@@ -39,8 +39,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, CalendarClock, FileText, History, Save as SaveIcon, ShieldQuestion,
-  SlidersHorizontal,
+  Activity, AlertTriangle, CalendarClock, CheckCircle2, FileText, History,
+  Loader2, Save as SaveIcon, ShieldQuestion, SlidersHorizontal,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
@@ -108,8 +108,30 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
   //
   // ⚠️ AND IT CARRIES ITS TONE. Every notice rendered as `fm-banner warn`,
   // including "Saved." — a success in the colour of a failure.
-  const [notice, setNotice] = useState<{ text: string; bad: boolean } | null>(null);
+  //
+  // ⚠️ AND IT LIVES IN THE HEADER, AS ONE ICON. Reported by the owner: a
+  // full-width bar reading "Sending…" then "Sent to 1 recipient(s)." pushed the
+  // whole tab body down for a sentence whose entire content is "that worked".
+  // It is now a chip beside the title, with the words in `title`/`aria-label`.
+  //
+  // ⚠️ `pending` IS A THIRD TONE AND NOT A DERIVED ONE. `bad: false` alone
+  // would draw a green tick on "Sending…", i.e. report success while the
+  // request is still open. Deriving it from `busy` instead was tried on paper
+  // and is wrong for a different reason: `save()` sets "Saved." and THEN awaits
+  // a diagnostics refetch, so the tick would spin for a beat after the write
+  // landed. The notice describes itself; nothing else has to be consulted.
+  const [notice, setNotice] = useState<
+    { text: string; bad: boolean; pending?: boolean } | null>(null);
   useEffect(() => { setNotice(null); }, [tab]);
+
+  // ⚠️ AN ERROR OPENS ITSELF; A SUCCESS DOES NOT. A `title` tooltip is
+  // mouse-only, and the device this is operated from is a wall-mounted tablet —
+  // so "Sent to 1, failed for 2: <why>" behind a hover would be unreadable
+  // exactly where it matters. Failures still render the full sentence in the
+  // body; successes are the icon alone, which is what was asked for. Tapping
+  // the chip toggles either way, so nothing is unreachable by touch.
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  useEffect(() => { setNoticeOpen(notice?.bad ?? false); }, [notice]);
 
   const reload = useCallback(async () => {
     const [c, d, h, k] = await Promise.all([
@@ -212,7 +234,7 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
       return;
     }
     setBusy(true);
-    setNotice({ text: "Sending…", bad: false });
+    setNotice({ text: "Sending…", bad: false, pending: true });
     const result = await runReportNow({
       preview: false, audience: s.audience, cadence: s.cadence, targets,
     });
@@ -250,6 +272,27 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
       >
         <div className="settings-header">
           <h2>Briefings</h2>
+          {notice && (
+            <button
+              type="button"
+              className={`reports-notice-chip${notice.bad ? " warn" : ""}`}
+              title={notice.text}
+              aria-expanded={noticeOpen}
+              onClick={() => setNoticeOpen((v) => !v)}
+            >
+              {notice.pending
+                ? <Loader2 size={18} className="spin" aria-hidden="true" />
+                : notice.bad
+                  ? <AlertTriangle size={18} aria-hidden="true" />
+                  : <CheckCircle2 size={18} aria-hidden="true" />}
+              {/* ⚠️ THE WORDS ARE STILL IN THE DOM, AND `title` IS NOT ENOUGH.
+                  A live region announces its CONTENT when that content changes;
+                  an icon has none, and `title` is only a last-resort accessible
+                  NAME, which is a different thing — so the result of a send
+                  would be announced as nothing. This span is the content. */}
+              <span className="sr-only" role="status">{notice.text}</span>
+            </button>
+          )}
         </div>
 
         <div className="fm-tabs" role="tablist" aria-label="Briefing sections">
@@ -270,11 +313,16 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="settings-body">
-          {notice && (
-            <div className={`fm-banner${notice.bad ? " warn" : ""}`} role="status">
+          {notice && noticeOpen && (
+            <div className={`fm-banner${notice.bad ? " warn" : ""}`}>
               {notice.text}
             </div>
           )}
+          {/* ⚠️ NOT A NOTICE, AND DELIBERATELY NOT MOVED. A notice is the result
+              of something the operator just did and lasts until they do the
+              next thing; this is a STATE of the dialog — every control below it
+              is showing nothing — and collapsing it to an icon would leave an
+              empty panel with no explanation on screen. */}
           {unreachable && (
             <div className="fm-banner warn">
               The add-on could not be reached, so these settings are not shown.
