@@ -1,3 +1,12 @@
+## 2.580.0
+
+### Changed — three comments asserted things nothing checked, and one of them was wrong
+
+`subject_key` and `dedup_key` each spelled out the same hash, held together
+only by a docstring saying they must agree; `dedup_key` now calls the other.
+The renderer's "the eight sections are the workbook's" stayed eight while
+`standing` replaced `headline` — seven are. Both are now pinned by tests.
+
 ## 2.579.0
 
 ### Fixed — the note under "Checks waiting on a rule" was barely understandable
