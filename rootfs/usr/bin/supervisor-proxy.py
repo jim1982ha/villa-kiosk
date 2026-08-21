@@ -2096,26 +2096,30 @@ reports_history_get_handler, _reports_history_put_unrouted = _json_store_handler
     reports_store.REPORTS_HISTORY_MAX_BYTES, "reports history")
 
 
-def _reports_next_runs(stored: Any) -> Dict[str, str]:
-    """`{schedule_id: local ISO}` for every schedule that can fire.
+def _next_runs_for(schedules: Any, explicit_zone: str = "") -> Dict[str, str]:
+    """`{schedule_id: local ISO}` for the schedules HANDED IN.
 
     ⚠️ THE VILLA'S CLOCK, RESOLVED THE SAME WAY THE SCHEDULER RESOLVES IT —
     explicit setting, then the name cached in the state file. Home Assistant is
-    NOT asked here: this is a diagnostics read that must stay cheap and must not
-    fail when Core is restarting, and a cached zone is what the last scheduler
-    pass already agreed on. A pass with no cached zone yet falls back to UTC,
-    exactly as `resolve_zone` does, and says so by being an hour off rather than
-    by being absent.
+    NOT asked here: this must stay cheap and must not fail when Core is
+    restarting, and a cached zone is what the last scheduler pass already agreed
+    on. A pass with no cached zone yet falls back to UTC, exactly as
+    `resolve_zone` does, and says so by being an hour off rather than by being
+    absent.
+
+    ⚠️ TAKES THE LIST RATHER THAN READING THE STORE, so the SAME function
+    answers for a saved schedule and for one the operator is still typing. The
+    alternative — computing the unsaved case in the SPA — is a second
+    implementation of `next_fire` wearing the same label, which is this
+    subsystem's most expensive recurring bug.
     """
-    config = reports_store.config_view(stored)
     state = _read_json_store(reports_store.REPORTS_STATE_FILE,
                              reports_store.EMPTY_STATE)
-    name = str(config.get("timezone") or state.get("timezone") or "")
+    name = explicit_zone or str(state.get("timezone") or "")
     zone = reports_schedule.resolve_timezone(name)
     now_local = datetime.now(timezone.utc).astimezone(zone)
 
     out: Dict[str, str] = {}
-    schedules = config.get("schedules")
     if not isinstance(schedules, list):
         return out
     for entry in schedules:
@@ -2125,6 +2129,49 @@ def _reports_next_runs(stored: Any) -> Dict[str, str]:
         if moment is not None:
             out[str(entry.get("id") or "")] = moment.isoformat(timespec="minutes")
     return out
+
+
+def _reports_next_runs(stored: Any) -> Dict[str, str]:
+    """The STORED schedules' next runs, for the diagnostics document."""
+    config = reports_store.config_view(stored)
+    return _next_runs_for(config.get("schedules"),
+                          str(config.get("timezone") or ""))
+
+
+async def reports_next_run_handler(request: web.Request) -> web.Response:
+    """When would THESE schedules next fire? Answers about an unsaved draft.
+
+    ⚠️ THIS EXISTS SO THE DIALOG CAN STOP SAYING "SAVE TO SEE IT". Picking a
+    time later today and being told nothing until you commit reads as "it always
+    schedules for tomorrow" — which is exactly how it was reported. The answer
+    has to be live, and it has to be the SAME answer the scheduler will give, so
+    it is computed here by `schedule.next_fire` rather than reimplemented in the
+    browser.
+
+    ⚠️ PURE, AND WRITES NOTHING. It reads the state file for the cached
+    timezone and computes; the schedules come from the body and are never
+    stored. So it is cheap enough to call while someone is still turning a time
+    dial, which a discovery-backed endpoint would not be.
+
+    Owner-only, like every other reports endpoint: a schedule says who gets
+    messaged and how often.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read schedule timing.")
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    schedules = body.get("schedules") if isinstance(body, dict) else None
+    if not isinstance(schedules, list):
+        return web.json_response({"error": "schedules must be a list"}, status=400)
+    if len(schedules) > 50:
+        # A schedule list this long is a bug or an attempt to make this loop.
+        return web.json_response({"error": "too many schedules"}, status=400)
+    return web.json_response({"next_runs": _next_runs_for(schedules)},
+                             headers={"Cache-Control": "no-store"})
 
 
 async def reports_secret_get_handler(request: web.Request) -> web.Response:
@@ -2403,6 +2450,7 @@ def main() -> None:
     app.router.add_put("/reports-config", reports_config_put_handler)
     app.router.add_get("/reports-history", reports_history_get_handler)
     app.router.add_get("/reports-diagnostics", reports_diagnostics_handler)
+    app.router.add_post("/reports-next-run", reports_next_run_handler)
     app.router.add_get("/reports-secret", reports_secret_get_handler)
     app.router.add_put("/reports-secret", reports_secret_put_handler)
     app.router.add_post("/reports-run-now", reports_run_now_handler)

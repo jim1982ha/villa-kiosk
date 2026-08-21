@@ -382,3 +382,25 @@ def test_next_fire_is_always_in_the_future_for_every_cadence() -> None:
         nxt = next_fire({"cadence": cadence, "hour": 7}, now)
         assert nxt is not None and nxt > now, cadence
     assert next_fire({"cadence": "hourly"}, now) is None
+
+
+def test_next_fire_is_TODAY_for_a_time_still_ahead() -> None:
+    """⚠️ REPORTED AS "IT ALWAYS SCHEDULES FOR THE NEXT DAY". The scheduler was
+    right — the add-on log showed the save landing at 13:42:12 for a 13:42
+    schedule, twelve seconds INTO the slot, so tomorrow was correct. What was
+    wrong is that the dialog could not say so while the time was being picked:
+    it showed "save to see it", and by the time you saved the moment had passed.
+
+    So the behaviour is pinned here and the DIALOG now asks this same function
+    live, through `/reports-next-run`, rather than reimplementing it."""
+    from datetime import datetime
+    from reports.schedule import next_fire
+    at_1341 = datetime(2026, 8, 21, 13, 41, tzinfo=timezone.utc)
+    nxt = next_fire({"cadence": "daily", "hour": 13, "minute": 42}, at_1341)
+    assert nxt is not None and nxt.strftime("%d %b %H:%M") == "21 Aug 13:42", (
+        "a slot still ahead today must be TODAY")
+
+    at_1343 = datetime(2026, 8, 21, 13, 43, tzinfo=timezone.utc)
+    nxt = next_fire({"cadence": "daily", "hour": 13, "minute": 42}, at_1343)
+    assert nxt is not None and nxt.strftime("%d %b %H:%M") == "22 Aug 13:42", (
+        "a slot already past today must roll to tomorrow")

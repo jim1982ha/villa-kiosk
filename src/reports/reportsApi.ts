@@ -81,6 +81,12 @@ export interface ReportPreview {
   body: string;
   findingCount: number;
   severity: Severity;
+  /** ⚠️ PRESENT ON BOTH, AND EMPTY IS THE WHOLE POINT ON A PREVIEW.
+   *  `run_report` always sets it — `[]` when previewing, one entry per target
+   *  when sending — so a caller that DELIVERED can say what reached whom. It
+   *  was missing from this type while the endpoint had always returned it,
+   *  which is why "send now" could not report a failed target. */
+  deliveries: DeliveryResult[];
   analysis: {
     ran: string[];
     /** ⚠️ PROSE, NOT A `SkipReason` CODE, and typing it as one would be
@@ -443,6 +449,51 @@ export async function fetchReportsHistory(): Promise<ReportHistoryEntry[] | null
   }
 }
 
+/** When would these schedules NEXT fire? Answers about an UNSAVED draft.
+ *
+ *  ⚠️ ASKED OF THE SERVER, NOT COMPUTED HERE. `schedule.next_fire` decides when
+ *  a briefing goes out — "weekly" means a chosen weekday, a monthly date is
+ *  clamped to the month's length, and a slot already past today rolls to the
+ *  next period — and a second implementation in the browser would be a
+ *  different answer wearing the same label. That is this subsystem's most
+ *  expensive recurring bug, so the draft is sent and the same function answers.
+ *
+ *  ⚠️ AND IT IS WHY THE DIALOG CAN STOP SAYING "SAVE TO SEE IT". Picking a time
+ *  later today and being told nothing until you commit reads as "it always
+ *  schedules for tomorrow", which is how it was reported. Empty on any failure:
+ *  the caller keeps showing the last known answer rather than a blank. */
+export async function fetchNextRuns(
+  schedules: ReportSchedule[],
+): Promise<Record<string, string>> {
+  try {
+    const r = await fetch(ingressPath("reports-next-run"), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ schedules: schedules.map(toWireSchedule) }),
+    });
+    if (!r.ok) return {};
+    return texts(obj(await r.json()).next_runs);
+  } catch {
+    return {};
+  }
+}
+
+/** ⚠️ THE SAME VOCABULARY THE STORE USES. A draft sent in this app's own
+ *  spelling would be read by `next_fire` as a schedule with no minute and no
+ *  weekday — answering confidently about a schedule nobody configured. The
+ *  schedule's own fields are single words and identical on both sides, which is
+ *  why this is a pass-through and not a mapping; it exists so that stops being
+ *  an accident. */
+function toWireSchedule(s: ReportSchedule): Record<string, unknown> {
+  return {
+    id: s.id, cadence: s.cadence, hour: s.hour, audience: s.audience,
+    ...(s.minute === undefined ? {} : { minute: s.minute }),
+    ...(s.weekday === undefined ? {} : { weekday: s.weekday }),
+    ...(s.day === undefined ? {} : { day: s.day }),
+  };
+}
+
 // ── narration credentials ───────────────────────────────────────────────────
 //
 // ⚠️ THERE IS NO READ PATH FOR THE VALUE, ON PURPOSE, AND THAT IS THE WHOLE
@@ -626,6 +677,7 @@ export async function runReportNow(
         },
         periodSince: str(analysis.period_since),
       },
+      deliveries: arr(d.deliveries).map(parseDelivery),
       // ⚠️ `null` WHEN ABSENT, NEVER AN EMPTY OBJECT. A delivered report
       // carries no payload block at all (it is preview-only), and an empty
       // object there would render as "nothing would be transmitted" — the

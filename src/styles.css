@@ -2182,7 +2182,33 @@ input[type="range"]::-moz-range-thumb {
    panels) — the same visual rule applied once here since this ONE class
    already backs every settings-style modal (Settings, Advanced Settings,
    Facility, Legend, First-run tips), rather than a per-modal exception. */
-.settings-footer { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; background: var(--bg-overlay); }
+/* ⚠️ THE ACTIONS STAY ON ONE ROW; THE HINT YIELDS. Reported from a phone: Save
+   sat above Close because the explanatory span beside them claimed its full
+   intrinsic width and pushed the buttons onto a second line. A footer's job is
+   to put every action in one predictable place, and a footer that reflows into
+   a column is that promise breaking exactly where the screen is smallest.
+
+   ⚠️ FIXED HERE, NOT PER DIALOG — every `.settings-footer` in the app is the
+   same span-then-buttons shape (Facility, Settings, Advanced Settings,
+   Briefings), so a rule on one of them would be the fifth agreement this
+   session has already spent two releases converging. The span is allowed to
+   shrink and ellipsise; the buttons are not. */
+.settings-footer {
+  flex: 0 0 auto; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px;
+  padding: 16px 28px; background: var(--bg-overlay);
+  flex-wrap: nowrap;
+}
+/* A direct-child span in a footer is the hint text — it may lose width and, at
+   the extreme, disappear. `min-width: 0` is what actually lets a flex item
+   shrink below its content; without it `overflow: hidden` never engages. */
+.settings-footer > span {
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Anything that is not the hint keeps its size and its row. */
+.settings-footer > button,
+.settings-footer > div { flex: 0 0 auto; }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
@@ -4149,6 +4175,20 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    A literal here renders differently per device class and defeats both themes.
 */
 .reports-pane { display: flex; flex-direction: column; gap: 12px; }
+
+/* ⚠️ A HEADING AND THE SENTENCE UNDER IT ARE ONE BLOCK. `.reports-pane` is a
+   flex column with `gap: 12px`, and both the heading and the paragraph also
+   carried their own margins — so the space between them was the gap PLUS two
+   margins and read as a blank line. Reported as "remove the redundant line
+   between the section title and the description text below it".
+
+   The same applies under a checkbox row: `label.toggle` has `margin-top: 12px`
+   on top of the pane gap. Collapsing the margins inside the pane leaves ONE
+   spacing rule — the pane's gap — which is what makes the rhythm predictable
+   instead of the sum of three opinions. */
+.reports-pane > h3 + p,
+.reports-pane > label.toggle + p { margin-top: -6px; }
+.reports-pane > label.toggle { margin-top: 0; }
 
 .reports-h3 {
   margin: 4px 0 0;

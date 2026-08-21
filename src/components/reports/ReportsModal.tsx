@@ -48,7 +48,9 @@ import {
   fetchReportsHistory, runReportNow, saveNarrationSecret, saveReportsConfig,
   type ReportPreview, type ReportsDiagnostics,
 } from "@/reports/reportsApi";
-import type { ReportHistoryEntry, ReportsConfig } from "@/reports/reportsTypes";
+import type {
+  ReportHistoryEntry, ReportSchedule, ReportsConfig,
+} from "@/reports/reportsTypes";
 import PreviewTab from "./PreviewTab";
 import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
@@ -191,6 +193,42 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
     setBusy(false);
   }, []);
 
+  /** Send ONE schedule's briefing for real, now.
+   *
+   *  ⚠️ THIS DELIVERS. Every other control in this dialog reads or previews;
+   *  this one messages the household, so it reports what happened per target
+   *  rather than a bare "Sent." — a briefing that reached nobody must not look
+   *  the same as one that reached three phones.
+   *
+   *  ⚠️ IT USES THE SCHEDULE'S OWN AUDIENCE AND RECIPIENTS, not the global
+   *  defaults, so "send this one now" means the same brief the schedule would
+   *  have sent. A schedule with no recipients is refused before the request,
+   *  because composing and delivering nowhere reads as success. */
+  const sendNow = useCallback(async (s: ReportSchedule) => {
+    const targets = s.targets ?? [];
+    if (targets.length === 0) {
+      setNotice({ text: "This schedule has no recipients, so there is nobody "
+                        + "to send it to.", bad: true });
+      return;
+    }
+    setBusy(true);
+    setNotice({ text: "Sending…", bad: false });
+    const result = await runReportNow({
+      preview: false, audience: s.audience, cadence: s.cadence, targets,
+    });
+    const sent = (result?.deliveries ?? []).filter((d) => d.status === "sent");
+    const failed = (result?.deliveries ?? []).filter(
+      (d) => d.status === "failed");
+    setNotice(!result
+      ? { text: "Could not send. See the add-on log.", bad: true }
+      : failed.length
+        ? { text: `Sent to ${sent.length}, failed for ${failed.length}: `
+                  + failed.map((d) => d.detail || d.target).join("; "), bad: true }
+        : { text: `Sent to ${sent.length} recipient(s).`, bad: false });
+    setHistory(await fetchReportsHistory());
+    setBusy(false);
+  }, []);
+
   const compose = useCallback(async () => {
     setBusy(true);
     setNotice(null);
@@ -274,6 +312,7 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
               diagnostics={diagnostics}
               busy={busy}
               onDraft={setPending}
+              onSendNow={(s) => void sendNow(s)}
               secretsConfigured={secretsConfigured}
               onSaveSecret={(provider, value) => void saveSecret(provider, value)}
             />

@@ -46,9 +46,11 @@
 // below migrates it into the schedules the first time the tab is opened, so the
 // operator ends up with one place without losing what they configured.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import type { ReportsDiagnostics } from "@/reports/reportsApi";
+import { fetchNextRuns, type ReportsDiagnostics } from "@/reports/reportsApi";
+import { useLongPress } from "@/hooks/useLongPress";
+import { tapFeedback } from "@/utils/haptics";
 import NarrationSection from "./NarrationSection";
 import DestinationList, { RecipientButton } from "./DestinationList";
 import {
@@ -153,7 +155,7 @@ export function adoptSharedTargets(config: ReportsConfig): ReportsConfig {
 }
 
 export default function ScheduleTab({
-  config, diagnostics, busy, onDraft, secretsConfigured, onSaveSecret,
+  config, diagnostics, busy, onDraft, onSendNow, secretsConfigured, onSaveSecret,
 }: {
   config: ReportsConfig | null;
   diagnostics: ReportsDiagnostics | null;
@@ -170,6 +172,15 @@ export default function ScheduleTab({
    *  in a child's render body is a loop — and cleared on unmount, so switching
    *  tabs cannot leave a Save button offering a draft nothing is showing. */
   onDraft: (draft: ReportsConfig | null) => void;
+  /** Send ONE schedule's briefing right now, for real.
+   *
+   *  ⚠️ A HIDDEN GESTURE ON THE DELETE BUTTON, BY REQUEST: tap removes the
+   *  schedule, HOLD sends it. Worth stating the hazard once, because the two
+   *  outcomes are far apart — a hold that lifts early deletes a schedule, and a
+   *  tap that lingers messages the household. `useLongPress` is the app's
+   *  shared recogniser and `consumeClick()` is what stops one press doing both,
+   *  which is the failure mode CameraPanel already paid for. */
+  onSendNow: (schedule: ReportSchedule) => void;
   secretsConfigured: Record<string, boolean>;
   onSaveSecret: (provider: string, value: string) => void;
 }) {
@@ -179,6 +190,42 @@ export default function ScheduleTab({
    *  Save button off the screen, and the question "who gets this one" is asked
    *  about one schedule at a time by definition. */
   const [openRecipients, setOpenRecipients] = useState<number | null>(null);
+  /** When the schedules ON SCREEN would next fire, answered by the server.
+   *
+   *  ⚠️ DEBOUNCED, because a `time` input fires on every dial turn and this is
+   *  a request per change. 350ms is long enough that scrubbing a time costs one
+   *  call and short enough that the line has settled before a finger lifts.
+   *
+   *  ⚠️ AND IT IS RE-ASKED WHEN THE ROW CHANGES AT ALL, not only its time: a
+   *  cadence of "weekly" moves the answer by up to six days and a weekday moves
+   *  it by one, so keying this on the time alone would leave the other two
+   *  controls silently stale — the same defect one field over. */
+  const [draftRuns, setDraftRuns] = useState<Record<string, string>>({});
+  /** ⚠️ ONE RECOGNISER, ONE HELD ROW. A hook per row would break the rules-of-
+   *  hooks contract the moment a schedule is deleted mid-list; HUD's category
+   *  buttons solved the same problem the same way, with a ref naming which one
+   *  is under the finger. */
+  const held = useRef<ReportSchedule | null>(null);
+  const sendHold = useLongPress(() => {
+    if (!held.current) return;
+    tapFeedback();
+    onSendNow(held.current);
+  }, { nativeButton: true });
+  const schedulesKey = JSON.stringify(draft.schedules ?? []);
+  useEffect(() => {
+    const rows: ReportSchedule[] = JSON.parse(schedulesKey);
+    if (rows.length === 0) { setDraftRuns({}); return; }
+    // ⚠️ `cancelled` rather than an AbortController: two answers can be in
+    // flight after a fast edit and the LAST REQUEST is not necessarily the last
+    // RESPONSE, so a stale one must be dropped on arrival rather than raced.
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void fetchNextRuns(rows).then((runs) => {
+        if (!cancelled && Object.keys(runs).length) setDraftRuns(runs);
+      });
+    }, 350);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [schedulesKey]);
 
   // Re-seed only when the server's copy changes, so typing is never clobbered
   // by a background reload — the same ordering rule `DeviceConfigSync` follows.
@@ -200,7 +247,10 @@ export default function ScheduleTab({
 
   const schedules = draft.schedules ?? [];
   const available = diagnostics?.notifyTargets ?? [];
-  const nextRun = diagnostics?.nextRuns ?? {};
+  /** ⚠️ THE LIVE ANSWER FOR WHAT IS ON SCREEN, not for what is stored. The
+   *  stored answer is the fallback, so a row that has never been edited still
+   *  reads correctly before the first probe returns. */
+  const nextRun = { ...(diagnostics?.nextRuns ?? {}), ...draftRuns };
   /** Does this row differ from what the add-on has stored?
    *
    *  ⚠️ COMPARED BY CONTENT, BY ID. `next_runs` is keyed by schedule id and
@@ -341,8 +391,20 @@ export default function ScheduleTab({
               />
               <button
                 className="btn danger icon-only"
-                aria-label="Remove this schedule"
+                aria-label="Remove this schedule. Press and hold to send it now."
+                title="Press and hold to send this briefing now"
+                onPointerDown={(e) => { held.current = s; sendHold.onPointerDown(e); }}
+                onPointerUp={sendHold.onPointerUp}
+                onPointerLeave={sendHold.onPointerLeave}
+                onPointerCancel={sendHold.onPointerCancel}
+                onPointerMove={sendHold.onPointerMove}
+                onKeyDown={(e) => { held.current = s; sendHold.onKeyDown(e); }}
+                onKeyUp={sendHold.onKeyUp}
                 onClick={() => {
+                  // ⚠️ THE HOLD ALREADY ACTED. Without this, one press both
+                  // sends the briefing AND deletes the schedule — the exact
+                  // double-fire `consumeClick` exists for.
+                  if (sendHold.consumeClick()) return;
                   setOpenRecipients(null);
                   set({ schedules: schedules.filter((_, n) => n !== i) });
                 }}
@@ -371,11 +433,10 @@ export default function ScheduleTab({
                 ? "Nothing is sent — “Send briefings on a schedule” is off."
                 : own.length === 0
                   ? "Nobody is selected, so this one would be composed and not sent."
-                  : edited(s)
-                    ? "Not saved yet — save to see when this goes out."
-                    : nextRun[s.id]
-                      ? `Next: ${whenNext(nextRun[s.id])}, villa time.`
-                      : "Next send is not known yet — save to see it."}
+                  : nextRun[s.id]
+                    ? `Next: ${whenNext(nextRun[s.id])}, villa time.${
+                        edited(s) ? " Not saved yet." : ""}`
+                    : "Working out when this goes out…"}
             </p>
 
             {openRecipients === i && (
