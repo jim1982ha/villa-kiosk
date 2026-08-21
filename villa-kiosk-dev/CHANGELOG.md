@@ -1,3 +1,14 @@
+## 2.577.0
+
+### Changed — every number carries its unit, and every rule name is quoted
+
+"current value 1694.7" and "max transitions 6" were field dumps nobody could
+read: the unit belongs to the sensor, so it now comes from Home Assistant's own
+`unit_of_measurement`, and a bare count carries the noun it counts. Rule,
+blueprint and automation names are bracketed so the sentence around them parses.
+The three headings inside one section no longer share a wrench, and the brief
+calls the Facility Manager by the name the kiosk uses instead of "caretaker".
+
 ## 2.576.0
 
 ### Fixed — one rule listed twice, and a headline nobody could scan
