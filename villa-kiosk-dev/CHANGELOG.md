@@ -1,3 +1,14 @@
+## 2.587.0
+
+### Fixed — a brief still said "caretaker", and the follow-up line was three clauses welded together
+
+"Facility Manager" was applied to the renderer and missed `verify`'s evidence
+string, so a delivered brief read "the caretaker marked the job done" after the
+rule had been accepted. A test now scans string literals — docstrings excluded
+by the AST, since `caretaker` is the right engineering word and the blueprints'
+own input keeps that name. The same line's semicolon chain and ISO date became
+sentences and "21 Aug".
+
 ## 2.586.0
 
 ### Fixed — the headline's total could not always be reached by adding up the report
