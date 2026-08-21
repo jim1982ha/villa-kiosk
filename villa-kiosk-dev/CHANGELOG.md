@@ -1,3 +1,14 @@
+## 2.593.0
+
+### Fixed — the kiosk link arrived dead, and four smaller defects in a delivered brief
+
+The link was appended after the sanitiser, which protected it from ours and
+handed it unsanitised to the destination's — a platform's own markdown parser ate
+the underscore in the ingress path and produced a 404. Markup-active characters
+in the URL are now percent-encoded, which no parser can touch. Also: a one-bar
+sparkline on the first report, a missing blank line before "Still open from
+earlier", a hoisted clause saying "it" about three things, and "1 device need".
+
 ## 2.592.0
 
 ### Changed — the brief is grouped by what you must do, numbers carry a trend, and the AI writes one sentence instead of the document
