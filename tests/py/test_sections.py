@@ -410,10 +410,12 @@ def test_a_maintenance_line_carries_its_measurement_not_just_a_name() -> None:
                         "transition_count": 14, "max_transitions": 6,
                         "timestamp": when}}
     body = _render(aggregated=_events(cycling))
-    # `_count` suffix pluralises the stem; `max_transitions` has no unit suffix
-    # and stays as written. Both are measurements the label alone did not carry.
-    assert "14 transitions" in body
-    assert "max 6 transitions" in body
+    # ⚠️ THIS PINNED "max 6 transitions", AND THAT WAS THE DEFECT. Reported
+    # verbatim: "i don't get what this means — 7 transitions, max 6
+    # transitions". A bound printed as a peer measurement reads as a second,
+    # smaller reading of the same quantity; it is the LIMIT the first broke.
+    assert "14 transitions (limit 6)" in body
+    assert "max 6 transitions" not in body
 
 
 def test_a_measurement_never_repeats_money_or_housekeeping() -> None:

@@ -1,3 +1,14 @@
+## 2.584.0
+
+### Fixed — "7 transitions, max 6 transitions" read as two measurements, and an acknowledged rule could hide
+
+A `max_`/`min_` field is the LIMIT a reading broke, not a second reading, and it
+now attaches to what it bounds: "7 transitions (limit 6)". Separately, v2.583.0
+exempted any rule with one completed task — the reference villa has `[PM-02]`
+nine times with eight ticked off, so its noisiest rule was the one exempted.
+Crossing the threshold is now the finding; the acknowledgement count changes the
+sentence instead.
+
 ## 2.583.0
 
 ### Added — the brief now names rules that fire and are never acknowledged

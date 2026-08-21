@@ -357,10 +357,16 @@ def test_a_measured_value_carries_the_sensors_own_unit() -> None:
 
 
 def test_a_count_carries_the_noun_it_counts() -> None:
-    """"max transitions 6" reads as a field dump; six of WHAT was the question."""
+    """"max transitions 6" reads as a field dump; six of WHAT was the question.
+
+    ⚠️ ANSWERING THAT LEFT A SECOND, SUBTLER ONE. "7 transitions, max 6
+    transitions" names the noun and still reads as two measurements — the owner
+    asked what it meant. A `max_`/`min_` field is a BOUND, and it now attaches
+    to what it bounds instead of standing beside it.
+    """
     body = _render([_measured(transition_count=7, max_transitions=6)])
-    assert "7 transitions" in body and "max 6 transitions" in body
-    assert "max transitions 6" not in body
+    assert "7 transitions (limit 6)" in body
+    assert "max transitions 6" not in body and "max 6 transitions" not in body
 
 
 def test_an_ambiguous_unit_prints_none_rather_than_the_wrong_one() -> None:

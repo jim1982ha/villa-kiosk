@@ -43,20 +43,44 @@ def _fires(*pairs: Any) -> List[_Item]:
 def test_a_rule_over_the_threshold_with_no_ack_is_noisy() -> None:
     rows = noise.noisy(
         noise.fires_by_rule(_fires(("PM-04", "Pump power factor", 23))),
-        acked=set(), threshold=20)
+        acks={}, threshold=20)
     assert [r["rule_id"] for r in rows] == ["PM-04"]
     assert rows[0]["fires"] == 23
     assert rows[0]["label"] == "Pump power factor", (
         "the reader needs the NAME; `PM-04` is a join key, not prose")
 
 
-def test_one_acknowledgement_clears_a_rule_however_often_it_fired() -> None:
-    """⚠️ "AT LEAST ONE", NOT PARITY WITH THE FIRE COUNT. A caretaker who fixes
-    the cause once for a rule that fired forty times has acknowledged it. Asking
-    for parity would flag every rule whose fix outlasts a single firing, which
-    is most of them, and the catalog's target is the rule nobody EVER answers."""
-    fires = noise.fires_by_rule(_fires(("PM-04", "Pump", 40)))
-    assert noise.noisy(fires, acked={"PM-04"}, threshold=20) == []
+def test_acknowledgement_does_not_exempt_a_rule_that_keeps_firing() -> None:
+    """⚠️ THE REFERENCE DEPLOYMENT FALSIFIED THE FIRST RULE THE DAY IT SHIPPED.
+
+    v2.583.0 exempted any rule with at least one completed task — "somebody is
+    responding". The owner's live list: `[PM-02]` NINE times, byte-identical
+    text, eight ticked off. The clearest case of a rule needing retuning was the
+    one the check exempted, and because their four rules all had completed
+    items, the feature was a no-op on the property it was built for.
+
+    A rule that fires repeatedly AND is acknowledged repeatedly is alert fatigue
+    with a paper trail. Crossing the threshold is the finding; the ack count
+    changes the SENTENCE.
+    """
+    fires = noise.fires_by_rule(_fires(("PM-02", "Pump short-cycling", 40)))
+    rows = noise.noisy(fires, acks={"PM-02": 8}, threshold=20)
+    assert [r["rule_id"] for r in rows] == ["PM-02"]
+    assert rows[0]["acks"] == 8
+
+
+def test_the_two_kinds_of_noise_read_differently() -> None:
+    """Both mean retune-or-retire, but a reader who has been ticking these off
+    weekly must be told the ticking is the evidence, not the fix."""
+    unanswered = DeterministicNarrator().render(_ctx(noise={
+        "rules": [{"rule_id": "A", "label": "Alpha", "fires": 23, "acks": 0}],
+        "threshold": 20, "window_days": 30, "known": True, "counted": 1}))[1]
+    ignored = DeterministicNarrator().render(_ctx(noise={
+        "rules": [{"rule_id": "B", "label": "Beta", "fires": 23, "acks": 8}],
+        "threshold": 20, "window_days": 30, "known": True, "counted": 1}))[1]
+    assert "was never acknowledged" in unanswered
+    assert "acknowledged 8 times and kept firing" in ignored
+    assert "never acknowledged" not in ignored
 
 
 def test_a_blank_rule_id_is_never_counted() -> None:
@@ -69,21 +93,22 @@ def test_a_blank_rule_id_is_never_counted() -> None:
 
 def test_the_threshold_is_inclusive_and_below_it_is_quiet() -> None:
     fires = noise.fires_by_rule(_fires(("A", "A", 20), ("B", "B", 19)))
-    assert [r["rule_id"] for r in noise.noisy(fires, set(), 20)] == ["A"]
+    assert [r["rule_id"] for r in noise.noisy(fires, {}, 20)] == ["A"]
 
 
 def test_noisiest_first() -> None:
     fires = noise.fires_by_rule(
         _fires(("A", "A", 21), ("B", "B", 99), ("C", "C", 40)))
-    assert [r["rule_id"] for r in noise.noisy(fires, set(), 20)] == ["B", "C", "A"]
+    assert [r["rule_id"] for r in noise.noisy(fires, {}, 20)] == ["B", "C", "A"]
 
 
-def test_acknowledged_reads_the_rule_id_the_join_uses() -> None:
-    assert noise.acknowledged([
+def test_acks_are_counted_per_rule_on_the_id_the_join_uses() -> None:
+    assert noise.acks_by_rule([
         {"rule_id": "PM-04", "text": "done"},
         {"rule_id": "  ", "text": "untagged"},
         {"text": "no id at all"},
-    ]) == {"PM-04"}
+        {"rule_id": "PM-04", "text": "done again"},
+    ]) == {"PM-04": 2}
 
 
 # ── the honest third answer ─────────────────────────────────────────────────
@@ -205,3 +230,30 @@ def test_escalation_lives_in_the_blueprints_not_here() -> None:
              if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)}
     assert not calls & {"post", "send", "sleep", "command"}, (
         "no I/O belongs here — it counts two lists that are already in memory")
+
+
+# ── a bound is not a measurement ────────────────────────────────────────────
+
+def test_a_limit_is_attached_to_what_it_bounds_not_listed_beside_it() -> None:
+    """⚠️ REPORTED AS UNREADABLE, VERBATIM: "i don't get what this means —
+    Pump short-cycling: 7 transitions, max 6 transitions". Two readings of the
+    same quantity, the second inexplicably smaller, when it is the LIMIT the
+    first one broke. `max_`/`min_` naming the same noun is a general shape, so
+    pairing needs no per-blueprint phrase table.
+
+    ⚠️ AND THE NOUNS DO NOT MATCH EXACTLY — `transition_count` against
+    `max_transitions`. An exact-stem rule would have paired nothing on the real
+    payloads while looking implemented.
+    """
+    from reports.narrate.deterministic import _bound_for
+    assert _bound_for("transition_count", {"max_transitions": 6}) == (
+        "max_transitions", 6)
+    assert _bound_for("runtime_minutes", {"max_runtime_minutes": 90})[1] == 90
+    assert _bound_for("transitions", {})[1] is None
+
+
+def test_an_unpaired_bound_is_still_printed() -> None:
+    """Dropping it would lose a number the blueprint chose to send — the
+    failure mode is silence, which this subsystem ranks worst."""
+    from reports.narrate.deterministic import _bound_for
+    assert _bound_for("voltage", {"max_transitions": 6})[1] is None

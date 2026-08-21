@@ -247,6 +247,24 @@ def _phrase(key: str, value: Any, unit: str = "") -> str:
     return f"{key.replace('_', ' ')} {value}" + (f" {unit}" if unit else "")
 
 
+def _bound_for(key: str, bounds: Dict[str, Any]) -> Tuple[str, Any]:
+    """The `max_`/`min_` entry that bounds `key`, if one is present.
+
+    ⚠️ MATCHED ON THE NOUN, TOLERATING PLURALS AND A `_count` TAIL, because the
+    blueprints do not agree with themselves: the pair that prompted this is
+    `transition_count` against `max_transitions`. Requiring an exact stem would
+    have matched none of the real payloads, which is a pairing rule that pairs
+    nothing — worse than no rule, because it looks implemented.
+    """
+    stem = key[:-6] if key.endswith("_count") else key
+    for candidate in (stem, stem + "s", stem.rstrip("s")):
+        for prefix in ("max_", "min_"):
+            name = prefix + candidate
+            if name in bounds:
+                return name, bounds[name]
+    return "", None
+
+
 def _amount(value: float, whole: bool = False, currency: str = "") -> str:
     """A cost, in the operator's own currency where Home Assistant knows it.
 
@@ -931,7 +949,15 @@ class DeterministicNarrator:
             if not isinstance(row, dict):
                 continue
             fires = int(row.get("fires") or 0)
+            acks = int(row.get("acks") or 0)
             label = str(row.get("label") or "").strip() or str(row.get("rule_id"))
+            # ⚠️ TWO KINDS OF NOISE, TWO ACTIONS. "Nobody is responding" and
+            # "responding is not stopping it" both mean retune-or-retire, but a
+            # reader who has been ticking these off every week needs to be told
+            # that the ticking is the evidence, not the fix.
+            tail = (f"was never acknowledged"
+                    if not acks else
+                    f"was acknowledged {_plural(acks, 'time')} and kept firing")
             out.append(
                 # ⚠️ `_plural` CARRIES THE COUNT. This read `fired {fires}
                 # {_plural(fires, 'time')}` and rendered "fired 23 23 times".
@@ -939,8 +965,8 @@ class DeterministicNarrator:
                 # string satisfies — a weak substring assertion agreeing with a
                 # broken line. Read the rendered output.
                 f"{BULLET}{name_of(readable_label(label))} fired "
-                f"{_plural(fires, 'time')} in {_plural(days, 'day')} and was "
-                f"never acknowledged — retune or retire it.")
+                f"{_plural(fires, 'time')} in {_plural(days, 'day')} and "
+                f"{tail} — retune or retire it.")
         return out
 
     def _monitoring_health(self, context: ReportContext) -> List[str]:
@@ -1350,13 +1376,34 @@ class DeterministicNarrator:
             if not isinstance(data, dict):
                 continue
             unit = self._unit_of(group)
-            parts: List[str] = []
+            # ⚠️ A BOUND IS NOT A MEASUREMENT, AND PRINTING IT AS ONE WAS
+            # REPORTED AS UNREADABLE. `{transition_count: 7, max_transitions: 6}`
+            # rendered as "7 transitions, max 6 transitions" — two readings of
+            # the same thing, one of them mysteriously smaller, when the second
+            # is the LIMIT the first one broke. Asked directly: "i don't get
+            # what this means". A `max_`/`min_` prefix naming the same noun as a
+            # measurement is a general shape, not per-blueprint knowledge, so
+            # pairing them needs no phrase table — see this method's own rule.
+            measured: Dict[str, Any] = {}
+            bounds: Dict[str, Any] = {}
             for key, value in data.items():
                 if key in NON_MEASUREMENT_KEYS or value in (None, "", [], {}):
                     continue
                 if isinstance(value, bool) or not isinstance(value, (int, float, str)):
                     continue
-                parts.append(_phrase(str(key), value, unit))
+                (bounds if str(key).startswith(("max_", "min_")) else
+                 measured)[str(key)] = value
+            parts: List[str] = []
+            for key, value in measured.items():
+                text = _phrase(key, value, unit)
+                bound_key, bound = _bound_for(key, bounds)
+                if bound is not None:
+                    bounds.pop(bound_key, None)
+                    word = "limit" if bound_key.startswith("max_") else "minimum"
+                    text = f"{text} ({word} {bound})"
+                parts.append(text)
+            # A bound with nothing to attach to still beats dropping it.
+            parts.extend(_phrase(k, v, unit) for k, v in bounds.items())
             if parts:
                 return ", ".join(parts[:3])
         return ""

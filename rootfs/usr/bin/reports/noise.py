@@ -73,26 +73,47 @@ def fires_by_rule(items: Sequence[Any]) -> Dict[str, Tuple[int, str]]:
     return out
 
 
-def acknowledged(done: Sequence[Dict[str, str]]) -> set[str]:
-    """Rules with at least one completed caretaker task.
+def acks_by_rule(done: Sequence[Dict[str, str]]) -> Dict[str, int]:
+    """How many completed caretaker tasks each rule has.
 
-    ⚠️ "AT LEAST ONE", NOT A COUNT MATCHED AGAINST FIRES. A caretaker who fixes
-    the cause once for a rule that fired forty times has acknowledged it; the
-    catalog's target is a rule nobody has EVER responded to. Requiring parity
-    would flag every rule whose fix outlasts one firing, which is most of them.
+    ⚠️ A COUNT, NOT A SET, AND THE REFERENCE DEPLOYMENT IS WHY. This returned a
+    set and `noisy` exempted any rule appearing in it — "one acknowledgement
+    ever means somebody is responding". The owner's live list falsified that the
+    day it shipped: `[PM-02]` appeared NINE times with byte-identical text
+    ("has flapped 7 times recently (threshold 6)"), eight of them ticked off. So
+    the single clearest case of a rule needing retuning was the one the check
+    exempted, and every other rule on that property with it.
+
+    A rule that fires repeatedly AND is acknowledged repeatedly is not healthy —
+    it is alert fatigue with a paper trail, and the acknowledgements are
+    evidence that responding is not stopping it. The catalog's target is alert
+    fatigue; "with no acknowledgement" was its proxy for that, and the proxy
+    fails exactly where the real thing is worst.
     """
-    return {str(row.get("rule_id") or "").strip()
-            for row in done if str(row.get("rule_id") or "").strip()}
+    out: Dict[str, int] = {}
+    for row in done:
+        rule = str(row.get("rule_id") or "").strip()
+        if rule:
+            out[rule] = out.get(rule, 0) + 1
+    return out
 
 
-def noisy(fires: Dict[str, Tuple[int, str]], acked: set[str],
+def noisy(fires: Dict[str, Tuple[int, str]], acks: Dict[str, int],
           threshold: int = DEFAULT_THRESHOLD) -> List[Dict[str, Any]]:
-    """Rules over the threshold that nobody has ever acknowledged, worst first."""
+    """Rules over the threshold, worst first. Acknowledgement does not exempt.
+
+    ⚠️ THE ACK COUNT CHANGES THE SENTENCE, NOT THE VERDICT. Crossing the
+    threshold IS the finding — see `acks_by_rule` for the live list that proved
+    an exemption hides the worst case. `acks` rides along so the brief can say
+    which kind of noise this is: nobody is responding, or responding is not
+    working. Those need different actions and must not read alike.
+    """
     rows: List[Tuple[int, str, str]] = [
         (count, rule, label) for rule, (count, label) in fires.items()
-        if count >= threshold and rule not in acked]
+        if count >= threshold]
     rows.sort(key=lambda r: (-r[0], r[1]))
-    return [{"rule_id": rule, "label": label, "fires": count}
+    return [{"rule_id": rule, "label": label, "fires": count,
+             "acks": acks.get(rule, 0)}
             for count, rule, label in rows]
 
 
@@ -114,6 +135,6 @@ def summarise(items: Sequence[Any], done: Sequence[Dict[str, str]],
     if not covered:
         return {"rules": [], "threshold": threshold, "window_days": window_days,
                 "known": False, "counted": len(fires)}
-    return {"rules": noisy(fires, acknowledged(done), threshold),
+    return {"rules": noisy(fires, acks_by_rule(done), threshold),
             "threshold": threshold, "window_days": window_days,
             "known": True, "counted": len(fires)}
