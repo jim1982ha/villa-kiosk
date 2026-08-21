@@ -1,3 +1,13 @@
+## 2.543.0
+
+### Changed — the check that a menu entry reaches every device now sees all of them
+
+It only looked at two of the three places the top bar puts things, and only at
+entries wired one particular way, so it was blind to the Cockpit and colour
+legend buttons — including while its own notes cited Cockpit as the example to
+copy. It now covers six entries instead of four, and still catches the fault it
+was written for.
+
 ## 2.542.0
 
 ### Fixed — the new spinner stopped dead for anyone who asks for less motion
