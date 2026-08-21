@@ -60,7 +60,13 @@ export default function ScheduleTab({
 
   return (
     <div className="reports-pane">
-      <label className="fm-check">
+      {/* ⚠️ `label.toggle` IS THE APP'S SHARED CHECKBOX ROW. This shipped as
+          `.fm-check`, a class that does not exist anywhere — so the label got
+          no flex layout and the input fell back to the browser's native
+          rendering: a white square floating above its own text, which is what
+          the owner screenshotted. `.fm-check-icon` exists and is for readiness
+          status glyphs; the similar name is what made the invention feel safe. */}
+      <label className="toggle">
         <input
           type="checkbox"
           checked={draft.enabled === true}

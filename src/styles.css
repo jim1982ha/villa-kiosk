@@ -2439,7 +2439,12 @@ input[type="range"]::-moz-range-thumb {
 .test-result.ok { background: color-mix(in srgb, var(--status-on) 18%, transparent); color: var(--status-on); }
 .test-result.fail { background: color-mix(in srgb, var(--status-danger) 18%, transparent); color: var(--status-danger); }
 
-/* --- Themed toggle rows (used in Settings) --- */
+/* --- Themed toggle rows ---
+   ⚠️ "used in Settings" until 2026-08-21, and nothing used it: Settings has no
+   checkbox at all any more. It was the RIGHT style sitting unused while a new
+   caller invented `.fm-check` beside it and shipped a native white square.
+   Now used by the Briefings schedule. A style with no callers and a comment
+   claiming otherwise is worse than a style with no callers. */
 label.toggle {
   display: flex;
   align-items: center;
@@ -2660,6 +2665,18 @@ label.toggle span { user-select: none; line-height: 1.4; }
    `will-change` is usually a smell because it is left on permanently; here
    the element only exists during loading and is unmounted the moment the
    villa appears, which is the case it was designed for. */
+/* ⚠️ AN INLINE ICON THAT TURNS. `@keyframes spin` already existed and
+   `.spinner` already used it, but there was no class to put on a lucide icon —
+   so `className="spin"` on a Loader2 named nothing and the "Composing…"
+   indicator sat perfectly still. Found by the undefined-className probe
+   (tests/py/test_css_classes.py), which exists because of it.
+
+   Separate from `.spinner`, which is a 44px bordered ring for a whole-panel
+   wait. This is the 16px in-button case; merging them would mean one class
+   that has to be told which of two unrelated things it is. */
+.spin { animation: spin 0.9s linear infinite; transform-origin: 50% 50%; }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
 .spinner {
   width: 44px; height: 44px;
   border: 4px solid var(--bg-input); border-top-color: var(--accent);
