@@ -1,3 +1,14 @@
+## 2.574.0
+
+### Fixed — Readiness said "2 not locked" and then listed every lock in the house
+
+Its checks were narrowed to the villa's own devices last release; the panel they
+open was not, so the two contradicted each other. Both now count the same set.
+Alongside it, four duplicates found by the same audit: the unavailable/unknown
+state pair was written out at seven places and named at none, an identical
+"off-like" set existed under three names, and the add-on had a second definition
+of "not reporting" inside the module whose only job is agreeing with the kiosk.
+
 ## 2.573.0
 
 ### Fixed — briefings could not be delivered: HTTP 500 from every send
