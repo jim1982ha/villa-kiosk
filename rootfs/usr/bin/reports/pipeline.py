@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
@@ -197,6 +197,40 @@ async def analyse(
     produced, skipped, counts, ran = await run_all(context, failures, history_days)
     return ([f.as_dict() for f in produced], describe_skips(skipped), counts,
             ran, tally)
+
+
+def _withheld_fields(context: ReportContext,
+                     outbound: Dict[str, Any]) -> List[str]:
+    """Field names present on the findings that did NOT travel. Names only.
+
+    ⚠️ THE MORE CONVINCING HALF OF THE INSPECTOR. A list of PERMITTED names
+    tells a reader what the allow-list says; a list of names it actually
+    dropped on this property's own data tells them what the allow-list DID.
+    Seeing `detail` and `entity_id` named as withheld is the difference between
+    reading a policy and watching it apply.
+
+    ⚠️ NAMES, NEVER VALUES — printing the values would mean leaking them into a
+    panel whose entire purpose is to show they are not leaked.
+
+    Compares the union of every source finding's keys against the union of
+    every emitted finding's keys, so a field dropped from one finding and kept
+    on another (because it was empty there) is not reported as withheld.
+    """
+    source: Set[str] = set()
+    for finding in context.findings or []:
+        if isinstance(finding, dict):
+            source |= set(finding)
+    aggregated = context.aggregated or {}
+    for item in aggregated.get("findings") or []:
+        as_dict = getattr(item, "as_dict", None)
+        if callable(as_dict):
+            source |= set(as_dict())
+
+    emitted: Set[str] = set()
+    for item in outbound.get("findings") or []:
+        if isinstance(item, dict):
+            emitted |= set(item)
+    return sorted(source - emitted)
 
 
 async def run_report(
@@ -399,6 +433,45 @@ async def run_report(
     entry["_body"] = body
     entry["_findings"] = findings
     entry["_preview"] = preview
+    if preview:
+        # ⚠️ THE PAYLOAD IS SHOWN, NOT DESCRIBED, AND IT IS THE REAL ONE.
+        # "Only numbers leave the villa" is a promise, and a promise about
+        # privacy that the operator has to take on trust is worth very little —
+        # particularly on a redistributable add-on whose reader cannot audit
+        # the source. So a preview carries the ACTUAL output of
+        # `payload.from_context`: the same function, on the same context, that
+        # a real narration would transmit. Not a mirror of it, not a mock-up
+        # from a second list kept by hand in the SPA — that would be a privacy
+        # claim verified against the wrong thing, which is worse than no claim.
+        #
+        # ⚠️ ON A PREVIEW ONLY, and for two independent reasons. It is never
+        # persisted (underscore keys are stripped by `append_history`), and a
+        # preview is the moment an operator is deciding whether to switch
+        # narration on — which is the moment this is worth reading.
+        #
+        # ⚠️ COMPUTED WHETHER OR NOT A PROVIDER IS CONFIGURED. The question is
+        # "what WOULD leave", asked before the answer can matter. Gating it on
+        # the feature being enabled would make it unavailable exactly when it
+        # is being decided.
+        try:
+            outbound = payload_mod.from_context(context)
+            entry["_payload"] = {
+                "body": outbound,
+                # ⚠️ THE AUDIT VERDICT TRAVELS WITH IT. `audit()` is what the
+                # narrator asks immediately before sending, so showing its
+                # result here is showing the same gate, not a second opinion
+                # about it. Empty is the pass.
+                "problems": payload_mod.audit(outbound),
+                # ⚠️ FIELD NAMES, NEVER VALUES. What is WITHHELD is the more
+                # convincing half — a reader who sees `detail` and `entity_id`
+                # named as dropped has learned something an allow-list of
+                # permitted names cannot tell them. Printing the values would
+                # be leaking them into a panel to prove they are not leaked.
+                "withheld": _withheld_fields(context, outbound),
+            }
+        except Exception as err:  # noqa: BLE001 - a preview must still render
+            swallow("could not build the narration payload for preview", err)
+
     # ⚠️ The instrument for "found nothing" vs "saw nothing".
     entry["_analysis"] = {"ran": ran, "skipped": skipped, "data": data_tally,
                           "rejected": _rejected_candidates(),

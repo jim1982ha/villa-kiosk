@@ -192,3 +192,56 @@ def test_a_real_aggregated_finding_passes_the_audit() -> None:
     assert P.audit(out) == []
     import json
     assert "climate.living" not in json.dumps(out)
+
+
+# ── the inspector shows the real object, not a description of it ────────────
+
+def test_a_preview_carries_the_payload_that_would_actually_be_sent() -> None:
+    """⚠️ THE WHOLE VALUE OF THE INSPECTOR IS THAT IT IS NOT A MOCK-UP.
+
+    "Only numbers leave the villa" is a promise, and on a redistributable
+    add-on the reader cannot audit the source to check it. So a preview carries
+    the output of `payload.from_context` — the same function, on the same
+    context, that a real narration transmits — plus `audit()`'s verdict on that
+    exact object. A panel fed from a second, hand-kept list in the SPA would
+    keep saying the right words after the backend changed, which is a privacy
+    claim verified against the wrong thing.
+
+    This pins the identity: what the preview exposes IS what narration sends.
+    """
+    from reports.narrate.base import ReportContext
+    context = ReportContext(
+        audience="owner", cadence="weekly", period="2026-W34",
+        generated_at="2026-08-21T07:00:00+08:00",
+        discovery={"reachable": True, "capabilities": [],
+                   "capabilities_missing": ["energy_cost"],
+                   "capability_absent": {"energy_cost": "No tariff is configured."}},
+        findings=[_finding(entity_id="sensor.emmas_bedroom_window")],
+    )
+    shown = P.from_context(context)
+    assert P.audit(shown) == []
+    import json
+    text = json.dumps(shown)
+    assert "emmas_bedroom" not in text
+    assert "No tariff is configured." in text, (
+        "blind spots travel, so the provider cannot write confidently about "
+        "something this property cannot measure")
+
+
+def test_the_withheld_list_names_fields_and_never_values() -> None:
+    """⚠️ THE HALF THAT CONVINCES. A list of PERMITTED names tells a reader what
+    the policy says; a list of names it actually dropped on their own data shows
+    it applying. Names only — printing the values would leak them into the panel
+    whose purpose is to show they are not leaked."""
+    from reports.narrate.base import ReportContext
+    from reports.pipeline import _withheld_fields
+    context = ReportContext(
+        audience="owner", cadence="weekly", period="P", generated_at="",
+        findings=[_finding(entity_id="sensor.emmas_bedroom_window",
+                           detail="Emma said the pump is loud")],
+    )
+    withheld = _withheld_fields(context, P.from_context(context))
+    assert "entity_id" in withheld and "detail" in withheld
+    assert "label" not in withheld, "an allow-listed field is not withheld"
+    for name in withheld:
+        assert "emmas_bedroom" not in name and "Emma" not in name

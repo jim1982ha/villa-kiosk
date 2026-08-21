@@ -86,6 +86,21 @@ export interface ReportPreview {
     };
     periodSince: string;
   };
+  /** ⚠️ WHAT WOULD ACTUALLY BE TRANSMITTED, built by the backend's own
+   *  `payload.from_context` on this very report — not a mirror of it, and not
+   *  reconstructed here from a second copy of the allow-list. A privacy claim
+   *  verified against a hand-kept twin is verified against the wrong thing.
+   *  Present on a PREVIEW only; never persisted to history. */
+  payload: {
+    body: unknown;
+    /** The backend's own `audit()` verdict on that object — the same gate the
+     *  narrator asks immediately before sending. Empty is the pass. */
+    problems: string[];
+    /** Field NAMES that existed on the findings and did not travel. Never
+     *  values: printing them would leak them into the panel whose purpose is
+     *  to show they are not leaked. */
+    withheld: string[];
+  } | null;
 }
 
 // ── narrowing helpers ───────────────────────────────────────────────────────
@@ -499,6 +514,11 @@ export async function runReportNow(
     if (!r.ok) return null;
     const d = obj(await r.json());
     const analysis = obj(d._analysis);
+    // ⚠️ PRESENCE IS THE SIGNAL. `_payload` is attached to a preview and to
+    // nothing else, so its absence means "this was a delivered report", not
+    // "nothing would be sent".
+    const pay = d._payload === undefined || d._payload === null
+      ? null : obj(d._payload);
     const agg = obj(analysis.aggregated);
     const savings = obj(agg.savings);
     return {
@@ -536,6 +556,15 @@ export async function runReportNow(
           }),
         },
         periodSince: str(analysis.period_since),
+      },
+      // ⚠️ `null` WHEN ABSENT, NEVER AN EMPTY OBJECT. A delivered report
+      // carries no payload block at all (it is preview-only), and an empty
+      // object there would render as "nothing would be transmitted" — the
+      // opposite claim, in the panel where being wrong costs the most.
+      payload: pay === null ? null : {
+        body: pay.body,
+        problems: strs(pay.problems),
+        withheld: strs(pay.withheld),
       },
     };
   } catch {

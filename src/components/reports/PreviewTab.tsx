@@ -8,12 +8,19 @@
 
 import { FileText, Loader2 } from "lucide-react";
 import type { ReportPreview } from "@/reports/reportsApi";
+import type { NarrationMode } from "@/reports/reportsTypes";
+import PayloadInspector from "./PayloadInspector";
 
 export default function PreviewTab({
-  preview, busy, onCompose,
+  preview, busy, narrationMode, onCompose,
 }: {
   preview: ReportPreview | null;
   busy: boolean;
+  /** ⚠️ SO THE INSPECTOR CAN LEAD WITH "NOTHING IS BEING TRANSMITTED" on the
+   *  default setting. A payload panel with no such statement implies the data
+   *  is leaving, which on every install that has not switched narration on is
+   *  the opposite of the truth. */
+  narrationMode: NarrationMode;
   onCompose: () => void;
 }) {
   return (
@@ -50,6 +57,13 @@ export default function PreviewTab({
               </div>
             )}
           </dl>
+
+          {/* ⚠️ AFTER THE BRIEF, NOT BEFORE IT. The plan puts this at the END
+              of onboarding — read a real report from real data, THEN see
+              exactly what would be transmitted, and only then decide. Leading
+              with a JSON block would bury the thing the operator came to
+              read. */}
+          <PayloadInspector preview={preview} mode={narrationMode} />
         </>
       )}
     </div>

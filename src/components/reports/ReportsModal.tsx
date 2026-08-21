@@ -227,6 +227,7 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
             <PreviewTab
               preview={preview}
               busy={busy}
+              narrationMode={config?.narration?.mode ?? "deterministic"}
               onCompose={() => void compose()}
             />
           )}

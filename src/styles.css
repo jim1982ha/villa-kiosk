@@ -4228,6 +4228,31 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    children, so `>` costs nothing and closes the door. */
 .reports-schedule > select { flex: 1 1 96px; min-height: var(--touch-min); }
 
+/* The narration payload, shown verbatim.
+   ⚠️ SCROLLS INSIDE ITS OWN BOX. JSON is the widest content this dialog ever
+   holds, and CLAUDE.md's own rule is that wide content gets `overflow-x: auto`
+   on its own container so the page body never scrolls sideways — on a 360px
+   phone one unwrapped line would otherwise drag the whole modal. Capped in
+   height for the same reason the tabs are: a long payload must not make the
+   dialog taller than the screen. */
+.reports-payload {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-input);
+  border: 1px solid var(--hairline);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  max-height: 40vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* `pre` defaults to `white-space: pre`, which is what we want — the
+     indentation carries the structure — so the horizontal scroll above is the
+     deliberate escape rather than wrapping JSON into unreadability. */
+  tab-size: 2;
+}
+
 /* A schedule's own destinations, indented under its row. Full width so it
    wraps below the selects rather than competing with them for the same line,
    and `flex-basis: 100%` on the row it sits in does the same job the selects'
