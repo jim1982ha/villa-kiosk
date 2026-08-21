@@ -184,7 +184,7 @@ def test_a_self_resolved_alert_is_counted_as_fixed() -> None:
     # ⚠️ NOW A BULLET UNDER ITS OWN HEADING. It was a bare sentence sitting
     # directly above the next heading — readable in a flat document, and a
     # heading that had lost its icon once every other heading gained one.
-    assert heading("fixed", "Closed by itself") in body
+    assert heading("selfclear", "Closed by itself") in body
     # ⚠️ AND IT NAMES THEM RATHER THAN COUNTING THEM (2.575.0). "3 alerts
     # resolved without intervention." sat directly under a section that had
     # just listed those same three with their durations — a number the reader
@@ -347,7 +347,7 @@ def test_a_report_with_everything_still_reads_top_down() -> None:
         _maintenance("Service the pump")))
     order = [body.index(h) for h in
              (heading("critical", "What went wrong"), heading("money", "Avoidable cost, most expensive first"),
-              heading("fixed", "For the caretaker"))]
+              heading("fixed", "For the facility manager"))]
     assert order == sorted(order)
 
 
@@ -398,7 +398,7 @@ def test_a_maintenance_line_carries_its_measurement_not_just_a_name() -> None:
     # `_count` suffix pluralises the stem; `max_transitions` has no unit suffix
     # and stays as written. Both are measurements the label alone did not carry.
     assert "14 transitions" in body
-    assert "max transitions 6" in body
+    assert "max 6 transitions" in body
 
 
 def test_a_measurement_never_repeats_money_or_housekeeping() -> None:
@@ -667,7 +667,7 @@ def test_checks_that_stood_down_for_the_same_reason_share_one_line() -> None:
 
 def test_two_headings_in_one_section_are_separated() -> None:
     """⚠️ `render` ONLY PUTS A BLANK LINE BETWEEN SECTIONS. "Closed by itself"
-    and "For the caretaker" live in the same one, so they ran together with no
+    and "For the facility manager" live in the same one, so they ran together with no
     gap — visible in the first delivered brief that had both, once headings
     carried markers and the join became obvious."""
     body = _render(aggregated=_events(
@@ -675,8 +675,8 @@ def test_two_headings_in_one_section_are_separated() -> None:
         _critical("cleared", when="2026-08-20T12:30:00+08:00"),
         _maintenance("Check the valve")))
     lines = body.splitlines()
-    closed = lines.index(heading("fixed", "Closed by itself"))
-    caretaker = lines.index(heading("fixed", "For the caretaker"))
+    closed = lines.index(heading("selfclear", "Closed by itself"))
+    caretaker = lines.index(heading("fixed", "For the facility manager"))
     assert lines[caretaker - 1] == "", (
         "a heading that follows content needs a blank line before it")
     assert closed < caretaker

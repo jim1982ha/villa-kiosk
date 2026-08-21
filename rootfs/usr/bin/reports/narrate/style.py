@@ -58,7 +58,15 @@ SECTION_MARK: Dict[str, str] = {
     "standing": "\U0001F514",      # bell
     "critical": "⚠️",     # warning sign
     "money": "\U0001F4B0",          # money bag
-    "fixed": "\U0001F527",          # wrench
+    # ⚠️ THE `fixed` SECTION RENDERS THREE HEADINGS AND THEY HAD ONE GLYPH
+    # BETWEEN THEM. "Followed up", "Closed by itself" and "For the facility
+    # manager" all came out as 🔧, so two consecutive headings in one section
+    # were visually identical and the reader had only the words to separate
+    # them — reported as exactly that. A marker whose whole job is to be findable
+    # without reading cannot be shared by the things it distinguishes.
+    "fixed": "\U0001F527",          # wrench — the tasks somebody has been given
+    "verified": "\u2611\ufe0f",         # ballot box with check — confirmed over
+    "selfclear": "\U0001F504",     # arrows counterclockwise — resolved on its own
     "preventive": "\U0001F4C5",     # calendar
     "trends": "\U0001F4C8",         # chart increasing
     "health": "\U0001FA7A",         # stethoscope
@@ -77,8 +85,14 @@ _MARKUP_ACTIVE = {
     "*": "",     # Markdown bold/italic.
     "`": "'",    # Markdown code.
     "~": "-",    # MarkdownV2 strikethrough.
-    "[": "(",    # Markdown link.
-    "]": ")",
+    # ⚠️ `[` AND `]` ARE NOT HERE, AND THAT IS DELIBERATE (2.577.0). They are
+    # the report's own quoting for a rule, blueprint or file name — "[roi_
+    # baseline_deviation] has not reported" is legible where the bare words are
+    # not, and the owner asked for it. Neither is an entity DELIMITER in
+    # Telegram's legacy Markdown: only `_ * ` and a backtick open an entity, so
+    # an unmatched bracket prints and nothing errors. The one construct that
+    # would matter is a link, `[text](url)`, which needs the two characters
+    # ADJACENT — see `inert`, which puts a space between them.
     "<": "(",    # HTML parse mode.
     ">": ")",
 }
@@ -124,8 +138,12 @@ def inert(text: str) -> str:
     intentional markup anywhere, so there is nothing for a whole-message pass to
     damage, and after it there is no site left that can forget.
     """
-    return "".join(_MARKUP_ACTIVE.get(character, character)
-                   for character in text)
+    flat = "".join(_MARKUP_ACTIVE.get(character, character) for character in text)
+    # ⚠️ THE ONE BRACKET CONSTRUCT THAT IS STILL MARKUP. `[text](url)` is a
+    # Markdown link and needs `](` adjacent; a space between them is invisible
+    # to a reader and stops any parser reading the pair as a link. This is what
+    # lets the brackets above stay literal.
+    return flat.replace("](", "] (")
 
 
 def heading(section: str, text: str) -> str:

@@ -136,6 +136,27 @@ def _entity_labels(states: Any) -> Dict[str, str]:
             for entity_id in entities}
 
 
+def _entity_units(states: Any) -> Dict[str, str]:
+    """entity_id -> `unit_of_measurement`, for every entity that declares one.
+
+    ⚠️ FROM THE SAME STATE DUMP `_entity_labels` READS. A blueprint reports the
+    NUMBER it measured and the report has to say what it is a number OF; only
+    the sensor knows. Costs a dict comprehension over data already in hand.
+    """
+    if not isinstance(states, list):
+        return {}
+    out: Dict[str, str] = {}
+    for entity in states:
+        if not isinstance(entity, dict):
+            continue
+        attributes = entity.get("attributes")
+        unit = (attributes or {}).get("unit_of_measurement") \
+            if isinstance(attributes, dict) else None
+        if unit and entity.get("entity_id"):
+            out[str(entity["entity_id"])] = str(unit)
+    return out
+
+
 def _standing_rows(states: Any) -> List[Dict[str, Any]]:
     """Live HA states -> the same list the kiosk's Cockpit is showing.
 
@@ -438,6 +459,7 @@ async def run_report(
     verified: List[Any] = []
     standing: List[Dict[str, Any]] = []
     labels: Dict[str, str] = {}
+    units: Dict[str, str] = {}
     try:
         async with HassClient(session) as hass:
             lists = await ledger.todo_lists(hass)
@@ -459,6 +481,7 @@ async def run_report(
             states = await hass.command("get_states")
             standing = _standing_rows(states)
             labels = _entity_labels(states)
+            units = _entity_units(states)
         carried = ledger.reconcile(todo, aggregated.get("tasks") or [])
 
         # ── verify ──────────────────────────────────────────────────────────
@@ -499,7 +522,7 @@ async def run_report(
         findings=findings + [f.as_dict() for f in verified],
         skipped=skipped, ran=ran,
         aggregated=aggregated, collector=collect.state(),
-        carried_tasks=carried, standing=standing, labels=labels,
+        carried_tasks=carried, standing=standing, labels=labels, units=units,
         currency=str(found.get("currency") or ""),
     )
     narrator = DeterministicNarrator()

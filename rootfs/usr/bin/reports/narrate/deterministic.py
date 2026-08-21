@@ -194,8 +194,24 @@ def _plural(count: int, singular: str, plural: str = "") -> str:
 _UNIT_SUFFIXES = ("minutes", "hours", "days", "seconds", "weeks", "months")
 
 
-def _phrase(key: str, value: Any) -> str:
-    """One measured field, as a phrase rather than a dump."""
+def _phrase(key: str, value: Any, unit: str = "") -> str:
+    """One measured field, as a phrase rather than a dump.
+
+    ⚠️ A NUMBER WITHOUT ITS UNIT IS USELESS, AND THIS PRINTED THREE OF THEM.
+    A delivered brief read "current value 1694.7, baseline value 750.0" and
+    "max transitions 6" — asked, fairly, what they were. The owner's rule:
+    never state a number without its unit where one exists. Three shapes had
+    no route to one:
+
+      *_value    the unit belongs to the SENSOR, not to the field name, so it
+                 comes from `unit_of_measurement` on the entity the group is
+                 about — see `ReportContext.units`.
+      *_<plural> a bare count whose noun IS its unit: `max_transitions` is six
+                 TRANSITIONS, not six of nothing.
+      anything   still falls through to the humanised dump, because a stiff
+                 true phrase beats a fluent one about the wrong field — the
+                 rule this function was written under and which still holds.
+    """
     words = key.split("_")
     tail = words[-1]
     stem = " ".join(words[:-1])
@@ -206,7 +222,16 @@ def _phrase(key: str, value: Any) -> str:
             else f"{stem} {value}"
     if tail in _UNIT_SUFFIXES and stem:
         return f"{stem} {value} {tail}"
-    return f"{key.replace('_', ' ')} {value}"
+    # ⚠️ THE SUBJECT'S OWN UNIT. `current_value`/`baseline_value` are whatever
+    # the watched sensor measures — watts for a pump, degrees for the meter
+    # cabinet — and only Home Assistant knows which.
+    if tail == "value" and stem and unit:
+        return f"{stem} {value} {unit}"
+    # A plural noun tail counts things, and the noun is the unit.
+    if (stem and tail.endswith("s") and not tail.endswith("ss")
+            and isinstance(value, (int, float)) and not isinstance(value, bool)):
+        return f"{stem} {_plural(int(value), tail[:-1])}"
+    return f"{key.replace('_', ' ')} {value}" + (f" {unit}" if unit else "")
 
 
 def _amount(value: float, whole: bool = False, currency: str = "") -> str:
@@ -236,10 +261,12 @@ class DeterministicNarrator:
     #: `pipeline` constructs it per pass — so this cannot leak between reports.
     _currency: str = ""
     _labels: Dict[str, str] = {}
+    _units: Dict[str, str] = {}
 
     def render(self, context: ReportContext) -> Tuple[str, str]:
         self._currency = context.currency
         self._labels = context.labels or {}
+        self._units = context.units or {}
         title = self._title(context)
         lines: List[str] = list(self._headline(context))
 
@@ -670,7 +697,7 @@ class DeterministicNarrator:
             # ENDED, which is precisely the line a reader should be able to
             # find. "Followed up" describes the ACTION, which is evidenced;
             # the sentence itself never says more than "has not recurred".
-            lines.append(heading("fixed", "Followed up"))
+            lines.append(heading("verified", "Followed up"))
             for item in verified[:MAX_LINES]:
                 lines.append(self._finding_line(item))
         if resolved:
@@ -681,7 +708,7 @@ class DeterministicNarrator:
             # a heading that had lost its icon. Found by rendering a brief from
             # real data and looking at it, which is the only thing that finds a
             # line that is grammatical and misplaced.
-            lines.append(heading("fixed", "Closed by itself"))
+            lines.append(heading("selfclear", "Closed by itself"))
             # ⚠️ NAMED, NOT COUNTED. This printed "3 alerts resolved without
             # intervention." directly under a section that had just listed
             # those same three with their durations — a number the reader has to
@@ -705,7 +732,12 @@ class DeterministicNarrator:
             # follows content, not only at a section boundary.
             if lines:
                 lines.append("")
-            lines.append(heading("fixed", "For the caretaker"))
+            # ⚠️ "FACILITY MANAGER", NOT "CARETAKER". The kiosk calls this
+            # person the Facility Manager everywhere — the workspace, the role,
+            # the permission — and the brief was the only surface using a
+            # second word for them. The blueprints' own `caretaker_todo_list`
+            # input keeps its name; that is the operator's YAML, not ours.
+            lines.append(heading("fixed", "For the facility manager"))
             for task in tasks[:MAX_LINES]:
                 if isinstance(task, dict):
                     where = str(task.get("bucket") or "").strip()
@@ -715,7 +747,7 @@ class DeterministicNarrator:
                     # health)" is a blueprint's own task text plus its bucket —
                     # correct, and unusable without knowing what to re-enable.
                     who = ", ".join(
-                        self._labels.get(e) or prettify_entity_slug(e)
+                        f"[{self._labels.get(e) or prettify_entity_slug(e)}]"
                         for e in (task.get("entities") or [])[:3])
                     tail = f" ({where})" if where else ""
                     lines.append(f"{BULLET}{text}" + (f" — {who}" if who else "") + tail)
@@ -918,8 +950,8 @@ class DeterministicNarrator:
             # using. The subject of the sentence is the rule, and the category
             # is the only thing left to qualify it with.
             buckets = [readable_label(str(b)) for b in (entry.get("buckets") or [])][:3]
-            if buckets and not entry.get("named"):
-                name = f"{', '.join(buckets)} {name}"
+            name = (f"{', '.join('[' + b + ']' for b in buckets)} {name}"
+                    if buckets and not entry.get("named") else f"[{name}]")
             # ⚠️ FIELD NAMES ARE IDENTIFIERS TOO. This printed `entity_id (use
             # entities)` verbatim — the same defect as the rule id, one line
             # over, and the reason the whole sentence came out italic on a
@@ -1173,6 +1205,19 @@ class DeterministicNarrator:
                     pass
         return f"{total:g} hours run" if total else ""
 
+    def _unit_of(self, group: Any) -> str:
+        """What the entities behind this group are measured in, if they agree.
+
+        ⚠️ ONLY WHERE THEY AGREE. A group covering a pump's power sensor and its
+        power-factor sensor has two units, and picking the first would label
+        every number with one of them. Ambiguity prints nothing, which is the
+        old behaviour and is honest; a wrong unit is worse than none.
+        """
+        units = {self._units.get(e, "") for e in
+                 (getattr(group, "entities", None) or [])}
+        units.discard("")
+        return units.pop() if len(units) == 1 else ""
+
     def _measurement(self, group: Any) -> str:
         """The numbers a blueprint measured, in the order it supplied them.
 
@@ -1187,13 +1232,14 @@ class DeterministicNarrator:
                     else getattr(item, "data", None)) or {}
             if not isinstance(data, dict):
                 continue
+            unit = self._unit_of(group)
             parts: List[str] = []
             for key, value in data.items():
                 if key in NON_MEASUREMENT_KEYS or value in (None, "", [], {}):
                     continue
                 if isinstance(value, bool) or not isinstance(value, (int, float, str)):
                     continue
-                parts.append(_phrase(str(key), value))
+                parts.append(_phrase(str(key), value, unit))
             if parts:
                 return ", ".join(parts[:3])
         return ""
@@ -1230,9 +1276,15 @@ class DeterministicNarrator:
                  for e in (getattr(group, "entities", None) or [])]
         if not names:
             return ""
-        if len(names) <= limit:
-            return ", ".join(names)
-        return f"{', '.join(names[:limit])} and {len(names) - limit} more"
+        # ⚠️ BRACKETED. "Critical automation health: critical automation off —
+        # critical doorbell---parking gate" runs a rule NAME into the prose
+        # around it with nothing to say where one stops and the other starts.
+        # Asked for directly: quote an automation, blueprint or file name.
+        # `style.inert` keeps `[` and `]` literal for exactly this.
+        marked = [f"[{name}]" for name in names]
+        if len(marked) <= limit:
+            return ", ".join(marked)
+        return f"{', '.join(marked[:limit])} and {len(marked) - limit} more"
 
     def _detail(self, group: Any) -> str:
         for item in self._items(group):

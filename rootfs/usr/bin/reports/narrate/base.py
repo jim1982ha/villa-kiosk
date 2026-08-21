@@ -85,6 +85,13 @@ class ReportContext:
     #: to a person and `automation.outdoor_unified_doorbell_call_and_unlock` in
     #: the payload; only the first says "critical".
     labels: Dict[str, str] = field(default_factory=dict)
+    #: entity_id -> `unit_of_measurement`, for the numbers a blueprint measured.
+    #:
+    #: ⚠️ THE UNIT BELONGS TO THE SENSOR, NOT TO THE FIELD NAME. A blueprint
+    #: sends `current_value: 1694.7` and only Home Assistant knows that is watts
+    #: on a pump and degrees on the meter cabinet. Without this the brief
+    #: printed "current value 1694.7" and was asked what it meant.
+    units: Dict[str, str] = field(default_factory=dict)
     #: The operator's own currency, from Home Assistant's `get_config`.
     #: Empty prints amounts bare — see `_amount`.
     currency: str = ""

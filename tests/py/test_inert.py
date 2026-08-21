@@ -50,12 +50,17 @@ def test_the_name_that_broke_delivery_is_inert() -> None:
         "Deleting it gives `Timmerflotte8343`, a different name")
 
 
-@pytest.mark.parametrize("character", ["_", "*", "`", "~", "[", "]", "<", ">"])
+@pytest.mark.parametrize("character", ["_", "*", "`", "~", "<", ">"])
 def test_no_markup_active_character_survives(character: str) -> None:
     """⚠️ THE UNION OF THE MODES, because the add-on does not choose the parse
     mode — the platform's own configuration does, and `discovery._plain_mode`
     can only turn one off where the service publishes a field for it. Legacy
-    Markdown breaks on `_ * ` [`; MarkdownV2 adds `~`; HTML breaks on `< >`."""
+    Markdown breaks on `_ * ` `; MarkdownV2 adds `~`; HTML breaks on `< >`.
+
+    ⚠️ `[` AND `]` ARE NOT IN THIS LIST since 2.577.0. They are the report's own
+    quoting for a rule or file name and neither opens an entity in Telegram's
+    legacy Markdown — only a LINK, `[text](url)`, is markup, and that needs the
+    two characters adjacent. See `test_a_link_is_the_only_bracket_construct`."""
     assert character not in style.inert(f"a {character} b")
 
 
@@ -85,12 +90,23 @@ def test_the_deterministic_body_is_inert_end_to_end() -> None:
         standing=rows)
     title, body = DeterministicNarrator().render(context)
     clean_title, clean_body = style.inert(title), style.inert(body)
-    for character in ("_", "*", "`", "[", "]", "<", ">"):
+    for character in ("_", "*", "`", "<", ">"):
         assert character not in clean_body, f"{character!r} survived into the body"
         assert character not in clean_title
     # The names are still readable, which is the other half of the requirement.
     assert "Timmerflotte 8343 Temperature" in clean_body
     assert "Gate motor grinding" in clean_body
+    # The room name keeps its brackets — they are not markup on their own.
+    assert "Entrance [north]" in clean_body
+
+
+def test_a_link_is_the_only_bracket_construct() -> None:
+    """⚠️ WHAT LETS THE BRACKETS STAY LITERAL. `[text](url)` needs `](`
+    adjacent; a space between them is invisible to a reader and stops any
+    parser reading the pair as a link."""
+    assert style.inert("[roi_baseline_deviation] has not reported") == \
+        "[roi baseline deviation] has not reported"
+    assert style.inert("a [link](http://x) here") == "a [link] (http://x) here"
 
 
 # ── the boundary ─────────────────────────────────────────────────────────────
@@ -134,6 +150,9 @@ def test_the_renderer_does_not_emit_markup_of_its_own() -> None:
     # /dry-audit, in a test I had just written.
     emitted = [re.sub(r"\{[^}]*\}", "", literal)
                for literal in re.findall(r'f?"([^"\n]{2,})"', source)]
+    # ⚠️ BRACKETS ARE NOT ON THIS LIST. The renderer emits them ON PURPOSE to
+    # quote a rule name, and `inert` keeps them — see the module header. What a
+    # whole-message pass WOULD eat is still forbidden here.
     offenders = [s for s in emitted
-                 if any(c in s for c in ("**", "__", "`", "<b>", "["))]
+                 if any(c in s for c in ("**", "__", "`", "<b>"))]
     assert not offenders, f"the renderer emits markup a whole-message pass would eat: {offenders}"

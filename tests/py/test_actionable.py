@@ -323,3 +323,96 @@ def test_the_dateline_is_not_a_bullet() -> None:
     from reports.narrate.style import BULLET
     first = _headline_block(_render(HEADLINE_EVENTS))[0]
     assert first.startswith("Prepared") and not first.startswith(BULLET)
+
+
+# ── a number without its unit is useless (2.577.0) ───────────────────────────
+
+def _measured(**data: Any) -> Dict[str, Any]:
+    return {"type": "vesta_maintenance_event", "at": "2026-08-21T10:00:00+08:00",
+            "data": {"blueprint": "maintenance_signature_drift",
+                     "report_bucket": "Pump signature drift",
+                     "label": "Pump signature drift",
+                     "entities": ["sensor.house_pump_power"],
+                     "timestamp": "2026-08-21T10:00:00+08:00", **data}}
+
+
+def test_a_measured_value_carries_the_sensors_own_unit() -> None:
+    """⚠️ THE UNIT BELONGS TO THE SENSOR. A brief read "current value 1694.7,
+    baseline value 750.0" and was asked what those were. Only Home Assistant
+    knows they are watts on a pump and degrees on the meter cabinet."""
+    body = _render([_measured(current_value=1694.7, baseline_value=750.0)],
+                   units={"sensor.house_pump_power": "W"})
+    assert "current 1694.7 W" in body and "baseline 750.0 W" in body
+
+
+def test_a_count_carries_the_noun_it_counts() -> None:
+    """"max transitions 6" reads as a field dump; six of WHAT was the question."""
+    body = _render([_measured(transition_count=7, max_transitions=6)])
+    assert "7 transitions" in body and "max 6 transitions" in body
+    assert "max transitions 6" not in body
+
+
+def test_an_ambiguous_unit_prints_none_rather_than_the_wrong_one() -> None:
+    """⚠️ A GROUP CAN COVER TWO SENSORS WITH TWO UNITS — a pump's power and its
+    power factor. Picking the first would label every number with one of them.
+    Silence is the old behaviour and is honest; a wrong unit is worse."""
+    event = _measured(current_value=1.0)
+    event["data"]["entities"] = ["sensor.house_pump_power", "sensor.house_pump_pf"]
+    body = _render([event], units={"sensor.house_pump_power": "W",
+                                   "sensor.house_pump_pf": "%"})
+    # ⚠️ AND IT KEEPS THE FIELD NAME. Without a unit, "current 1.0" says less
+    # than "current value 1.0" — dropping the noun is only safe once something
+    # replaces it, so the fallback is the old, stiff, true dump.
+    assert "current value 1.0" in body
+    assert "1.0 W" not in body and "1.0 %" not in body
+
+
+def test_a_percentage_still_prints_as_one() -> None:
+    body = _render([_measured(deviation_pct=126.0)], units={"sensor.house_pump_power": "W"})
+    assert "deviation 126.0%" in body
+
+
+# ── a named rule is bracketed, so the sentence parses ────────────────────────
+
+def test_a_named_rule_is_bracketed() -> None:
+    """⚠️ ASKED FOR DIRECTLY. "Critical automation health: critical automation
+    off — critical doorbell---parking gate" runs a rule NAME into the prose
+    around it with nothing marking where one stops."""
+    body = _render([AUDIT_EVENT], labels=LABELS)
+    # ⚠️ CHECKED ON EACH LINE THAT NAMES A RULE, NOT ON THE BODY. The first
+    # version searched the whole message and survived a mutation that removed
+    # the brackets from `_subjects`, because the caretaker-task line builds its
+    # own and still had them. Two code paths, one assertion.
+    audit = next(l for l in body.splitlines() if "critical automation off" in l)
+    task = next(l for l in body.splitlines() if "Re-enable" in l)
+    for line in (audit, task):
+        assert f"[{DISPLAY_NAME}]" in line, f"unbracketed rule name: {line!r}"
+
+
+def test_the_brackets_survive_the_markup_pass() -> None:
+    """⚠️ THE TWO REQUIREMENTS MEET HERE. `style.inert` neutralises anything a
+    notify platform can parse, and brackets are the report's own quoting — so
+    they must NOT be neutralised, while `](` still must be."""
+    from reports.narrate.style import inert
+    body = inert(_render([AUDIT_EVENT], labels=LABELS))
+    assert "[critical doorbell---parking gate]" in body
+
+
+# ── three headings, three marks ──────────────────────────────────────────────
+
+def test_the_three_fixed_headings_do_not_share_a_glyph() -> None:
+    """⚠️ REPORTED: "the icon you use is the same for Closed by itself and For
+    the facility manager". A marker whose job is to be findable without reading
+    cannot be shared by the things it distinguishes."""
+    from reports.narrate.style import SECTION_MARK
+    marks = [SECTION_MARK[k] for k in ("verified", "selfclear", "fixed")]
+    assert len(set(marks)) == 3, marks
+
+
+def test_the_brief_says_facility_manager_not_caretaker() -> None:
+    """⚠️ ONE WORD FOR ONE PERSON. The kiosk calls them the Facility Manager
+    everywhere — workspace, role, permission — and the brief was the only
+    surface using a second word."""
+    body = _render([AUDIT_EVENT], labels=LABELS)
+    assert "For the facility manager" in body
+    assert "caretaker" not in body.lower()

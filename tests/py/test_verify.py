@@ -191,7 +191,7 @@ def test_a_verification_gets_its_own_heading() -> None:
     # first bullet was then the cost line and the assertion compared it to the
     # dateline. The property is "the verification bullet has a heading above
     # it", so start from the heading.
-    head = lines.index(heading("fixed", "Followed up"))
+    head = lines.index(heading("verified", "Followed up"))
     assert lines[head + 1].startswith(BULLET), (
         "nothing is listed under the Followed up heading")
 
