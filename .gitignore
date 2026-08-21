@@ -12,6 +12,12 @@ tests/*
 # guarantee, and a guarantee that lives in an ignored directory is not one. CI
 # runs it (.github/workflows/ci.yaml).
 !tests/py/
+# ...and the QA harness, for the same reason one level out. It reads a dozen
+# field names straight out of the backend's JSON, so it is the same
+# cross-artefact contract every other pin in tests/py exists for — and an
+# ignored copy is one nothing keeps in step. `test_qa_harness.py` checks the
+# names it reads against the Python that produces them.
+!tests/qa/
 node_modules
 dist
 dist-ssr
