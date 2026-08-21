@@ -26,7 +26,10 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
-from . import aggregate as aggregate_mod, collect, discovery, ledger, verify as verify_mod, schedule as schedule_mod, stats as stats_mod, store
+from . import (aggregate as aggregate_mod, collect, devices as devices_mod,
+               discovery, ledger, model as model_mod, schedule as schedule_mod,
+               standing as standing_mod, stats as stats_mod, store,
+               verify as verify_mod)
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import PAYLOAD_ALLOWED_FIELDS, severity_rank
@@ -54,6 +57,31 @@ def _rejected_candidates() -> List[Dict[str, Any]]:
         for item in getattr(module, "rejected", []) or []:
             out.append({"module": module.name, **item})
     return out
+
+
+def _standing_rows(states: Any) -> List[Dict[str, Any]]:
+    """Live HA states -> the same list the kiosk's Cockpit is showing.
+
+    ⚠️ THE SUBJECT IS DROPPED HERE, AT THE CROSSING. `standing.Item.subject`
+    carries an entity id — it is what P3 will deduplicate against the blueprint
+    layer on, and it is server-side only. Filtering it later would work and is
+    the weaker guarantee; this subsystem's rule is that "the data is not there"
+    beats "the filter is careful", which is the same reason `dedup_key` hashes
+    its subject and `Finding` has no entity field at all.
+
+    ⚠️ THE MESH NAMES COME FROM THE GLB, not from a browser. See `model.py`:
+    publishing the kiosk's derived list would make a briefing depend on somebody
+    having opened the tablet, which fails precisely on the villa nobody visits.
+    """
+    if not isinstance(states, list):
+        return []
+    entities = {str(e.get("entity_id") or ""): e for e in states
+                if isinstance(e, dict) and e.get("entity_id")}
+    config = devices_mod.read_config()
+    items = standing_mod.build(
+        entities, config, ledger.read(), model_mod.mesh_entity_ids())
+    return [{"kind": i.kind, "title": i.title, "detail": i.detail, "room": i.room}
+            for i in items]
 
 
 def _statistics_fetcher(session: ClientSession, now_local: datetime,
@@ -313,11 +341,26 @@ async def run_report(
     # todo list is thinner, not absent.
     carried: List[Dict[str, str]] = []
     verified: List[Any] = []
+    standing: List[Dict[str, Any]] = []
     try:
         async with HassClient(session) as hass:
             lists = await ledger.todo_lists(hass)
             todo = await ledger.todo_tasks(hass, lists)
             done = await ledger.todo_tasks(hass, lists, status="completed")
+            # ── standing state ──────────────────────────────────────────────
+            # ⚠️ LIVE STATE, ON THE CONNECTION THAT IS ALREADY OPEN. The brief
+            # could not previously see a single thing the kiosk calls "needs
+            # attention" — no entity states, and `ledger.read()` reached
+            # `verify` and never the renderer. An owner compared the two screens
+            # and found a brief that mentioned none of the four devices the
+            # Cockpit was listing. See `standing.py`.
+            #
+            # ⚠️ NON-FATAL, LIKE THE TODO READ ABOVE AND FOR THE SAME REASON: a
+            # brief that cannot reach Home Assistant is thinner, never absent.
+            # It shares this `try` deliberately — a failure here must not cost
+            # the caretaker reconciliation either, and both are the same kind
+            # of "the villa was unreachable" outcome.
+            standing = _standing_rows(await hass.command("get_states"))
         carried = ledger.reconcile(todo, aggregated.get("tasks") or [])
 
         # ── verify ──────────────────────────────────────────────────────────
@@ -358,7 +401,7 @@ async def run_report(
         findings=findings + [f.as_dict() for f in verified],
         skipped=skipped, ran=ran,
         aggregated=aggregated, collector=collect.state(),
-        carried_tasks=carried,
+        carried_tasks=carried, standing=standing,
     )
     narrator = DeterministicNarrator()
     try:

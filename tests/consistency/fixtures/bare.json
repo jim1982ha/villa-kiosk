@@ -1,0 +1,26 @@
+{
+  "name": "bare",
+  "note": "A brand-new install. No model, no entity map, no blueprints, no facility record, no Energy dashboard. Every surface must report NOTHING CONFIGURED, never NOTHING WRONG.",
+  "states": {
+    "light.a": {
+      "entity_id": "light.a",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Light A"
+      }
+    },
+    "sensor.b": {
+      "entity_id": "sensor.b",
+      "state": "unavailable",
+      "attributes": {
+        "friendly_name": "Sensor B"
+      }
+    }
+  },
+  "deviceConfig": {},
+  "fmData": {},
+  "meshEntityIds": [],
+  "resolvedRooms": {},
+  "blueprints": [],
+  "seenBlueprints": {}
+}

@@ -18,6 +18,12 @@ tests/*
 # ignored copy is one nothing keeps in step. `test_qa_harness.py` checks the
 # names it reads against the Python that produces them.
 !tests/qa/
+# ...and the consistency harness, which is HALF of a test in tests/py. Its
+# TypeScript entry point and its four deployment fixtures are what
+# `test_consistency_parity.py` runs; leaving them untracked would make the pin
+# pass on this machine and skip everywhere else — a guarantee that only holds
+# on the author's laptop is not one.
+!tests/consistency/
 node_modules
 dist
 dist-ssr

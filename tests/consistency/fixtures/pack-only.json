@@ -1,0 +1,49 @@
+{
+  "name": "pack-only",
+  "note": "The VESTA blueprint pack is imported and NO automation has been built from it, so nothing can ever fire. The built-in analyses must still run: this is the new-property case, and today it is the one that silently detects nothing.",
+  "states": {
+    "light.hall": {
+      "entity_id": "light.hall",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Hall light"
+      }
+    },
+    "sensor.pump_power": {
+      "entity_id": "sensor.pump_power",
+      "state": "unavailable",
+      "attributes": {
+        "friendly_name": "Pump power"
+      }
+    }
+  },
+  "deviceConfig": {
+    "entityMap": {
+      "light.hall": {
+        "entityId": "light.hall",
+        "type": "light",
+        "label": "Hall light"
+      },
+      "sensor.pump_power": {
+        "entityId": "sensor.pump_power",
+        "type": "sensor",
+        "label": "Pump power"
+      }
+    }
+  },
+  "fmData": {},
+  "meshEntityIds": [
+    "light.hall"
+  ],
+  "resolvedRooms": {
+    "light.hall": "Hall",
+    "sensor.pump_power": "Plant room"
+  },
+  "blueprints": [
+    "maintenance_silence",
+    "maintenance_signature_drift",
+    "roi_baseline_deviation",
+    "critical_watchdog"
+  ],
+  "seenBlueprints": {}
+}

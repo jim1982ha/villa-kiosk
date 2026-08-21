@@ -1,0 +1,35 @@
+{
+  "name": "blueprints-live",
+  "note": "The automation layer is installed and firing. Nobody has configured the kiosk \u2014 no entity map, no model. The briefing is full; the Cockpit is honestly sparse. Neither may contradict the other.",
+  "states": {
+    "sensor.pump_power": {
+      "entity_id": "sensor.pump_power",
+      "state": "412.0",
+      "attributes": {
+        "friendly_name": "Pump power"
+      }
+    },
+    "binary_sensor.leak": {
+      "entity_id": "binary_sensor.leak",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Laundry leak",
+        "device_class": "moisture"
+      }
+    }
+  },
+  "deviceConfig": {},
+  "fmData": {},
+  "meshEntityIds": [],
+  "resolvedRooms": {},
+  "blueprints": [
+    "maintenance_silence",
+    "roi_idle_load",
+    "critical_watchdog"
+  ],
+  "seenBlueprints": {
+    "maintenance_silence": 3,
+    "roi_idle_load": 11,
+    "critical_watchdog": 2
+  }
+}

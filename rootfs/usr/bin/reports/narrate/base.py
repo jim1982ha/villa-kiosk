@@ -60,6 +60,22 @@ class ReportContext:
     #: it was listening; the todo list holds jobs that are still open however
     #: long ago they were raised.
     carried_tasks: List[Dict[str, str]] = field(default_factory=list)
+    #: What is wrong at the MOMENT OF COMPOSING — `standing.build()`, rendered
+    #: as dicts so a stored history entry and a live pass have the same shape.
+    #:
+    #: ⚠️ THE PRESENT TENSE, AND THE ONLY THING HERE THAT IS. Everything above
+    #: describes the PERIOD; this is live state, and it is the same list the
+    #: kiosk's Cockpit is showing at the same instant. Collapsing the two would
+    #: reintroduce the contradiction the whole section exists to remove — a
+    #: device that recovered inside the window belongs to the events, one that
+    #: broke before it and is still down belongs here.
+    #:
+    #: ⚠️ NO `subject` FIELD SURVIVES THE CROSSING. `standing.Item.subject`
+    #: carries an entity id and is what P3 will deduplicate against the
+    #: blueprint layer on; the renderer never needs it, and a field that reaches
+    #: a narration payload is a field `PAYLOAD_ALLOWED_FIELDS` has to defend
+    #: against. It is dropped where the dicts are built, not filtered later.
+    standing: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class Narrator(Protocol):

@@ -1,0 +1,212 @@
+{
+  "name": "both",
+  "note": "The reference shape, and the one the parity test's equality assertion runs on. Every rule the two sides must agree on is exercised here at least once, ON A ROW THAT IS ACTUALLY REPORTED \u2014 three rules were placed on entities the derivation dropped earlier and were pinned by nothing until mutation testing said so: a stored label on a device that was never offline, a `disabled` mapping that the config-debris rule already removed, and `isUnavailable(absent)`, which is only reachable through a mesh-derived id Home Assistant has never heard of.",
+  "states": {
+    "sensor.combo_temperature": {
+      "entity_id": "sensor.combo_temperature",
+      "state": "unavailable",
+      "attributes": {
+        "friendly_name": "Bedroom Combo Temperature"
+      }
+    },
+    "sensor.combo_humidity": {
+      "entity_id": "sensor.combo_humidity",
+      "state": "unavailable",
+      "attributes": {
+        "friendly_name": "Combo Humidity"
+      }
+    },
+    "light.kitchen": {
+      "entity_id": "light.kitchen",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Kitchen Ceiling Light 2"
+      }
+    },
+    "lock.front": {
+      "entity_id": "lock.front",
+      "state": "unavailable",
+      "attributes": {
+        "friendly_name": "Front Door Lock 0x84f2"
+      }
+    },
+    "binary_sensor.laundry_leak": {
+      "entity_id": "binary_sensor.laundry_leak",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Laundry leak",
+        "device_class": "moisture"
+      }
+    },
+    "binary_sensor.hall_motion": {
+      "entity_id": "binary_sensor.hall_motion",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Hall motion",
+        "device_class": "motion"
+      }
+    },
+    "camera.gate": {
+      "entity_id": "camera.gate",
+      "state": "idle",
+      "attributes": {
+        "friendly_name": "Gate camera"
+      }
+    },
+    "switch.kept": {
+      "entity_id": "switch.kept",
+      "state": "off",
+      "attributes": {
+        "friendly_name": "Kept switch"
+      }
+    },
+    "sensor.mesh_only": {
+      "entity_id": "sensor.mesh_only",
+      "state": "unavailable",
+      "attributes": {
+        "friendly_name": "mesh_only_sensor"
+      }
+    },
+    "switch.pump_relay": {
+      "entity_id": "switch.pump_relay",
+      "state": "on",
+      "attributes": {
+        "friendly_name": "Pump relay"
+      }
+    },
+    "light.master_bedroom_master_bedroom_light_ceiling": {
+      "entity_id": "light.master_bedroom_master_bedroom_light_ceiling",
+      "state": "unavailable",
+      "attributes": {}
+    }
+  },
+  "deviceConfig": {
+    "entityMap": {
+      "sensor.combo_temperature": {
+        "entityId": "sensor.combo_temperature",
+        "type": "sensor",
+        "label": "combo_temperature"
+      },
+      "sensor.combo_humidity": {
+        "entityId": "sensor.combo_humidity",
+        "type": "sensor",
+        "label": "Combo Humidity"
+      },
+      "light.kitchen": {
+        "entityId": "light.kitchen",
+        "type": "light",
+        "label": "Kitchen spots"
+      },
+      "lock.front": {
+        "entityId": "lock.front",
+        "type": "lock",
+        "label": "Front gate"
+      },
+      "binary_sensor.laundry_leak": {
+        "entityId": "binary_sensor.laundry_leak",
+        "type": "sensor",
+        "label": "Laundry leak"
+      },
+      "binary_sensor.hall_motion": {
+        "entityId": "binary_sensor.hall_motion",
+        "type": "sensor",
+        "label": "hall_motion"
+      },
+      "camera.gate": {
+        "entityId": "camera.gate",
+        "type": "camera",
+        "label": "Gate camera"
+      },
+      "switch.hidden": {
+        "entityId": "switch.hidden",
+        "type": "switch",
+        "label": "Hidden switch",
+        "disabled": true
+      },
+      "sensor.debris": {
+        "entityId": "sensor.debris",
+        "type": "sensor",
+        "label": "Debris"
+      },
+      "switch.kept": {
+        "entityId": "switch.kept",
+        "type": "switch",
+        "label": "Kept switch"
+      },
+      "switch.pump_relay": {
+        "entityId": "switch.pump_relay",
+        "type": "switch",
+        "label": "Pump relay",
+        "disabled": true
+      }
+    },
+    "deviceGroups": [],
+    "dismissedEntityIds": [
+      "switch.kept",
+      "sensor.ghost"
+    ]
+  },
+  "fmData": {
+    "schedules": [
+      {
+        "id": "sch-1",
+        "title": "Pool service",
+        "everyDays": 7,
+        "enabled": true,
+        "room": "Pool",
+        "category": "minor"
+      },
+      {
+        "id": "sch-2",
+        "title": "Filter change",
+        "everyDays": 30,
+        "enabled": false,
+        "room": "Plant room",
+        "category": "minor"
+      }
+    ],
+    "completions": [],
+    "costs": [],
+    "tickets": [
+      {
+        "id": "tkt-1",
+        "title": "Gate motor grinding",
+        "status": "open",
+        "room": "Entrance",
+        "entityId": "camera.gate",
+        "createdAt": "2026-08-01T00:00:00Z"
+      },
+      {
+        "id": "tkt-2",
+        "title": "Old leak",
+        "status": "resolved",
+        "room": "Laundry",
+        "resolvedAt": "2026-08-02T00:00:00Z"
+      }
+    ],
+    "savedDocuments": []
+  },
+  "meshEntityIds": [
+    "light.kitchen",
+    "lock.front",
+    "sensor.mesh_only",
+    "light.terrace_string",
+    "light.master_bedroom_master_bedroom_light_ceiling"
+  ],
+  "resolvedRooms": {
+    "sensor.combo_temperature": "Bedroom",
+    "light.kitchen": "Kitchen",
+    "lock.front": "Entrance",
+    "binary_sensor.laundry_leak": "Laundry",
+    "camera.gate": "Entrance",
+    "sensor.mesh_only": "Terrace",
+    "light.master_bedroom_master_bedroom_light_ceiling": "Master Bedroom"
+  },
+  "blueprints": [
+    "maintenance_silence",
+    "critical_watchdog"
+  ],
+  "seenBlueprints": {
+    "critical_watchdog": 4
+  }
+}

@@ -50,6 +50,12 @@ SEVERITY_MARK: Dict[str, str] = {
 #: One marker per section of the brief, keyed by `SECTIONS_FOR`'s own names so
 #: a section cannot gain a heading here and be absent there.
 SECTION_MARK: Dict[str, str] = {
+    # ⚠️ A BELL, NOT A SECOND WARNING SIGN. This section and `critical` sit
+    # next to each other and answer different questions — what is wrong NOW
+    # against what went wrong THIS PERIOD — so they must not open with the same
+    # glyph. A reader skimming a phone notification distinguishes them by that
+    # character before they read either heading.
+    "standing": "\U0001F514",      # bell
     "critical": "⚠️",     # warning sign
     "money": "\U0001F4B0",          # money bag
     "fixed": "\U0001F527",          # wrench

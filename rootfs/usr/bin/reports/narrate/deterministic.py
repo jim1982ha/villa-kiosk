@@ -42,6 +42,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
+from ..standing import DANGER_KINDS as STANDING_DANGER
 from ..text import readable_label
 from .style import BULLET, heading, title_mark
 from ..contracts import severity_rank
@@ -59,6 +60,20 @@ AUDIENCE_WORD = {"owner": "property brief", "facility": "facility brief"}
 #: and the ranked sections put the ones that matter first.
 MAX_LINES = 8
 
+#: The four standing kinds, in the order the Cockpit paints them and with the
+#: word each is summarised by when a group is truncated.
+#: ⚠️ DERIVED FROM NOTHING — it is a presentation order, and the KINDS
+#: themselves come from `standing.py`, which is pinned against the kiosk. A kind
+#: added there and missing here would be built, counted toward the title's
+#: severity, and then print no lines at all — so `test_standing.py` derives the
+#: emitted kinds from that module and asserts each one has a heading.
+KIND_HEADINGS: Tuple[Tuple[str, str], ...] = (
+    ("unavailable", "Devices not reporting"),
+    ("alarm", "Alarms"),
+    ("fault", "Open faults"),
+    ("schedule", "Overdue maintenance"),
+)
+
 #: ⚠️ WHICH SECTIONS EACH AUDIENCE READS — AND THE SPLIT IS DELIBERATELY TINY.
 #: The first cut also withheld `preventive` from the owner, on the reasoning
 #: that a maintenance worklist is the facility manager's job. That reasoning was
@@ -69,16 +84,23 @@ MAX_LINES = 8
 #:
 #: So only `money` is withheld, from the audience that does not act on a cost
 #: ranking, and every section any kind routes to is in BOTH lists. Pinned.
+#:
+#: ⚠️ `standing` LEADS, AND IT IS THE ONLY SECTION IN THE PRESENT TENSE. Every
+#: other section reports the PERIOD; this one reports the moment of composing,
+#: and it is exactly what the kiosk's Cockpit is showing at the same instant.
+#: It leads because it is the actionable half — and because a reader comparing
+#: the notification against the tablet in their other hand should meet the
+#: matching list first, not three sections down.
 SECTIONS_FOR = {
-    "owner": ("critical", "money", "fixed", "preventive", "trends", "health",
-              "coverage"),
-    "facility": ("critical", "fixed", "preventive", "trends", "health",
-                 "coverage"),
+    "owner": ("standing", "critical", "money", "fixed", "preventive", "trends",
+              "health", "coverage"),
+    "facility": ("standing", "critical", "fixed", "preventive", "trends",
+                 "health", "coverage"),
 }
 #: An unknown audience gets everything rather than nothing: a missing section is
 #: invisible, and this subsystem's rule is that absence must never be silent.
-ALL_SECTIONS = ("critical", "money", "fixed", "preventive", "trends", "health",
-                "coverage")
+ALL_SECTIONS = ("standing", "critical", "money", "fixed", "preventive",
+                "trends", "health", "coverage")
 
 #: ⚠️ EVERY `FINDING_KIND` HAS A SECTION, AND THAT IS AN INVARIANT, NOT A
 #: CONVENIENCE. The first cut routed `ANOMALY` to trends and `DATA_QUALITY` to
@@ -202,6 +224,7 @@ class DeterministicNarrator:
 
         wanted = SECTIONS_FOR.get(context.audience, ALL_SECTIONS)
         builders = {
+            "standing": self._standing,
             "critical": self._critical_recap,
             "money": self._money,
             "fixed": self._fixed_and_suggested,
@@ -243,7 +266,15 @@ class DeterministicNarrator:
                     # a task raised earlier and never done is not an empty week,
                     # and saying "found nothing" over the top of it would be the
                     # 2.530.0 defect in a new place.
-                    or context.carried_tasks)
+                    or context.carried_tasks
+                    # ⚠️ AND SO IS A DEVICE THAT IS OFF RIGHT NOW. Adding the
+                    # standing section without adding it HERE printed "no
+                    # automated checks are configured yet, so nothing has been
+                    # assessed" directly above a list of eight things that were
+                    # wrong — the report contradicting itself inside one
+                    # message, which is the exact failure this whole exercise
+                    # is about, committed while fixing it.
+                    or context.standing)
 
     # ── framing ──────────────────────────────────────────────────────────────
 
@@ -275,6 +306,23 @@ class DeterministicNarrator:
                     worst = candidate
         for group in (context.aggregated.get("groups") or []):
             candidate = str(getattr(group, "severity", "info"))
+            if severity_rank(candidate) > severity_rank(worst):
+                worst = candidate
+        # ⚠️ THE THIRD SOURCE, AND IT SHIPPED MISSING FOR ONE RENDER. A brief
+        # listing five offline devices, a leak and an open fault was titled with
+        # a green tick, because this read only the PERIOD's findings and standing
+        # state is the present tense. The title is often all that is read, so
+        # that tick is the whole message for most readers.
+        #
+        # ⚠️ THE MAPPING IS `standing.DANGER_KINDS`, NOT A LOCAL GUESS. The kiosk
+        # already decides which kinds are "broken or unsafe right now" and which
+        # are "needs doing" — a second opinion here would put the tablet on red
+        # and the notification on amber for one villa.
+        for row in context.standing or []:
+            if not isinstance(row, dict):
+                continue
+            candidate = ("critical" if str(row.get("kind") or "") in STANDING_DANGER
+                         else "warning")
             if severity_rank(candidate) > severity_rank(worst):
                 worst = candidate
         return worst
@@ -683,6 +731,59 @@ class DeterministicNarrator:
             lines.append(f"{BULLET}{label}: {said}")
         for item in module_findings[:MAX_LINES]:
             lines.append(self._finding_line(item))
+        return lines
+
+    # ── 0. standing state — the present tense, and the tablet's own list ─────
+
+    def _standing(self, context: ReportContext) -> List[str]:
+        """What is wrong RIGHT NOW, in the words the kiosk uses for it.
+
+        ⚠️ THIS SECTION EXISTS SO THE TWO SURFACES CANNOT CONTRADICT EACH OTHER.
+        Before it, a briefing could report nothing while the Cockpit listed four
+        offline devices, because `ReportContext` had no live state and no
+        facility record — see `standing.py`. The owner found that by comparing
+        two screens, which is how every divergence in this subsystem has been
+        found, and asked for it not to be possible.
+
+        ⚠️ ITS TENSE IS THE WHOLE POINT AND IS SAID OUT LOUD. Every other
+        section covers the PERIOD. A device that failed and recovered inside the
+        window belongs to "what went wrong" and not here; one that failed before
+        the window and is still down belongs here and not there. Both are
+        correct and both read as a contradiction unless the reader is told which
+        question was answered — so the heading carries the moment.
+
+        ⚠️ GROUPED BY KIND, NOT RANKED. `MAX_LINES` truncation on a flat list
+        would silently drop whichever kind sorted last, and "3 more" is a
+        legitimate summary where "the alarms are missing" is not.
+        """
+        items = context.standing or []
+        if not items:
+            # ⚠️ SILENT WHEN CLEAN, and that is not the same as hiding it. The
+            # headline already says whether anything is wrong, and a section
+            # reading "nothing is wrong right now" in every healthy brief is the
+            # line a reader learns to skip — taking the section with it.
+            return []
+
+        by_kind: Dict[str, List[Dict[str, Any]]] = {}
+        for item in items:
+            if isinstance(item, dict):
+                by_kind.setdefault(str(item.get("kind") or ""), []).append(item)
+
+        lines = [heading("standing", "Right now")]
+        for kind, label in KIND_HEADINGS:
+            group = by_kind.get(kind) or []
+            if not group:
+                continue
+            shown = group[:MAX_LINES]
+            for entry in shown:
+                where = str(entry.get("room") or "")
+                what = str(entry.get("title") or "")
+                detail = str(entry.get("detail") or label)
+                lines.append(f"{BULLET}{what} — {detail}"
+                             + (f", {where}" if where else ""))
+            if len(group) > len(shown):
+                lines.append(f"{BULLET}and {len(group) - len(shown)} more "
+                             f"{label.lower()}")
         return lines
 
     # ── 7. monitoring health ─────────────────────────────────────────────────

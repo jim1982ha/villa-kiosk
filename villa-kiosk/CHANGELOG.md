@@ -1,3 +1,15 @@
+## 2.571.0
+
+### Added — the briefing now reports what the kiosk is showing, and a test proves they agree
+
+A brief could report nothing while the Cockpit listed four offline devices,
+because the report pipeline had never read the kiosk's device configuration and
+`ReportContext` carried no live state and no maintenance record. Briefings now
+open with a "Right now" section — offline devices, alarms, open faults, overdue
+maintenance — built from the same rules the tablet uses, including the owner's
+own labels and dismissals. A parity harness runs the kiosk's real code and the
+add-on's over four deployment shapes and fails on any difference.
+
 ## 2.570.0
 
 ### Fixed — one attention button on the top bar, and its badge counts everything
