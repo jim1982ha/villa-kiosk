@@ -4156,7 +4156,15 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   padding: 12px;
   border-radius: var(--radius-md, 8px);
   background: var(--bg-input);
-  border: 1px solid var(--border);
+  /* ⚠️ `--hairline`, NOT `--border`. This stylesheet's own comment at
+     .spark-grid records that `--border` was never defined in either theme —
+     and an undefined custom property falls back to the property's INITIAL
+     value, which for border-color is `currentColor`. So both reports borders
+     were drawn in the text colour rather than a hairline: visible, wrong, and
+     invisible to review because the declaration reads perfectly. A claim
+     recorded in one place and violated two thousand lines below it, which is
+     /dry-audit Part 3's exact shape. */
+  border: 1px solid var(--hairline);
   font-family: inherit;
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -4194,7 +4202,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   padding: 10px 12px;
   border-radius: var(--radius-md, 8px);
   background: var(--bg-input);
-  border-left: 3px solid var(--border);
+  border-left: 3px solid var(--hairline);
 }
 .reports-entry.sev-warning { border-left-color: var(--status-warning); }
 .reports-entry.sev-critical { border-left-color: var(--status-danger); }
@@ -4219,6 +4227,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    reason `.fm-field > input` is written that way. The selects here ARE direct
    children, so `>` costs nothing and closes the door. */
 .reports-schedule > select { flex: 1 1 96px; min-height: var(--touch-min); }
+
+/* A schedule's own destinations, indented under its row. Full width so it
+   wraps below the selects rather than competing with them for the same line,
+   and `flex-basis: 100%` on the row it sits in does the same job the selects'
+   own `flex: 1 1 96px` does — see .reports-schedule's wrap note. */
+.reports-subrow {
+  flex: 1 1 100%;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--hairline);
+}
+.reports-subrow > button { min-height: var(--touch-min); }
 
 /* When a panel was measured, beside the control that measures it again.
    ⚠️ WRAPS, and the button keeps its touch target when it does — on a 360px

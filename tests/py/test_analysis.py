@@ -610,3 +610,55 @@ def test_the_rejection_log_always_carries_the_working_level() -> None:
     assert entry["reason"] == "below_rise_threshold"
     assert entry["active_level"] is not None, "the tuning column must never be blank"
     assert entry["rise_of_active"] is not None
+
+
+# ── the shape the operator's switch has to be written in ────────────────────
+
+def test_a_module_is_switched_off_by_a_SLICE_not_by_a_bare_boolean() -> None:
+    """⚠️ THE SHAPE IS LOAD-BEARING AND THE CLIENT HAD IT WRONG.
+
+    `run_all` does `settings = context.settings.get(module.name)` and then
+    `settings if isinstance(settings, dict) else {}` — so `{"m": False}` becomes
+    `{}`, `enabled` reads as absent, and `if enabled is False` never fires. An
+    operator switching a check off would have been accepted and ignored, in the
+    same silent way as the config keys in v2.545.0.
+
+    `ReportsConfig.modules` was typed `Record<string, boolean>` until v2.546.0
+    and was latent only because no UI wrote it. This pins the shape the Checks
+    tab must produce, in the renderer's own terms rather than in a comment.
+    """
+    import asyncio
+    from reports.analysis.registry import register, run_all
+    from reports.analysis.base import AnalysisModule, Finding, ModuleContext
+
+    class _Probe:
+        name = "probe_module"
+        requires: tuple = ()
+        audiences = ("owner",)
+        min_days = 0
+
+        async def run(self, context: ModuleContext) -> list:
+            return [Finding(ref="p0", kind="OBSERVATION", severity="info",
+                            label="ran", detail="")]
+
+    register(_Probe())  # type: ignore[arg-type]
+
+    def _ctx(settings: dict) -> ModuleContext:
+        from datetime import datetime, timezone
+        return ModuleContext(
+            audience="owner", cadence="weekly",
+            now_local=datetime.now(timezone.utc), capabilities=[],
+            inventory={}, settings=settings, min_history_days=0,
+            stats=None, labels={})
+
+    def _ran(settings: dict) -> bool:
+        _f, _s, _c, ran = asyncio.run(run_all(_ctx(settings), {}, 999))
+        return "probe_module" in ran
+
+    assert _ran({}), "a module with no settings must run"
+    assert not _ran({"probe_module": {"enabled": False}}), (
+        "the slice form is what the gate reads")
+    assert _ran({"probe_module": False}), (
+        "a BARE BOOLEAN is discarded as not-a-dict and the module runs anyway — "
+        "this is the shape the client must NOT write, pinned so the type "
+        "cannot drift back to it silently")

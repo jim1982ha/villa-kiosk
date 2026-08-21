@@ -44,17 +44,36 @@ from .log import log, warn
 DELIVERY_TIMEOUT_S = 30.0
 
 
-def _service_path(target: str) -> str:
-    """`notify.mobile_app_x` -> `notify/mobile_app_x`.
+#: The domain assumed when a target names none. `notify` because that is what
+#: almost every target is, and because a config written by hand as
+#: `mobile_app_phone` should work rather than 404 at delivery time — long after
+#: the operator chose it.
+DEFAULT_DOMAIN = "notify"
 
-    Accepts a bare service name too, so a config written by hand without the
-    domain still works rather than failing at delivery time with a 404 the
-    operator cannot interpret.
+
+def _service_path(target: str) -> str:
+    """`notify.mobile_app_x` -> `notify/mobile_app_x`. Any domain.
+
+    ⚠️ THE DOMAIN USED TO BE HARD-CODED, AND THAT CONTRADICTED THIS FILE'S OWN
+    HEADER. It claims to be platform-agnostic and says in as many words that
+    moving to Telegram is "a configuration change rather than a code change" —
+    which was false, because the modern `telegram_bot` integration registers
+    `telegram_bot.send_message` and no `notify.telegram_*` service at all. A
+    target naming any other domain was rewritten to `notify/<domain>.<service>`
+    and 404'd. Found on the reference villa, which has a loaded telegram_bot
+    entry and asked where Telegram was in the picker.
+
+    Still no platform name here: the DOMAIN travels in the target string, and
+    `discovery._speaks_message` decides what may be offered by reading each
+    service's published schema. The payload is unchanged — `title` plus
+    `message` is exactly what `telegram_bot.send_message` takes too, which is
+    the whole reason this is a one-line generalisation rather than a branch.
     """
     name = target.strip()
-    if name.startswith("notify."):
-        name = name[len("notify."):]
-    return f"notify/{name}"
+    domain, _, service = name.partition(".")
+    if not service:
+        return f"{DEFAULT_DOMAIN}/{domain}"
+    return f"{domain}/{service}"
 
 
 async def deliver_one(session: ClientSession, target: str,

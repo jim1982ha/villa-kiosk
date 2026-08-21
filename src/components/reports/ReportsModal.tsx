@@ -19,6 +19,7 @@
 //
 //   Preview      compose one now and read it, sending nothing
 //   Coverage     what this property can be asked about, and what it cannot
+//   Checks       the built-in analyses, on/off, and why each did or did not run
 //   Schedule     when it arrives, for whom, where, and who writes the prose
 //   History      what was produced and whether it was delivered
 //   Diagnostics  the detection layer's own health
@@ -38,7 +39,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, CalendarClock, FileText, History, ShieldQuestion,
+  Activity, CalendarClock, FileText, History, ShieldQuestion, SlidersHorizontal,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
@@ -52,12 +53,14 @@ import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
 import DiagnosticsTab from "./DiagnosticsTab";
+import ModulesTab from "./ModulesTab";
 
-type Tab = "preview" | "coverage" | "schedule" | "history" | "diagnostics";
+type Tab = "preview" | "coverage" | "checks" | "schedule" | "history" | "diagnostics";
 
 const TABS: { id: Tab; label: string; icon: typeof FileText }[] = [
   { id: "preview", label: "Preview", icon: FileText },
   { id: "coverage", label: "Coverage", icon: ShieldQuestion },
+  { id: "checks", label: "Checks", icon: SlidersHorizontal },
   { id: "schedule", label: "Schedule", icon: CalendarClock },
   { id: "history", label: "History", icon: History },
   { id: "diagnostics", label: "Diagnostics", icon: Activity },
@@ -232,6 +235,15 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
               diagnostics={diagnostics}
               busy={busy}
               onRefresh={() => void refresh()}
+            />
+          )}
+          {tab === "checks" && (
+            <ModulesTab
+              diagnostics={diagnostics}
+              config={config}
+              preview={preview}
+              busy={busy}
+              onSave={(next) => void save(next)}
             />
           )}
           {tab === "schedule" && (

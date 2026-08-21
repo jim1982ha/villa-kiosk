@@ -135,7 +135,20 @@ export interface ReportsConfig {
   enabled?: boolean;
   schedules?: ReportSchedule[];
   notifyTargets?: string[];
-  modules?: Record<string, boolean>;
+  /** Per-module operator settings, keyed by module name.
+   *
+   *  ⚠️ AN OBJECT PER MODULE, NOT A BARE BOOLEAN. This was
+   *  `Record<string, boolean>` and the server does
+   *  `settings = context.settings.get(module.name)` then
+   *  `settings if isinstance(settings, dict) else {}` — so `{"standby_creep":
+   *  false}` becomes `{}`, `enabled` reads as absent, and the gate's
+   *  `if enabled is False` never fires. Switching a module OFF would have been
+   *  accepted and ignored, exactly like the config keys in v2.545.0. Latent
+   *  only because no UI wrote it until v2.546.0.
+   *
+   *  The slice is open beyond `enabled` because `resolve_threshold` reads
+   *  per-module tuning from the same object. */
+  modules?: Record<string, { enabled?: boolean }>;
   /** ⚠️ `monthlyLimit` IS A CEILING ON REQUESTS, NOT ON TOKENS — see
    *  `providers.DEFAULT_MONTHLY_LIMIT`. Token accounting needs a provider's own
    *  reply to be trusted for billing and differs per provider; a request count

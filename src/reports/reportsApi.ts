@@ -222,11 +222,17 @@ export function parseReportsConfig(raw: unknown): ReportsConfig {
   if (typeof c.min_history_days === "number") out.minHistoryDays = c.min_history_days;
   const modules = obj(c.modules);
   if (Object.keys(modules).length) {
-    const flags: Record<string, boolean> = {};
+    // ⚠️ AN OBJECT PER MODULE — see `ReportsConfig.modules`. A bare boolean is
+    // read by the server as "not a dict" and discarded, so an operator's
+    // switch-off would be accepted and ignored. Older stored configs may still
+    // hold the bare form; it is READ leniently and written back in the shape
+    // the server actually reads.
+    const slices: Record<string, { enabled?: boolean }> = {};
     for (const [k, v] of Object.entries(modules)) {
-      if (typeof v === "boolean") flags[k] = v;
+      if (typeof v === "boolean") slices[k] = { enabled: v };
+      else if (typeof obj(v).enabled === "boolean") slices[k] = { enabled: obj(v).enabled as boolean };
     }
-    out.modules = flags;
+    if (Object.keys(slices).length) out.modules = slices;
   }
   const narration = obj(c.narration);
   if (typeof narration.mode === "string" || typeof narration.monthly_limit === "number") {

@@ -444,12 +444,22 @@ def append_history(entry: Dict[str, Any]) -> None:
 def targets_for(config: Dict[str, Any], schedule: Dict[str, Any]) -> List[str]:
     """Where one schedule's report goes.
 
-    A schedule may name its own targets; otherwise it uses the global list.
-    Empty means nowhere, which `deliver` reports as a configuration state
-    rather than an error.
+    ⚠️ ABSENT MEANS INHERIT; EMPTY MEANS NOWHERE. This is the same distinction
+    the whole config layer turns on — `store.py`'s docstring is about it — and
+    it was NOT implemented here: `if isinstance(own, list) and own:` treats an
+    empty own-list as absent and falls through to the shared list, while the
+    docstring above it said "empty means nowhere". A claim nothing verified,
+    true of `deliver`'s handling and not of this function.
+
+    Latent until v2.546.0, because nothing could express the difference — the
+    dialog had no per-schedule destinations at all. Now that a schedule can be
+    given its own list, "I set this one's destinations, then removed them all"
+    is a thing an operator can do, and it must not silently resume delivering
+    to everyone on the shared list. `deliver` reports the empty result as a
+    configuration state rather than an error, which is what makes it visible.
     """
     own = schedule.get("targets")
-    if isinstance(own, list) and own:
+    if isinstance(own, list):
         return [str(t) for t in own if isinstance(t, str) and t]
     shared = config.get("notify_targets")
     if isinstance(shared, list):

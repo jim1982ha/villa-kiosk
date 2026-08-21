@@ -197,6 +197,34 @@ def test_service_path_accepts_both_forms() -> None:
     assert _service_path("  notify.telegram  ") == "notify/telegram"
 
 
+def test_a_target_outside_the_notify_domain_keeps_its_domain() -> None:
+    """⚠️ THE DOMAIN WAS HARD-CODED AND THE HEADER CLAIMED IT WAS NOT. This
+    file says moving to Telegram is "a configuration change rather than a code
+    change"; it was not, because the modern `telegram_bot` integration
+    registers `telegram_bot.send_message` and NO `notify.telegram_*` service —
+    so the target was rewritten to `notify/telegram_bot.send_message` and 404'd.
+
+    Found on the reference villa: a loaded telegram_bot entry, nine notify
+    services, none of them Telegram, and an owner asking where it had gone."""
+    assert _service_path("telegram_bot.send_message") == "telegram_bot/send_message"
+    assert _service_path("  telegram_bot.send_message  ") == "telegram_bot/send_message"
+
+
+def test_only_services_that_take_a_required_message_are_offered() -> None:
+    """⚠️ A CAPABILITY TEST, NOT A SECOND DOMAIN NAME. What makes a service a
+    valid destination is that it speaks the payload `deliver` sends — a
+    REQUIRED `message` plus a `title`. Requiring `message` to be REQUIRED is
+    what keeps the other twenty telegram actions (send_photo, edit_caption,
+    delete_message) out of a list the operator picks a destination from."""
+    from reports.discovery import _speaks_message
+    assert _speaks_message({"message": {"required": True}, "title": {}})
+    # title-only, message-optional, and message-absent are all not destinations
+    assert not _speaks_message({"title": {}})
+    assert not _speaks_message({"message": {"required": False}, "title": {}})
+    assert not _speaks_message({"message": {"required": True}})
+    assert not _speaks_message({"message": "not a schema", "title": {}})
+
+
 class _FakeResponse:
     def __init__(self, status: int, body: str = "") -> None:
         self.status = status
@@ -482,3 +510,32 @@ def test_no_empty_sentence_claims_all_is_well() -> None:
         for forbidden in ("all is well", "everything is fine", "no issues",
                           "all good", "healthy"):
             assert forbidden not in body.lower(), (kw, forbidden)
+
+
+# ── where one schedule's brief goes ─────────────────────────────────────────
+
+def test_a_schedule_without_targets_inherits_the_shared_list() -> None:
+    """The common case, and why the shared list exists at all: one property,
+    one or two destinations, every brief to both."""
+    from reports.pipeline import targets_for
+    config = {"notify_targets": ["notify.a", "notify.b"]}
+    assert targets_for(config, {"cadence": "daily"}) == ["notify.a", "notify.b"]
+
+
+def test_a_schedule_with_its_own_targets_overrides_the_shared_list() -> None:
+    from reports.pipeline import targets_for
+    config = {"notify_targets": ["notify.a"]}
+    assert targets_for(config, {"targets": ["telegram_bot.send_message"]}) == \
+        ["telegram_bot.send_message"]
+
+
+def test_an_EMPTY_own_list_means_nowhere_not_inherit() -> None:
+    """⚠️ ABSENT MEANS INHERIT, EMPTY MEANS NOWHERE — the same distinction the
+    whole config layer turns on, and it was not implemented here: an empty own
+    list fell through to the shared one while the docstring above it said the
+    opposite. Latent until the dialog could express it. An operator who gives a
+    schedule its own destinations and then removes them all must not silently
+    resume delivering to everyone."""
+    from reports.pipeline import targets_for
+    config = {"notify_targets": ["notify.a", "notify.b"]}
+    assert targets_for(config, {"targets": []}) == []

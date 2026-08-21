@@ -217,27 +217,66 @@ async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
     `entity_id`, not a bare message. Calling it the old way fails at delivery
     time — long after the operator chose it — so it is flagged `needs_target`
     and Phase 2 must not treat it as a plain target.
+    ⚠️ AND A THIRD, FOUND ON THE REFERENCE VILLA: THE `notify` DOMAIN IS NOT
+    THE ONLY PLACE A MESSAGE CAN BE SENT. That property runs the modern
+    `telegram_bot` integration, which registers `telegram_bot.send_message` and
+    NO `notify.telegram_*` service at all — so a picker built from the `notify`
+    domain showed six mobile apps and a television, and the owner asked where
+    Telegram had gone. It had never been there and could not be: `deliver.py`
+    also hard-coded the domain, so even a hand-typed target would 404.
+
+    ⚠️ THE FIX IS A CAPABILITY TEST, NOT A SECOND DOMAIN NAME. Any service in
+    any domain that takes a REQUIRED `message` and accepts a `title` speaks the
+    intersection `deliver.py` already sends — that is the whole contract, and it
+    is checked against the service's own published schema rather than against a
+    list of integrations this file would then have to maintain. `telegram_bot.
+    send_message` matches it; so does anything else that ever ships with the
+    same shape. No platform name appears here, which is the same rule
+    `deliver.py`'s header states for the same reason.
     """
     try:
         result: Any = await hass.command("get_services")
     except HassUnavailable:
         return []
-    domain = result.get("notify") if isinstance(result, dict) else None
-    if not isinstance(domain, dict):
+    if not isinstance(result, dict):
         return []
+
     targets: List[Dict[str, Any]] = []
-    for service, meta in domain.items():
-        info: Dict[str, Any] = meta if isinstance(meta, dict) else {}
-        raw_fields = info.get("fields")
-        fields: Dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
-        targets.append({
-            "service": f"notify.{service}",
-            "name": str(info.get("name") or service),
-            "broadcast": service == "notify",
-            "needs_target": "entity_id" in fields or service == "send_message",
-        })
+    for domain_name, services in result.items():
+        if not isinstance(services, dict):
+            continue
+        for service, meta in services.items():
+            info: Dict[str, Any] = meta if isinstance(meta, dict) else {}
+            raw_fields = info.get("fields")
+            fields: Dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
+            if domain_name != "notify" and not _speaks_message(fields):
+                continue
+            targets.append({
+                "service": f"{domain_name}.{service}",
+                "name": str(info.get("name") or service),
+                # ⚠️ DOMAIN-QUALIFIED. `notify.notify` is the fan-out; a service
+                # merely NAMED `notify` in another domain is not.
+                "broadcast": domain_name == "notify" and service == "notify",
+                "needs_target": (domain_name == "notify"
+                                 and ("entity_id" in fields
+                                      or service == "send_message")),
+            })
     targets.sort(key=lambda row: str(row["service"]))
     return targets
+
+
+def _speaks_message(fields: Dict[str, Any]) -> bool:
+    """Does this service take the payload `deliver.py` sends?
+
+    ⚠️ REQUIRED `message` IS THE DISCRIMINATOR, and `title` alone is not enough
+    — plenty of services take a title. Requiring `message` to be REQUIRED is
+    what keeps `telegram_bot.send_photo`, `edit_caption` and the other twenty
+    telegram actions out of a list the operator picks a destination from.
+    """
+    message = fields.get("message")
+    if not isinstance(message, dict) or not message.get("required"):
+        return False
+    return "title" in fields
 
 
 def _duplicate_names(targets: Sequence[Dict[str, Any]]) -> List[str]:
