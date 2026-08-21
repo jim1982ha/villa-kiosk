@@ -491,6 +491,7 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
     capabilities: Set[str] = set()
     preflight: List[Dict[str, str]] = []
     inventory: Dict[str, Any] = {}
+    currency: Optional[str] = None
 
     # ⚠️ Detected, not configured. A property with a blueprint layer gets its
     # findings from there; one without falls back to the built-in modules. The
@@ -588,6 +589,18 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
             reachable = True
             version = config.get("version") if isinstance(config, dict) else None
             timezone = config.get("time_zone") if isinstance(config, dict) else None
+            # ⚠️ ASKED FOR, NOT GUESSED — AND THE DISTINCTION IS THE WHOLE
+            # POINT. The renderer printed every amount bare, on the reasoning
+            # that "guessing a symbol from a locale the add-on cannot see is how
+            # a report claims dollars about a figure computed in rupiah". That
+            # is right about GUESSING and it stopped one question short: Home
+            # Assistant carries the operator's own `currency` setting and this
+            # very command already returned it, beside the `version` and
+            # `time_zone` two lines up, and it was thrown away. So a brief said
+            # "Avoidable cost identified: 2,146" and the owner asked what 2,146
+            # stood for — a fair question with no answer in the message.
+            # Absent or blank still prints bare, which is the old behaviour.
+            currency = config.get("currency") if isinstance(config, dict) else None
     except HassUnavailable as err:
         log(f"discovery could not reach Home Assistant: {err}")
         return {
@@ -597,6 +610,7 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
             "capability_meaning": CAPABILITY_MEANING,
             "capability_absent": CAPABILITY_ABSENT,
             "inventory": inventory,
+            "currency": currency or "",
             "preflight": [{
                 "severity": "critical", "code": "unreachable",
                 "detail": f"Home Assistant could not be reached: {err}",
@@ -631,6 +645,7 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
         "reachable": reachable,
         "version": version,
         "timezone": timezone,
+        "currency": currency or "",
         "capabilities": sorted(capabilities),
         "capabilities_missing": absent,
         "capability_meaning": CAPABILITY_MEANING,

@@ -1,3 +1,15 @@
+## 2.575.0
+
+### Fixed — findings that were true and impossible to act on
+
+A brief said "Critical automation health: critical automation off" without
+saying which, "Re-enable, or document as a deliberate decision" without saying
+what to re-enable, "(critical) uses an older alert format" about one of thirteen
+rules, "3 alerts resolved" about three already listed above, and "Avoidable cost
+identified: 2,146" with no currency. Every one was correct. Each now names its
+subject — from the entity ids the events always carried and the currency Home
+Assistant already knew — using the display name, not the entity id.
+
 ## 2.574.0
 
 ### Fixed — Readiness said "2 not locked" and then listed every lock in the house

@@ -185,7 +185,15 @@ def test_a_self_resolved_alert_is_counted_as_fixed() -> None:
     # directly above the next heading — readable in a flat document, and a
     # heading that had lost its icon once every other heading gained one.
     assert heading("fixed", "Closed by itself") in body
-    assert "resolved without intervention" in body
+    # ⚠️ AND IT NAMES THEM RATHER THAN COUNTING THEM (2.575.0). "3 alerts
+    # resolved without intervention." sat directly under a section that had
+    # just listed those same three with their durations — a number the reader
+    # has to reconcile against the lines above it. Asked outright: "what are
+    # these alerts?"
+    assert "resolved without intervention" not in body
+    assert body.count("Water leak") == 2, (
+        "the incident should appear once in the recap and once, by name, "
+        "under Closed by itself")
 
 
 # ── 5. preventive ────────────────────────────────────────────────────────────

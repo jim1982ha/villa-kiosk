@@ -76,6 +76,18 @@ class ReportContext:
     #: a narration payload is a field `PAYLOAD_ALLOWED_FIELDS` has to defend
     #: against. It is dropped where the dicts are built, not filtered later.
     standing: List[Dict[str, Any]] = field(default_factory=list)
+    #: entity_id -> what a person calls it, for the ids blueprint events carry.
+    #:
+    #: ⚠️ RESOLVED, NOT PRINTED RAW. A finding that names a rule family instead
+    #: of the thing that is wrong is unactionable even when every word is true —
+    #: and an entity_id is often the one name in which the point is invisible.
+    #: The automation this was built for reads `critical_doorbell---parking_gate`
+    #: to a person and `automation.outdoor_unified_doorbell_call_and_unlock` in
+    #: the payload; only the first says "critical".
+    labels: Dict[str, str] = field(default_factory=dict)
+    #: The operator's own currency, from Home Assistant's `get_config`.
+    #: Empty prints amounts bare — see `_amount`.
+    currency: str = ""
 
 
 class Narrator(Protocol):

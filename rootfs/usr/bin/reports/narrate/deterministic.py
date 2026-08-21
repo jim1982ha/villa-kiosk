@@ -31,10 +31,17 @@ Money section with no priced findings is omitted, but a Money section on a
 property with no tariff configured is REPLACED BY THE ADMISSION, because its
 silence would otherwise read as "nothing was wasted".
 
-⚠️ NO CURRENCY SYMBOL ANYWHERE. `cost_local` is in the operator's own currency,
-chosen per blueprint instance; the amount is printed bare. Guessing a symbol
-from a locale the add-on cannot see is how a report claims dollars about a
-figure computed in rupiah.
+⚠️ THE CURRENCY IS ASKED FOR, NEVER GUESSED, AND FOR A LONG TIME IT WAS
+NEITHER. `cost_local` is in the operator's own currency, chosen per blueprint
+instance, and every amount printed bare — on the reasoning that guessing a
+symbol from a locale the add-on cannot see is how a report claims dollars about
+a figure computed in rupiah. That is right about guessing and it stopped one
+question short: Home Assistant carries the operator's own `currency` setting,
+`discovery` was already calling the command that returns it, and it was thrown
+away beside the version and the timezone. So a delivered brief opened
+"Avoidable cost identified: 2,146" and the owner asked what 2,146 stood for.
+An ISO code is now appended where Home Assistant has one; an unset currency
+still prints bare, which is the old behaviour and the only honest fallback.
 """
 
 from __future__ import annotations
@@ -43,6 +50,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
 from ..standing import severity_of as standing_severity
+from ..devices import prettify_entity_slug
 from ..text import readable_label
 from .style import BULLET, heading, title_mark
 from ..contracts import severity_rank
@@ -201,8 +209,8 @@ def _phrase(key: str, value: Any) -> str:
     return f"{key.replace('_', ' ')} {value}"
 
 
-def _amount(value: float, whole: bool = False) -> str:
-    """A cost, with no currency symbol — see the module docstring.
+def _amount(value: float, whole: bool = False, currency: str = "") -> str:
+    """A cost, in the operator's own currency where Home Assistant knows it.
 
     ⚠️ `whole` IS DECIDED BY THE LIST, NOT BY THE VALUE. Choosing per value
     printed "799", "156" and "96.00" in one column of a real report. The
@@ -210,7 +218,12 @@ def _amount(value: float, whole: bool = False) -> str:
     from magnitude alone — but within one list, consistency is available for
     free and its absence reads as a mistake.
     """
-    return f"{value:,.0f}" if whole or abs(value) >= 100 else f"{value:,.2f}"
+    text = f"{value:,.0f}" if whole or abs(value) >= 100 else f"{value:,.2f}"
+    # ⚠️ THE CODE AFTER THE NUMBER, NOT A SYMBOL BEFORE IT. `get_config` returns
+    # an ISO code (`IDR`, `EUR`), not a glyph, and inventing the glyph would be
+    # the guess this deliberately does not make — `Rp` and `IDR` are not
+    # interchangeable to everyone and a wrong symbol is worse than none.
+    return f"{text} {currency}" if currency else text
 
 
 class DeterministicNarrator:
@@ -218,7 +231,15 @@ class DeterministicNarrator:
 
     name = "deterministic"
 
+    #: ⚠️ SET PER RENDER, because `_money_line` formats one group and is not
+    #: given the context. A renderer instance handles one report at a time —
+    #: `pipeline` constructs it per pass — so this cannot leak between reports.
+    _currency: str = ""
+    _labels: Dict[str, str] = {}
+
     def render(self, context: ReportContext) -> Tuple[str, str]:
+        self._currency = context.currency
+        self._labels = context.labels or {}
         title = self._title(context)
         lines: List[str] = list(self._headline(context))
 
@@ -402,7 +423,8 @@ class DeterministicNarrator:
                     f"{'was' if unpriced == 1 else 'were'} measured but could "
                     f"not be priced") if unpriced else ""
             lines.append(
-                f"Avoidable cost identified: {_amount(float(total))}, across "
+                f"Avoidable cost identified: "
+                f"{_amount(float(total), currency=context.currency)}, across "
                 f"{_plural(counted, 'finding')}{qualifier}{more}.")
 
         if context.findings:
@@ -600,7 +622,7 @@ class DeterministicNarrator:
             said = ", ".join(p for p in (energy, duration) if p) \
                 or self._measurement(group) or "no figure supplied"
             return f"{BULLET}{label}: {said}, not priced"
-        parts = [_amount(float(cost), whole)]
+        parts = [_amount(float(cost), whole, currency=self._currency)]
         if energy:
             parts.append(energy)
         return f"{BULLET}{label}: {', '.join(parts)}{note}"
@@ -645,8 +667,16 @@ class DeterministicNarrator:
             # real data and looking at it, which is the only thing that finds a
             # line that is grammatical and misplaced.
             lines.append(heading("fixed", "Closed by itself"))
-            lines.append(f"{BULLET}{_plural(len(resolved), 'alert')} resolved "
-                         f"without intervention.")
+            # ⚠️ NAMED, NOT COUNTED. This printed "3 alerts resolved without
+            # intervention." directly under a section that had just listed
+            # those same three with their durations — a number the reader has to
+            # reconcile against the lines above it, adding nothing. Asked
+            # outright: "what are these alerts?". A count is only worth a line
+            # when the things counted are not already on the page.
+            for group in resolved[:MAX_LINES]:
+                lines.append(f"{BULLET}{self._name(group, alert=True)}")
+            if len(resolved) > MAX_LINES:
+                lines.append(f"{BULLET}and {len(resolved) - MAX_LINES} more.")
         if tasks:
             # ⚠️ A SECTION CAN HOLD MORE THAN ONE HEADING, AND `render` ONLY
             # SEPARATES SECTIONS. So two headings inside this one ran together
@@ -660,7 +690,15 @@ class DeterministicNarrator:
                 if isinstance(task, dict):
                     where = str(task.get("bucket") or "").strip()
                     text = str(task.get("text") or "").strip()
-                    lines.append(f"{BULLET}{text}" + (f" ({where})" if where else ""))
+                    # ⚠️ AND WHAT IT IS ABOUT. "Re-enable, or document as a
+                    # deliberate, intentional decision. (Critical automation
+                    # health)" is a blueprint's own task text plus its bucket —
+                    # correct, and unusable without knowing what to re-enable.
+                    who = ", ".join(
+                        self._labels.get(e) or prettify_entity_slug(e)
+                        for e in (task.get("entities") or [])[:3])
+                    tail = f" ({where})" if where else ""
+                    lines.append(f"{BULLET}{text}" + (f" — {who}" if who else "") + tail)
             if len(tasks) > MAX_LINES:
                 lines.append(f"{BULLET}and {len(tasks) - MAX_LINES} more.")
 
@@ -815,7 +853,10 @@ class DeterministicNarrator:
         for group in self._top(self._groups(context, "audit")):
             label = self._name(group)
             said = self._detail(group) or self._measurement(group)
-            lines.append(f"{BULLET}{label}: {said}" if said else f"{BULLET}{label}")
+            # ⚠️ WHICH ONE. See `_subjects` — this line is the reason it exists.
+            who = self._subjects(group)
+            body = f"{label}: {said}" if said else label
+            lines.append(f"{BULLET}{body}" + (f" — {who}" if who else ""))
 
         silent = context.collector.get("silent_types") or []
         if silent and context.collector.get("connected"):
@@ -841,8 +882,24 @@ class DeterministicNarrator:
             # separator to humanise — and it opens a sentence here. Doing it
             # inside the shared helper would turn a real label like "iPhone 16
             # Fab" into "IPhone 16 Fab".
+            # ⚠️ A PARENTHESISED CATEGORY IS THE DRIFT ITSELF, AND IT USED TO
+            # BE THE WHOLE ANSWER. `schema_drift` keys by blueprint where the
+            # payload names one and falls back to the CATEGORY where it does
+            # not — so a brief read "(critical) uses an older alert format",
+            # naming one of thirteen rules and identifying none. The offending
+            # events still carry a `report_bucket`, which is the operator's own
+            # words for what the rule is; printing it turns an unactionable
+            # line into a place to look.
             raw = readable_label(str(entry.get("blueprint") or "an automation"))
             name = raw[:1].upper() + raw[1:]
+            # ⚠️ THE BUCKET LEADS AND THE CATEGORY FOLLOWS IN PARENTHESES.
+            # Written the other way it read "(critical) — Pool pump schedule
+            # uses an older alert format", which parses as a category doing the
+            # using. The subject of the sentence is the rule, and the category
+            # is the only thing left to qualify it with.
+            buckets = [readable_label(str(b)) for b in (entry.get("buckets") or [])][:3]
+            if buckets and not entry.get("named"):
+                name = f"{', '.join(buckets)} {name}"
             # ⚠️ FIELD NAMES ARE IDENTIFIERS TOO. This printed `entity_id (use
             # entities)` verbatim — the same defect as the rule id, one line
             # over, and the reason the whole sentence came out italic on a
@@ -1120,6 +1177,42 @@ class DeterministicNarrator:
             if parts:
                 return ", ".join(parts[:3])
         return ""
+
+    def _subjects(self, group: Any, limit: int = 3) -> str:
+        """The equipment this group is about, named the way a person names it.
+
+        ⚠️ THE FINDING WITHOUT ITS SUBJECT IS NOT A FINDING. A delivered brief
+        read "Critical automation health: critical automation off" and the owner
+        asked, reasonably, which automation — and neither the notification nor I
+        could answer from it. The event had carried
+        `entities: ["automation.outdoor_unified_doorbell_call_and_unlock"]` the
+        whole time and `Group.entities` had been exposing it since the module
+        was written; nothing called it.
+
+        ⚠️ THROUGH `labels`, NEVER THE RAW ID. That automation's display name is
+        `critical_doorbell---parking_gate` — it IS one of this villa's critical
+        rules, and its entity_id is a stale slug from before it was renamed, so
+        the id is the single form in which the word "critical" is invisible.
+        Answering "which one?" with the id would name it in the way least likely
+        to be recognised, which is the mistake I made answering by hand.
+
+        ⚠️ CAPPED, AND THE REMAINDER COUNTED. A sweep can name twenty entities
+        and a notification that lists twenty is one nobody reads to the end.
+        """
+        # ⚠️ `prettify_entity_slug`, NOT `readable_label`, FOR THE FALLBACK.
+        # The latter humanises the underscores and keeps the domain, giving
+        # "Automation.outdoor unified doorbell call and unlock" — a name with a
+        # stray dot in the middle. The kiosk's own fallback drops the domain and
+        # title-cases the rest, which is what `display_label` does when Home
+        # Assistant has no friendly name either, so both surfaces degrade the
+        # same way rather than two different ways.
+        names = [self._labels.get(e) or prettify_entity_slug(e)
+                 for e in (getattr(group, "entities", None) or [])]
+        if not names:
+            return ""
+        if len(names) <= limit:
+            return ", ".join(names)
+        return f"{', '.join(names[:limit])} and {len(names) - limit} more"
 
     def _detail(self, group: Any) -> str:
         for item in self._items(group):

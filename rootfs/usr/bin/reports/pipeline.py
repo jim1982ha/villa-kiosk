@@ -111,6 +111,31 @@ def _without_blueprint_subjects(
     return kept, dropped
 
 
+def _entity_labels(states: Any) -> Dict[str, str]:
+    """entity_id -> what a person calls it, for every entity the villa has.
+
+    ⚠️ THE OWNER'S LABEL FIRST, THE FRIENDLY NAME SECOND, and that ordering is
+    the whole value: an entity_id is often the one name in which the point is
+    invisible. `automation.outdoor_unified_doorbell_call_and_unlock` displays as
+    `critical_doorbell---parking_gate` — the id is a stale slug from before it
+    was renamed, so a brief naming the id would answer "which critical
+    automation?" with the string containing no evidence that it is one.
+
+    ⚠️ THE WHOLE STATE DUMP IS ALREADY IN HAND. `_standing_rows` fetches it on
+    the connection this shares, so this costs a dict comprehension, not a call.
+    """
+    if not isinstance(states, list):
+        return {}
+    config = devices_mod.read_config()
+    entity_map = config.get("entityMap") or {}
+    if not isinstance(entity_map, dict):
+        entity_map = {}
+    entities = {str(e.get("entity_id") or ""): e for e in states
+                if isinstance(e, dict) and e.get("entity_id")}
+    return {entity_id: devices_mod.label_for(entity_id, entity_map, entities)
+            for entity_id in entities}
+
+
 def _standing_rows(states: Any) -> List[Dict[str, Any]]:
     """Live HA states -> the same list the kiosk's Cockpit is showing.
 
@@ -412,6 +437,7 @@ async def run_report(
     carried: List[Dict[str, str]] = []
     verified: List[Any] = []
     standing: List[Dict[str, Any]] = []
+    labels: Dict[str, str] = {}
     try:
         async with HassClient(session) as hass:
             lists = await ledger.todo_lists(hass)
@@ -430,7 +456,9 @@ async def run_report(
             # It shares this `try` deliberately — a failure here must not cost
             # the caretaker reconciliation either, and both are the same kind
             # of "the villa was unreachable" outcome.
-            standing = _standing_rows(await hass.command("get_states"))
+            states = await hass.command("get_states")
+            standing = _standing_rows(states)
+            labels = _entity_labels(states)
         carried = ledger.reconcile(todo, aggregated.get("tasks") or [])
 
         # ── verify ──────────────────────────────────────────────────────────
@@ -471,7 +499,8 @@ async def run_report(
         findings=findings + [f.as_dict() for f in verified],
         skipped=skipped, ran=ran,
         aggregated=aggregated, collector=collect.state(),
-        carried_tasks=carried, standing=standing,
+        carried_tasks=carried, standing=standing, labels=labels,
+        currency=str(found.get("currency") or ""),
     )
     narrator = DeterministicNarrator()
     try:

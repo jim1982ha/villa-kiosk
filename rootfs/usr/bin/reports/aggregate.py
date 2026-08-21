@@ -332,6 +332,8 @@ def schema_drift(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     missing_by: Dict[str, set[str]] = {}
     legacy_by: Dict[str, set[str]] = {}
     counts: Dict[str, int] = {}
+    named_by: Dict[str, bool] = {}
+    buckets_by: Dict[str, set[str]] = {}
 
     for event in events:
         if not isinstance(event, dict):
@@ -355,8 +357,19 @@ def schema_drift(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         if not missing and not legacy:
             continue
 
+        named = bool(str(data.get("blueprint") or "").strip())
         key = str(data.get("blueprint") or "").strip() or f"({category})"
         categories.setdefault(key, category)
+        named_by[key] = named
+        # ⚠️ THE BUCKET IS WHAT IS LEFT TO IDENTIFY IT BY. A payload with no
+        # `blueprint` field cannot name itself — that IS the drift — and the
+        # report said so as "(critical)", one of thirteen rules and none of
+        # them. `report_bucket` is the operator's own words for what the rule
+        # is and these events still carry it, so it is the difference between
+        # "something in the critical family" and "go and look at this".
+        bucket = str(data.get("report_bucket") or "").strip()
+        if bucket:
+            buckets_by.setdefault(key, set()).add(bucket)
         counts[key] = counts.get(key, 0) + 1
         missing_by.setdefault(key, set()).update(
             readable_label(field) for field in missing)
@@ -380,7 +393,11 @@ def schema_drift(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
              "category": categories[key],
              "events": counts[key],
              "missing": sorted(missing_by.get(key, set())),
-             "legacy": sorted(legacy_by.get(key, set()))}
+             "legacy": sorted(legacy_by.get(key, set())),
+             #: Whether the payload named its own blueprint. False is itself
+             #: part of the finding — see `buckets`.
+             "named": named_by.get(key, False),
+             "buckets": sorted(buckets_by.get(key, set()))}
             for key in sorted(counts)
         ],
         "count": len(counts),
@@ -475,6 +492,25 @@ class Group:
 
     @property
     def entities(self) -> List[str]:
+        """The equipment this group's events named, in the order first seen.
+
+        ⚠️ THIS EXISTED ALL ALONG AND THE RENDERER NEVER CALLED IT. A brief read
+        "Critical automation health: critical automation off" — true,
+        legitimate, and impossible to act on, because the event behind it
+        carried `entities: ["automation.outdoor_unified_doorbell_call_and_unlock"]`
+        and nothing printed it. The owner asked "which one?" and neither the
+        notification nor I could answer. Reported 2026-08-21; the data was two
+        lines away the whole time, which is why the fix is a call and not a
+        feature.
+
+        ⚠️ IDS, NOT NAMES — the caller resolves them through
+        `ReportContext.labels`. That automation's DISPLAY name is
+        `critical_doorbell---parking_gate` while its entity_id is a stale slug
+        from before it was renamed, so the id is the one form in which the word
+        "critical" is invisible. Printing ids would have answered "which one?"
+        with the name least likely to be recognised — which is exactly what I
+        did when answering by hand.
+        """
         out: List[str] = []
         for item in self.items:
             for ent in item.entities:
@@ -586,7 +622,7 @@ def savings_total(groups: Sequence[Group]) -> Dict[str, Any]:
     return {"total": round(total, 2), "groups": counted, "basis_mix": mix}
 
 
-def open_tasks(groups: Sequence[Group]) -> List[Dict[str, str]]:
+def open_tasks(groups: Sequence[Group]) -> List[Dict[str, Any]]:
     """Caretaker task text the blueprints raised, deduplicated.
 
     ⚠️ READ-ONLY, AND NOT THE `todo` LIST. Nine blueprints call `todo.add_item`
@@ -595,14 +631,19 @@ def open_tasks(groups: Sequence[Group]) -> List[Dict[str, str]]:
     report generator that mutates the record it reports on is one nobody can
     trust.
     """
-    seen: List[Dict[str, str]] = []
+    seen: List[Dict[str, Any]] = []
     texts = set()
     for g in groups:
         for item in g.items:
             if item.task_text and item.task_text not in texts:
                 texts.add(item.task_text)
+                # ⚠️ AND WHAT IT IS ABOUT. A delivered brief read "Re-enable, or
+                # document as a deliberate, intentional decision. (Critical
+                # automation health)" — a blueprint's own task text beside its
+                # bucket, correct and impossible to act on without knowing WHAT
+                # to re-enable. The event named it in `entities` all along.
                 seen.append({"bucket": g.bucket, "text": item.task_text,
-                             "rule_id": g.rule_id})
+                             "rule_id": g.rule_id, "entities": list(item.entities)})
     return seen
 
 
