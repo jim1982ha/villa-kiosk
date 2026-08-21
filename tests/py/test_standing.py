@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 from reports import model as model_mod                      # noqa: E402
 from reports import standing as standing_mod                 # noqa: E402
 from reports.narrate import DeterministicNarrator, ReportContext  # noqa: E402
+from reports.narrate.style import BULLET                    # noqa: E402
 from reports.narrate import deterministic as det             # noqa: E402
 from reports.narrate.style import SECTION_MARK               # noqa: E402
 
@@ -208,3 +209,47 @@ def test_a_file_that_is_not_a_glb_is_refused_quietly() -> None:
         assert model_mod.mesh_entity_ids(path) == []
     finally:
         os.unlink(path)
+
+
+def test_right_now_groups_each_state_under_its_own_sub_heading() -> None:
+    """⚠️ ASKED FOR WITH THE WANTED SHAPE WRITTEN OUT. The section was already
+    grouped by kind INTERNALLY and printed flat, so the reader saw the kind
+    repeated on every bullet — "LG webOS TV — Unavailable", "Timmerflotte 2623
+    Temperature — Unavailable" — with no visible structure at all.
+
+    Two consequences the shape forces: the label is not bulleted (it is not one
+    of the things, it is what they are), and the state word drops off each line
+    once the heading above says it.
+    """
+    rows = [
+        {"kind": "unavailable", "title": "A device", "detail": "Unavailable",
+         "room": ""},
+        {"kind": "unavailable", "title": "Another device",
+         "detail": "Unavailable", "room": ""},
+        {"kind": "fault", "title": "Not working", "detail": "Open fault",
+         "room": "Living Room"},
+    ]
+    body = DeterministicNarrator().render(_context(rows))[1]
+    block = [l for l in body.split("Right now")[1].splitlines() if l.strip()]
+
+    assert block[0] == "Unavailable devices:"
+    assert not block[0].startswith(BULLET), (
+        "the label is what the bullets ARE, not one of them")
+    assert block[1] == f"{BULLET}A device", (
+        "the state is on the heading now, so repeating it per line is the "
+        "duplication this grouping removed")
+    assert "Open ticket:" in block
+    # A ticket's own detail is NOT the heading's word, so it survives.
+    assert f"{BULLET}Not working — Open fault, Living Room" in block
+
+
+def test_a_group_label_agrees_with_how_many_are_under_it() -> None:
+    """⚠️ "(s)" IS A SHRUG, NOT A PLURAL. The worked example wrote "Unavailable
+    device(s):" as shorthand for the SHAPE. `_plural` exists in this codebase
+    because "2 categorys" reached a rendered report; printing "(s)" would be
+    that lesson unlearned one line further out. The count is known here."""
+    one = DeterministicNarrator().render(_context([
+        {"kind": "unavailable", "title": "A device", "detail": "Unavailable",
+         "room": ""}]))[1]
+    assert "Unavailable device:" in one and "devices:" not in one
+    assert "(s)" not in one

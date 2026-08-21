@@ -1,3 +1,12 @@
+## 2.590.0
+
+### Changed — "Right now" groups each state under its own sub-heading
+
+The section was already grouped by kind internally and printed flat, so the
+reader saw the state repeated on every bullet and no structure at all. Each
+group is now named above its own list, and the state word drops off the lines
+beneath it. The label agrees with its count rather than printing "(s)".
+
 ## 2.589.0
 
 ### Fixed — a daily brief presented fourteen-day findings as if they were today's

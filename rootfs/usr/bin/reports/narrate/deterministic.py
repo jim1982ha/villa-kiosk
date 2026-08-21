@@ -93,10 +93,17 @@ MAX_LINES = 8
 #: added there and missing here would be built, counted toward the title's
 #: severity, and then print no lines at all — so `test_standing.py` derives the
 #: emitted kinds from that module and asserts each one has a heading.
+#: ⚠️ THE LABELS NAME THE THINGS, BECAUSE THEY ARE NOW SUB-HEADINGS. They used
+#: to be invisible — the section printed a flat list and used these only for a
+#: truncation note — so "Devices not reporting" was fine as a description. As a
+#: heading over its own bullets it has to name what the bullets ARE, so the
+#: state word on each line stops being needed. "Open tickets" (not "Open
+#: faults") because that is what the Facility Manager tab calls them and the
+#: owner's own example asked for tickets.
 KIND_HEADINGS: Tuple[Tuple[str, str], ...] = (
-    ("unavailable", "Devices not reporting"),
+    ("unavailable", "Unavailable devices"),
     ("alarm", "Alarms"),
-    ("fault", "Open faults"),
+    ("fault", "Open tickets"),
     ("schedule", "Overdue maintenance"),
 )
 
@@ -308,6 +315,22 @@ def _phrase(key: str, value: Any, unit: str = "") -> str:
             and isinstance(value, (int, float)) and not isinstance(value, bool)):
         return f"{stem} {_plural(int(value), tail[:-1])}"
     return f"{key.replace('_', ' ')} {value}" + (f" {unit}" if unit else "")
+
+
+def _plural_label(label: str, count: int) -> str:
+    """A group label that agrees with how many things are under it.
+
+    ⚠️ "(s)" IS NOT A PLURAL, IT IS A SHRUG. The owner's worked example wrote
+    "Unavailable device(s):" as shorthand for the shape they wanted, not as the
+    wording — `_plural` exists in this file precisely because "2 categorys"
+    reached a rendered report, and printing "(s)" would be that lesson unlearned
+    one line further out. The count is known at the point of printing, so the
+    label can simply be right.
+    """
+    if label.endswith("s") and count == 1:
+        singular = label[:-3] + "y" if label.endswith("ies") else label[:-1]
+        return singular
+    return label
 
 
 def _bound_for(key: str, bounds: Dict[str, Any]) -> Tuple[str, Any]:
@@ -1059,16 +1082,32 @@ class DeterministicNarrator:
             group = by_kind.get(kind) or []
             if not group:
                 continue
+            # ⚠️ THE GROUP IS NAMED OUT LOUD. It was already grouped by kind
+            # internally and printed FLAT, so the reader saw four bullets with
+            # the kind repeated on each — "LG webOS TV — Unavailable",
+            # "Timmerflotte 2623 Temperature — Unavailable" — and no visible
+            # structure. Asked for directly, with the wanted shape written out.
+            # The label is not bulleted: it is not one of the things, it is what
+            # they are, and the same rule the group note under `waiting` follows.
             shown = group[:MAX_LINES]
+            lines.append(f"{_plural_label(label, len(group))}:")
             for entry in shown:
                 where = str(entry.get("room") or "")
                 what = str(entry.get("title") or "")
                 detail = str(entry.get("detail") or label)
-                lines.append(f"{BULLET}{what} — {detail}"
+                # ⚠️ NOT REPEATED WHEN THE HEADING ALREADY SAYS IT. "Unavailable"
+                # under "Unavailable device(s)" is the same word twice on one
+                # line; "Open fault" under "Opened ticket(s)" is extra
+                # information and stays. Containment either way decides, which
+                # is what the owner's own worked example does.
+                said = detail.strip().lower()
+                heading_words = label.strip().lower()
+                redundant = said in heading_words or heading_words in said
+                tail = "" if redundant else f" — {detail}"
+                lines.append(f"{BULLET}{what}{tail}"
                              + (f", {where}" if where else ""))
             if len(group) > len(shown):
-                lines.append(f"{BULLET}and {len(group) - len(shown)} more "
-                             f"{label.lower()}")
+                lines.append(f"{BULLET}and {len(group) - len(shown)} more")
         return lines
 
     # ── 7. monitoring health ─────────────────────────────────────────────────
