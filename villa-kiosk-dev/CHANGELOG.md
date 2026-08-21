@@ -1,3 +1,14 @@
+## 2.589.0
+
+### Fixed — a daily brief presented fourteen-day findings as if they were today's
+
+The analysis modules read `min_history_days` whatever the cadence is, because a
+baseline cannot be computed from one day — so a daily brief genuinely carries
+fourteen-day findings, and the previous release put "today" on the Trends
+heading above them. The window is a statistical requirement, not a reporting
+period, so each finding now states it and Trends no longer claims a period it
+does not own.
+
 ## 2.588.0
 
 ### Added — a brief can now link back into the kiosk, and refuses to when it would not be safe
