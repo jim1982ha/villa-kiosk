@@ -1,10 +1,10 @@
-## 2.557.0
+## 2.558.0
 
-### Fixed — the "next send" line kept describing the schedule you just changed
+### Changed — Save moved into the Briefings footer, beside Close
 
-Editing a schedule from weekly to daily and saving left the line underneath
-reading the old day and time. It is computed by the add-on from the stored
-settings, and nothing asked it again after a save. It now refreshes when you
-save, and while a row has unsaved edits it says so instead of showing a date
-that belongs to the previous version of it.
+It was at the bottom of the Schedule tab's content, below the fold on a laptop
+and further down still once the AI section is expanded — so the button that
+commits the work was the one you could not see, while Close sat pinned the whole
+time. It now sits in the footer where every other dialog puts its actions,
+always in the same place and greyed out when there is nothing to save.
 
