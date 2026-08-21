@@ -181,8 +181,9 @@ export default function DeviceSearchPicker({
             >
               {/* The entity_id is shown, not just the friendly label. A label
                   alone is frequently not enough to know what you are picking —
-                  a row reading "Bedroom 1" tells an operator nothing they can
-                  act on, while "sensor.bedroom_1" names the thing exactly. The
+                  a row reading "Hallway" tells an operator nothing they can
+                  act on, while "sensor.hallway_temperature" names the thing
+                  exactly. The
                   room comes second because it is the weaker hint of the two
                   and is often not set at all. */}
               <span style={{ flex: 1, textAlign: "left", minWidth: 0 }}>

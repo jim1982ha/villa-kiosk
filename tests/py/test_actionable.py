@@ -313,8 +313,17 @@ def test_the_headline_facts_are_bullets() -> None:
     and the headline did not. Asked for directly."""
     from reports.narrate.style import BULLET
     lines = _headline_block(_render(HEADLINE_EVENTS, currency="IDR"))
-    facts = [l for l in lines if not l.startswith("Prepared")]
+    # ⚠️ A FACT IS A BULLETED LINE — anchored on the MARK, not on the dateline's
+    # first word. This read `not startswith("Prepared")`, so when the dateline
+    # gained a second, deliberately unbulleted line (the window sentence, added
+    # after the owner asked when the numbers reset) that line counted as a fact
+    # and the test failed for a change that was correct. The property is "the
+    # headline's facts carry the mark that means finding"; the bullet IS that.
+    facts = [l for l in lines if l.startswith(BULLET)]
     assert len(facts) == 2, f"expected a cost line and an unresolved line: {facts}"
+    dateline = [l for l in lines if not l.startswith(BULLET)]
+    assert dateline and not any(l.startswith(BULLET) for l in dateline), (
+        "the dateline is not a finding and must not wear a bullet")
     assert all(l.startswith(BULLET) for l in facts), facts
     assert any("Avoidable cost" in l for l in facts)
     assert any("still unresolved" in l for l in facts)

@@ -404,3 +404,31 @@ def test_next_fire_is_TODAY_for_a_time_still_ahead() -> None:
     nxt = next_fire({"cadence": "daily", "hour": 13, "minute": 42}, at_1343)
     assert nxt is not None and nxt.strftime("%d %b %H:%M") == "22 Aug 13:42", (
         "a slot already past today must roll to tomorrow")
+
+
+def test_every_cadence_says_what_its_window_is() -> None:
+    """⚠️ THE PHRASE IS A CLAIM ABOUT `period_start`, SO IT LIVES BESIDE IT.
+
+    Asked by the owner reading a delivered brief: "I see number — when are these
+    numbers reset?" Nothing on the page answered it. The title said "Daily
+    property brief"; the dateline said it was prepared at 23:35, which is the
+    one time that is NOT the boundary — from a prepared time a reader infers a
+    rolling window, and `period_start` uses wall-clock midnight.
+
+    A cadence with no phrase would silently print no window sentence, which is
+    the same silence that prompted the question.
+    """
+    from datetime import datetime, timezone
+    from reports import schedule
+
+    moment = datetime(2026, 8, 21, 23, 35, tzinfo=timezone.utc)  # a Friday
+    for cadence in ("daily", "weekly", "monthly"):
+        assert cadence in schedule.WINDOW_PHRASE, f"{cadence} has no phrase"
+
+    # And the phrase must describe what period_start actually does.
+    assert schedule.period_start("daily", moment).hour == 0
+    assert schedule.period_start("weekly", moment).weekday() == 0, "Monday"
+    assert schedule.period_start("monthly", moment).day == 1
+    assert "midnight" in schedule.WINDOW_PHRASE["daily"]
+    assert "Monday" in schedule.WINDOW_PHRASE["weekly"]
+    assert "1st" in schedule.WINDOW_PHRASE["monthly"]

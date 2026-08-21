@@ -61,6 +61,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
 from ..analysis.registry import BLUEPRINT_GRACE_DAYS
+from ..schedule import WINDOW_PHRASE
 from ..standing import severity_of as standing_severity
 from ..devices import prettify_entity_slug
 from ..text import readable_label
@@ -429,7 +430,16 @@ class DeterministicNarrator:
                 f"Reason: {reason}",
             ]
 
+        # ⚠️ THE DATELINE CARRIES THE WINDOW, AND THE TWO TIMES ARE DIFFERENT.
+        # "Prepared ... 23:35" is when it was composed; the counts reset at
+        # midnight. A reader who has only the prepared time will infer a rolling
+        # window from it, which is exactly what was asked. `standing` is
+        # deliberately NOT covered by this sentence — it is the present tense
+        # and says so in its own heading.
         lines = [f"Prepared {self._when(context.generated_at)}."]
+        phrase = WINDOW_PHRASE.get(context.cadence)
+        if phrase:
+            lines.append(phrase)
 
         savings = self._savings(context)
         total = savings.get("total")

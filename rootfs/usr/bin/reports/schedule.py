@@ -104,6 +104,26 @@ def period_start(cadence: str, moment: datetime) -> datetime:
     return midnight
 
 
+#: How to SAY what `period_start` computes, in the brief itself.
+#:
+#: ⚠️ ASKED BY THE OWNER, READING A DELIVERED BRIEF: "I see number — when are
+#: these numbers reset?" Nothing on the page answered it. The title said
+#: "Daily property brief" and the dateline said when it was PREPARED (23:35),
+#: which is the one time that is NOT the boundary — a reader can reasonably
+#: infer a rolling 24 hours, and it is wall-clock midnight.
+#:
+#: ⚠️ IT LIVES HERE, TOUCHING `period_start`, BECAUSE IT IS A CLAIM ABOUT WHAT
+#: THAT FUNCTION DOES. A phrase written in the renderer would be a second
+#: statement of the windowing rule with nothing holding the two together — the
+#: shape this repo keeps paying for. `test_schedule` pins that every cadence
+#: `period_start` handles has a phrase here.
+WINDOW_PHRASE = {
+    "daily": "Counts and costs below cover today, from midnight.",
+    "weekly": "Counts and costs below cover this week, from Monday midnight.",
+    "monthly": "Counts and costs below cover this month, from the 1st.",
+}
+
+
 def idempotency_key(schedule_id: str, cadence: str, moment: datetime) -> str:
     return f"{schedule_id}:{period_key(cadence, moment)}"
 
