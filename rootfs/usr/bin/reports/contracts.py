@@ -146,7 +146,23 @@ PAYLOAD_ALLOWED_FIELDS: Final[Tuple[str, ...]] = (
     "confidence",      # 0..1
     "completeness",    # 0..1 — how much of the window actually had data
     "horizon_days",    # FORECAST only
+    # ⚠️ STRUCTURE, ADDED SO THE MODEL CAN COMPOSE RATHER THAN REPHRASE. Without
+    # these it received a flat list and could not know what leads, what is new,
+    # or whether a number is worse than usual — the three things a good opening
+    # sentence turns on. All scalars, all non-identifying: a zone name, two
+    # counts and a direction say nothing about which villa this is.
+    "zone",            # needs_you | this_period | about_report
+    "age_days",        # how long this has been open
+    "occurrences",     # how many times it fired in the window
+    "trend_direction", # up | down | flat, against the previous periods
+    "trend_pct",       # by how much
 )
+
+#: ⚠️ VALIDATED OUTBOUND like `SEVERITY` and `FINDING_KIND`, for the same
+#: reason: these cross to a third party, and "whatever a module put there" is
+#: not a thing to hand over.
+ZONE: Final[Tuple[str, ...]] = ("needs_you", "this_period", "about_report")
+TREND_DIRECTION: Final[Tuple[str, ...]] = ("up", "down", "flat")
 
 # Every value set above, by name, so the parity test can iterate rather than
 # being edited whenever a set is added — a check that must be updated by hand

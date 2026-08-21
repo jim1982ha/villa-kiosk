@@ -31,7 +31,8 @@ from . import (aggregate as aggregate_mod, collect, devices as devices_mod,
                discovery, ledger, links as links_mod, model as model_mod,
                noise as noise_mod,
                schedule as schedule_mod, standing as standing_mod,
-               stats as stats_mod, store, verify as verify_mod)
+               stats as stats_mod, store, trend as trend_mod,
+               verify as verify_mod)
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import PAYLOAD_ALLOWED_FIELDS, severity_rank
@@ -572,6 +573,7 @@ async def run_report(
         aggregated=aggregated, collector=collect.state(),
         carried_tasks=carried, standing=standing, labels=labels, units=units,
         noise=noise_summary,
+        history=_history_series(cadence),
         currency=str(found.get("currency") or ""),
     )
     narrator = DeterministicNarrator()
@@ -605,9 +607,25 @@ async def run_report(
     if provider is not None:
         prose, narration_why = await provider.narrate(
             session, payload_mod.from_context(context))
-        if prose:
-            body, narration_mode = prose, provider.name
-        else:
+        # ⚠️ A SLOT, NOT THE BODY. The provider now writes the LEAD SENTENCE and
+        # the renderer keeps everything else — zones, charts, columns, figures.
+        # So the re-render below cannot lose structure however poor the answer
+        # is, and the worst case costs one sentence rather than the brief.
+        #
+        # ⚠️ REJECTED IF IT IS NOT ONE SENTENCE. A model asked for a line
+        # sometimes returns a paragraph, and pasting a paragraph where a lead
+        # belongs would push the dateline out of the notification preview — the
+        # exact thing the slot exists to protect. Cheap to check, and the
+        # fallback is the deterministic sentence that was already there.
+        lead = usable_lead(prose)
+        if lead:
+            context.slots = {"lead": lead}
+            title, body = narrator.render(context)
+            narration_mode = provider.name
+        elif lead:
+            narration_why = "the answer was not a single short sentence"
+            log(f"not narrated by a provider: {narration_why}")
+        elif not lead:
             # ⚠️ A REASON, RECORDED. "This week's brief reads differently" is
             # otherwise unanswerable — and the five causes call for different
             # actions (configure a key, wait, raise a limit, or nothing).
@@ -682,6 +700,18 @@ async def run_report(
         # What the brief actually reports: this add-on's own checks, the
         # verifications, and the blueprint layer's grouped findings.
         "findingCount": len(findings) + len(grouped),
+        # ⚠️ STORED SO THE NEXT REPORT CAN COMPARE. Without it "74 IDR" is a
+        # number the reader cannot judge — the owner's own diagnosis of the
+        # brief — and no wording fixes that, because the comparison was never
+        # computed. `findingCount` was already here and gave findings a trend
+        # for free; money needed this one field.
+        # ⚠️ THE RAW TOTAL, NOT THE ROUNDED ONE. The headline rounds so a reader
+        # can add the column up (v2.586.0); a stored series must not, or seven
+        # periods of rounding drift accumulate into the baseline the next brief
+        # is judged against.
+        "avoidableCost": float(
+            (aggregated.get("savings") or {}).get("total") or 0.0),
+        "currency": str(found.get("currency") or ""),
         "severity": severity,
         "deliveries": deliveries,
     }
@@ -751,6 +781,53 @@ async def run_report(
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")
     return entry
+
+
+#: A notification preview is about two lines. Past this the dateline is pushed
+#: out of it, which is what the lead slot exists to protect.
+MAX_LEAD_CHARS = 200
+
+
+def usable_lead(prose: Optional[str]) -> str:
+    """A provider's answer if it is one short sentence, else "".
+
+    ⚠️ EXTRACTED SO IT CAN BE TESTED AS BEHAVIOUR. It was three inline
+    conditions, and the test asserted the SHAPE of the source ("does it bound
+    the length?") — which stayed true when a mutation changed the bound to
+    100000. A guard that can only be checked by reading it is a guard nothing
+    checks.
+
+    ⚠️ A MODEL ASKED FOR A LINE SOMETIMES RETURNS A PARAGRAPH, or a preamble, or
+    the sentence wrapped in quotes. None of those belong where the lead goes,
+    and the fallback is the deterministic sentence that is already correct — so
+    this refuses rather than repairs.
+    """
+    raw = str(prose or "")
+    if not raw.strip() or "\n" in raw.strip():
+        return ""
+    lead = " ".join(raw.split())
+    return lead if len(lead) <= MAX_LEAD_CHARS else ""
+
+
+def _history_series(cadence: str) -> Dict[str, List[float]]:
+    """Past values this report may compare itself against.
+
+    ⚠️ READ BEFORE THIS REPORT IS APPENDED, which is what makes "previous"
+    true — `append_history` runs after delivery. Non-fatal like every other
+    read here: no history means no trend line, and a brief without one is
+    exactly what every brief was until now.
+    """
+    try:
+        document = store.history_view(
+            store.read_json(store.REPORTS_HISTORY_FILE, store.EMPTY_HISTORY))
+        entries = list(document.get("entries") or [])
+        return {
+            field: trend_mod.series_from_history(entries, field, cadence)
+            for field in ("avoidableCost", "findingCount")
+        }
+    except Exception as err:  # noqa: BLE001 - a trend is never worth a report
+        swallow("could not read history for trends", err)
+        return {}
 
 
 def append_history(entry: Dict[str, Any]) -> None:

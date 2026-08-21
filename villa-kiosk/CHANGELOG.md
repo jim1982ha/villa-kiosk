@@ -1,3 +1,14 @@
+## 2.592.0
+
+### Changed — the brief is grouped by what you must do, numbers carry a trend, and the AI writes one sentence instead of the document
+
+Sections are filed into NEEDS YOU / THIS PERIOD / ABOUT THIS REPORT, so the half
+that needs a person is no longer interleaved with the half about the monitoring
+system. Money carries a comparison against the previous periods and a sparkline,
+which needed one new history field. And narration now fills the lead sentence
+rather than replacing the whole body — the renderer keeps every figure, chart
+and heading, so a weak answer costs one line instead of the report.
+
 ## 2.591.0
 
 ### Fixed — the kiosk link never worked, and two headings shared a marker

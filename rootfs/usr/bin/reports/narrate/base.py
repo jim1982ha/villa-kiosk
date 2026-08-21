@@ -39,6 +39,14 @@ class ReportContext:
     #: different claim from `known: False` ("the buffer does not reach back far
     #: enough to ask"), and the brief must not collapse them.
     noise: Dict[str, Any] = field(default_factory=dict)
+    #: Same-cadence values from PREVIOUS reports, oldest first, so a number can
+    #: be judged rather than merely stated. ⚠️ THIS REPORT IS NOT IN IT — history
+    #: is appended after delivery — or every trend would compare a value with
+    #: itself and read "about usual" forever. See `reports.trend`.
+    history: Dict[str, List[float]] = field(default_factory=dict)
+    #: Prose a narration provider supplied, per slot. Absent or unusable keys
+    #: fall back to the deterministic sentence — see `DeterministicNarrator.SLOTS`.
+    slots: Dict[str, str] = field(default_factory=dict)
     discovery: Dict[str, Any] = field(default_factory=dict)
     #: Analysis output. Empty until Phase 3 introduces modules.
     findings: List[Dict[str, Any]] = field(default_factory=list)

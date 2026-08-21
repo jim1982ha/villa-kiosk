@@ -39,6 +39,7 @@ from typing import Any, Dict, List, Mapping, Sequence
 
 from ..contracts import (
     AUDIENCE, CADENCE, FINDING_KIND, PAYLOAD_ALLOWED_FIELDS, SEVERITY,
+    TREND_DIRECTION, ZONE,
 )
 
 #: Context the provider needs to write ABOUT something, none of which
@@ -114,6 +115,12 @@ def build(
             item.pop("severity", None)
         if item.get("kind") not in FINDING_KIND:
             item.pop("kind", None)
+        # ⚠️ THE NEW ENUMS GET THE SAME TREATMENT, not a comment saying they
+        # should. An unvalidated enum is a free-text field with a short name.
+        if item.get("zone") not in ZONE:
+            item.pop("zone", None)
+        if item.get("trend_direction") not in TREND_DIRECTION:
+            item.pop("trend_direction", None)
         if item:
             safe.append(item)
 
@@ -221,8 +228,18 @@ def from_context(context: Any) -> Dict[str, Any]:
         blind.append("This property's own automation alerts were not being "
                      "recorded for part of this period.")
 
+    # ⚠️ THE ZONE IS ATTACHED HERE, FROM THE RENDERER'S OWN TABLE, so the model
+    # is told what leads by the same rule the document is built with. Deriving it
+    # separately would let the two disagree about what "needs you" means, which
+    # is the divergence this whole subsystem exists to prevent.
+    def _zoned(item: Mapping[str, Any]) -> Mapping[str, Any]:
+        from .deterministic import SECTION_FOR_KIND, ZONE_OF_SECTION
+        section = SECTION_FOR_KIND.get(str(item.get("kind") or ""), "trends")
+        zone = ZONE_OF_SECTION.get(section)
+        return {**item, "zone": zone} if zone else item
+
     findings: List[Mapping[str, Any]] = [
-        f for f in (getattr(context, "findings", None) or [])
+        _zoned(f) for f in (getattr(context, "findings", None) or [])
         if isinstance(f, Mapping)]
     # `aggregated["findings"]` are `Finding` objects — the blueprint layer's
     # own output, already free of entity ids by `to_findings`' contract.

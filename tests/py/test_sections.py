@@ -360,10 +360,28 @@ def test_a_report_with_everything_still_reads_top_down() -> None:
     body = _render(aggregated=_events(
         _roi("Gym lights", 900.0), _critical("raised"),
         _maintenance("Service the pump")))
-    order = [body.index(h) for h in
-             (section_heading("critical", "weekly"), section_heading("money", "weekly"),
-              section_heading("fixed", "weekly"))]
-    assert order == sorted(order)
+    # ⚠️ THE ZONES ARE THE ORDER NOW, AND THAT IS THE CHANGE. This asserted
+    # critical < money < fixed, which was composition order. "For the facility
+    # manager" is work a human must do, so it moved AHEAD of what merely
+    # happened — the whole point of zoning. What must still hold is that the
+    # zones themselves are in descending order of demand, and that each section
+    # sits inside its own.
+    from reports.narrate.deterministic import (
+        ZONE_OF_SECTION, ZONE_ORDER, zone_heading)
+    zones = [body.index(zone_heading(z)) for z in ZONE_ORDER
+             if zone_heading(z) in body]
+    assert zones == sorted(zones), "zones must read in their declared order"
+    for section in ("critical", "money", "fixed"):
+        head = section_heading(section, "weekly")
+        if head not in body:
+            continue
+        zone = ZONE_OF_SECTION[section]
+        start = body.index(zone_heading(zone))
+        later = [body.index(zone_heading(z)) for z in ZONE_ORDER
+                 if zone_heading(z) in body and body.index(zone_heading(z)) > start]
+        end = min(later) if later else len(body)
+        assert start < body.index(head) < end, (
+            f"{section} renders outside its own zone {zone}")
 
 
 def test_plurals_are_english_not_string_concatenation() -> None:
@@ -647,8 +665,19 @@ def test_every_section_is_findable_without_reading_it() -> None:
         if not line:
             continue
         marked = any(line.startswith(m) for m in SECTION_MARK.values())
-        assert marked or line.startswith(BULLET), (
-            f"neither a marked heading nor a bullet: {line!r}")
+        # ⚠️ A THIRD KIND OF STRUCTURAL LINE EXISTS NOW. Zone rules group the
+        # sections by how much they demand of the reader; they are not headings
+        # and not findings, and the group labels under "Right now" are the same
+        # shape. What the test is really about is that nothing looks like a
+        # heading without being one — so the allowed shapes are enumerated
+        # rather than the rule loosened to "anything goes".
+        from reports.narrate.deterministic import ZONE_RULE
+        zone = line.startswith(ZONE_RULE)
+        label = line.endswith(":")
+        indented = line.startswith("   ")   # the trend chart under its heading
+        assert marked or zone or label or indented or line.startswith(BULLET), (
+            f"neither a marked heading, a zone rule, a group label nor a "
+            f"bullet: {line!r}")
 
 
 def test_the_title_says_how_urgent_this_one_is() -> None:
@@ -682,22 +711,33 @@ def test_checks_that_stood_down_for_the_same_reason_share_one_line() -> None:
     assert "3 checks did not run" in lines[0]
 
 
-def test_two_headings_in_one_section_are_separated() -> None:
-    """⚠️ `render` ONLY PUTS A BLANK LINE BETWEEN SECTIONS. "Closed by itself"
-    and "For the facility manager" live in the same one, so they ran together with no
-    gap — visible in the first delivered brief that had both, once headings
-    carried markers and the join became obvious."""
+def test_every_heading_that_follows_content_has_a_blank_line_before_it() -> None:
+    """⚠️ `render` ONLY PUTS A BLANK LINE BETWEEN SECTIONS, so two headings
+    inside one ran together with no gap — visible in the first delivered brief
+    that had both.
+
+    ⚠️ THIS USED TO PIN ONE PAIR ("Closed by itself" before "For the facility
+    manager") AND THAT CLAIM IS NOW FALSE BY DESIGN: zoning moved the facility
+    manager's work into NEEDS YOU and what closed by itself into THIS PERIOD, so
+    they are deliberately in that order and in different zones. The ORDERING was
+    incidental; the SEPARATION was the invariant. It is now asserted over every
+    heading in the document rather than one pair, which is what the docstring
+    always claimed it was about.
+    """
+    from reports.narrate.deterministic import ZONE_RULE
     body = _render(aggregated=_events(
         _critical("raised", when="2026-08-20T12:00:00+08:00"),
         _critical("cleared", when="2026-08-20T12:30:00+08:00"),
-        _maintenance("Check the valve")))
+        _roi("Vacancy waste", 1581.0),
+        _maintenance("Check the valve")), currency="IDR")
     lines = body.splitlines()
-    closed = lines.index(section_heading("selfclear", "weekly"))
-    caretaker = lines.index(section_heading("fixed", "weekly"))
-    assert lines[caretaker - 1] == "", (
-        "a heading that follows content needs a blank line before it")
-    assert closed < caretaker
-
+    marks = tuple(SECTION_MARK.values())
+    for index, line in enumerate(lines):
+        if index == 0 or not line.startswith(marks + (ZONE_RULE,)):
+            continue
+        assert lines[index - 1] == "", (
+            f"heading {line!r} follows content with no blank line:\n"
+            + "\n".join(lines[max(0, index - 3):index + 1]))
 
 def test_all_sections_matches_the_builders_that_render_them() -> None:
     """⚠️ THE COUNT STAYED EIGHT WHILE THE MEMBERSHIP CHANGED TWICE. The module

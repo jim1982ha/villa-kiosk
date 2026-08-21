@@ -201,38 +201,40 @@ def _prompt(body: Mapping[str, Any]) -> str:
     invited it to assess, rank or conclude would put an unaccountable opinion
     into a document the owner acts on — and would make the deterministic
     renderer and the narrated version disagree about what happened.
+
+    ⚠️ AND IT NO LONGER ASKS FOR A DOCUMENT. Until v2.592.0 narration REPLACED
+    the whole body, so a third of this prompt was format rules — headings,
+    bullets, emoji, "no markdown" — restating `style.py` in English where the
+    two could drift, and asking a language model to retype sparklines, aligned
+    columns and every figure. One weak answer cost the entire brief.
+
+    Now the renderer keeps the document and the provider writes ONE sentence:
+    the lead a push notification shows before it truncates. Every format rule
+    above is gone because the model no longer emits structure, and an unusable
+    answer costs that sentence rather than the report.
     """
-    marks = " ".join(sorted(set(SECTION_MARK.values())))
     return (
-        "You are writing a short property report for the owner of a villa. It "
-        "arrives as a phone notification.\n"
-        "Below is JSON describing findings that automated checks produced this "
-        "period.\n\n"
+        "You are writing the opening line of a property report for the owner "
+        "of a villa. It arrives as a phone notification, which shows about two "
+        "lines before it truncates.\n\n"
+        "Below is JSON describing what automated checks found this period. "
+        "Write ONE sentence naming the single most important thing in it.\n\n"
         "Rules:\n"
         "- Use ONLY the facts in the JSON. Do not infer causes, do not "
-        "estimate, do not add advice that the data does not support.\n"
+        "estimate, do not add advice the data does not support.\n"
         "- Do not invent equipment, rooms or numbers that are not present.\n"
-        "- If `not_covered` is non-empty, state plainly that those things "
-        "could not be measured.\n"
-        "- Be brief. A reader on a phone should finish it.\n"
-        # ⚠️ THE SAME SHAPE THE BUILT-IN RENDERER PRODUCES, ASKED FOR
-        # EXPLICITLY. Narration REPLACES the body, so without this, switching
-        # it on would silently lose the structure that makes a brief scannable
-        # on a phone — the owner would have turned on "nicer wording" and got
-        # back a wall of prose. The reason each rule exists is in `style.py`;
-        # what matters here is that both narrators emit the same document.
-        "\n"
-        "Format:\n"
-        "- Open with ONE line naming the single most important thing. A push "
-        "notification shows about two lines and nothing else.\n"
-        f"- Group the rest under short headings, each starting with one of "
-        f"these emoji: {marks}\n"
-        f"- Start every list item with '{BULLET.strip()}'.\n"
-        "- NO markdown: no asterisks, no underscores, no backticks, no '#', "
-        "no links. Emoji are the only formatting. Some destinations parse "
-        "markup and would mangle the rest of the message.\n\n"
+        "- Prefer a finding whose `zone` is `needs_you`: those need a person "
+        "today. `about_report` items are about the monitoring system and must "
+        "never lead.\n"
+        "- `trend_direction` and `trend_pct` say whether a number is worse than "
+        "usual. That is often the most useful thing to say about it.\n"
+        "- `age_days` distinguishes something new from something outstanding.\n"
+        "- Plain text. No markdown, no emoji, no bullet, no heading, no line "
+        "break. One sentence, under 140 characters.\n"
+        "- Reply with the sentence and nothing else.\n\n"
         + json.dumps(body, indent=1, sort_keys=True)
     )
+
 
 
 class ProviderNarrator:

@@ -332,8 +332,16 @@ def test_the_headline_facts_are_bullets() -> None:
 def test_the_dateline_is_not_a_bullet() -> None:
     """It is the dateline, not a finding."""
     from reports.narrate.style import BULLET
-    first = _headline_block(_render(HEADLINE_EVENTS))[0]
-    assert first.startswith("Prepared") and not first.startswith(BULLET)
+    block = _headline_block(_render(HEADLINE_EVENTS))
+    # ⚠️ A LEAD SENTENCE NOW SITS ABOVE IT. A push notification shows about two
+    # lines, and spending the first on "Prepared Saturday…" tells the reader
+    # nothing — so the loudest fact leads and the dateline follows. Both are
+    # unbulleted for the same reason: neither is a finding.
+    dateline = next(l for l in block if l.startswith("Prepared"))
+    assert not dateline.startswith(BULLET)
+    for line in block[:block.index(dateline)]:
+        assert not line.startswith(BULLET), (
+            f"the lead is a sentence, not a finding: {line!r}")
 
 
 # ── a number without its unit is useless (2.577.0) ───────────────────────────

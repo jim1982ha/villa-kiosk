@@ -70,6 +70,7 @@ from ..schedule import PERIOD_SCOPE_WORD, WINDOW_PHRASE, period_span
 from ..standing import severity_of as standing_severity
 from ..devices import prettify_entity_slug
 from .. import links as links_mod
+from .. import trend as trend_mod
 from ..text import readable_label
 from .style import BULLET, heading, name_of, title_mark
 from ..contracts import severity_rank
@@ -170,6 +171,53 @@ SECTION_TITLE = {
 }
 
 
+#: Which zone each section belongs to, and the order zones appear in.
+#:
+#: ⚠️ THE BRIEF USED TO BE NINE SECTIONS IN COMPOSITION ORDER, and on a real
+#: delivered one that came to eight lines about the VILLA and eight about the
+#: REPORTING SYSTEM, interleaved. A reader on a phone cannot separate them, and
+#: the half that needs a human is not the half that is longest. Zones sort by
+#: demand on attention: what a person must act on, what merely happened, and the
+#: instrument talking about itself.
+#:
+#: ⚠️ EVERY SECTION HAS ONE — asserted, not assumed. A section missing from this
+#: table would render in no zone, which is the silent disappearance
+#: `SECTION_FOR_KIND` already exists to prevent one layer down.
+ZONE_ORDER: Tuple[str, ...] = ("needs_you", "this_period", "about_report")
+ZONE_TITLE = {
+    "needs_you": "NEEDS YOU",
+    "this_period": "THIS PERIOD",
+    "about_report": "ABOUT THIS REPORT",
+}
+ZONE_OF_SECTION = {
+    "standing": "needs_you",
+    "fixed": "needs_you",
+    "preventive_open": "needs_you",
+    "critical": "this_period",
+    "money": "this_period",
+    "money_unpriced": "this_period",
+    "preventive": "this_period",
+    "selfclear": "this_period",
+    "closed": "this_period",
+    "verified": "this_period",
+    "trends": "this_period",
+    "health": "about_report",
+    "waiting": "about_report",
+    "coverage": "about_report",
+}
+
+#: ⚠️ THE RULE IS A CHARACTER `inert()` LEAVES ALONE, and that was checked
+#: rather than assumed — box-drawing passes, asterisks and backticks do not.
+ZONE_RULE = "\u2501"
+
+
+def zone_heading(zone: str, width: int = 44) -> str:
+    """A zone separator: the name, then rule to a fixed width."""
+    title = ZONE_TITLE[zone]
+    tail = max(0, width - len(title) - 4)
+    return f"{ZONE_RULE * 2} {title} {ZONE_RULE * tail}"
+
+
 def section_heading(key: str, cadence: str = "") -> str:
     """The rendered heading for a section, period word included where allowed.
 
@@ -187,15 +235,15 @@ def section_heading(key: str, cadence: str = "") -> str:
 
 
 SECTIONS_FOR = {
-    "owner": ("standing", "critical", "money", "fixed", "preventive", "trends",
-              "health", "coverage"),
-    "facility": ("standing", "critical", "fixed", "preventive", "trends",
-                 "health", "coverage"),
+    "owner": ("standing", "critical", "money", "closed", "fixed",
+              "preventive", "trends", "health", "coverage"),
+    "facility": ("standing", "critical", "closed", "fixed", "preventive",
+                 "trends", "health", "coverage"),
 }
 #: An unknown audience gets everything rather than nothing: a missing section is
 #: invisible, and this subsystem's rule is that absence must never be silent.
-ALL_SECTIONS = ("standing", "critical", "money", "fixed", "preventive",
-                "trends", "health", "coverage")
+ALL_SECTIONS = ("standing", "critical", "money", "closed", "fixed",
+                "preventive", "trends", "health", "coverage")
 
 #: ⚠️ EVERY `FINDING_KIND` HAS A SECTION, AND THAT IS AN INVARIANT, NOT A
 #: CONVENIENCE. The first cut routed `ANOMALY` to trends and `DATA_QUALITY` to
@@ -321,6 +369,13 @@ def _phrase(key: str, value: Any, unit: str = "") -> str:
     return f"{key.replace('_', ' ')} {value}" + (f" {unit}" if unit else "")
 
 
+def _capitalise(text: str) -> str:
+    """First letter up, rest untouched — never `.capitalize()`, which lowercases
+    the remainder and would turn "The Facility Manager" into "The facility
+    manager", which is the trap readable_label's callers were warned about."""
+    return f"{text[:1].upper()}{text[1:]}" if text else text
+
+
 def _plural_label(label: str, count: int) -> str:
     """A group label that agrees with how many things are under it.
 
@@ -396,6 +451,7 @@ class DeterministicNarrator:
             "standing": self._standing,
             "critical": self._critical_recap,
             "money": self._money,
+            "closed": self._closed,
             "fixed": self._fixed_and_suggested,
             "preventive": self._preventive,
             "trends": self._trends,
@@ -414,11 +470,30 @@ class DeterministicNarrator:
             lines.append("")
             lines.append(self._nothing_to_report(context))
 
+        # ⚠️ RENDERED FIRST, GROUPED SECOND. Every section is built exactly as
+        # before and then filed under its zone, so zoning cannot change WHICH
+        # sections appear or what they say — only the order they are read in and
+        # the rule printed above each group. A zone with nothing in it prints
+        # nothing at all: a "NEEDS YOU" header over silence is the loudest
+        # possible way to say nothing is wrong, and would train the reader to
+        # skip the one banner that must never be skipped.
+        rendered: Dict[str, List[str]] = {z: [] for z in ZONE_ORDER}
         for name in wanted:
             block = builders[name](context)
-            if block:
-                lines.append("")
-                lines.extend(block)
+            if not block:
+                continue
+            zone = ZONE_OF_SECTION.get(name)
+            # A section nobody filed lands in the period zone rather than
+            # vanishing — the same "never drop it" rule `_findings_for` follows.
+            rendered[zone if zone in rendered else "this_period"].extend(
+                [""] + block)
+
+        for zone in ZONE_ORDER:
+            if not rendered[zone]:
+                continue
+            lines.append("")
+            lines.append(zone_heading(zone))
+            lines.extend(rendered[zone])
 
         return title, "\n".join(lines).strip()
 
@@ -446,6 +521,51 @@ class DeterministicNarrator:
                     or context.standing)
 
     # ── framing ──────────────────────────────────────────────────────────────
+
+    #: The prose a provider may replace, and nothing else.
+    #:
+    #: ⚠️ THE PROVIDER FILLS SLOTS; IT NO LONGER REBUILDS THE DOCUMENT. Whole-body
+    #: replacement made the model responsible for structure it cannot be trusted
+    #: with — sparklines, aligned columns and every number would be retyped by a
+    #: language model, and a third of the prompt was format rules restating
+    #: `style.py` in English where the two could drift. Worse, one weak answer
+    #: cost the entire brief.
+    #:
+    #: With slots the renderer keeps the document — zones, charts, columns,
+    #: figures, the footer — and the model writes the sentences it is actually
+    #: good at. Degradation gets FINER, not weaker: an unusable slot falls back
+    #: to its deterministic text on its own, so a bad answer costs one sentence.
+    #: The safety property CLAUDE.md records ("a provider can only replace, so
+    #: doing nothing is the fallback") is unchanged in kind and stronger in
+    #: degree.
+    SLOTS: Tuple[str, ...] = ("lead",)
+
+    def slot_defaults(self, context: ReportContext) -> Dict[str, str]:
+        """What each slot says when nobody improves on it."""
+        return {"lead": self._lead_sentence(context)}
+
+    def _lead_sentence(self, context: ReportContext) -> str:
+        """The one line a push notification shows before it is cut off.
+
+        ⚠️ IT NAMES THE LOUDEST THING, NOT THE FIRST. A notification preview is
+        about two lines; if they are spent on a heading the reader learns
+        nothing. Standing state leads when there is any, because it is the only
+        section in the present tense — what is wrong RIGHT NOW outranks what
+        happened earlier today, however expensive.
+        """
+        standing = [i for i in (context.standing or []) if isinstance(i, dict)]
+        if standing:
+            kinds = {str(i.get("kind") or "") for i in standing}
+            for kind, label in KIND_HEADINGS:
+                if kind in kinds:
+                    n = sum(1 for i in standing if i.get("kind") == kind)
+                    return (f"{_plural(n, _plural_label(label, 1).lower())} "
+                            f"need attention right now.")
+        incidents = [g for g in self._groups(context, "critical")
+                     if self._is_open(g)]
+        if incidents:
+            return f"{_plural(len(incidents), 'critical alert')} still open."
+        return ""
 
     def _title(self, context: ReportContext) -> str:
         """⚠️ THE TITLE IS OFTEN ALL THAT IS READ — a push notification shows it
@@ -559,7 +679,9 @@ class DeterministicNarrator:
         # window from it, which is exactly what was asked. `standing` is
         # deliberately NOT covered by this sentence — it is the present tense
         # and says so in its own heading.
-        lines = [f"Prepared {self._when(context.generated_at)}."]
+        lead = (context.slots or {}).get("lead") or self._lead_sentence(context)
+        lines = [lead] if lead else []
+        lines.append(f"Prepared {self._when(context.generated_at)}.")
         phrase = WINDOW_PHRASE.get(context.cadence)
         if phrase:
             lines.append(phrase)
@@ -783,7 +905,22 @@ class DeterministicNarrator:
             # decides: if anything in it is large, minor units are noise
             # everywhere in it.
             whole = self._money_whole(context)
+            # ⚠️ THE COMPARISON IS THE POINT, NOT THE DECORATION. "74 IDR" cannot
+            # be judged; "74 IDR, up 21% on a normal day" can. The chart is eight
+            # characters of block elements — checked against `inert()`, renders
+            # on every destination, costs nothing offline, which a hosted image
+            # does not.
+            past = (context.history or {}).get("avoidableCost") or []
+            shown_total = self._money_shown_total(context, whole)
+            move = trend_mod.phrase(shown_total, past, context.currency,
+                                    context.cadence)
+            if move:
+                head = f"{head}   {move}"
             lines = [head]
+            chart = trend_mod.sparkline(list(past) + [shown_total])
+            if chart:
+                noun = trend_mod.PERIOD_NOUN.get(context.cadence, "period")
+                lines.append(f"   {_plural(len(past) + 1, noun)}: {chart}")
             for group in self._top(billable):
                 lines.append(self._money_line(group, whole=whole))
             # ⚠️ THE TAIL CARRIES ITS COST, OR THE TOTAL CANNOT BE REACHED.
@@ -892,26 +1029,28 @@ class DeterministicNarrator:
 
     # ── 4. fixed and suggested ───────────────────────────────────────────────
 
-    def _fixed_and_suggested(self, context: ReportContext) -> List[str]:
-        """What closed by itself, and what somebody has been asked to do.
+    def _closed(self, context: ReportContext) -> List[str]:
+        """What ENDED: confirmed fixed, and what cleared without anybody acting.
 
-        ⚠️ THE TASKS ARE REPORTED, NOT CREATED. Nine blueprints call
-        `todo.add_item` beside their event; this says what they raised. The
-        report never writes to the caretaker list or the Facility Manager
-        store — reconciling the two is Phase B, and a report generator that
-        mutates the record it reports on is one nobody can trust.
+        ⚠️ SPLIT OUT OF `_fixed_and_suggested` WHEN ZONES ARRIVED, and the split
+        is the point rather than tidying. That method emitted four headings —
+        two describing work a human must still do, two describing work that is
+        over — so once sections were grouped by demand on the reader it could
+        not be filed at all: half of it belongs in NEEDS YOU and half in THIS
+        PERIOD. One builder, one zone.
         """
+        verified = self._findings_for(context, "fixed")
         resolved = [g for g in self._groups(context, "critical")
                     if not self._is_open(g)]
-        tasks = self._list(context, "tasks")
-        # ⚠️ AND THE VERIFICATION FINDINGS ROUTED HERE — see `_preventive`.
-        verified = self._findings_for(context, "fixed")
-        if not resolved and not tasks and not verified \
-                and not context.carried_tasks:
+        if not verified and not resolved:
             return []
-
         lines: List[str] = []
         if verified:
+            # ⚠️ THE SHARED SENTENCE IS WRITTEN ONCE. Three lines ended with the
+            # same eleven words — "The Facility Manager marked it done, and it
+            # has not recurred since" — which is a third of the section spent
+            # restating one fact. Same treatment the `waiting` group already
+            # gets, and the note is NOT bulleted: it is about the list, not in it.
             # ⚠️ ITS OWN HEADING. These rendered as bare bullets above
             # "Raised for the caretaker", orphaned under nothing — and a
             # verification is the one line in the report that says a story
@@ -919,8 +1058,22 @@ class DeterministicNarrator:
             # find. "Followed up" describes the ACTION, which is evidenced;
             # the sentence itself never says more than "has not recurred".
             lines.append(section_heading("verified"))
-            for item in verified[:MAX_LINES]:
-                lines.append(self._finding_line(item))
+            shown = verified[:MAX_LINES]
+            tails = [self._verified_tail(i) for i in shown]
+            # ⚠️ ONLY HOIST WHEN THERE IS A GROUP TO HOIST TO. The first cut
+            # computed `shared` from a single item too, stripped the clause off
+            # it, and then declined to print the note because there was nothing
+            # to share it between — so a lone verification silently lost the
+            # only sentence that said it had been fixed.
+            shared = (tails[0] if len(shown) > 1 and tails
+                      and len(set(tails)) == 1 else "")
+            for item, tail in zip(shown, tails):
+                line = self._finding_line(item)
+                if shared and line.endswith(shared):
+                    line = line[: -len(shared)].rstrip(" .,;—-")
+                lines.append(line)
+            if shared:
+                lines.append(_capitalise(shared.strip(" .,;—-")) + ".")
         if resolved:
             # ⚠️ A BULLET UNDER A HEADING, NOT A BARE SENTENCE. It used to sit
             # unmarked directly above "For the caretaker", so once headings
@@ -945,6 +1098,21 @@ class DeterministicNarrator:
                 lines.append(f"{BULLET}{self._occurrences(group)}")
             if len(resolved) > MAX_LINES:
                 lines.append(f"{BULLET}and {len(resolved) - MAX_LINES} more.")
+        return lines
+
+    def _fixed_and_suggested(self, context: ReportContext) -> List[str]:
+        """What closed by itself, and what somebody has been asked to do.
+
+        ⚠️ THE TASKS ARE REPORTED, NOT CREATED. Nine blueprints call
+        `todo.add_item` beside their event; this says what they raised. The
+        report never writes to the caretaker list or the Facility Manager
+        store — reconciling the two is Phase B, and a report generator that
+        mutates the record it reports on is one nobody can trust.
+        """
+        tasks = self._list(context, "tasks")
+        if not tasks and not context.carried_tasks:
+            return []
+        lines: List[str] = []
         if tasks:
             # ⚠️ A SECTION CAN HOLD MORE THAN ONE HEADING, AND `render` ONLY
             # SEPARATES SECTIONS. So two headings inside this one ran together
@@ -1433,6 +1601,22 @@ class DeterministicNarrator:
         return any(
             isinstance(item, dict) and str(item.get("capability")) == capability
             for item in (context.discovery.get("preflight") or []))
+
+    @staticmethod
+    @staticmethod
+    def _verified_tail(item: Dict[str, Any]) -> str:
+        """The evidence clause of a verification, if it has one.
+
+        ⚠️ SPLIT ON THE SENTENCE THE RENDERER DID NOT WRITE. `verify._detail`
+        composes "reported N times, last on D. <evidence>, and it has not
+        recurred since." — the second sentence is identical across every line in
+        a period where one person closed everything, which is the common case.
+        Matching on the punctuation rather than the words means rewording the
+        evidence (as v2.587.0 did) cannot silently stop the hoisting.
+        """
+        detail = str(item.get("detail") or "")
+        head, sep, tail = detail.partition(". ")
+        return f". {tail}" if sep and tail else ""
 
     @staticmethod
     def _finding_line(item: Dict[str, Any], fallback: str = "") -> str:

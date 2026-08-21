@@ -120,7 +120,12 @@ def test_the_pipeline_sanitises_after_both_narrators() -> None:
     source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
                                "pipeline.py"), encoding="utf-8").read()
     call = source.index("style_mod.inert(title)")
-    overlay = source.index("body, narration_mode = prose, provider.name")
+    # ⚠️ THE OVERLAY IS A RE-RENDER NOW, NOT AN ASSIGNMENT. v2.592.0 made the
+    # provider fill the LEAD SLOT and re-ran the renderer, so the old anchor
+    # (`body, narration_mode = prose, …`) no longer exists. The property is
+    # unchanged and is what this asserts: whatever the provider contributes
+    # reaches `body` BEFORE `inert` runs, or the narrated path ships unsanitised.
+    overlay = source.index('context.slots = {"lead": lead}')
     deliver = source.index("deliveries = ([] if preview")
     assert overlay < call < deliver, (
         "the sanitiser must sit between the provider overlay and delivery")

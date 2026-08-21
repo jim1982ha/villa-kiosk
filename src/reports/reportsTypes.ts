@@ -134,6 +134,13 @@ export const PAYLOAD_ALLOWED_FIELDS = [
   "confidence",
   "completeness",
   "horizon_days",
+  // Structure, so a narration provider can compose rather than rephrase: a
+  // zone name, two counts and a direction. All scalars, none identifying.
+  "zone",
+  "age_days",
+  "occurrences",
+  "trend_direction",
+  "trend_pct",
 ] as const;
 export type PayloadField = (typeof PAYLOAD_ALLOWED_FIELDS)[number];
 
