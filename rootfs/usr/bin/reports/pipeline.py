@@ -21,15 +21,15 @@ yet" sentence rather than implying all is well.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
 from . import (aggregate as aggregate_mod, collect, devices as devices_mod,
-               discovery, ledger, model as model_mod, schedule as schedule_mod,
-               standing as standing_mod, stats as stats_mod, store,
-               verify as verify_mod)
+               discovery, ledger, model as model_mod, noise as noise_mod,
+               schedule as schedule_mod, standing as standing_mod,
+               stats as stats_mod, store, verify as verify_mod)
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import PAYLOAD_ALLOWED_FIELDS, severity_rank
@@ -515,6 +515,40 @@ async def run_report(
     except Exception as err:  # noqa: BLE001 - a report must still go out
         swallow("could not read the caretaker list", err)
 
+    # ── noise ───────────────────────────────────────────────────────────────
+    # ⚠️ ITS OWN WINDOW, NOT THE REPORT'S. The catalog's rule is "N fires a
+    # MONTH", and a daily brief must not answer it from one day's events — that
+    # would under-count by 30x and quietly report every noisy rule as fine. So
+    # this reaches back `noise_window_days` regardless of cadence, which is also
+    # why it is computed here rather than from `inside`.
+    #
+    # ⚠️ AND IT ASKS WHETHER THE BUFFER REACHES THAT FAR. `collect.MAX_EVENTS`
+    # bounds the ring, so on a busy property the oldest retained event can be
+    # newer than the window start — at which point every count is a FLOOR and
+    # comparing a floor against a threshold reports "not noisy" for the rules
+    # that are noisiest. `covered=False` makes the brief say it cannot tell.
+    noise_summary: Dict[str, Any] = {}
+    try:
+        settings_now = settings or {}
+        window_days = int(settings_now.get("noise_window_days")
+                          or noise_mod.DEFAULT_WINDOW_DAYS)
+        threshold = int(settings_now.get("noise_threshold_fires")
+                        or noise_mod.DEFAULT_THRESHOLD)
+        start = collect.as_utc_iso(
+            (now_local - timedelta(days=window_days)).isoformat())
+        buffered = aggregate_mod.normalise_all(collect.events_since(""))
+        stamps = [collect.as_utc_iso(i.when) for i in buffered if i.when]
+        in_window = [i for i in buffered
+                     if i.when and collect.as_utc_iso(i.when) >= start]
+        # The ring reaches back far enough iff its OLDEST event predates the
+        # window — or it is not full, in which case nothing has been evicted.
+        covered = (len(buffered) < collect.MAX_EVENTS
+                   or bool(stamps) and min(stamps) <= start)
+        noise_summary = noise_mod.summarise(
+            in_window, done, threshold, window_days, covered)
+    except Exception as err:  # noqa: BLE001 - never costs the report
+        swallow("could not assess alert noise", err)
+
     # ── narrate ─────────────────────────────────────────────────────────────
     context = ReportContext(
         audience=audience, cadence=cadence, period=period,
@@ -523,6 +557,7 @@ async def run_report(
         skipped=skipped, ran=ran,
         aggregated=aggregated, collector=collect.state(),
         carried_tasks=carried, standing=standing, labels=labels, units=units,
+        noise=noise_summary,
         currency=str(found.get("currency") or ""),
     )
     narrator = DeterministicNarrator()

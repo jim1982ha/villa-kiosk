@@ -901,6 +901,48 @@ class DeterministicNarrator:
 
     # ── 7. monitoring health ─────────────────────────────────────────────────
 
+    def _noise_lines(self, context: ReportContext) -> List[str]:
+        """Rules that fire and are never acknowledged — the catalog's own rule.
+
+        ⚠️ THE THRESHOLD IS PRINTED, NOT JUST APPLIED. "fired 23 times, never
+        acknowledged" invites "so what?"; naming the bar the reader's own
+        configuration sets makes the line a judgement they can disagree with.
+        Units on both numbers, per `feedback_report-prose-rules`.
+
+        ⚠️ THREE OUTCOMES AND THEY ARE NOT COLLAPSED. Rules found; asked and
+        none found (silent, because a clean answer every week is noise of a
+        different kind); and COULD NOT ASK, which is stated. The third is the
+        one that matters: the collector's ring is bounded, so a busy property
+        can hold fewer than `noise_window_days` of events, every count is then a
+        floor, and a floor compared against a threshold reports the noisiest
+        rules as fine. Silence there would be a counter reading 0 for the exact
+        case it exists to measure — this project's most-repeated defect.
+        """
+        noise = context.noise or {}
+        if not noise:
+            return []
+        days = int(noise.get("window_days") or 0)
+        if not noise.get("known"):
+            return [f"{BULLET}Alert noise could not be assessed — the event "
+                    f"buffer does not reach back {days} days."]
+        rules = noise.get("rules") or []
+        out: List[str] = []
+        for row in rules[:MAX_LINES]:
+            if not isinstance(row, dict):
+                continue
+            fires = int(row.get("fires") or 0)
+            label = str(row.get("label") or "").strip() or str(row.get("rule_id"))
+            out.append(
+                # ⚠️ `_plural` CARRIES THE COUNT. This read `fired {fires}
+                # {_plural(fires, 'time')}` and rendered "fired 23 23 times".
+                # The test asserted `"23 times" in body`, which the doubled
+                # string satisfies — a weak substring assertion agreeing with a
+                # broken line. Read the rendered output.
+                f"{BULLET}{name_of(readable_label(label))} fired "
+                f"{_plural(fires, 'time')} in {_plural(days, 'day')} and was "
+                f"never acknowledged — retune or retire it.")
+        return out
+
     def _monitoring_health(self, context: ReportContext) -> List[str]:
         """Whether the monitoring itself is working.
 
@@ -931,6 +973,8 @@ class DeterministicNarrator:
             who = self._subjects(group)
             body = f"{label}: {said}" if said else label
             lines.append(f"{BULLET}{body}" + (f" — {who}" if who else ""))
+
+        lines.extend(self._noise_lines(context))
 
         silent = context.collector.get("silent_types") or []
         if silent and context.collector.get("connected"):

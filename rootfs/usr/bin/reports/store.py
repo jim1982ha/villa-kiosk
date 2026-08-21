@@ -110,6 +110,13 @@ CONFIG_DEFAULTS: Final[Dict[str, Any]] = {
     # current hour never becoming due at all.
     "timezone": "",
     "min_history_days": 14,
+    # ⚠️ THE CATALOG'S NOISE RULE, AS DEFAULTS RATHER THAN CONSTANTS. "20 fires
+    # a month with no acknowledgement" is the workbook's number for ONE
+    # property; a busier or quieter villa needs a different one, and a tuning
+    # constant baked into a redistributable add-on is CLAUDE.md's first hard
+    # rule broken. See `noise.py` for what they gate.
+    "noise_threshold_fires": 20,
+    "noise_window_days": 30,
 }
 
 

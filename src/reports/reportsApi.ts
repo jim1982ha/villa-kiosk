@@ -228,6 +228,8 @@ const CONFIG_WIRE_KEYS = {
   narration: "narration",
   timezone: "timezone",
   min_history_days: "minHistoryDays",
+  noise_threshold_fires: "noiseThresholdFires",
+  noise_window_days: "noiseWindowDays",
 } as const;
 
 /** ⚠️ AND THE SAME RULE ONE LEVEL DOWN. `providers.shared()` reads the

@@ -1,3 +1,13 @@
+## 2.583.0
+
+### Added — the brief now names rules that fire and are never acknowledged
+
+The catalog's own honesty rule (Severity & Routing) had no implementation:
+nothing recorded that an alert was acted on, so no rule could be judged noisy —
+Coverage Gaps RPT-05, open and blocked. A completed caretaker todo item is the
+acknowledgement, which needed no change to delivery because those items were
+already being read every run. Escalation stays in the `critical_*` blueprints.
+
 ## 2.582.0
 
 ### Added — the brief now says when its counts reset, and a test guards the first hard rule

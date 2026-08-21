@@ -34,6 +34,11 @@ class ReportContext:
     period: str
     generated_at: str
     #: Whole `discover()` result — capabilities, inventory, preflight.
+    #: Rules that fire and are never acknowledged — see `reports.noise`. Empty
+    #: `rules` with `known: True` means "asked and found none", which is a
+    #: different claim from `known: False` ("the buffer does not reach back far
+    #: enough to ask"), and the brief must not collapse them.
+    noise: Dict[str, Any] = field(default_factory=dict)
     discovery: Dict[str, Any] = field(default_factory=dict)
     #: Analysis output. Empty until Phase 3 introduces modules.
     findings: List[Dict[str, Any]] = field(default_factory=list)
