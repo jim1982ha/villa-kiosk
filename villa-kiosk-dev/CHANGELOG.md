@@ -1,3 +1,16 @@
+## 2.544.0
+
+### Fixed — saving a briefing schedule was refused, and three tabs were reading nothing
+
+Every save returned 400 and every read quietly returned nothing: the panel
+wrapped its settings in the wrong envelope key, copied from the Facility store,
+where the reports store uses a different one. The writes failed loudly; the two
+reads degraded to defaults, which is indistinguishable from a property nobody
+has configured, so they had been wrong since the panel shipped. The dialog also
+gains the Close footer every other settings dialog has, an error banner that
+clears when you switch tabs, a way to actually choose where briefings are sent,
+and a note in Coverage saying when it last checked.
+
 ## 2.543.0
 
 ### Changed — the check that a menu entry reaches every device now sees all of them
