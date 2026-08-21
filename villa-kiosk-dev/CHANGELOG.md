@@ -1,3 +1,13 @@
+## 2.582.0
+
+### Added — the brief now says when its counts reset, and a test guards the first hard rule
+
+Asked by the owner reading a delivered brief: nothing on the page said when the
+numbers reset. The dateline gave the time it was PREPARED (23:35), which is the
+one time that is not the boundary. It now states the window beneath it. Also:
+nothing anywhere checked that no villa-specific entity id ships — two were being
+rendered as example text in Settings and the fault picker on every install.
+
 ## 2.581.1
 
 ### Fixed — a real entity id naming a person was committed to a public repository
