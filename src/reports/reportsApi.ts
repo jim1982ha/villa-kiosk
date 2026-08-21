@@ -154,14 +154,72 @@ function parseSchedule(raw: unknown): ReportSchedule {
   };
 }
 
+/** ⚠️ THE STORE SPEAKS snake_case AND THIS APP SPEAKS camelCase, AND TWO KEYS
+ *  DIFFER BETWEEN THEM. `store.CONFIG_DEFAULTS` is the wire contract:
+ *  `notify_targets` and `min_history_days`. Read or written as `notifyTargets`
+ *  / `minHistoryDays` they are not errors — they are ACCEPTED AND IGNORED. The
+ *  proxy's `validate_config` only checks keys it knows, and `config_view` keeps
+ *  unknown ones so a newer add-on's settings survive a downgrade, so a save
+ *  returns 200 and the scheduler then reads `notify_targets`, finds nothing,
+ *  and delivers a composed brief to nowhere.
+ *
+ *  This is the third defect of the same family in this file, after the envelope
+ *  key (v2.544.0, two sites). Same shape every time: Python one side,
+ *  TypeScript the other, a string literal in each and nothing between them. The
+ *  mapping is stated ONCE here and used by both directions, so the parse and
+ *  the serialise cannot drift; `tests/py/test_store_envelope.py` derives the
+ *  wire names from `CONFIG_DEFAULTS` and fails if this table omits one.
+ *
+ *  Schedule ITEM fields (`id`/`cadence`/`hour`/`audience`/`targets`) are single
+ *  words and identical on both sides — nothing to map, which is exactly why
+ *  they worked and hid this. */
+const CONFIG_WIRE_KEYS = {
+  enabled: "enabled",
+  schedules: "schedules",
+  notify_targets: "notifyTargets",
+  modules: "modules",
+  narration: "narration",
+  timezone: "timezone",
+  min_history_days: "minHistoryDays",
+} as const;
+
+/** ⚠️ AND THE SAME RULE ONE LEVEL DOWN. `providers.shared()` reads the
+ *  narration slice with `settings.get("monthly_limit")`, so a nested key is
+ *  exactly as capable of being written under a name nothing reads — and more
+ *  capable of hiding, because the slice itself arrives intact and the mode
+ *  works. The one that would have broken: a budget the operator set to 20
+ *  silently running at the default 200. */
+const NARRATION_WIRE_KEYS = {
+  mode: "mode",
+  monthly_limit: "monthlyLimit",
+} as const;
+
+/** A `ReportsConfig` in the store's own vocabulary, ready to PUT. */
+function toWire(config: ReportsConfig): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [wire, client] of Object.entries(CONFIG_WIRE_KEYS)) {
+    const value = (config as Record<string, unknown>)[client];
+    if (value !== undefined) out[wire] = value;
+  }
+  if (config.narration) {
+    const slice: Record<string, unknown> = {};
+    for (const [wire, client] of Object.entries(NARRATION_WIRE_KEYS)) {
+      const value = (config.narration as Record<string, unknown>)[client];
+      if (value !== undefined) slice[wire] = value;
+    }
+    out.narration = slice;
+  }
+  return out;
+}
+
 export function parseReportsConfig(raw: unknown): ReportsConfig {
   const c = obj(raw);
   const out: ReportsConfig = {};
   if (typeof c.enabled === "boolean") out.enabled = c.enabled;
   if (Array.isArray(c.schedules)) out.schedules = c.schedules.map(parseSchedule);
-  if (Array.isArray(c.notifyTargets)) out.notifyTargets = strs(c.notifyTargets);
+  if (Array.isArray(c.notify_targets)) out.notifyTargets = strs(c.notify_targets);
   if (typeof c.timezone === "string") out.timezone = c.timezone;
-  if (typeof c.minHistoryDays === "number") out.minHistoryDays = c.minHistoryDays;
+  if (typeof c.min_history_days === "number") out.minHistoryDays = c.min_history_days;
   const modules = obj(c.modules);
   if (Object.keys(modules).length) {
     const flags: Record<string, boolean> = {};
@@ -171,8 +229,13 @@ export function parseReportsConfig(raw: unknown): ReportsConfig {
     out.modules = flags;
   }
   const narration = obj(c.narration);
-  if (typeof narration.mode === "string") {
-    out.narration = { mode: oneOf(narration.mode, NARRATION_MODE) as NarrationMode };
+  if (typeof narration.mode === "string" || typeof narration.monthly_limit === "number") {
+    out.narration = {
+      ...(typeof narration.mode === "string"
+        ? { mode: oneOf(narration.mode, NARRATION_MODE) as NarrationMode } : {}),
+      ...(typeof narration.monthly_limit === "number"
+        ? { monthlyLimit: narration.monthly_limit } : {}),
+    };
   }
   return out;
 }
@@ -235,7 +298,10 @@ export async function saveReportsConfig(
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        config: { ...carryOver, ...config },
+        // ⚠️ `toWire`, NOT the config object — see CONFIG_WIRE_KEYS. Spreading
+        // this app's own camelCase names writes keys the scheduler never reads,
+        // and the write SUCCEEDS, which is what made it invisible.
+        config: { ...carryOver, ...toWire(config) },
         ...(expectedRev === null ? {} : { rev: expectedRev }),
       }),
     });
@@ -293,6 +359,51 @@ export async function fetchReportsHistory(): Promise<ReportHistoryEntry[] | null
     return entries.reverse();
   } catch {
     return null;
+  }
+}
+
+// ── narration credentials ───────────────────────────────────────────────────
+//
+// ⚠️ THERE IS NO READ PATH FOR THE VALUE, ON PURPOSE, AND THAT IS THE WHOLE
+// SHAPE OF THIS PAIR. Every other store here is read-then-write: fetch the
+// document, edit it, PUT it back. A credential must not work that way, because
+// the fetch would put an API key into a browser — and this browser is a kiosk
+// running unattended on a villa wall. The server answers only "is one set"
+// (`secrets.configured`, which exists so the value is never even loaded), and
+// this client cannot ask for more because there is nothing to ask.
+
+/** Which providers have a credential stored. Never the credential. */
+export async function fetchNarrationSecrets(): Promise<Record<string, boolean>> {
+  try {
+    const r = await fetch(ingressPath("reports-secret"), { credentials: "same-origin" });
+    if (!r.ok) return {};
+    const d = obj(await r.json());
+    const out: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(obj(d.configured))) out[k] = v === true;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Store or clear one credential. An empty `value` DELETES it — the only way to
+ *  turn a provider off completely, since clearing the mode leaves the key on
+ *  disk and a credential that outlives its purpose is one nobody watches. */
+export async function saveNarrationSecret(
+  provider: string, value: string,
+): Promise<{ ok: boolean; error: string }> {
+  try {
+    const r = await fetch(ingressPath("reports-secret"), {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, value }),
+    });
+    if (r.ok) return { ok: true, error: "" };
+    const d = obj(await r.json().catch(() => ({})));
+    return { ok: false, error: str(d.error) || `Refused (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the add-on." };
   }
 }
 

@@ -36,6 +36,7 @@
 import { useEffect, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import type { ReportsDiagnostics } from "@/reports/reportsApi";
+import NarrationSection from "./NarrationSection";
 import {
   AUDIENCE, CADENCE, type Cadence, type ReportSchedule, type ReportsConfig,
 } from "@/reports/reportsTypes";
@@ -55,12 +56,14 @@ function newSchedule(): ReportSchedule {
 }
 
 export default function ScheduleTab({
-  config, diagnostics, busy, onSave,
+  config, diagnostics, busy, onSave, secretsConfigured, onSaveSecret,
 }: {
   config: ReportsConfig | null;
   diagnostics: ReportsDiagnostics | null;
   busy: boolean;
   onSave: (next: ReportsConfig) => void;
+  secretsConfigured: Record<string, boolean>;
+  onSaveSecret: (provider: string, value: string) => void;
 }) {
   const [draft, setDraft] = useState<ReportsConfig>({});
 
@@ -228,6 +231,14 @@ export default function ScheduleTab({
           </select>
         </div>
       )}
+
+      <NarrationSection
+        draft={draft}
+        set={set}
+        keyStored={secretsConfigured.anthropic === true}
+        busy={busy}
+        onSaveSecret={onSaveSecret}
+      />
 
       <button className="btn primary" disabled={busy} onClick={() => onSave(draft)}>
         <Save size={16} /><span>{busy ? "Saving…" : "Save"}</span>

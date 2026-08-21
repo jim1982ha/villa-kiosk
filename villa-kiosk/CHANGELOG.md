@@ -1,3 +1,16 @@
+## 2.545.0
+
+### Added — briefings can be written by an AI service, and briefing settings now actually save
+
+Optional and off by default: the add-on writes every brief itself, and that
+stays true if the service is unreachable, over budget, or the villa has no
+internet — the brief still arrives on time in the built-in wording. Only
+numbers leave the property, never entity ids, free text or anything about who
+is home, and the key is stored on the add-on where nothing can read it back.
+Also fixed: the destination list and the history depth were saved under names
+the scheduler never reads, so both were accepted and ignored — a brief would
+have been composed and delivered nowhere.
+
 ## 2.544.0
 
 ### Fixed — saving a briefing schedule was refused, and three tabs were reading nothing

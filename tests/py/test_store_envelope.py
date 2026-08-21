@@ -155,6 +155,107 @@ def test_the_anchors_still_find_something() -> None:
             f"(`JSON.stringify({{ key: … }})`), so its envelope is unchecked")
 
 
+# ── the keys INSIDE the envelope ────────────────────────────────────────────
+
+REPORTS_API = os.path.join(SRC, "reports", "reportsApi.ts")
+
+#: The client's `wire: "clientName"` table. One place, used by both the parse
+#: and the serialise, so the two directions cannot drift from each other — the
+#: only remaining question is whether the table itself is complete.
+WIRE_TABLE = re.compile(r"const CONFIG_WIRE_KEYS = \{(.*?)\n\} as const;", re.DOTALL)
+WIRE_ENTRY = re.compile(r"^\s*(\w+):\s*\"(\w+)\",", re.MULTILINE)
+
+
+def config_defaults() -> List[str]:
+    """The reports config's top-level keys, from `store.CONFIG_DEFAULTS`."""
+    path = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports", "store.py")
+    with open(path, encoding="utf-8") as handle:
+        source = handle.read()
+    block = source[source.index("CONFIG_DEFAULTS"):]
+    block = block[:block.index("\n}")]
+    return re.findall(r"^\s{4}\"(\w+)\":", block, re.MULTILINE)
+
+
+def test_the_client_speaks_every_key_the_store_defines() -> None:
+    """⚠️ THE STORE SPEAKS snake_case AND THE APP SPEAKS camelCase, and a key
+    that differs between them is ACCEPTED AND IGNORED rather than refused:
+    `validate_config` only checks keys it knows, and `config_view` deliberately
+    keeps unknown ones so a newer add-on's settings survive a downgrade. So a
+    save of `notifyTargets` returns 200, and the scheduler then reads
+    `notify_targets`, finds nothing, and delivers a composed brief nowhere.
+
+    Two of the seven keys are two words long, which is why five of them worked
+    and hid it — and why the schedule ITEM fields, all single words, worked
+    too."""
+    with open(REPORTS_API, encoding="utf-8") as handle:
+        source = handle.read()
+    table = WIRE_TABLE.search(source)
+    assert table, ("CONFIG_WIRE_KEYS is gone from reportsApi.ts — the mapping "
+                   "this test checks no longer exists in one place")
+    mapped = dict(WIRE_ENTRY.findall(table.group(1)))
+
+    missing = [k for k in config_defaults() if k not in mapped]
+    assert not missing, (
+        f"the store defines these config keys and the client's wire table does "
+        f"not name them, so they are written under a name nothing reads: "
+        f"{missing}")
+
+
+def test_the_client_reads_the_wire_name_for_every_two_word_key() -> None:
+    """The table governs the WRITE path. The read path is hand-written per key,
+    so the ones that can differ are checked directly — a `c.notifyTargets` in
+    the parser degrades to absent and renders as "nothing configured", which is
+    the same silent shape as the envelope bug's GET half."""
+    with open(REPORTS_API, encoding="utf-8") as handle:
+        source = handle.read()
+    problems: List[str] = []
+    for key in config_defaults():
+        if "_" not in key:
+            continue  # single words are identical in both vocabularies
+        camel = re.sub(r"_(\w)", lambda m: m.group(1).upper(), key)
+        if f"c.{camel}" in source:
+            problems.append(
+                f"reportsApi.ts parses `c.{camel}` but the store writes "
+                f"`{key}` — the read degrades to absent and looks like an "
+                f"unconfigured property")
+    assert not problems, "\n".join(problems)
+
+
+NARRATION_TABLE = re.compile(
+    r"const NARRATION_WIRE_KEYS = \{(.*?)\n\} as const;", re.DOTALL)
+
+
+def test_the_client_speaks_every_key_the_narration_slice_reads() -> None:
+    """⚠️ THE SAME RULE ONE LEVEL DOWN, AND IT HIDES BETTER THERE. A nested key
+    written under the wrong name arrives inside a slice that is otherwise
+    correct, so the feature WORKS and only that setting is ignored — here, a
+    monthly ceiling an operator set to 20 silently running at the default 200.
+    The top-level version at least makes a whole feature inert.
+
+    Derived from `providers.shared`'s own `settings.get(...)` calls, so a fourth
+    narration setting is covered on the day it is read."""
+    providers = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+                             "narrate", "providers.py")
+    with open(providers, encoding="utf-8") as handle:
+        block = handle.read()
+    block = block[block.index("def shared("):]
+    wanted = set(re.findall(r"settings\.get\(\"(\w+)\"", block))
+    assert wanted, "providers.shared reads no settings — this anchor moved"
+
+    with open(REPORTS_API, encoding="utf-8") as handle:
+        source = handle.read()
+    table = NARRATION_TABLE.search(source)
+    assert table, "NARRATION_WIRE_KEYS is gone from reportsApi.ts"
+    mapped = dict(WIRE_ENTRY.findall(table.group(1)))
+
+    # `provider` is read with a default and is not operator-facing yet — one
+    # adapter ships, and the server refuses a credential for any other name.
+    missing = sorted(wanted - set(mapped) - {"provider"})
+    assert not missing, (
+        f"providers.shared reads these narration settings and the client's "
+        f"wire table does not name them: {missing}")
+
+
 def test_the_three_known_stores_are_covered() -> None:
     """The list this test would otherwise have hard-coded, asserted as an
     OUTCOME of the derivation instead of as its input — so it proves the regex

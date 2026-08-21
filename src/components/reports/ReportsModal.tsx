@@ -19,7 +19,7 @@
 //
 //   Preview      compose one now and read it, sending nothing
 //   Coverage     what this property can be asked about, and what it cannot
-//   Schedule     when it arrives, for whom, and where
+//   Schedule     when it arrives, for whom, where, and who writes the prose
 //   History      what was produced and whether it was delivered
 //   Diagnostics  the detection layer's own health
 //
@@ -42,8 +42,8 @@ import {
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  fetchReportsConfig, fetchReportsDiagnostics, fetchReportsHistory,
-  runReportNow, saveReportsConfig,
+  fetchNarrationSecrets, fetchReportsConfig, fetchReportsDiagnostics,
+  fetchReportsHistory, runReportNow, saveNarrationSecret, saveReportsConfig,
   type ReportPreview, type ReportsDiagnostics,
 } from "@/reports/reportsApi";
 import type { ReportHistoryEntry, ReportsConfig } from "@/reports/reportsTypes";
@@ -73,6 +73,9 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
   const [diagnostics, setDiagnostics] = useState<ReportsDiagnostics | null>(null);
   const [history, setHistory] = useState<ReportHistoryEntry[] | null>(null);
   const [preview, setPreview] = useState<ReportPreview | null>(null);
+  // ⚠️ WHETHER A CREDENTIAL EXISTS, NEVER THE CREDENTIAL. `/reports-secret` has
+  // no read path for the value at all — see `secrets.configured()`.
+  const [secretsConfigured, setSecretsConfigured] = useState<Record<string, boolean>>({});
 
   // ⚠️ THREE STATES, NOT TWO. "Not loaded yet", "loaded and empty" and
   // "could not be reached" are different things, and collapsing the last two
@@ -96,8 +99,9 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
   useEffect(() => { setNotice(null); }, [tab]);
 
   const reload = useCallback(async () => {
-    const [c, d, h] = await Promise.all([
+    const [c, d, h, k] = await Promise.all([
       fetchReportsConfig(), fetchReportsDiagnostics(), fetchReportsHistory(),
+      fetchNarrationSecrets(),
     ]);
     if (c) {
       setConfig(c.config);
@@ -106,6 +110,7 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
     }
     setDiagnostics(d);
     setHistory(h);
+    setSecretsConfigured(k);
     setUnreachable(c === null);
   }, []);
 
@@ -144,6 +149,23 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
     }
     setBusy(false);
   }, [rev, carryOver, reload]);
+
+  /** ⚠️ A SEPARATE WRITE FROM THE CONFIG SAVE, because a credential is not
+   *  configuration: it lives in its own 0600 file that no store handler serves.
+   *  Riding the config PUT would put an API key into the document any
+   *  authorized session — a guest's phone included — can GET. */
+  const saveSecret = useCallback(async (provider: string, value: string) => {
+    setBusy(true);
+    setNotice(null);
+    const result = await saveNarrationSecret(provider, value);
+    if (result.ok) {
+      setSecretsConfigured(await fetchNarrationSecrets());
+      setNotice({ text: value ? "Key stored." : "Key removed.", bad: false });
+    } else {
+      setNotice({ text: result.error, bad: true });
+    }
+    setBusy(false);
+  }, []);
 
   const compose = useCallback(async () => {
     setBusy(true);
@@ -218,6 +240,8 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
               diagnostics={diagnostics}
               busy={busy}
               onSave={(next) => void save(next)}
+              secretsConfigured={secretsConfigured}
+              onSaveSecret={(provider, value) => void saveSecret(provider, value)}
             />
           )}
           {tab === "history" && <HistoryTab entries={history} />}

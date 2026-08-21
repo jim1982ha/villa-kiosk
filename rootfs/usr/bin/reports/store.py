@@ -40,7 +40,7 @@ import os
 import tempfile
 from typing import Any, Dict, Final, List
 
-from .contracts import CADENCE, CONTRACT_VERSION
+from .contracts import CADENCE, CONTRACT_VERSION, NARRATION_MODE
 from .log import warn
 
 DATA_DIR: Final[str] = "/data"
@@ -177,6 +177,28 @@ def validate_config(value: Any) -> List[str]:
         problems.append("notify_targets must be a list")
     elif not all(isinstance(t, str) for t in targets):
         problems.append("notify_targets must be a list of strings")
+
+    # ⚠️ AN UNKNOWN MODE MUST FAIL HERE, NOT SILENTLY MEAN "OFF". `providers.
+    # shared()` returns None for anything that is not exactly NARRATION_MODE[1],
+    # which is the right runtime behaviour — a typo can never accidentally
+    # enable a paid third-party call — and the wrong SAVE behaviour: an operator
+    # who typed it would get a green "Saved." and a report that never changes,
+    # with nothing anywhere saying why. The two together are the rule this
+    # subsystem follows everywhere: refuse at the moment of the mistake, degrade
+    # at the moment of use.
+    narration = value.get("narration", {})
+    if not isinstance(narration, dict):
+        problems.append("narration must be an object")
+    else:
+        mode = narration.get("mode", NARRATION_MODE[0])
+        if mode not in NARRATION_MODE:
+            problems.append(
+                f"narration.mode must be one of {', '.join(NARRATION_MODE)}")
+        limit = narration.get("monthly_limit")
+        if limit is not None and (not isinstance(limit, int)
+                                  or isinstance(limit, bool) or limit < 0):
+            # `isinstance(True, int)` is True in Python — see the hour check.
+            problems.append("narration.monthly_limit must be a whole number")
 
     return problems
 

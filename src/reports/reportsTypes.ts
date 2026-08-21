@@ -136,7 +136,11 @@ export interface ReportsConfig {
   schedules?: ReportSchedule[];
   notifyTargets?: string[];
   modules?: Record<string, boolean>;
-  narration?: { mode?: NarrationMode };
+  /** ⚠️ `monthlyLimit` IS A CEILING ON REQUESTS, NOT ON TOKENS — see
+   *  `providers.DEFAULT_MONTHLY_LIMIT`. Token accounting needs a provider's own
+   *  reply to be trusted for billing and differs per provider; a request count
+   *  is exact, provider-agnostic, and an owner can reason about it. */
+  narration?: { mode?: NarrationMode; monthlyLimit?: number };
   timezone?: string;
   minHistoryDays?: number;
 }

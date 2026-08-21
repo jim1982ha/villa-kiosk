@@ -36,6 +36,7 @@ from .deliver import deliver
 from .hass import fetch_timezone
 from .log import log, swallow, warn
 from .narrate import DeterministicNarrator, ReportContext
+from .narrate import payload as payload_mod, providers as providers_mod
 from .schedule import period_key, period_start
 
 
@@ -210,6 +211,7 @@ async def run_report(
     min_history_days: int = 14,
     module_failures: Optional[Dict[str, int]] = None,
     preview: bool = False,
+    narration: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Produce and deliver one report. Returns the history entry.
 
@@ -321,6 +323,37 @@ async def run_report(
         title = f"{cadence.title()} report — {period}"
         body = "The report could not be composed. See the add-on log."
 
+    # ── narrate again, optionally, through a provider ───────────────────────
+    # ⚠️ AN OVERLAY, NOT A BRANCH, AND THAT IS THE WHOLE DESIGN OF PHASE 6. The
+    # deterministic body already exists on the line above and is already good
+    # enough to deliver; a provider can only REPLACE it. So "degrade to the
+    # built-in renderer on any failure" is not a code path that has to be
+    # written correctly and tested against every failure mode — it is what
+    # happens when this block does nothing, which is what it does on absence, a
+    # missing key, an open breaker, a spent budget, a timeout, an unusable
+    # answer and an exception alike. There is no arm of this that can end with
+    # no report.
+    #
+    # ⚠️ WHICH IS ALSO WHY THE DETERMINISTIC RENDER IS NOT SKIPPED when a
+    # provider is configured. Composing it is local, fast and free. The
+    # alternative — render only if the provider declines — makes the offline
+    # villa's report depend on control flow that runs only when a third party
+    # is unreachable, i.e. it puts the case that matters most on the path with
+    # the least coverage. See CLAUDE.md's second hard rule.
+    narration_mode = narrator.name
+    narration_why = ""
+    provider = providers_mod.shared(narration or {})
+    if provider is not None:
+        prose, narration_why = await provider.narrate(
+            session, payload_mod.from_context(context))
+        if prose:
+            body, narration_mode = prose, provider.name
+        else:
+            # ⚠️ A REASON, RECORDED. "This week's brief reads differently" is
+            # otherwise unanswerable — and the five causes call for different
+            # actions (configure a key, wait, raise a limit, or nothing).
+            log(f"not narrated by a provider: {narration_why}")
+
     # ── deliver ─────────────────────────────────────────────────────────────
     # ⚠️ A PREVIEW COMPOSES EVERYTHING AND SENDS NOTHING. An operator deciding
     # whether to switch reports on needs to read one first, and "enable it and
@@ -345,7 +378,14 @@ async def run_report(
         "at": generated_at,
         "audience": audience,
         "cadence": cadence,
-        "narration": narrator.name,
+        # ⚠️ WHAT ACTUALLY WROTE THIS ONE, not what was configured. `contracts`
+        # already says why the field exists: "the summaries changed tone last
+        # Tuesday" is otherwise unanswerable. A provider that was configured and
+        # then declined must record `deterministic`, or the history claims prose
+        # nobody wrote — and since declining is the COMMON case here (no key, no
+        # WAN, budget spent), a field set from the config would be wrong more
+        # often than right.
+        "narration": narration_mode,
         "findingCount": len(findings),
         "severity": severity,
         "deliveries": deliveries,
@@ -367,7 +407,12 @@ async def run_report(
                           # an empty section cannot be told from an aggregation
                           # that raised and was swallowed two lines above.
                           "aggregated": aggregate_mod.summary(aggregated),
-                          "period_since": since}
+                          "period_since": since,
+                          # ⚠️ THE INSTRUMENT FOR "WHY IS THIS NOT NARRATED".
+                          # Empty means it was, or that nothing was configured;
+                          # `mode` separates those two without a second field.
+                          "narration": {"mode": narration_mode,
+                                        "declined": narration_why}}
     log(f"report {entry['id']}: {len(findings)} finding(s), "
         f"{sum(1 for d in deliveries if d.get('status') == 'sent')}/"
         f"{len(deliveries)} delivered")
@@ -519,7 +564,9 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
                 min_history_days=int(config.get("min_history_days") or 14),
                 module_failures=(state.get("moduleFailures")
                                  if isinstance(state.get("moduleFailures"), dict)
-                                 else {}))
+                                 else {}),
+                narration=(config.get("narration")
+                           if isinstance(config.get("narration"), dict) else {}))
             # ⚠️ Persisted so "three consecutive failures" survives a restart.
             # Counted in memory only, a module that fails on every boot would
             # never reach three and would be retried forever.

@@ -138,6 +138,8 @@ from reports import pipeline as reports_pipeline    # noqa: E402
 from reports.analysis import registry as reports_registry  # noqa: E402
 from reports.analysis import modules as _reports_modules  # noqa: E402,F401
 from reports import schedule as reports_schedule    # noqa: E402
+from reports import secrets as reports_secrets      # noqa: E402
+from reports.narrate import providers as reports_narrate_providers  # noqa: E402
 from reports import store as reports_store          # noqa: E402
 
 SUPERVISOR = "supervisor"
@@ -2093,6 +2095,81 @@ reports_history_get_handler, _reports_history_put_unrouted = _json_store_handler
     reports_store.REPORTS_HISTORY_MAX_BYTES, "reports history")
 
 
+async def reports_secret_get_handler(request: web.Request) -> web.Response:
+    """Whether a narration credential is configured. NEVER the credential.
+
+    ⚠️ THIS ENDPOINT HAS NO READ PATH FOR THE VALUE, BY CONSTRUCTION, AND THAT
+    IS THE POINT OF THE PAIR. Every other `/data` store here is
+    read-then-write: the client GETs the document, edits it and PUTs it back. A
+    credential store must not work that way, because the GET would put an API
+    key into a browser — and from there into a screenshot, a cached response, a
+    devtools panel, or the kiosk running unattended on a wall where anyone can
+    open it. `secrets.configured()` exists precisely so this question can be
+    answered without the value being loaded at all.
+
+    Owner-only, like every other reports write. The answer is a boolean about
+    the add-on's own configuration, but "is there a paid provider wired up
+    here" is still not a guest's business.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read narration settings.")
+    return web.json_response(
+        {"configured": {name: reports_secrets.configured(name)
+                        for name in reports_narrate_providers.ADAPTERS}},
+        headers={"Cache-Control": "no-store"})
+
+
+async def reports_secret_put_handler(request: web.Request) -> web.Response:
+    """Store or clear one narration credential. Write-only.
+
+    An empty `value` DELETES it, which is the only way to turn a configured
+    provider off completely — clearing `narration.mode` stops it being used but
+    leaves the key on disk, and a credential that outlives its purpose is a
+    credential nobody is watching.
+
+    ⚠️ THE VALUE IS NEVER ECHOED, NOT EVEN ON SUCCESS, and never logged — see
+    `secrets.py` and `log.redact`. The response says what happened, not what
+    was stored.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may set narration credentials.")
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "body must be an object"}, status=400)
+
+    name = str(body.get("provider") or "")
+    if name not in reports_narrate_providers.ADAPTERS:
+        # ⚠️ REFUSED, NOT STORED. An unknown provider name can never be read
+        # back by anything, so accepting it would write a credential to disk
+        # that nothing will ever use and nothing will ever surface — the worst
+        # possible outcome for a secret.
+        return web.json_response(
+            {"error": f"unknown provider {name!r}"}, status=400)
+
+    value = body.get("value")
+    if not isinstance(value, str):
+        return web.json_response({"error": "value must be a string"}, status=400)
+    if len(value) > 500:
+        # An API key is well under this; a body this size is a mistake or an
+        # attempt to use the store as a buffer.
+        return web.json_response({"error": "value is too long"}, status=400)
+
+    ok = reports_secrets.put(name, value.strip())
+    if not ok:
+        return web.json_response(
+            {"error": "could not be stored — see the add-on log"}, status=500)
+    print(f"[supervisor-proxy] narration credential for {name} "
+          f"{'set' if value.strip() else 'cleared'}", flush=True)
+    return web.json_response({"ok": True, "configured": bool(value.strip())})
+
+
 async def reports_diagnostics_handler(request: web.Request) -> web.Response:
     """What this deployment can and cannot analyse.
 
@@ -2224,6 +2301,8 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
             min_history_days=int(config.get("min_history_days") or 14),
             module_failures=(state.get("moduleFailures")
                              if isinstance(state.get("moduleFailures"), dict) else {}),
+            narration=(config.get("narration")
+                       if isinstance(config.get("narration"), dict) else {}),
             preview=preview)
         if not preview:
             reports_pipeline.append_history(entry)
@@ -2281,6 +2360,8 @@ def main() -> None:
     app.router.add_put("/reports-config", reports_config_put_handler)
     app.router.add_get("/reports-history", reports_history_get_handler)
     app.router.add_get("/reports-diagnostics", reports_diagnostics_handler)
+    app.router.add_get("/reports-secret", reports_secret_get_handler)
+    app.router.add_put("/reports-secret", reports_secret_put_handler)
     app.router.add_post("/reports-run-now", reports_run_now_handler)
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
