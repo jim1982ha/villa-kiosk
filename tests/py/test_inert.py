@@ -156,3 +156,45 @@ def test_the_renderer_does_not_emit_markup_of_its_own() -> None:
     offenders = [s for s in emitted
                  if any(c in s for c in ("**", "__", "`", "<b>"))]
     assert not offenders, f"the renderer emits markup a whole-message pass would eat: {offenders}"
+
+
+def test_no_module_quotes_a_name_by_hand() -> None:
+    """⚠️ THE APPLICABLE SET, NOT THE CALL SITES. `name_of` was written for the
+    renderer, and two audits converged the sites that already looked like it.
+    A third — `discovery`'s missing-statistic preflight line — carried its own
+    pair of apostrophes and was found by grepping for the SHAPE of the problem
+    instead of the name of the solution, which is `feedback_audit-applicable-set`
+    in one sentence.
+
+    This scans the shipped source rather than any call site, so site four is
+    caught on the day it is written. It looks for an apostrophe-wrapped
+    interpolation in an f-string — the exact thing `name_of` returns.
+    """
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports")
+    pattern = re.compile(r"'\{[A-Za-z_][A-Za-z0-9_.\[\]()]*\}'")
+    offenders = []
+    for folder, _, files in os.walk(root):
+        for name in sorted(f for f in files if f.endswith(".py")):
+            path = os.path.join(folder, name)
+            for number, line in enumerate(
+                    open(path, encoding="utf-8").read().splitlines(), 1):
+                if line.lstrip().startswith("#"):
+                    continue
+                if pattern.search(line):
+                    offenders.append(f"{os.path.relpath(path, REPO_ROOT)}:"
+                                     f"{number}: {line.strip()}")
+    # Two exemptions, each named, each with its reason at the filter — the
+    # dry-audit rule about suppressions that cannot go blind.
+    offenders = [
+        o for o in offenders
+        # `name_of` itself is the one place the literal belongs.
+        if "text.py" not in o
+        # providers.py quotes the BULLET GLYPH inside the LLM prompt. That is
+        # not a name and its audience is not a reader: `name_of` says "this
+        # word is a rule, not prose", and a prompt instruction saying which
+        # character to start a line with is a different question entirely.
+        and "providers.py" not in o]
+    assert not offenders, (
+        "these quote a name by hand instead of calling `reports.text.name_of`, "
+        "so a change of quoting style would reach every site but these:\n  "
+        + "\n  ".join(offenders))

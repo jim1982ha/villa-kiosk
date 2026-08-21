@@ -1,3 +1,12 @@
+## 2.579.0
+
+### Fixed — the note under "Checks waiting on a rule" was barely understandable
+
+It read "Check them, or the check they stand in for runs by itself after 45
+days" — which inverts what stands in for what ("they" are the blueprints; the
+check they stand in for is the built-in one) and never says these checks are
+not running. Also `name_of` moved to `reports.text` for `discovery`'s two sites.
+
 ## 2.578.1
 
 ### Fixed — the group's explanation was wearing a bullet

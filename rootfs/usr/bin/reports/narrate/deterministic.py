@@ -49,6 +49,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
+from ..analysis.registry import BLUEPRINT_GRACE_DAYS
 from ..standing import severity_of as standing_severity
 from ..devices import prettify_entity_slug
 from ..text import readable_label
@@ -1028,9 +1029,32 @@ class DeterministicNarrator:
             # reader counting the list gets three where there are two. The
             # dateline sets the precedent: a line that is not a finding does not
             # carry the mark that means "finding".
-            out.append("Each of those rules is installed and has produced no "
-                       "event since. Check them, or the check they stand in "
-                       "for runs by itself after 45 days.")
+            # ⚠️ THREE SENTENCES, ONE JOB EACH: what is not happening, what to
+            # do, what happens if nobody does. The first attempt said "Each of
+            # those rules is installed and has produced no event since. Check
+            # them, or the check they stand in for runs by itself after 45
+            # days" — reported as "very bad details, barely understandable",
+            # and it was: "the check they stand in for" means the BUILT-IN
+            # check while "they" are the blueprints, so the sentence inverts
+            # what stands in for what, and nowhere does it say the plain fact
+            # that these checks are not running.
+            # ⚠️ WRITTEN OUT IN FULL PER NUMBER, NOT ASSEMBLED WORD BY WORD.
+            # The first draft interpolated each clause ("it defers"/"each
+            # defers", "that rule has"/"none of those rules has") and produced
+            # "None of these checks is NOT running" and "that rule has ever
+            # fired" — a double negative and a dropped "never", both of which
+            # reverse the meaning, and neither of which any test could see. Two
+            # literals cost one duplicated noun and cannot do that.
+            out.append(
+                (f"This check is not running: it defers to the rule beside it, "
+                 f"and that rule has never fired. Check the rule works — after "
+                 f"{BLUEPRINT_GRACE_DAYS} days with no event the check runs "
+                 f"anyway.")
+                if len(silent) == 1 else
+                (f"None of these checks is running: each defers to the rule "
+                 f"beside it, and none of those rules has ever fired. Check "
+                 f"the rules work — after {BLUEPRINT_GRACE_DAYS} days with no "
+                 f"event each check runs anyway."))
         return out
 
     def _coverage(self, context: ReportContext) -> List[str]:

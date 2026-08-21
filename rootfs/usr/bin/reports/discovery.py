@@ -36,6 +36,7 @@ from . import collect, ledger
 from .hass import HassClient, HassUnavailable, statistic_ids_of
 from .log import log
 from .stats import list_statistic_ids
+from .text import name_of
 
 # Capability names. Strings rather than an enum for the same reason
 # contracts.py uses tuples — they cross into JSON and into the SPA.
@@ -190,8 +191,14 @@ def missing_statistic_preflight(
     out: List[Dict[str, str]] = [{
         "severity": "warning",
         "code": "statistic_missing",
-        "detail": f"The Energy dashboard's {label} statistic '{sid}' has no "
-                  f"recorded history.",
+        # ⚠️ `name_of`, not a hand-written pair of apostrophes. The audit that
+        # converged the renderer's five sites walked their call sites and so
+        # could not see this one; it was found by grepping for the SHAPE of the
+        # problem — an apostrophe-wrapped interpolation — which is
+        # `feedback_audit-applicable-set` in one line. A statistic id is a name
+        # in prose exactly as a rule name is. Pinned by `test_inert`.
+        "detail": f"The Energy dashboard's {label} statistic {name_of(sid)} "
+                  f"has no recorded history.",
     } for label, sid in gone[:MAX_LISTED_STATISTICS]]
     if len(gone) > MAX_LISTED_STATISTICS:
         out.append({
@@ -574,7 +581,8 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
                     "severity": "notice",
                     "code": "notify_name_collision",
                     "detail": f"More than one delivery target is named "
-                              f"'{duplicate}' — they are told apart by service id.",
+                              f"{name_of(duplicate)} — they are told apart by "
+                              f"service id.",
                 })
 
             inventory["energy"] = {

@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 from reports import aggregate as agg                              # noqa: E402
 from reports.narrate import DeterministicNarrator, ReportContext  # noqa: E402
 from reports.narrate.deterministic import _amount                 # noqa: E402
+from reports.analysis.registry import BLUEPRINT_GRACE_DAYS      # noqa: E402
 from reports.narrate.style import name_of                         # noqa: E402
 
 #: Verbatim from `ha_get_automation_traces` on the reference villa, 08:00 scan.
@@ -454,8 +455,14 @@ def test_silent_cover_skips_are_gathered_under_one_heading() -> None:
 
 
 def test_the_shared_sentence_is_written_once() -> None:
+    """⚠️ ANCHORED ON THE CONSTANT, NOT ON THE PROSE. This test named the
+    sentence verbatim and the sentence has now been reworded twice on owner
+    feedback — the second time as "very bad details, barely understandable" —
+    so the test had to be edited each time to keep saying what it always meant.
+    The grace period is the one thing the note MUST state and cannot state
+    twice, and it comes from the module that owns it."""
     body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
-    assert body.count("has produced no event since") == 1
+    assert body.count(f"{BLUEPRINT_GRACE_DAYS} days") == 1
     assert "which has not reported since it was installed" not in body
 
 
@@ -490,12 +497,18 @@ def test_the_group_note_is_not_a_bullet() -> None:
     this line". The dateline sets the precedent: a line that is not a finding
     does not carry the mark that means finding.
     """
-    from reports.narrate.style import BULLET
+    from reports.narrate.style import BULLET, SECTION_MARK
     body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
     block = [l for l in body.split("never reported")[1].splitlines() if l.strip()]
     bullets = [l for l in block if l.startswith(BULLET)]
     assert len(bullets) == 2, (
         f"expected one bullet per stood-down check, got {len(bullets)}:\n"
         + "\n".join(block))
-    note = next(l for l in block if "produced no event since" in l)
+    # Found STRUCTURALLY — the block is a heading, its bullets, and exactly
+    # one explanation — so rewording the note cannot make this test blind.
+    note = next(l for l in block if not l.startswith(BULLET)
+                and not l.startswith(SECTION_MARK["waiting"]))
     assert not note.startswith(BULLET)
+    assert str(BLUEPRINT_GRACE_DAYS) in note, (
+        "the note must say how long the built-in check waits, or the reader "
+        f"cannot tell whether to act: {note!r}")

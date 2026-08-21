@@ -14,6 +14,34 @@ from __future__ import annotations
 
 import re
 
+def name_of(text: str) -> str:
+    """A rule, blueprint, automation or file name, quoted so the sentence parses.
+
+    ⚠️ APOSTROPHES, NOT BRACKETS, AND THE PLATFORM DECIDED THAT. Brackets were
+    tried in 2.577.0 and arrived stripped: Telegram's Markdown parser consumes
+    them as link syntax with or without a following `(url)`, so the delivered
+    message read "covered by Roi baseline deviation" — exactly the unquoted
+    prose the change was meant to fix — while the units and headings from the
+    same release came through fine. An apostrophe is not markup in any dialect
+    and the owner quoted the preflight line back to me with its apostrophes
+    intact — "the same way you are doing it already for 'iphone 16 fab'" —
+    which is the evidence, not the line's age. ⚠️ This docstring claimed that
+    line had been delivering one "for months"; it shipped 2026-08-20, the
+    day before. A rendering rule is proved by a DELIVERED message (see
+    `feedback_report-prose-rules`), and one delivery is enough — reaching for
+    duration instead was reaching for a weaker argument that also happened to
+    be false.
+
+    ⚠️ ONE FUNCTION, SO THE NEXT SITE GETS IT BY CALLING. Five places name a
+    rule and each had its own literal; the next one would have had a sixth.
+    It lives HERE and not in `narrate/style` for the reason stated at the top
+    of this module: `discovery` writes the preflight line quoted above and
+    must not import upward into the renderer, so the rule sits at the layer
+    both can reach. `narrate.style` re-exports it — every existing caller is
+    unchanged.
+    """
+    return f"'{text}'"
+
 
 def readable_label(value: str) -> str:
     """A name for a reader. An identifier becomes prose; prose is left alone.

@@ -29,6 +29,10 @@ sections are fixed by `SECTIONS_FOR`; no room, entity or tariff appears.
 
 from __future__ import annotations
 
+# Re-exported, not defined here: `discovery` needs it too and may not
+# import upward into the renderer. See `reports.text`.
+from ..text import name_of as name_of
+
 from typing import Dict
 
 #: A bullet that is a character, not a list marker. See the header.
@@ -151,24 +155,6 @@ def inert(text: str) -> str:
     damage, and after it there is no site left that can forget.
     """
     return "".join(_MARKUP_ACTIVE.get(character, character) for character in text)
-
-
-def name_of(text: str) -> str:
-    """A rule, blueprint, automation or file name, quoted so the sentence parses.
-
-    ⚠️ APOSTROPHES, NOT BRACKETS, AND THE PLATFORM DECIDED THAT. Brackets were
-    tried in 2.577.0 and arrived stripped: Telegram's Markdown parser consumes
-    them as link syntax with or without a following `(url)`, so the delivered
-    message read "covered by Roi baseline deviation" — exactly the unquoted
-    prose the change was meant to fix — while the units and headings from the
-    same release came through fine. An apostrophe is not markup in any dialect
-    and the preflight line has been delivering one intact for months:
-    "More than one delivery target is named 'iphone 16 fab'".
-
-    ⚠️ ONE FUNCTION, SO THE NEXT SITE GETS IT BY CALLING. Five places name a
-    rule and each had its own literal; the next one would have had a sixth.
-    """
-    return f"'{text}'"
 
 
 def heading(section: str, text: str) -> str:
