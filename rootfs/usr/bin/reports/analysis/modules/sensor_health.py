@@ -49,6 +49,11 @@ class SensorHealth:
     """Meters that stopped reporting, or stopped changing."""
 
     name: str = "sensor_health"
+    title: str = "Meters that stopped reporting"
+    description: str = (
+        "Finds meters that have gone silent or frozen on one value. Worth "
+        "knowing on its own, and it is what stops a dead meter being read as "
+        "a device that suddenly uses nothing.")
     requires: Sequence[str] = ("statistics", "energy_devices")
     audiences: Sequence[str] = ("owner", "facility")
     min_days: int = 14

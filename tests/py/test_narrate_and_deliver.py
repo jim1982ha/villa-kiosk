@@ -568,3 +568,29 @@ def test_a_plain_target_carries_no_entity_id() -> None:
         {"title": "T", "message": "B"}
     assert _payload_for("telegram_bot.send_message", "T", "B") == \
         {"title": "T", "message": "B"}
+
+
+def test_a_duplicate_route_to_an_offered_destination_is_not_offered() -> None:
+    """⚠️ "IT FEELS LIKE REDUNDANT OPTIONS, RIGHT?" — it did, twice over on the
+    reference villa, and offering a second name for one destination is worse
+    than offering nothing: it invites a choice with no meaning, and in the
+    telegram case one that quietly fans out where the operator picked a group.
+
+    Both rules read data already fetched, and neither names an integration.
+    """
+    from reports.discovery import _redundant
+    speaks = {"message": {"required": True}, "title": {}}
+
+    # A: `notify.persistent_notification` exists, so `persistent_notification.*`
+    # is the same place by another name.
+    assert _redundant("persistent_notification", speaks, {"persistent_notification"})
+
+    # B: the service addresses entities, so the ENTITIES are the real targets
+    # and the bare service is the fan-out. Same rule `notify.send_message`
+    # already got as `needs_target`, generalised.
+    assert _redundant("telegram_bot", {**speaks, "entity_id": {}}, set())
+
+    # ⚠️ CONSERVATIVE: nothing becomes unreachable. An integration that
+    # registers neither a notify service nor notify entities keeps its own
+    # service, because there it is the only route.
+    assert not _redundant("some_integration", speaks, {"mobile_app_x", "notify"})

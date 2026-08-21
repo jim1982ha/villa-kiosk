@@ -180,6 +180,16 @@ def validate_config(value: Any) -> List[str]:
                                        or isinstance(minute, bool)
                                        or not 0 <= minute <= 59):
                 problems.append(f"{where}.minute must be an integer 0-59")
+            weekday = item.get("weekday")
+            if weekday is not None and (not isinstance(weekday, int)
+                                        or isinstance(weekday, bool)
+                                        or not 0 <= weekday <= 6):
+                problems.append(f"{where}.weekday must be an integer 0-6")
+            month_day = item.get("day")
+            if month_day is not None and (not isinstance(month_day, int)
+                                          or isinstance(month_day, bool)
+                                          or not 1 <= month_day <= 31):
+                problems.append(f"{where}.day must be an integer 1-31")
 
     targets = value.get("notify_targets", [])
     if not isinstance(targets, list):

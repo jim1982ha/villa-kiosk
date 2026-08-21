@@ -69,6 +69,30 @@ const DEFAULT_HOUR = 7;
 const asTime = (hour: number, minute: number) =>
   `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 
+/** Monday-first, matching the scheduler's `weekday` (0 = Monday). ⚠️ NOT
+ *  `toLocaleDateString`-derived: the villa's week starts where the scheduler
+ *  says it starts, and a reader in a Sunday-first locale must not be offered a
+ *  list whose indices mean something else on the server. */
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday",
+                  "Friday", "Saturday", "Sunday"];
+
+/** "Monday 24 Aug, 11:59" from the villa-local ISO the backend computed.
+ *
+ *  ⚠️ RENDERED, NOT RECOMPUTED, AND NOT RE-ZONED. The string already carries
+ *  the villa's offset; parsing it and formatting in the reader's zone would
+ *  show a phone in another country a different day from the one the report
+ *  actually lands on — the exact reason this dialog never sends a timezone. So
+ *  the parts are read off the ISO text itself. */
+function whenNext(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+  if (!m) return "";
+  const [, y, mo, d, hh, mm] = m;
+  const at = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  const day = at.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" });
+  const month = at.toLocaleDateString(undefined, { month: "short", timeZone: "UTC" });
+  return `${day} ${Number(d)} ${month}, ${hh}:${mm}`;
+}
+
 /** ⚠️ A `time` INPUT CAN BE EMPTY, and clearing it must not schedule 00:00 —
  *  the operator is mid-edit, not asking for midnight. An unparseable value
  *  leaves the schedule alone. */
@@ -155,6 +179,7 @@ export default function ScheduleTab({
 
   const schedules = draft.schedules ?? [];
   const available = diagnostics?.notifyTargets ?? [];
+  const nextRun = diagnostics?.nextRuns ?? {};
   // ⚠️ WAS THE SHARED LIST MIGRATED INTO THE ROWS THIS SESSION? `draft` is the
   // migrated copy and `config` is the server's, so a difference here means the
   // operator is looking at destinations that are NOT yet stored — and pressing
@@ -242,6 +267,34 @@ export default function ScheduleTab({
                   if (t) setAt(i, t);
                 }}
               />
+              {/* ⚠️ THE DAY IS A CONTROL BECAUSE IT WAS A SECRET. "Weekly"
+                  meant Monday and "monthly" meant the 1st, hard-coded, with
+                  nothing in the dialog saying so — the owner created a weekly
+                  schedule on a Friday for two minutes' time, received nothing,
+                  and had to ask why. It only appears for the cadence it applies
+                  to: a daily schedule has no day to choose and a third
+                  permanently-disabled control is the clutter this row has twice
+                  been rebuilt to remove. */}
+              {s.cadence === "weekly" && (
+                <select
+                  aria-label="On which day"
+                  value={s.weekday ?? 0}
+                  onChange={(e) => setAt(i, { weekday: Number(e.target.value) })}
+                >
+                  {WEEKDAYS.map((d, n) => <option key={d} value={n}>{d}</option>)}
+                </select>
+              )}
+              {s.cadence === "monthly" && (
+                <select
+                  aria-label="On which date"
+                  value={s.day ?? 1}
+                  onChange={(e) => setAt(i, { day: Number(e.target.value) })}
+                >
+                  {Array.from({ length: 31 }, (_, n) => n + 1).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              )}
               <select
                 aria-label="Written for"
                 value={s.audience}
@@ -267,6 +320,23 @@ export default function ScheduleTab({
                 <Trash2 size={16} />
               </button>
             </div>
+
+            {/* ⚠️ THE ANSWER TO "WHY HAVE I NOT RECEIVED ANYTHING", STATED
+                BEFORE IT IS ASKED. Computed by `schedule.next_fire` on the
+                server — the same function the scheduler uses — because a second
+                implementation here would be a different answer under the same
+                label. It reflects SAVED settings, so it lags an unsaved edit;
+                saying which is better than a number that silently means the
+                wrong one. */}
+            <p className="muted body-text reports-next">
+              {draft.enabled !== true
+                ? "Nothing is sent — “Send briefings on a schedule” is off."
+                : own.length === 0
+                  ? "Nobody is selected, so this one would be composed and not sent."
+                  : nextRun[s.id]
+                    ? `Next: ${whenNext(nextRun[s.id])}, villa time.`
+                    : "Next send is not known yet — save to see it."}
+            </p>
 
             {openRecipients === i && (
               <DestinationList

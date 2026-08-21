@@ -73,6 +73,10 @@ class LevelAnomaly:
     """Consumption well above this device's own normal for that weekday."""
 
     name: str = "level_anomaly"
+    title: str = "Unusual consumption for the day of week"
+    description: str = (
+        "Compares each day against what this property normally uses on that "
+        "same weekday, so a busy Saturday is not reported as a fault.")
     requires: Sequence[str] = ("statistics", "energy_devices")
     audiences: Sequence[str] = ("owner", "facility")
     #: Six weeks minimum, eight read — see the module docstring on why this is

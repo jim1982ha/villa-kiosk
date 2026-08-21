@@ -4337,6 +4337,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   tab-size: 2;
 }
 
+/* The plain-language answer to "when does this actually go out", under the row
+   it belongs to. ⚠️ IT IS THE FIX FOR A REAL WEEK LOST: "weekly" meant Monday
+   and nothing said so, so a schedule created on a Friday for two minutes' time
+   sent nothing and looked broken. Muted and small — it is a statement of fact,
+   not a control, and must not compete with the row above it. */
+.reports-next { margin: 0; font-size: var(--text-xs); }
+
 /* One schedule, whole: when it fires, who it is written for, and who receives
    it. ⚠️ A CARD RATHER THAN A ROW BECAUSE THE RECIPIENTS BELONG TO IT — the
    previous design put destinations in a separate section further down the page

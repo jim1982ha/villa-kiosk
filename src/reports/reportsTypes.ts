@@ -135,6 +135,14 @@ export interface ReportSchedule {
    *  the precision real, and the delivery minute cannot affect the report's
    *  CONTENT: the window is a date boundary over hourly statistics buckets. */
   minute?: number;
+  /** Weekly only: 0 = Monday … 6 = Sunday. ⚠️ ABSENT MEANS MONDAY, which used
+   *  to be a hard-coded law with nothing anywhere saying so — a weekly schedule
+   *  created on a Friday next fired the following Monday and the dialog was
+   *  silent about it, which cost the owner a week of receiving nothing. */
+  weekday?: number;
+  /** Monthly only: 1–31, clamped to the month's length by the scheduler, so
+   *  "the 31st" means the last day in February rather than an error. */
+  day?: number;
   audience: Audience;
   /** ⚠️ ABSENT MEANS INHERIT THE LEGACY SHARED LIST; EMPTY MEANS NOWHERE.
    *  `pipeline.targets_for` reads it exactly that way, which is why the tab

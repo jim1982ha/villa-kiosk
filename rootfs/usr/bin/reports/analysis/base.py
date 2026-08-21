@@ -122,7 +122,26 @@ class ModuleContext:
 class AnalysisModule(Protocol):
     """One question asked of the villa's history."""
 
+    #: The identifier: stable, snake_case, stored in config and history. NEVER
+    #: shown to an operator — see `title`.
     name: str
+    #: What this check is called on screen, and what it looks for, in the
+    #: owner's language.
+    #:
+    #: ⚠️ THESE EXIST BECAUSE THE CHECKS TAB READ AS DEVELOPER NOTES. It showed
+    #: `name.replace("_", " ")` — "level anomaly", "standby creep" — beside
+    #: "owner and facility · needs 42 days of history", and the owner said it
+    #: "feels like internal comments". It was: an identifier with its
+    #: underscores taken out is an identifier, and a capability list is a
+    #: precondition, not a purpose. Someone deciding whether to switch a check
+    #: OFF needs to know what it would stop telling them.
+    #:
+    #: ⚠️ AND THEY LIVE ON THE MODULE, NOT IN THE SPA. A table of display names
+    #: in TypeScript is a second list that goes stale the day a module is added
+    #: or renamed — the exact cross-artefact drift `test_store_envelope` exists
+    #: for. The module knows what it does; it says so once, here.
+    title: str
+    description: str
     #: Capabilities that must ALL be present for this module to mean anything.
     requires: Sequence[str]
     #: Which audiences this module's findings belong to.

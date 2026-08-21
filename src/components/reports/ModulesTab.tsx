@@ -58,9 +58,9 @@ export default function ModulesTab({
   return (
     <div className="reports-pane">
       <p className="muted body-text">
-        These are the checks built into the add-on. Each one needs particular
-        data to be possible at all — a check that cannot run says so rather than
-        going quiet, both here and in the brief itself.
+        Checks the add-on runs against this property&rsquo;s own history. Each
+        needs particular data to be possible at all, and one that cannot run
+        says so instead of going quiet.
       </p>
 
       <h3 className="reports-h3">Built-in checks</h3>
@@ -76,6 +76,14 @@ export default function ModulesTab({
         const reason = skipReason.get(m.name);
         return (
           <div key={m.name} className="reports-entry">
+            {/* ⚠️ THE TITLE AND THE SENTENCE COME FROM THE MODULE ITSELF. This
+                showed the identifier with its underscores removed — "level
+                anomaly" — beside "owner and facility · needs 42 days of
+                history", and the owner said it read like internal comments. It
+                did: an identifier is not a name, and a capability list is a
+                precondition rather than a purpose. Somebody deciding whether to
+                switch a check OFF needs to know what it would stop telling
+                them. */}
             <div className="reports-entry-head">
               <label className="toggle">
                 <input
@@ -84,51 +92,44 @@ export default function ModulesTab({
                   disabled={busy}
                   onChange={(e) => toggle(m.name, e.target.checked)}
                 />
-                <span>{m.name.replace(/_/g, " ")}</span>
+                <span>{m.title}</span>
               </label>
-              <span className="muted">
-                {m.audiences.join(" and ")} · needs {m.minDays} days of history
-              </span>
             </div>
+            {m.description && (
+              <p className="muted body-text">{m.description}</p>
+            )}
 
-            {/* ⚠️ THE CAPABILITY CHECK IS SHOWN WHATEVER THE TOGGLE SAYS, and
-                it comes FIRST — the backend gate is ordered the same way and
-                for the same reason. "This property has no device metering" is
-                more useful than "you have not enabled it" about a check that
-                could never have worked. */}
-            <ul className="reports-deliveries">
-              {missing.length > 0 ? (
-                <li className="reports-delivery status-skipped">
-                  <span>
-                    <Ban size={12} aria-hidden="true" /> Not possible here:{" "}
-                    {missing.map((c) => diagnostics.capabilityAbsent[c] || c).join(" ")}
-                  </span>
-                </li>
-              ) : (
-                <li className="reports-delivery">
-                  <span>
-                    <Check size={12} aria-hidden="true" /> This property has the
-                    data it needs.
-                  </span>
-                </li>
-              )}
-              {!on && (
-                <li className="reports-delivery status-skipped">
-                  <span>Switched off, so it is reported as switched off rather
-                    than omitted.</span>
-                </li>
-              )}
-              {ran.has(m.name) && (
-                <li className="reports-delivery">
-                  <span><Check size={12} aria-hidden="true" /> Ran in the last preview.</span>
-                </li>
-              )}
-              {reason && (
-                <li className="reports-delivery status-skipped">
-                  <span><Info size={12} aria-hidden="true" /> Last preview: {reason}</span>
-                </li>
-              )}
-            </ul>
+            {/* ⚠️ ONE LINE, AND ONLY WHEN IT SAYS SOMETHING. The old version
+                printed a green "This property has the data it needs" on every
+                row — a status that is true of every healthy check and therefore
+                carries no information, three times over. Silence is the good
+                case; a row speaks when something is stopping it. */}
+            {missing.length > 0 && (
+              <p className="reports-item sev-warning">
+                <Ban size={14} aria-hidden="true" />
+                <span>
+                  Not possible here.{" "}
+                  {missing.map((c) => diagnostics.capabilityAbsent[c] || c).join(" ")}
+                </span>
+              </p>
+            )}
+            {!on && missing.length === 0 && (
+              <p className="reports-item muted">
+                <span>Switched off. The brief will say so rather than omit it.</span>
+              </p>
+            )}
+            {reason && (
+              <p className="reports-item muted">
+                <Info size={14} aria-hidden="true" />
+                <span>Last preview: {reason}</span>
+              </p>
+            )}
+            {ran.has(m.name) && (
+              <p className="reports-item">
+                <Check size={14} aria-hidden="true" />
+                <span>Ran in the last preview.</span>
+              </p>
+            )}
           </div>
         );
       })}
@@ -145,30 +146,36 @@ export default function ModulesTab({
           incomplete CRUD screen. The extensible layer really is the blueprint
           one, and it needs no add-on change whatsoever — that is the pivot this
           whole subsystem was rebuilt around. */}
+      {/* ⚠️ REWRITTEN OUT OF DEVELOPER LANGUAGE. It said "any Home Assistant
+          automation that fires a `vesta_*` event is picked up, deduplicated,
+          costed and written into the brief" — four verbs of pipeline internals
+          and a wildcard nobody outside this repo can act on. What the reader
+          needs is: these are not yours to manage, your automations are, and
+          here is how to tell they arrived. The event-name detail belongs in the
+          README with the rest of the integration contract, not on a settings
+          screen. */}
       <h3 className="reports-h3">Adding your own checks</h3>
       <p className="muted body-text">
-        The checks above ship with the add-on and arrive with its updates —
-        there is nothing to install and nothing to delete here. What this
-        property can add is <strong>automations</strong>: any Home Assistant
-        automation that fires a <code>vesta_*</code> event is picked up,
-        deduplicated, costed and written into the brief with no change to this
-        add-on at all. The Diagnostics tab lists every event type heard so far,
-        which is how you confirm a new automation is reaching the brief.
+        These three arrive with the add-on — nothing to install, nothing to
+        delete. Your own Home Assistant automations are the ones that extend a
+        brief: anything they report is grouped, priced and written in
+        automatically. Diagnostics lists what has been heard, which is how you
+        confirm a new one is arriving.
       </p>
       {diagnostics.capabilities.includes("blueprint_layer") ? (
         <p className="reports-item">
           <Check size={14} aria-hidden="true" />
           <span>
-            This property has its own automation layer, and it takes precedence:
-            the built-in checks above stand down where it covers the same
-            ground, because an automation sees occupancy, schedules and tariffs
-            that statistics alone cannot.
+            Your automations are reporting, and they win: a built-in check above
+            steps aside where one covers the same ground, because your
+            automation knows about occupancy, schedules and tariffs and a
+            statistic does not.
           </span>
         </p>
       ) : (
         <p className="reports-item muted">
-          No automation has reported yet, so the built-in checks above are the
-          only analysis running.
+          Nothing has reported yet, so the checks above are the only analysis
+          running.
         </p>
       )}
     </div>

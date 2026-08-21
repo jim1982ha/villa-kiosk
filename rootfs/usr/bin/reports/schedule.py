@@ -22,6 +22,7 @@ after a restart yields the same string and the send is suppressed.
 
 from __future__ import annotations
 
+from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -107,8 +108,40 @@ def idempotency_key(schedule_id: str, cadence: str, moment: datetime) -> str:
     return f"{schedule_id}:{period_key(cadence, moment)}"
 
 
+#: Which weekday a `weekly` schedule lands on when none is chosen, and which
+#: day of the month a `monthly` one does.
+#:
+#: ⚠️ THESE WERE HARD-CODED AND INVISIBLE, AND IT COST THE OWNER A WEEK. A
+#: weekly schedule fired on MONDAY with nothing anywhere saying so — they
+#: created one on a Friday at 11:58 for 11:59, received nothing, and were right
+#: to ask why: its slot for that week was Monday 11:59, four days past, outside
+#: the six-hour catch-up window. Next delivery would have been the following
+#: Monday. Now they are DEFAULTS rather than laws, the UI offers both, and
+#: `next_fire` states the answer in the dialog so it can never be invisible
+#: again.
+DEFAULT_WEEKDAY = 0   # Monday — a week's report is about the week that ended
+DEFAULT_MONTH_DAY = 1
+
+
+def _slot(entry: Dict[str, Any], key: str, low: int, high: int,
+          fallback: int) -> int:
+    """One bounded integer from a schedule, tolerating absence and nonsense.
+
+    ⚠️ ABSENT MEANS THE DEFAULT AND SO DOES MALFORMED, deliberately. Every
+    schedule stored before a field existed lacks it, and a schedule that stops
+    firing because one value is out of range is a silent outage — the config
+    validator is where a typo should fail, at save. `isinstance(True, int)` is
+    True in Python, hence the bool guard this codebase writes everywhere.
+    """
+    value = entry.get(key, fallback)
+    if isinstance(value, int) and not isinstance(value, bool) and low <= value <= high:
+        return value
+    return fallback
+
+
 def _fire_time(cadence: str, hour: int, minute: int,
-               now_local: datetime) -> Optional[datetime]:
+               now_local: datetime, weekday: int = DEFAULT_WEEKDAY,
+               month_day: int = DEFAULT_MONTH_DAY) -> Optional[datetime]:
     """When this schedule was due within the current period.
 
     ⚠️ Built by REPLACING the hour on a real local date, never by adding
@@ -128,13 +161,49 @@ def _fire_time(cadence: str, hour: int, minute: int,
     if cadence == "daily":
         return now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if cadence == "weekly":
-        # Monday. A week's report is about the week that just ended, and Monday
-        # morning is when someone reads it.
-        monday = now_local - timedelta(days=now_local.weekday())
-        return monday.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        start = now_local - timedelta(days=now_local.weekday())
+        return (start + timedelta(days=weekday)).replace(
+            hour=hour, minute=minute, second=0, microsecond=0)
     if cadence == "monthly":
-        return now_local.replace(day=1, hour=hour, minute=minute,
-                                 second=0, microsecond=0)
+        # ⚠️ CLAMPED TO THE MONTH'S LENGTH, not restricted to 1-28. An operator
+        # who wants the 31st should get the 31st in January and the last day in
+        # February, rather than being told a date they can see on a calendar is
+        # not allowed.
+        last = monthrange(now_local.year, now_local.month)[1]
+        return now_local.replace(day=min(month_day, last), hour=hour,
+                                 minute=minute, second=0, microsecond=0)
+    return None
+
+
+def next_fire(entry: Dict[str, Any], now_local: datetime) -> Optional[datetime]:
+    """When this schedule will NEXT fire, or None if it never can.
+
+    ⚠️ THE ONE THING THE DIALOG COULD NOT SAY, AND THE REASON IT HAD TO. A
+    weekly schedule created on a Friday next fires the following MONDAY, which
+    is obvious from `_fire_time` and invisible from the UI — so the answer is
+    computed HERE, by the same function the scheduler uses, and shown. A second
+    implementation in the SPA would be a different answer wearing the same
+    label, which is this subsystem's most expensive recurring bug.
+
+    Probes forward a day at a time rather than doing calendar arithmetic per
+    cadence: `_fire_time` already knows where each cadence's slot sits within a
+    period, so walking the days re-uses that instead of restating it. Bounded at
+    two months, which covers every cadence including a monthly landing on the
+    31st.
+    """
+    cadence = str(entry.get("cadence") or "")
+    if cadence not in ("daily", "weekly", "monthly"):
+        return None
+    hour = _slot(entry, "hour", 0, 23, 7)
+    minute = _slot(entry, "minute", 0, 59, 0)
+    weekday = _slot(entry, "weekday", 0, 6, DEFAULT_WEEKDAY)
+    month_day = _slot(entry, "day", 1, 31, DEFAULT_MONTH_DAY)
+
+    for ahead in range(0, 62):
+        moment = now_local + timedelta(days=ahead)
+        fire_at = _fire_time(cadence, hour, minute, moment, weekday, month_day)
+        if fire_at is not None and fire_at > now_local:
+            return fire_at
     return None
 
 
@@ -169,14 +238,13 @@ def due(schedules: Sequence[Dict[str, Any]], sent_keys: Sequence[str],
         # minutes existed has no `minute` key, and treating that as malformed
         # would silently stop delivering the reports an operator already
         # configured — the worst possible reading of a field being added.
-        raw_minute = entry.get("minute", 0)
-        minute = raw_minute if (isinstance(raw_minute, int)
-                                and not isinstance(raw_minute, bool)
-                                and 0 <= raw_minute <= 59) else 0
+        minute = _slot(entry, "minute", 0, 59, 0)
+        weekday = _slot(entry, "weekday", 0, 6, DEFAULT_WEEKDAY)
+        month_day = _slot(entry, "day", 1, 31, DEFAULT_MONTH_DAY)
         if not schedule_id:
             continue
 
-        fire_at = _fire_time(cadence, hour, minute, now_local)
+        fire_at = _fire_time(cadence, hour, minute, now_local, weekday, month_day)
         if fire_at is None or now_local < fire_at:
             continue
         if now_local - fire_at > timedelta(hours=CATCH_UP_HOURS):

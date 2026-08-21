@@ -105,6 +105,7 @@ import sys
 import tempfile
 import time
 from datetime import datetime, timezone
+from typing import Any, Dict
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
@@ -2095,6 +2096,37 @@ reports_history_get_handler, _reports_history_put_unrouted = _json_store_handler
     reports_store.REPORTS_HISTORY_MAX_BYTES, "reports history")
 
 
+def _reports_next_runs(stored: Any) -> Dict[str, str]:
+    """`{schedule_id: local ISO}` for every schedule that can fire.
+
+    ⚠️ THE VILLA'S CLOCK, RESOLVED THE SAME WAY THE SCHEDULER RESOLVES IT —
+    explicit setting, then the name cached in the state file. Home Assistant is
+    NOT asked here: this is a diagnostics read that must stay cheap and must not
+    fail when Core is restarting, and a cached zone is what the last scheduler
+    pass already agreed on. A pass with no cached zone yet falls back to UTC,
+    exactly as `resolve_zone` does, and says so by being an hour off rather than
+    by being absent.
+    """
+    config = reports_store.config_view(stored)
+    state = _read_json_store(reports_store.REPORTS_STATE_FILE,
+                             reports_store.EMPTY_STATE)
+    name = str(config.get("timezone") or state.get("timezone") or "")
+    zone = reports_schedule.resolve_timezone(name)
+    now_local = datetime.now(timezone.utc).astimezone(zone)
+
+    out: Dict[str, str] = {}
+    schedules = config.get("schedules")
+    if not isinstance(schedules, list):
+        return out
+    for entry in schedules:
+        if not isinstance(entry, dict):
+            continue
+        moment = reports_schedule.next_fire(entry, now_local)
+        if moment is not None:
+            out[str(entry.get("id") or "")] = moment.isoformat(timespec="minutes")
+    return out
+
+
 async def reports_secret_get_handler(request: web.Request) -> web.Response:
     """Whether a narration credential is configured. NEVER the credential.
 
@@ -2218,6 +2250,8 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
         "modules": [
             {
                 "name": m.name,
+                "title": getattr(m, "title", "") or m.name.replace("_", " "),
+                "description": getattr(m, "description", ""),
                 "requires": list(m.requires),
                 "audiences": list(m.audiences),
                 "min_days": m.min_days,
@@ -2228,6 +2262,15 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
         # categories. Without this the only way to tell "nothing happened" from
         # "nothing is listening" is to read a file on the host.
         "collector": reports_collect.state(),
+        # ⚠️ WHEN EACH SCHEDULE NEXT FIRES, COMPUTED BY THE SCHEDULER'S OWN
+        # FUNCTION. The dialog could not say this, and its absence cost a week:
+        # a weekly schedule created on a Friday next fires the following MONDAY,
+        # which is obvious from `_fire_time` and invisible from the UI, so the
+        # owner configured one, received nothing and had to ask. A second
+        # implementation in the SPA would be a different answer wearing the same
+        # label — this subsystem's most expensive recurring bug — so the answer
+        # is produced HERE, once, by `schedule.next_fire`.
+        "next_runs": _reports_next_runs(stored),
         **found,
     }, headers={"Cache-Control": "no-store"})
 

@@ -338,3 +338,47 @@ def test_the_config_validator_refuses_a_bad_minute_but_allows_an_absent_one() ->
     assert validate_config(ok_minute) == []
     bad = {"schedules": [{"cadence": "daily", "hour": 7, "minute": 60}]}
     assert any("minute" in p for p in validate_config(bad))
+
+
+def test_a_weekly_schedule_can_land_on_any_weekday() -> None:
+    """⚠️ THIS COST THE OWNER A WEEK. "Weekly" fired on MONDAY, hard-coded, with
+    nothing in the dialog saying so: they created one on a Friday at 11:58 for
+    11:59, received nothing, and were right to ask why. Its slot for that week
+    was Monday 11:59 — four days past, outside the six-hour catch-up window."""
+    from datetime import datetime
+    from reports.schedule import due
+    friday = datetime(2026, 8, 21, 11, 59, tzinfo=timezone.utc)
+    assert due([{"id": "s", "cadence": "weekly", "hour": 11, "minute": 59}],
+               [], friday) == [], "the default is still Monday"
+    fired = due([{"id": "s", "cadence": "weekly", "hour": 11, "minute": 59,
+                  "weekday": 4}], [], friday)
+    assert len(fired) == 1, "weekday=4 is Friday and it is 11:59 on a Friday"
+
+
+def test_next_fire_answers_the_question_the_dialog_could_not() -> None:
+    from datetime import datetime
+    from reports.schedule import next_fire
+    friday_noon = datetime(2026, 8, 21, 12, 1, tzinfo=timezone.utc)
+    nxt = next_fire({"cadence": "weekly", "hour": 11, "minute": 59}, friday_noon)
+    assert nxt is not None
+    assert nxt.strftime("%A %d %b %H:%M") == "Monday 24 Aug 11:59"
+
+
+def test_a_monthly_day_is_clamped_to_the_month_rather_than_refused() -> None:
+    """An operator who wants the 31st gets the 31st in January and the last day
+    in February, rather than a date they can see on a calendar being rejected."""
+    from datetime import datetime
+    from reports.schedule import next_fire
+    in_february = datetime(2026, 2, 5, 9, 0, tzinfo=timezone.utc)
+    nxt = next_fire({"cadence": "monthly", "hour": 7, "day": 31}, in_february)
+    assert nxt is not None and nxt.strftime("%d %b") == "28 Feb"
+
+
+def test_next_fire_is_always_in_the_future_for_every_cadence() -> None:
+    from datetime import datetime
+    from reports.schedule import next_fire
+    now = datetime(2026, 8, 21, 12, 1, tzinfo=timezone.utc)
+    for cadence in ("daily", "weekly", "monthly"):
+        nxt = next_fire({"cadence": cadence, "hour": 7}, now)
+        assert nxt is not None and nxt > now, cadence
+    assert next_fire({"cadence": "hourly"}, now) is None

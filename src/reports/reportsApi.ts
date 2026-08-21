@@ -31,7 +31,10 @@ export interface ReportsDiagnostics {
   ready: boolean;
   contractVersion: number;
   enabled: boolean;
-  modules: { name: string; requires: string[]; audiences: Audience[]; minDays: number }[];
+  modules: {
+    name: string; title: string; description: string;
+    requires: string[]; audiences: Audience[]; minDays: number;
+  }[];
   reachable: boolean;
   error: string;
   capabilities: string[];
@@ -45,6 +48,12 @@ export interface ReportsDiagnostics {
    *  and does not update while the dialog is open. The Coverage tab prints it
    *  rather than leaving a reader to assume a live feed. */
   at: string;
+  /** ⚠️ WHEN EACH SCHEDULE NEXT FIRES, keyed by schedule id, computed by the
+   *  SCHEDULER'S OWN `schedule.next_fire`. Not recomputed here: a second
+   *  implementation would be a different answer wearing the same label, which
+   *  is this subsystem's most expensive recurring bug. Local ISO in the villa's
+   *  clock, so it is displayed as-is rather than re-zoned to the reader's. */
+  nextRuns: Record<string, string>;
   /** Every `notify.*` service this property has, for the destination picker.
    *  Already on the wire inside `inventory` — the Schedule tab could only
    *  REMOVE targets until v2.545.0 because nothing parsed it, which made
@@ -177,6 +186,10 @@ function parseSchedule(raw: unknown): ReportSchedule {
     // the whole config layer is built to avoid.
     ...(typeof s.minute === "number"
       ? { minute: Math.min(59, Math.max(0, Math.round(s.minute))) } : {}),
+    ...(typeof s.weekday === "number"
+      ? { weekday: Math.min(6, Math.max(0, Math.round(s.weekday))) } : {}),
+    ...(typeof s.day === "number"
+      ? { day: Math.min(31, Math.max(1, Math.round(s.day))) } : {}),
     audience: oneOf(s.audience, AUDIENCE) as Audience,
     ...(Array.isArray(s.targets) ? { targets: strs(s.targets) } : {}),
   };
@@ -461,6 +474,13 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
         const mod = obj(m);
         return {
           name: str(mod.name),
+          // ⚠️ FROM THE MODULE, NOT FROM A TABLE HERE. A display-name map in
+          // the SPA is a second list that goes stale the day a check is added
+          // or renamed — the cross-artefact drift `test_store_envelope` exists
+          // for. The fallback is the identifier, so a module that has not
+          // declared a title degrades to what the tab showed before.
+          title: str(mod.title) || str(mod.name).replace(/_/g, " "),
+          description: str(mod.description),
           requires: strs(mod.requires),
           audiences: membersOf(mod.audiences, AUDIENCE),
           minDays: num(mod.min_days),
@@ -487,6 +507,7 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
         };
       }),
       at: str(d.at),
+      nextRuns: texts(d.next_runs),
       notifyTargets: arr(obj(d.inventory).notify_targets).map((t) => {
         const target = obj(t);
         return {

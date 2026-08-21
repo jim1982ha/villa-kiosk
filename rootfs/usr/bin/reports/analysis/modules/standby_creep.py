@@ -106,6 +106,10 @@ class StandbyCreep:
     # and fails the structural match invariantly. mypy --strict catches it;
     # nothing at runtime would.
     name: str = "standby_creep"
+    title: str = "Equipment drawing more at rest"
+    description: str = (
+        "Watches what each metered device uses when it is idle. A rising floor "
+        "is often a failing part or something left switched on.")
     requires: Sequence[str] = ("statistics", "energy_devices")
     audiences: Sequence[str] = ("owner", "facility")
     min_days: int = 14

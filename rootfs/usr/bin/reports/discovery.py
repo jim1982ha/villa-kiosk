@@ -249,6 +249,10 @@ async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
     if not isinstance(result, dict):
         return []
 
+    notify_domain = result.get("notify")
+    notify_services: Set[str] = (set(notify_domain)
+                                 if isinstance(notify_domain, dict) else set())
+
     targets: List[Dict[str, Any]] = []
     for domain_name, services in result.items():
         if not isinstance(services, dict):
@@ -257,8 +261,11 @@ async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
             info: Dict[str, Any] = meta if isinstance(meta, dict) else {}
             raw_fields = info.get("fields")
             fields: Dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
-            if domain_name != "notify" and not _speaks_message(fields):
-                continue
+            if domain_name != "notify":
+                if not _speaks_message(fields):
+                    continue
+                if _redundant(domain_name, fields, notify_services):
+                    continue
             targets.append({
                 "service": f"{domain_name}.{service}",
                 "name": str(info.get("name") or service),
@@ -327,6 +334,45 @@ async def _notify_entities(hass: HassClient) -> List[Dict[str, Any]]:
             "needs_target": False,
         })
     return out
+
+
+def _redundant(domain: str, fields: Dict[str, Any],
+               notify_services: Set[str]) -> bool:
+    """Does this non-notify service reach somewhere already offered?
+
+    ⚠️ THE ANY-DOMAIN SCAN WAS TOO GENEROUS AND THE LIST SHOWED IT. Reported as
+    "it feels like redundant options, right?" — and it was, twice over on the
+    reference villa:
+
+      `persistent_notification.create`  the same place as `notify.persistent_notification`
+      `telegram_bot.send_message`       every allowed chat, when the chats are
+                                        already listed one by one as entities
+
+    Both are DUPLICATE ROUTES, and offering a second name for one destination is
+    worse than offering nothing: it invites a choice with no meaning and, in the
+    telegram case, one that quietly fans out where the operator picked a group.
+
+    Two rules, both read off data already fetched — no extra round trip, no
+    integration named:
+
+      A `notify.<domain>` EXISTS. Home Assistant's own convention is that an
+        integration reachable by notification registers itself there; if it did,
+        its own domain service is the same destination by another name.
+
+      THE SERVICE TAKES `entity_id`. Then it is an ENTITY-ADDRESSING service and
+        the entities are the specific targets — which `_notify_entities` lists
+        individually. This is exactly the rule already applied to
+        `notify.send_message` as `needs_target`, generalised to every domain
+        rather than special-cased for one.
+
+    ⚠️ CONSERVATIVE BY DESIGN: it only ever hides a service whose destinations
+    are ALREADY REACHABLE another way, so nothing becomes unreachable. A
+    property whose integration registers neither a notify service nor notify
+    entities keeps its domain service, because there it is the only route.
+    """
+    if domain in notify_services:
+        return True
+    return "entity_id" in fields
 
 
 def _speaks_message(fields: Dict[str, Any]) -> bool:
