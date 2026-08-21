@@ -1,3 +1,15 @@
+## 2.540.0
+
+### Fixed — the new workspace could not be opened, and is now called Briefings
+
+It was reachable only from the phone-width menu, so on a desktop or tablet there
+was no way in at all. It also shared both its name and its icon with Facility's
+existing Report tab while being a different thing — that one is a document you
+generate and download, this one is the periodic brief the villa sends you. Three
+things the first real capture showed: the facility brief announced a cost total
+it never listed, a column of figures mixed decimals with whole numbers, and an
+internal code appeared in place of a sentence.
+
 ## 2.539.0
 
 ### Added — the running version can be read from the browser console
