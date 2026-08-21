@@ -13,10 +13,17 @@ and every CSS rule it names was checked, including the one stating that
 the device class the owner actually uses" — the checklist covers how a thing
 renders, not whether it renders at all.
 
-The rule existed in the code three times over — Facility, Cockpit and the view
-switch each carry an inline button AND a menu item — and nowhere as a name. That
-is precisely the shape /dry-audit's Part 4 exists to find: duplication with no
-helper to violate, so no grep and no test could see a fourth reader miss it.
+The rule existed in the code four times over — Facility, Settings, the view
+switch and Cockpit each carry an inline button AND a menu item — and nowhere as
+a name. That is precisely the shape /dry-audit's Part 4 exists to find:
+duplication with no helper to violate, so no grep and no test could see a fifth
+reader miss it.
+
+⚠️ THE FIRST DRAFT OF THIS PARAGRAPH NAMED THREE, AND NAMED THE WRONG THREE —
+"Facility, Cockpit and the view switch", omitting Settings and including Cockpit,
+which the first version of the probe could not even see. Written by generalising
+from the sites in view, which is the `HOLD_MS_HUD` failure verbatim. Found by
+/dry-audit's Part 3 one release later.
 
 ⚠️ READS SOURCE TEXT, like `test_nginx_routes` and `test_contract_parity`. The
 applicable set is "handlers the HUD renders a button for", derived from the file
@@ -33,14 +40,30 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HUD_PATH = os.path.join(REPO_ROOT, "src", "components", "hud", "HUD.tsx")
 
-#: The two containers, and what each is worth. Both are `.hud-group`s in the
-#: same row; CSS decides which one exists at a given width.
+#: The THREE containers, and what each is worth at a given width:
+#:   .hud-center        every width (some children hidden on the phone tier)
+#:   .hud-right-inline  desktop and tablet only
+#:   .hud-overflow      phone only
+CENTRE = 'className="hud-center"'
 INLINE = 'className="hud-right-inline hud-group"'
 OVERFLOW = 'className="hud-group hud-overflow"'
 
+#: ⚠️ THE MENU'S OWN TOGGLE IS NOT AN ENTRY IN IT. `setMenuOpen` opens and
+#: closes the overflow menu; demanding it appear on both surfaces is asking the
+#: button to contain itself.
+NOT_AN_ENTRY = {"setMenuOpen"}
 
-def _regions() -> Tuple[str, str]:
-    """The inline row and the overflow menu, as source text.
+
+def _regions() -> Tuple[str, str, str]:
+    """The centre row, the inline row and the overflow menu, as source text.
+
+    ⚠️ THERE ARE THREE SURFACES, NOT TWO, AND MODELLING TWO MADE THIS PIN BLIND.
+    `.hud-center` is visible at every width; `.hud-right-inline` is desktop and
+    tablet; `.hud-overflow` is phone. So the map colour legend, which lives in
+    the centre row on a roomy screen and in the menu on a phone, read as
+    "menu only" — a false positive that would have made a real one unbelievable.
+    The rule is about the inline/overflow PAIR: an entry whose desktop home is
+    the centre row needs no inline twin.
 
     ⚠️ THE OVERFLOW REGION ENDS WHERE THE MENU DOES, not at end-of-file.
     Modals are rendered after it — `CockpitModal` among them — and treating the
@@ -49,14 +72,16 @@ def _regions() -> Tuple[str, str]:
     """
     with open(HUD_PATH, encoding="utf-8") as handle:
         source = handle.read()
-    i_inline, i_over = source.index(INLINE), source.index(OVERFLOW)
-    assert i_inline < i_over, "the inline row is expected before the menu"
+    i_centre, i_inline, i_over = (
+        source.index(CENTRE), source.index(INLINE), source.index(OVERFLOW))
+    assert i_centre < i_inline < i_over, "regions are expected in source order"
+    centre = source[i_centre:i_inline]
     inline = source[i_inline:i_over]
     tail = source[i_over:]
     # The menu ends at the first modal rendered after it.
     end = min((tail.index(m) for m in ("<CockpitModal", "</header>", "</div>\n    </>")
                if m in tail), default=len(tail))
-    return inline, tail[:end]
+    return centre, inline, tail[:end]
 
 
 def _entries(region: str) -> List[str]:
@@ -73,23 +98,37 @@ def _entries(region: str) -> List[str]:
     overflow menu at the first modal: without that bound, every callback
     threaded into `CockpitModal` reads as a menu entry — which was the FIRST
     false positive. The two fixes are the same fix from opposite ends.
+
+    ⚠️ LOCAL STATE COUNTS TOO. Cockpit and the legend are opened by
+    `setCockpitOpen` / `setLegendOpen`, not by a prop — so a pattern matching
+    only `on(Open|Toggle)X` could not see two of the app's own HUD entries, and
+    the first version of this pin was blind to Cockpit while its own docstring
+    cited Cockpit as the example to follow. That is the third false reading this
+    small function has produced, and every one of them was the region model or
+    the pattern being narrower than the thing it describes.
     """
     found: List[str] = []
-    for name in re.findall(r"\bon(?:Open|Toggle)[A-Z]\w+", region):
-        if name not in found:
-            found.append(name)
+    for name in re.findall(r"\b(?:on(?:Open|Toggle)|set)[A-Z]\w*", region):
+        if name in NOT_AN_ENTRY or name in found:
+            continue
+        if name.startswith("set") and not name.endswith("Open"):
+            continue
+        found.append(name)
     return found
 
 
 def test_every_hud_entry_renders_on_both_surfaces() -> None:
-    inline, overflow = _regions()
+    centre, inline, overflow = _regions()
+    on_centre = set(_entries(centre))
     on_inline, on_menu = set(_entries(inline)), set(_entries(overflow))
 
     assert on_inline, "no inline entries found — the region markers moved"
     assert on_menu, "no menu entries found — the region markers moved"
 
-    menu_only = sorted(on_menu - on_inline)
-    inline_only = sorted(on_inline - on_menu)
+    # An entry whose desktop home is the always-visible centre row needs no
+    # inline twin — see `_regions`.
+    menu_only = sorted(on_menu - on_inline - on_centre)
+    inline_only = sorted(on_inline - on_menu - on_centre)
 
     assert not menu_only, (
         "invisible on desktop AND tablet — `.hud-overflow` is display:none "
@@ -106,7 +145,7 @@ def test_the_two_regions_are_still_findable() -> None:
     empty sets and report health forever."""
     with open(HUD_PATH, encoding="utf-8") as handle:
         source = handle.read()
-    for marker in (INLINE, OVERFLOW):
+    for marker in (CENTRE, INLINE, OVERFLOW):
         assert marker in source, (
             f"{marker} is gone from HUD.tsx — this test's anchors moved and it "
             f"would otherwise pass on an empty comparison.")
@@ -116,7 +155,7 @@ def test_the_probe_ignores_callbacks_threaded_into_modals() -> None:
     """The first version reported `onOpenEntity` as menu-only. It is handed to
     `CockpitModal` as a prop, is not a button on either surface, and is not an
     entry at all."""
-    _, overflow = _regions()
+    _, _, overflow = _regions()
     assert "onOpenEntity" not in _entries(overflow), (
         "a prop handed to a child component is being read as a HUD entry")
 
@@ -124,7 +163,7 @@ def test_the_probe_ignores_callbacks_threaded_into_modals() -> None:
 def test_every_entry_names_itself_for_a_screen_reader() -> None:
     """A HUD entry is an icon with no visible text on the inline surface, so
     `aria-label` is the only thing that names it."""
-    inline, _ = _regions()
+    _, inline, _ = _regions()
     offenders: Dict[str, str] = {}
     for block in re.findall(r"<button[^>]*?>", inline, re.DOTALL):
         if "onOpen" not in block and "onToggle" not in block:
