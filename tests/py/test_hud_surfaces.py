@@ -13,9 +13,11 @@ and every CSS rule it names was checked, including the one stating that
 the device class the owner actually uses" — the checklist covers how a thing
 renders, not whether it renders at all.
 
-The rule existed in the code four times over — Facility, Settings, the view
-switch and Cockpit each carry an inline button AND a menu item — and nowhere as
-a name. That is precisely the shape /dry-audit's Part 4 exists to find:
+The rule existed in the code four times over at that moment — Facility,
+Settings, the view switch and Cockpit each carrying an inline button AND a menu
+item — and nowhere as a name. (Briefings made it five, which is why the count is
+tied to the release that measured it rather than left in the present tense: the
+probe below derives the set, and this paragraph is a record of one day.) That is precisely the shape /dry-audit's Part 4 exists to find:
 duplication with no helper to violate, so no grep and no test could see a fifth
 reader miss it.
 

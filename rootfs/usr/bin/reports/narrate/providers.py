@@ -182,6 +182,14 @@ async def _anthropic(session: ClientSession, body: Mapping[str, Any],
 #: rather than a code path.
 ADAPTERS: Dict[str, Adapter] = {"anthropic": _anthropic}
 
+#: ⚠️ THE DEFAULT PROVIDER IS DERIVED, NOT NAMED. Two places used to spell
+#: `"anthropic"` as a fallback — this class's `__init__` and `shared()` — which
+#: made the claim above ("no platform name anywhere except in its own adapter")
+#: false in the same file that states it, and expressed one preference in three
+#: places. Found by /dry-audit Part 3. Deriving it means adding a second adapter
+#: cannot leave a stale default behind, and the claim becomes structural.
+DEFAULT_PROVIDER = next(iter(ADAPTERS))
+
 
 def _prompt(body: Mapping[str, Any]) -> str:
     """What the provider is asked to do.
@@ -218,7 +226,7 @@ class ProviderNarrator:
 
     name = NARRATION_MODE[1]  # "provider"
 
-    def __init__(self, provider: str = "anthropic",
+    def __init__(self, provider: str = DEFAULT_PROVIDER,
                  monthly_limit: int = DEFAULT_MONTHLY_LIMIT) -> None:
         self.provider = provider
         self.budget = Budget(monthly_limit)
@@ -322,7 +330,7 @@ def shared(settings: Mapping[str, Any]) -> Optional[ProviderNarrator]:
     if str(settings.get("mode") or NARRATION_MODE[0]) != NARRATION_MODE[1]:
         return None
 
-    provider = str(settings.get("provider") or "anthropic")
+    provider = str(settings.get("provider") or DEFAULT_PROVIDER)
     raw_limit = settings.get("monthly_limit")
     limit = (int(raw_limit) if isinstance(raw_limit, int)
              and not isinstance(raw_limit, bool) else DEFAULT_MONTHLY_LIMIT)

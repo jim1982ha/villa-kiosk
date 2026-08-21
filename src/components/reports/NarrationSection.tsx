@@ -113,8 +113,14 @@ export default function NarrationSection({
                   </select>
                 </label>
 
+                {/* ⚠️ THE LABEL SAYS WHAT THE NUMBER DOES, not what it is
+                    called. "Most briefings per month" was reported as unclear
+                    and it deserved to be: it names a unit without saying what
+                    happens at the ceiling, and the two-paragraph explanation
+                    underneath was where the answer had been put instead.
+                    Answering in the label is what let the paragraphs go. */}
                 <label className="fm-field">
-                  <span>Most briefings per month</span>
+                  <span>Stop after this many a month</span>
                   <input
                     type="number"
                     min={0}
@@ -171,23 +177,20 @@ export default function NarrationSection({
                 </span>
               </div>
 
+              {/* ⚠️ TWO LINES, BY INSTRUCTION AND BY MERIT. This was four
+                  paragraphs — the ceiling explained twice, the cost, and a
+                  pointer to the payload inspector — under a form of three
+                  fields, and the owner called it too much text. Everything cut
+                  is said better elsewhere: the ceiling by its own label above,
+                  and what leaves the property by the inspector itself, which
+                  SHOWS the real payload rather than describing it. Prose that
+                  restates a control or duplicates a panel is what makes a
+                  settings page feel heavy. */}
               <p className="muted body-text">
-                The limit is a ceiling on requests so a misconfigured schedule
-                cannot run up a bill; it is counted in memory and resets when the
-                add-on restarts, so it guards against a runaway rather than
-                serving as a billing record. Sending briefings costs money at the
-                service&rsquo;s own rates.
-              </p>
-
-              {/* ⚠️ THE ONE PLACE THE PRIVACY QUESTION IS ANSWERED. See this
-                  file's header: a prose list here would be a second copy of the
-                  allow-list, and the inspector shows the real payload. */}
-              <p className="muted body-text">
-                <strong>What would leave this property:</strong> compose a brief
-                on the Preview tab and open <em>What would leave this
-                property</em> underneath it. That panel is built by the add-on
-                from the brief you are looking at, and names the fields it
-                dropped — so it can be read rather than taken on trust.
+                Past that many, briefings keep arriving in the built-in wording;
+                the count is in memory and resets when the add-on restarts.
+                Requests are billed at the service&rsquo;s own rates — Preview
+                shows exactly what would be sent.
               </p>
             </>
           )}

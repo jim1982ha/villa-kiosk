@@ -17,7 +17,14 @@
  * SHAPE of a report, never its content.
  */
 
-/** Bumped when a value's MEANING changes; never for an addition. */
+/** Bumped when a value's MEANING changes; never for an addition.
+ *
+ *  ⚠️ NOTHING IN THIS APP IMPORTS THIS, AND DELETING IT BREAKS A TEST.
+ *  `tests/py/test_contract_parity.py` reads it out of this file's SOURCE TEXT
+ *  and asserts it equals `contracts.CONTRACT_VERSION` — a consumer no
+ *  TypeScript tool can see, so every unused-export sweep flags it. Said here so
+ *  the next audit stops at this line instead of removing the constant and
+ *  silently turning that pin into a vacuous pass. */
 export const CONTRACT_VERSION = 1;
 
 /** Ordered least to most urgent — report sections sort by this order. */

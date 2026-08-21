@@ -9,11 +9,24 @@ the server, from a schedule the owner configured. So delivery calls Core
 directly and does not pass through that gate. Widening the browser allowlist to
 cover this would hand every open tab the ability to notify.
 
-⚠️ PLATFORM-AGNOSTIC BY CONSTRUCTION. A target is a service id discovered at
-runtime; no platform name appears in this file. That is the hard rule about
-nothing villa-specific shipping, and it is also what makes moving from
+⚠️ PLATFORM-AGNOSTIC BY CONSTRUCTION. A target is an id DISCOVERED AT RUNTIME;
+no platform name appears in this file. That is the hard rule about nothing
+villa-specific shipping, and it is what makes moving from
 `persistent_notification` to Telegram — or anything else — a configuration
 change rather than a code change.
+
+⚠️ AND A TARGET IS NOT ALWAYS A SERVICE. This sentence said "a service id"
+until v2.552.0 and had been wrong since v2.549.0, which is the kind of stale
+half-sentence that sends the next reader looking for the wrong thing. Three
+forms, all discovered, none named here:
+
+  `notify.mobile_app_x`       a classic notify service
+  `telegram_bot.send_message` any domain, if it takes `message` + `title`
+  `entity:notify.x`           an ENTITY on the modern notify platform
+
+`discovery` decides what may be offered by reading each service's published
+schema; `_service_path` and `_payload_for` below are the only two places that
+care which form arrived.
 
 The payload is therefore the INTERSECTION of what notify platforms accept:
 `title` and `message`, both plain text. Not markdown, not HTML, no `data`

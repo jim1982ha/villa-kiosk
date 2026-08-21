@@ -29,6 +29,7 @@
 //   way to address ONE of them — which is what "send it to the Telegram group,
 //   not to every chat the bot can reach" requires.
 
+import { useEffect, useRef } from "react";
 import { ChevronDown, Send } from "lucide-react";
 
 export interface DiscoveredTarget {
@@ -116,30 +117,70 @@ export default function DestinationList({
       ? targets.filter((t) => t !== service)
       : [...targets, service]);
 
+  /** ⚠️ A LIST THAT OPENS BELOW THE FOLD READS AS NOTHING HAVING HAPPENED, and
+   *  on the last schedule in a long tab that is exactly where it opens. `nearest`
+   *  rather than `center`: it scrolls only as far as it must, so a list already
+   *  fully visible does not jump. Runs once on mount because this component is
+   *  rendered only while open — the parent unmounts it on close, so there is no
+   *  "did it just open" state to track. */
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    box.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, []);
+
   return (
-    <div className="reports-recipients">
+    <div className="reports-recipients" ref={box}>
       {rows.length === 0 && (
         <p className="muted body-text">
           Home Assistant offers nothing that can deliver a brief. Set up a
           notification integration there first.
         </p>
       )}
+      {/* ⚠️ SAID ONCE, ONLY WHEN IT APPLIES. A device reachable BOTH as a
+          service and as a notify entity appears twice, which looks like a bug
+          until someone says it is not — but a property with only one kind
+          should not be told about a distinction it will never see. */}
+      {rows.some((t) => t.service.startsWith("entity:"))
+        && rows.some((t) => !t.service.startsWith("entity:")) && (
+        <p className="muted body-text">
+          A device can appear twice — Home Assistant offers some of them both as
+          a service and as a notification target. Either one works; the id below
+          each name is what tells them apart.
+        </p>
+      )}
       {rows.map((t) => (
-        <label key={t.service} className="toggle">
+        <label key={t.service} className="toggle reports-target">
           <input
             type="checkbox"
             checked={targets.includes(t.service)}
             onChange={() => toggle(t.service)}
           />
           <span>
-            {t.name}
-            {/* ⚠️ `notify.notify` FANS OUT TO EVERY DEVICE IN THE HOUSE. A
-                perfectly good service and a terrible default: a villa that
-                switches briefings on and gets the weekly summary on the TV,
-                three phones and a tablet switches them off again. */}
-            {t.broadcast && (
-              <span className="sev-warning"> — every device in the house</span>
-            )}
+            <span className="reports-target-name">
+              {t.name}
+              {/* ⚠️ `notify.notify` FANS OUT TO EVERY DEVICE IN THE HOUSE. A
+                  perfectly good service and a terrible default: a villa that
+                  switches briefings on and gets the weekly summary on the TV,
+                  three phones and a tablet switches them off again. */}
+              {t.broadcast && (
+                <span className="sev-warning"> — every device in the house</span>
+              )}
+            </span>
+            {/* ⚠️ THE ID IS ALWAYS SHOWN, AND IT IS NOT DECORATION. Two rows
+                can carry the SAME friendly name and mean different things, and
+                the first version showed the name alone: this property has two
+                notify entities both called "iPhone 16 Fab", and the same phone
+                again as a SERVICE — three indistinguishable rows, reported as
+                "what's the difference between these? this is not clear at all".
+
+                Home Assistant's own friendly names are not unique and were
+                never promised to be; the id is the only thing that is. Showing
+                it beats every alternative considered: numbering duplicates
+                says which is which but not WHAT they are, and stripping HA's
+                "Send a notification via …" boilerplate to make the two kinds
+                look alike would be locale-specific string surgery that hides
+                the very distinction the reader is asking about. */}
+            <span className="reports-target-id">{plain(t.service)}</span>
           </span>
         </label>
       ))}

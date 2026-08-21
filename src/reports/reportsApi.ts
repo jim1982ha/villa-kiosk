@@ -1,6 +1,11 @@
 // src/reports/reportsApi.ts
-// Client for the reports subsystem's four endpoints, served from the add-on's
-// own /data volume like every other shared store.
+// Client for the reports subsystem's endpoints, served from the add-on's own
+// /data volume like every other shared store: /reports-config, -history,
+// -diagnostics, -run-now and -secret.
+//
+// ⚠️ THE COUNT IS NAMED RATHER THAN COUNTED, because "four endpoints" was
+// written when there were four and was wrong by two the moment Phase 6 added
+// the credential pair. A list goes stale visibly; a number goes stale silently.
 //
 // ⚠️ EVERY READ NARROWS. A store written by a newer add-on must not inject
 // unknown shapes into this app, and one written by an older add-on must not

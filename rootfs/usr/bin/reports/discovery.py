@@ -204,9 +204,14 @@ def missing_statistic_preflight(
 
 
 async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
-    """Every notify service, described well enough to choose between.
+    """Every destination this deployment offers, described well enough to
+    choose between.
 
-    ⚠️ TWO TRAPS, BOTH LIVE ON REAL DEPLOYMENTS.
+    ⚠️ NOT "every notify service", which is what this line said until v2.552.0
+    and what the function did until v2.546.0. It returns notify services, any
+    other domain's service that speaks the same payload, AND notify entities.
+
+    ⚠️ THREE TRAPS, ALL LIVE ON REAL DEPLOYMENTS.
 
     `notify.notify` fans out to EVERY configured device at once. It is a
     perfectly good service and a terrible default: a villa that switches on
@@ -216,8 +221,11 @@ async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
     `notify.send_message` is the newer entity-based platform and takes an
     `entity_id`, not a bare message. Calling it the old way fails at delivery
     time — long after the operator chose it — so it is flagged `needs_target`
-    and Phase 2 must not treat it as a plain target.
-    ⚠️ AND A THIRD, FOUND ON THE REFERENCE VILLA: THE `notify` DOMAIN IS NOT
+    and Phase 2 must not treat it as a plain target. Since v2.549.0 the
+    destinations it stands for are listed individually as entity targets, so it
+    is hidden from the picker rather than offered and refused.
+
+    ⚠️ THE THIRD, FOUND ON THE REFERENCE VILLA: THE `notify` DOMAIN IS NOT
     THE ONLY PLACE A MESSAGE CAN BE SENT. That property runs the modern
     `telegram_bot` integration, which registers `telegram_bot.send_message` and
     NO `notify.telegram_*` service at all — so a picker built from the `notify`
