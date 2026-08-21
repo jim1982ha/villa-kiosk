@@ -177,9 +177,16 @@ def _phrase(key: str, value: Any) -> str:
     return f"{key.replace('_', ' ')} {value}"
 
 
-def _amount(value: float) -> str:
-    """A cost, with no currency symbol — see the module docstring."""
-    return f"{value:,.0f}" if abs(value) >= 100 else f"{value:,.2f}"
+def _amount(value: float, whole: bool = False) -> str:
+    """A cost, with no currency symbol — see the module docstring.
+
+    ⚠️ `whole` IS DECIDED BY THE LIST, NOT BY THE VALUE. Choosing per value
+    printed "799", "156" and "96.00" in one column of a real report. The
+    currency is the operator's own and unknown here, so nothing can be inferred
+    from magnitude alone — but within one list, consistency is available for
+    free and its absence reads as a mistake.
+    """
+    return f"{value:,.0f}" if whole or abs(value) >= 100 else f"{value:,.2f}"
 
 
 class DeterministicNarrator:
@@ -281,7 +288,16 @@ class DeterministicNarrator:
 
         savings = self._savings(context)
         total = savings.get("total")
-        if isinstance(total, (int, float)) and savings.get("groups"):
+        # ⚠️ ONLY WHERE THE MONEY SECTION IS ACTUALLY RENDERED. The facility
+        # brief withholds the cost ranking — that audience does not act on it —
+        # and the headline was announcing the total anyway, so the facility
+        # manager read "Avoidable cost identified: 1,051, across 3 findings; 1
+        # further finding could not be priced" with NO breakdown anywhere below
+        # it. That is v2.529.0's contradiction with the sign flipped: there the
+        # headline priced what the section denied, here it prices what the
+        # audience is never shown.
+        shows_money = "money" in SECTIONS_FOR.get(context.audience, ALL_SECTIONS)
+        if shows_money and isinstance(total, (int, float)) and savings.get("groups"):
             mix = savings.get("basis_mix") or {}
             estimated = int(mix.get("estimated", 0))
             counted = int(savings["groups"])
@@ -450,9 +466,16 @@ class DeterministicNarrator:
         if billable:
             head = ("Avoidable cost, most expensive first:" if priced
                     else "Waste identified, not priced:")
+            # ⚠️ ONE FORMAT FOR THE WHOLE LIST. `_amount` decided per value —
+            # two decimals below 100, none above — so a real report printed
+            # "799", "156" and "96.00" in the same column. The currency is the
+            # operator's own and unknown here, so the magnitude of the LIST
+            # decides: if anything in it is large, minor units are noise
+            # everywhere in it.
+            whole = any((self._number(g, "total_cost") or 0) >= 100 for g in billable)
             lines = [head]
             for group in self._top(billable):
-                lines.append(self._money_line(group))
+                lines.append(self._money_line(group, whole=whole))
             return lines + self._and_more(billable)
 
         if "energy_cost" in (context.discovery.get("capabilities_missing") or []):
@@ -470,7 +493,7 @@ class DeterministicNarrator:
                     "waste can be identified but not priced."]
         return []
 
-    def _money_line(self, group: Any) -> str:
+    def _money_line(self, group: Any, whole: bool = False) -> str:
 
         cost = self._number(group, "total_cost")
         basis = self._text(group, "basis")
@@ -498,7 +521,7 @@ class DeterministicNarrator:
             said = ", ".join(p for p in (energy, duration) if p) \
                 or self._measurement(group) or "no figure supplied"
             return f"- {label}: {said}, not priced"
-        parts = [_amount(float(cost))]
+        parts = [_amount(float(cost), whole)]
         if energy:
             parts.append(energy)
         return f"- {label}: {', '.join(parts)}{note}"

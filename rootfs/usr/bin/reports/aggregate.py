@@ -184,6 +184,27 @@ def _as_float(value: Any) -> Optional[float]:
     return None
 
 
+def _readable(detail: Any, finding: Any) -> str:
+    """The sentence a blueprint supplied, or its code made readable.
+
+    ⚠️ `finding` IS A MACHINE TOKEN AND IT REACHED THE PAGE. The `audit_*`
+    blueprints emit `finding: "critical_automation_off"` and
+    `finding: "entity_unavailable"` — identifiers, not prose — and a real report
+    printed "Critical automation health: critical_automation_off" to the owner.
+    `detail`, where a category supplies one, is a real sentence and is used
+    untouched.
+
+    Underscores to spaces is the whole transformation: a lookup table of every
+    code every blueprint might emit goes stale the day someone adds a mode,
+    which is the same reason `_phrase` works on suffixes rather than names.
+    """
+    text = str(detail or "").strip()
+    if text:
+        return text
+    code = str(finding or "").strip()
+    return code.replace("_", " ") if code else ""
+
+
 def _severity_of(raw: Any, category: str) -> str:
     """A blueprint's severity, in the report's vocabulary. NEVER raw.
 
@@ -252,7 +273,7 @@ def normalise(event: Dict[str, Any]) -> Optional[Item]:
         # the same as "cleared", so it must stay None rather than defaulting.
         phase=(str(data["phase"]) if data.get("phase") else None),
         entities=entities,
-        detail=str(data.get("detail") or data.get("finding") or "").strip(),
+        detail=_readable(data.get("detail"), data.get("finding")),
         # ⚠️ THE BLUEPRINT'S OWN TIME FIRST. `fired` is Home Assistant's stamp
         # and `at` is when the collector wrote it; both are later than the
         # condition they describe, and `at` can be much later after an outage.

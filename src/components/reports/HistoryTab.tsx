@@ -27,8 +27,8 @@ export default function HistoryTab({
   if (entries.length === 0) {
     return (
       <p className="muted body-text">
-        No reports have been produced yet. A preview is not recorded here —
-        only something that was actually sent.
+        No briefings have been sent yet. A preview is not recorded here — only
+        something that was actually delivered.
       </p>
     );
   }

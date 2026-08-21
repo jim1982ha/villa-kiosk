@@ -19,14 +19,14 @@ export default function PreviewTab({
   return (
     <div className="reports-pane">
       <p className="muted body-text">
-        Composes the report that would be sent, and sends nothing. Nothing is
+        Composes the brief that would be sent, and sends nothing. Nothing is
         recorded in the history either — a delivery record for something that
         was not delivered is worse than no record.
       </p>
 
       <button className="btn primary" onClick={onCompose} disabled={busy}>
         {busy ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
-        <span>{busy ? "Composing…" : "Compose a report now"}</span>
+        <span>{busy ? "Composing…" : "Compose a brief now"}</span>
       </button>
 
       {preview && (

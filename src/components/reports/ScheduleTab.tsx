@@ -66,7 +66,7 @@ export default function ScheduleTab({
           checked={draft.enabled === true}
           onChange={(e) => set({ enabled: e.target.checked })}
         />
-        <span>Send reports on a schedule</span>
+        <span>Send briefings on a schedule</span>
       </label>
       <p className="muted body-text">
         Off by default. Read one from the Preview tab first — that is what this
@@ -118,7 +118,7 @@ export default function ScheduleTab({
         <Plus size={16} /><span>Add a schedule</span>
       </button>
 
-      <h3 className="reports-h3">Where reports go</h3>
+      <h3 className="reports-h3">Where briefings go</h3>
       {/* ⚠️ `notify.notify` FANS OUT TO EVERY DEVICE IN THE HOUSE. It is a
           perfectly good service and a terrible default — a villa that switches
           reports on and gets the weekly summary on the TV, three phones and a
@@ -138,7 +138,7 @@ export default function ScheduleTab({
         ))}
         {targets.length === 0 && (
           <li className="reports-item muted">
-            Nothing configured — a scheduled report would be composed and have
+            Nothing configured — a scheduled brief would be composed and have
             nowhere to go.
           </li>
         )}

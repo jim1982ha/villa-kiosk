@@ -527,3 +527,39 @@ def test_a_fully_priced_total_carries_no_such_caveat() -> None:
     body = _render(aggregated=_events(_roi("A", 10.0),
                                       _roi("B", 20.0, rule="ROI-05")))
     assert "could not be priced" not in body
+
+
+# ── read off the first full QA capture, on hardware ─────────────────────────
+
+def test_an_audience_without_the_money_section_is_not_told_a_total() -> None:
+    """⚠️ v2.529.0's CONTRADICTION WITH THE SIGN FLIPPED. There the headline
+    priced a finding the section then denied; here it priced one the audience
+    is never shown at all. A live facility brief opened "Avoidable cost
+    identified: 1,051, across 3 findings; 1 further finding could not be
+    priced" with no breakdown anywhere below it."""
+    data = _events(_roi("Gym lights", 900.0))
+    owner = _render(audience="owner", aggregated=data)
+    facility = _render(audience="facility", aggregated=data)
+    assert "Avoidable cost identified" in owner
+    assert "Avoidable cost identified" not in facility
+    assert "could not be priced" not in facility
+
+
+def test_one_money_list_uses_one_number_format() -> None:
+    """⚠️ A live report printed "799", "156" and "96.00" in one column.
+    `_amount` decided per value; the currency is the operator's own and unknown,
+    so the magnitude of the LIST decides."""
+    body = _render(aggregated=_events(
+        _roi("Big", 799.0), _roi("Small", 96.0, rule="ROI-05")))
+    # ⚠️ "96," is correct — that comma separates the cost from the energy.
+    # The defect was the DECIMALS, on one row of a column that had none.
+    assert "Big: 799," in body
+    assert "Small: 96," in body
+    assert "96.00" not in body, "one row with decimals beside rows without"
+
+
+def test_a_small_only_list_keeps_its_decimals() -> None:
+    """The rule is consistency WITHIN a list, not "never show minor units" —
+    a list of small figures in a currency that has them still needs them."""
+    body = _render(aggregated=_events(_roi("A", 4.5), _roi("B", 9.25, rule="ROI-05")))
+    assert "4.50" in body and "9.25" in body

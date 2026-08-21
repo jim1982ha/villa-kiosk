@@ -425,3 +425,27 @@ def test_summary_names_the_blueprint_to_update() -> None:
         [_critical(legacy=True)]))["schema_drift"][0]
     assert entry["blueprint"] == "(critical)"
     assert entry["events"] == 1
+
+
+def test_a_machine_token_never_reaches_the_prose() -> None:
+    """⚠️ IT DID. The `audit_*` blueprints emit `finding: "critical_automation_off"`
+    and `finding: "entity_unavailable"` — identifiers, not sentences — and a
+    live report printed "Critical automation health: critical_automation_off"
+    to the owner. Underscores to spaces is the whole transformation: a lookup
+    of every code every blueprint might emit goes stale the day someone adds a
+    mode."""
+    when = "2026-08-21T09:00:00+08:00"
+    event = {"type": "vesta_audit_event", "fired": when, "at": when, "data": {
+        "blueprint": "audit_config_integrity", "rule_id": "DQ-02",
+        "report_bucket": "Critical automation health",
+        "finding": "critical_automation_off", "timestamp": when}}
+    item = aggregate.normalise(event)
+    assert item is not None
+    assert item.detail == "critical automation off"
+    assert "_" not in item.detail
+
+
+def test_a_real_sentence_is_left_alone() -> None:
+    """`critical` supplies `detail` as prose; it must not be word-processed."""
+    item = aggregate.normalise(_critical())
+    assert item is not None and item.detail == "kitchen sensor"

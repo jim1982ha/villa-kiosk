@@ -24,7 +24,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, LogOut, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, FileText,
+  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, Newspaper,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -94,10 +94,25 @@ interface Props {
   /** Open the Facility Manager workspace. Undefined when the profile lacks
    *  `manageFacility` — the button is then not rendered at all. */
   onOpenFacility?: () => void;
-  /** Open the reports workspace. Undefined when the profile is not the owner —
-   *  the entry is then not rendered at all. ⚠️ A RENDERING CONVENIENCE ONLY:
+  /** Open the Briefings workspace. Undefined when the profile is not the owner
+   *  — the entry is then not rendered at all. ⚠️ A RENDERING CONVENIENCE ONLY:
    *  the proxy refuses a non-owner write to /reports-config and a non-owner
-   *  read of /reports-diagnostics whatever the browser sends. */
+   *  read of /reports-diagnostics whatever the browser sends.
+   *
+   *  ⚠️ "BRIEFINGS", NOT "REPORTS", AND THE DISTINCTION IS REAL. Facility
+   *  already has a tab labelled "Report" with this exact `FileText` icon, and
+   *  it is a different thing: a DOCUMENT the facility manager generates on
+   *  demand, in Markdown, downloaded, a point-in-time record of readiness and
+   *  spend. This is the AUTOMATED PERIODIC brief — scheduled, delivered by
+   *  notification, composed from the villa's own alert layer. Two surfaces
+   *  called "Report" wearing the same icon is a coin-flip for the reader.
+   *
+   *  The word is the product's own: every one of these is titled "Weekly
+   *  property brief" or "Weekly facility brief" by the renderer. Opening
+   *  Briefings and finding a brief is the whole of the naming rationale. The
+   *  CODE keeps `reports` throughout — the backend package, the four
+   *  `/reports-*` endpoints and the file names — because that is what the
+   *  subsystem IS; only the label a person reads is disambiguated. */
   onOpenReports?: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
@@ -626,6 +641,24 @@ export default function HUD({
                 )}
               </button>
             )}
+            {/* ⚠️ A HUD ENTRY NEEDS BOTH SURFACES, AND THIS ONE SHIPPED WITH
+                ONE. `.hud-overflow` is `display:none` at every width EXCEPT the
+                phone tier, so a menu item on its own is invisible on the desktop
+                and the tablet — which is every device this villa is operated
+                from. Briefings shipped in v2.537.0 menu-only and could not be
+                opened at all on a 1324px laptop. Facility and the view switch
+                have carried both copies from the start; this is the same rule,
+                joined late. */}
+            {onOpenReports && (
+              <button
+                className="icon-btn"
+                onClick={onOpenReports}
+                title="Briefings — the villa's periodic brief, and when it is sent"
+                aria-label="Open the briefings workspace"
+              >
+                <Newspaper size={24} />
+              </button>
+            )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
             {/* First-person / bird's-eye switch, right after Facility — both
@@ -728,8 +761,8 @@ export default function HUD({
                     className="hud-menu-item"
                     onClick={() => { setMenuOpen(false); onOpenReports(); }}
                   >
-                    <FileText size={18} />
-                    <span>Reports</span>
+                    <Newspaper size={18} />
+                    <span>Briefings</span>
                   </button>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus

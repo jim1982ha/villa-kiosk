@@ -1,5 +1,18 @@
 // src/components/reports/ReportsModal.tsx
-// The reports workspace — one modal, five tabs, owner only.
+// The Briefings workspace — one modal, five tabs, owner only.
+//
+// ⚠️ LABELLED "BRIEFINGS", NOT "REPORTS", AND ON PURPOSE. Facility already has
+// a tab called "Report" — a DOCUMENT the facility manager generates on demand,
+// in Markdown, downloaded, a point-in-time record of readiness and spend. This
+// is the AUTOMATED PERIODIC brief: scheduled, delivered by notification, built
+// from the villa's own alert layer. They shipped with the same label AND the
+// same `FileText` icon, which is a coin-flip for whoever opens one.
+//
+// The word is the product's own — the renderer titles every one of these
+// "Weekly property brief" / "Weekly facility brief", so opening Briefings and
+// finding a brief needs no explanation. The CODE stays `reports` throughout:
+// the backend package, the four `/reports-*` endpoints, these file names. That
+// is what the subsystem is; only the label a person reads is disambiguated.
 //
 // Tab order is the order somebody actually approaches this: read one, see what
 // it can and cannot measure, decide when it arrives, then look at the record.
@@ -64,7 +77,7 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
   // ⚠️ THREE STATES, NOT TWO. "Not loaded yet", "loaded and empty" and
   // "could not be reached" are different things, and collapsing the last two
   // shows an empty schedule list to someone whose add-on is simply down —
-  // which reads as "reports are off" and invites configuring them twice.
+  // which reads as "briefings are off" and invites configuring them twice.
   const [unreachable, setUnreachable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -109,7 +122,7 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
     setNotice("");
     const result = await runReportNow({ preview: true, cadence: "weekly" });
     if (result) setPreview(result);
-    else setNotice("Could not compose a report. See the add-on log.");
+    else setNotice("Could not compose a brief. See the add-on log.");
     setBusy(false);
   }, []);
 
@@ -121,13 +134,13 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Reports"
+        aria-label="Briefings"
       >
         <div className="settings-header">
-          <h2>Reports</h2>
+          <h2>Briefings</h2>
         </div>
 
-        <div className="fm-tabs" role="tablist" aria-label="Report sections">
+        <div className="fm-tabs" role="tablist" aria-label="Briefing sections">
           {TABS.map((t) => {
             const Icon = t.icon;
             return (
