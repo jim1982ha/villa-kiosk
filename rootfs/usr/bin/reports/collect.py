@@ -85,8 +85,19 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _categories_from_blueprints(listing: Any) -> List[str]:
-    """Blueprint file names -> the event categories they emit.
+def _stems_from_blueprints(listing: Any) -> List[str]:
+    """Blueprint file names -> their stems (`maintenance_silence.yaml` -> that).
+
+    ⚠️ THE STEM IS KEPT NOW, AND IT USED TO BE THROWN AWAY. This function
+    returned only the CATEGORY (`maintenance`), which is too coarse to answer
+    the question that matters: a built-in check stands down because the
+    property's own automations cover its ground, and "the maintenance category
+    is alive" says nothing about whether the ONE blueprint that covers it has
+    ever fired. On the reference villa the maintenance category was busy —
+    three pump findings in a single brief — while `maintenance_silence` had
+    `last_triggered: null` on all four of its instances, and the brief reported
+    "your own automations already cover this" about a rule that had never
+    reported anything in its life. See `silent_blueprints` in `state()`.
 
     ⚠️ KEYED ON THE BLUEPRINT, NEVER ON THE AUTOMATION. An automation instance
     is named by whoever filled the form — `roi_idle_load---living_room_ac` on
@@ -127,7 +138,7 @@ def _categories_from_blueprints(listing: Any) -> List[str]:
             if isinstance(meta, dict):
                 entries.append((str(meta.get("path") or ""), meta))
 
-    categories: set[str] = set()
+    stems: set[str] = set()
     for path, meta in entries:
         if not path:
             continue
@@ -144,10 +155,20 @@ def _categories_from_blueprints(listing: Any) -> List[str]:
             continue
 
         leaf = path.rsplit("/", 1)[-1]
-        stem = leaf.rsplit(".", 1)[0]
+        stem = leaf.rsplit(".", 1)[0].lower()
         if "_" in stem:
-            categories.add(stem.split("_", 1)[0].lower())
-    return sorted(categories)
+            stems.add(stem)
+    return sorted(stems)
+
+
+def category_of(stem: str) -> str:
+    """`maintenance_silence` -> `maintenance`. One expression, three readers."""
+    return stem.split("_", 1)[0].lower()
+
+
+def _categories_from_blueprints(listing: Any) -> List[str]:
+    """The event categories this deployment's blueprints emit."""
+    return sorted({category_of(s) for s in _stems_from_blueprints(listing)})
 
 
 async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
@@ -161,10 +182,12 @@ async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
     anywhere. Reading the installed blueprints makes the subscription a
     function of the deployment.
 
-    ⚠️ RETURNS THE CATEGORIES TOO, and that second value is not decoration. It
-    is what tells the rest of the subsystem that this property HAS a detection
-    layer — see `blueprint_layer_present`. An empty list means the fallback was
-    used, so nothing may be concluded from it.
+    ⚠️ RETURNS THE INSTALLED BLUEPRINTS TOO, and that second value is not
+    decoration. It is what tells the rest of the subsystem that this property
+    HAS a detection layer — see `blueprint_layer_present` — and, per blueprint,
+    which parts of that layer have ever actually reported (`silent_blueprints`).
+    An empty list means the fallback was used, so nothing may be concluded
+    from it.
     """
     try:
         listing: Any = await hass.command("blueprint/list", domain="automation")
@@ -172,11 +195,12 @@ async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
         warn(f"could not list blueprints ({err}); using the fallback event list")
         return list(FALLBACK_EVENT_TYPES), []
 
-    categories = _categories_from_blueprints(listing)
-    if not categories:
+    stems = _stems_from_blueprints(listing)
+    if not stems:
         warn("no VESTA blueprints found; using the fallback event list")
         return list(FALLBACK_EVENT_TYPES), []
-    return ([EVENT_TEMPLATE.format(category=c) for c in categories], categories)
+    categories = sorted({category_of(s) for s in stems})
+    return ([EVENT_TEMPLATE.format(category=c) for c in categories], stems)
 
 
 def read_buffer() -> Dict[str, Any]:
@@ -186,10 +210,21 @@ def read_buffer() -> Dict[str, Any]:
     return {
         "events": events,
         "seen_types": raw.get("seen_types") if isinstance(raw.get("seen_types"), dict) else {},
+        # Which BLUEPRINTS have produced an event, by stem, cumulative. Same
+        # shape and same purpose as `seen_types` one level finer — see
+        # `_stems_from_blueprints` for why the coarser one was not enough.
+        "seen_blueprints": (raw.get("seen_blueprints")
+                            if isinstance(raw.get("seen_blueprints"), dict) else {}),
         "online_since": raw.get("online_since") or "",
         "last_seen": raw.get("last_seen") or "",
         "offline_seconds": raw.get("offline_seconds") or 0,
         "blueprint_categories": raw.get("blueprint_categories") or [],
+        #: Installed VESTA blueprints, by stem. ⚠️ ABSENT ON A STORE WRITTEN
+        #: BEFORE 2.568.0, and that is why every reader of it must treat an
+        #: empty list as "not known" rather than as "none installed": the
+        #: latter would claim every covering blueprint is silent on the first
+        #: pass after an upgrade, which is a false alarm about a real check.
+        "blueprint_names": raw.get("blueprint_names") or [],
     }
 
 
@@ -313,6 +348,25 @@ def state() -> Dict[str, Any]:
             for c in buffer["blueprint_categories"]
             if not buffer["seen_types"].get(EVENT_TEMPLATE.format(category=c))
         ),
+        "blueprint_names": buffer["blueprint_names"],
+        # ⚠️ THE SAME QUESTION AS `silent_types`, ONE LEVEL FINER, AND THE
+        # COARSE ONE ANSWERED IT WRONG. A category is alive as soon as ANY of
+        # its blueprints fires, so `maintenance` read healthy on the reference
+        # villa — three pump findings in one brief — while `maintenance_silence`
+        # had never fired at all. The built-in check that stands down for that
+        # blueprint was reported as "covered", and the devices it covers went
+        # unmentioned in every brief. This is what `registry.gate` reads to stop
+        # claiming coverage it cannot demonstrate.
+        #
+        # ⚠️ CUMULATIVE, NOT PER-PERIOD, AND DELIBERATELY SO. "Has never
+        # reported since this add-on started listening" is a statement about
+        # the RULE; "did not report this week" is a statement about the week,
+        # and a well-run villa has many quiet weeks. Only the first is evidence
+        # that a stand-down is unproven.
+        "silent_blueprints": sorted(
+            s for s in buffer["blueprint_names"]
+            if not buffer["seen_blueprints"].get(s)
+        ),
         "last_event_at": events[-1].get("at") if events else "",
     }
 
@@ -356,28 +410,41 @@ class Collector:
             buffer = read_buffer()
             events = list(buffer["events"]) + self._pending
             seen = dict(buffer["seen_types"])
+            by_blueprint = dict(buffer["seen_blueprints"])
             for entry in self._pending:
                 name = entry["type"]
                 if name:
                     seen[name] = int(seen.get(name, 0)) + 1
+                # ⚠️ THE BLUEPRINT NAMES ITSELF IN ITS OWN EVENT DATA, and that
+                # is the only trustworthy source. The automation INSTANCE is
+                # named by whoever filled the form and differs per property;
+                # `data["blueprint"]` is the file, which is the same everywhere
+                # it is installed. An event without it counts toward its type
+                # and toward no blueprint, which is honest — a rule using an
+                # older payload shape is exactly what `schema_drift` reports.
+                stem = str(entry["data"].get("blueprint") or "").strip().lower()
+                if stem:
+                    by_blueprint[stem] = int(by_blueprint.get(stem, 0)) + 1
             store.write_json(store.REPORTS_EVENTS_FILE, {
                 "events": events[-MAX_EVENTS:],
                 "seen_types": seen,
+                "seen_blueprints": by_blueprint,
                 "online_since": buffer["online_since"] or _now(),
                 "last_seen": _now(),
                 "offline_seconds": buffer["offline_seconds"],
                 # ⚠️ CARRIED FORWARD. This method rewrites the whole document,
-                # so a key it forgets is a key it DELETES. Dropping this one
-                # would make the built-in modules start duplicating the
+                # so a key it forgets is a key it DELETES. Dropping either of
+                # these would make the built-in modules start duplicating the
                 # automation layer again on the first flush after connecting —
                 # a bug with a delay fuse, invisible until the first event.
                 "blueprint_categories": buffer["blueprint_categories"],
+                "blueprint_names": buffer["blueprint_names"],
             })
             self._pending = []
         except Exception as err:  # noqa: BLE001 - never take the loop down
             swallow("could not flush the event buffer", err)
 
-    def _mark_online(self, categories: Sequence[str]) -> None:
+    def _mark_online(self, stems: Sequence[str]) -> None:
         """Record that listening has (re)started, and what this property runs.
 
         `online_since` is only set when it is absent, so a reconnection does not
@@ -394,16 +461,22 @@ class Collector:
         """
         try:
             buffer = read_buffer()
-            known = buffer.get("blueprint_categories") or []
+            known_names = buffer.get("blueprint_names") or []
+            known_categories = buffer.get("blueprint_categories") or []
+            names = list(stems) if stems else known_names
+            categories = (sorted({category_of(s) for s in stems}) if stems
+                          else known_categories)
             store.write_json(store.REPORTS_EVENTS_FILE, {
                 "events": buffer["events"],
                 "seen_types": buffer["seen_types"],
+                "seen_blueprints": buffer["seen_blueprints"],
                 "online_since": buffer["online_since"] or _now(),
                 "last_seen": buffer["last_seen"],
                 "offline_seconds": buffer["offline_seconds"],
                 # Never overwritten with an empty list: a pass that could not
                 # reach Core must not erase what a previous one established.
-                "blueprint_categories": list(categories) if categories else known,
+                "blueprint_categories": categories,
+                "blueprint_names": names,
             })
         except Exception as err:  # noqa: BLE001
             swallow("could not mark the collector online", err)
@@ -411,11 +484,11 @@ class Collector:
     async def run_once(self) -> None:
         """One connection's lifetime. Returns when the socket closes."""
         async with HassClient(self._session) as hass:
-            categories: List[str] = []
+            stems: List[str] = []
             if not self._types:
-                self._types, categories = await discover_event_types(hass)
+                self._types, stems = await discover_event_types(hass)
             await hass.subscribe(self._types)
-            self._mark_online(categories)
+            self._mark_online(stems)
             # ⚠️ SET AFTER `subscribe`, NEVER BEFORE. An open websocket that has
             # not been subscribed receives nothing, so marking it connected on
             # connect would report a listener that is not listening — the same

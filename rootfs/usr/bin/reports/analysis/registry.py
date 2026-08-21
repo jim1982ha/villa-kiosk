@@ -27,6 +27,7 @@ import asyncio
 from typing import Any, Dict, List, Sequence, Tuple
 
 from ..log import swallow, warn
+from ..text import readable_label
 from .base import AnalysisModule, Finding, ModuleContext, skip
 
 #: One module's budget. Generous — a month of hourly statistics for twenty
@@ -66,17 +67,34 @@ def gate(module: AnalysisModule, context: ModuleContext,
     # Not deleted, because the add-on is redistributable: a fresh install has no
     # blueprints, and there these modules are the only analysis there is. The
     # deployment is detected rather than configured.
-    if getattr(module, "superseded_by_blueprints", False):
-        if "blueprint_layer" in context.capabilities:
-            # ⚠️ SHORT, BECAUSE IT IS PRINTED IN A NOTIFICATION. This was
-            # "covered by this property's own automation layer, which sees
-            # occupancy and cost context these checks cannot" — ninety-eight
-            # characters, three times over in one brief, in the section a
-            # reader is least likely to reach. WHY the automations are better
-            # belongs on the Checks tab, which has room and already says it;
-            # what a brief needs is which checks did not run and why.
+    covered_by = list(getattr(module, "superseded_by", ()) or ())
+    if covered_by and "blueprint_layer" in context.capabilities:
+        # ⚠️ SHORT, BECAUSE IT IS PRINTED IN A NOTIFICATION. This was
+        # "covered by this property's own automation layer, which sees
+        # occupancy and cost context these checks cannot" — ninety-eight
+        # characters, three times over in one brief, in the section a
+        # reader is least likely to reach. WHY the automations are better
+        # belongs on the Checks tab, which has room and already says it;
+        # what a brief needs is which checks did not run and why.
+        #
+        # ⚠️ AND IT WAS A CLAIM NOTHING VERIFIED (2.568.0). "Your own
+        # automations already cover this" was true of the LAYER and said
+        # nothing about the RULE. On the reference villa `sensor_health` stood
+        # down for `maintenance_silence`, which had `last_triggered: null` on
+        # every one of its four instances since the day it was installed — so
+        # three dead sensors and a dead TV, visible on the kiosk's own home
+        # screen, appeared in no brief at all and the brief's only comment on
+        # the subject was a reassurance. The owner found it by comparing the
+        # two screens. A stand-down is still correct (installed beats fired,
+        # see `collect.blueprint_layer_present`); asserting it WORKS, without
+        # a single event to show for it, was not.
+        silent = [b for b in covered_by if b in set(context.silent_blueprints)]
+        if silent:
             return (False, "missing_capability",
-                    "your own automations already cover this")
+                    f"covered by {readable_label(silent[0])}, which has not "
+                    f"reported since it was installed — check that rule")
+        return (False, "missing_capability",
+                "your own automations already cover this")
 
     missing = [c for c in module.requires if c not in context.capabilities]
     if missing:
@@ -132,6 +150,15 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             settings=settings if isinstance(settings, dict) else {},
             min_history_days=context.min_history_days,
             stats=context.stats, labels=context.labels,
+            # ⚠️ EVERY FIELD, AND THIS ONE IS WHY THE RULE EXISTS. This
+            # re-assembles the context per module, so a field added to the
+            # dataclass and not copied HERE arrives at the gate as its default
+            # — silently, with no type error, because the default is a valid
+            # value. `silent_blueprints` defaulting to `()` makes every covering
+            # blueprint look like it has reported, which is precisely the false
+            # reassurance this release removes. Same shape as the `reachY` the
+            # badge tier lost in 2.429.0.
+            silent_blueprints=context.silent_blueprints,
         )
 
         ok, reason, detail = gate(module, module_context, counts, history_days)

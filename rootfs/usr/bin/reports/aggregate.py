@@ -32,13 +32,18 @@ where an entity resolves to one.
 
 from __future__ import annotations
 
-import re
 import collections
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .analysis.base import Finding, dedup_key
 from .contracts import SEVERITY, severity_rank
+# ⚠️ THIS RULE LIVES IN `text` NOW, not here — `analysis.registry` needs it too
+# and importing `aggregate` from there would reverse an arrow the analysis
+# package's docstring promises points downward. Imported, not re-exported: a
+# module that silently forwards someone else's symbol is a second name for one
+# thing, which is what the move was avoiding.
+from .text import readable_label
 
 #: The event name a category is carried on. `vesta_<category>_event`.
 CATEGORY_OF_EVENT = {
@@ -607,42 +612,6 @@ def to_findings(groups: Sequence[Group]) -> List[Finding]:
                                 f"{g.rule_id}|{g.bucket}"),
         ))
     return out
-
-
-def readable_label(value: str) -> str:
-    """A name for a reader. An identifier becomes prose; prose is left alone.
-
-    ⚠️ THE FIRST FIX FOR THIS WAS ON THE WRONG PATH AND I SHIPPED IT AS DONE.
-    v2.555.0 humanised the FALLBACK in `to_findings` — `g.blueprint or
-    g.category`, reached only when a blueprint supplies neither label nor bucket
-    — and the very next capture still read "What went wrong: -
-    critical_schedule---pool_pump — still unresolved". Because that string is
-    not a fallback: it is the `label` the automation actually sent, so the
-    renderer read it straight out of the group and never touched the code I had
-    changed. One construction site fixed, a different reader shipping the
-    defect: /dry-audit's opening sentence, paid for again.
-
-    ⚠️ SO IT IS APPLIED WHERE A NAME IS READ, NOT WHERE ONE IS BUILT, and there
-    is ONE of it — `to_findings` and the renderer's `_name` both call this.
-
-    ⚠️ AND IT MUST NOT TOUCH A HUMAN LABEL. Blanket humanising would turn the
-    same property's real "Lights - monitored rooms" into "Lights monitored
-    rooms" — damage done in the name of tidiness. Whitespace is the tell: an
-    identifier has none, a label written by a person does. So a value with a
-    space is returned exactly as it arrived, and only a spaceless
-    `snake_case`/`kebab---case` token is rewritten.
-
-    No villa data and no table: punctuation, applied to whatever arrives.
-    """
-    text = str(value or "").strip()
-    if not text or " " in text:
-        return text
-    if "_" not in text and "--" not in text:
-        return text
-    text = re.sub(r"-{2,}", " \u2014 ", text)
-    text = re.sub(r"[_\-]+", " ", text).strip()
-    text = re.sub(r"\s+", " ", text)
-    return text[:1].upper() + text[1:]
 
 
 def _detail_for(g: Group) -> str:

@@ -468,7 +468,7 @@ def test_a_rule_id_is_never_printed_raw_into_a_brief() -> None:
 
     So this pins the RENDER path, which is the one the owner sees.
     """
-    from reports.aggregate import readable_label
+    from reports.text import readable_label
     from reports.narrate.deterministic import DeterministicNarrator
 
     assert readable_label("critical_schedule---pool_pump") == \
@@ -486,7 +486,7 @@ def test_humanising_never_damages_a_label_a_person_wrote() -> None:
     turns "Lights - monitored rooms" into "Lights monitored rooms" — damage
     done in the name of tidiness. Whitespace is the tell: an identifier has
     none, a label written by a person does."""
-    from reports.aggregate import readable_label
+    from reports.text import readable_label
     for human in ("Lights - monitored rooms", "Vacancy waste - whole villa",
                   "Bathroom VMC", "Living room AC",
                   "Entrance unlocked while vacant", "Event bus smoke test", ""):

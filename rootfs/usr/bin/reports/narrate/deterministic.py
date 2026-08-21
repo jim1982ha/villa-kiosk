@@ -42,7 +42,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
-from ..aggregate import readable_label
+from ..text import readable_label
 from .style import BULLET, heading, title_mark
 from ..contracts import severity_rank
 from .base import ReportContext

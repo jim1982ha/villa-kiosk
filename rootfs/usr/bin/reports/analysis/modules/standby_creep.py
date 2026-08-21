@@ -114,12 +114,17 @@ class StandbyCreep:
     audiences: Sequence[str] = ("owner", "facility")
     min_days: int = 14
 
-    #: Filled per run when diagnostics are wanted; read by the preview.
-    #: ⚠️ A deployed blueprint does this job with more context. See the gate in
-    #: `registry.gate` — this module runs only where no automation layer is
-    #: reporting, which is every install except the one it was written against.
-    superseded_by_blueprints: bool = True
+    #: ⚠️ THE BLUEPRINT THAT COVERS THIS, BY FILE NAME — not a bare `True`.
+    #: The gate stands this module down wherever a detection layer is
+    #: installed, and used to say "your own automations already cover this"
+    #: without being able to name which one or to check it had ever reported.
+    #: Naming it makes the claim checkable: see `registry.gate` and
+    #: `collect.state()["silent_blueprints"]`. A stem, because that is the one
+    #: part of a VESTA rule that is the same on every property — the automation
+    #: INSTANCE is named by whoever filled the form.
+    superseded_by: Sequence[str] = ("maintenance_signature_drift",)
 
+    #: Filled per run when diagnostics are wanted; read by the preview.
     rejected: List[Dict[str, Any]]
 
     async def run(self, context: ModuleContext) -> List[Finding]:

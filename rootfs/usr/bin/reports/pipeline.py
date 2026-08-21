@@ -184,6 +184,11 @@ async def analyse(
         settings=settings, min_history_days=min_history_days,
         stats=_statistics_fetcher(session, now_local, tally),
         labels={},
+        # ⚠️ FROM THE COLLECTOR, NOT FROM DISCOVERY. Discovery answers "does
+        # this property HAVE a detection layer"; only the event buffer knows
+        # which parts of it have ever spoken, and that is the difference
+        # between "covered" and "covered on paper" — see `registry.gate`.
+        silent_blueprints=list(collect.state().get("silent_blueprints") or []),
     )
     # History depth is not yet measured per statistic; the recorder's presence
     # is the proxy for it, and each module applies its own `min_days` to the

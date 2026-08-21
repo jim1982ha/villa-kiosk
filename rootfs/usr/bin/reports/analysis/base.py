@@ -102,6 +102,14 @@ class ModuleContext:
     stats: Any = None
     #: Injected by the pipeline: labels for statistic ids, from the registry.
     labels: Dict[str, str] = field(default_factory=dict)
+    #: Installed VESTA blueprints that have never produced an event, by stem.
+    #: ⚠️ THE GATE USES THIS TO QUALIFY A STAND-DOWN, NEVER TO REVERSE ONE.
+    #: "Installed beats fired" stays the rule — see `collect.blueprint_layer_present`
+    #: for why a quiet, well-run villa must not get duplicate findings. What
+    #: this adds is honesty about the claim: a check that stood down for a
+    #: blueprint which has never reported is covered in theory only, and the
+    #: brief now says which.
+    silent_blueprints: Sequence[str] = ()
 
     @property
     def zone(self) -> Any:
@@ -149,6 +157,10 @@ class AnalysisModule(Protocol):
     #: Refuses to run on less history than this, because a baseline built from
     #: three days is not a baseline.
     min_days: int
+    #: Blueprint stems whose presence stands this module down, because the
+    #: property's own automation layer already asks the same question with more
+    #: context. Empty for a module nothing supersedes. See `registry.gate`.
+    superseded_by: Sequence[str]
 
     async def run(self, context: ModuleContext) -> List[Finding]:
         ...
