@@ -36,6 +36,7 @@ not.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
 from .analysis.base import Finding, dedup_key
@@ -45,8 +46,28 @@ from .ledger import resolved_tickets_for
 #: the renderer never has to translate one — and so the reader is told WHICH
 #: kind of evidence this is, because "the caretaker ticked it off" and "a ticket
 #: was closed with a cost against it" are different strengths of claim.
-EVIDENCE_TASK = "the caretaker marked the job done"
+#: ⚠️ "FACILITY MANAGER", NEVER "CARETAKER" — the owner's standing rule, and
+#: this string is the one that slipped through it. The kiosk names the role that
+#: way everywhere (workspace, permission, profile), so a brief using a second
+#: word for the same person reads as a different person. Reported twice: once as
+#: the rule, and once when this line reached a delivered brief anyway.
+#: The blueprints' own `caretaker_todo_list` input keeps its name — that is the
+#: operator's YAML, not prose anybody reads. `test_no_reader_sees_caretaker`
+#: pins the distinction so the next string cannot slip the same way.
+EVIDENCE_TASK = "the Facility Manager marked it done"
 EVIDENCE_TICKET = "a maintenance ticket was closed"
+
+
+def _day(iso: str) -> str:
+    """A date a person writes: "21 Aug". Empty when there is nothing to say.
+
+    ⚠️ NOT THE ISO FORM. "up to 2026-08-21" mid-sentence is a machine's date in
+    a human's paragraph, and the brief is read on a phone.
+    """
+    try:
+        return datetime.fromisoformat(str(iso)).strftime("%-d %b")
+    except (TypeError, ValueError):
+        return ""
 
 
 def _key(item: Any) -> str:
@@ -154,13 +175,20 @@ def _sentence(occurrences: int, last_seen: str, evidence: str,
     the pump. A reader who is told "resolved" and finds it broken next week
     stops reading the report, and there is no way to earn that word back.
     """
+    # ⚠️ SENTENCES, NOT A CHAIN OF SEMICOLONS. This rendered as "reported once
+    # up to 2026-08-21; the caretaker marked the job done; has not recurred
+    # since" — three clauses welded together, an ISO date mid-prose, and no
+    # subject on the last one. Reported as "very badly rendered text". Each
+    # clause answers a different question (how often, who acted, what since),
+    # so each gets a sentence and the date gets a form people write.
     times = f"{occurrences} times" if occurrences != 1 else "once"
-    when = f" up to {last_seen[:10]}" if len(last_seen) >= 10 else ""
-    closed = f" on {closed_at[:10]}" if len(closed_at) >= 10 else ""
+    when = f", last on {_day(last_seen)}" if _day(last_seen) else ""
+    closed = f" on {_day(closed_at)}" if _day(closed_at) else ""
     # ⚠️ THE COST ITSELF IS NOT PRINTED. `costId` is a reference into the
     # Facility Manager store; resolving it here would put an operator's own
     # figures into prose that Phase 6 may send onward, and `ledger.py`'s third
     # rule is that free text and totals do not travel from that store.
     priced = ", with a cost recorded against it" if cost_id else ""
-    return (f"reported {times}{when}; {evidence}{closed}{priced}; "
-            f"has not recurred since")
+    return (f"reported {times}{when}. "
+            f"{evidence[0].upper()}{evidence[1:]}{closed}{priced}, "
+            f"and it has not recurred since.")
