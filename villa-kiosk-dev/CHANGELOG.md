@@ -1,3 +1,16 @@
+## 2.573.0
+
+### Fixed — briefings could not be delivered: HTTP 500 from every send
+
+A device name containing an underscore — `Timmerflotte_8343 Temperature`, a
+normal Home Assistant friendly name — reached the message text for the first
+time in 2.571.0, when briefings started reporting what the kiosk shows. A
+platform configured to parse markdown reads that underscore as an italic that
+never closes and rejects the whole message, which Home Assistant returns as a
+500. Every delivery failed. The finished message is now stripped of every
+character any notify platform can read as markup, once, before it is sent or
+stored.
+
 ## 2.572.0
 
 ### Fixed — a property with the blueprint pack and no automations detected nothing
