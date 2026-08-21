@@ -61,7 +61,7 @@ def test_a_profile_without_facility_still_has_a_cockpit() -> None:
     assert "CockpitModal" in hud, (
         "the standalone Cockpit was deleted — a guest now has no status view "
         "at all, which is not what 'merge the two modals' asked for")
-    opener = re.search(r"const openCockpit = \(\) => \{(.*?)\n  \};", hud, re.DOTALL)
+    opener = re.search(r"const openAttention = \(\) => \{(.*?)\n  \};", hud, re.DOTALL)
     assert opener, "the alert icon's open path moved — this test is blind"
     body = opener.group(1)
     assert "onOpenFacility" in body and "setCockpitOpen(true)" in body, (
@@ -70,10 +70,12 @@ def test_a_profile_without_facility_still_has_a_cockpit() -> None:
 
 
 def test_the_alert_icon_lands_on_the_tab_its_badge_counts() -> None:
+    """⚠️ ONLY WHEN THERE IS SOMETHING TO SHOW (2.570.0). The badge counts the
+    rows the Cockpit tab lists, so a tap on a non-zero badge must land there.
+    At zero it must NOT: Cockpit then reads "everything looks fine" in front of
+    the work board somebody opened Facility to reach."""
     hud = _code(HUD)
-    assert 'onOpenFacility("cockpit")' in hud, (
-        "the icon's badge counts the rows the Cockpit tab shows, so opening "
-        "Facility on any other tab answers a different question from the tap")
+    assert 'onOpenFacility(attention > 0 ? "cockpit" : undefined)' in hud
 
 
 def test_cockpit_is_gated_nowhere() -> None:
@@ -145,3 +147,56 @@ def test_guest_holds_neither_capability() -> None:
     guest = re.search(r"guest: \{(.*?)\n  \},", perms, re.DOTALL)
     assert guest, "the permission matrix moved — this test is blind"
     assert "manageFacility" not in guest.group(1)
+
+
+# ── one attention entry, one count (2.570.0) ─────────────────────────────────
+#
+# ⚠️ 2.569.0 MOVED THE REDUNDANCY INSTEAD OF REMOVING IT. Cockpit became a
+# Facility tab and the alert icon was pointed at it, so an owner had a triangle
+# and a clipboard side by side opening the SAME dialog — reported as "I see 2
+# Facility modals (with 2 different icons)". I had argued the two icons were
+# justified because they carried different badges. They did: 5 and 1, about one
+# villa, on one bar, one a strict subset of the other and neither labelled.
+
+def test_the_top_bar_has_one_attention_button() -> None:
+    """Two buttons that open the same dialog is the reported bug. The glyph is
+    chosen, not duplicated — `AttentionIcon` is the single element."""
+    hud = _code(HUD)
+    assert "const AttentionIcon = onOpenFacility ? ClipboardList : TriangleAlert;" in hud, (
+        "the attention glyph must be ONE element whose icon depends on the "
+        "profile, not two buttons rendered side by side")
+    assert hud.count("<AttentionIcon size=") == 2, (
+        "expected exactly two renders — the inline top-bar button and the "
+        "phone overflow row; a third is a surface that can drift")
+
+
+def test_the_badge_counts_every_kind_of_problem() -> None:
+    """⚠️ EXHAUSTIVE, BY THE OWNER'S REQUEST: "make sure the badge in the icons
+    is exhaustively considering the full number of major issues". That is
+    `buildAttentionItems`' four kinds — unavailable devices, open faults,
+    overdue schedules and active alarms — never a subset."""
+    hud = _code(HUD)
+    assert "const attention = attentionItems.length;" in hud
+    assert "facilityAttention" not in hud, (
+        "the second count is back. It re-derived late tasks + open faults "
+        "inline, which is both a subset of the badge beside it and a second "
+        "definition of 'an open fault'")
+
+
+def test_the_hud_no_longer_re_derives_facility_state() -> None:
+    """The inline copy read `scheduleBoard` and `fmData.tickets` — the same two
+    loops `buildAttentionItems` runs. One source or it drifts; that drift has
+    already shipped once, as "the menu says 4 but the modal says 5"."""
+    hud = _code(HUD)
+    for symbol in ("scheduleBoard", "useFmData"):
+        assert symbol not in hud, (
+            f"HUD reads {symbol} again — attention state has one owner, "
+            f"`useVillaAttention`")
+
+
+def test_the_landing_tab_follows_the_badge() -> None:
+    """The icon said "5 things need attention", so the tap must show those five.
+    With nothing to show, Cockpit is a page reading "everything looks fine" in
+    front of the board somebody opened Facility to reach."""
+    hud = _code(HUD)
+    assert 'onOpenFacility(attention > 0 ? "cockpit" : undefined)' in hud

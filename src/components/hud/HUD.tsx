@@ -5,8 +5,10 @@
 //              the right-side overflow menu instead — see hud-overflow) so
 //              the category row keeps its width
 //   • Center — category filter, then a label-size stepper (+/-)
-//   • Right  — unavailable-devices + Facility alerts, then the profile chip
-//              and Settings — grouped together since they're all "who's
+//   • Right  — ONE attention entry (see openAttention: the count is always
+//              every kind of problem; only the glyph and the destination
+//              depend on the profile), then Briefings, the view switch, the
+//              profile chip and Settings — grouped since they're all "who's
 //              signed in / what needs attention" info, not map controls
 // A left control column floats below the brand: the vertical floor toggle
 // (1F / 2F) — a plain tap switches floor as before; a LONG-PRESS on either
@@ -19,7 +21,7 @@
 // labels are always shown; "Highlight clickable objects" moved to Settings.)
 // Bottom bar: bottom-right shows the first-person movement joystick only.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
@@ -45,8 +47,6 @@ import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import type { FacilityTab } from "@/components/fm/FacilityModal";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
-import { useFmData } from "@/fm/FmDataContext";
-import { scheduleBoard } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
 
 // Label-size stepper (next to the category filter): each click moves
@@ -93,9 +93,12 @@ interface Props {
    *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
   onOpenEntity: (entityId: string) => void;
   /** Open the Facility Manager workspace, optionally on a named tab.
-   *  Undefined when the profile lacks `manageFacility` — the button is then
-   *  not rendered at all, and the alert icon opens the standalone Cockpit
-   *  instead of Facility's Cockpit tab. */
+   *
+   *  ⚠️ ITS PRESENCE IS THE RBAC SWITCH FOR THE WHOLE ATTENTION ENTRY.
+   *  Undefined exactly when the profile lacks `manageFacility` (see Dashboard),
+   *  and the top bar's single attention button then wears a warning triangle
+   *  and opens the standalone Cockpit instead of a clipboard opening Facility.
+   *  The COUNT on it is the same either way — see `openAttention`. */
   onOpenFacility?: (tab?: FacilityTab) => void;
   /** Open a Facility RECORD — a fault ticket, or the maintenance schedule.
    *
@@ -165,41 +168,65 @@ export default function HUD({
   // unified — reported as "the button says 4, the modal says 5 things need
   // attention" once the two definitions had quietly drifted apart.
   const { attentionItems, health } = useVillaAttention(mappedEntityIds);
-  // Opens Cockpit (the villa-wide status report), not the bare unavailable-
-  // devices list directly any more — that list is now a drill-down INSIDE
-  // Cockpit's Needs Attention section, reached the same way.
+  // ── ONE ATTENTION ENTRY, WHATEVER THE PROFILE (2.570.0) ─────────────────
   //
-  // ⚠️ WHERE COCKPIT OPENS DEPENDS ON THE PROFILE, AND THAT IS THE WHOLE MERGE
-  // (2.569.0). Reported as "two distinct icons / modals feels redundant" —
-  // true for an operator who can open both. So anyone holding `manageFacility`
-  // gets Facility's own Cockpit TAB from this icon, and the standalone dialog
-  // is only for the profiles Facility is closed to. A guest holds neither
-  // capability and Cockpit was never gated: merging by DELETING the modal would
-  // have removed the villa's only status view from the person most likely to be
-  // standing at the tablet.
+  // ⚠️ THIS WAS TWO ICONS AND 2.569.0 MADE IT WORSE. Cockpit became a Facility
+  // tab, and the alert icon was pointed at it — so an owner had a triangle and
+  // a clipboard side by side opening the SAME dialog. "I see 2 Facility modals
+  // (with 2 different icons)": the redundancy had been moved, not removed. I
+  // argued at the time that keeping both was justified because they carried
+  // different badges. They did, and that was the second half of the bug.
   //
-  // ⚠️ THE ICON ITSELF STAYS EITHER WAY, and that is not the redundancy that
-  // was reported — it carries the attention COUNT, and "find out without going
-  // looking" is the reason it is on the top bar at all. Folding it into the
-  // Facility icon would merge two different badges (things wrong right now vs.
-  // maintenance overdue) into one number that means neither.
+  // ⚠️ THE BADGE COUNTS EVERYTHING, FROM THE ONE COMPUTATION. The alert icon
+  // showed 5 (`buildAttentionItems`: unavailable devices + open faults +
+  // overdue schedules + active alarms) while the Facility icon showed 1 (late
+  // tasks + open faults, re-derived INLINE here from `scheduleBoard` and
+  // `fmData.tickets`). Two numbers about one villa, on one bar, one of them a
+  // strict subset of the other and neither labelled — the owner asked for the
+  // exhaustive one. `useVillaAttention` is now the only source, which also
+  // deletes a second implementation of "what is an open fault" that agreed with
+  // the first purely by coincidence.
+  //
+  // What the profile changes is the DESTINATION and the GLYPH, never the count:
+  // an operator who can reach Facility gets Facility (Cockpit is its first tab),
+  // and everyone else gets the standalone Cockpit dialog. The icon matches the
+  // dialog it opens, so the two profiles are each internally consistent.
   const [cockpitOpen, setCockpitOpen] = useState(false);
-  const openCockpit = () => {
-    if (onOpenFacility) onOpenFacility("cockpit");
+  const attention = attentionItems.length;
+  const AttentionIcon = onOpenFacility ? ClipboardList : TriangleAlert;
+  const attentionTitle = onOpenFacility
+    ? "Facility — status, maintenance, readiness, faults"
+    : "Cockpit — villa status at a glance";
+  const attentionLabel = onOpenFacility
+    ? "Open the facility workspace"
+    : "Open Cockpit — villa status at a glance";
+  // ⚠️ THE MENU ROW'S WORDING IS DECIDED HERE, NOT IN THE MENU. Both surfaces
+  // read the same four values, so the phone and the tablet cannot end up naming
+  // the same entry differently — the rule `.hud-overflow` exists to satisfy,
+  // applied to the words as well as to the entry's existence.
+  const attentionWord = onOpenFacility ? "Facility" : "Cockpit";
+  const openAttention = () => {
+    // ⚠️ THE LANDING TAB FOLLOWS THE BADGE. The icon said "5 things need
+    // attention", so the tap has to show those five; with nothing to show,
+    // Cockpit is a page reading "everything looks fine" in front of the work
+    // board somebody opened Facility to reach.
+    if (onOpenFacility) onOpenFacility(attention > 0 ? "cockpit" : undefined);
     else setCockpitOpen(true);
   };
 
-  // Facility attention count: overdue/never-recorded maintenance plus unresolved
-  // faults. Surfaced ON the button because the whole point of a schedule is
-  // that you find out you're late WITHOUT having to go looking — an operator
-  // who must open a modal to discover overdue work will discover it late.
-  const { data: fmData } = useFmData();
-  const facilityAttention = useMemo(() => {
-    const lateTasks = scheduleBoard(fmData).filter(
-      (s) => s.state === "overdue" || s.state === "never").length;
-    const openFaults = fmData.tickets.filter((t) => t.status !== "resolved").length;
-    return lateTasks + openFaults;
-  }, [fmData]);
+  // ⚠️ THE SECOND COUNT IS GONE, NOT RELOCATED (2.570.0). It read
+  // `scheduleBoard(fmData)` late-or-never plus unresolved `fmData.tickets` —
+  // the same two loops `buildAttentionItems` already runs, written a second
+  // time here, and therefore a second definition of "an open fault" that
+  // matched the first only because nobody had changed either. That is the exact
+  // shape of the drift which produced "the menu says 4 but the modal says 5"
+  // and got the alert badge unified in 2.86.0; this copy simply outlived it.
+  //
+  // The surviving reason for it — "the point of a schedule is that you find out
+  // you are late WITHOUT going looking" — is fully served by the one badge,
+  // because overdue schedules are one of `buildAttentionItems`' four kinds.
+  // A count that EXCLUDED four unavailable devices was the worse answer to that
+  // requirement, not a different one.
 
   // ── Floor buttons now do double duty, no separate Rooms button any more:
   // a normal tap/click keeps the original behaviour (switch to that floor,
@@ -641,35 +668,18 @@ export default function HUD({
         <div className="hud-right">
           <div className="hud-right-inline hud-group">
             <button
-              className={`icon-btn${attentionItems.length > 0 ? " has-alert" : ""}`}
-              onClick={openCockpit}
-              title={attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance"}
-              aria-label="Open Cockpit — villa status at a glance"
+              className={`icon-btn${attention > 0 ? " has-alert" : ""}`}
+              onClick={openAttention}
+              title={attention > 0 ? health.summary : attentionTitle}
+              aria-label={attentionLabel}
             >
-              <TriangleAlert size={24} />
-              {attentionItems.length > 0 && (
+              <AttentionIcon size={24} />
+              {attention > 0 && (
                 <span className="icon-btn-count" aria-hidden="true">
-                  {formatCountBadge(attentionItems.length)}
+                  {formatCountBadge(attention)}
                 </span>
               )}
             </button>
-            {onOpenFacility && (
-              <button
-                className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
-                onClick={() => onOpenFacility()}
-                title={facilityAttention > 0
-                  ? `${facilityAttention} maintenance item${facilityAttention === 1 ? "" : "s"} need attention`
-                  : "Facility — maintenance, readiness, faults"}
-                aria-label="Open the facility workspace"
-              >
-                <ClipboardList size={24} />
-                {facilityAttention > 0 && (
-                  <span className="icon-btn-count" aria-hidden="true">
-                    {formatCountBadge(facilityAttention)}
-                  </span>
-                )}
-              </button>
-            )}
             {/* ⚠️ A HUD ENTRY NEEDS BOTH SURFACES, AND THIS ONE SHIPPED WITH
                 ONE. `.hud-overflow` is `display:none` at every width EXCEPT the
                 phone tier, so a menu item on its own is invisible on the desktop
@@ -760,30 +770,28 @@ export default function HUD({
                     <span className="dot" />
                   </span>
                 </div>
-                {/* Cockpit/Facility — the same two buttons that sit beside
-                    the profile chip on a roomy screen (see
-                    .hud-right-inline), collapsed into menu items here so a
-                    phone doesn't lose access to either, just an extra tap
-                    to reach them. Count shown inline rather than as a
-                    floating badge — this is a text row, not an icon. */}
+                {/* The attention entry — the same button that sits beside the
+                    profile chip on a roomy screen (see .hud-right-inline),
+                    collapsed into a menu item here so a phone doesn't lose it,
+                    just an extra tap. Count shown inline rather than as a
+                    floating badge — this is a text row, not an icon.
+                    ⚠️ ONE ROW, AND IT USED TO BE TWO. Both opened the same
+                    dialog for anyone holding `manageFacility`, with two
+                    different counts. Glyph, wording, destination and count all
+                    come from the same four values the inline button reads, so
+                    the two surfaces cannot say different things — which is the
+                    rule `.hud-overflow` exists to satisfy in the first place. */}
                 <button
                   role="menuitem"
                   className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); openCockpit(); }}
+                  onClick={() => { setMenuOpen(false); openAttention(); }}
                 >
-                  <TriangleAlert size={18} />
-                  <span>Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}</span>
+                  <AttentionIcon size={18} />
+                  <span>
+                    {attentionWord}
+                    {attention > 0 ? ` (${formatCountBadge(attention)})` : ""}
+                  </span>
                 </button>
-                {onOpenFacility && (
-                  <button
-                    role="menuitem"
-                    className="hud-menu-item"
-                    onClick={() => { setMenuOpen(false); onOpenFacility(); }}
-                  >
-                    <ClipboardList size={18} />
-                    <span>Facility{facilityAttention > 0 ? ` (${formatCountBadge(facilityAttention)})` : ""}</span>
-                  </button>
-                )}
                 {onOpenReports && (
                   <button
                     role="menuitem"

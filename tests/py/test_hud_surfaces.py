@@ -101,6 +101,15 @@ def _entries(region: str) -> List[str]:
     threaded into `CockpitModal` reads as a menu entry — which was the FIRST
     false positive. The two fixes are the same fix from opposite ends.
 
+    ⚠️ AND A LOCAL OPENER COUNTS — THE FOURTH TIME THIS PATTERN WAS NARROWER
+    THAN ITS OWN DESCRIPTION. 2.570.0 merged the alert and Facility buttons into
+    one attention entry whose two surfaces both call a local `openAttention()`,
+    and the pattern matched neither: the inline row went blind while the menu
+    row still matched `onOpenFacility` inside its label ternary, so the pair
+    read as menu-only. The entry was on both surfaces the whole time. Widened
+    rather than special-cased, because "a function named open*" is what a HUD
+    entry's handler looks like when it is not a prop.
+
     ⚠️ LOCAL STATE COUNTS TOO. Cockpit and the legend are opened by
     `setCockpitOpen` / `setLegendOpen`, not by a prop — so a pattern matching
     only `on(Open|Toggle)X` could not see two of the app's own HUD entries, and
@@ -110,7 +119,7 @@ def _entries(region: str) -> List[str]:
     the pattern being narrower than the thing it describes.
     """
     found: List[str] = []
-    for name in re.findall(r"\b(?:on(?:Open|Toggle)|set)[A-Z]\w*", region):
+    for name in re.findall(r"\b(?:on(?:Open|Toggle)|set|open)[A-Z]\w*", region):
         if name in NOT_AN_ENTRY or name in found:
             continue
         if name.startswith("set") and not name.endswith("Open"):
