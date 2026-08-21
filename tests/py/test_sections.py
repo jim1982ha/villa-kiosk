@@ -849,3 +849,38 @@ def test_a_truncated_money_list_still_reaches_its_total() -> None:
     assert abs(sum(figures) - total) < 0.01, (
         f"the visible figures sum to {sum(figures)}, headline says {total}; the "
         f"truncated tail carries no cost:\n{body}")
+
+
+def test_a_finding_never_wears_a_period_it_was_not_measured_over() -> None:
+    """⚠️ ASKED AS A GUARANTEE: "make sure the report is contextually reflecting
+    numbers and counts based on the selected time granularity so that presented
+    insight are always relevant to this time period."
+
+    The analysis modules read `min_history_days` (14) WHATEVER the cadence is,
+    because a baseline cannot be computed from a single day. So a daily brief
+    genuinely carries fourteen-day findings — and v2.585.0 made that worse by
+    putting "today" on the Trends heading above them, asserting the exact
+    mismatch this guards.
+
+    The window is a statistical requirement, not a reporting period. Shrinking
+    it to one day would report noise; so it is STATED, and the heading no longer
+    claims a period it does not own.
+    """
+    body = _render(cadence="daily", findings=[{
+        "kind": "ANOMALY", "label": "Living room AC", "area": "Living Room",
+        "severity": "warning", "detail": "drawing more at rest",
+        "window_days": 14}])
+    assert "measured over 14 days" in body, (
+        "a 14-day finding in a daily brief must say so:\n" + body)
+    assert "Trends today" not in body, (
+        "a trend spans more than the period by definition — the heading must "
+        "not claim one")
+
+
+def test_a_single_day_window_is_not_announced() -> None:
+    """Saying "measured over 1 day" in a daily brief is noise: it is the report's
+    own period, restated on every line."""
+    body = _render(cadence="daily", findings=[{
+        "kind": "ANOMALY", "label": "AC", "severity": "warning",
+        "detail": "odd", "window_days": 1}])
+    assert "measured over" not in body

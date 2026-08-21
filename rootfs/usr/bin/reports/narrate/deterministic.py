@@ -126,7 +126,17 @@ KIND_HEADINGS: Tuple[Tuple[str, str], ...] = (
 #: DEFINITION from earlier; `standing` is the present tense and says so;
 #: `health`, `waiting` and `coverage` describe the monitoring rather than the
 #: period. A suffix on any of those turns a true heading into a false one.
-PERIOD_SCOPED = frozenset({"critical", "money", "selfclear", "fixed", "trends"})
+#: ⚠️ `trends` IS NOT ONE, AND PUTTING IT HERE WAS A REGRESSION I SHIPPED. A
+#: trend is a statement ABOUT a span longer than the period — the modules read
+#: `min_history_days` (14 by default) whatever the cadence is, because a
+#: baseline cannot be computed from one day. So "📈 Trends today" over a
+#: fourteen-day finding asserts precisely the thing the owner asked me to
+#: guarantee could never happen: "make sure the report is contextually
+#: reflecting numbers and counts based on the selected time granularity".
+#: The window is a STATISTICAL requirement, not a reporting period, so the fix
+#: is to state it (see `_finding_line`) rather than shrink it to one day and
+#: report noise.
+PERIOD_SCOPED = frozenset({"critical", "money", "selfclear", "fixed"})
 
 
 #: ⚠️ EVERY HEADING'S WORDS, IN ONE PLACE, BECAUSE THE TESTS KEPT PINNING THEM
@@ -1386,7 +1396,18 @@ class DeterministicNarrator:
         area = str(item.get("area") or "")
         where = f" ({area})" if area else ""
         detail = str(item.get("detail") or fallback)
-        return f"{BULLET}{label}{where}: {detail}".rstrip(": ")
+        # ⚠️ THE WINDOW TRAVELS WITH THE FINDING, BECAUSE IT IS NOT THE REPORT'S.
+        # A module reads `min_history_days` (14) whatever the cadence, since a
+        # baseline cannot be built from one day — so a DAILY brief can carry a
+        # fourteen-day finding, and until this line it presented one under a
+        # heading reading "today". The reader was being handed a number and a
+        # period that did not belong to each other, which is the one thing the
+        # owner asked to be guaranteed against.
+        span = item.get("window_days")
+        over = (f" — measured over {_plural(int(span), 'day')}"
+                if isinstance(span, (int, float)) and not isinstance(span, bool)
+                and int(span) > 1 else "")
+        return f"{BULLET}{label}{where}: {detail}{over}".rstrip(": ")
 
     def _findings_for(self, context: ReportContext, section: str) -> List[Dict[str, Any]]:
         """Module findings this section owns, by KIND.
