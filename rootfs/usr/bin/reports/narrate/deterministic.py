@@ -559,8 +559,13 @@ class DeterministicNarrator:
             for kind, label in KIND_HEADINGS:
                 if kind in kinds:
                     n = sum(1 for i in standing if i.get("kind") == kind)
+                    # ⚠️ THE VERB AGREES TOO. `_plural` handles the noun and
+                    # this read "1 unavailable device NEED attention" — the
+                    # exact shape of the "2 categorys" defect `_plural` exists
+                    # to prevent, one word to the right of where it looks.
                     return (f"{_plural(n, _plural_label(label, 1).lower())} "
-                            f"need attention right now.")
+                            f"{'needs' if n == 1 else 'need'} attention right "
+                            f"now.")
         incidents = [g for g in self._groups(context, "critical")
                      if self._is_open(g)]
         if incidents:
@@ -917,7 +922,13 @@ class DeterministicNarrator:
             if move:
                 head = f"{head}   {move}"
             lines = [head]
-            chart = trend_mod.sparkline(list(past) + [shown_total])
+            # ⚠️ NO PRIOR PERIODS, NO CHART. The first brief after this shipped
+            # drew "1 day: ▅" — a single bar, scaled against itself, saying
+            # nothing whatsoever. A trend needs something to trend against, and
+            # a chart that cannot show a shape is decoration where the rest of
+            # this report is measurement.
+            chart = (trend_mod.sparkline(list(past) + [shown_total])
+                     if len(past) >= 2 else "")
             if chart:
                 noun = trend_mod.PERIOD_NOUN.get(context.cadence, "period")
                 lines.append(f"   {_plural(len(past) + 1, noun)}: {chart}")
@@ -1149,6 +1160,12 @@ class DeterministicNarrator:
         # the thing an owner reads that list for. Already deduplicated by
         # `ledger.reconcile`, so nothing here was also stated above.
         if context.carried_tasks:
+            # ⚠️ A SECTION CAN HOLD TWO HEADINGS AND `render` ONLY SEPARATES
+            # SECTIONS — the same defect as the "Closed by itself" pair, in the
+            # other half of this method, found in a delivered brief where "For
+            # the facility manager" ran straight into this one.
+            if lines:
+                lines.append("")
             lines.append(section_heading("preventive_open"))
             for task in context.carried_tasks[:MAX_LINES]:
                 lines.append(f"{BULLET}{task.get('text', '')}".rstrip())

@@ -270,3 +270,15 @@ def test_an_unknown_zone_or_direction_is_dropped_not_forwarded() -> None:
     sent = built["findings"][0]
     assert "zone" not in sent and "trend_direction" not in sent
     assert sent["occurrences"] == 3
+
+
+def test_the_lead_sentence_agrees_with_its_own_count() -> None:
+    """⚠️ "1 unavailable device NEED attention" reached a rendered brief. The
+    noun went through `_plural` and the VERB did not — the "2 categorys" defect
+    one word to the right of where that helper looks."""
+    def lead(n: int) -> str:
+        rows = [{"kind": "unavailable", "title": f"Device {i}",
+                 "detail": "Unavailable", "room": ""} for i in range(n)]
+        return DeterministicNarrator().render(_ctx(standing=rows))[1].splitlines()[0]
+    assert lead(1) == "1 unavailable device needs attention right now."
+    assert lead(3) == "3 unavailable devices need attention right now."

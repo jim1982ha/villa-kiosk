@@ -54,8 +54,13 @@ from .ledger import resolved_tickets_for
 #: The blueprints' own `caretaker_todo_list` input keeps its name — that is the
 #: operator's YAML, not prose anybody reads. `test_no_reader_sees_caretaker`
 #: pins the distinction so the next string cannot slip the same way.
-EVIDENCE_TASK = "the Facility Manager marked it done"
-EVIDENCE_TICKET = "a maintenance ticket was closed"
+#: ⚠️ SUBJECT-FREE, SO IT READS FOR ONE ITEM OR A GROUP. When several
+#: verifications share the same evidence the renderer HOISTS this clause above
+#: them and prints it once — and "the Facility Manager marked IT done" then
+#: refers to three things at once, which a delivered brief showed. A clause with
+#: no pronoun is correct in both positions and needs no plural variant.
+EVIDENCE_TASK = "marked done by the Facility Manager"
+EVIDENCE_TICKET = "closed with a maintenance ticket"
 
 
 def _day(iso: str) -> str:
@@ -191,4 +196,4 @@ def _sentence(occurrences: int, last_seen: str, evidence: str,
     priced = ", with a cost recorded against it" if cost_id else ""
     return (f"reported {times}{when}. "
             f"{evidence[0].upper()}{evidence[1:]}{closed}{priced}, "
-            f"and it has not recurred since.")
+            f"with no recurrence since.")

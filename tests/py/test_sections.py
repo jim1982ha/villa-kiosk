@@ -729,7 +729,16 @@ def test_every_heading_that_follows_content_has_a_blank_line_before_it() -> None
         _critical("raised", when="2026-08-20T12:00:00+08:00"),
         _critical("cleared", when="2026-08-20T12:30:00+08:00"),
         _roi("Vacancy waste", 1581.0),
-        _maintenance("Check the valve")), currency="IDR")
+        _maintenance("Check the valve")), currency="IDR",
+        # ⚠️ CARRIED TASKS ARE IN THE FIXTURE BECAUSE LEAVING THEM OUT IS HOW
+        # THIS MISSED ONE. "Still open from earlier" is the SECOND heading inside
+        # `_fixed_and_suggested`, and with no carried tasks it never rendered —
+        # so the test passed while a delivered brief ran "For the facility
+        # manager" straight into it. A fixture that cannot reach a branch is a
+        # test that does not cover it.
+        carried_tasks=[{"rule_id": "PM-04", "text": "Check the pump."}],
+        standing=[{"kind": "unavailable", "title": "A device",
+                   "detail": "Unavailable", "room": ""}])
     lines = body.splitlines()
     marks = tuple(SECTION_MARK.values())
     for index, line in enumerate(lines):

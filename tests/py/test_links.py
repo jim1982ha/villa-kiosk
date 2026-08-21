@@ -112,12 +112,22 @@ def test_the_footer_would_be_destroyed_by_inert_which_is_why_it_is_appended() ->
     This test asserts the DAMAGE, so if someone ever routes the footer through
     `inert` it fails with the reason written down.
     """
-    from reports.narrate.style import inert
+    from reports.narrate.style import _MARKUP_ACTIVE, inert
     url = links.kiosk_url("cockpit", EXTERNAL, ENTRY)
-    assert "hassio_ingress" in url
-    assert "hassio_ingress" not in inert(url), (
-        "inert no longer strips underscores — re-check whether the footer must "
-        "still be appended after it, and why")
+
+    # ⚠️ THE INVARIANT GOT STRONGER AFTER A DELIVERED BRIEF PROVED THE OLD ONE
+    # INSUFFICIENT. Appending after the sanitiser protects the URL from OURS and
+    # thereby hands it, unsanitised, to the DESTINATION'S parser — which ate the
+    # underscore and produced `/api/hassioingress/…`, a link that 404s. (It was
+    # not `inert`: that maps `_` to a SPACE and would have left "hassio ingress",
+    # which is how the cause was identified.) So the URL now carries no
+    # markup-active character at all, and is safe from every parser including ours.
+    surviving = [c for c in url if c in _MARKUP_ACTIVE]
+    assert not surviving, (
+        f"the URL still carries {surviving} — a platform that parses markdown "
+        f"will consume them and deliver a dead link")
+    assert inert(url) == url, "an encoded URL must pass through untouched"
+    assert "%5F" in url, "the ingress path's underscore must be encoded"
 
     source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
                                "pipeline.py"), encoding="utf-8").read()
@@ -159,7 +169,11 @@ def test_the_happy_path_points_at_the_kiosk_and_not_at_home_assistant() -> None:
     """"NEVER link to Home assistant directly" — the path is the add-on's own
     ingress entry, so the reader lands in VESTA, not on an HA dashboard."""
     url = links.kiosk_url("cockpit", EXTERNAL, ENTRY)
-    assert url == f"https://villa.example.org{ENTRY}"
+    # Percent-encoding is URL-legal and decoded by the server before routing, so
+    # this is the same address — just one no markdown parser can chew on.
+    from urllib.parse import unquote, urlsplit
+    assert unquote(urlsplit(url).path) == ENTRY
+    assert url.startswith("https://villa.example.org/")
     assert "/lovelace" not in url and "/config" not in url
     assert links.footer(EXTERNAL, ENTRY).endswith(url)
 

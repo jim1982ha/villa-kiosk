@@ -54,20 +54,20 @@ def test_reported_then_done_then_quiet_is_a_verification() -> None:
     found = verify.verify([_item()], [], _done(), None)
     assert len(found) == 1
     assert found[0].kind == "VERIFICATION"
-    assert "has not recurred since" in found[0].detail
+    assert "no recurrence since" in found[0].detail
 
 
 def test_a_resolved_ticket_is_evidence_too() -> None:
     found = verify.verify([_item()], [], [], _fm())
     assert len(found) == 1
-    assert "maintenance ticket was closed" in found[0].detail
+    assert "maintenance ticket" in found[0].detail
 
 
 def test_the_ticket_is_preferred_over_a_ticked_box() -> None:
     """⚠️ A completed todo item means somebody ticked a box; a resolved ticket
     means somebody recorded a repair, with a date and often a cost."""
     found = verify.verify([_item()], [], _done(), _fm())
-    assert "maintenance ticket was closed" in found[0].detail
+    assert "maintenance ticket" in found[0].detail
     assert "marked the job done" not in found[0].detail
 
 
@@ -164,7 +164,7 @@ def test_a_verification_reaches_the_report() -> None:
         findings=[f.as_dict() for f in found])
     body = DeterministicNarrator().render(context)[1]
     assert "Pump short-cycling" in body
-    assert "has not recurred since" in body
+    assert "no recurrence since" in body
     assert "nothing has been assessed" not in body
 
 

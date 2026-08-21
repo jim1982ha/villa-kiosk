@@ -30,6 +30,21 @@ The link is a plain address; Home Assistant authenticates the person when they
 arrive, which is the only place that check belongs. A self-authenticating link
 in a chat message is a bearer token in somebody's message history.
 
+⚠️ 5a. AND PERCENT-ENCODED, BECAUSE APPENDING AFTER THE SANITISER WAS ONLY HALF
+THE PROBLEM AND I SHIPPED THE OTHER HALF. Rule 5 below is right that the body
+must be sanitised in full and this line added afterwards. What it missed is that
+"after the sanitiser" also means "UNSANITISED" — the URL then reaches the
+destination carrying a markup-active character, and the destination has a parser
+too. A delivered brief proved it: `/api/hassio_ingress/…` arrived as
+`/api/hassioingress/…`, the underscore consumed by the platform's own markdown,
+producing a link that 404s. `inert` was innocent — it maps `_` to a SPACE and
+would have produced "hassio ingress".
+
+So every markup-active character in the URL is percent-encoded. That is a
+URL-LEGAL transformation, decoded back by any HTTP server before routing, and it
+is invisible to a markdown parser because `%5F` contains nothing to parse. It is
+also the only fix that does not depend on which platform the owner configured.
+
 ⚠️ 5. IT IS APPENDED AFTER `style.inert()`, NOT EXEMPTED FROM IT. `inert()`
 strips `_ * ~ ` [ ] < >` from the whole message, so an ingress path
 (`/api/hassio_ingress/…`) arrives as "hassio ingress" — a dead link. The obvious
@@ -118,6 +133,23 @@ def reason(ha_config: Any, ingress_entry: str) -> str:
     return ""
 
 
+#: Characters a notify platform may parse as markup, percent-encoded so it
+#: cannot. ⚠️ DERIVED FROM `style._MARKUP_ACTIVE` RATHER THAN RETYPED — the two
+#: must name the same set, and a second hand-written list is how they drift.
+def _safe_url(url: str) -> str:
+    """A URL no markdown dialect can chew on.
+
+    ⚠️ THE PATH AND QUERY ONLY. Percent-encoding the scheme or host would
+    produce something no client resolves; those cannot contain a markup-active
+    character in a valid URL anyway.
+    """
+    from .narrate.style import _MARKUP_ACTIVE
+    parts = urlsplit(url)
+    tail = "".join(f"%{ord(c):02X}" if c in _MARKUP_ACTIVE else c
+                   for c in parts.path)
+    return f"{parts.scheme}://{parts.netloc}{tail}"
+
+
 def kiosk_url(page: str, ha_config: Any, ingress_entry: str) -> str:
     """An absolute link to one kiosk page, or "" if it cannot be built safely."""
     if page not in PAGES:
@@ -126,7 +158,7 @@ def kiosk_url(page: str, ha_config: Any, ingress_entry: str) -> str:
     if not base:
         return ""
     path = PAGES[page]
-    return f"{base}/{path.lstrip('/')}" if path else base
+    return _safe_url(f"{base}/{path.lstrip('/')}" if path else base)
 
 
 def footer(ha_config: Any, ingress_entry: str) -> str:
