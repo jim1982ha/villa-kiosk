@@ -45,6 +45,21 @@ export type Audience = (typeof AUDIENCE)[number];
  * equipment fault, and saying "the freezer is warming" when the truth is "the
  * freezer's thermometer went offline" is the fastest way to lose a reader.
  */
+/* ⚠️ SOME DERIVED TYPES BELOW HAVE NO CONSUMER YET, AND THAT IS DELIBERATE —
+ * recorded here because /dry-audit's unused-export probe flags them on EVERY
+ * run and the verdict was reached twice without ever being written down, which
+ * is how a correct adjudication becomes a recurring review cost.
+ *
+ * `FindingKind`, `PayloadField` and `ReportsHistory` are unreferenced today.
+ * This file is a MIRROR of `contracts.py`, kept complete on purpose: the parity
+ * test fails on a value present on only one side, and a reader consulting the
+ * shared vocabulary should find all of it rather than the subset the SPA has
+ * happened to need so far. Deleting one to quiet a probe would make the mirror
+ * partial, and the next consumer would re-derive it by hand — the drift this
+ * whole file exists to prevent.
+ *
+ * ⚠️ NOT A BLANKET EXEMPTION. A future export with no consumer AND no twin in
+ * `contracts.py` is ordinary dead code and should go. */
 export const FINDING_KIND = [
   "OBSERVATION",
   "ANOMALY",

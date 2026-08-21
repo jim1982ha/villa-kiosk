@@ -136,9 +136,60 @@ def _family(path: str, source: str) -> Dict[str, str]:
     return out
 
 
-#: A primary button whose label commits the form.
-COMMIT = re.compile(r'<button[^>]*?\bprimary\b[^>]*?>(.{0,160}?)</button>', re.DOTALL)
-COMMIT_WORD = re.compile(r'>\s*(Save|Apply)\s*<|<span>\{[^}]*?["\'](Save|Saving)')
+#: ⚠️ `[^>]` CANNOT BE USED TO FIND A TAG'S END IN JSX, AND THIS PIN LEARNED IT
+#: THE EXPENSIVE WAY. The first version matched
+#: `<button[^>]*?\bprimary\b[^>]*?>(.{0,160}?)</button>` — which stops at the
+#: `>` inside `onClick={() => …}`, i.e. inside the ATTRIBUTES of almost every
+#: button in this codebase. It then captured 160 characters of handler body and
+#: looked for a label there.
+#:
+#: So it saw `FaultsTab`'s `Save changes` not at all, and caught the defect it
+#: was written for only because THAT button's label happened to fall within 160
+#: characters of where the truncated match ended. A pin that works by luck
+#: reports health on everything it cannot parse — which was most buttons.
+#:
+#: Found by /dry-audit Part 3 one release after it shipped: the docstring
+#: claimed a check the code did not perform.
+BUTTON_OPEN = "<button"
+BUTTON_CLOSE = "</button>"
+
+#: A label that commits a form. `Save changes` counts and `Saving…` does not —
+#: the second is a busy state of the first, not a second button.
+COMMIT_WORD = re.compile(r"\b(Save|Apply)\b")
+
+#: ⚠️ THE APP'S OWN RECORD-SCOPED ACTION ROW. A tab may legitimately hold a
+#: primary commit button when it belongs to ONE RECORD rather than to the
+#: dialog — `FaultsTab`'s "Save changes" writes one ticket, `ScheduleEditor`'s
+#: writes one maintenance job — and both already sit in `.modal-actions`, which
+#: is what this codebase has always used to mean exactly that. So the exemption
+#: is an existing convention read off the markup, not a list of file names that
+#: would go stale.
+RECORD_ROW = 'className="modal-actions'
+
+
+def _primary_buttons(source: str) -> List[str]:
+    """Every `<button …>…</button>` whose class list contains `primary`.
+
+    Walks from each `</button>` back to the nearest `<button`, so an arrow
+    function in the attributes cannot truncate the element — see BUTTON_OPEN.
+    """
+    out: List[str] = []
+    at = source.find(BUTTON_CLOSE)
+    while at >= 0:
+        start = source.rfind(BUTTON_OPEN, 0, at)
+        if start >= 0:
+            element = source[start:at]
+            if "primary" in element.split(">")[0] or 'btn primary' in element:
+                out.append(element)
+        at = source.find(BUTTON_CLOSE, at + 1)
+    return out
+
+
+def _in_record_row(source: str, element: str) -> bool:
+    """Is this button inside a `.modal-actions` row that is still open?"""
+    before = source[:source.find(element)]
+    opened = before.rfind(RECORD_ROW)
+    return opened >= 0 and before.rfind("</div>") < opened
 
 
 def test_the_button_that_commits_a_form_is_in_the_footer() -> None:
@@ -153,18 +204,49 @@ def test_the_button_that_commits_a_form_is_in_the_footer() -> None:
     already did; there was nothing to violate but the convention, which is why
     nothing caught it. Now something does.
 
-    ⚠️ PRIMARY BUTTONS ONLY. A tab may perfectly well have a secondary,
-    row-scoped action in its body — "Store key" writes a different file,
-    "Raise fault" acts on one record. What must not be in the body is the
-    button that commits the DIALOG's form.
+    ⚠️ WHAT IS ACTUALLY CHECKED, stated precisely because the first version of
+    this docstring claimed more than the code did: a `<button>` whose class list
+    contains `primary`, whose text mentions Save or Apply, which sits BEFORE the
+    footer and OUTSIDE a `.modal-actions` row.
+
+    ⚠️ `.modal-actions` IS THE EXEMPTION AND IT IS EARNED. A tab may hold a
+    primary commit button when it belongs to ONE RECORD rather than to the
+    dialog — `FaultsTab`'s "Save changes" writes one ticket, `ScheduleEditor`'s
+    writes one maintenance job — and both already sit in that row, which is what
+    this codebase has always used to mean a record-scoped action. Reading the
+    convention off the markup beats a list of file names, which goes stale.
     """
     problems: List[str] = []
     for path, source in sorted(_dialogs().items()):
         for kid_path, kid in _family(path, source).items():
             cut = kid.index("settings-footer") if "settings-footer" in kid else len(kid)
-            for block in COMMIT.findall(kid[:cut]):
-                if COMMIT_WORD.search(block) or COMMIT_WORD.search("><" + block + "</button>"):
-                    problems.append(
-                        f"{kid_path}: a primary Save/Apply outside the footer — "
-                        f"{' '.join(block.split())[:60]}")
+            body = kid[:cut]
+            for element in _primary_buttons(body):
+                if not COMMIT_WORD.search(element):
+                    continue
+                if _in_record_row(body, element):
+                    continue
+                problems.append(
+                    f"{kid_path}: a primary Save/Apply outside the footer and "
+                    f"outside a .modal-actions row — "
+                    f"{' '.join(element.split())[:70]}")
     assert not problems, "\n".join(problems)
+
+
+def test_the_matcher_survives_an_arrow_function_in_the_attributes() -> None:
+    """⚠️ THE REGRESSION THAT MADE THE PIN ABOVE A LIE, pinned so it cannot
+    return. `[^>]*?` stops at the `>` inside `onClick={() => …}`, which is in
+    the attributes of almost every button here — so the matcher saw a truncated
+    tag and searched the handler body for a label."""
+    markup = (
+        '<div className="reports-pane">\n'
+        '  <button className="btn primary" disabled={busy}\n'
+        '          onClick={() => { const x = 1; save(x); }}>\n'
+        '    <span>{busy ? "Saving…" : "Save"}</span>\n'
+        '  </button>\n'
+        '</div>')
+    found = _primary_buttons(markup)
+    assert len(found) == 1, "an arrow function in the attributes hid the button"
+    assert COMMIT_WORD.search(found[0]), "the label was not reached"
+    assert not _in_record_row(markup, found[0]), (
+        "a bare pane is not a .modal-actions row")
