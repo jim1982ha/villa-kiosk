@@ -596,6 +596,18 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
             config: Any = await hass.command("get_config")
             reachable = True
             version = config.get("version") if isinstance(config, dict) else None
+            # ⚠️ RECORDED HERE, ADJUDICATED IN `links`. Both URLs are captured
+            # because "which one may be sent" is a policy question, and keeping
+            # the policy in one module beats a discovery step that silently
+            # drops a field a future caller needs. `links._base` is the only
+            # reader and it refuses everything but an https EXTERNAL url — an
+            # internal one is a LAN address and must never reach a notify
+            # platform. See that module's rule 1.
+            if isinstance(config, dict):
+                inventory["urls"] = {
+                    "external": str(config.get("external_url") or ""),
+                    "internal": str(config.get("internal_url") or ""),
+                }
             timezone = config.get("time_zone") if isinstance(config, dict) else None
             # ⚠️ ASKED FOR, NOT GUESSED — AND THE DISTINCTION IS THE WHOLE
             # POINT. The renderer printed every amount bare, on the reasoning

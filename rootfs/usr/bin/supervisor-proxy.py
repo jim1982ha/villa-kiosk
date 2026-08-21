@@ -2402,6 +2402,37 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
     return web.json_response(entry, headers={"Cache-Control": "no-store"})
 
 
+async def _publish_ingress_entry(session: ClientSession) -> None:
+    """Record this add-on's own ingress path so a brief can link to the kiosk.
+
+    ⚠️ ASKED OF THE SUPERVISOR, NEVER DERIVED. The entry contains a
+    per-installation token segment (`/api/hassio_ingress/<token>`), so it cannot
+    be built from the slug — and a guessed path 404s, which reads to the
+    recipient as "the kiosk is broken" rather than "the link is wrong".
+
+    ⚠️ IT IS NOT A SECRET AND IT IS NOT A CREDENTIAL. Home Assistant still
+    authenticates whoever follows the link; the path alone opens nothing. That
+    is precisely why `reports/links.py` may put it in a message and why it must
+    never carry a token of its own — see that module's rule 4.
+
+    Non-fatal by design, like every other startup probe here: no entry means
+    `links` produces nothing and the brief is exactly what it was before links
+    existed. Fail closed, never fail loud.
+    """
+    try:
+        async with session.get(
+            f"http://{SUPERVISOR}/addons/self/info", headers=AUTH,
+        ) as resp:
+            if resp.status != 200:
+                return
+            body = await resp.json()
+        entry = str((body.get("data") or {}).get("ingress_entry") or "")
+        if entry.startswith("/"):
+            os.environ["VK_INGRESS_ENTRY"] = entry
+    except Exception as err:  # noqa: BLE001 - a link is never worth a failed boot
+        print(f"[supervisor-proxy] could not read ingress entry: {err}", flush=True)
+
+
 def main() -> None:
     app = web.Application()
 
@@ -2410,6 +2441,7 @@ def main() -> None:
         os.makedirs(DATA_ROOT, exist_ok=True)
         _session_secret()  # create the signing key on first boot
         await _cleanup_stale_options(a["session"])
+        await _publish_ingress_entry(a["session"])
         # ⚠️ The reports scheduler runs for the life of the process. Created as
         # a task rather than awaited — on_startup must return for the server to
         # begin serving, and this loop never returns. Cancelled in on_cleanup so

@@ -21,13 +21,15 @@ yet" sentence rather than implying all is well.
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
 from . import (aggregate as aggregate_mod, collect, devices as devices_mod,
-               discovery, ledger, model as model_mod, noise as noise_mod,
+               discovery, ledger, links as links_mod, model as model_mod,
+               noise as noise_mod,
                schedule as schedule_mod, standing as standing_mod,
                stats as stats_mod, store, verify as verify_mod)
 from .analysis import ModuleContext, describe_skips, registered, run_all
@@ -371,6 +373,18 @@ def _withheld_fields(context: ReportContext,
     return sorted(source - set(PAYLOAD_ALLOWED_FIELDS))
 
 
+def _ingress_entry() -> str:
+    """This add-on's own ingress path, as the Supervisor reports it.
+
+    ⚠️ FROM THE ENVIRONMENT, NOT GUESSED FROM THE SLUG. The entry contains a
+    per-installation token segment, so it cannot be derived — and a guessed path
+    would produce a link that 404s, which is worse than no link because the
+    reader concludes the kiosk is broken. Absent means no link, per `links`'
+    fail-closed rule.
+    """
+    return os.environ.get("VK_INGRESS_ENTRY", "")
+
+
 async def run_report(
     session: ClientSession,
     audience: str,
@@ -607,6 +621,19 @@ async def run_report(
     # message with an HTTP 500 — see `style.inert`, which this exists to call at
     # the one point every path has already converged on.
     title, body = style_mod.inert(title), style_mod.inert(body)
+
+    # ⚠️ APPENDED AFTER `inert`, NOT EXEMPTED FROM IT. An ingress path contains
+    # `hassio_ingress`, and `inert` strips underscores from the whole message —
+    # so a link written into the body arrives dead. Teaching `inert` to skip
+    # URLs would turn "remove every markup-active character" into "…unless the
+    # surrounding text looks like a URL", with the villa's own device names
+    # inside that text. Instead: sanitise everything the villa can influence,
+    # then add a line this add-on generated from Home Assistant's own config.
+    # See `links.py`, which refuses to produce anything unless it is safe.
+    link = links_mod.footer((found.get("inventory") or {}).get("urls"),
+                            _ingress_entry())
+    if link:
+        body = f"{body}\n\n{link}"
 
     # ── deliver ─────────────────────────────────────────────────────────────
     # ⚠️ A PREVIEW COMPOSES EVERYTHING AND SENDS NOTHING. An operator deciding
