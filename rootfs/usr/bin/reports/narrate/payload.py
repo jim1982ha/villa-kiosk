@@ -22,7 +22,7 @@ and ledger free text beyond a summary count.
 THAN AN OVERSIGHT. `label` and `area` are on the allow-list because prose that
 cannot say which pump or which room is prose nobody can act on. Entity ids are
 excluded for a different reason: they carry the same information WITHOUT being
-needed for it — `sensor.emmas_bedroom_window` names a child's bedroom in a
+needed for it — `sensor.<firstname>_bedroom_window` names a child's bedroom in a
 string the reader never sees, so it is pure leak with no reader benefit. The
 line is "what does the sentence require", not "what looks sensitive".
 

@@ -129,7 +129,7 @@ SKIP_REASON: Final[Tuple[str, ...]] = (
 # credentials, occupant location or presence history, raw event logs, entity
 # IDs, and ledger free text beyond a summary count. Entity IDs are excluded
 # because they routinely carry room and person names
-# (`sensor.emmas_bedroom_window`) — the label is what the reader needs, and an
+# (`sensor.<firstname>_bedroom_window`) — the label is what the reader needs, and an
 # opaque ref is what the model needs to talk about it.
 PAYLOAD_ALLOWED_FIELDS: Final[Tuple[str, ...]] = (
     "ref",             # opaque per-report handle, e.g. "d3" — NOT an entity_id

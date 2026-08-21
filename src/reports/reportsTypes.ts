@@ -116,7 +116,7 @@ export type SkipReason = (typeof SKIP_REASON)[number];
  * A deny-list fails open on every field nobody thought of.
  *
  * Note the absence of entity IDs: they routinely carry room and person names
- * (`sensor.emmas_bedroom_window`). The label is what a reader needs; `ref` is
+ * (`sensor.<firstname>_bedroom_window`). The label is what a reader needs; `ref` is
  * the opaque handle a model needs to refer to something.
  */
 export const PAYLOAD_ALLOWED_FIELDS = [

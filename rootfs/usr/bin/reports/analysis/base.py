@@ -242,7 +242,7 @@ def dedup_key(module: str, subject: str) -> str:
     weeks running — it only ever needs to be STABLE and UNIQUE, never readable.
     Building it as `module:entity_id` made every Finding carry an entity id in
     plain text, and entity ids routinely name rooms and people
-    (`sensor.emmas_bedroom_window`).
+    (`sensor.<firstname>_bedroom_window`).
 
     `PAYLOAD_ALLOWED_FIELDS` would have filtered it at the Phase 6 boundary, so
     nothing would have leaked — but this subsystem's rule is that a guarantee

@@ -1,3 +1,12 @@
+## 2.581.1
+
+### Fixed — a real entity id naming a person was committed to a public repository
+
+Four comments argued that entity ids must be hashed because they routinely carry
+room and person names, and each demonstrated it with a real one that does. The
+argument is right; the example was the leak it describes. Replaced with a
+placeholder, which makes the point without being anybody's window.
+
 ## 2.581.0
 
 ### Added — nothing checked that standing state leads the brief
