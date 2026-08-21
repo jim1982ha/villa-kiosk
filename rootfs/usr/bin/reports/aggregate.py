@@ -565,6 +565,44 @@ def group(items: Sequence[Item]) -> List[Group]:
         if key not in groups:
             groups[key] = Group(item)
         groups[key].add(item)
+    return _fold_unnamed(groups)
+
+
+def _fold_unnamed(groups: Dict[Tuple[str, str], "Group"]) -> List["Group"]:
+    """Fold a category-keyed group into the blueprint-keyed one for its bucket.
+
+    ⚠️ THE SAME RULE APPEARED TWICE IN ONE BRIEF AND THE READER SAW TWO
+    INCIDENTS. `Item.key()` falls back `rule_id or blueprint or category`, so a
+    rule whose blueprint was updated MID-PERIOD emits both shapes: the newer
+    events key on `("critical_presence_guard", bucket)` and the older ones,
+    which carry no `blueprint` field, key on `("critical", bucket)`. Two keys,
+    one rule, two lines — reported as "why do I see 2 times the same
+    automation?" with "Entrance unlocked while vacant" listed twice, once
+    resolved after 10 minutes and once after 1.1 hours.
+
+    ⚠️ THE MERGE IS NARROW ON PURPOSE. It folds ONLY a group keyed on the bare
+    category — which is precisely the signature of a payload that could not name
+    itself — and only when exactly ONE named group shares its bucket. Two rules
+    that both name themselves on one bucket stay apart, which is what the
+    fallback chain was written to protect; and an unnamed group with two
+    candidates is left alone rather than guessed at.
+    """
+    named: Dict[str, List[Tuple[str, str]]] = {}
+    for (owner, bucket) in groups:
+        if owner not in CATEGORY_OF_EVENT.values():
+            named.setdefault(bucket, []).append((owner, bucket))
+
+    for key in list(groups):
+        owner, bucket = key
+        if owner not in CATEGORY_OF_EVENT.values():
+            continue
+        candidates = named.get(bucket) or []
+        if len(candidates) != 1:
+            continue
+        target = groups[candidates[0]]
+        for item in groups[key].items:
+            target.add(item)
+        del groups[key]
     return list(groups.values())
 
 

@@ -185,9 +185,15 @@ def test_a_verification_gets_its_own_heading() -> None:
     # ⚠️ `BULLET`, NOT `"- "`. The bullet is `•` now: a leading `- ` is a
     # list marker in every markdown dialect and becomes a rendered list whose
     # indentation the sender does not control, on platforms that parse.
-    bullet = next(i for i, ln in enumerate(lines) if ln.startswith(BULLET))
-    assert lines[bullet - 1] == heading("fixed", "Followed up"), (
-        "the verification bullet has no heading above it")
+    # ⚠️ ANCHORED ON THE HEADING, NOT ON THE FIRST BULLET IN THE BODY. This
+    # found `lines[0].startswith(BULLET)` and asserted about the line above it,
+    # which broke the day the HEADLINE gained bullets of its own (2.576.0) — the
+    # first bullet was then the cost line and the assertion compared it to the
+    # dateline. The property is "the verification bullet has a heading above
+    # it", so start from the heading.
+    head = lines.index(heading("fixed", "Followed up"))
+    assert lines[head + 1].startswith(BULLET), (
+        "nothing is listed under the Followed up heading")
 
 
 def test_the_window_split_normalises_both_sides_to_utc() -> None:

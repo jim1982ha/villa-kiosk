@@ -205,3 +205,121 @@ def test_open_tasks_carry_their_subject() -> None:
     tasks = agg.open_tasks(groups)
     assert tasks and tasks[0]["entities"] == [
         "automation.outdoor_unified_doorbell_call_and_unlock"]
+
+
+# ── one rule, one line (2.576.0) ─────────────────────────────────────────────
+
+def _presence(shape: str, phase: str, at: str, minutes: float = 0.0) -> Dict[str, Any]:
+    """The same rule, in the two payload shapes one period can contain."""
+    bucket = "Entrance unlocked while vacant"
+    data: Dict[str, Any] = {"report_bucket": bucket, "label": bucket,
+                            "severity": "P1", "phase": phase}
+    if minutes:
+        data["duration_minutes"] = minutes
+    if shape == "new":
+        data.update(blueprint="critical_presence_guard", entities=["lock.front"],
+                    timestamp=at)
+    else:                       # predates the convention: names neither itself
+        data.update(entity_id="lock.front")     # nor its entities
+    return {"type": "vesta_critical_event", "at": at, "data": data}
+
+
+MIXED = [
+    _presence("old", "raised", "2026-08-21T00:10:00+08:00"),
+    _presence("old", "cleared", "2026-08-21T00:20:00+08:00", 10.0),
+    _presence("new", "raised", "2026-08-21T09:35:00+08:00"),
+    _presence("new", "cleared", "2026-08-21T09:46:00+08:00", 10.0),
+]
+
+
+def test_one_rule_is_one_line_whatever_shape_its_payload_arrived_in() -> None:
+    """⚠️ REPORTED AS "why do I see 2 times the same automation?". `Item.key()`
+    falls back `rule_id or blueprint or category`, so a rule whose blueprint was
+    updated mid-period emitted BOTH keys — `("critical_presence_guard", bucket)`
+    for the new events and `("critical", bucket)` for the old — and the brief
+    listed one incident twice, resolved after two different durations."""
+    body = _render(MIXED)
+    recap = body.split("What went wrong")[1].split("\n\n")[0]
+    assert recap.count("Entrance unlocked while vacant") == 1, (
+        f"the same rule is listed more than once:\n{recap}")
+    assert "(2 times)" in recap
+
+
+def test_closed_by_itself_counts_the_way_the_recap_does() -> None:
+    """⚠️ TWO CONVENTIONS FOR ONE FACT, FOUR LINES APART. The recap collapsed
+    repeats into "(6 times)" while this section printed the name once per
+    occurrence — reported alongside the split above."""
+    closed = _render(MIXED).split("Closed by itself")[1].split("\n\n")[0]
+    assert closed.count("Entrance unlocked while vacant") == 1
+    assert "(2 times)" in closed
+
+
+def test_two_named_rules_on_one_bucket_are_still_kept_apart() -> None:
+    """⚠️ THE FALLBACK CHAIN EXISTS TO PROTECT THIS, so the merge is narrow: it
+    folds ONLY a group keyed on the bare category — the signature of a payload
+    that could not name itself — and only when exactly one named group shares
+    the bucket."""
+    bucket = "Shared bucket"
+    def named(blueprint: str) -> Dict[str, Any]:
+        return {"type": "vesta_critical_event", "at": "2026-08-21T09:00:00+08:00",
+                "data": {"blueprint": blueprint, "report_bucket": bucket,
+                         "label": blueprint, "severity": "P1", "phase": "raised",
+                         "entities": ["x.y"], "timestamp": "2026-08-21T09:00:00+08:00"}}
+    groups = agg.aggregate([named("critical_a"), named("critical_b")]).get("groups")
+    assert len(groups) == 2, "two self-naming rules on one bucket were merged"
+
+
+def test_an_unnamed_group_with_two_candidates_is_left_alone() -> None:
+    """Guessing which of two rules an anonymous payload belongs to would be
+    worse than the duplicate line it is trying to remove."""
+    bucket = "Shared bucket"
+    def event(blueprint: str = "") -> Dict[str, Any]:
+        data: Dict[str, Any] = {"report_bucket": bucket, "label": bucket,
+                                "severity": "P1", "phase": "raised"}
+        if blueprint:
+            data.update(blueprint=blueprint, entities=["x.y"],
+                        timestamp="2026-08-21T09:00:00+08:00")
+        return {"type": "vesta_critical_event", "at": "2026-08-21T09:00:00+08:00",
+                "data": data}
+    groups = agg.aggregate([event("critical_a"), event("critical_b"), event()])
+    assert len(groups.get("groups")) == 3
+
+
+# ── the headline reads like the rest of the brief ────────────────────────────
+
+#: A period with something to say in the headline: a priced finding and an
+#: unresolved incident. MIXED has neither, which is why it cannot serve here —
+#: the first version of this test sliced four lines off a brief whose headline
+#: was one line long and asserted about the section underneath it.
+HEADLINE_EVENTS = [
+    {"type": "vesta_roi_event", "at": "2026-08-21T12:00:00+08:00",
+     "data": {"blueprint": "roi_vacancy_waste", "report_bucket": "Vacancy waste",
+              "label": "Vacancy waste", "entities": ["sensor.x"], "kwh": 0.93,
+              "cost_local": 1581.0, "timestamp": "2026-08-21T12:00:00+08:00"}},
+    _presence("new", "raised", "2026-08-21T09:35:00+08:00"),
+]
+
+
+def _headline_block(body: str) -> List[str]:
+    """Everything before the first blank line — the headline, by construction."""
+    return body.split("\n\n")[0].splitlines()
+
+
+def test_the_headline_facts_are_bullets() -> None:
+    """⚠️ THE TWO MOST IMPORTANT NUMBERS IN THE MESSAGE were the only lines a
+    reader could not pick out by scanning — every section below marked its lines
+    and the headline did not. Asked for directly."""
+    from reports.narrate.style import BULLET
+    lines = _headline_block(_render(HEADLINE_EVENTS, currency="IDR"))
+    facts = [l for l in lines if not l.startswith("Prepared")]
+    assert len(facts) == 2, f"expected a cost line and an unresolved line: {facts}"
+    assert all(l.startswith(BULLET) for l in facts), facts
+    assert any("Avoidable cost" in l for l in facts)
+    assert any("still unresolved" in l for l in facts)
+
+
+def test_the_dateline_is_not_a_bullet() -> None:
+    """It is the dateline, not a finding."""
+    from reports.narrate.style import BULLET
+    first = _headline_block(_render(HEADLINE_EVENTS))[0]
+    assert first.startswith("Prepared") and not first.startswith(BULLET)

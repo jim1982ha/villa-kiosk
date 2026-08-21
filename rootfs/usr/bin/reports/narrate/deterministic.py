@@ -368,6 +368,13 @@ class DeterministicNarrator:
     def _headline(self, context: ReportContext) -> List[str]:
         """The period, and the one number that matters.
 
+        ⚠️ BULLETS, LIKE EVERY OTHER LINE OF FACT IN THE BRIEF. These were bare
+        sentences under the "Prepared ..." line while every section below marked
+        its lines with `BULLET` — so the two most important numbers in the whole
+        message were the only ones a reader could not pick out by scanning.
+        Asked for directly. The "Prepared ..." line stays unmarked: it is the
+        dateline, not a finding.
+
         ⚠️ THE NUMBER IS OMITTED RATHER THAN ZEROED when nothing was priced.
         "0 wasted" is a measurement; "nothing priced" is the absence of one, and
         a property with no tariff configured would otherwise be congratulated
@@ -423,24 +430,24 @@ class DeterministicNarrator:
                     f"{'was' if unpriced == 1 else 'were'} measured but could "
                     f"not be priced") if unpriced else ""
             lines.append(
-                f"Avoidable cost identified: "
+                f"{BULLET}Avoidable cost identified: "
                 f"{_amount(float(total), currency=context.currency)}, across "
                 f"{_plural(counted, 'finding')}{qualifier}{more}.")
 
         if context.findings:
             # ⚠️ READABLE ENGLISH, NOT "1 finding(s)". This is read by the
             # villa's owner every week and the sloppiness costs nothing to fix.
-            lines.append(f"{_plural(len(context.findings), 'finding')} from "
-                         f"this property's own checks.")
+            lines.append(f"{BULLET}{_plural(len(context.findings), 'finding')} "
+                         f"from this property's own checks.")
 
         incidents = self._groups(context, "critical")
         if incidents:
             still_open = [g for g in incidents if self._is_open(g)]
             if still_open:
                 lines.append(
-                    f"{_plural(len(still_open), 'critical alert')} from this "
-                    f"period {'is' if len(still_open) == 1 else 'are'} still "
-                    f"unresolved.")
+                    f"{BULLET}{_plural(len(still_open), 'critical alert')} from "
+                    f"this period {'is' if len(still_open) == 1 else 'are'} "
+                    f"still unresolved.")
         return lines
 
     def _nothing_to_report(self, context: ReportContext) -> str:
@@ -506,6 +513,18 @@ class DeterministicNarrator:
             lines.append(f"{BULLET}{self._incident_line(group)}")
         return lines + self._and_more(groups)
 
+    def _occurrences(self, group: Any) -> str:
+        """The group's name, with "(N times)" when it fired more than once.
+
+        ⚠️ SHARED BY THE RECAP AND "CLOSED BY ITSELF", because they had two
+        conventions for one fact four lines apart — one collapsing repeats into
+        a count and the other repeating the name. Whatever the next section to
+        list incidents is, it gets the count by CALLING rather than by
+        remembering."""
+        label = self._name(group, alert=True)
+        count = self._count(group)
+        return f"{label} ({_plural(count, 'time')})" if count > 1 else label
+
     def _incident_line(self, group: Any) -> str:
         """One incident, with whether it ENDED — which is the whole point.
 
@@ -513,14 +532,10 @@ class DeterministicNarrator:
         emit `raised` and `cleared` with no incident id, so an unmatched raise
         has no honest duration and gets "still unresolved" instead of a number.
         """
-        label = self._name(group, alert=True)
-        count = self._count(group)
         opened = self._is_open(group)
         minutes = self._number(group, "duration_minutes")
 
-        parts: List[str] = [label]
-        if count > 1:
-            parts.append(f"({_plural(count, 'time')})")
+        parts: List[str] = [self._occurrences(group)]
         if opened:
             parts.append("— still unresolved")
         elif minutes is not None:
@@ -674,7 +689,12 @@ class DeterministicNarrator:
             # outright: "what are these alerts?". A count is only worth a line
             # when the things counted are not already on the page.
             for group in resolved[:MAX_LINES]:
-                lines.append(f"{BULLET}{self._name(group, alert=True)}")
+                # ⚠️ THE SAME "(N times)" THE RECAP USES. Listing one incident
+                # per occurrence put "Entrance unlocked while vacant" on two
+                # consecutive lines with nothing to tell them apart, while the
+                # section directly above it collapsed the identical events into
+                # "(6 times)". Two conventions for one fact, four lines apart.
+                lines.append(f"{BULLET}{self._occurrences(group)}")
             if len(resolved) > MAX_LINES:
                 lines.append(f"{BULLET}and {len(resolved) - MAX_LINES} more.")
         if tasks:
