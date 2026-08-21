@@ -4245,6 +4245,27 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    answer to a question, not a field. */
 .reports-schedule > button { flex: 0 1 auto; min-height: var(--touch-min); }
 
+/* Two labelled fields side by side, collapsing to one column when there is no
+   room. ⚠️ SAME IDIOM AS `.fm-summary` — auto-fit with a minimum — rather than
+   a fixed two-column grid, because a 360px phone must stack them and a media
+   query would be a second place to state the same breakpoint. The children are
+   `.fm-field`, which owns the label rhythm, the control padding, the focus ring
+   and the placeholder colour; this only places them. */
+.reports-fields {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+/* A row of buttons that act on something OTHER than the form's own Save — here
+   the credential, which is written to a different file by a different endpoint.
+   Wraps, and the status sentence takes the remaining width so it never squeezes
+   a button below its touch target. */
+.reports-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+}
+.reports-actions > button { min-height: var(--touch-min); }
+.reports-actions > span { flex: 1 1 220px; }
+
 /* The tick list behind that button. ⚠️ ONE COLUMN, and capped so a property
    with twenty notification targets cannot push Save off a phone screen. */
 .reports-recipients {

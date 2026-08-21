@@ -165,7 +165,11 @@ export interface ReportsConfig {
    *  `providers.DEFAULT_MONTHLY_LIMIT`. Token accounting needs a provider's own
    *  reply to be trusted for billing and differs per provider; a request count
    *  is exact, provider-agnostic, and an owner can reason about it. */
-  narration?: { mode?: NarrationMode; monthlyLimit?: number };
+  /** ⚠️ `provider` NAMES A KEY OF THE SERVER'S `providers.ADAPTERS`, and the UI
+   *  offers exactly that set — `/reports-secret` returns one entry per adapter,
+   *  so the SPA never keeps its own list to fall out of date. `shared()` refuses
+   *  a name it has no adapter for, so an unknown one can never open a socket. */
+  narration?: { mode?: NarrationMode; provider?: string; monthlyLimit?: number };
   timezone?: string;
   minHistoryDays?: number;
 }

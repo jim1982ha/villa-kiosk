@@ -248,9 +248,12 @@ def test_the_client_speaks_every_key_the_narration_slice_reads() -> None:
     assert table, "NARRATION_WIRE_KEYS is gone from reportsApi.ts"
     mapped = dict(WIRE_ENTRY.findall(table.group(1)))
 
-    # `provider` is read with a default and is not operator-facing yet — one
-    # adapter ships, and the server refuses a credential for any other name.
-    missing = sorted(wanted - set(mapped) - {"provider"})
+    # ⚠️ THE `provider` EXEMPTION IS GONE. It was excused as "read with a
+    # default and not operator-facing yet"; v2.551.0 put a Service selector in
+    # the UI, so it is now a stored setting like the others and an exemption
+    # would be exactly the blind spot this test exists for. An exemption that
+    # outlives its reason is worse than no test — it reads as covered.
+    missing = sorted(wanted - set(mapped))
     assert not missing, (
         f"providers.shared reads these narration settings and the client's "
         f"wire table does not name them: {missing}")

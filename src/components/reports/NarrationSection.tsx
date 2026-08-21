@@ -15,33 +15,59 @@
 // running unattended on a villa wall, and a settings page that renders an API
 // key is one shoulder away from disclosing it.
 //
-// ⚠️ AND IT IS THE ONE PLACE IN THIS APP THAT NEEDS THE INTERNET. CLAUDE.md's
-// second hard rule stands — the villa may have no WAN at all — which is why the
-// copy states the failure mode rather than hiding it: the brief still arrives,
-// written by the built-in renderer, on time.
+// ⚠️ THE PRIVACY CLAIM IS NOT RESTATED HERE, AND THAT IS A DRY FIX WITH TEETH.
+// This section used to carry a paragraph listing what does and does not leave
+// the villa — a second, hand-kept copy of `contracts.PAYLOAD_ALLOWED_FIELDS`,
+// written in prose, guaranteed to drift and impossible to check. The payload
+// inspector on the Preview tab shows the REAL object, built by the backend's
+// own `payload.from_context`, next to the field names it actually dropped. One
+// claim, in the one place that can prove it; this section points at it.
+//
+// ⚠️ AND THE FIELDS ARE `.fm-field`, THE APP'S SHARED LABELLED CONTROL. They
+// were `.reports-schedule` — a SCHEDULE ROW — plus four inline `style`
+// attributes, which is how a settings form came to look like a schedule that
+// had lost its selects. `.fm-field` owns the label rhythm
+// (`--field-label-gap`/`--field-label-size`), the control padding, the focus
+// ring and the placeholder colour, all of which were being approximated here.
 
 import { useState } from "react";
-import { KeyRound, Trash2 } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import type { NarrationMode, ReportsConfig } from "@/reports/reportsTypes";
 
-/** The only provider with an adapter. ⚠️ Mirrors `providers.ADAPTERS`; the
- *  server REFUSES a credential for any name it has no adapter for, so an
- *  unknown one can never be written to disk. */
-const PROVIDER = "anthropic";
-const PROVIDER_LABEL = "Anthropic (Claude)";
+/** `"anthropic"` → `"Anthropic"`. ⚠️ NO PRODUCT NAMES AND NO TABLE: the list of
+ *  providers is whatever the server's adapter table holds (see below), so a
+ *  display-name map here would be a second copy that goes stale the day a
+ *  second adapter ships — and would put a vendor's product name in the bundle
+ *  for a provider this install may not even use. */
+const titleCase = (name: string) =>
+  name.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function NarrationSection({
-  draft, set, keyStored, busy, onSaveSecret,
+  draft, set, secretsConfigured, busy, onSaveSecret,
 }: {
   draft: ReportsConfig;
   set: (patch: Partial<ReportsConfig>) => void;
-  keyStored: boolean;
+  /** ⚠️ THE PROVIDER LIST COMES FROM HERE, keyed by the server's own
+   *  `providers.ADAPTERS`. `/reports-secret` returns one entry per adapter, so
+   *  the choice offered and the choice the server can honour are the same set
+   *  by construction — the SPA never keeps its own list to fall out of date.
+   *  The values say which already have a key; the keys say what exists. */
+  secretsConfigured: Record<string, boolean>;
   busy: boolean;
   onSaveSecret: (provider: string, value: string) => void;
 }) {
   const [typed, setTyped] = useState("");
   const mode: NarrationMode = draft.narration?.mode ?? "deterministic";
   const on = mode === "provider";
+
+  const providers = Object.keys(secretsConfigured).sort();
+  const provider = providers.includes(draft.narration?.provider ?? "")
+    ? (draft.narration?.provider as string)
+    : providers[0] ?? "";
+  const keyStored = secretsConfigured[provider] === true;
+
+  const patchNarration = (patch: Partial<NonNullable<ReportsConfig["narration"]>>) =>
+    set({ narration: { ...draft.narration, mode, ...patch } });
 
   return (
     <>
@@ -58,100 +84,113 @@ export default function NarrationSection({
         <span>Let an AI service write the summary</span>
       </label>
       <p className="muted body-text">
-        Off by default, and the add-on writes every brief itself — that is the
-        version you read in Preview. Switching this on rephrases the same
-        findings; it never changes them, and it cannot add any. If the service
-        is unreachable, over budget, or this villa has no internet, the brief
-        still arrives on time in the built-in wording.
+        Off by default: the add-on writes every brief itself, offline, and that
+        is the version you read in Preview. Switching this on rephrases the same
+        findings — it cannot add, remove or change one. If the service is
+        unreachable or over budget, the brief still arrives on time in the
+        built-in wording.
       </p>
 
       {on && (
         <>
-          <p className="muted body-text">
-            <strong>What leaves the villa:</strong> the findings as numbers —
-            a label, a room, a measurement and a severity. Never an entity id,
-            never a photo, never free text typed by an operator, and never
-            anything about who is home. The exact list is fixed in the add-on
-            and checked again on every send.
-          </p>
-
-          <div className="reports-schedule">
-            <span className="body-text" style={{ flex: "1 1 140px" }}>
-              {PROVIDER_LABEL}
-            </span>
-            <label
-              className="body-text"
-              style={{ display: "flex", alignItems: "center", gap: 6 }}
-            >
-              <span className="muted">At most</span>
-              <input
-                type="number"
-                min={0}
-                max={2000}
-                aria-label="Briefings narrated per month"
-                style={{ width: 84, minHeight: "var(--touch-min)" }}
-                value={draft.narration?.monthlyLimit ?? 200}
-                onChange={(e) =>
-                  set({ narration: { ...draft.narration, mode,
-                                     monthlyLimit: Math.max(0, Number(e.target.value) || 0) } })}
-              />
-              <span className="muted">per month</span>
-            </label>
-          </div>
-          <p className="muted body-text">
-            A ceiling on requests, so a misconfigured schedule cannot run up a
-            bill. Counted in this add-on&rsquo;s memory and reset when it
-            restarts — it is a guard against a runaway, not a billing record.
-          </p>
-
-          {/* ⚠️ A SEPARATE SAVE FROM THE REST OF THE FORM. The credential does
-              not live in the config store — it is a different file, at 0600,
-              that no store handler serves — so it cannot ride the config PUT,
-              and pretending otherwise would put the key in the document any
-              authorized session can GET. */}
-          {keyStored ? (
-            <div className="reports-item">
-              <span><KeyRound size={14} aria-hidden="true" /> A key is stored.</span>
-              <button
-                className="btn danger icon-only"
-                disabled={busy}
-                aria-label="Remove the stored key"
-                onClick={() => onSaveSecret(PROVIDER, "")}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ) : (
+          {providers.length === 0 ? (
             <p className="reports-item sev-warning">
-              No key is stored, so briefings will keep using the built-in
-              wording.
+              The add-on offers no narration service, or could not be reached.
             </p>
-          )}
+          ) : (
+            <>
+              <div className="reports-fields">
+                <label className="fm-field">
+                  <span>Service</span>
+                  <select
+                    value={provider}
+                    disabled={providers.length === 1}
+                    onChange={(e) => patchNarration({ provider: e.target.value })}
+                  >
+                    {providers.map((p) => (
+                      <option key={p} value={p}>{titleCase(p)}</option>
+                    ))}
+                  </select>
+                </label>
 
-          <div className="reports-schedule">
-            <input
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              aria-label={keyStored ? "Replace the stored key" : "API key"}
-              placeholder={keyStored ? "Replace the stored key…" : "Paste the API key…"}
-              style={{ flex: "1 1 200px", minHeight: "var(--touch-min)" }}
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-            />
-            <button
-              className="btn"
-              disabled={busy || typed.trim() === ""}
-              onClick={() => { onSaveSecret(PROVIDER, typed.trim()); setTyped(""); }}
-            >
-              <KeyRound size={16} /><span>Store key</span>
-            </button>
-          </div>
-          <p className="muted body-text">
-            Stored on the add-on only, readable by nobody through this app, and
-            never printed in a log. Sending briefings costs money at the
-            provider&rsquo;s own rates.
-          </p>
+                <label className="fm-field">
+                  <span>Most briefings per month</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2000}
+                    value={draft.narration?.monthlyLimit ?? 200}
+                    onChange={(e) =>
+                      patchNarration({
+                        monthlyLimit: Math.max(0, Number(e.target.value) || 0),
+                      })}
+                  />
+                </label>
+              </div>
+
+              <label className="fm-field">
+                <span>{keyStored ? "Replace the API key" : "API key"}</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={keyStored ? "A key is stored — paste a new one to replace it"
+                                         : "Paste the API key…"}
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                />
+              </label>
+
+              {/* ⚠️ A SEPARATE SAVE FROM THE REST OF THE FORM, and the buttons
+                  say so by sitting apart from the Save at the foot of the tab.
+                  The credential does not live in the config store — it is a
+                  different file, at 0600, that no store handler serves — so it
+                  cannot ride the config PUT, and pretending otherwise would put
+                  the key in the document any authorized session can GET. */}
+              <div className="reports-actions">
+                <button
+                  className="btn"
+                  disabled={busy || typed.trim() === ""}
+                  onClick={() => { onSaveSecret(provider, typed.trim()); setTyped(""); }}
+                >
+                  <KeyRound size={16} /><span>Store key</span>
+                </button>
+                {keyStored && (
+                  <button
+                    className="btn ghost"
+                    disabled={busy}
+                    onClick={() => onSaveSecret(provider, "")}
+                  >
+                    Remove the stored key
+                  </button>
+                )}
+                <span className={keyStored ? "muted body-text" : "sev-warning body-text"}>
+                  {keyStored
+                    ? "A key is stored on the add-on. It is never shown or logged."
+                    : "No key stored — briefings keep using the built-in wording."}
+                </span>
+              </div>
+
+              <p className="muted body-text">
+                The limit is a ceiling on requests so a misconfigured schedule
+                cannot run up a bill; it is counted in memory and resets when the
+                add-on restarts, so it guards against a runaway rather than
+                serving as a billing record. Sending briefings costs money at the
+                service&rsquo;s own rates.
+              </p>
+
+              {/* ⚠️ THE ONE PLACE THE PRIVACY QUESTION IS ANSWERED. See this
+                  file's header: a prose list here would be a second copy of the
+                  allow-list, and the inspector shows the real payload. */}
+              <p className="muted body-text">
+                <strong>What would leave this property:</strong> compose a brief
+                on the Preview tab and open <em>What would leave this
+                property</em> underneath it. That panel is built by the add-on
+                from the brief you are looking at, and names the fields it
+                dropped — so it can be read rather than taken on trust.
+              </p>
+            </>
+          )}
         </>
       )}
     </>

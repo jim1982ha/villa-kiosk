@@ -1,11 +1,11 @@
-## 2.550.0
+## 2.551.0
 
-### Changed — one line per schedule, and any time of day rather than the hour
+### Fixed — the AI narration settings were a wall of text, not a form
 
-The recipients are now a button on the schedule's own line showing who receives
-it, opening a tick list when you want to change it — no separate section, no
-row of its own, no delete button per recipient. The time is a single field
-accepting any hour and minute instead of a dropdown of whole hours. Delivering
-at 07:30 is exactly as accurate as 07:00 was and changes nothing about what the
-briefing measures: the period it covers is a date boundary, not a clock time.
+Switching the option on unfolded four paragraphs and a row that looked like a
+schedule missing its dropdowns. It is now three labelled fields and a pair of
+buttons, using the same field styling as every other form in the app. The
+paragraph listing what does and does not leave the property is gone with it: the
+Preview tab already shows the real thing, built from the brief in front of you,
+so describing it a second time could only ever drift from it.
 

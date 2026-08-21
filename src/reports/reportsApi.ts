@@ -214,6 +214,7 @@ const CONFIG_WIRE_KEYS = {
  *  silently running at the default 200. */
 const NARRATION_WIRE_KEYS = {
   mode: "mode",
+  provider: "provider",
   monthly_limit: "monthlyLimit",
 } as const;
 
@@ -258,10 +259,13 @@ export function parseReportsConfig(raw: unknown): ReportsConfig {
     if (Object.keys(slices).length) out.modules = slices;
   }
   const narration = obj(c.narration);
-  if (typeof narration.mode === "string" || typeof narration.monthly_limit === "number") {
+  if (typeof narration.mode === "string" || typeof narration.provider === "string"
+      || typeof narration.monthly_limit === "number") {
     out.narration = {
       ...(typeof narration.mode === "string"
         ? { mode: oneOf(narration.mode, NARRATION_MODE) as NarrationMode } : {}),
+      ...(typeof narration.provider === "string"
+        ? { provider: narration.provider } : {}),
       ...(typeof narration.monthly_limit === "number"
         ? { monthlyLimit: narration.monthly_limit } : {}),
     };

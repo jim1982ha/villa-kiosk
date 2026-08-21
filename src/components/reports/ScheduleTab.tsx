@@ -289,7 +289,7 @@ export default function ScheduleTab({
       <NarrationSection
         draft={draft}
         set={set}
-        keyStored={secretsConfigured.anthropic === true}
+        secretsConfigured={secretsConfigured}
         busy={busy}
         onSaveSecret={onSaveSecret}
       />
