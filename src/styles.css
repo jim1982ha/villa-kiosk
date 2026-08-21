@@ -4253,17 +4253,37 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   tab-size: 2;
 }
 
+/* One schedule, whole: when it fires, who it is written for, and who receives
+   it. ⚠️ A CARD RATHER THAN A ROW BECAUSE THE RECIPIENTS BELONG TO IT — the
+   previous design put destinations in a separate section further down the page
+   and made the operator cross-reference two lists to answer "who gets this
+   one". The border is what says the contents are one thing. */
+.reports-schedule-card {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--hairline);
+}
+/* The controls row inside a card sits flush — the card already provides the
+   inset, and a second background reads as a box inside a box. */
+.reports-schedule-card > .reports-schedule { padding: 0; background: none; }
+
 /* A schedule's own destinations, indented under its row. Full width so it
    wraps below the selects rather than competing with them for the same line,
    and `flex-basis: 100%` on the row it sits in does the same job the selects'
    own `flex: 1 1 96px` does — see .reports-schedule's wrap note. */
 .reports-subrow {
-  flex: 1 1 100%;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding-top: 4px;
+  padding-top: 6px;
   border-top: 1px solid var(--hairline);
+  /* ⚠️ THE LABEL IS THE SAME WEIGHT AS A SECTION HEADING WITHOUT BEING ONE.
+     "Sends to" inside a card is a field label, not an <h3>: an h3 here would
+     put four headings in the tab outline for four schedules and make the
+     document structure a screen reader announces meaningless. */
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
-.reports-subrow > button { min-height: var(--touch-min); }
 
 /* When a panel was measured, beside the control that measures it again.
    ⚠️ WRAPS, and the button keeps its touch target when it does — on a 360px

@@ -30,20 +30,27 @@
 // scheduled brief would be composed and have nowhere to go" was a permanent
 // state reachable only by editing the store by hand.
 //
-// ⚠️ DESTINATIONS ARE PER-SCHEDULE, WITH THE SHARED LIST AS THE DEFAULT — and
-// `pipeline.targets_for` has worked that way since Phase 2 (a schedule's own
-// `targets` wins; otherwise the shared list). Only this tab never showed it,
-// which forced every brief to the same people and made the audience selector
-// look like it chose a recipient. It does not: it chooses what is IN the brief.
-// The owner asked for exactly this — "it would make more sense to add this menu
-// for each schedule, so the user can individually select where to send each
-// report and at what time."
+// ⚠️ A SCHEDULE OWNS ITS RECIPIENTS. THERE IS NO SEPARATE DESTINATION SECTION,
+// AND REMOVING IT IS THE POINT. v2.546.0 added per-schedule targets as an
+// OPT-IN OVERRIDE beside a global list, on the reasoning that one shared list
+// is the common case and two ways to set one thing needs the relationship
+// stated at the control. The owner rejected that and was right: "the recipient
+// selection must be linked and associated with each schedule profile that the
+// user is adding."
 //
-// The shared list stays, and stays FIRST, because it is the common case: one
-// property, one or two destinations, every brief to both. A schedule opts OUT
-// of it by naming its own. Two ways to set one thing is a config nobody can
-// reason about UNLESS the relationship is stated at the control, so it is —
-// each row says whether it is following the shared list or overriding it.
+// The rejected design asked the operator to hold a rule in their head — which
+// list is in force for which row — to answer the only question they ever have
+// about a schedule, which is "who gets this one". A card per schedule carrying
+// when · for whom · to whom answers it by looking. `pipeline.targets_for` has
+// preferred a schedule's own targets since Phase 2, so this is the UI catching
+// up with the data model rather than a new capability.
+//
+// ⚠️ `notify_targets` STAYS ON THE BACKEND and is NOT shown. It is the fallback
+// for any config written before this, and `targets_for` still reads it when a
+// schedule names nothing — deleting it would silently redirect the briefings of
+// every install that has not opened this dialog since. `adoptSharedTargets`
+// below migrates it into the schedules the first time the tab is opened, so the
+// operator ends up with one place without losing what they configured.
 
 import { useEffect, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
@@ -65,6 +72,43 @@ function newSchedule(): ReportSchedule {
     cadence: "weekly",
     hour: DEFAULT_HOUR,
     audience: "owner",
+    // ⚠️ AN EMPTY LIST, NOT AN ABSENT ONE, AND THE DIFFERENCE IS REAL.
+    // `targets_for` reads absent as "inherit `notify_targets`" and empty as
+    // "nowhere" — so a new schedule with no `targets` key would DISPLAY as
+    // "Nobody" here while the backend quietly delivered it to a legacy shared
+    // list the operator can no longer see. Stating the empty list makes what is
+    // shown and what is stored the same thing.
+    targets: [],
+  };
+}
+
+/** Move a legacy shared destination list onto the schedules that were using it.
+ *
+ *  ⚠️ INTO THE DRAFT, NEVER STRAIGHT TO DISK. This runs when the tab opens, and
+ *  a migration that wrote itself back would be a background write the operator
+ *  did not ask for — on a store two devices can hold open at once, with a
+ *  revision check that would then fire on the other one. It becomes real when
+ *  they press Save, like every other edit here.
+ *
+ *  ⚠️ AND IT IS A NO-OP UNLESS THERE IS SOMETHING TO MOVE. A schedule that
+ *  already names its own targets is untouched, and a config with no shared list
+ *  is returned as-is — so opening the tab twice cannot produce two different
+ *  drafts, and an operator who deliberately emptied a schedule's destinations
+ *  does not get the shared list pushed back into it.
+ *
+ *  The backend keeps reading `notify_targets` for anyone who never opens this
+ *  dialog (`pipeline.targets_for`), which is why clearing it here is safe: the
+ *  schedules now carry what it used to supply. */
+export function adoptSharedTargets(config: ReportsConfig): ReportsConfig {
+  const shared = config.notifyTargets ?? [];
+  const schedules = config.schedules ?? [];
+  if (shared.length === 0) return config;
+  if (schedules.every((s) => s.targets !== undefined)) return config;
+  return {
+    ...config,
+    schedules: schedules.map((s) =>
+      s.targets === undefined ? { ...s, targets: [...shared] } : s),
+    notifyTargets: [],
   };
 }
 
@@ -82,15 +126,21 @@ export default function ScheduleTab({
 
   // Re-seed only when the server's copy changes, so typing is never clobbered
   // by a background reload — the same ordering rule `DeviceConfigSync` follows.
-  useEffect(() => { if (config) setDraft(config); }, [config]);
+  useEffect(() => { if (config) setDraft(adoptSharedTargets(config)); }, [config]);
 
   if (!config) {
     return <p className="muted body-text">Reading the schedule…</p>;
   }
 
   const schedules = draft.schedules ?? [];
-  const targets = draft.notifyTargets ?? [];
   const available = diagnostics?.notifyTargets ?? [];
+  // ⚠️ WAS THE SHARED LIST MIGRATED INTO THE ROWS THIS SESSION? `draft` is the
+  // migrated copy and `config` is the server's, so a difference here means the
+  // operator is looking at destinations that are NOT yet stored — and pressing
+  // Close instead of Save would leave the old shape in place, still working.
+  // Saying so beats a silent rewrite either way.
+  const migrated = (config.notifyTargets ?? []).length > 0
+    && (draft.notifyTargets ?? []).length === 0;
   const set = (patch: Partial<ReportsConfig>) => setDraft({ ...draft, ...patch });
   const setAt = (i: number, patch: Partial<ReportSchedule>) =>
     set({ schedules: schedules.map((s, n) => (n === i ? { ...s, ...patch } : s)) });
@@ -116,114 +166,93 @@ export default function ScheduleTab({
         setting commits you to receiving.
       </p>
 
+      {migrated && (
+        <div className="fm-banner">
+          Destinations used to be one shared list for every schedule. They have
+          been copied onto each schedule below — press Save to keep that.
+          Nothing has changed yet, and briefings keep going where they were
+          going until you do.
+        </div>
+      )}
+
       <h3 className="reports-h3">Schedules</h3>
       <p className="muted body-text">
-        How often, at what hour in the villa&rsquo;s own time, and who it is
-        written for. <strong>Written for</strong> changes what the brief
-        contains — an owner brief includes running costs, a facility brief is
-        the work list. It does not choose a recipient: each schedule is
-        delivered to the shared list below unless you give it its own
-        destinations.
+        Each schedule is one briefing: how often, at what hour in the
+        villa&rsquo;s own time, who it is written for, and who receives it.
+        <strong> Written for</strong> chooses the CONTENT — an owner brief
+        includes running costs, a facility brief is the work list — and{" "}
+        <strong>Sends to</strong> chooses the recipients. They are independent:
+        a facility brief can go to the owner&rsquo;s phone.
       </p>
       {schedules.length === 0 && (
-        <p className="muted body-text">None yet.</p>
+        <p className="muted body-text">
+          None yet. Nothing is sent until you add one.
+        </p>
       )}
-      {schedules.map((s, i) => (
-        <div key={s.id || i} className="reports-schedule">
-          <select
-            aria-label="How often"
-            value={s.cadence}
-            onChange={(e) => setAt(i, { cadence: e.target.value as Cadence })}
-          >
-            {CADENCE.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select
-            aria-label="At"
-            value={s.hour}
-            onChange={(e) => setAt(i, { hour: Number(e.target.value) })}
-          >
-            {HOURS.map((h) => (
-              <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-            ))}
-          </select>
-          <select
-            aria-label="Written for"
-            value={s.audience}
-            onChange={(e) => setAt(i, { audience: e.target.value as ReportSchedule["audience"] })}
-          >
-            {AUDIENCE.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <button
-            className="btn danger icon-only"
-            aria-label="Remove this schedule"
-            onClick={() => set({ schedules: schedules.filter((_, n) => n !== i) })}
-          >
-            <Trash2 size={16} />
-          </button>
 
-          {/* ⚠️ THE RELATIONSHIP BETWEEN THE TWO LISTS IS STATED AT THE
-              CONTROL. Two ways to set one thing is a config nobody can reason
-              about unless each row says which one is in force — so a schedule
-              following the shared list SAYS SO, and names how many that is,
-              rather than showing an empty list that reads as "nowhere". */}
-          <div className="reports-subrow">
-            {s.targets === undefined ? (
-              <>
-                <span className="muted body-text">
-                  Sent to the shared list below
-                  {targets.length > 0 ? ` (${targets.length})` : " — which is empty"}.
-                </span>
-                <button
-                  className="btn ghost"
-                  onClick={() => setAt(i, { targets: [] })}
-                >
-                  Send this one somewhere else
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="muted body-text">
-                  This schedule only:
-                </span>
-                <button
-                  className="btn ghost"
-                  onClick={() => setAt(i, { targets: undefined })}
-                >
-                  Use the shared list
-                </button>
-                <div style={{ flexBasis: "100%" }}>
-                  <DestinationList
-                    targets={s.targets}
-                    available={available}
-                    onChange={(next) => setAt(i, { targets: next })}
-                    emptyText="Nowhere — this schedule would be composed and not sent."
-                  />
-                </div>
-              </>
-            )}
+      {schedules.map((s, i) => {
+        const own = s.targets ?? [];
+        return (
+          <div key={s.id || i} className="reports-schedule-card">
+            <div className="reports-schedule">
+              <select
+                aria-label="How often"
+                value={s.cadence}
+                onChange={(e) => setAt(i, { cadence: e.target.value as Cadence })}
+              >
+                {CADENCE.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                aria-label="At"
+                value={s.hour}
+                onChange={(e) => setAt(i, { hour: Number(e.target.value) })}
+              >
+                {HOURS.map((h) => (
+                  <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
+                ))}
+              </select>
+              <select
+                aria-label="Written for"
+                value={s.audience}
+                onChange={(e) =>
+                  setAt(i, { audience: e.target.value as ReportSchedule["audience"] })}
+              >
+                {AUDIENCE.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <button
+                className="btn danger icon-only"
+                aria-label="Remove this schedule"
+                onClick={() => set({ schedules: schedules.filter((_, n) => n !== i) })}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+
+            {/* ⚠️ INSIDE THE CARD, NOT BESIDE IT. "Who gets this one" is a
+                property of the schedule, and the previous design made an
+                operator cross-reference a list further down the page to answer
+                it. Any Home Assistant action that accepts a title and a message
+                qualifies — see `discovery._speaks_message` — which is why this
+                is not called "notification services". */}
+            <div className="reports-subrow">
+              <span className="muted body-text">Sends to</span>
+            </div>
+            <DestinationList
+              targets={own}
+              available={available}
+              onChange={(next) => setAt(i, { targets: next })}
+              emptyText="Nobody — this briefing would be composed and not sent."
+            />
           </div>
-        </div>
-      ))}
+        );
+      })}
+
       <button
         className="btn"
         onClick={() => set({ schedules: [...schedules, newSchedule()] })}
       >
         <Plus size={16} /><span>Add a schedule</span>
       </button>
-
-      <h3 className="reports-h3">Where briefings go</h3>
-      <p className="muted body-text">
-        The shared list: every schedule above uses it unless it names its own.
-        Any Home Assistant service that accepts a title and a message can be a
-        destination — the brief is plain text, so it arrives the same way any
-        other notification does.
-      </p>
-      <DestinationList
-        targets={targets}
-        available={available}
-        onChange={(next) => set({ notifyTargets: next })}
-        emptyText="Nothing configured — a scheduled brief would be composed and have nowhere to go."
-      />
 
       <NarrationSection
         draft={draft}

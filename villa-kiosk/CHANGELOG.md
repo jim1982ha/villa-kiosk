@@ -1,11 +1,12 @@
-## 2.547.0
+## 2.548.0
 
-### Added — see exactly what an AI service would be told about this property
+### Changed — each schedule now carries its own recipients, and there is no separate destination list
 
-Composing a brief now shows the payload that narration would transmit, built by
-the add-on itself rather than described, together with the field names it
-dropped — the entity ids and free text that stay here. On the default setting
-it leads with the fact that nothing is being transmitted at all, since the brief
-was written on this property. The point is that the privacy promise can be read
-instead of trusted, before the feature is switched on.
+A briefing is one thing: how often, at what hour, who it is written for, and
+who receives it. The previous layout put recipients in their own section
+further down the page, so answering "who gets this one" meant cross-referencing
+two lists and remembering which was in force. Each schedule is now a card
+holding all four. An existing shared list is copied onto the schedules that
+were using it when the tab is opened, and nothing changes until Save is
+pressed — briefings keep arriving where they were arriving until then.
 
