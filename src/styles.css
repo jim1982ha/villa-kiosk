@@ -2453,6 +2453,19 @@ label.toggle {
   cursor: pointer;
   font-size: var(--text-md);
   color: var(--text-primary);
+  /* ⚠️ THE ROW IS THE TARGET, AND IT WAS 22px TALL — half of --touch-min.
+     The checkbox below is 22x22 and this row had no height of its own, so the
+     whole tappable strip was 22px on a wall-mounted tablet operated by finger.
+     Found by /phone-parity measuring it rather than reading it: nothing here
+     LOOKED wrong, and the label spans the full width so it reads as a
+     comfortable target horizontally.
+
+     ⚠️ FIXED ON THE SHARED ROW, NOT PER SCREEN. Every `label.toggle` in the app
+     is one of the four added in August 2026 — it was the documented shared
+     checkbox row and had no callers before that — so this reaches all of them
+     and cannot surprise a screen that predates it. `align-items: center` was
+     already here, so the contents stay centred and only the row grows. */
+  min-height: var(--touch-min);
 }
 label.toggle input[type="checkbox"] {
   appearance: none;
@@ -4291,7 +4304,10 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   max-height: min(38vh, 300px); overflow-y: auto;
   border-top: 1px solid var(--hairline);
 }
-.reports-recipients > label { min-height: var(--touch-min); }
+/* ⚠️ NO `min-height` HERE ANY MORE. It was written on this container while the
+   other three toggle rows in the app went without — one screen fixed, three
+   left, which is the applicable-set mistake /dry-audit opens with. The height
+   now comes from `label.toggle` itself and reaches every row. */
 
 /* A destination row: friendly name over its id. ⚠️ THE ID IS THE ONLY UNIQUE
    THING — Home Assistant's friendly names are not unique and never promised to

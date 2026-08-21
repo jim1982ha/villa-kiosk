@@ -1,11 +1,10 @@
-## 2.562.0
+## 2.563.0
 
-### Changed — a check that was reporting success on cases it could not read
+### Fixed — the checkbox rows in Briefings were half the size a finger needs
 
-The check added last release, meant to keep every dialog's save button in its
-footer, could not see a button whose handler is written inline — which is nearly
-all of them. It caught the one it was written for by coincidence. It now reads
-whole buttons, and knows that a save belonging to a single record rather than to
-the dialog is allowed to sit beside that record. No behaviour changes here; the
-guard around it does.
+Every "switch this on" row — the schedule toggle, the AI toggle, each built-in
+check and each recipient — was 22 pixels tall, against the 44 the rest of the app
+uses for anything tapped. Nothing looked wrong, because the row stretches the
+full width; only the height was short. Fixed on the shared row, so all four
+places grow together.
 
