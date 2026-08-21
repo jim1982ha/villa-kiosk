@@ -29,7 +29,7 @@ from __future__ import annotations
 # `style.py` is the one place a heading is decided; reading it here means
 # the next change to how a brief looks touches one file.
 from reports.narrate.style import (  # noqa: F401
-    BULLET, SECTION_MARK, heading,
+    BULLET, SECTION_MARK, heading, name_of,
 )
 
 import inspect
@@ -39,7 +39,7 @@ from typing import Any, Dict, List
 from reports import aggregate
 from reports.contracts import FINDING_KIND
 from reports.narrate import DeterministicNarrator, ReportContext
-from reports.narrate.deterministic import SECTION_FOR_KIND
+from reports.narrate.deterministic import section_heading, SECTION_FOR_KIND
 
 
 def _events(*items: Dict[str, Any]) -> Dict[str, Any]:
@@ -176,7 +176,7 @@ def test_money_admits_it_cannot_price_rather_than_going_silent() -> None:
         discovery={**_ctx().discovery, "capabilities_missing": ["energy_cost"],
                    "capability_absent": {"energy_cost": "No tariff."}},
         aggregated=_events(_maintenance("Service the pump")))
-    assert heading("money", "Avoidable cost") in body
+    assert section_heading("money", "weekly") in body
     assert "not priced" in body or "Not calculated" in body
 
 
@@ -194,7 +194,7 @@ def test_a_self_resolved_alert_is_counted_as_fixed() -> None:
     # ⚠️ NOW A BULLET UNDER ITS OWN HEADING. It was a bare sentence sitting
     # directly above the next heading — readable in a flat document, and a
     # heading that had lost its icon once every other heading gained one.
-    assert heading("selfclear", "Closed by itself") in body
+    assert section_heading("selfclear", "weekly") in body
     # ⚠️ AND IT NAMES THEM RATHER THAN COUNTING THEM (2.575.0). "3 alerts
     # resolved without intervention." sat directly under a section that had
     # just listed those same three with their durations — a number the reader
@@ -221,8 +221,8 @@ def test_only_the_money_ranking_is_audience_specific() -> None:
     data = _events(_roi("Gym lights", 900.0), _maintenance("Service the pump"))
     owner = _render(audience="owner", aggregated=data)
     facility = _render(audience="facility", aggregated=data)
-    assert heading("money", "Avoidable cost, most expensive first") in owner
-    assert heading("money", "Avoidable cost, most expensive first") not in facility
+    assert section_heading("money", "weekly") in owner
+    assert section_heading("money", "weekly") not in facility
     assert heading("preventive", "Maintenance signals") in owner and heading("preventive", "Maintenance signals") in facility
 
 
@@ -291,7 +291,7 @@ def test_a_skipped_module_says_so() -> None:
     body = _render(skipped=[{"module": "standby_creep",
                              "reason": "insufficient_history",
                              "detail": "needs 14 days, has 3"}])
-    assert "Standby creep did not run" in body
+    assert f"{name_of('Standby creep')} did not run" in body
 
 
 # ── 8. coverage ──────────────────────────────────────────────────────────────
@@ -361,8 +361,8 @@ def test_a_report_with_everything_still_reads_top_down() -> None:
         _roi("Gym lights", 900.0), _critical("raised"),
         _maintenance("Service the pump")))
     order = [body.index(h) for h in
-             (heading("critical", "What went wrong"), heading("money", "Avoidable cost, most expensive first"),
-              heading("fixed", "For the facility manager"))]
+             (section_heading("critical", "weekly"), section_heading("money", "weekly"),
+              section_heading("fixed", "weekly"))]
     assert order == sorted(order)
 
 
@@ -392,7 +392,7 @@ def test_a_priced_finding_is_ranked_even_with_no_dashboard_tariff() -> None:
         discovery={**_ctx().discovery, "capabilities_missing": ["energy_cost"],
                    "capability_absent": {"energy_cost": "No tariff."}},
         aggregated=_events(_roi("Gym lights", 26.0, basis="estimated")))
-    assert heading("money", "Avoidable cost, most expensive first") in body
+    assert section_heading("money", "weekly") in body
     assert "Gym lights" in body
     assert "Not calculated" not in body, "the headline priced it; this denied it"
 
@@ -692,8 +692,8 @@ def test_two_headings_in_one_section_are_separated() -> None:
         _critical("cleared", when="2026-08-20T12:30:00+08:00"),
         _maintenance("Check the valve")))
     lines = body.splitlines()
-    closed = lines.index(heading("selfclear", "Closed by itself"))
-    caretaker = lines.index(heading("fixed", "For the facility manager"))
+    closed = lines.index(section_heading("selfclear", "weekly"))
+    caretaker = lines.index(section_heading("fixed", "weekly"))
     assert lines[caretaker - 1] == "", (
         "a heading that follows content needs a blank line before it")
     assert closed < caretaker
@@ -743,8 +743,55 @@ def test_standing_leads_the_report() -> None:
         aggregated=_events(_roi("Gym lights", 900.0), _critical("raised")),
     ))[1]
     positions = [body.index(h) for h in (
-        heading("standing", "Right now"),
-        heading("critical", "What went wrong"),
-        heading("money", "Avoidable cost, most expensive first"))]
+        section_heading("standing"),
+        section_heading("critical", "weekly"),
+        section_heading("money", "weekly"))]
     assert positions == sorted(positions), (
         "standing must be rendered above the period sections, not among them")
+
+
+def test_every_rule_name_in_prose_is_quoted() -> None:
+    """⚠️ ASKED FOR EXHAUSTIVELY: "make sure it is, and check all potential cases
+    where it applies so i don't tell you this case again."
+
+    The report reached the owner saying `Equipment drawing more at rest did not
+    run: your own automations already cover this` — the check's name running
+    straight into the sentence with nothing marking where it ends. And on the
+    line below it the BLUEPRINT was quoted while the check beside it was bare.
+
+    ⚠️ THE EXISTING PIN COULD NOT SEE THIS. `test_inert.test_no_module_quotes_a_
+    name_by_hand` scans for names quoted BY HAND instead of through `name_of` —
+    the opposite defect. A name with no quoting at all matches nothing, so the
+    applicable set of "should be quoted" was never covered by anything. That is
+    `feedback_audit-applicable-set` with the pin built for the wrong half.
+
+    This renders every shape of skip at once and asserts the name is quoted in
+    each arm, so a fourth arm cannot ship bare.
+    """
+    body = _render(skipped=[
+        # one check, one reason  -> the singular arm
+        {"module": "standby_creep", "title": "Equipment drawing more at rest",
+         "reason": "your own automations already cover this",
+         "code": "missing_capability"},
+        # two sharing a reason   -> the grouped arm
+        {"module": "level_anomaly", "title": "Unusual level",
+         "reason": "your own automations already cover this",
+         "code": "missing_capability"},
+        {"module": "sensor_health", "title": "Meters that stopped reporting",
+         "reason": "your own automations already cover this",
+         "code": "missing_capability"},
+        # the silent-cover arm   -> its own sub-heading
+        {"module": "roi_day", "title": "Unusual consumption for the day of week",
+         "detail": "Roi baseline deviation", "code": "covered_but_silent"},
+        # no title at all        -> the humanised-module fallback
+        {"module": "battery_forecast", "reason": "insufficient_history",
+         "code": "insufficient_history"},
+    ])
+    for expected in ("Equipment drawing more at rest", "Unusual level",
+                     "Meters that stopped reporting", "Battery forecast",
+                     "Unusual consumption for the day of week"):
+        assert name_of(expected) in body, (
+            f"{expected!r} reaches the reader unquoted — it runs into the "
+            f"sentence with nothing marking where the name ends")
+        # And never bare directly before the prose that follows it.
+        assert f"{expected} did not run" not in body

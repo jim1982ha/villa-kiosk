@@ -124,6 +124,49 @@ WINDOW_PHRASE = {
 }
 
 
+#: The same window as a HEADING can wear: "What went wrong today".
+#:
+#: ⚠️ NOT EVERY SECTION MAY TAKE ONE, AND THAT IS THE WHOLE SUBTLETY. Asked
+#: about "⚠️ What went wrong": "based on what are you saying this? (daily,
+#: monthly, yearly? custom period?)" — a fair question the dateline answers and
+#: the heading did not. But `Followed up` reaches across the WHOLE retained
+#: ring on purpose (a problem reported two months ago and fixed last week is
+#: still a verification), `Still open from earlier` is defined as outside the
+#: period, and `Right now` is the present tense. Suffixing those would make each
+#: heading a lie. `deterministic.PERIOD_SCOPED` is the list, and a test pins it.
+PERIOD_SCOPE_WORD = {"daily": "today", "weekly": "this week",
+                     "monthly": "this month"}
+
+
+def period_span(cadence: str, moment: datetime) -> str:
+    """The dates a report COVERS, for its title. "21 Aug" / "17-23 Aug" / "August".
+
+    ⚠️ THE TITLE USED TO NAME THE CADENCE AND THE SEND DATE — "Daily property
+    brief - 2026-08-21" — and the owner asked two questions about it in one
+    breath: "would that always be daily?" and "based on what start/end date?
+    this is very confusing". Both come from the same gap: the cadence is a
+    SETTING and the date was the day it was SENT, so between them they never
+    said which days the contents describe. A range answers both at once and
+    makes the cadence redundant rather than restated.
+
+    ⚠️ DERIVED FROM `period_start`, NOT COMPUTED BESIDE IT. A span that
+    disagreed with the window would be a title describing a period the body does
+    not — the exact failure `period_key`'s own header warns about, where both
+    halves stay internally consistent and only the reader can tell.
+    """
+    start = period_start(cadence, moment)
+    if cadence == "monthly":
+        return start.strftime("%B %Y")
+    end = moment
+    if cadence == "weekly":
+        end = start + timedelta(days=6)
+        if start.month == end.month:
+            return f"{start.day}-{end.day} {end.strftime('%b %Y')}"
+        return (f"{start.day} {start.strftime('%b')} - "
+                f"{end.day} {end.strftime('%b %Y')}")
+    return start.strftime("%-d %b %Y")
+
+
 def idempotency_key(schedule_id: str, cadence: str, moment: datetime) -> str:
     return f"{schedule_id}:{period_key(cadence, moment)}"
 

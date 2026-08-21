@@ -61,7 +61,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
 from ..analysis.registry import BLUEPRINT_GRACE_DAYS
-from ..schedule import WINDOW_PHRASE
+# ⚠️ ALIASED. This file ALREADY has a `PERIOD_WORD` ({'daily': 'Daily'}) for
+# the title, and importing schedule's under the same name shadowed it: every
+# scoped heading rendered "What went wrong Weekly". The tests could not see
+# it — they derive the heading from `section_heading`, so they agreed with
+# the wrong expression. Reading the output caught it, again.
+from ..schedule import PERIOD_SCOPE_WORD, WINDOW_PHRASE, period_span
 from ..standing import severity_of as standing_severity
 from ..devices import prettify_entity_slug
 from ..text import readable_label
@@ -112,6 +117,54 @@ KIND_HEADINGS: Tuple[Tuple[str, str], ...] = (
 #: It leads because it is the actionable half — and because a reader comparing
 #: the notification against the tablet in their other hand should meet the
 #: matching list first, not three sections down.
+#: Sections whose heading names the reporting PERIOD, and therefore may carry
+#: "today" / "this week" / "this month".
+#:
+#: ⚠️ THE OMISSIONS ARE THE POINT, NOT AN OVERSIGHT. `verified` spans the whole
+#: retained ring (`pipeline`: "a problem reported two months ago and fixed last
+#: week is still a verification"); `preventive`'s carried tasks are BY
+#: DEFINITION from earlier; `standing` is the present tense and says so;
+#: `health`, `waiting` and `coverage` describe the monitoring rather than the
+#: period. A suffix on any of those turns a true heading into a false one.
+PERIOD_SCOPED = frozenset({"critical", "money", "selfclear", "fixed", "trends"})
+
+
+#: ⚠️ EVERY HEADING'S WORDS, IN ONE PLACE, BECAUSE THE TESTS KEPT PINNING THEM
+#: AS LITERALS. Adding the period word broke SEVEN tests that had the old text
+#: typed into an assertion — the fourth time this session a test anchored on
+#: prose and failed for a change that was correct. A heading is presentation and
+#: gets reworded on owner feedback roughly every release; nothing that checks
+#: STRUCTURE should have to be edited when it does. Tests call `section_heading`.
+SECTION_TITLE = {
+    "critical": "What went wrong",
+    "money": "What the waste cost",
+    "money_unpriced": "Waste found but not priced",
+    "verified": "Followed up — including before this period",
+    "selfclear": "Closed by itself",
+    "fixed": "For the facility manager",
+    "preventive_open": "Still open from earlier",
+    "preventive": "Maintenance signals",
+    "trends": "Trends",
+    "standing": "Right now",
+    "health": "Monitoring health",
+    "waiting": "Checks waiting on a rule that has never reported",
+    "coverage": "Not covered by this report",
+}
+
+
+def section_heading(key: str, cadence: str = "") -> str:
+    """The rendered heading for a section, period word included where allowed.
+
+    The ONE expression both the renderer and the tests read, so rewording a
+    heading is a one-line change rather than a one-line change plus seven
+    assertions nobody remembers are there.
+    """
+    section = key.split("_")[0] if key.startswith(("money_", "preventive_")) else key
+    word = PERIOD_SCOPE_WORD.get(cadence, "") if section in PERIOD_SCOPED else ""
+    text = SECTION_TITLE[key]
+    return heading(section, f"{text} {word}" if word else text)
+
+
 SECTIONS_FOR = {
     "owner": ("standing", "critical", "money", "fixed", "preventive", "trends",
               "health", "coverage"),
@@ -364,10 +417,25 @@ class DeterministicNarrator:
         automations already use (`🪫 Low Battery Alert`). The words after the
         marker are unchanged: a title that also changed its wording would break
         every reader's sense of which message this is."""
-        period = PERIOD_WORD.get(context.cadence, "Property")
+        # ⚠️ THE SPAN, NOT THE CADENCE AND THE SEND DATE. "Daily property brief
+        # — 2026-08-21" drew two questions at once: "would that always be
+        # daily?" and "based on what start/end date?". The cadence is a SETTING
+        # and the date was when it was SENT, so between them they never named
+        # the days the contents describe. The span answers both and makes the
+        # cadence redundant rather than restated. Falls back to the stored
+        # period key when the timestamp will not parse — a title is never worth
+        # failing a delivery over.
         audience = AUDIENCE_WORD.get(context.audience, "brief")
-        return (f"{title_mark(self._worst(context))} "
-                f"{period} {audience} — {context.period}")
+        try:
+            span = period_span(context.cadence,
+                               datetime.fromisoformat(context.generated_at))
+        except (TypeError, ValueError):
+            span = context.period
+        # ⚠️ NO "Property" PREFIX — `AUDIENCE_WORD` ALREADY CARRIES IT. Adding
+        # one rendered "Property property brief". The cadence word it replaced
+        # sat in the same slot, which is why the doubling was not obvious from
+        # the diff; it was obvious from one line of output.
+        return f"{title_mark(self._worst(context))} {audience.title()} — {span}"
 
     def _worst(self, context: ReportContext) -> str:
         """The loudest thing in this brief, for the title's marker.
@@ -504,8 +572,31 @@ class DeterministicNarrator:
         if context.findings:
             # ⚠️ READABLE ENGLISH, NOT "1 finding(s)". This is read by the
             # villa's owner every week and the sloppiness costs nothing to fix.
-            lines.append(f"{BULLET}{_plural(len(context.findings), 'finding')} "
-                         f"from this property's own checks.")
+            #
+            # ⚠️ AND IT SAID "from this property's own checks", WHICH WAS BOTH
+            # VAGUE AND BACKWARDS. Asked directly where the number came from.
+            # `context.findings` is the ADD-ON's built-in analysis PLUS
+            # `verify`'s confirmations — so "this property's own checks" named
+            # the one thing it is not (the property's own checks are its
+            # blueprints, which feed `aggregated`). On the brief that prompted
+            # the question the modules had all stood down and all three were
+            # verifications, so the line counted things that went RIGHT and
+            # filed them under a heading implying they went wrong.
+            #
+            # Split, because they are two different claims and a reader can act
+            # on only one of them.
+            confirmations = sum(1 for f in context.findings
+                                if isinstance(f, dict)
+                                and str(f.get("kind") or "") == "VERIFICATION")
+            analysed = len(context.findings) - confirmations
+            if analysed:
+                lines.append(
+                    f"{BULLET}{_plural(analysed, 'finding')} from VESTA's own "
+                    f"analysis, alongside your automations' alerts.")
+            if confirmations:
+                lines.append(
+                    f"{BULLET}{_plural(confirmations, 'earlier problem')} "
+                    f"confirmed fixed — see Followed up below.")
 
         incidents = self._groups(context, "critical")
         if incidents:
@@ -575,7 +666,7 @@ class DeterministicNarrator:
         groups = self._groups(context, "critical")
         if not groups:
             return []
-        lines = [heading("critical", "What went wrong")]
+        lines = [section_heading("critical", context.cadence)]
         for group in self._top(groups):
             lines.append(f"{BULLET}{self._incident_line(group)}")
         return lines + self._and_more(groups)
@@ -646,8 +737,8 @@ class DeterministicNarrator:
         # having nothing priced, not for lacking a capability this section
         # never used.
         if billable:
-            head = (heading("money", "Avoidable cost, most expensive first") if priced
-                    else heading("money", "Waste identified, not priced"))
+            head = (section_heading("money", context.cadence) if priced
+                    else section_heading("money_unpriced", context.cadence))
             # ⚠️ ONE FORMAT FOR THE WHOLE LIST. `_amount` decided per value —
             # two decimals below 100, none above — so a real report printed
             # "799", "156" and "96.00" in the same column. The currency is the
@@ -667,7 +758,7 @@ class DeterministicNarrator:
             # it appears here and again under monitoring health in slightly
             # different words. So when preflight already explains it, this
             # points at that instead of restating it.
-            head = heading("money", "Avoidable cost")
+            head = section_heading("money", context.cadence)
             if self._explained(context, "energy_cost"):
                 return [head, f"{BULLET}Not calculated — see monitoring health "
                               f"below."]
@@ -737,7 +828,7 @@ class DeterministicNarrator:
             # ENDED, which is precisely the line a reader should be able to
             # find. "Followed up" describes the ACTION, which is evidenced;
             # the sentence itself never says more than "has not recurred".
-            lines.append(heading("verified", "Followed up"))
+            lines.append(section_heading("verified"))
             for item in verified[:MAX_LINES]:
                 lines.append(self._finding_line(item))
         if resolved:
@@ -748,7 +839,7 @@ class DeterministicNarrator:
             # a heading that had lost its icon. Found by rendering a brief from
             # real data and looking at it, which is the only thing that finds a
             # line that is grammatical and misplaced.
-            lines.append(heading("selfclear", "Closed by itself"))
+            lines.append(section_heading("selfclear", context.cadence))
             # ⚠️ NAMED, NOT COUNTED. This printed "3 alerts resolved without
             # intervention." directly under a section that had just listed
             # those same three with their durations — a number the reader has to
@@ -777,7 +868,7 @@ class DeterministicNarrator:
             # the permission — and the brief was the only surface using a
             # second word for them. The blueprints' own `caretaker_todo_list`
             # input keeps its name; that is the operator's YAML, not ours.
-            lines.append(heading("fixed", "For the facility manager"))
+            lines.append(section_heading("fixed", context.cadence))
             for task in tasks[:MAX_LINES]:
                 if isinstance(task, dict):
                     where = str(task.get("bucket") or "").strip()
@@ -800,7 +891,7 @@ class DeterministicNarrator:
         # the thing an owner reads that list for. Already deduplicated by
         # `ledger.reconcile`, so nothing here was also stated above.
         if context.carried_tasks:
-            lines.append(heading("preventive", "Still open from earlier"))
+            lines.append(section_heading("preventive_open"))
             for task in context.carried_tasks[:MAX_LINES]:
                 lines.append(f"{BULLET}{task.get('text', '')}".rstrip())
             extra = len(context.carried_tasks) - MAX_LINES
@@ -820,7 +911,7 @@ class DeterministicNarrator:
         forecast = self._findings_for(context, "preventive")
         if not groups and not forecast:
             return []
-        lines = [heading("preventive", "Maintenance signals")]
+        lines = [section_heading("preventive")]
         for group in self._top(groups):
             label = self._name(group)
             # ⚠️ THE MEASUREMENT, NOT JUST THE NAME. A live report printed
@@ -851,7 +942,7 @@ class DeterministicNarrator:
         if not drifting and not module_findings:
             return []
 
-        lines = [heading("trends", "Trends")]
+        lines = [section_heading("trends", context.cadence)]
         for group in self._top(drifting):
             label = self._name(group)
             # ⚠️ THE NUMBER IF THERE IS ONE. A live report printed
@@ -900,7 +991,7 @@ class DeterministicNarrator:
             if isinstance(item, dict):
                 by_kind.setdefault(str(item.get("kind") or ""), []).append(item)
 
-        lines = [heading("standing", "Right now")]
+        lines = [section_heading("standing")]
         for kind, label in KIND_HEADINGS:
             group = by_kind.get(kind) or []
             if not group:
@@ -1066,7 +1157,7 @@ class DeterministicNarrator:
 
         lines.extend(self._skipped_lines(context))
 
-        return ([heading("health", "Monitoring health")] + lines) if lines else []
+        return ([section_heading("health")] + lines) if lines else []
 
     def _skipped_lines(self, context: ReportContext) -> List[str]:
         """Why checks did not run — GROUPED BY REASON, one line each.
@@ -1088,8 +1179,16 @@ class DeterministicNarrator:
         for item in context.skipped:
             if not isinstance(item, dict):
                 continue
-            name = str(item.get("title") or "") or readable_label(
-                str(item.get("module") or "a check"))
+            # ⚠️ QUOTED HERE, ONCE, FOR EVERY ARM BELOW. Reported: "Equipment
+            # drawing more at rest did not run: your own automations already
+            # cover this" — the check's NAME runs straight into the sentence, so
+            # the reader cannot see where it ends. Worse, the "covered by" arm
+            # quoted the BLUEPRINT and left the check beside it bare, on one
+            # line. Three call sites printed this name and one of them had the
+            # rule; building it quoted at its single source is what stops a
+            # fourth from diverging.
+            name = name_of(str(item.get("title") or "") or readable_label(
+                str(item.get("module") or "a check")))
             # ⚠️ ON THE CODE, NEVER ON THE SENTENCE. `reason` below is prose and
             # is reworded whenever a reader complains; `code` is the contract.
             if str(item.get("code") or "") == "covered_but_silent":
@@ -1110,8 +1209,7 @@ class DeterministicNarrator:
 
         if silent:
             out.append("")
-            out.append(heading("waiting", "Checks waiting on a rule that has "
-                                          "never reported"))
+            out.append(section_heading("waiting"))
             for name, blueprint in silent[:MAX_LINES]:
                 out.append(f"{BULLET}{name} — covered by {name_of(blueprint)}"
                            if blueprint else f"{BULLET}{name}")
@@ -1181,7 +1279,7 @@ class DeterministicNarrator:
             # a property that does not have it.
             lines.append(f"{BULLET}{absent_voice.get(capability) or capability}")
 
-        return ([heading("coverage", "Not covered by this report")] + lines) if lines else []
+        return ([section_heading("coverage")] + lines) if lines else []
 
     def _preflight_lines(self, context: ReportContext) -> List[str]:
         items = context.discovery.get("preflight") or []

@@ -15,6 +15,8 @@ whether the owner trusts the thing:
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import asyncio
 from typing import Any, Dict, List, Optional
 
@@ -169,9 +171,19 @@ def test_the_body_is_plain_text() -> None:
 
 
 def test_the_title_names_the_period_and_audience() -> None:
+    """⚠️ IT PINNED THE CADENCE AND THE PERIOD KEY, WHICH IS WHAT WAS WRONG.
+    "Weekly property brief — 2026-W34" was reported as confusing twice over:
+    "would that always be daily?" (the cadence is a setting, restated) and
+    "based on what start/end date?" (`2026-W34` is a key, not dates). The title
+    now carries the SPAN, which answers both and makes the cadence redundant.
+    """
+    from reports.schedule import period_span
     title, _ = DeterministicNarrator().render(_ctx())
-    assert "2026-W34" in title
-    assert "Weekly" in title
+    assert period_span("weekly", datetime.fromisoformat(
+        "2026-08-20T07:00:00+08:00")) in title
+    assert "Weekly" not in title, "the cadence is a setting, not the window"
+    assert "2026-W34" not in title, "a period KEY is not a date range"
+    assert "brief" in title.lower()
 
 
 def test_the_renderer_never_invents_a_number() -> None:

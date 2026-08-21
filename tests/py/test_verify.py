@@ -17,6 +17,7 @@ from __future__ import annotations
 # `style.py` is the one place a heading is decided; reading it here means
 # the next change to how a brief looks touches one file.
 from reports.narrate.style import BULLET, heading  # noqa: F401
+from reports.narrate.deterministic import section_heading  # noqa: E402
 
 from typing import Any, Dict, List
 
@@ -191,7 +192,7 @@ def test_a_verification_gets_its_own_heading() -> None:
     # first bullet was then the cost line and the assertion compared it to the
     # dateline. The property is "the verification bullet has a heading above
     # it", so start from the heading.
-    head = lines.index(heading("verified", "Followed up"))
+    head = lines.index(section_heading("verified"))
     assert lines[head + 1].startswith(BULLET), (
         "nothing is listed under the Followed up heading")
 

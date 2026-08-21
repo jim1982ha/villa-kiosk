@@ -432,3 +432,43 @@ def test_every_cadence_says_what_its_window_is() -> None:
     assert "midnight" in schedule.WINDOW_PHRASE["daily"]
     assert "Monday" in schedule.WINDOW_PHRASE["weekly"]
     assert "1st" in schedule.WINDOW_PHRASE["monthly"]
+
+
+def test_a_scoped_heading_reads_as_english_not_as_a_cadence_name() -> None:
+    """⚠️ THE TEST THAT DERIVES THE HEADING CANNOT CHECK THE HEADING.
+
+    `deterministic` already had a `PERIOD_WORD` ({'daily': 'Daily'}) for the
+    title, and importing `schedule`'s under the same name shadowed it — every
+    scoped heading rendered "What went wrong Weekly". Every test that builds its
+    expectation from `section_heading` agreed, because they were reading the
+    same wrong expression. So this one asserts the VALUE, not the agreement.
+    """
+    from reports.narrate.deterministic import section_heading
+    for cadence, expected in (("daily", "today"), ("weekly", "this week"),
+                              ("monthly", "this month")):
+        rendered = section_heading("critical", cadence)
+        assert rendered.endswith(expected), rendered
+        assert cadence.title() not in rendered, (
+            f"{rendered!r} ends with the cadence's NAME, not a phrase a heading "
+            f"can end with — the shadowing bug")
+
+
+def test_the_title_span_says_which_days_the_report_covers() -> None:
+    """⚠️ "Daily property brief - 2026-08-21" drew two questions in one breath:
+    "would that always be daily?" and "based on what start/end date?". The
+    cadence is a SETTING and the date was the SEND date, so neither named the
+    days the contents describe. The span answers both.
+
+    Derived from `period_start`, so a title can never describe a window the body
+    does not — `period_key`'s own header warns about exactly that shape, where
+    both halves stay internally consistent and only the reader can tell.
+    """
+    from datetime import datetime, timezone
+    from reports import schedule
+    friday = datetime(2026, 8, 21, 23, 35, tzinfo=timezone.utc)
+    assert schedule.period_span("daily", friday) == "21 Aug 2026"
+    assert schedule.period_span("weekly", friday) == "17-23 Aug 2026"
+    assert schedule.period_span("monthly", friday) == "August 2026"
+    # The weekly span must START on the same day period_start does.
+    start = schedule.period_start("weekly", friday)
+    assert str(start.day) == schedule.period_span("weekly", friday).split("-")[0]

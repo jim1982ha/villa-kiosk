@@ -1,3 +1,14 @@
+## 2.585.0
+
+### Changed — the brief now says which days it covers, in the title and in every heading that has a period
+
+"Daily property brief — 2026-08-21" named a SETTING and the SEND date, so
+neither said which days the contents describe; the title now carries the span.
+Period-scoped headings gained "today"/"this week"/"this month", and the sections
+that deliberately look outside the period say so instead. The headline's "3
+findings from this property's own checks" counted verifications and named the
+one thing it was not. Check names in prose are now quoted everywhere.
+
 ## 2.584.0
 
 ### Fixed — "7 transitions, max 6 transitions" read as two measurements, and an acknowledged rule could hide
