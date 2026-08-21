@@ -119,6 +119,15 @@ export type SkipReason = (typeof SKIP_REASON)[number];
  * (`sensor.<firstname>_bedroom_window`). The label is what a reader needs; `ref` is
  * the opaque handle a model needs to refer to something.
  */
+/** Where a finding sits in the brief's three zones, and which way a number
+ *  moved against the periods before it. Both are validated on the way OUT to a
+ *  narration provider, so both must match `contracts.py` exactly. */
+export const ZONE = ["needs_you", "this_period", "about_report"] as const;
+export type Zone = (typeof ZONE)[number];
+
+export const TREND_DIRECTION = ["up", "down", "flat"] as const;
+export type TrendDirection = (typeof TREND_DIRECTION)[number];
+
 export const PAYLOAD_ALLOWED_FIELDS = [
   "ref",
   "kind",

@@ -73,7 +73,7 @@ from .. import links as links_mod
 from .. import trend as trend_mod
 from ..text import readable_label
 from .style import BULLET, heading, name_of, title_mark
-from ..contracts import severity_rank
+from ..contracts import ZONE, severity_rank
 from .base import ReportContext
 
 #: Human wording for a cadence, in the possessive form the title uses.
@@ -183,7 +183,14 @@ SECTION_TITLE = {
 #: ⚠️ EVERY SECTION HAS ONE — asserted, not assumed. A section missing from this
 #: table would render in no zone, which is the silent disappearance
 #: `SECTION_FOR_KIND` already exists to prevent one layer down.
-ZONE_ORDER: Tuple[str, ...] = ("needs_you", "this_period", "about_report")
+#: ⚠️ THE CONTRACT'S OWN TUPLE, NOT A SECOND COPY. This restated
+#: `contracts.ZONE` verbatim, so the renderer and the value validated on its way
+#: to a narration provider were two declarations of one set — add a zone to
+#: either and the other never hears about it. The ORDER is meaningful here and
+#: the contract's tuple is already in reading order, which is why it can serve
+#: both; if that ever stops being true, the fix is a derived ordering, never a
+#: second list.
+ZONE_ORDER: Tuple[str, ...] = ZONE
 ZONE_TITLE = {
     "needs_you": "NEEDS YOU",
     "this_period": "THIS PERIOD",
@@ -209,6 +216,26 @@ ZONE_OF_SECTION = {
 #: ⚠️ THE RULE IS A CHARACTER `inert()` LEAVES ALONE, and that was checked
 #: rather than assumed — box-drawing passes, asterisks and backticks do not.
 ZONE_RULE = "\u2501"
+
+
+def add_heading(lines: List[str], key: str, cadence: str = "") -> None:
+    """Append a section heading, with the blank line it needs if it follows text.
+
+    ⚠️ THIS RULE HAS NOW BEEN MISSED THREE TIMES, EACH AT A NEW SITE, WHICH MAKES
+    THE RULE THE DEFECT RATHER THAN ANY OF THE SITES. `render` only separates
+    SECTIONS, so a section emitting two headings runs them together — first
+    caught between "Closed by itself" and "For the facility manager", then
+    before "Still open from earlier", then between "Followed up" and "Closed by
+    itself" when that method was split. Each fix was an inline `if lines:
+    lines.append("")` at the site somebody happened to be looking at, which is
+    `grep -l` three releases running.
+
+    A caller now gets the blank line by CALLING, and a fourth heading cannot
+    forget it.
+    """
+    if lines:
+        lines.append("")
+    lines.append(section_heading(key, cadence))
 
 
 def zone_heading(zone: str, width: int = 44) -> str:
@@ -1068,7 +1095,7 @@ class DeterministicNarrator:
             # ENDED, which is precisely the line a reader should be able to
             # find. "Followed up" describes the ACTION, which is evidenced;
             # the sentence itself never says more than "has not recurred".
-            lines.append(section_heading("verified"))
+            add_heading(lines, "verified")
             shown = verified[:MAX_LINES]
             tails = [self._verified_tail(i) for i in shown]
             # ⚠️ ONLY HOIST WHEN THERE IS A GROUP TO HOIST TO. The first cut
@@ -1093,7 +1120,7 @@ class DeterministicNarrator:
             # a heading that had lost its icon. Found by rendering a brief from
             # real data and looking at it, which is the only thing that finds a
             # line that is grammatical and misplaced.
-            lines.append(section_heading("selfclear", context.cadence))
+            add_heading(lines, "selfclear", context.cadence)
             # ⚠️ NAMED, NOT COUNTED. This printed "3 alerts resolved without
             # intervention." directly under a section that had just listed
             # those same three with their durations — a number the reader has to
@@ -1130,14 +1157,12 @@ class DeterministicNarrator:
             # with no blank line between them — visible in the first delivered
             # brief that had both. The separator belongs wherever a heading
             # follows content, not only at a section boundary.
-            if lines:
-                lines.append("")
             # ⚠️ "FACILITY MANAGER", NOT "CARETAKER". The kiosk calls this
             # person the Facility Manager everywhere — the workspace, the role,
             # the permission — and the brief was the only surface using a
             # second word for them. The blueprints' own `caretaker_todo_list`
             # input keeps its name; that is the operator's YAML, not ours.
-            lines.append(section_heading("fixed", context.cadence))
+            add_heading(lines, "fixed", context.cadence)
             for task in tasks[:MAX_LINES]:
                 if isinstance(task, dict):
                     where = str(task.get("bucket") or "").strip()
@@ -1160,13 +1185,7 @@ class DeterministicNarrator:
         # the thing an owner reads that list for. Already deduplicated by
         # `ledger.reconcile`, so nothing here was also stated above.
         if context.carried_tasks:
-            # ⚠️ A SECTION CAN HOLD TWO HEADINGS AND `render` ONLY SEPARATES
-            # SECTIONS — the same defect as the "Closed by itself" pair, in the
-            # other half of this method, found in a delivered brief where "For
-            # the facility manager" ran straight into this one.
-            if lines:
-                lines.append("")
-            lines.append(section_heading("preventive_open"))
+            add_heading(lines, "preventive_open")
             for task in context.carried_tasks[:MAX_LINES]:
                 lines.append(f"{BULLET}{task.get('text', '')}".rstrip())
             extra = len(context.carried_tasks) - MAX_LINES
@@ -1506,8 +1525,12 @@ class DeterministicNarrator:
                            f"run — {reason}: {', '.join(names)}")
 
         if silent:
-            out.append("")
-            out.append(section_heading("waiting"))
+            # ⚠️ THE FOURTH SITE, AND IT WAS CORRECT BY HAND. It wrote its own
+            # blank line and always had — so it never produced the bug, and that
+            # is exactly why it stayed invisible while three other sites were
+            # fixed one at a time. A rule kept by four independent copies, three
+            # of which have already failed it, is not a rule.
+            add_heading(out, "waiting")
             for name, blueprint in silent[:MAX_LINES]:
                 out.append(f"{BULLET}{name} — covered by {name_of(blueprint)}"
                            if blueprint else f"{BULLET}{name}")

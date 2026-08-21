@@ -1,3 +1,14 @@
+## 2.594.0
+
+### Changed — /dry-audit: two enums shipped unpinned, the zone list existed twice, and a heading rule had four copies
+
+`ZONE` and `TREND_DIRECTION` were validated outbound but never registered in
+`CONTRACT_SETS`, so nothing checked them against the SPA; adding them
+immediately demanded the TypeScript twin, which is the pin working. The
+renderer also restated the zone tuple instead of reading the contract's. And
+"a heading following content needs a blank line" was kept by four hand-written
+copies, three of which had already failed it — it is one function now.
+
 ## 2.593.0
 
 ### Fixed — the kiosk link arrived dead, and four smaller defects in a delivered brief

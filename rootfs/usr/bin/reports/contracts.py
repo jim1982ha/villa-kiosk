@@ -176,4 +176,12 @@ CONTRACT_SETS: Final[Dict[str, Tuple[str, ...]]] = {
     "NARRATION_MODE": NARRATION_MODE,
     "SKIP_REASON": SKIP_REASON,
     "PAYLOAD_ALLOWED_FIELDS": PAYLOAD_ALLOWED_FIELDS,
+    # ⚠️ ADDED ONE RELEASE LATE, AND THE COMMENT ABOVE PREDICTED IT. `ZONE` and
+    # `TREND_DIRECTION` shipped in v2.592.0 as validated outbound enums and were
+    # not registered here, so nothing checked them against the SPA — the exact
+    # "a check that must be updated by hand silently stops covering new cases"
+    # this dict exists to avoid, missed two lines below the sentence saying so.
+    # /dry-audit found it the same day.
+    "ZONE": ZONE,
+    "TREND_DIRECTION": TREND_DIRECTION,
 }

@@ -33,6 +33,7 @@ from reports.narrate.style import (  # noqa: F401
 )
 
 import inspect
+import os
 import re
 from typing import Any, Dict, List
 
@@ -953,3 +954,34 @@ def test_no_two_headings_share_a_glyph_unless_they_are_mutually_exclusive() -> N
                and set(k) != {"money", "money_unpriced"}}
     assert not clashes, (
         f"these headings share a marker and can appear in one report: {clashes}")
+
+
+def test_no_section_appends_a_heading_without_the_shared_helper() -> None:
+    """⚠️ THE RULE WAS MISSED AT THREE SEPARATE SITES, ONE PER RELEASE, WHICH
+    MAKES THE RULE THE DEFECT. `render` only separates SECTIONS, so a section
+    emitting two headings runs them together. It was fixed inline three times —
+    between "Closed by itself" and "For the facility manager", before "Still
+    open from earlier", then between "Followed up" and "Closed by itself" when
+    that method was split — each time at the site somebody happened to be
+    looking at. That is `grep -l` three releases running.
+
+    `add_heading` is the one owner. This asserts the applicable set is empty:
+    nothing appends a section heading any other way, so a fourth site gets the
+    blank line by CALLING rather than by remembering.
+    """
+    # ⚠️ THE MODULE'S OWN FILE, VIA `inspect`. There is no REPO_ROOT in this
+    # file (conftest puts the package on the path), and hard-coding one would
+    # be a second answer to "where is the source" — the shape this test is
+    # about, in the test itself.
+    from reports.narrate import deterministic as det
+    source = inspect.getsource(det)
+    offenders = [
+        f"line {n}: {line.strip()}"
+        for n, line in enumerate(source.splitlines(), 1)
+        if "append(section_heading(" in line
+        # `add_heading`'s own body is the one place the literal belongs.
+        and "lines.append(section_heading(key, cadence))" not in line
+    ]
+    assert not offenders, (
+        "these append a heading directly and will run it into the line above:\n  "
+        + "\n  ".join(offenders))
