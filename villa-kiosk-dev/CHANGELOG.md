@@ -1,3 +1,13 @@
+## 2.541.0
+
+### Fixed — a checkbox with no styling, and a spinner that did not turn
+
+The schedule's on/off control named a style that does not exist, so the browser
+drew its own plain white square floating above the label; the "Composing…"
+indicator named another, so it sat still. Neither is visible to a type checker —
+a class name is just a string — so a check now compares every class in the
+markup against the stylesheet, across the whole app.
+
 ## 2.540.0
 
 ### Fixed — the new workspace could not be opened, and is now called Briefings
