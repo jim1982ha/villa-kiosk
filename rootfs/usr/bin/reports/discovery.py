@@ -275,6 +275,7 @@ async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
                 "needs_target": (domain_name == "notify"
                                  and ("entity_id" in fields
                                       or service == "send_message")),
+                "plain_mode": _plain_mode(fields),
             })
     targets += await _notify_entities(hass)
     targets.sort(key=lambda row: str(row["service"]))
@@ -373,6 +374,50 @@ def _redundant(domain: str, fields: Dict[str, Any],
     if domain in notify_services:
         return True
     return "entity_id" in fields
+
+
+def _plain_mode(fields: Dict[str, Any]) -> str:
+    """The option that tells this service NOT to parse the message, or "".
+
+    ⚠️ SENDING PLAIN TEXT IS NOT THE SAME AS IT ARRIVING PLAIN, and the
+    reference villa proved it. `deliver.py` sends `title` + `message` with no
+    markup — its header says so at length — but the villa's telegram_bot entry
+    has `parse_mode: markdown` as its DEFAULT, so Telegram parsed our plain text
+    as Markdown on the way in and ate every underscore as an italic marker. The
+    owner's delivered brief read `criticalschedule---poolpump`,
+    `levelanomaly`, `sensorhealth`, `entityid`, while the same brief in the
+    console read `critical_schedule---pool_pump`. Silent, lossy, and invisible
+    from this end: the add-on's log says delivered, and it was.
+
+    ⚠️ STILL NO PLATFORM NAME. The service DECLARES its `parse_mode` options in
+    the schema this function is handed, so the question asked is "does this
+    service offer a way to switch parsing off", exactly as `_speaks_message`
+    asks "does it take a message". A service that offers none returns "" and is
+    called precisely as before.
+
+    ⚠️ AND IT IS NOT AN ESCAPING PROBLEM. Escaping would mean knowing which
+    dialect each platform speaks — markdown, markdownv2 and html differ in what
+    they escape and how — which is the platform table this file exists to avoid.
+    Telling the service not to parse is one field and no dialect knowledge.
+    """
+    field = fields.get("parse_mode")
+    if not isinstance(field, dict):
+        return ""
+    selector = field.get("selector")
+    options: Any = []
+    if isinstance(selector, dict) and isinstance(selector.get("select"), dict):
+        options = selector["select"].get("options") or []
+    if not isinstance(options, list):
+        return ""
+    for option in options:
+        name = option if isinstance(option, str) else ""
+        if isinstance(option, dict):
+            name = str(option.get("value") or "")
+        # "plain_text", "plain", "none", "text" — whichever this service calls
+        # its no-parsing option. Matched on the CONCEPT, not on a known list.
+        if name and ("plain" in name.lower() or name.lower() in ("none", "text")):
+            return name
+    return ""
 
 
 def _speaks_message(fields: Dict[str, Any]) -> bool:

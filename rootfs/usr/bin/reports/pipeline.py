@@ -400,7 +400,9 @@ async def run_report(
     # see what arrives" is a poor way to find out that a module is noisy — the
     # finding out happens on someone's phone.
     deliveries = ([] if preview
-                  else await deliver(session, targets, title, body))
+                  else await deliver(session, targets, title, body,
+                                     (found.get("inventory") or {})
+                                     .get("notify_targets") or []))
 
     # ── record ──────────────────────────────────────────────────────────────
     # The report's own severity is the loudest thing in it — a finding or a

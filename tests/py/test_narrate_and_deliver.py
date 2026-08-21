@@ -629,3 +629,46 @@ def test_the_history_entry_counts_the_findings_the_brief_actually_reports() -> N
         "a P1 blueprint alert must outrank a notice, or the record understates "
         "the report it stands for")
     assert len(groups) == 1
+
+
+def test_a_service_that_parses_markup_is_told_not_to() -> None:
+    """⚠️ SENDING PLAIN TEXT IS NOT THE SAME AS IT ARRIVING PLAIN.
+
+    The reference villa's Telegram integration has `parse_mode: markdown` as
+    its DEFAULT, so it parsed our unmarked text on the way in and consumed
+    every underscore as an italic marker. The delivered brief read
+    `criticalschedule---poolpump`, `levelanomaly`, `sensorhealth`, `entityid`
+    where the same brief in the console read `critical_schedule---pool_pump`.
+
+    Lossy, silent and invisible from our end: the add-on logged `delivered`,
+    and it had. Only comparing the message against the composed one found it —
+    which is why the QA harness prints the composed brief.
+    """
+    from reports.deliver import _payload_for
+    assert _payload_for("telegram_bot.send_message", "T", "B", "plain_text") == {
+        "title": "T", "message": "B", "parse_mode": "plain_text"}
+    # ⚠️ A SERVICE OFFERING NO SUCH OPTION GETS EXACTLY WHAT IT GOT BEFORE.
+    assert _payload_for("notify.mobile_app_x", "T", "B") == {
+        "title": "T", "message": "B"}
+    # Both at once: an entity target on a parsing platform.
+    assert _payload_for("entity:notify.bot_group", "T", "B", "none") == {
+        "title": "T", "message": "B",
+        "entity_id": "notify.bot_group", "parse_mode": "none"}
+
+
+def test_the_no_parse_option_is_read_from_the_service_not_a_platform_list() -> None:
+    """⚠️ A CAPABILITY TEST, like `_speaks_message`. The service DECLARES its
+    `parse_mode` options; the question asked is "does it offer a way to switch
+    parsing off", never "is this Telegram". Escaping instead would mean knowing
+    which dialect each platform speaks — markdown, markdownv2 and html differ —
+    which is the platform table this file exists to avoid."""
+    from reports.discovery import _plain_mode
+    telegram = {"parse_mode": {"selector": {"select": {
+        "options": ["html", "markdown", "markdownv2", "plain_text"]}}}}
+    assert _plain_mode(telegram) == "plain_text"
+    assert _plain_mode({"parse_mode": {"selector": {"select": {
+        "options": [{"value": "html"}, {"value": "none"}]}}}}) == "none"
+    # A service with no parse_mode, or one offering only parsing modes.
+    assert _plain_mode({"message": {"required": True}, "title": {}}) == ""
+    assert _plain_mode({"parse_mode": {"selector": {"select": {
+        "options": ["html", "markdown"]}}}}) == ""

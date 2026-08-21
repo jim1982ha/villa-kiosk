@@ -107,7 +107,8 @@ ENTITY_PREFIX = "entity:"
 ENTITY_SERVICE = "notify/send_message"
 
 
-def _payload_for(target: str, title: str, message: str) -> Dict[str, Any]:
+def _payload_for(target: str, title: str, message: str,
+                 plain_mode: str = "") -> Dict[str, Any]:
     """The body for one target, and where it is posted.
 
     ⚠️ STILL THE INTERSECTION — `title` plus `message`, plain text — with
@@ -115,18 +116,33 @@ def _payload_for(target: str, title: str, message: str) -> Dict[str, Any]:
     addressing. That is not a platform branch: `notify.send_message` takes an
     entity the way any entity service does, and `discovery` flags exactly this
     case as `needs_target`.
+
+    ⚠️ AND `parse_mode` WHERE THE SERVICE OFFERS ONE, because SENDING plain
+    text is not the same as it ARRIVING plain. The reference villa's Telegram
+    integration defaults to `parse_mode: markdown`, so it parsed our unmarked
+    text on the way in and consumed every underscore as an italic marker: the
+    owner's delivered brief read `criticalschedule---poolpump` where the
+    console read `critical_schedule---pool_pump`. Lossy, silent, and invisible
+    from here — the log said delivered, and it was.
+
+    The value is whatever THAT service calls its no-parsing option, read from
+    its own published schema by `discovery._plain_mode`; a service offering
+    none gets exactly the payload it got before.
     """
+    body: Dict[str, Any] = {"title": title, "message": message}
     if target.startswith(ENTITY_PREFIX):
-        return {"entity_id": target[len(ENTITY_PREFIX):],
-                "title": title, "message": message}
-    return {"title": title, "message": message}
+        body["entity_id"] = target[len(ENTITY_PREFIX):]
+    if plain_mode:
+        body["parse_mode"] = plain_mode
+    return body
 
 
 async def deliver_one(session: ClientSession, target: str,
-                      title: str, message: str) -> Dict[str, Any]:
+                      title: str, message: str,
+                      plain_mode: str = "") -> Dict[str, Any]:
     """Send to one target. Never raises."""
     url = f"{REST_ROOT}/services/{_service_path(target)}"
-    payload = _payload_for(target, title, message)
+    payload = _payload_for(target, title, message, plain_mode)
     try:
         async with session.post(url, headers=AUTH_HEADERS, json=payload,
                                 timeout=None) as response:
@@ -143,7 +159,8 @@ async def deliver_one(session: ClientSession, target: str,
 
 
 async def deliver(session: ClientSession, targets: Sequence[str],
-                  title: str, message: str) -> List[Dict[str, Any]]:
+                  title: str, message: str,
+                  known: Sequence[Dict[str, Any]] = ()) -> List[Dict[str, Any]]:
     """Send to every target, independently.
 
     Sequential rather than gathered, on purpose: a villa has a handful of
@@ -159,10 +176,17 @@ async def deliver(session: ClientSession, targets: Sequence[str],
         warn("no delivery target configured — report produced but not sent")
         return []
 
+    # ⚠️ FROM DISCOVERY'S OWN TARGET RECORDS, not a second lookup. The schema
+    # was already read this pass; asking Home Assistant again at delivery time
+    # would be a second answer to a question already answered, and one more
+    # thing to fail while a report is going out.
+    plain = {str(t.get("service") or ""): str(t.get("plain_mode") or "")
+             for t in known if isinstance(t, dict)}
+
     results: List[Dict[str, Any]] = []
     for target in targets:
         result = await asyncio.wait_for(
-            deliver_one(session, target, title, message),
+            deliver_one(session, target, title, message, plain.get(target, "")),
             timeout=DELIVERY_TIMEOUT_S + 5)
         results.append(result)
         if result["status"] == "sent":
