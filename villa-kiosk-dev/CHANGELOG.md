@@ -1,11 +1,10 @@
-## 2.553.0
+## 2.554.0
 
-### Fixed — a weekly briefing fired on Monday and nothing said so
+### Added — a one-paste check that the briefing subsystem is working
 
-Creating one on a Friday for two minutes' time sent nothing, correctly and
-invisibly: its slot for that week had passed four days earlier. The day is now a
-control — any weekday, any date of the month — and each schedule states in plain
-words when it next goes out, or why it will not. The checks are described by
-what they look for instead of by their internal names, and the destination list
-no longer offers two routes to the same place.
+`tests/qa/briefings-qa.js` is pasted into a browser console on the kiosk and
+prints a pass/fail line per feature: the endpoints, the stored settings, when
+each schedule next goes out, the destinations offered, the checks, and — for
+narration — exactly what would leave the property. It reads and previews only:
+no setting is written and no notification is sent.
 
