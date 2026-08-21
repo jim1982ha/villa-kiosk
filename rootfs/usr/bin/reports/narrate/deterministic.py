@@ -1023,9 +1023,14 @@ class DeterministicNarrator:
             for name, blueprint in silent[:MAX_LINES]:
                 out.append(f"{BULLET}{name} — covered by {name_of(blueprint)}"
                            if blueprint else f"{BULLET}{name}")
-            out.append(f"{BULLET}Each of those rules is installed and has "
-                       f"produced no event since. Check them, or the check they "
-                       f"stand in for runs by itself after 45 days.")
+            # ⚠️ NO BULLET. This is the group's EXPLANATION, not a member of
+            # it — bulleted, it reads as a third check that did not run, and a
+            # reader counting the list gets three where there are two. The
+            # dateline sets the precedent: a line that is not a finding does not
+            # carry the mark that means "finding".
+            out.append("Each of those rules is installed and has produced no "
+                       "event since. Check them, or the check they stand in "
+                       "for runs by itself after 45 days.")
         return out
 
     def _coverage(self, context: ReportContext) -> List[str]:

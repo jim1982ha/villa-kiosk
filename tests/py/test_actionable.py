@@ -481,3 +481,21 @@ def test_the_sub_heading_has_its_own_glyph() -> None:
     body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
     line = next(l for l in body.splitlines() if "never reported" in l)
     assert line.startswith(SECTION_MARK["waiting"])
+
+
+def test_the_group_note_is_not_a_bullet() -> None:
+    """⚠️ A BULLET MEANS "AN ITEM IN THIS LIST". The explanation under the
+    sub-heading wore one, so a reader counting the checks that stood down got
+    three where there are two — reported as "there should not have a bullet on
+    this line". The dateline sets the precedent: a line that is not a finding
+    does not carry the mark that means finding.
+    """
+    from reports.narrate.style import BULLET
+    body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
+    block = [l for l in body.split("never reported")[1].splitlines() if l.strip()]
+    bullets = [l for l in block if l.startswith(BULLET)]
+    assert len(bullets) == 2, (
+        f"expected one bullet per stood-down check, got {len(bullets)}:\n"
+        + "\n".join(block))
+    note = next(l for l in block if "produced no event since" in l)
+    assert not note.startswith(BULLET)

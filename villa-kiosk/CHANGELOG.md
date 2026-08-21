@@ -1,3 +1,12 @@
+## 2.578.1
+
+### Fixed — the group's explanation was wearing a bullet
+
+Under "Checks waiting on a rule that has never reported", the sentence
+explaining the group carried the same bullet as the checks themselves, so a
+reader counting the list got three where there are two. A bullet means "an item
+in this list"; that line is not one.
+
 ## 2.578.0
 
 ### Fixed — the quoting never reached you, and the stood-down checks now sit together
