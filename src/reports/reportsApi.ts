@@ -34,6 +34,17 @@ export interface ReportsDiagnostics {
   capabilityMeaning: Record<string, string>;
   capabilityAbsent: Record<string, string>;
   preflight: { severity: Severity; detail: string; code: string }[];
+  /** ⚠️ WHEN DISCOVERY RAN, which is NOT "now". This endpoint probes Home
+   *  Assistant live on every request, and the dialog requests it once, when it
+   *  opens — so everything derived from it is a snapshot taken at this instant
+   *  and does not update while the dialog is open. The Coverage tab prints it
+   *  rather than leaving a reader to assume a live feed. */
+  at: string;
+  /** Every `notify.*` service this property has, for the destination picker.
+   *  Already on the wire inside `inventory` — the Schedule tab could only
+   *  REMOVE targets until v2.545.0 because nothing parsed it, which made
+   *  "where briefings go" unconfigurable from the dialog that owns it. */
+  notifyTargets: { service: string; name: string; broadcast: boolean }[];
   collector: {
     connected: boolean;
     connectedSince: string;
@@ -179,8 +190,8 @@ export async function fetchReportsConfig(): Promise<
   try {
     const r = await fetch(ingressPath("reports-config"), { credentials: "same-origin" });
     if (!r.ok) return null;
-    const d = (await r.json()) as { data?: unknown; rev?: unknown };
-    return { config: parseReportsConfig(d.data), rev: str(d.rev, "0"), raw: obj(d.data) };
+    const d = (await r.json()) as { config?: unknown; rev?: unknown };
+    return { config: parseReportsConfig(d.config), rev: str(d.rev, "0"), raw: obj(d.config) };
   } catch {
     return null;
   }
@@ -200,7 +211,19 @@ export type SaveOutcome =
  *  ⚠️ The revision travels IN THE BODY, not as `If-Match`. That is this
  *  server's contract (`_json_store_handlers`), and a header would simply be
  *  ignored — the write would then succeed unconditionally, which is the exact
- *  failure the parameter exists to prevent. */
+ *  failure the parameter exists to prevent.
+ *
+ *  ⚠️ THE ENVELOPE KEY IS `config`, AND IT IS PER-STORE, NOT PER-CODEBASE.
+ *  `_json_store_handlers(path, key, …)` takes the key as an argument, so
+ *  /device-config and /reports-config wrap their document in `config` while
+ *  /fm-data wraps its in `data`. This client was written from `fmApi.ts` and
+ *  inherited `data`, which the server does not read here — so `body.get("config")`
+ *  was None and every save came back 400 ("config must be a dict"). The GET had
+ *  the SAME defect and failed SILENTLY: `d.data` was undefined, `parseReportsConfig`
+ *  degraded it to defaults, and the Schedule tab showed an empty configuration
+ *  that looked exactly like a property with nothing set up. The write failing
+ *  loudly is the only reason the read was ever found. Pinned by
+ *  `tests/py/test_store_envelope.py`, which derives each key from the proxy. */
 export async function saveReportsConfig(
   config: ReportsConfig,
   expectedRev: string | null,
@@ -212,7 +235,7 @@ export async function saveReportsConfig(
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        data: { ...carryOver, ...config },
+        config: { ...carryOver, ...config },
         ...(expectedRev === null ? {} : { rev: expectedRev }),
       }),
     });
@@ -259,8 +282,14 @@ export async function fetchReportsHistory(): Promise<ReportHistoryEntry[] | null
   try {
     const r = await fetch(ingressPath("reports-history"), { credentials: "same-origin" });
     if (!r.ok) return null;
-    const d = (await r.json()) as { data?: unknown };
-    const entries = arr(obj(d.data).entries).map(parseEntry);
+    // ⚠️ `history`, NOT `data` — the envelope key is per-store, and this was
+    // the THIRD site with the same inherited mistake. It never surfaced: a
+    // history store that parses to nothing renders as "nothing has been
+    // delivered yet", which is the correct display for a subsystem that has
+    // never run. Found by `tests/py/test_store_envelope.py` on its first pass,
+    // not by anyone reading the tab.
+    const d = (await r.json()) as { history?: unknown };
+    const entries = arr(obj(d.history).entries).map(parseEntry);
     return entries.reverse();
   } catch {
     return null;
@@ -308,6 +337,15 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
           code: str(item.code),
         };
       }),
+      at: str(d.at),
+      notifyTargets: arr(obj(d.inventory).notify_targets).map((t) => {
+        const target = obj(t);
+        return {
+          service: str(target.service),
+          name: str(target.name),
+          broadcast: bool(target.broadcast),
+        };
+      }).filter((t) => t.service !== ""),
       collector: {
         connected: bool(collector.connected),
         connectedSince: str(collector.connected_since),

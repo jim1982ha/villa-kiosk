@@ -12,6 +12,26 @@
 // actually set is written back. Filling in defaults would make a DELETED
 // schedule indistinguishable from an absent one, which is the config
 // resurrection bug CLAUDE.md's hard rule describes.
+//
+// ⚠️ "WRITTEN FOR" IS NOT "SENT TO", AND THE FIRST VERSION OF THIS TAB LET A
+// READER BELIEVE IT WAS. `audience` selects WHAT IS IN the brief — the owner's
+// brief carries a money section the facility one omits, the facility brief is
+// the work list (`SECTIONS_FOR` in `narrate/deterministic.py` is the whole
+// difference). WHERE it goes is `notify_targets`, which is one shared list for
+// every schedule. So picking "facility" does NOT route anything to a facility
+// manager; it changes the prose, and the same notification targets receive it.
+// The owner asked this outright — "how would the system know where to send the
+// report based on the owner/facility selection?" — which is the question a
+// two-column row of unlabelled selects invites, and the honest answer is that
+// it does not. Both facts are now stated in the UI beside the controls.
+//
+// ⚠️ AND THE TARGET LIST HAD NO WAY TO ADD ONE. It rendered `notifyTargets`
+// with a delete button per row and no picker, so "Nothing configured — a
+// scheduled brief would be composed and have nowhere to go" was a permanent
+// state reachable only by editing the store by hand. `pipeline.targets_for`
+// also supports per-SCHEDULE targets; that is deliberately not exposed yet —
+// one destination list is the common case and two ways to set it is the shape
+// of a config nobody can reason about.
 
 import { useEffect, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
@@ -54,6 +74,16 @@ export default function ScheduleTab({
 
   const schedules = draft.schedules ?? [];
   const targets = draft.notifyTargets ?? [];
+  const available = diagnostics?.notifyTargets ?? [];
+  const unused = available.filter((t) => !targets.includes(t.service));
+  /** A configured target keeps its friendly name if discovery still knows it,
+   *  and prints as its raw service id if it does not — a target that has since
+   *  been removed from Home Assistant must stay VISIBLE and removable, not
+   *  silently disappear from a list the operator is auditing. */
+  const nameFor = (service: string) => {
+    const known = available.find((t) => t.service === service);
+    return known && known.name !== service ? `${known.name} — ${service}` : service;
+  };
   const set = (patch: Partial<ReportsConfig>) => setDraft({ ...draft, ...patch });
   const setAt = (i: number, patch: Partial<ReportSchedule>) =>
     set({ schedules: schedules.map((s, n) => (n === i ? { ...s, ...patch } : s)) });
@@ -80,6 +110,13 @@ export default function ScheduleTab({
       </p>
 
       <h3 className="reports-h3">Schedules</h3>
+      <p className="muted body-text">
+        How often, at what hour in the villa&rsquo;s own time, and who it is
+        written for. <strong>Written for</strong> changes what the brief
+        contains — an owner brief includes running costs, a facility brief is
+        the work list — not where it is sent. Every schedule goes to the same
+        destinations, set below.
+      </p>
       {schedules.length === 0 && (
         <p className="muted body-text">None yet.</p>
       )}
@@ -125,14 +162,19 @@ export default function ScheduleTab({
       </button>
 
       <h3 className="reports-h3">Where briefings go</h3>
+      <p className="muted body-text">
+        Every schedule above is delivered to all of these. Home Assistant
+        notification services only — the brief is plain text, so it arrives the
+        same way any other HA notification does.
+      </p>
       {/* ⚠️ `notify.notify` FANS OUT TO EVERY DEVICE IN THE HOUSE. It is a
           perfectly good service and a terrible default — a villa that switches
           reports on and gets the weekly summary on the TV, three phones and a
           tablet switches them off again. Discovery flags it; this warns. */}
       <ul className="reports-list">
-        {(diagnostics?.capabilities.includes("notify") ? targets : []).map((t) => (
+        {targets.map((t) => (
           <li key={t} className="reports-item">
-            <span>{t}</span>
+            <span>{nameFor(t)}</span>
             <button
               className="btn danger icon-only"
               aria-label={`Stop sending to ${t}`}
@@ -148,12 +190,44 @@ export default function ScheduleTab({
             nowhere to go.
           </li>
         )}
-        {targets.some((t) => t.endsWith(".notify")) && (
+        {targets.some((t) => t === "notify.notify") && (
           <li className="reports-item sev-warning">
             One of these sends to every device in the house at once.
           </li>
         )}
       </ul>
+
+      {/* ⚠️ A PICKER, NOT A TEXT FIELD. The services are already known —
+          discovery enumerates them — and a free-text service name that does not
+          exist fails silently at delivery time, hours later, on nobody's
+          screen. `unused` is empty when everything discovered is already a
+          target, which is a different state from "this property has no notify
+          services" and reads differently below. */}
+      {available.length === 0 ? (
+        <p className="muted body-text">
+          This property has no Home Assistant notification services, so there is
+          nowhere to deliver a brief. Set one up in Home Assistant first.
+        </p>
+      ) : unused.length > 0 && (
+        <div className="reports-schedule">
+          <select
+            aria-label="Add a destination"
+            value=""
+            onChange={(e) => {
+              const service = e.target.value;
+              if (service) set({ notifyTargets: [...targets, service] });
+            }}
+          >
+            <option value="">Add a destination…</option>
+            {unused.map((t) => (
+              <option key={t.service} value={t.service}>
+                {t.name === t.service ? t.service : `${t.name} — ${t.service}`}
+                {t.broadcast ? " (every device)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <button className="btn primary" disabled={busy} onClick={() => onSave(draft)}>
         <Save size={16} /><span>{busy ? "Saving…" : "Save"}</span>

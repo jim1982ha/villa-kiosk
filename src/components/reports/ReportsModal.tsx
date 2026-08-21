@@ -80,7 +80,20 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
   // which reads as "briefings are off" and invites configuring them twice.
   const [unreachable, setUnreachable] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
+
+  // ⚠️ A NOTICE BELONGS TO THE ACTION THAT RAISED IT, NOT TO THE DIALOG. It
+  // rendered above the tab body, so "The add-on refused the change (400)" from
+  // a save in Schedule was still on screen in Coverage, History and
+  // Diagnostics — reported by the owner. Those tabs have no save, so the banner
+  // there is an error about nothing, and worse, it reads as an error about
+  // WHATEVER TAB IS SHOWING. Clearing it on switch is the whole fix; keeping
+  // one notice per tab would be a second state machine for a message whose
+  // entire lifetime is "until the user does the next thing".
+  //
+  // ⚠️ AND IT CARRIES ITS TONE. Every notice rendered as `fm-banner warn`,
+  // including "Saved." — a success in the colour of a failure.
+  const [notice, setNotice] = useState<{ text: string; bad: boolean } | null>(null);
+  useEffect(() => { setNotice(null); }, [tab]);
 
   const reload = useCallback(async () => {
     const [c, d, h] = await Promise.all([
@@ -98,20 +111,35 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => { void reload(); }, [reload]);
 
+  /** Re-probe on demand. ⚠️ `/reports-diagnostics` RUNS DISCOVERY LIVE ON
+   *  EVERY REQUEST — it opens a websocket and walks the recorder — so this is
+   *  the real thing rather than a cache bust, and it is also why nothing here
+   *  polls: doing this every few seconds while a dialog sits open would put a
+   *  continuous load on a Pi for a panel that is read once. */
+  const refresh = useCallback(async () => {
+    setBusy(true);
+    setNotice(null);
+    await reload();
+    setBusy(false);
+  }, [reload]);
+
   const save = useCallback(async (next: ReportsConfig) => {
     setBusy(true);
-    setNotice("");
+    setNotice(null);
     const result = await saveReportsConfig(next, rev, carryOver);
     if (result.ok) {
       setConfig(next);
       setRev(result.rev);
-      setNotice("Saved.");
+      setNotice({ text: "Saved.", bad: false });
     } else {
       // ⚠️ A CONFLICT RE-READS RATHER THAN RETRYING. Another device wrote in
       // the gap; overwriting it is exactly what the revision exists to stop.
-      setNotice(result.conflict
-        ? "Someone else changed these settings. Reloaded — please re-apply."
-        : result.error);
+      setNotice({
+        text: result.conflict
+          ? "Someone else changed these settings. Reloaded — please re-apply."
+          : result.error,
+        bad: true,
+      });
       if (result.conflict) await reload();
     }
     setBusy(false);
@@ -119,10 +147,10 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
 
   const compose = useCallback(async () => {
     setBusy(true);
-    setNotice("");
+    setNotice(null);
     const result = await runReportNow({ preview: true, cadence: "weekly" });
     if (result) setPreview(result);
-    else setNotice("Could not compose a brief. See the add-on log.");
+    else setNotice({ text: "Could not compose a brief. See the add-on log.", bad: true });
     setBusy(false);
   }, []);
 
@@ -158,7 +186,11 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="settings-body">
-          {notice && <div className="fm-banner warn">{notice}</div>}
+          {notice && (
+            <div className={`fm-banner${notice.bad ? " warn" : ""}`} role="status">
+              {notice.text}
+            </div>
+          )}
           {unreachable && (
             <div className="fm-banner warn">
               The add-on could not be reached, so these settings are not shown.
@@ -173,7 +205,13 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
               onCompose={() => void compose()}
             />
           )}
-          {tab === "coverage" && <CoverageTab diagnostics={diagnostics} />}
+          {tab === "coverage" && (
+            <CoverageTab
+              diagnostics={diagnostics}
+              busy={busy}
+              onRefresh={() => void refresh()}
+            />
+          )}
           {tab === "schedule" && (
             <ScheduleTab
               config={config}
@@ -184,6 +222,23 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
           )}
           {tab === "history" && <HistoryTab entries={history} />}
           {tab === "diagnostics" && <DiagnosticsTab diagnostics={diagnostics} />}
+        </div>
+
+        {/* ⚠️ THE SHELL WAS COPIED FROM `FacilityModal` AND THE FOOTER WAS NOT.
+            Every dialog in this family — Facility, Settings, Advanced Settings —
+            ends in a `.settings-footer` with a Close button, and this one shipped
+            with no way out except the backdrop or Escape. Neither is discoverable
+            on a wall-mounted tablet, which is the device this is operated from.
+            That is the cost of copying a shell by hand: it carries what the
+            copier noticed. `tests/py/test_modal_shell.py` now derives the parts
+            of the shell from the dialogs that HAVE them and fails on a
+            `.settings-modal` missing one, because there is no component to
+            violate and so nothing else could have caught it. */}
+        <div className="settings-footer" style={{ justifyContent: "space-between" }}>
+          <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
+            Briefings are composed by the add-on and delivered by Home Assistant
+          </span>
+          <button className="btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

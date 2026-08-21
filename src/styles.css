@@ -4219,3 +4219,14 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    reason `.fm-field > input` is written that way. The selects here ARE direct
    children, so `>` costs nothing and closes the door. */
 .reports-schedule > select { flex: 1 1 96px; min-height: var(--touch-min); }
+
+/* When a panel was measured, beside the control that measures it again.
+   ⚠️ WRAPS, and the button keeps its touch target when it does — on a 360px
+   viewport the sentence takes the full width and the button drops below it
+   rather than being crushed to an icon. */
+.reports-freshness {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  justify-content: space-between;
+}
+.reports-freshness > span { flex: 1 1 200px; }
+.reports-freshness > button { min-height: var(--touch-min); }
