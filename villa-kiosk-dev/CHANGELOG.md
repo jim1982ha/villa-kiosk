@@ -1,10 +1,11 @@
-## 2.561.0
+## 2.562.0
 
-### Fixed — tapping a fault in the Cockpit opened the device, not the fault
+### Changed — a check that was reporting success on cases it could not read
 
-The "needs attention" list mixes devices with maintenance records, and every row
-opened a device panel — so an open fault opened whatever equipment it names
-instead of the ticket. A fault now opens in Facility with its details ready to
-edit, and an overdue maintenance job opens the Schedule tab. Rows that stand for
-a device still open the device, which is what they are for.
+The check added last release, meant to keep every dialog's save button in its
+footer, could not see a button whose handler is written inline — which is nearly
+all of them. It caught the one it was written for by coincidence. It now reads
+whole buttons, and knows that a save belonging to a single record rather than to
+the dialog is allowed to sit beside that record. No behaviour changes here; the
+guard around it does.
 
