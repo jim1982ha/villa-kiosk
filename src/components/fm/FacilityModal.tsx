@@ -138,8 +138,14 @@ export default function FacilityModal({
   // summaryGroups.ts) rather than a second, differently-scoped view.
   const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
   const openCheckDevices = (check: ReadinessCheck) => {
-    const group = check.id === "locks" ? locksGroup(entities)
-      : check.id === "lights" ? lightsGroup(entities)
+    // ⚠️ SCOPED TO THE VILLA'S OWN DEVICES, or the panel contradicts the check
+    // that opened it. Since 2.572.0 the checks count `selectableDeviceIds`, so
+    // an unfiltered group answered "2 not locked" and then listed every `lock.*`
+    // Home Assistant has — found by /dry-audit one release later, which is
+    // exactly the drift that follows from narrowing one reader of a set and not
+    // its neighbour.
+    const group = check.id === "locks" ? locksGroup(entities, {}, villaDevices)
+      : check.id === "lights" ? lightsGroup(entities, villaDevices)
       : null;
     if (group) setCheckPanelGroup(group);
   };
@@ -182,6 +188,15 @@ export default function FacilityModal({
     () => buildDeviceOptions(config.entityMap, entities, resolvedRooms, config.deviceGroups,
                              mappedEntityIds, config.dismissedEntityIds),
     [config.entityMap, entities, resolvedRooms, config.deviceGroups, mappedEntityIds, config.dismissedEntityIds],
+  );
+
+  /** The villa's own devices — shared by the readiness drill-down below and
+   *  built here because `mappedEntityIds` only exists at this level. */
+  const villaDevices = useMemo(
+    () => new Set(selectableDeviceIds(config.entityMap, config.deviceGroups,
+                                      mappedEntityIds, entities,
+                                      config.dismissedEntityIds)),
+    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
   );
 
   const unavailableIds = useMemo(

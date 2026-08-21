@@ -82,6 +82,11 @@ _MARKUP_ACTIVE = {
     "<": "(",    # HTML parse mode.
     ">": ")",
 }
+#: ⚠️ `#` IS DELIBERATELY ABSENT. It is a Markdown HEADING marker, not an
+#: entity delimiter — an unpaired one never produces `Can't parse entities`, it
+#: just prints. Adding it would mangle a real name like `Room #2` to fix
+#: nothing. `providers._flatten` strips leading `### ` from a model's answer,
+#: which is a different job on a different input.
 
 
 def inert(text: str) -> str:
@@ -110,10 +115,12 @@ def inert(text: str) -> str:
 
     ⚠️ APPLIED ONCE, AT THE BOUNDARY, ON THE WHOLE MESSAGE. Sanitising per call
     site is the version of this that ships broken again the first time a name
-    reaches a site nobody thought of. Six exist today — device labels, room
-    names, ticket titles, schedule titles, a delivery target's own name inside a
-    preflight notice, and a blueprint's `label` — and the number is not the
-    point: it is that the set grows with ordinary work. The renderer emits no
+    reaches a site nobody thought of. The KINDS of human-supplied string already
+    here are device labels, room names, ticket and schedule titles, a delivery
+    target's own name inside a preflight notice, and a blueprint's `label` — and
+    counting them would be the mistake, not the reassurance: a comment naming
+    "six sites" is the `HOLD_MS_HUD` failure waiting for its seventh. The set
+    grows with ordinary work; a boundary does not. The renderer emits no
     intentional markup anywhere, so there is nothing for a whole-message pass to
     damage, and after it there is no site left that can forget.
     """

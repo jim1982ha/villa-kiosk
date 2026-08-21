@@ -34,8 +34,16 @@ const friendly = (e: HassEntity, entityMap: Record<string, EntityMapping>) =>
 export function locksGroup(
   entities: Record<string, HassEntity>,
   entityMap: Record<string, EntityMapping> = {},
+  /** ⚠️ NARROW THIS TO THE VILLA'S OWN DEVICES WHERE THE CALLER KNOWS THEM.
+   *  Optional and unfiltered by default, so the bottom-bar tile keeps the
+   *  behaviour it has always had — see the note at `SummaryBar`'s call. The
+   *  Readiness tab MUST pass it: since 2.572.0 its checks count villa devices
+   *  (`selectableDeviceIds`), so an unfiltered drill-down would answer "2 not
+   *  locked" and then open a panel listing every `lock.*` Home Assistant has. */
+  allowed?: ReadonlySet<string>,
 ): SummaryGroup | null {
-  const locks = Object.values(entities).filter((e) => e.entity_id.startsWith("lock."));
+  const locks = Object.values(entities).filter(
+    (e) => e.entity_id.startsWith("lock.") && (!allowed || allowed.has(e.entity_id)));
   if (locks.length === 0) return null;
   const allLocked = locks.every((l) => l.state === "locked");
   return {
@@ -47,8 +55,13 @@ export function locksGroup(
 
 /** Every `light.*` entity. Returns null (no group, no tile) when there are
  *  no lights at all. */
-export function lightsGroup(entities: Record<string, HassEntity>): SummaryGroup | null {
-  const lights = Object.values(entities).filter((e) => e.entity_id.startsWith("light."));
+export function lightsGroup(
+  entities: Record<string, HassEntity>,
+  /** See `locksGroup`'s own parameter — same rule, same reason. */
+  allowed?: ReadonlySet<string>,
+): SummaryGroup | null {
+  const lights = Object.values(entities).filter(
+    (e) => e.entity_id.startsWith("light.") && (!allowed || allowed.has(e.entity_id)));
   if (lights.length === 0) return null;
   return { title: "Lights", icon: Lightbulb, entityIds: lights.map((e) => e.entity_id) };
 }

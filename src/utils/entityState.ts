@@ -7,8 +7,13 @@
 // deliberately doesn't attempt; this file is only the generic fallback.
 
 import type { HassEntity } from "@/types/ha.types";
+import { UNKNOWN_STATES } from "./stateColors";
 
-export const OFF_STATES = new Set(["off", "unavailable", "unknown", ""]);
+/** ⚠️ DERIVED, NOT RESTATED. "Off-like" is "not known" plus the two ways an
+ *  entity says it is doing nothing; writing the four out again is how
+ *  `readiness.ts` came to carry an identical `OFF_LIKE` under a second name. */
+export const OFF_STATES: ReadonlySet<string> =
+  new Set(["off", "", ...UNKNOWN_STATES]);
 
 /** Generic cross-domain "is this on" — anything not off/unavailable/unknown
  *  counts, so it covers an open cover, an unlocked lock, a playing media

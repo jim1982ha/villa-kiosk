@@ -9,6 +9,7 @@
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
 import { useState, type ComponentType } from "react";
+import { OFF_STATES } from "@/utils/entityState";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
@@ -72,7 +73,6 @@ interface Props {
   roomScenes?: HaSceneInfo[];
 }
 
-const OFF = new Set(["off", "unavailable", "unknown", ""]);
 
 const pretty = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 
@@ -171,7 +171,7 @@ export default function SummaryGroupPanel({
   // and the row could never reflect it either way.
   const toggleables = [...onMap, ...offMap]
     .filter((e) => TOGGLEABLE_DOMAINS.has(e.entity_id.split(".")[0]));
-  const anyOn = toggleables.some((e) => !OFF.has(e.state));
+  const anyOn = toggleables.some((e) => !OFF_STATES.has(e.state));
 
   const typeOf = (id: string): EntityType =>
     (config.entityMap[id]?.type ?? inferTypeFromEntityId(id) ?? "sensor");
@@ -316,7 +316,7 @@ export default function SummaryGroupPanel({
     // row's state, so the control could only ever look broken.
     const rowInHa = !!entities[id];
     const canToggle = canControl && rowInHa && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
-    const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
+    const toggleOn = isLock ? e.state !== "locked" : !OFF_STATES.has(e.state);
     // EXACTLY what the map paints, via the one shared rule — see
     // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from
     // classifyDeviceActivity plus its own unavailable check, which matched the

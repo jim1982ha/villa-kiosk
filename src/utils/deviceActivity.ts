@@ -11,6 +11,7 @@
 // everywhere it's used.
 
 import type { HassEntity } from "@/types/ha.types";
+import { isUnavailable } from "./stateColors";
 import type { EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
 import { TRANSITIONAL_STATES } from "@/utils/stateColors";
@@ -49,7 +50,7 @@ export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
  * store it already has. The RULE is what has to be shared, not the plumbing.
  */
 export function badgeKindFor(type: EntityType, s: HassEntity, linkedOn: boolean): BadgeKind {
-  if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
+  if (isUnavailable(s)) return "unavailable";
   // Outranks the entity's own state vocabulary on purpose — see linkedEntityId.
   if (linkedOn) return "alert";
   return classifyDeviceActivity(type, s);

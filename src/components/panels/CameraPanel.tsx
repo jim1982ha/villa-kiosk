@@ -30,7 +30,7 @@ import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { tapDebug } from "@/utils/tapDebug";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { STATUS_COLOR, UNKNOWN_STATES } from "@/utils/stateColors";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { mergeStateHistories } from "./chartUtils";
 import StateTimeline from "./StateTimeline";
@@ -399,7 +399,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       setStatusHistory(mergeStateHistories(
         { camera: camHist, motion: motionHist },
         (cur) => {
-          if (!cur.camera || cur.camera === "unavailable" || cur.camera === "unknown") return "offline";
+          if (!cur.camera || UNKNOWN_STATES.has(cur.camera)) return "offline";
           if (motionId && cur.motion === "on") return "motion";
           return "online";
         },

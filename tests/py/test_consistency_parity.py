@@ -325,3 +325,63 @@ def test_readiness_uses_the_shared_device_rule() -> None:
         "byDomain filters by something other than the shared device set")
     assert "disabled" not in body.group(1), (
         "a local relevance predicate is back, and it will drift again")
+
+
+def test_the_unknown_state_pair_is_named_on_both_sides() -> None:
+    """⚠️ ONE LITERAL ON EACH SIDE OF A LANGUAGE BOUNDARY, AGAIN. The add-on has
+    carried `devices.UNKNOWN_STATES` since 2.571.0 and the kiosk had the pair
+    written out at six sites and named nowhere — three on a `HassEntity` (where
+    `isUnavailable` already existed and was simply not called) and three on a
+    bare state string, where the predicate does not fit and only the SET does.
+    Found by /dry-audit on 2026-08-21."""
+    source = _ts_source(os.path.join("utils", "stateColors.ts"))
+    block = re.search(r"UNKNOWN_STATES[^=]*=\s*new Set\(\[(.*?)\]\)", source, re.DOTALL)
+    assert block, "UNKNOWN_STATES moved — this test is blind"
+    kiosk = set(re.findall(r'"(\w+)"', block.group(1)))
+    assert kiosk == set(devices_mod.UNKNOWN_STATES), (
+        f"tablet {sorted(kiosk)} vs brief {sorted(devices_mod.UNKNOWN_STATES)}")
+
+
+def test_the_kiosk_does_not_write_the_pair_out_again() -> None:
+    """The set exists so the six sites can stop restating it; a seventh that
+    restates it is the drift starting over."""
+    offenders = []
+    for root, _dirs, files in os.walk(os.path.join(REPO_ROOT, "src")):
+        for name in files:
+            if not name.endswith((".ts", ".tsx")):
+                continue
+            path = os.path.join(root, name)
+            with open(path, encoding="utf-8") as handle:
+                for number, line in enumerate(handle, 1):
+                    if line.lstrip().startswith(("//", "*", "/*")):
+                        continue
+                    # ⚠️ THE DECLARATION IS NOT A RESTATEMENT. `stateColors`
+                    # is where the pair is allowed to appear; everywhere else
+                    # must read it.
+                    if "UNKNOWN_STATES" in line:
+                        continue
+                    if '"unavailable"' in line and '"unknown"' in line:
+                        offenders.append(f"{os.path.relpath(path, REPO_ROOT)}:{number}")
+    # stateColors declares it; entityState derives OFF_STATES from it.
+    assert offenders == [], (
+        f"the unavailable/unknown pair is written out again at: {offenders}")
+
+
+def test_readiness_and_its_drill_down_count_the_same_devices() -> None:
+    """⚠️ NARROWING ONE READER OF A SET AND NOT ITS NEIGHBOUR. 2.572.0 made the
+    Readiness checks count villa devices; the panel they open kept listing every
+    `lock.*` Home Assistant has, so the check said "2 not locked" and the drill
+    down showed eight."""
+    facility = _ts_source(os.path.join("components", "fm", "FacilityModal.tsx"))
+    call = re.search(r"const group = check\.id === \"locks\"(.*?);", facility, re.DOTALL)
+    assert call, "openCheckDevices moved — this test is blind"
+    # ⚠️ EVERY BRANCH, NOT THE DISPATCH AS A WHOLE. The first version asserted
+    # `"villaDevices" in` the ternary and passed while `locksGroup` was
+    # unscoped, because the `lightsGroup` arm still mentioned it — a mutation
+    # survived and said so. One group builder per branch, each checked.
+    builders = re.findall(r"(\w+Group)\(([^)]*)\)", call.group(1))
+    assert builders, "no group builders found in the dispatch"
+    unscoped = [name for name, args in builders if "villaDevices" not in args]
+    assert not unscoped, (
+        f"these drill-down groups are not scoped to the villa's own devices, "
+        f"so they contradict the check that opens them: {unscoped}")

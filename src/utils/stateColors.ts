@@ -13,8 +13,20 @@ import type { HassEntity } from "@/types/ha.types";
  *  needs to check this FIRST — see LockPanel, the worst case: silently
  *  treating "unavailable" as "not locked" rendered a lock HA has lost contact
  *  with as a confirmed, alarming "UNLOCKED". */
+/** The two states in which an entity's true value is NOT known.
+ *
+ *  ⚠️ NAMED BECAUSE THE PAIR WAS WRITTEN OUT SIX TIMES. `isUnavailable` below
+ *  answers the question for a `HassEntity`, and three callers had it inline
+ *  because they had one — but three more work on a bare state STRING (a history
+ *  point, a merged status map) where the predicate does not fit, so the shared
+ *  thing that reaches all six is the SET, not the function. The add-on has
+ *  carried `devices.UNKNOWN_STATES` since 2.571.0 and the kiosk had no
+ *  counterpart, which is this subsystem's most-repeated defect shape: one
+ *  literal on each side of a language boundary with nothing between them. */
+export const UNKNOWN_STATES: ReadonlySet<string> = new Set(["unavailable", "unknown"]);
+
 export function isUnavailable(entity: HassEntity | undefined): boolean {
-  return entity == null || entity.state === "unavailable" || entity.state === "unknown";
+  return entity == null || UNKNOWN_STATES.has(entity.state);
 }
 
 /**
@@ -177,7 +189,12 @@ const DOMAIN_STATES: Record<string, Record<string, StatusKey>> = {
  */
 export function statusKeyFor(state: string, domain?: string): StatusKey {
   const s = state.trim().toLowerCase();
-  if (s === "" || s === "unavailable" || s === "unknown" || s === "none") {
+  // ⚠️ WIDER THAN `UNKNOWN_STATES` ON PURPOSE, and the two extra members stay
+  // spelled out: a blank state and the literal `"none"` are not "the value is
+  // unknown", they are an entity that has nothing to report — they land on the
+  // same COLOUR and are not the same fact. Converging them into the set would
+  // make `isUnavailable` start answering true for them.
+  if (s === "" || s === "none" || UNKNOWN_STATES.has(s)) {
     return "unavailable";
   }
   if (domain) {

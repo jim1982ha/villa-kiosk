@@ -2,6 +2,7 @@
 // Fetch recent entity history via the REST API for panel sparklines/timelines.
 
 import type { HistoryPoint, StateHistoryPoint } from "@/types/ha.types";
+import { UNKNOWN_STATES } from "@/utils/stateColors";
 import { ingressApiBase } from "./ingress";
 
 interface RawHistoryState {
@@ -72,7 +73,7 @@ export async function fetchStateHistory(
   const points = series
     .map((s) => ({ t: new Date(s.last_changed).getTime(), state: s.state }))
     .filter((p) => Number.isFinite(p.t)
-      && (opts.keepUnavailable || (p.state !== "unavailable" && p.state !== "unknown")));
+      && (opts.keepUnavailable || !UNKNOWN_STATES.has(p.state)));
   // Collapse consecutive duplicate states (can happen when only attributes
   // changed between two reported points) so segment rendering doesn't draw
   // redundant boundaries.

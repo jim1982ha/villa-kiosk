@@ -75,6 +75,14 @@ function deriveTiles(
   // an unanchored "door" substring — reverted). Shared with the Facility
   // Readiness tab's "View doors" shortcut (see summaryGroups.ts) so both
   // open the identical group, not two independently-derived lists.
+  // ⚠️ DELIBERATELY UNFILTERED, AND THIS IS THE OPEN QUESTION /dry-audit left
+  // (2026-08-21). `locksGroup` now accepts a villa-device set and Facility's
+  // Readiness drill-down passes one, because its CHECK counts villa devices and
+  // the two must agree. The bottom bar has no such neighbour to contradict, so
+  // narrowing it here would change a visible count on the main screen with
+  // nothing reporting the old one as wrong — a design change, not an audit
+  // finding. If the tile should show only the villa's locks, pass
+  // `selectableDeviceIds` here and verify the count on hardware.
   const locksG = locksGroup(entities, entityMap);
   if (locksG) {
     const locks = locksG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);

@@ -14,6 +14,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import type { DeviceGroup } from "@/config/AppConfig";
 import { isUnavailable } from "@/utils/stateColors";
+import { OFF_STATES } from "@/utils/entityState";
 import { selectableDeviceIds, unavailableDeviceIds } from "@/config/deviceGroups";
 import { scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
@@ -38,7 +39,6 @@ export interface ReadinessReport {
   overall: CheckState;
 }
 
-const OFF_LIKE = new Set(["off", "unavailable", "unknown", ""]);
 
 /**
  * Build the readiness checks.
@@ -124,14 +124,14 @@ export function buildReadiness(
 
   // ── Lights off (a lit empty villa is burned Direct Expense) ──────────────
   const lights = byDomain("light");
-  const litCount = lights.filter((l) => !OFF_LIKE.has(l.state)).length;
+  const litCount = lights.filter((l) => !OFF_STATES.has(l.state)).length;
   if (lights.length) {
     checks.push({
       id: "lights",
       label: "Lights off before arrival",
       state: litCount === 0 ? "pass" : "warn",
       detail: litCount === 0 ? "All lights off." : `${litCount} still on.`,
-      entityIds: lights.filter((l) => !OFF_LIKE.has(l.state)).map((l) => l.entity_id),
+      entityIds: lights.filter((l) => !OFF_STATES.has(l.state)).map((l) => l.entity_id),
     });
   }
 

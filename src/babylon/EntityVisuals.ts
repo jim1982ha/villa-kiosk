@@ -9226,7 +9226,7 @@ export class EntityVisuals {
 
   /** Tiny chip text under the badge for entities whose state is a reading, not just on/off. */
   private compactValue(type: EntityType, s: HassEntity): string {
-    if (s.state === "unavailable" || s.state === "unknown") return "";
+    if (isUnavailable(s)) return "";
     switch (type) {
       case "light": {
         const b = s.attributes.brightness as number | undefined;
@@ -9631,7 +9631,7 @@ export class EntityVisuals {
 
       case "climate": {
         setEmissive?.(Color3.Black());
-        const running = state.state !== "off" && state.state !== "unavailable" && state.state !== "unknown";
+        const running = !isUnavailable(state) && state.state !== "off";
         this.applyClimateOutline(mesh, running);
         break;
       }

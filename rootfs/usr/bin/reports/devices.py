@@ -179,6 +179,20 @@ def selectable_device_ids(entity_map: Mapping[str, Any],
     return reps
 
 
+def filter_unavailable(device_ids: Iterable[str],
+                       entities: Mapping[str, Any]) -> List[str]:
+    """Of these devices, the ones not reporting.
+
+    ⚠️ SPLIT OUT SO A CALLER THAT ALREADY HAS THE SELECTABLE LIST DOES NOT WRITE
+    THE FILTER AGAIN. `standing.build` needs both lists and had this loop inline
+    to avoid deriving the first one twice — three lines that were a copy of
+    `unavailable_device_ids`' body, and therefore a second place for "not
+    reporting" to be defined in the module whose entire job is agreeing with the
+    kiosk. Found by /dry-audit (2.574.0).
+    """
+    return [i for i in device_ids if is_unavailable(entities.get(i))]
+
+
 def unavailable_device_ids(entity_map: Mapping[str, Any],
                            device_groups: Sequence[Mapping[str, Any]],
                            mesh_entity_ids: Iterable[str],
@@ -187,9 +201,9 @@ def unavailable_device_ids(entity_map: Mapping[str, Any],
     """`deviceGroups.unavailableDeviceIds` — the reality filter is not repeated
     here for the same reason it is not repeated there: the two lists must not be
     able to drift apart."""
-    return [i for i in selectable_device_ids(
-        entity_map, device_groups, mesh_entity_ids, entities, dismissed_ids)
-        if is_unavailable(entities.get(i))]
+    return filter_unavailable(selectable_device_ids(
+        entity_map, device_groups, mesh_entity_ids, entities, dismissed_ids),
+        entities)
 
 
 # ── naming ───────────────────────────────────────────────────────────────────

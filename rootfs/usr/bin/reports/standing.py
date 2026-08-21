@@ -185,8 +185,7 @@ def build(entities: Mapping[str, Any],
 
     selectable = devices_mod.selectable_device_ids(
         entity_map, device_groups, mesh_entity_ids, entities, dismissed)
-    unavailable = [i for i in selectable
-                   if devices_mod.is_unavailable(entities.get(i))]
+    unavailable = devices_mod.filter_unavailable(selectable, entities)
 
     for entity_id in unavailable:
         items.append(Item(
