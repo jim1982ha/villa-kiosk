@@ -1,3 +1,14 @@
+## 2.549.0
+
+### Added — a Telegram chat can be picked by name, not just the bot as a whole
+
+Destinations now include individual notification targets, not only services. A
+Telegram bot with two permitted chats appears as those two chats by name, so a
+briefing can go to the group rather than to everything the bot can reach. The
+one entry that could be chosen and then fail — the generic "send_message" that
+needs a target — is no longer offered, because the things it stood for are now
+listed individually.
+
 ## 2.548.0
 
 ### Changed — each schedule now carries its own recipients, and there is no separate destination list
