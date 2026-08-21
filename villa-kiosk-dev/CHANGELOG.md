@@ -1,3 +1,15 @@
+## 2.578.0
+
+### Fixed — the quoting never reached you, and the stood-down checks now sit together
+
+Rule names were bracketed in 2.577.0 and arrived stripped: Telegram's Markdown
+parser eats brackets as link syntax, so the delivered brief still read "covered
+by Roi baseline deviation" while the units and headings from the same release
+came through. Names are quoted with apostrophes now — the delimiter the
+duplicate-target line has been delivering intact all along. The three "did not
+run: covered by a rule that has never reported" lines are gathered under one
+sub-heading with the explanation written once.
+
 ## 2.577.0
 
 ### Changed — every number carries its unit, and every rule name is quoted
