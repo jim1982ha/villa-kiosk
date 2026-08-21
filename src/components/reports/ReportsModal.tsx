@@ -139,6 +139,19 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
       setConfig(next);
       setRev(result.rev);
       setNotice({ text: "Saved.", bad: false });
+      // ⚠️ EVERYTHING DERIVED FROM THE CONFIG IS NOW STALE, AND ONE OF THOSE
+      // THINGS IS A SENTENCE THE OPERATOR READS AS FACT. `next_runs` is
+      // computed by the backend from the STORED schedules, so until this
+      // refetch it kept answering about the config from before the save: an
+      // owner changed a schedule from "weekly on Monday 12:38" to "daily
+      // 12:40", pressed Save, and the line under the row still read "Next:
+      // Monday 24 Aug, 12:38".
+      //
+      // ⚠️ THE WHOLE DIAGNOSTICS DOCUMENT, NOT A NEW next-runs ENDPOINT.
+      // Destinations and capabilities are derived from the same read and go
+      // stale on the same event; a second route would be a second thing to
+      // keep in step, for a request an operator makes deliberately and rarely.
+      setDiagnostics(await fetchReportsDiagnostics());
     } else {
       // ⚠️ A CONFLICT RE-READS RATHER THAN RETRYING. Another device wrote in
       // the gap; overwriting it is exactly what the revision exists to stop.

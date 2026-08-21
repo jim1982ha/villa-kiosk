@@ -1,4 +1,4 @@
-/* VESTA Briefings — one-paste QA validation for v2.544.0 → v2.553.0.
+/* VESTA Briefings — one-paste QA validation for the briefings subsystem.
  *
  * HOW TO RUN
  *   1. Open the kiosk as the OWNER profile (HA sidebar or the direct hostname).
@@ -115,6 +115,29 @@
       const to = (s.targets || []).length ? `${s.targets.length} recipient(s)` : "NOBODY";
       say(`  info  ${s.cadence} ${day} ${time} · ${s.audience} · ${to}`);
       check(!!when, `  next send is known for ${s.id}`, when || "never — it can never fire");
+      // ⚠️ DOES THE DATE MATCH THE SCHEDULE, not merely exist. "The add-on
+      // reports a next send" passes even when it reports the WRONG one — and a
+      // confidently wrong date is worse than none, because nothing about it
+      // looks stale. Parts are read off the ISO text rather than re-zoned: the
+      // string already carries the villa's offset, and parsing it in the
+      // reader's zone would compare against a different day.
+      if (when) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(when) || [];
+        const at = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+        const dow = (at.getUTCDay() + 6) % 7;            // 0 = Monday
+        const want = s.cadence === "weekly" ? `${days[s.weekday ?? 0]} ${time}`
+                   : s.cadence === "monthly" ? `day ${s.day ?? 1} ${time}` : time;
+        const got = s.cadence === "weekly" ? `${days[dow]} ${m[4]}:${m[5]}`
+                  : s.cadence === "monthly" ? `day ${+m[3]} ${m[4]}:${m[5]}`
+                  : `${m[4]}:${m[5]}`;
+        // A monthly day is CLAMPED to the month's length, so the 31st is the
+        // 28th in February and that is correct rather than a mismatch.
+        const clamped = s.cadence === "monthly"
+          && +m[3] === new Date(Date.UTC(+m[1], +m[2], 0)).getUTCDate();
+        check(got === want || clamped, `  next send matches the schedule`,
+          got === want ? got : `reports ${got}, configured ${want}` +
+            (clamped ? "" : "  ← the two disagree"));
+      }
       if ((s.targets || []).length === 0) {
         no("  this schedule has no recipients", "it would be composed and not sent");
       }

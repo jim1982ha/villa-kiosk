@@ -180,6 +180,15 @@ export default function ScheduleTab({
   const schedules = draft.schedules ?? [];
   const available = diagnostics?.notifyTargets ?? [];
   const nextRun = diagnostics?.nextRuns ?? {};
+  /** Does this row differ from what the add-on has stored?
+   *
+   *  ⚠️ COMPARED BY CONTENT, BY ID. `next_runs` is keyed by schedule id and
+   *  computed from the STORED document, so a row the operator has touched but
+   *  not saved is described by a date belonging to its previous settings.
+   *  Matching by INDEX would report every row as edited the moment one is
+   *  deleted, which is the same lie in the other direction. */
+  const savedById = new Map((config.schedules ?? []).map((s) => [s.id, JSON.stringify(s)]));
+  const edited = (s: ReportSchedule) => savedById.get(s.id) !== JSON.stringify(s);
   // ⚠️ WAS THE SHARED LIST MIGRATED INTO THE ROWS THIS SESSION? `draft` is the
   // migrated copy and `config` is the server's, so a difference here means the
   // operator is looking at destinations that are NOT yet stored — and pressing
@@ -325,17 +334,27 @@ export default function ScheduleTab({
                 BEFORE IT IS ASKED. Computed by `schedule.next_fire` on the
                 server — the same function the scheduler uses — because a second
                 implementation here would be a different answer under the same
-                label. It reflects SAVED settings, so it lags an unsaved edit;
-                saying which is better than a number that silently means the
-                wrong one. */}
+                label.
+
+                ⚠️ WHICH MEANS IT DESCRIBES THE STORED SCHEDULE, NOT THE ONE ON
+                SCREEN, AND IT MUST SAY SO WHILE THOSE DIFFER. The comment here
+                used to claim exactly that — "it lags an unsaved edit; saying
+                which is better than a number that silently means the wrong
+                one" — and the code never said which: an owner changed a row
+                from "weekly on Monday 12:38" to "daily 12:40", and the line
+                went on reading "Next: Monday 24 Aug, 12:38". A confident wrong
+                date is worse than no date, because nothing about it looks
+                stale. */}
             <p className="muted body-text reports-next">
               {draft.enabled !== true
                 ? "Nothing is sent — “Send briefings on a schedule” is off."
                 : own.length === 0
                   ? "Nobody is selected, so this one would be composed and not sent."
-                  : nextRun[s.id]
-                    ? `Next: ${whenNext(nextRun[s.id])}, villa time.`
-                    : "Next send is not known yet — save to see it."}
+                  : edited(s)
+                    ? "Not saved yet — save to see when this goes out."
+                    : nextRun[s.id]
+                      ? `Next: ${whenNext(nextRun[s.id])}, villa time.`
+                      : "Next send is not known yet — save to see it."}
             </p>
 
             {openRecipients === i && (

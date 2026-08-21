@@ -1,10 +1,10 @@
-## 2.556.0
+## 2.557.0
 
-### Fixed — a rule's internal name still appeared in the briefing
+### Fixed — the "next send" line kept describing the schedule you just changed
 
-The previous release tidied the wrong copy of it: the name only looked like a
-fallback, and the one the briefing actually prints comes straight from the
-automation that raised the alert. It is now cleaned up where a name is read
-rather than where one is built, so every section gets it. Labels written by a
-person are left exactly as they are — "Lights - monitored rooms" stays that way.
+Editing a schedule from weekly to daily and saving left the line underneath
+reading the old day and time. It is computed by the add-on from the stored
+settings, and nothing asked it again after a save. It now refreshes when you
+save, and while a row has unsaved edits it says so instead of showing a date
+that belongs to the previous version of it.
 
