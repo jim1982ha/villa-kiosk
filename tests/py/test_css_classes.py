@@ -156,3 +156,42 @@ def test_the_probe_can_actually_see_the_defect_it_was_written_for() -> None:
         "if `.fm-check` were ever defined, the original defect would not have "
         "been visible to this probe at all")
     assert "spin" in defined, "the inline spinner utility must exist"
+
+
+# ── one policy, decided once ────────────────────────────────────────────────
+
+def test_reduced_motion_is_decided_in_exactly_one_place() -> None:
+    """⚠️ A SECOND `prefers-reduced-motion` BLOCK IS A SECOND OPINION, and the
+    one this caught was actively wrong.
+
+    `styles.css` ends with a global policy: kill vestibular motion, but keep
+    PROGRESS INDICATORS moving via `reduced-motion-breathe`, because — its own
+    comment records this, reported from an iPad — "a frozen spinner does not
+    read as 'motion was reduced', it reads as 'this app has hung'".
+
+    The `.spin` utility shipped with its own block saying `animation: none`,
+    which does exactly what that carve-out exists to prevent, for a fourth
+    progress indicator that simply was not in the list. Found by /phone-parity
+    on 2026-08-21. One rule, one list, joined rather than duplicated.
+    """
+    with open(CSS_PATH, encoding="utf-8") as handle:
+        css = handle.read()
+    blocks = re.findall(r"@media\s*\(\s*prefers-reduced-motion", css)
+    assert len(blocks) == 1, (
+        f"{len(blocks)} prefers-reduced-motion blocks — this policy is decided "
+        f"once, at the foot of the file, and a new animation joins its "
+        f"progress-indicator list rather than opting itself out.")
+
+
+def test_every_looping_indicator_survives_reduced_motion() -> None:
+    """The carve-out's list is the applicable set. An infinite animation that
+    reports PROGRESS and is not in it gets frozen by the blanket reset."""
+    with open(CSS_PATH, encoding="utf-8") as handle:
+        css = handle.read()
+    carve = re.search(r"animation: reduced-motion-breathe[^;]*;", css)
+    assert carve, "the progress-indicator carve-out is gone"
+    selector = css[:carve.start()].rsplit("}", 1)[-1]
+    for name in (".spinner", ".spin"):
+        assert name in selector, (
+            f"{name} loops to report progress and is not in the reduced-motion "
+            f"carve-out, so it freezes mid-turn and reads as a hang")

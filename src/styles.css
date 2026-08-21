@@ -2674,8 +2674,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
    Separate from `.spinner`, which is a 44px bordered ring for a whole-panel
    wait. This is the 16px in-button case; merging them would mean one class
    that has to be told which of two unrelated things it is. */
+/* ⚠️ NO `prefers-reduced-motion` RULE HERE, AND THE FIRST CUT HAD ONE THAT WAS
+   ACTIVELY WRONG. It said `.spin { animation: none }` — which is precisely the
+   defect the progress-indicator carve-out at the foot of this file exists to
+   prevent, and whose comment records it being reported from an iPad: "a frozen
+   spinner does not read as 'motion was reduced', it reads as 'this app has
+   hung'". That policy is decided ONCE, globally, and `.spin` joins its list
+   rather than writing a second opinion beside it. */
 .spin { animation: spin 0.9s linear infinite; transform-origin: 50% 50%; }
-@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
 
 .spinner {
   width: 44px; height: 44px;
@@ -3813,7 +3819,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
      Reduced-motion asks for no VESTIBULAR motion, not for no feedback, so
      these keep animating with the movement taken out: a slow opacity breath
      conveys "still working" while nothing travels, rotates or scales. */
-  .spinner, .conn-dot.connecting .dot, .state-timeline-skeleton {
+  .spinner, .spin, .conn-dot.connecting .dot, .state-timeline-skeleton {
     animation: reduced-motion-breathe 1.6s ease-in-out infinite !important;
   }
   /* The skeleton's own look is a moving GRADIENT, so the breath above has to
