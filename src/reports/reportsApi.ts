@@ -236,6 +236,36 @@ const NARRATION_WIRE_KEYS = {
   monthly_limit: "monthlyLimit",
 } as const;
 
+/** The carried-over document with keys a PAST DEFECT wrote, removed.
+ *
+ *  ⚠️ CARRY-OVER MADE A BUG IMMORTAL. Unknown keys are preserved on every write
+ *  so a newer add-on's settings survive a downgrade — a good rule, and it means
+ *  the `notifyTargets` that v2.545.0's client wrote before the vocabulary was
+ *  fixed is copied forward forever. A live QA run on the reference villa found
+ *  it still there, six releases later: inert, unread, and permanently reported
+ *  as a defect by the check that looks for exactly this.
+ *
+ *  ⚠️ ONLY KEYS THIS CLIENT KNOWS TO BE DEAD — the camelCase spelling of a name
+ *  in its own wire table. An unknown key it has never heard of is still carried,
+ *  because that is the case the rule exists for; guessing beyond the table would
+ *  make a downgrade delete a newer version's settings, which is the bug the
+ *  carry-over prevents. */
+function withoutDeadKeys(raw: Record<string, unknown>): Record<string, unknown> {
+  // ⚠️ ONLY WHERE THE TWO SPELLINGS DIFFER. Five of the seven names are
+  // identical in both vocabularies — `enabled`, `schedules`, `modules`,
+  // `narration`, `timezone` — and `toWire` emits a key only when the draft
+  // DEFINES it, so stripping those from the carry-over would delete a stored
+  // `enabled: true` from any client that had not touched it. Caught before it
+  // shipped by writing out what the set actually contained.
+  const dead = new Set(
+    Object.entries(CONFIG_WIRE_KEYS)
+      .filter(([wire, client]) => wire !== client)
+      .map(([, client]) => client as string));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) if (!dead.has(k)) out[k] = v;
+  return out;
+}
+
 /** A `ReportsConfig` in the store's own vocabulary, ready to PUT. */
 function toWire(config: ReportsConfig): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -352,7 +382,7 @@ export async function saveReportsConfig(
         // ⚠️ `toWire`, NOT the config object — see CONFIG_WIRE_KEYS. Spreading
         // this app's own camelCase names writes keys the scheduler never reads,
         // and the write SUCCEEDS, which is what made it invisible.
-        config: { ...carryOver, ...toWire(config) },
+        config: { ...withoutDeadKeys(carryOver), ...toWire(config) },
         ...(expectedRev === null ? {} : { rev: expectedRev }),
       }),
     });

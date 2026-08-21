@@ -449,3 +449,23 @@ def test_a_real_sentence_is_left_alone() -> None:
     """`critical` supplies `detail` as prose; it must not be word-processed."""
     item = aggregate.normalise(_critical())
     assert item is not None and item.detail == "kitchen sensor"
+
+
+def test_a_rule_id_is_never_printed_raw_into_a_brief() -> None:
+    """⚠️ IT REACHED THE OWNER'S PHONE. A live QA capture read "What went wrong:
+    - critical_schedule---pool_pump — still unresolved". Same defect as the
+    Checks tab's identifiers, one surface further out: a brief must read as
+    prose whatever a rule was named.
+
+    Only reached when the blueprint supplied neither a label nor a bucket, so
+    the real fix is on that side — but printing nothing instead would lose the
+    finding entirely."""
+    from reports.aggregate import _readable_id
+    assert _readable_id("critical_schedule---pool_pump") == \
+        "Critical schedule — pool pump"
+    assert _readable_id("roi_idle_load") == "Roi idle load"
+    assert _readable_id("") == ""
+    # No underscore, no multi-dash and no lower-case first letter survives.
+    for raw in ("a_b---c_d", "x---y", "z_z"):
+        out = _readable_id(raw)
+        assert "_" not in out and "---" not in out and out[0].isupper(), out

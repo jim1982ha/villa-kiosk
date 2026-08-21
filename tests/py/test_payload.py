@@ -245,3 +245,36 @@ def test_the_withheld_list_names_fields_and_never_values() -> None:
     assert "label" not in withheld, "an allow-listed field is not withheld"
     for name in withheld:
         assert "emmas_bedroom" not in name and "Emma" not in name
+
+
+def test_withheld_means_the_policy_dropped_it_not_that_it_was_empty() -> None:
+    """⚠️ A FALSE PRIVACY CLAIM, ERRING IN THE DIRECTION THAT FLATTERS US.
+
+    The first cut compared source keys against EMITTED keys, so an allow-listed
+    field that happened to be blank on this property's data was reported as
+    withheld. A live QA run printed `withheld: area, baseline, dedup_key, delta,
+    horizon_days, window_days` — five of those six ARE permitted and were merely
+    empty on blueprint-derived findings. Only `detail` and `dedup_key` were
+    actually being kept back.
+
+    Telling an owner we protect more than we do, in the one panel whose whole
+    job is to be believed, is worse than telling them nothing.
+    """
+    from reports.narrate.base import ReportContext
+    from reports.pipeline import _withheld_fields
+    from reports.contracts import PAYLOAD_ALLOWED_FIELDS
+
+    # `area` is allow-listed and empty here; `detail` is allow-listed nowhere.
+    context = ReportContext(
+        audience="owner", cadence="weekly", period="P", generated_at="",
+        findings=[_finding(area="", baseline=None, delta=None,
+                           detail="Emma said the pump is loud")],
+    )
+    withheld = _withheld_fields(context, P.from_context(context))
+    assert "detail" in withheld, "the one field nobody can bound must be named"
+    for permitted in ("area", "baseline", "delta"):
+        assert permitted not in withheld, (
+            f"{permitted} is on the allow-list — reporting it as withheld "
+            f"claims a protection that does not exist")
+    assert not (set(withheld) & set(PAYLOAD_ALLOWED_FIELDS)), (
+        "nothing on the allow-list may ever be described as withheld")

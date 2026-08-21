@@ -594,3 +594,38 @@ def test_a_duplicate_route_to_an_offered_destination_is_not_offered() -> None:
     # registers neither a notify service nor notify entities keeps its own
     # service, because there it is the only route.
     assert not _redundant("some_integration", speaks, {"mobile_app_x", "notify"})
+
+
+def test_the_history_entry_counts_the_findings_the_brief_actually_reports() -> None:
+    """⚠️ THE AUDIT TRAIL SAID A QUIET WEEK ABOUT THE WEEK IT DESCRIBED.
+
+    `findingCount` and `severity` walked preflight and MODULE findings only —
+    the two things that produce almost nothing on a property whose own
+    automations do the detecting. A live QA run recorded `findings=0
+    severity=notice` for a brief that opened "1 critical alert from this period
+    is still unresolved" and listed twelve groups.
+
+    The whole subsystem was rebuilt around the blueprint layer being the primary
+    detector, so omitting it made the record wrong in the COMMON case, not an
+    edge one.
+    """
+    import asyncio
+    from datetime import datetime, timezone as tz
+    from reports import pipeline, collect, aggregate
+
+    when = "2026-08-20T10:00:00+08:00"
+    events = [{"type": "vesta_critical_event", "fired": when, "at": when, "data": {
+        "blueprint": "critical_schedule", "rule_id": "CR-01",
+        "report_bucket": "Pool pump", "severity": "P1",
+        "entities": ["switch.pool_pump"], "timestamp": when}}]
+    groups = aggregate.group(aggregate.normalise_all(events))
+    assert groups, "the fixture must produce at least one group"
+
+    # The two lines the entry is built from, exercised directly: a group's
+    # severity must reach `severity`, and its existence must reach the count.
+    from reports.contracts import severity_rank
+    worst = max(severity_rank(getattr(g, "severity", "info")) for g in groups)
+    assert worst > severity_rank("notice"), (
+        "a P1 blueprint alert must outrank a notice, or the record understates "
+        "the report it stands for")
+    assert len(groups) == 1

@@ -29,7 +29,7 @@ from aiohttp import ClientSession
 from . import aggregate as aggregate_mod, collect, discovery, ledger, verify as verify_mod, schedule as schedule_mod, stats as stats_mod, store
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
-from .contracts import severity_rank
+from .contracts import PAYLOAD_ALLOWED_FIELDS, severity_rank
 from .analysis import modules as _modules  # noqa: F401  (importing registers them)
 from .hass import HassClient, HassUnavailable
 from .deliver import deliver
@@ -212,9 +212,18 @@ def _withheld_fields(context: ReportContext,
     ⚠️ NAMES, NEVER VALUES — printing the values would mean leaking them into a
     panel whose entire purpose is to show they are not leaked.
 
-    Compares the union of every source finding's keys against the union of
-    every emitted finding's keys, so a field dropped from one finding and kept
-    on another (because it was empty there) is not reported as withheld.
+    ⚠️ AND IT MEANS "THE POLICY DROPPED IT", NOT "IT WAS EMPTY". The first cut
+    compared source keys against EMITTED keys, so any allow-listed field that
+    happened to be blank on this property's findings was reported as withheld.
+    A live QA run printed `withheld: area, baseline, dedup_key, delta,
+    horizon_days, window_days` — and five of those six ARE permitted; they were
+    simply empty on blueprint-derived findings. Only `detail` and `dedup_key`
+    were actually being kept back.
+
+    That is a FALSE PRIVACY CLAIM in the one panel whose entire job is to be
+    believed, and it errs in the direction that flatters us — telling an owner
+    we protect more than we do. Comparing against the ALLOW-LIST answers the
+    question that was asked: which of this property's fields may never travel.
     """
     source: Set[str] = set()
     for finding in context.findings or []:
@@ -226,11 +235,8 @@ def _withheld_fields(context: ReportContext,
         if callable(as_dict):
             source |= set(as_dict())
 
-    emitted: Set[str] = set()
-    for item in outbound.get("findings") or []:
-        if isinstance(item, dict):
-            emitted |= set(item)
-    return sorted(source - emitted)
+    del outbound  # ⚠️ deliberately unread — see the docstring.
+    return sorted(source - set(PAYLOAD_ALLOWED_FIELDS))
 
 
 async def run_report(
@@ -400,12 +406,22 @@ async def run_report(
     # The report's own severity is the loudest thing in it — a finding or a
     # preflight item. Preflight alone would rank a stale config above a
     # freezer that is failing.
+    # ⚠️ THE BLUEPRINT LAYER COUNTS, AND IT DID NOT. This walked preflight and
+    # MODULE findings only — the two things that produce almost nothing on a
+    # property whose own automations do the detecting. A live QA run recorded
+    # `findings=0 severity=notice` for a brief that opened "1 critical alert
+    # from this period is still unresolved" and listed twelve groups: the
+    # history said a quiet week about the week it described. Since the whole
+    # subsystem was rebuilt around the blueprint layer being the primary
+    # detector, omitting it made the audit trail wrong in the common case.
+    grouped = [g for g in (aggregated.get("groups") or [])]
     severity = "info"
-    for item in list(found.get("preflight") or []) + findings:
-        if isinstance(item, dict):
-            candidate = str(item.get("severity", "info"))
-            if severity_rank(candidate) > severity_rank(severity):
-                severity = candidate
+    for candidate in ([str(i.get("severity", "info")) for i in
+                       list(found.get("preflight") or []) + findings
+                       if isinstance(i, dict)]
+                      + [str(getattr(g, "severity", "info")) for g in grouped]):
+        if severity_rank(candidate) > severity_rank(severity):
+            severity = candidate
 
     entry: Dict[str, Any] = {
         "id": entry_id or f"manual:{period}:{now_local.strftime('%H%M%S')}",
@@ -420,7 +436,9 @@ async def run_report(
         # WAN, budget spent), a field set from the config would be wrong more
         # often than right.
         "narration": narration_mode,
-        "findingCount": len(findings),
+        # What the brief actually reports: this add-on's own checks, the
+        # verifications, and the blueprint layer's grouped findings.
+        "findingCount": len(findings) + len(grouped),
         "severity": severity,
         "deliveries": deliveries,
     }

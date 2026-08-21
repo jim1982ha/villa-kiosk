@@ -32,6 +32,7 @@ where an entity resolves to one.
 
 from __future__ import annotations
 
+import re
 import collections
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -587,7 +588,7 @@ def to_findings(groups: Sequence[Group]) -> List[Finding]:
             ref=f"g{index}",
             kind=KIND_OF_CATEGORY.get(g.category, "OBSERVATION"),
             severity=g.severity,
-            label=g.label or g.bucket or g.blueprint or g.category,
+            label=g.label or g.bucket or _readable_id(g.blueprint or g.category),
             detail=detail,
             metric="energy" if g.total_kwh is not None else "",
             unit="kWh" if g.total_kwh is not None else "",
@@ -596,6 +597,27 @@ def to_findings(groups: Sequence[Group]) -> List[Finding]:
                                 f"{g.rule_id}|{g.bucket}"),
         ))
     return out
+
+
+def _readable_id(value: str) -> str:
+    """An identifier, as prose, for when nothing better exists.
+
+    ⚠️ THE LAST RESORT PRINTED A RAW ID INTO THE BRIEF. A live QA capture read
+    "What went wrong: - critical_schedule---pool_pump — still unresolved", which
+    is the same defect the Checks tab had: an identifier is not a name, and this
+    one reached the owner's phone rather than a settings screen.
+
+    ⚠️ IT IS ONLY EVER REACHED WHEN THE BLUEPRINT SUPPLIED NEITHER A LABEL NOR A
+    BUCKET, so the right long-term fix is on that side — but a brief must read
+    as prose whatever a rule was named, and the alternative is printing nothing,
+    which loses the finding entirely.
+
+    No villa data and no table: it is punctuation, applied to whatever arrives.
+    """
+    text = re.sub(r"-{2,}", " \u2014 ", str(value or ""))
+    text = re.sub(r"[_\-]+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text)
+    return text[:1].upper() + text[1:] if text else ""
 
 
 def _detail_for(g: Group) -> str:
