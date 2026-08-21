@@ -223,9 +223,13 @@ def subject_key(subject: str) -> str:
     and it has to match across a built-in module and a blueprint that have
     nothing else in common — so the module may not appear in it.
 
-    ⚠️ SAME HASH, SAME TRUNCATION as `dedup_key`, deliberately: two hashes of
-    the same string that disagree because one was cut at 16 and the other at 12
-    is the shape of bug this whole subsystem keeps paying for.
+    ⚠️ SAME HASH, SAME TRUNCATION as `dedup_key` — and `dedup_key` now CALLS
+    this rather than restating it. Both used to spell out
+    `sha256(...).hexdigest()[:16]` independently, with only this sentence
+    holding them together: two hashes of the same string that disagree because
+    one was cut at 16 and the other at 12 is the shape of bug this whole
+    subsystem keeps paying for, and prose does not stop it. One expression does.
+    Pinned by `test_dedupe`.
     """
     return hashlib.sha256(subject.encode("utf-8")).hexdigest()[:16]
 
@@ -249,8 +253,9 @@ def dedup_key(module: str, subject: str) -> str:
     The module name stays readable so a stored history is still diagnosable at
     a glance; only the subject is opaque.
     """
-    digest = hashlib.sha256(subject.encode("utf-8")).hexdigest()[:16]
-    return f"{module}:{digest}"
+    # ⚠️ THROUGH `subject_key`, not a second copy of the same expression — see
+    # its docstring for why the two must agree bit for bit.
+    return f"{module}:{subject_key(subject)}"
 
 
 def label_for(statistic_id: str, labels: Dict[str, str]) -> str:

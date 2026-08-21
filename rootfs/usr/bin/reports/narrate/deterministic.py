@@ -25,7 +25,16 @@ rather than merely full:
 the context it was handed. There is no example device, no seeded threshold and
 no sample sentence with a room in it.
 
-⚠️ THE EIGHT SECTIONS ARE THE WORKBOOK'S, AND A SECTION IS SKIPPED ONLY WHEN IT
+⚠️ EIGHT SECTIONS, SEVEN OF THEM THE WORKBOOK'S — AND THE COUNT IS A
+COINCIDENCE THAT HID THE DRIFT FOR A RELEASE. This line read "the eight sections
+are the workbook's". The workbook's eight were headline, critical recap, money,
+fixed and suggested, preventive, trends, monitoring health, coverage. 2.571.0
+added `standing` (the only present-tense section, and the owner's request, not
+the workbook's) while `headline` is not a gateable section at all — it renders
+unconditionally above them. So membership changed twice and the total did not
+move, which is precisely why nobody noticed. `ALL_SECTIONS` is the list and
+`test_dedupe` pins it against the builders; this sentence is not the list.
+A SECTION IS SKIPPED ONLY WHEN IT
 HAS NOTHING TO SAY *AND* NOTHING TO ADMIT. Those are different conditions: a
 Money section with no priced findings is omitted, but a Money section on a
 property with no tariff configured is REPLACED BY THE ADMISSION, because its

@@ -32,8 +32,14 @@ def name_of(text: str) -> str:
     duration instead was reaching for a weaker argument that also happened to
     be false.
 
-    ⚠️ ONE FUNCTION, SO THE NEXT SITE GETS IT BY CALLING. Five places name a
-    rule and each had its own literal; the next one would have had a sixth.
+    ⚠️ ONE FUNCTION, SO THE NEXT SITE GETS IT BY CALLING. The renderer's five
+    sites each had their own literal before this existed. ⚠️ This docstring
+    carried that FIVE as a present-tense count of the callers, and went stale in
+    the release that moved the function here — which added two. A count of call
+    sites is a claim that ages every time the function succeeds, so the number
+    is gone and `test_inert.test_no_module_quotes_a_name_by_hand` is the pin: it
+    scans the shipped source for the SHAPE (an apostrophe-wrapped
+    interpolation), so it stays true as callers come and go.
     It lives HERE and not in `narrate/style` for the reason stated at the top
     of this module: `discovery` writes the preflight line quoted above and
     must not import upward into the renderer, so the rule sits at the layer
