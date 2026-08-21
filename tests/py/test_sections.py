@@ -795,3 +795,57 @@ def test_every_rule_name_in_prose_is_quoted() -> None:
             f"sentence with nothing marking where the name ends")
         # And never bare directly before the prose that follows it.
         assert f"{expected} did not run" not in body
+
+
+# ── the headline's arithmetic must close on the page ────────────────────────
+
+def _money_figures(body: str, currency: str = "IDR") -> List[float]:
+    """Every money figure a reader can see in the Money section, as they read it."""
+    block = body.split(section_heading("money", "weekly"))[-1].split("\n\n")[0]
+    return [float(m.replace(",", ""))
+            for m in re.findall(rf"([\d,]+(?:\.\d+)?) {currency}", block)]
+
+
+def test_the_headline_total_is_derivable_from_the_page() -> None:
+    """⚠️ ASKED DIRECTLY: "are you sure this number can be derived from the rest
+    of the report? this should be the case, if user is trying to understand this
+    number from the single source of the current report".
+
+    It was — in the brief that prompted the question, which had two small
+    findings. It was not in general, for two independent reasons:
+
+    ROUNDING. `_amount` chose minor units per value, so the LIST asked "is
+    anything in me large?" while the TOTAL asked "am I large?". Two findings of
+    100.4 and 50.4 printed as "100" and "50" under a headline of "151".
+
+    TRUNCATION. Past MAX_LINES the tail read "and N more." with no figure, so
+    the hidden findings were in the total and nowhere on the page.
+
+    A reader who adds the column up must land on the number they were given.
+    """
+    groups = [_roi(f"Load {i}", 100.4 if i == 0 else 50.4) for i in range(2)]
+    body = _render(aggregated=_events(*groups), currency="IDR")
+    figures = _money_figures(body)
+    headline = next(l for l in body.splitlines()
+                    if "Avoidable cost identified" in l)
+    total = float(re.search(r"([\d,]+(?:\.\d+)?) IDR", headline)
+                  .group(1).replace(",", ""))
+    assert abs(sum(figures) - total) < 0.01, (
+        f"the column sums to {sum(figures)} and the headline says {total} — a "
+        f"reader adding it up is told they are wrong:\n{body}")
+
+
+def test_a_truncated_money_list_still_reaches_its_total() -> None:
+    """Nine findings, eight lines. The ninth must be accounted for, not hidden
+    behind a bare "and 1 more."."""
+    groups = [_roi(f"Load {i}", 10.0) for i in range(9)]
+    body = _render(aggregated=_events(*groups), currency="IDR")
+    assert "and 1 more" in body
+    figures = _money_figures(body)
+    headline = next(l for l in body.splitlines()
+                    if "Avoidable cost identified" in l)
+    total = float(re.search(r"([\d,]+(?:\.\d+)?) IDR", headline)
+                  .group(1).replace(",", ""))
+    assert abs(sum(figures) - total) < 0.01, (
+        f"the visible figures sum to {sum(figures)}, headline says {total}; the "
+        f"truncated tail carries no cost:\n{body}")

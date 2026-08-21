@@ -566,7 +566,7 @@ class DeterministicNarrator:
                     f"not be priced") if unpriced else ""
             lines.append(
                 f"{BULLET}Avoidable cost identified: "
-                f"{_amount(float(total), currency=context.currency)}, across "
+                f"{_amount(self._money_shown_total(context, self._money_whole(context)), whole=self._money_whole(context), currency=context.currency)}, across "
                 f"{_plural(counted, 'finding')}{qualifier}{more}.")
 
         if context.findings:
@@ -745,11 +745,26 @@ class DeterministicNarrator:
             # operator's own and unknown here, so the magnitude of the LIST
             # decides: if anything in it is large, minor units are noise
             # everywhere in it.
-            whole = any((self._number(g, "total_cost") or 0) >= 100 for g in billable)
+            whole = self._money_whole(context)
             lines = [head]
             for group in self._top(billable):
                 lines.append(self._money_line(group, whole=whole))
-            return lines + self._and_more(billable)
+            # ⚠️ THE TAIL CARRIES ITS COST, OR THE TOTAL CANNOT BE REACHED.
+            # `_and_more` prints "and N more." with no figure, so beyond
+            # MAX_LINES the headline's total stopped being derivable from the
+            # page — asked directly: "are you sure this number can be derived
+            # from the rest of the report?". It was, in the brief that prompted
+            # the question, because it had two lines. With nine it would not be.
+            hidden = [g for g in billable[MAX_LINES:]
+                      if self._number(g, "total_cost") is not None]
+            extra = len(billable) - MAX_LINES
+            if extra > 0:
+                spent = sum(self._as_shown(self._number(g, "total_cost") or 0.0,
+                                           whole) for g in hidden)
+                tail = (f" — {_amount(spent, whole=whole, currency=context.currency)} "
+                        f"between them") if hidden else ""
+                lines.append(f"{BULLET}and {extra} more{tail}.")
+            return lines
 
         if "energy_cost" in (context.discovery.get("capabilities_missing") or []):
             # ⚠️ THE SECTION STAYS AND THE REASON MOVES. Two rules pull opposite
@@ -766,6 +781,44 @@ class DeterministicNarrator:
                     f"{BULLET}Not calculated. No electricity tariff is "
                     f"configured, so waste can be identified but not priced."]
         return []
+
+    @staticmethod
+    def _as_shown(value: float, whole: bool) -> float:
+        """A cost rounded exactly as `_amount` will print it.
+
+        ⚠️ THE HEADLINE SUMS THESE, NOT THE TRUE VALUES, AND THAT IS THE WHOLE
+        FIX. Sharing the FORMAT between the headline and the list was not
+        enough: 100.4 and 50.4 both print whole, as "100" and "50", while their
+        true sum 150.8 prints as "151". A reader adding the column gets 150 and
+        is told 151 — the arithmetic the report asks them to trust, failing by
+        one, every time the decimals happen to carry.
+
+        Costs a little precision in the headline and buys the only property that
+        matters for it: a total a reader can reach from the page.
+        """
+        return round(value) if whole else round(value, 2)
+
+    def _money_shown_total(self, context: ReportContext, whole: bool) -> float:
+        """What the Money column adds up to, as printed."""
+        return sum(self._as_shown(self._number(g, "total_cost") or 0.0, whole)
+                   for g in self._groups(context, "roi")
+                   if self._text(g, "basis") != "trend"
+                   and self._number(g, "total_cost") is not None)
+
+    def _money_whole(self, context: ReportContext) -> bool:
+        """Whether money in THIS report prints without minor units.
+
+        ⚠️ ONE DECISION FOR THE HEADLINE AND THE LIST. It was made twice: the
+        list asked "is anything in me large?" and `_amount` asked the TOTAL "are
+        you large?". Two items of 100.4 and 50.4 printed as "100" and "50" over
+        a headline of "151" — a reader adding the column up gets a different
+        answer from the one they were given, which is exactly the arithmetic
+        this report asks them to trust.
+        """
+        return any((self._number(g, "total_cost") or 0) >= 100
+                   for g in self._groups(context, "roi")
+                   if self._text(g, "basis") != "trend")
+
 
     def _money_line(self, group: Any, whole: bool = False) -> str:
 

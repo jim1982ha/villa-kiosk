@@ -1,3 +1,13 @@
+## 2.586.0
+
+### Fixed — the headline's total could not always be reached by adding up the report
+
+Two independent reasons, both invisible on a short list. The list chose minor
+units by its own largest value while the total chose by its own magnitude, so
+100.4 and 50.4 printed as "100" and "50" under a headline of "151". And past
+eight findings the tail read "and N more." with no figure, putting real cost in
+the total and nowhere on the page. The headline now sums what is printed.
+
 ## 2.585.0
 
 ### Changed — the brief now says which days it covers, in the title and in every heading that has a period
