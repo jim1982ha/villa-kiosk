@@ -70,17 +70,50 @@ def _service_path(target: str) -> str:
     the whole reason this is a one-line generalisation rather than a branch.
     """
     name = target.strip()
+    # ⚠️ AN ENTITY TARGET ALWAYS GOES THROUGH ONE SERVICE, whatever integration
+    # the entity belongs to — that is the whole design of the entity-based
+    # platform, and the reason this stays free of platform names.
+    if name.startswith(ENTITY_PREFIX):
+        return ENTITY_SERVICE
     domain, _, service = name.partition(".")
     if not service:
         return f"{DEFAULT_DOMAIN}/{domain}"
     return f"{domain}/{service}"
 
 
+#: An entity-addressed destination, written by `discovery.ENTITY_TARGET_PREFIX`.
+#: ⚠️ THE PREFIX EXISTS BECAUSE A SERVICE AND AN ENTITY ARE THE SAME SHAPE.
+#: `notify.mobile_app_x` is a service; `notify.living_room_bot_group` is an
+#: entity on the modern platform. Nothing about the string distinguishes them,
+#: and calling one the other way 404s or 400s at delivery time — long after the
+#: operator picked it from a list.
+ENTITY_PREFIX = "entity:"
+
+#: The one service that addresses a notify ENTITY. Not a platform name: it is
+#: Home Assistant's own generic entry point for the entity-based platform.
+ENTITY_SERVICE = "notify/send_message"
+
+
+def _payload_for(target: str, title: str, message: str) -> Dict[str, Any]:
+    """The body for one target, and where it is posted.
+
+    ⚠️ STILL THE INTERSECTION — `title` plus `message`, plain text — with
+    `entity_id` added only where the service REQUIRES it to know what it is
+    addressing. That is not a platform branch: `notify.send_message` takes an
+    entity the way any entity service does, and `discovery` flags exactly this
+    case as `needs_target`.
+    """
+    if target.startswith(ENTITY_PREFIX):
+        return {"entity_id": target[len(ENTITY_PREFIX):],
+                "title": title, "message": message}
+    return {"title": title, "message": message}
+
+
 async def deliver_one(session: ClientSession, target: str,
                       title: str, message: str) -> Dict[str, Any]:
     """Send to one target. Never raises."""
     url = f"{REST_ROOT}/services/{_service_path(target)}"
-    payload = {"title": title, "message": message}
+    payload = _payload_for(target, title, message)
     try:
         async with session.post(url, headers=AUTH_HEADERS, json=payload,
                                 timeout=None) as response:

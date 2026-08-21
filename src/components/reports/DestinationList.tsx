@@ -16,10 +16,24 @@
 
 import { Trash2 } from "lucide-react";
 
+/** The `entity:` prefix exists to keep an entity target from being confused
+ *  with a service of the same shape (see `discovery.ENTITY_TARGET_PREFIX`). It
+ *  is a storage detail and reads as noise beside a friendly name, so it is
+ *  dropped for display only — never from the value. */
+const plain = (target: string) =>
+  target.startsWith("entity:") ? target.slice("entity:".length) : target;
+
 export interface DiscoveredTarget {
   service: string;
   name: string;
   broadcast: boolean;
+  /** ⚠️ A SERVICE THAT CANNOT BE CALLED WITHOUT AN `entity_id`, and therefore
+   *  one that must NOT be offered. `notify.send_message` is the modern
+   *  platform's single entry point: picking it bare is a valid-looking choice
+   *  that fails at delivery time, hours later, on nobody's screen. The
+   *  destinations it stands for are listed individually as entity targets — so
+   *  hiding it removes a trap without removing a capability. */
+  needsTarget: boolean;
 }
 
 export default function DestinationList({
@@ -30,7 +44,8 @@ export default function DestinationList({
   onChange: (next: string[]) => void;
   emptyText: string;
 }) {
-  const unused = available.filter((t) => !targets.includes(t.service));
+  const unused = available.filter(
+    (t) => !targets.includes(t.service) && !t.needsTarget);
 
   /** A configured target keeps its friendly name if discovery still knows it,
    *  and prints as its raw service id if it does not — a target since removed
@@ -38,7 +53,8 @@ export default function DestinationList({
    *  from a list the operator is auditing. */
   const label = (service: string) => {
     const known = available.find((t) => t.service === service);
-    return known && known.name !== service ? `${known.name} — ${service}` : service;
+    return known && known.name !== service
+      ? `${known.name} — ${plain(service)}` : plain(service);
   };
 
   return (
@@ -86,7 +102,8 @@ export default function DestinationList({
             <option value="">Add a destination…</option>
             {unused.map((t) => (
               <option key={t.service} value={t.service}>
-                {t.name === t.service ? t.service : `${t.name} — ${t.service}`}
+                {t.name === t.service
+                  ? plain(t.service) : `${t.name} — ${plain(t.service)}`}
                 {t.broadcast ? " (every device)" : ""}
               </option>
             ))}

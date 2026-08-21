@@ -261,8 +261,64 @@ async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
                                  and ("entity_id" in fields
                                       or service == "send_message")),
             })
+    targets += await _notify_entities(hass)
     targets.sort(key=lambda row: str(row["service"]))
     return targets
+
+
+#: How an entity-addressed destination is written in the config, so it cannot
+#: be confused with a SERVICE of the same shape. ⚠️ THIS PREFIX IS LOAD-BEARING:
+#: `notify.mobile_app_x` is a service and `notify.living_room_bot_group` is an
+#: ENTITY, and the two are indistinguishable as strings. Calling one the other
+#: way fails at delivery time, long after the operator chose it.
+ENTITY_TARGET_PREFIX = "entity:"
+
+
+async def _notify_entities(hass: HassClient) -> List[Dict[str, Any]]:
+    """Notify ENTITIES, which are how the modern platform addresses one chat.
+
+    ⚠️ THE SERVICE LIST CANNOT REACH THESE, AND THEY ARE OFTEN THE ONES THE
+    OPERATOR WANTS. Home Assistant's newer notify platform registers ONE
+    `notify.send_message` service for the whole system and an ENTITY per
+    destination — so a Telegram bot with two allowed chats appears as two notify
+    entities and zero notify services. Offering `notify.send_message` bare is
+    worse than offering nothing: it is a valid pick that fails at delivery time
+    because it carries no `entity_id`.
+
+    Found on the reference villa, twice over. The first pass added
+    `telegram_bot.send_message`, which reaches every allowed chat at once and
+    cannot select one; the owner then asked for the Telegram GROUP specifically,
+    which is exactly what an entity target addresses.
+
+    ⚠️ THE FRIENDLY NAME IS THE WHOLE POINT of listing these — an operator picks
+    "TheLysHouse", not `notify.living_room_vesta_thelyshouse_thelyshouse`.
+    """
+    try:
+        result: Any = await hass.command("get_states")
+    except HassUnavailable:
+        return []
+    if not isinstance(result, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for state in result:
+        if not isinstance(state, dict):
+            continue
+        entity_id = str(state.get("entity_id") or "")
+        if not entity_id.startswith("notify."):
+            continue
+        attributes = state.get("attributes")
+        friendly = ""
+        if isinstance(attributes, dict):
+            friendly = str(attributes.get("friendly_name") or "")
+        out.append({
+            "service": f"{ENTITY_TARGET_PREFIX}{entity_id}",
+            "name": friendly or entity_id,
+            # An entity addresses exactly one destination, which is the reason
+            # to prefer it — it can never be the fan-out.
+            "broadcast": False,
+            "needs_target": False,
+        })
+    return out
 
 
 def _speaks_message(fields: Dict[str, Any]) -> bool:

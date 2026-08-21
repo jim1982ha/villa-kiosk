@@ -44,7 +44,9 @@ export interface ReportsDiagnostics {
    *  Already on the wire inside `inventory` — the Schedule tab could only
    *  REMOVE targets until v2.545.0 because nothing parsed it, which made
    *  "where briefings go" unconfigurable from the dialog that owns it. */
-  notifyTargets: { service: string; name: string; broadcast: boolean }[];
+  notifyTargets: {
+    service: string; name: string; broadcast: boolean; needsTarget: boolean;
+  }[];
   collector: {
     connected: boolean;
     connectedSince: string;
@@ -476,6 +478,7 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
           service: str(target.service),
           name: str(target.name),
           broadcast: bool(target.broadcast),
+          needsTarget: bool(target.needs_target),
         };
       }).filter((t) => t.service !== ""),
       collector: {

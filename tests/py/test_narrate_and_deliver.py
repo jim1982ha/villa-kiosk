@@ -539,3 +539,32 @@ def test_an_EMPTY_own_list_means_nowhere_not_inherit() -> None:
     from reports.pipeline import targets_for
     config = {"notify_targets": ["notify.a", "notify.b"]}
     assert targets_for(config, {"targets": []}) == []
+
+
+def test_an_entity_target_goes_through_send_message_and_carries_its_entity() -> None:
+    """⚠️ THE MODERN NOTIFY PLATFORM REGISTERS ONE SERVICE AND AN ENTITY PER
+    DESTINATION, which the service list cannot reach and which is often the one
+    the operator wants. A Telegram bot with two allowed chats appears as two
+    notify ENTITIES and zero notify services — so addressing ONE of them (the
+    group, not every chat the bot can reach) is only possible this way.
+
+    The `entity:` prefix is load-bearing: `notify.mobile_app_x` is a SERVICE and
+    `notify.living_room_bot_group` is an ENTITY, and nothing about the two
+    strings distinguishes them.
+    """
+    from reports.deliver import _payload_for
+    target = "entity:notify.living_room_bot_group"
+    assert _service_path(target) == "notify/send_message"
+    body = _payload_for(target, "T", "B")
+    assert body == {"entity_id": "notify.living_room_bot_group",
+                    "title": "T", "message": "B"}
+
+
+def test_a_plain_target_carries_no_entity_id() -> None:
+    """Still the intersection — `title` plus `message` — everywhere else.
+    Sending a stray `entity_id` to a classic notify service is a 400."""
+    from reports.deliver import _payload_for
+    assert _payload_for("notify.mobile_app_x", "T", "B") == \
+        {"title": "T", "message": "B"}
+    assert _payload_for("telegram_bot.send_message", "T", "B") == \
+        {"title": "T", "message": "B"}
