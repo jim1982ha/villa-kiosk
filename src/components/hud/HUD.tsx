@@ -94,6 +94,14 @@ interface Props {
   /** Open the Facility Manager workspace. Undefined when the profile lacks
    *  `manageFacility` — the button is then not rendered at all. */
   onOpenFacility?: () => void;
+  /** Open a Facility RECORD — a fault ticket, or the maintenance schedule.
+   *
+   *  ⚠️ THE HUD'S COCKPIT HAS NO FACILITY AROUND IT, so a record row here has
+   *  to travel out to Dashboard, which owns whether that dialog is open.
+   *  Optional and gated the same way `onOpenFacility` is: a profile that may
+   *  not manage the facility never receives it, and Cockpit then leaves those
+   *  rows unopenable rather than opening the wrong thing. */
+  onOpenFacilityRecord?: (kind: "fault" | "schedule", recordId: string) => void;
   /** Open the Briefings workspace. Undefined when the profile is not the owner
    *  — the entry is then not rendered at all. ⚠️ A RENDERING CONVENIENCE ONLY:
    *  the proxy refuses a non-owner write to /reports-config and a non-owner
@@ -134,7 +142,8 @@ export default function HUD({
   onOpenSettings, canOpenSettings, onMove,
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
-  mappedEntityIds, onOpenEntity, onOpenFacility, onOpenReports, onOpenCategory,
+  mappedEntityIds, onOpenEntity, onOpenFacility, onOpenFacilityRecord,
+  onOpenReports, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -846,6 +855,12 @@ export default function HUD({
           mappedEntityIds={mappedEntityIds}
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
+          {...(onOpenFacilityRecord ? {
+            onOpenRecord: (kind: "fault" | "schedule", recordId: string) => {
+              setCockpitOpen(false);
+              onOpenFacilityRecord(kind, recordId);
+            },
+          } : {})}
         />
       )}
 

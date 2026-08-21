@@ -45,6 +45,13 @@ export interface CockpitModalProps {
   onClose: () => void;
   mappedEntityIds: Set<string>;
   onOpenEntity: (entityId: string) => void;
+  /** Open a Facility RECORD — a fault ticket or a maintenance schedule.
+   *
+   *  ⚠️ OPTIONAL, AND ITS ABSENCE IS WHY THE ROW FALLS BACK. Cockpit is
+   *  rendered from two places; a caller that cannot reach the Facility
+   *  workspace (or a profile that may not) simply does not pass it, and the
+   *  row then has nothing to open rather than opening the wrong thing. */
+  onOpenRecord?: (kind: "fault" | "schedule", recordId: string) => void;
 }
 
 const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
@@ -54,7 +61,9 @@ const ATTENTION_ICON: Record<AttentionKind, typeof TriangleAlert> = {
   alarm: TriangleAlert,
 };
 
-export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }: CockpitModalProps) {
+export default function CockpitModal({
+  onClose, mappedEntityIds, onOpenEntity, onOpenRecord,
+}: CockpitModalProps) {
   const { entities, ws, entityFloorNumbers } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
@@ -174,7 +183,8 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
               <div className="settings-section-title">Needs attention</div>
               <div className="cockpit-attention-list">
                 {attentionItems.map((item) => (
-                  <CockpitAttentionRow key={item.id} item={item} onOpenEntity={onOpenEntity} />
+                  <CockpitAttentionRow key={item.id} item={item}
+                    onOpenEntity={onOpenEntity} onOpenRecord={onOpenRecord} />
                 ))}
               </div>
             </>
@@ -329,14 +339,39 @@ export default function CockpitModal({ onClose, mappedEntityIds, onOpenEntity }:
   );
 }
 
-function CockpitAttentionRow({ item, onOpenEntity }: { item: AttentionItem; onOpenEntity: (id: string) => void }) {
+/** ⚠️ A ROW OPENS WHAT IT IS, NOT WHAT IT MENTIONS. Every row used to call
+ *  `onOpenEntity(item.entityId)` whatever its kind — and for a fault or a
+ *  schedule `entityId` is the DEVICE the record is linked to, so tapping "Not
+ *  working · Open fault" opened the television's panel instead of the ticket.
+ *  Reported as: "I expect to see the ticket details from the Facility menu".
+ *
+ *  ⚠️ AND BOTH RECORD KINDS ARE ROUTED, NOT ONLY THE ONE REPORTED. An overdue
+ *  maintenance task opening a device panel is the identical mistake, and fixing
+ *  only the instance that was noticed is what /dry-audit opens by warning
+ *  against. The two DEVICE kinds — `unavailable` and `alarm` — keep the device
+ *  panel, which is correct and is what the owner said to preserve.
+ *
+ *  A row with nothing to open stays a `div`: a `button` that does nothing is
+ *  worse than plain text, because it invites the tap. */
+function CockpitAttentionRow({ item, onOpenEntity, onOpenRecord }: {
+  item: AttentionItem;
+  onOpenEntity: (id: string) => void;
+  onOpenRecord?: (kind: "fault" | "schedule", recordId: string) => void;
+}) {
   const Icon = ATTENTION_ICON[item.kind];
-  const tappable = !!item.entityId;
+  const record = (item.kind === "fault" || item.kind === "schedule")
+    ? item.recordId : undefined;
+  const open = record && onOpenRecord
+    ? () => onOpenRecord(item.kind as "fault" | "schedule", record)
+    : item.entityId && !record
+      ? () => onOpenEntity(item.entityId as string)
+      : null;
+  const tappable = !!open;
   const Row = tappable ? "button" : "div";
   return (
     <Row
       className={`cockpit-attention-row${tappable ? " tappable" : ""}`}
-      {...(tappable ? { onClick: () => onOpenEntity(item.entityId as string) } : {})}
+      {...(tappable ? { onClick: open } : {})}
     >
       <Icon size={16} className={`cockpit-attention-icon cockpit-attention-${item.kind}`} />
       <span className="cockpit-attention-body">

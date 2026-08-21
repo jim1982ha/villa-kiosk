@@ -28,8 +28,21 @@ export interface AttentionItem {
   room?: string;
   /** Present when this item can be drilled into (opens the entity's own
    *  panel) — a fault/schedule with no device behind it (a whole-villa task,
-   *  a free-text device description) has none, so it renders as read-only. */
+   *  a free-text device description) has none, so it renders as read-only.
+   *
+   *  ⚠️ FOR A FAULT OR A SCHEDULE THIS IS THE DEVICE THE RECORD IS LINKED TO,
+   *  NOT THE RECORD. Tapping the row used to open it for every kind, so an
+   *  open fault opened the TV's device panel instead of the ticket: reported
+   *  as "I expect to see the ticket details". A device row is right to open a
+   *  device; a record row must open its record, which is what `recordId`
+   *  below is for. */
   entityId?: string;
+  /** The Facility record this row stands for — a ticket id for `fault`, a
+   *  schedule id for `schedule`, absent for the two device kinds.
+   *
+   *  ⚠️ A SEPARATE FIELD RATHER THAN PARSING `id`. `id` is `fault:<uuid>` and
+   *  splitting it at the colon would work until a record id contains one. */
+  recordId?: string;
 }
 
 /**
@@ -73,6 +86,7 @@ export function buildAttentionItems(opts: {
       detail: t.status === "in_progress" ? "In progress" : "Open fault",
       room: t.room,
       entityId: t.entityId,
+      recordId: t.id,
     });
   }
 
@@ -85,6 +99,7 @@ export function buildAttentionItems(opts: {
       detail: s.state === "never" ? "Never recorded" : "Overdue",
       room: s.schedule.room,
       entityId: s.schedule.entityId,
+      recordId: s.schedule.id,
     });
   }
 

@@ -86,6 +86,11 @@ export default function Dashboard() {
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
    *  consumed it so reopening Facility later doesn't resurrect the form. */
   const [faultForEntity, setFaultForEntity] = useState<string | null>(null);
+  /** A Facility record the HUD's Cockpit asked to open — an existing ticket, or
+   *  the schedule tab. ⚠️ DASHBOARD OWNS IT because Dashboard owns whether the
+   *  Facility dialog is open at all; Cockpit can only ask. */
+  const [facilityRecord, setFacilityRecord] =
+    useState<{ kind: "fault" | "schedule"; id: string } | null>(null);
   /** Device a GUEST is reporting a problem with (see GuestReportModal). */
   const [guestReportFor, setGuestReportFor] = useState<string | null>(null);
   // When Advanced Settings is opened from a device panel's edit shortcut, this
@@ -818,6 +823,10 @@ export default function Dashboard() {
         mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
         onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
+        onOpenFacilityRecord={canManageFacility ? (kind, id) => {
+          setFacilityRecord({ kind, id });
+          setFacilityOpen(true);
+        } : undefined}
         onOpenReports={canEditConfig ? () => setReportsOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
       />
@@ -1027,11 +1036,15 @@ export default function Dashboard() {
 
       {facilityOpen && canManageFacility && (
         <FacilityModal
-          onClose={() => { setFacilityOpen(false); setFaultForEntity(null); }}
+          onClose={() => {
+            setFacilityOpen(false); setFaultForEntity(null); setFacilityRecord(null);
+          }}
           mappedEntityIds={effectiveMappedEntityIds}
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
           reportFaultFor={faultForEntity ?? undefined}
-          onFaultFormOpened={() => setFaultForEntity(null)}
+          onFaultFormOpened={() => { setFaultForEntity(null); setFacilityRecord(null); }}
+          openFaultId={facilityRecord?.kind === "fault" ? facilityRecord.id : undefined}
+          openScheduleTab={facilityRecord?.kind === "schedule"}
         />
       )}
 

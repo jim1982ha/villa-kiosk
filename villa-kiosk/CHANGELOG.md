@@ -1,12 +1,10 @@
-## 2.560.0
+## 2.561.0
 
-### Fixed — the briefing still carried internal names, and the previous fix could not reach them
+### Fixed — tapping a fault in the Cockpit opened the device, not the fault
 
-Underscored identifiers were reaching the delivered message — "level_anomaly did
-not run", "entity_id (use entities)" — where Telegram reads an underscore as the
-start of italics and ran the emphasis on through the following sentences. The
-previous release tried to stop Telegram interpreting the text at all, which
-cannot work for a message addressed to a specific chat: that route offers no
-such setting. The names are now written out properly instead — "Meters that
-stopped reporting did not run" — so there is nothing left to misread.
+The "needs attention" list mixes devices with maintenance records, and every row
+opened a device panel — so an open fault opened whatever equipment it names
+instead of the ticket. A fault now opens in Facility with its details ready to
+edit, and an overdue maintenance job opens the Schedule tab. Rows that stand for
+a device still open the device, which is what they are for.
 

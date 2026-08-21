@@ -33,7 +33,8 @@ const LABEL: Record<FmTicketStatus, string> = {
 };
 
 export default function FaultsTab(
-  { onOpenEntity, unavailableIds, deviceOptions, reportFaultFor, onFaultFormOpened }: {
+  { onOpenEntity, unavailableIds, deviceOptions, reportFaultFor, onFaultFormOpened,
+    openTicketId, onTicketOpened }: {
     onOpenEntity: (id: string) => void;
     /** Computed once by FacilityModal via unavailableDeviceIds and passed in,
      *  rather than recomputed here — this tab used to derive its own
@@ -50,6 +51,15 @@ export default function FaultsTab(
     /** Open the form pre-pointed at this device (see FacilityModal). */
     reportFaultFor?: string;
     onFaultFormOpened?: () => void;
+    /** Open THIS existing ticket for editing.
+     *
+     *  ⚠️ THE COUNTERPART TO `reportFaultFor`, WHICH RAISES A NEW ONE. Cockpit
+     *  lists open faults and tapping one must show the ticket; without this the
+     *  only way in was to find it in the list by eye. Same shape deliberately —
+     *  a request id in, a callback when it has been honoured — so the two read
+     *  as one mechanism rather than two. */
+    openTicketId?: string;
+    onTicketOpened?: () => void;
   },
 ) {
   const { data, addTicket, updateTicket, removeTicket } = useFmData();
@@ -130,6 +140,20 @@ export default function FaultsTab(
     // the form mid-edit. The request id is the only trigger that matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportFaultFor]);
+
+  // ⚠️ THE TICKET MUST EXIST BEFORE IT CAN BE OPENED, and on a cold start the
+  // store arrives after this effect first runs — so it depends on the ticket
+  // LIST too, and clears the request only once it has actually found one. A
+  // request silently dropped because the data had not loaded is the shape of
+  // bug that only ever reproduces on someone else's slower connection.
+  useEffect(() => {
+    if (!openTicketId) return;
+    const ticket = data.tickets.find((t) => t.id === openTicketId);
+    if (!ticket) return;
+    openEditor(ticket);
+    onTicketOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTicketId, data.tickets]);
 
   return (
     <div className="fm-stack">

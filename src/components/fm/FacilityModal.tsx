@@ -55,6 +55,7 @@ const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
 
 export default function FacilityModal({
   onClose, mappedEntityIds, onOpenEntity, reportFaultFor, onFaultFormOpened,
+  openFaultId, openScheduleTab,
 }: {
   onClose: () => void;
   mappedEntityIds: Set<string>;
@@ -68,12 +69,29 @@ export default function FacilityModal({
   /** Jump to a device's panel — lets a failing check or a fault open the
    *  actual device instead of leaving the operator to hunt for it. */
   onOpenEntity: (entityId: string) => void;
+  /** Open on Faults with THIS existing ticket in the editor.
+   *
+   *  ⚠️ THE COUNTERPART TO `reportFaultFor`. Cockpit's "needs attention" list
+   *  shows open faults, and tapping one opened the linked DEVICE's panel —
+   *  because `entityId` on a fault row is the device the ticket names, and the
+   *  row called `onOpenEntity` for every kind. A record row must open its
+   *  record. */
+  openFaultId?: string;
+  /** Open on Schedule — for an overdue maintenance row, which had the same
+   *  defect and is fixed with it rather than left for the next report. */
+  openScheduleTab?: boolean;
 }) {
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onClose);
   // Landing on Faults rather than Today when the operator arrived by tapping
   // "report a fault" on a device: they have already said what they want.
-  const [tab, setTab] = useState<Tab>(reportFaultFor ? "faults" : "today");
+  const [tab, setTab] = useState<Tab>(
+    reportFaultFor || openFaultId ? "faults" : openScheduleTab ? "schedule" : "today");
+  /** A ticket this dialog's OWN Cockpit asked to open. ⚠️ SEPARATE FROM THE
+   *  `openFaultId` PROP: that one is a request from outside and is cleared by
+   *  the caller, this one is ours and is cleared by us. Merging them would mean
+   *  writing to a prop's owner from here to reset it. */
+  const [ownFaultId, setOwnFaultId] = useState<string | null>(null);
   const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
@@ -205,7 +223,9 @@ export default function FacilityModal({
             {ready && tab === "faults" && (
               <FaultsTab onOpenEntity={onOpenEntity} unavailableIds={unavailableIds}
                 deviceOptions={deviceOptions} reportFaultFor={reportFaultFor}
-                onFaultFormOpened={onFaultFormOpened} />
+                onFaultFormOpened={onFaultFormOpened}
+                openTicketId={openFaultId ?? ownFaultId ?? undefined}
+                onTicketOpened={() => { setOwnFaultId(null); onFaultFormOpened?.(); }} />
             )}
             {ready && tab === "spend" && (
               <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />
@@ -229,11 +249,21 @@ export default function FacilityModal({
         </div>
       </div>
 
+      {/* ⚠️ THIS DIALOG IS ALREADY THE DESTINATION, so a record row does not
+          travel back out through Dashboard — it closes Cockpit and switches
+          this tab. The other Cockpit, in the HUD, has no Facility around it and
+          must ask Dashboard to open one; both end in the same place, by the
+          shortest route each has. */}
       {cockpitOpen && (
         <CockpitModal
           mappedEntityIds={mappedEntityIds}
           onClose={() => setCockpitOpen(false)}
           onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
+          onOpenRecord={(kind, recordId) => {
+            setCockpitOpen(false);
+            if (kind === "fault") { setOwnFaultId(recordId); setTab("faults"); }
+            else setTab("schedule");
+          }}
         />
       )}
 
