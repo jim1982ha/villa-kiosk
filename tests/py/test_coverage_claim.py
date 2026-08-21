@@ -101,12 +101,16 @@ def test_an_unknown_blueprint_list_does_not_accuse_anything() -> None:
 
 def test_the_stand_down_names_the_rule_that_has_never_reported() -> None:
     module = next(m for m in _superseded() if m.name == "sensor_health")
-    _, _, detail = registry.gate(
+    _, reason, detail = registry.gate(
         module, _context(silent_blueprints=["maintenance_silence"]), {}, 60)
-    assert "Maintenance silence" in detail, (
+    # ⚠️ THE SENTENCE MOVED TO THE RENDERER (2.578.0) and the gate now returns
+    # the blueprint NAME plus its own reason code. The property is unchanged —
+    # the reader must be told WHICH rule to look at — but the brief writes the
+    # explanation once under a sub-heading instead of on every line.
+    assert reason == "covered_but_silent"
+    assert detail == "Maintenance silence", (
         "the reader has to know WHICH rule to go and look at; an unnamed one "
         "is the reassurance this replaced")
-    assert "not reported" in detail
     assert "maintenance_silence" not in detail, (
         "an identifier in prose on the owner's phone — `readable_label` exists "
         "for exactly this and the gate must go through it")
@@ -126,10 +130,15 @@ def test_the_module_still_stands_down_either_way() -> None:
     A version of this fix that ran the module instead would reintroduce the
     duplicate findings the gate exists to prevent."""
     module = next(m for m in _superseded() if m.name == "sensor_health")
-    for silent in ([], ["maintenance_silence"]):
+    # ⚠️ THE REASON CODE DIFFERS BY ARM AND THE REFUSAL DOES NOT. A silent
+    # cover is its own kind of skip so the brief can group it; a speaking one
+    # is the plain capability refusal. Both stand the module down, which is the
+    # property this test is about.
+    for silent, expected in (([], "missing_capability"),
+                             (["maintenance_silence"], "covered_but_silent")):
         ok, reason, _ = registry.gate(
             module, _context(silent_blueprints=silent), {}, 60)
-        assert ok is False and reason == "missing_capability"
+        assert ok is False and reason == expected
 
 
 # ── the wiring, which is where this class of bug actually lives ──────────────

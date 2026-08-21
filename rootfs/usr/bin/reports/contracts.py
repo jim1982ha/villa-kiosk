@@ -109,6 +109,12 @@ SKIP_REASON: Final[Tuple[str, ...]] = (
     "audience_mismatch",    # not part of this audience's brief
     "timed_out",            # exceeded its budget this run
     "errored",              # raised; three in a row auto-disables it
+    # ⚠️ ITS OWN VALUE SO THE RENDERER CAN GROUP WITHOUT PARSING ENGLISH. These
+    # skips share a shape — "this check stands down for a rule that has never
+    # reported" — and the brief lists them one per line among unrelated ones.
+    # Grouping them by matching on the sentence would be the cross-artefact
+    # defect this file exists to prevent, one layer in.
+    "covered_but_silent",   # a covering blueprint exists and has never fired
 )
 
 # ⚠️ THE PRIVACY BOUNDARY (Phase 6). The allow-list of field names that may

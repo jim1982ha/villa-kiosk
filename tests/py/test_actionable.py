@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 from reports import aggregate as agg                              # noqa: E402
 from reports.narrate import DeterministicNarrator, ReportContext  # noqa: E402
 from reports.narrate.deterministic import _amount                 # noqa: E402
+from reports.narrate.style import name_of                         # noqa: E402
 
 #: Verbatim from `ha_get_automation_traces` on the reference villa, 08:00 scan.
 AUDIT_EVENT = {
@@ -374,10 +375,15 @@ def test_a_percentage_still_prints_as_one() -> None:
 
 # ── a named rule is bracketed, so the sentence parses ────────────────────────
 
-def test_a_named_rule_is_bracketed() -> None:
+def test_a_named_rule_is_quoted() -> None:
     """⚠️ ASKED FOR DIRECTLY. "Critical automation health: critical automation
     off — critical doorbell---parking gate" runs a rule NAME into the prose
-    around it with nothing marking where one stops."""
+    around it with nothing marking where one stops.
+
+    ⚠️ APOSTROPHES, NOT BRACKETS. 2.577.0 used brackets and the DELIVERED
+    message came back with every one stripped — Telegram's Markdown parser
+    consumes them as link syntax — while the units and headings from the same
+    release arrived intact. See `style.name_of`."""
     body = _render([AUDIT_EVENT], labels=LABELS)
     # ⚠️ CHECKED ON EACH LINE THAT NAMES A RULE, NOT ON THE BODY. The first
     # version searched the whole message and survived a mutation that removed
@@ -386,16 +392,16 @@ def test_a_named_rule_is_bracketed() -> None:
     audit = next(l for l in body.splitlines() if "critical automation off" in l)
     task = next(l for l in body.splitlines() if "Re-enable" in l)
     for line in (audit, task):
-        assert f"[{DISPLAY_NAME}]" in line, f"unbracketed rule name: {line!r}"
+        assert name_of(DISPLAY_NAME) in line, f"unquoted rule name: {line!r}"
 
 
-def test_the_brackets_survive_the_markup_pass() -> None:
+def test_the_quotes_survive_the_markup_pass() -> None:
     """⚠️ THE TWO REQUIREMENTS MEET HERE. `style.inert` neutralises anything a
-    notify platform can parse, and brackets are the report's own quoting — so
-    they must NOT be neutralised, while `](` still must be."""
+    notify platform can parse; an apostrophe is not markup in any dialect, which
+    is why it is the quoting that reaches the reader."""
     from reports.narrate.style import inert
     body = inert(_render([AUDIT_EVENT], labels=LABELS))
-    assert "[critical doorbell---parking gate]" in body
+    assert name_of("critical doorbell---parking gate") in body
 
 
 # ── three headings, three marks ──────────────────────────────────────────────
@@ -416,3 +422,62 @@ def test_the_brief_says_facility_manager_not_caretaker() -> None:
     body = _render([AUDIT_EVENT], labels=LABELS)
     assert "For the facility manager" in body
     assert "caretaker" not in body.lower()
+
+
+# ── the sub-category (2.578.0) ───────────────────────────────────────────────
+
+SILENT_SKIPS = [
+    {"module": "level_anomaly", "title": "Unusual consumption for the day of week",
+     "reason": "Roi baseline deviation", "detail": "Roi baseline deviation",
+     "code": "covered_but_silent"},
+    {"module": "sensor_health", "title": "Meters that stopped reporting",
+     "reason": "Maintenance silence", "detail": "Maintenance silence",
+     "code": "covered_but_silent"},
+    {"module": "standby_creep", "title": "Equipment drawing more at rest",
+     "reason": "your own automations already cover this",
+     "detail": "your own automations already cover this",
+     "code": "missing_capability"},
+]
+
+
+def test_silent_cover_skips_are_gathered_under_one_heading() -> None:
+    """⚠️ THE SENTENCE WAS REPEATED VERBATIM ON EVERY LINE BUT THE RULE NAME,
+    three of them scattered among unrelated skips. Asked for: one sub-heading,
+    one bullet each, the explanation written once."""
+    body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
+    block = body.split("never reported")[1]
+    assert "Unusual consumption for the day of week" in block
+    assert "Meters that stopped reporting" in block
+    assert name_of("Roi baseline deviation") in block
+    # The unrelated skip stays where it was.
+    assert "Equipment drawing more at rest" not in block
+
+
+def test_the_shared_sentence_is_written_once() -> None:
+    body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
+    assert body.count("has produced no event since") == 1
+    assert "which has not reported since it was installed" not in body
+
+
+def test_the_grouping_reads_the_code_not_the_sentence() -> None:
+    """⚠️ GROUPING ON PROSE BREAKS THE DAY THE PROSE IS REWORDED, which this
+    report has now done twice on owner feedback. `covered_but_silent` is a
+    SKIP_REASON value and is pinned across both artefacts by
+    `test_contract_parity`."""
+    from reports.contracts import SKIP_REASON
+    assert "covered_but_silent" in SKIP_REASON
+    reworded = [{**s, "detail": "totally different words", "reason": "x"}
+                if s["code"] == "covered_but_silent" else s for s in SILENT_SKIPS]
+    body = _render([AUDIT_EVENT], skipped=reworded)
+    assert "Unusual consumption for the day of week" in body.split("never reported")[1]
+
+
+def test_the_sub_heading_has_its_own_glyph() -> None:
+    """⚠️ THE 2.577.0 RULE, BROKEN IN THE RELEASE THAT WROTE IT DOWN. It first
+    rendered under the stethoscope — the same glyph as the section containing
+    it — because "one glyph per heading" was read as "per section"."""
+    from reports.narrate.style import SECTION_MARK
+    assert SECTION_MARK["waiting"] != SECTION_MARK["health"]
+    body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
+    line = next(l for l in body.splitlines() if "never reported" in l)
+    assert line.startswith(SECTION_MARK["waiting"])

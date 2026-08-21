@@ -70,6 +70,11 @@ SECTION_MARK: Dict[str, str] = {
     "preventive": "\U0001F4C5",     # calendar
     "trends": "\U0001F4C8",         # chart increasing
     "health": "\U0001FA7A",         # stethoscope
+    # ⚠️ A SUB-HEADING INSIDE `health` STILL NEEDS ITS OWN GLYPH. It first
+    # rendered under the stethoscope — the same mark as the section that
+    # contains it — because the 2.577.0 rule was read as "one glyph per
+    # SECTION" rather than per HEADING. Broken in the release that wrote it.
+    "waiting": "\u23f3",           # hourglass — installed, never fired
     "coverage": "\U0001F6AB",       # prohibited
 }
 
@@ -85,14 +90,21 @@ _MARKUP_ACTIVE = {
     "*": "",     # Markdown bold/italic.
     "`": "'",    # Markdown code.
     "~": "-",    # MarkdownV2 strikethrough.
-    # ⚠️ `[` AND `]` ARE NOT HERE, AND THAT IS DELIBERATE (2.577.0). They are
-    # the report's own quoting for a rule, blueprint or file name — "[roi_
-    # baseline_deviation] has not reported" is legible where the bare words are
-    # not, and the owner asked for it. Neither is an entity DELIMITER in
-    # Telegram's legacy Markdown: only `_ * ` and a backtick open an entity, so
-    # an unmatched bracket prints and nothing errors. The one construct that
-    # would matter is a link, `[text](url)`, which needs the two characters
-    # ADJACENT — see `inert`, which puts a space between them.
+    # ⚠️ BACK IN THE LIST (2.578.0) AFTER A ROUND TRIP THROUGH THE PLATFORM.
+    # 2.577.0 took them out so the report could quote a rule name as
+    # "[roi_baseline_deviation]", reasoning that only `_ * ` and a backtick open
+    # an entity in Telegram's legacy Markdown, so a bare bracket would print.
+    # It does not: the DELIVERED message came back with every bracket silently
+    # gone, while the units and the headings from the same release arrived
+    # intact. Telegram's Markdown parser consumes them as link syntax whether or
+    # not a `(url)` follows.
+    #
+    # ⚠️ AND THE TEST THAT "PROVED" IT PASSED, because it exercised `inert` in
+    # isolation and nothing exercised the platform. The report quotes with
+    # APOSTROPHES now — `style.name_of` — which the preflight line has been
+    # delivering intact all along, and which is the owner's own suggestion.
+    "[": "(",    # Markdown link syntax; Telegram eats these either way.
+    "]": ")",
     "<": "(",    # HTML parse mode.
     ">": ")",
 }
@@ -138,12 +150,25 @@ def inert(text: str) -> str:
     intentional markup anywhere, so there is nothing for a whole-message pass to
     damage, and after it there is no site left that can forget.
     """
-    flat = "".join(_MARKUP_ACTIVE.get(character, character) for character in text)
-    # ⚠️ THE ONE BRACKET CONSTRUCT THAT IS STILL MARKUP. `[text](url)` is a
-    # Markdown link and needs `](` adjacent; a space between them is invisible
-    # to a reader and stops any parser reading the pair as a link. This is what
-    # lets the brackets above stay literal.
-    return flat.replace("](", "] (")
+    return "".join(_MARKUP_ACTIVE.get(character, character) for character in text)
+
+
+def name_of(text: str) -> str:
+    """A rule, blueprint, automation or file name, quoted so the sentence parses.
+
+    ⚠️ APOSTROPHES, NOT BRACKETS, AND THE PLATFORM DECIDED THAT. Brackets were
+    tried in 2.577.0 and arrived stripped: Telegram's Markdown parser consumes
+    them as link syntax with or without a following `(url)`, so the delivered
+    message read "covered by Roi baseline deviation" — exactly the unquoted
+    prose the change was meant to fix — while the units and headings from the
+    same release came through fine. An apostrophe is not markup in any dialect
+    and the preflight line has been delivering one intact for months:
+    "More than one delivery target is named 'iphone 16 fab'".
+
+    ⚠️ ONE FUNCTION, SO THE NEXT SITE GETS IT BY CALLING. Five places name a
+    rule and each had its own literal; the next one would have had a sixth.
+    """
+    return f"'{text}'"
 
 
 def heading(section: str, text: str) -> str:

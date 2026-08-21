@@ -187,12 +187,15 @@ def test_a_speaking_blueprint_still_stands_its_module_down() -> None:
 def test_a_silent_blueprint_within_the_grace_window_still_stands_it_down() -> None:
     """A listener that came up recently has no standing to call a monthly rule
     silent, so the conservative answer holds and the brief says which rule."""
-    ok, _, detail = registry.gate(
+    ok, reason, detail = registry.gate(
         _module("sensor_health"),
         _context(silent_blueprints=["maintenance_silence"],
                  heard_nothing_for_days=3.0), {}, 60)
     assert ok is False
-    assert "has not reported" in detail
+    # ⚠️ THE DETAIL IS THE BLUEPRINT NAME, NOT A SENTENCE (2.578.0). The brief
+    # gathers these under one sub-heading and writes the explanation once.
+    assert reason == "covered_but_silent"
+    assert detail == "Maintenance silence"
 
 
 def test_a_long_silent_blueprint_lets_its_module_run() -> None:
@@ -252,3 +255,28 @@ def test_every_superseded_module_can_still_be_reached(module_name: str) -> None:
                  heard_nothing_for_days=registry.BLUEPRINT_GRACE_DAYS + 1),
         {}, 999)
     assert ok is True, f"{module_name} refused with {reason}"
+
+
+def test_the_silent_cover_skip_reaches_the_renderer_with_its_own_code() -> None:
+    """⚠️ THE WHOLE PATH, NOT A HAND-BUILT DICT. `test_actionable`'s fixtures
+    set `code` themselves, so they exercise the renderer's grouping and NOT the
+    gate that produces it — a mutation changing the gate's returned reason to
+    `missing_capability` survived every test in that file. The brief would have
+    silently lost its sub-heading and scattered those lines again.
+    """
+    module = _module("sensor_health")
+    ok, reason, detail = registry.gate(
+        module, _context(silent_blueprints=["maintenance_silence"],
+                         heard_nothing_for_days=3.0), {}, 60)
+    assert ok is False
+    assert reason == "covered_but_silent", (
+        "the gate no longer marks this skip as its own kind, so the renderer "
+        "cannot group it without parsing English")
+    assert detail == "Maintenance silence", (
+        "the detail must be the blueprint NAME alone — the renderer writes the "
+        "sentence once, so a sentence here would repeat on every line")
+
+    described = registry.describe_skips([{"module": module.name,
+                                          "reason": reason, "detail": detail}])
+    assert described[0]["code"] == "covered_but_silent", (
+        "describe_skips drops the raw code, so the renderer sees only prose")

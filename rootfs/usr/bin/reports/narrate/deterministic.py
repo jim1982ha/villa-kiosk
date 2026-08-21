@@ -52,7 +52,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 from ..standing import severity_of as standing_severity
 from ..devices import prettify_entity_slug
 from ..text import readable_label
-from .style import BULLET, heading, title_mark
+from .style import BULLET, heading, name_of, title_mark
 from ..contracts import severity_rank
 from .base import ReportContext
 
@@ -747,7 +747,7 @@ class DeterministicNarrator:
                     # health)" is a blueprint's own task text plus its bucket —
                     # correct, and unusable without knowing what to re-enable.
                     who = ", ".join(
-                        f"[{self._labels.get(e) or prettify_entity_slug(e)}]"
+                        name_of(self._labels.get(e) or prettify_entity_slug(e))
                         for e in (task.get("entities") or [])[:3])
                     tail = f" ({where})" if where else ""
                     lines.append(f"{BULLET}{text}" + (f" — {who}" if who else "") + tail)
@@ -950,8 +950,8 @@ class DeterministicNarrator:
             # using. The subject of the sentence is the rule, and the category
             # is the only thing left to qualify it with.
             buckets = [readable_label(str(b)) for b in (entry.get("buckets") or [])][:3]
-            name = (f"{', '.join('[' + b + ']' for b in buckets)} {name}"
-                    if buckets and not entry.get("named") else f"[{name}]")
+            name = (f"{', '.join(name_of(b) for b in buckets)} {name}"
+                    if buckets and not entry.get("named") else name_of(name))
             # ⚠️ FIELD NAMES ARE IDENTIFIERS TOO. This printed `entity_id (use
             # entities)` verbatim — the same defect as the rule id, one line
             # over, and the reason the whole sentence came out italic on a
@@ -987,11 +987,23 @@ class DeterministicNarrator:
         and costs a third of the space.
         """
         by_reason: Dict[str, List[str]] = {}
+        # ⚠️ ONE SHAPE OF SKIP GETS ITS OWN SUB-HEADING. "X did not run: covered
+        # by Y, which has not reported since it was installed — check that rule"
+        # is a sentence repeated verbatim on every line but the rule name, and
+        # the brief carried three of them scattered among unrelated skips.
+        # Asked for: group them, one bullet each, under one explanation.
+        silent: List[Tuple[str, str]] = []
         for item in context.skipped:
             if not isinstance(item, dict):
                 continue
             name = str(item.get("title") or "") or readable_label(
                 str(item.get("module") or "a check"))
+            # ⚠️ ON THE CODE, NEVER ON THE SENTENCE. `reason` below is prose and
+            # is reworded whenever a reader complains; `code` is the contract.
+            if str(item.get("code") or "") == "covered_but_silent":
+                silent.append((name, str(item.get("detail")
+                                         or item.get("reason") or "")))
+                continue
             reason = str(item.get("detail") or item.get("reason")
                          or "no reason given")
             by_reason.setdefault(reason, []).append(name)
@@ -1003,6 +1015,17 @@ class DeterministicNarrator:
             else:
                 out.append(f"{BULLET}{_plural(len(names), 'check')} did not "
                            f"run — {reason}: {', '.join(names)}")
+
+        if silent:
+            out.append("")
+            out.append(heading("waiting", "Checks waiting on a rule that has "
+                                          "never reported"))
+            for name, blueprint in silent[:MAX_LINES]:
+                out.append(f"{BULLET}{name} — covered by {name_of(blueprint)}"
+                           if blueprint else f"{BULLET}{name}")
+            out.append(f"{BULLET}Each of those rules is installed and has "
+                       f"produced no event since. Check them, or the check they "
+                       f"stand in for runs by itself after 45 days.")
         return out
 
     def _coverage(self, context: ReportContext) -> List[str]:
@@ -1276,12 +1299,12 @@ class DeterministicNarrator:
                  for e in (getattr(group, "entities", None) or [])]
         if not names:
             return ""
-        # ⚠️ BRACKETED. "Critical automation health: critical automation off —
+        # ⚠️ QUOTED. "Critical automation health: critical automation off —
         # critical doorbell---parking gate" runs a rule NAME into the prose
         # around it with nothing to say where one stops and the other starts.
-        # Asked for directly: quote an automation, blueprint or file name.
-        # `style.inert` keeps `[` and `]` literal for exactly this.
-        marked = [f"[{name}]" for name in names]
+        # `style.name_of` owns the quoting for every site that names a rule —
+        # see its docstring for why apostrophes and not brackets.
+        marked = [name_of(name) for name in names]
         if len(marked) <= limit:
             return ", ".join(marked)
         return f"{', '.join(marked[:limit])} and {len(marked) - limit} more"

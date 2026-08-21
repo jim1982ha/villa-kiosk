@@ -96,6 +96,11 @@ export const SKIP_REASON = [
   "audience_mismatch",
   "timed_out",
   "errored",
+  // ⚠️ ITS OWN VALUE SO THE BRIEF CAN GROUP THESE WITHOUT PARSING ENGLISH: a
+  // check standing down for a covering rule that has never fired. Added to
+  // `contracts.py` first and caught here by `test_contract_parity` on the same
+  // run — which is the whole reason that test exists.
+  "covered_but_silent",
 ] as const;
 export type SkipReason = (typeof SKIP_REASON)[number];
 

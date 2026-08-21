@@ -50,17 +50,18 @@ def test_the_name_that_broke_delivery_is_inert() -> None:
         "Deleting it gives `Timmerflotte8343`, a different name")
 
 
-@pytest.mark.parametrize("character", ["_", "*", "`", "~", "<", ">"])
+@pytest.mark.parametrize("character", ["_", "*", "`", "~", "[", "]", "<", ">"])
 def test_no_markup_active_character_survives(character: str) -> None:
     """⚠️ THE UNION OF THE MODES, because the add-on does not choose the parse
     mode — the platform's own configuration does, and `discovery._plain_mode`
     can only turn one off where the service publishes a field for it. Legacy
-    Markdown breaks on `_ * ` `; MarkdownV2 adds `~`; HTML breaks on `< >`.
+    Markdown breaks on `_ * ` [`; MarkdownV2 adds `~`; HTML breaks on `< >`.
 
-    ⚠️ `[` AND `]` ARE NOT IN THIS LIST since 2.577.0. They are the report's own
-    quoting for a rule or file name and neither opens an entity in Telegram's
-    legacy Markdown — only a LINK, `[text](url)`, is markup, and that needs the
-    two characters adjacent. See `test_a_link_is_the_only_bracket_construct`."""
+    ⚠️ `[` AND `]` WERE TAKEN OUT IN 2.577.0 AND PUT BACK IN 2.578.0. The
+    reasoning was that only `_ * ` and a backtick OPEN an entity, so a bare
+    bracket would print — and the delivered message came back with every one
+    stripped. Telegram consumes them as link syntax with or without a `(url)`.
+    The report quotes with apostrophes now; see `style.name_of`."""
     assert character not in style.inert(f"a {character} b")
 
 
@@ -90,23 +91,22 @@ def test_the_deterministic_body_is_inert_end_to_end() -> None:
         standing=rows)
     title, body = DeterministicNarrator().render(context)
     clean_title, clean_body = style.inert(title), style.inert(body)
-    for character in ("_", "*", "`", "<", ">"):
+    for character in ("_", "*", "`", "[", "]", "<", ">"):
         assert character not in clean_body, f"{character!r} survived into the body"
         assert character not in clean_title
     # The names are still readable, which is the other half of the requirement.
     assert "Timmerflotte 8343 Temperature" in clean_body
     assert "Gate motor grinding" in clean_body
-    # The room name keeps its brackets — they are not markup on their own.
-    assert "Entrance [north]" in clean_body
+    assert "Entrance (north)" in clean_body
 
 
-def test_a_link_is_the_only_bracket_construct() -> None:
-    """⚠️ WHAT LETS THE BRACKETS STAY LITERAL. `[text](url)` needs `](`
-    adjacent; a space between them is invisible to a reader and stops any
-    parser reading the pair as a link."""
-    assert style.inert("[roi_baseline_deviation] has not reported") == \
-        "[roi baseline deviation] has not reported"
-    assert style.inert("a [link](http://x) here") == "a [link] (http://x) here"
+def test_the_reports_own_quoting_is_not_markup_anywhere() -> None:
+    """⚠️ THE ONE DELIMITER THAT SURVIVES EVERY PLATFORM. Brackets were tried
+    and eaten; an apostrophe is not markup in Markdown, MarkdownV2 or HTML, and
+    the preflight line has been delivering one intact for months."""
+    quoted = style.name_of("Roi baseline deviation")
+    assert quoted == "'Roi baseline deviation'"
+    assert style.inert(f"covered by {quoted}") == "covered by 'Roi baseline deviation'"
 
 
 # ── the boundary ─────────────────────────────────────────────────────────────

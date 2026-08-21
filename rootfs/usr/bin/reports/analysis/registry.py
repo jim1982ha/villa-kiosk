@@ -121,9 +121,13 @@ def gate(module: AnalysisModule, context: ModuleContext,
             # that rule starts speaking about a device, the built-in check
             # yields on it — per device, not per property.
             return (True, "", "")
-        return (False, "missing_capability",
-                f"covered by {readable_label(silent[0])}, which has not "
-                f"reported since it was installed — check that rule")
+        # ⚠️ ITS OWN REASON CODE, AND THE DETAIL IS THE BLUEPRINT NAME ALONE.
+        # The renderer gathers every skip of this shape under one sub-heading
+        # and writes the explanation once, so a sentence here would repeat on
+        # every line — which is what the brief did, three times over, until an
+        # owner asked for them grouped. Grouping on the PROSE would have worked
+        # today and broken the next time a reader asked for different words.
+        return (False, "covered_but_silent", readable_label(silent[0]))
 
     missing = [c for c in module.requires if c not in context.capabilities]
     if missing:
@@ -224,6 +228,7 @@ def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
         "audience_mismatch": "not part of this brief",
         "timed_out": "took too long",
         "errored": "failed",
+        "covered_but_silent": "covered by a rule that has never reported",
     }
     out: List[Dict[str, str]] = []
     for item in skipped:
@@ -242,7 +247,12 @@ def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
         name = item.get("module", "a check")
         out.append({"module": name,
                     "title": _title_of(str(name)),
-                    "reason": detail or reason})
+                    "reason": detail or reason,
+                    # ⚠️ THE RAW CODE TRAVELS TOO. `reason` above is prose for
+                    # printing; `code` is what the renderer groups on, because
+                    # grouping on a sentence breaks the day the sentence is
+                    # reworded — which is how this report has been bitten before.
+                    "code": str(item.get("reason", ""))})
     return out
 
 
