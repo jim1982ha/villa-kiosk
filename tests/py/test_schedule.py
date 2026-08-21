@@ -284,3 +284,57 @@ def test_the_regression_itself_a_current_hour_schedule_is_due_locally() -> None:
     assert due([_sched(hour=now_local.hour)], [], now_utc) == [], (
         "scheduling against UTC must NOT find a local-hour schedule due — "
         "if this passes, the fixture no longer reproduces the regression")
+
+
+# ── minutes ─────────────────────────────────────────────────────────────────
+
+def test_a_schedule_can_fire_at_an_arbitrary_minute() -> None:
+    """⚠️ THE TICK RUNS EVERY 60 SECONDS, so minute precision is as real as the
+    hour's always was — and it cannot affect what the report CONTAINS, because
+    the window comes from `period_start`, a DATE boundary, over hourly
+    statistics buckets this does not slice. Delivery time and measurement window
+    are independent."""
+    from datetime import datetime
+    from reports.schedule import due
+    entry = {"id": "s1", "cadence": "daily", "hour": 7, "minute": 30}
+
+    at_0729 = datetime(2026, 8, 21, 7, 29, tzinfo=timezone.utc)
+    at_0730 = datetime(2026, 8, 21, 7, 30, tzinfo=timezone.utc)
+    assert due([entry], [], at_0729) == []
+    fired = due([entry], [], at_0730)
+    assert len(fired) == 1 and fired[0]["id"] == "s1"
+
+
+def test_a_schedule_written_before_minutes_existed_still_fires() -> None:
+    """⚠️ ABSENT MEANS ZERO, NOT MALFORMED. Every schedule stored before this
+    field existed has no `minute` key, and rejecting those would silently stop
+    delivering reports an operator already configured — the worst possible
+    reading of a field being added."""
+    from datetime import datetime
+    from reports.schedule import due
+    legacy = {"id": "s1", "cadence": "daily", "hour": 7}
+    fired = due([legacy], [], datetime(2026, 8, 21, 7, 0, tzinfo=timezone.utc))
+    assert len(fired) == 1
+
+
+def test_a_nonsense_minute_falls_back_rather_than_dropping_the_schedule() -> None:
+    """A schedule that stops firing because one field is wrong is a silent
+    outage. `validate_config` refuses a bad minute at SAVE time, which is where
+    a typo should fail; by the time the scheduler reads it, delivering at the
+    top of the hour beats not delivering."""
+    from datetime import datetime
+    from reports.schedule import due
+    for bad in (99, -1, True, "30", None):
+        entry = {"id": "s1", "cadence": "daily", "hour": 7, "minute": bad}
+        fired = due([entry], [], datetime(2026, 8, 21, 7, 0, tzinfo=timezone.utc))
+        assert len(fired) == 1, f"minute={bad!r} dropped the schedule"
+
+
+def test_the_config_validator_refuses_a_bad_minute_but_allows_an_absent_one() -> None:
+    from reports.store import validate_config
+    ok = {"schedules": [{"cadence": "daily", "hour": 7}]}
+    assert validate_config(ok) == []
+    ok_minute = {"schedules": [{"cadence": "daily", "hour": 7, "minute": 30}]}
+    assert validate_config(ok_minute) == []
+    bad = {"schedules": [{"cadence": "daily", "hour": 7, "minute": 60}]}
+    assert any("minute" in p for p in validate_config(bad))

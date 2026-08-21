@@ -171,6 +171,15 @@ def validate_config(value: Any) -> List[str]:
                 # `isinstance(True, int)` is True in Python, so a JSON `true`
                 # would sail through a bare int check and schedule an hour 1.
                 problems.append(f"{where}.hour must be an integer 0-23")
+            # ⚠️ OPTIONAL, because every schedule written before minutes existed
+            # has no such key. Absent is valid and means the top of the hour;
+            # present and wrong is refused, so a typo fails at the moment it is
+            # saved rather than by silently delivering at :00 forever.
+            minute = item.get("minute")
+            if minute is not None and (not isinstance(minute, int)
+                                       or isinstance(minute, bool)
+                                       or not 0 <= minute <= 59):
+                problems.append(f"{where}.minute must be an integer 0-59")
 
     targets = value.get("notify_targets", [])
     if not isinstance(targets, list):

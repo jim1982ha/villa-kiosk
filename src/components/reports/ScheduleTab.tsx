@@ -17,18 +17,12 @@
 // READER BELIEVE IT WAS. `audience` selects WHAT IS IN the brief — the owner's
 // brief carries a money section the facility one omits, the facility brief is
 // the work list (`SECTIONS_FOR` in `narrate/deterministic.py` is the whole
-// difference). WHERE it goes is `notify_targets`, which is one shared list for
-// every schedule. So picking "facility" does NOT route anything to a facility
-// manager; it changes the prose, and the same notification targets receive it.
-// The owner asked this outright — "how would the system know where to send the
-// report based on the owner/facility selection?" — which is the question a
-// two-column row of unlabelled selects invites, and the honest answer is that
-// it does not. Both facts are now stated in the UI beside the controls.
-//
-// ⚠️ AND THE TARGET LIST HAD NO WAY TO ADD ONE. It rendered `notifyTargets`
-// with a delete button per row and no picker, so "Nothing configured — a
-// scheduled brief would be composed and have nowhere to go" was a permanent
-// state reachable only by editing the store by hand.
+// difference). WHERE it goes is the schedule's own `targets`. So picking
+// "facility" does NOT route anything to a facility manager; it changes the
+// prose. The owner asked this outright — "how would the system know where to
+// send the report based on the owner/facility selection?" — which is the
+// question a row of unlabelled selects invites, and the honest answer is that
+// it does not. Both facts are stated in the UI beside the controls.
 //
 // ⚠️ A SCHEDULE OWNS ITS RECIPIENTS. THERE IS NO SEPARATE DESTINATION SECTION,
 // AND REMOVING IT IS THE POINT. v2.546.0 added per-schedule targets as an
@@ -56,15 +50,36 @@ import { useEffect, useState } from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import type { ReportsDiagnostics } from "@/reports/reportsApi";
 import NarrationSection from "./NarrationSection";
-import DestinationList from "./DestinationList";
+import DestinationList, { RecipientButton } from "./DestinationList";
 import {
   AUDIENCE, CADENCE, type Cadence, type ReportSchedule, type ReportsConfig,
 } from "@/reports/reportsTypes";
 
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
-
 /** ⚠️ Display defaults only, applied at RENDER and never written back. */
 const DEFAULT_HOUR = 7;
+
+/** `"07:00"` from the stored pair, for `<input type="time">`.
+ *
+ *  ⚠️ ONE CONTROL INSTEAD OF TWO SELECTS, AND IT IS ALSO THE MORE CAPABLE ONE.
+ *  A 24-entry hour dropdown could not express 07:30 at all, and a second
+ *  dropdown for minutes would have put five controls on a row the owner had
+ *  just called cluttered. `type="time"` is native, is a wheel on iOS — the
+ *  device this is operated from — and honours the reader's 12/24-hour locale
+ *  without this file knowing anything about it. */
+const asTime = (hour: number, minute: number) =>
+  `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+
+/** ⚠️ A `time` INPUT CAN BE EMPTY, and clearing it must not schedule 00:00 —
+ *  the operator is mid-edit, not asking for midnight. An unparseable value
+ *  leaves the schedule alone. */
+function parseTime(value: string): { hour: number; minute: number } | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(value);
+  if (!m) return null;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return { hour, minute };
+}
 
 function newSchedule(): ReportSchedule {
   return {
@@ -72,6 +87,7 @@ function newSchedule(): ReportSchedule {
     cadence: "weekly",
     hour: DEFAULT_HOUR,
     audience: "owner",
+    minute: 0,
     // ⚠️ AN EMPTY LIST, NOT AN ABSENT ONE, AND THE DIFFERENCE IS REAL.
     // `targets_for` reads absent as "inherit `notify_targets`" and empty as
     // "nowhere" — so a new schedule with no `targets` key would DISPLAY as
@@ -123,6 +139,11 @@ export default function ScheduleTab({
   onSaveSecret: (provider: string, value: string) => void;
 }) {
   const [draft, setDraft] = useState<ReportsConfig>({});
+  /** Which schedule has its recipient list open, if any. ⚠️ ONE AT A TIME, and
+   *  by INDEX rather than a flag per row: two open lists on a phone push the
+   *  Save button off the screen, and the question "who gets this one" is asked
+   *  about one schedule at a time by definition. */
+  const [openRecipients, setOpenRecipients] = useState<number | null>(null);
 
   // Re-seed only when the server's copy changes, so typing is never clobbered
   // by a background reload — the same ordering rule `DeviceConfigSync` follows.
@@ -176,13 +197,16 @@ export default function ScheduleTab({
       )}
 
       <h3 className="reports-h3">Schedules</h3>
+      {/* ⚠️ ONE SENTENCE. The previous version explained the audience/recipient
+          distinction in four lines above a section the owner had just called
+          cluttered — and the distinction is now visible in the row itself, an
+          audience select beside a recipients button. Prose that repeats what
+          the controls already show is what makes a panel feel heavy. The time
+          is the one thing the controls cannot say, because a browser shows the
+          READER's clock and the schedule fires on the VILLA's. */}
       <p className="muted body-text">
-        Each schedule is one briefing: how often, at what hour in the
-        villa&rsquo;s own time, who it is written for, and who receives it.
-        <strong> Written for</strong> chooses the CONTENT — an owner brief
-        includes running costs, a facility brief is the work list — and{" "}
-        <strong>Sends to</strong> chooses the recipients. They are independent:
-        a facility brief can go to the owner&rsquo;s phone.
+        One briefing each: how often, at what time in the villa&rsquo;s own
+        clock, what it contains, and who receives it.
       </p>
       {schedules.length === 0 && (
         <p className="muted body-text">
@@ -194,6 +218,13 @@ export default function ScheduleTab({
         const own = s.targets ?? [];
         return (
           <div key={s.id || i} className="reports-schedule-card">
+            {/* ⚠️ ONE LINE: when · for whom · to whom · remove. The recipients
+                are a BUTTON here rather than a list, because "who gets this
+                one" is a one-glance question and the answer is short — the
+                list only appears when it is being changed. Two releases put
+                the destinations on their own row under the schedule and the
+                owner called both cluttered; they were right, and a set of
+                three is not worth a permanent row. */}
             <div className="reports-schedule">
               <select
                 aria-label="How often"
@@ -202,15 +233,15 @@ export default function ScheduleTab({
               >
                 {CADENCE.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select
-                aria-label="At"
-                value={s.hour}
-                onChange={(e) => setAt(i, { hour: Number(e.target.value) })}
-              >
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-                ))}
-              </select>
+              <input
+                type="time"
+                aria-label="At what time"
+                value={asTime(s.hour, s.minute ?? 0)}
+                onChange={(e) => {
+                  const t = parseTime(e.target.value);
+                  if (t) setAt(i, t);
+                }}
+              />
               <select
                 aria-label="Written for"
                 value={s.audience}
@@ -219,30 +250,31 @@ export default function ScheduleTab({
               >
                 {AUDIENCE.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
+              <RecipientButton
+                targets={own}
+                available={available}
+                open={openRecipients === i}
+                onToggle={() => setOpenRecipients(openRecipients === i ? null : i)}
+              />
               <button
                 className="btn danger icon-only"
                 aria-label="Remove this schedule"
-                onClick={() => set({ schedules: schedules.filter((_, n) => n !== i) })}
+                onClick={() => {
+                  setOpenRecipients(null);
+                  set({ schedules: schedules.filter((_, n) => n !== i) });
+                }}
               >
                 <Trash2 size={16} />
               </button>
             </div>
 
-            {/* ⚠️ INSIDE THE CARD, NOT BESIDE IT. "Who gets this one" is a
-                property of the schedule, and the previous design made an
-                operator cross-reference a list further down the page to answer
-                it. Any Home Assistant action that accepts a title and a message
-                qualifies — see `discovery._speaks_message` — which is why this
-                is not called "notification services". */}
-            <div className="reports-subrow">
-              <span className="muted body-text">Sends to</span>
-            </div>
-            <DestinationList
-              targets={own}
-              available={available}
-              onChange={(next) => setAt(i, { targets: next })}
-              emptyText="Nobody — this briefing would be composed and not sent."
-            />
+            {openRecipients === i && (
+              <DestinationList
+                targets={own}
+                available={available}
+                onChange={(next) => setAt(i, { targets: next })}
+              />
+            )}
           </div>
         );
       })}

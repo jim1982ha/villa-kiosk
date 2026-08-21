@@ -166,6 +166,12 @@ function parseSchedule(raw: unknown): ReportSchedule {
     id: str(s.id),
     cadence: oneOf(s.cadence, CADENCE) as Cadence,
     hour: Math.min(23, Math.max(0, Math.round(num(s.hour, 7)))),
+    // ⚠️ ONLY WHEN PRESENT — the sparse-overlay rule one level down. Writing
+    // `minute: 0` into every schedule on every read would turn "never set" into
+    // "deliberately the top of the hour", which is the same erasure of absence
+    // the whole config layer is built to avoid.
+    ...(typeof s.minute === "number"
+      ? { minute: Math.min(59, Math.max(0, Math.round(s.minute))) } : {}),
     audience: oneOf(s.audience, AUDIENCE) as Audience,
     ...(Array.isArray(s.targets) ? { targets: strs(s.targets) } : {}),
   };

@@ -118,9 +118,21 @@ export type PayloadField = (typeof PAYLOAD_ALLOWED_FIELDS)[number];
 export interface ReportSchedule {
   id: string;
   cadence: Cadence;
+  /** Wall-clock hour in the VILLA's timezone, never the reader's — see
+   *  `ScheduleTab`'s header and `schedule.resolve_timezone`. */
   hour: number;
+  /** ⚠️ OPTIONAL, AND ABSENT MEANS ZERO. Every schedule stored before minutes
+   *  existed has no such key, and the scheduler reads it that way rather than
+   *  treating it as malformed — rejecting those would silently stop delivering
+   *  reports an operator already configured. The 60-second tick is what makes
+   *  the precision real, and the delivery minute cannot affect the report's
+   *  CONTENT: the window is a date boundary over hourly statistics buckets. */
+  minute?: number;
   audience: Audience;
-  /** Empty means "every target configured globally". */
+  /** ⚠️ ABSENT MEANS INHERIT THE LEGACY SHARED LIST; EMPTY MEANS NOWHERE.
+   *  `pipeline.targets_for` reads it exactly that way, which is why the tab
+   *  writes `[]` on a new schedule rather than omitting the key — otherwise a
+   *  row displaying "Nobody" would be delivered to a list nobody can see. */
   targets?: string[];
 }
 

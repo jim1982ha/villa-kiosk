@@ -107,23 +107,34 @@ def idempotency_key(schedule_id: str, cadence: str, moment: datetime) -> str:
     return f"{schedule_id}:{period_key(cadence, moment)}"
 
 
-def _fire_time(cadence: str, hour: int, now_local: datetime) -> Optional[datetime]:
+def _fire_time(cadence: str, hour: int, minute: int,
+               now_local: datetime) -> Optional[datetime]:
     """When this schedule was due within the current period.
 
     ⚠️ Built by REPLACING the hour on a real local date, never by adding
     seconds. `replace()` on a tz-aware datetime re-resolves the offset, so the
     result is 07:00 wall-clock on both sides of a DST change; arithmetic on a
     UTC instant is what drifts.
+
+    ⚠️ MINUTE PRECISION IS HONEST HERE, AND IT IS WORTH SAYING WHY. The tick
+    runs every 60 seconds, so a schedule set for 07:30 fires within a minute of
+    07:30 — the same accuracy the hour already had. And it cannot affect what
+    the report CONTAINS: the window comes from `period_start(cadence,
+    now_local)`, which is a DATE boundary, and Home Assistant's long-term
+    statistics are hourly buckets that this does not slice. Delivery time and
+    measurement window are independent, which is what makes an arbitrary minute
+    a free choice rather than a trade.
     """
     if cadence == "daily":
-        return now_local.replace(hour=hour, minute=0, second=0, microsecond=0)
+        return now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if cadence == "weekly":
         # Monday. A week's report is about the week that just ended, and Monday
         # morning is when someone reads it.
         monday = now_local - timedelta(days=now_local.weekday())
-        return monday.replace(hour=hour, minute=0, second=0, microsecond=0)
+        return monday.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if cadence == "monthly":
-        return now_local.replace(day=1, hour=hour, minute=0, second=0, microsecond=0)
+        return now_local.replace(day=1, hour=hour, minute=minute,
+                                 second=0, microsecond=0)
     return None
 
 
@@ -154,10 +165,18 @@ def due(schedules: Sequence[Dict[str, Any]], sent_keys: Sequence[str],
         # schedule hour 1 — the same trap the config validator guards.
         if not isinstance(hour, int) or isinstance(hour, bool) or not 0 <= hour <= 23:
             continue
+        # ⚠️ ABSENT MEANS ZERO, NOT INVALID. Every schedule written before
+        # minutes existed has no `minute` key, and treating that as malformed
+        # would silently stop delivering the reports an operator already
+        # configured — the worst possible reading of a field being added.
+        raw_minute = entry.get("minute", 0)
+        minute = raw_minute if (isinstance(raw_minute, int)
+                                and not isinstance(raw_minute, bool)
+                                and 0 <= raw_minute <= 59) else 0
         if not schedule_id:
             continue
 
-        fire_at = _fire_time(cadence, hour, now_local)
+        fire_at = _fire_time(cadence, hour, minute, now_local)
         if fire_at is None or now_local < fire_at:
             continue
         if now_local - fire_at > timedelta(hours=CATCH_UP_HOURS):

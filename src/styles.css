@@ -4226,7 +4226,34 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    control it does not own — the CSS form of the applicable-set bug, and the
    reason `.fm-field > input` is written that way. The selects here ARE direct
    children, so `>` costs nothing and closes the door. */
-.reports-schedule > select { flex: 1 1 96px; min-height: var(--touch-min); }
+.reports-schedule > select,
+.reports-schedule > input[type="time"] {
+  flex: 1 1 96px; min-height: var(--touch-min);
+}
+/* ⚠️ SAFARI GIVES `input[type=time]` A DIFFERENT INTRINSIC BOX and ignores the
+   form-control inheritance the selects get, so it renders at the browser's own
+   font and sits a few pixels off its neighbours on the one platform this
+   product is operated from. Stated explicitly rather than inherited. */
+.reports-schedule > input[type="time"] {
+  font: inherit; font-size: var(--text-sm);
+  padding: 0 10px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--hairline);
+  background: var(--bg-input); color: var(--text-primary);
+}
+/* The recipients button sizes to its label and does not stretch — it is the
+   answer to a question, not a field. */
+.reports-schedule > button { flex: 0 1 auto; min-height: var(--touch-min); }
+
+/* The tick list behind that button. ⚠️ ONE COLUMN, and capped so a property
+   with twenty notification targets cannot push Save off a phone screen. */
+.reports-recipients {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 4px 4px;
+  max-height: 40vh; overflow-y: auto; overscroll-behavior: contain;
+  border-top: 1px solid var(--hairline);
+}
+.reports-recipients > label { min-height: var(--touch-min); }
 
 /* The narration payload, shown verbatim.
    ⚠️ SCROLLS INSIDE ITS OWN BOX. JSON is the widest content this dialog ever
@@ -4272,18 +4299,6 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    wraps below the selects rather than competing with them for the same line,
    and `flex-basis: 100%` on the row it sits in does the same job the selects'
    own `flex: 1 1 96px` does — see .reports-schedule's wrap note. */
-.reports-subrow {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding-top: 6px;
-  border-top: 1px solid var(--hairline);
-  /* ⚠️ THE LABEL IS THE SAME WEIGHT AS A SECTION HEADING WITHOUT BEING ONE.
-     "Sends to" inside a card is a field label, not an <h3>: an h3 here would
-     put four headings in the tab outline for four schedules and make the
-     document structure a screen reader announces meaningless. */
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
 /* When a panel was measured, beside the control that measures it again.
    ⚠️ WRAPS, and the button keeps its touch target when it does — on a 360px
