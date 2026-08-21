@@ -1,3 +1,13 @@
+## 2.542.0
+
+### Fixed — the new spinner stopped dead for anyone who asks for less motion
+
+It carried its own rule switching its animation off, which is exactly what the
+app's existing reduced-motion policy was written to avoid: a frozen spinner does
+not read as less motion, it reads as the app having hung — reported from an iPad
+once already. It now joins the same list as every other progress indicator and
+keeps breathing gently instead.
+
 ## 2.541.0
 
 ### Fixed — a checkbox with no styling, and a spinner that did not turn
