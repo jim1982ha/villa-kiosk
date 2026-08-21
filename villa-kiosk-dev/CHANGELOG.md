@@ -1,3 +1,14 @@
+## 2.588.0
+
+### Added — a brief can now link back into the kiosk, and refuses to when it would not be safe
+
+The link is built only from Home Assistant's own external https URL plus this
+add-on's ingress entry, so it lands in VESTA rather than on a Home Assistant
+page. It is withheld entirely — never downgraded — when only a LAN address
+exists, when the URL is plaintext, or when the ingress entry is unknown; a LAN
+address in a message bound for a chat platform would leak the villa's network
+shape permanently. Appended after sanitising, so no URL exemption was needed.
+
 ## 2.587.0
 
 ### Fixed — a brief still said "caretaker", and the follow-up line was three clauses welded together
