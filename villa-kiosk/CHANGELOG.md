@@ -1,3 +1,13 @@
+## 2.539.0
+
+### Added — the running version can be read from the browser console
+
+Diagnosing anything here starts with knowing which build produced it, and there
+was no way to ask: the version is substituted into the bundle when it is built,
+so typing its name in the console finds nothing. Captures have arrived two
+releases behind more than once, and a missing field then looks exactly like a
+fix that did not work. `window.__VK_VERSION__` now answers it.
+
 ## 2.538.0
 
 ### Fixed — an unrecognised urgency would have been shown as the least urgent

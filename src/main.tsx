@@ -12,6 +12,20 @@ import "./styles.css";
 // First line of our own code to run: everything before this point is the HTML
 // round trip plus the JS bundle's download/parse/compile, which is precisely
 // the phase the Babylon deep-import work targets and which nothing measured.
+// ⚠️ THE VERSION HAS TO BE REACHABLE FROM THE CONSOLE, and until now it was
+// not. `__APP_VERSION__` is a BUILD-TIME define — Vite substitutes it into the
+// bundle, so it is a literal in the compiled code and simply does not exist as
+// a global when you type it into DevTools. Settings prints it and telemetry
+// sends it; neither helps somebody pasting a diagnostic snippet.
+//
+// This project's own standing rule is "check the version on line 1 of every
+// capture", and captures have arrived two releases behind more than once — an
+// absent field then reads exactly like a fix that did not work. One assignment
+// makes every future console capture self-stamping. Same precedent as
+// `window.__villaLeakHold`: a diagnostic handle, deliberately global.
+(window as unknown as { __VK_VERSION__?: string }).__VK_VERSION__ =
+  typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "?";
+
 markBoot("js");
 // Watch for main-thread stalls from the very first frame — the freeze being
 // chased happens on the screens BEFORE the villa loads, so the observer has
