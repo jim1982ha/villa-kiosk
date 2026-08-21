@@ -1,3 +1,14 @@
+## 2.569.0
+
+### Changed — Cockpit is a tab of the Facility workspace, not a second modal beside it
+
+Two icons on the top bar opened two dialogs that answer the same question, which
+is what an owner sees because they can open both. Cockpit is now Facility's
+first tab and the alert icon lands on it. The standalone dialog stays for the
+profiles Facility is closed to — a guest holds no `manageFacility` and Cockpit
+was never gated, so deleting it would have removed the villa's only status view
+from the person most likely to be at the tablet. One implementation, two shells.
+
 ## 2.568.0
 
 ### Fixed — a brief said "your own automations already cover this" about a rule that had never fired

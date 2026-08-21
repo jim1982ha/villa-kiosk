@@ -43,6 +43,7 @@ import { useHomeAnchor } from "./useHomeAnchor";
 import RadialRoomMenu, { type RadialItem } from "./RadialRoomMenu";
 import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
+import type { FacilityTab } from "@/components/fm/FacilityModal";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard } from "@/fm/fmEngine";
@@ -91,9 +92,11 @@ interface Props {
   /** Drill into an entity's full panel from the unavailable-devices list —
    *  wired to Dashboard's setActivePanel, same callback SummaryBar uses. */
   onOpenEntity: (entityId: string) => void;
-  /** Open the Facility Manager workspace. Undefined when the profile lacks
-   *  `manageFacility` — the button is then not rendered at all. */
-  onOpenFacility?: () => void;
+  /** Open the Facility Manager workspace, optionally on a named tab.
+   *  Undefined when the profile lacks `manageFacility` — the button is then
+   *  not rendered at all, and the alert icon opens the standalone Cockpit
+   *  instead of Facility's Cockpit tab. */
+  onOpenFacility?: (tab?: FacilityTab) => void;
   /** Open a Facility RECORD — a fault ticket, or the maintenance schedule.
    *
    *  ⚠️ THE HUD'S COCKPIT HAS NO FACILITY AROUND IT, so a record row here has
@@ -164,10 +167,27 @@ export default function HUD({
   const { attentionItems, health } = useVillaAttention(mappedEntityIds);
   // Opens Cockpit (the villa-wide status report), not the bare unavailable-
   // devices list directly any more — that list is now a drill-down INSIDE
-  // Cockpit's Needs Attention section (see CockpitModal), reached the same
-  // way. Name kept close to its old meaning since this is still the "how
-  // many devices need attention" alert icon; only what it opens changed.
+  // Cockpit's Needs Attention section, reached the same way.
+  //
+  // ⚠️ WHERE COCKPIT OPENS DEPENDS ON THE PROFILE, AND THAT IS THE WHOLE MERGE
+  // (2.569.0). Reported as "two distinct icons / modals feels redundant" —
+  // true for an operator who can open both. So anyone holding `manageFacility`
+  // gets Facility's own Cockpit TAB from this icon, and the standalone dialog
+  // is only for the profiles Facility is closed to. A guest holds neither
+  // capability and Cockpit was never gated: merging by DELETING the modal would
+  // have removed the villa's only status view from the person most likely to be
+  // standing at the tablet.
+  //
+  // ⚠️ THE ICON ITSELF STAYS EITHER WAY, and that is not the redundancy that
+  // was reported — it carries the attention COUNT, and "find out without going
+  // looking" is the reason it is on the top bar at all. Folding it into the
+  // Facility icon would merge two different badges (things wrong right now vs.
+  // maintenance overdue) into one number that means neither.
   const [cockpitOpen, setCockpitOpen] = useState(false);
+  const openCockpit = () => {
+    if (onOpenFacility) onOpenFacility("cockpit");
+    else setCockpitOpen(true);
+  };
 
   // Facility attention count: overdue/never-recorded maintenance plus unresolved
   // faults. Surfaced ON the button because the whole point of a schedule is
@@ -622,7 +642,7 @@ export default function HUD({
           <div className="hud-right-inline hud-group">
             <button
               className={`icon-btn${attentionItems.length > 0 ? " has-alert" : ""}`}
-              onClick={() => setCockpitOpen(true)}
+              onClick={openCockpit}
               title={attentionItems.length > 0 ? health.summary : "Cockpit — villa status at a glance"}
               aria-label="Open Cockpit — villa status at a glance"
             >
@@ -636,7 +656,7 @@ export default function HUD({
             {onOpenFacility && (
               <button
                 className={`icon-btn${facilityAttention > 0 ? " has-alert" : ""}`}
-                onClick={onOpenFacility}
+                onClick={() => onOpenFacility()}
                 title={facilityAttention > 0
                   ? `${facilityAttention} maintenance item${facilityAttention === 1 ? "" : "s"} need attention`
                   : "Facility — maintenance, readiness, faults"}
@@ -749,7 +769,7 @@ export default function HUD({
                 <button
                   role="menuitem"
                   className="hud-menu-item"
-                  onClick={() => { setMenuOpen(false); setCockpitOpen(true); }}
+                  onClick={() => { setMenuOpen(false); openCockpit(); }}
                 >
                   <TriangleAlert size={18} />
                   <span>Cockpit{attentionItems.length > 0 ? ` (${formatCountBadge(attentionItems.length)})` : ""}</span>

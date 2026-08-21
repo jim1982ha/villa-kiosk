@@ -36,7 +36,11 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 COCKPIT = os.path.join(REPO_ROOT, "src", "components", "cockpit")
 DATA = os.path.join(COCKPIT, "cockpitData.ts")
-MODAL = os.path.join(COCKPIT, "CockpitModal.tsx")
+# ⚠️ THE ROW LIVES IN THE TAB, NOT THE MODAL (2.569.0). Cockpit became a
+# Facility tab and `CockpitModal` is now a thin shell around `CockpitTab`;
+# this test failed on the move, which is it working — the dispatch it reads
+# is the whole point and a path that silently found nothing would pass.
+MODAL = os.path.join(COCKPIT, "CockpitTab.tsx")
 
 
 def _read(path: str) -> str:

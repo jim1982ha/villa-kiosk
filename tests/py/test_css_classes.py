@@ -54,7 +54,6 @@ KNOWN_HOOKS: Dict[str, str] = {
     "cam-next": "rides .icon-btn (CameraPanel)",
     "fs-btn": "rides .icon-btn (CameraPanel)",
     "close": "rides .icon-btn (CameraPanel)",
-    "cockpit-modal": "rides .modal.settings-modal.modal-fixed-height",
     "first-run-backdrop": "rides .modal-backdrop.panel-modal-backdrop",
     "legend-modal": "rides .modal (LegendModal)",
     "room-choice-modal": "passed to BasePanel, applied beside its own classes",

@@ -1,9 +1,10 @@
 // src/components/fm/FacilityModal.tsx
-// The Facility Manager workspace — one modal, six tabs, opened from the HUD
+// The Facility Manager workspace — one modal, seven tabs, opened from the HUD
 // by any profile holding the `manageFacility` capability (facility manager and
 // owner; see auth/permissions.ts for why both).
 //
 // Tab order is the operator's own order of business, not a feature list:
+//   Cockpit    how the villa is right now, before deciding what to do about it
 //   Today      what needs doing right now (the maintenance board + open faults)
 //   Readiness  is the villa fit for the next guest
 //   Faults     the work queue
@@ -11,15 +12,23 @@
 //   Schedule   what the Today board measures against — configured, then acted on
 //   Report     the operational annex for whatever monthly owner report already exists
 //
+// ⚠️ COCKPIT USED TO BE ITS OWN MODAL BEHIND ITS OWN HUD ICON, AND FOR AN
+// OWNER THAT WAS TWO DOORS INTO ONE ROOM (2.569.0) — reported as "two distinct
+// icons / modals feels redundant". It is a tab here now, and the HUD's alert
+// icon lands on it. The separate modal still EXISTS, for the profiles this
+// dialog is closed to: Cockpit was never gated and Facility is, so deleting it
+// would have taken the villa's only status view away from a guest. See
+// `cockpit/CockpitModal.tsx`.
+//
 // Fixed height (.modal-fixed-height) on desktop/tablet: this modal switches
 // between views with wildly different content — Spend can be two rows,
 // Faults a dozen — and letting the dialog resize around every tab switch was
 // jarring. See that class's own comment in styles.css.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog,
+  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, Gauge,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -30,7 +39,7 @@ import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
 import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
-import CockpitModal from "@/components/cockpit/CockpitModal";
+import CockpitTab from "@/components/cockpit/CockpitTab";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
@@ -39,9 +48,14 @@ import SpendTab from "./SpendTab";
 import ReportTab from "./ReportTab";
 import ScheduleEditor from "./ScheduleEditor";
 
-type Tab = "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
+export type FacilityTab =
+  | "cockpit" | "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
 
-const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
+const TABS: { id: FacilityTab; label: string; icon: typeof ListChecks }[] = [
+  // First, because "how is the villa" precedes "what shall I do about it" —
+  // and because the HUD's alert badge lands here, so it is the tab an operator
+  // arrives on most often.
+  { id: "cockpit", label: "Cockpit", icon: Gauge },
   { id: "today", label: "Today", icon: ListChecks },
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "faults", label: "Faults", icon: Wrench },
@@ -55,7 +69,7 @@ const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
 
 export default function FacilityModal({
   onClose, mappedEntityIds, onOpenEntity, reportFaultFor, onFaultFormOpened,
-  openFaultId, openScheduleTab,
+  openFaultId, openScheduleTab, openTab,
 }: {
   onClose: () => void;
   mappedEntityIds: Set<string>;
@@ -80,18 +94,32 @@ export default function FacilityModal({
   /** Open on Schedule — for an overdue maintenance row, which had the same
    *  defect and is fixed with it rather than left for the next report. */
   openScheduleTab?: boolean;
+  /** Land on a named tab. Set by the HUD's alert icon, which opens this dialog
+   *  on Cockpit — the icon's badge counts the very rows that tab shows, so
+   *  landing on Today would answer a different question from the one tapped.
+   *
+   *  ⚠️ LOWEST PRECEDENCE OF THE FOUR ENTRY REQUESTS. `reportFaultFor` /
+   *  `openFaultId` / `openScheduleTab` each carry a RECORD the caller wants
+   *  opened, and a tab hint that overrode one would drop it on the floor. */
+  openTab?: FacilityTab;
 }) {
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onClose);
   // Landing on Faults rather than Today when the operator arrived by tapping
   // "report a fault" on a device: they have already said what they want.
-  const [tab, setTab] = useState<Tab>(
-    reportFaultFor || openFaultId ? "faults" : openScheduleTab ? "schedule" : "today");
-  /** A ticket this dialog's OWN Cockpit asked to open. ⚠️ SEPARATE FROM THE
-   *  `openFaultId` PROP: that one is a request from outside and is cleared by
-   *  the caller, this one is ours and is cleared by us. Merging them would mean
-   *  writing to a prop's owner from here to reset it. */
+  const [tab, setTab] = useState<FacilityTab>(
+    reportFaultFor || openFaultId ? "faults"
+      : openScheduleTab ? "schedule"
+        : openTab ?? "today");
+  /** A ticket this dialog's OWN Cockpit tab asked to open. ⚠️ SEPARATE FROM
+   *  THE `openFaultId` PROP: that one is a request from outside and is cleared
+   *  by the caller, this one is ours and is cleared by us. Merging them would
+   *  mean writing to a prop's owner from here to reset it. */
   const [ownFaultId, setOwnFaultId] = useState<string | null>(null);
+  const activeTabRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [tab]);
   const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
@@ -102,12 +130,6 @@ export default function FacilityModal({
   // was to minimise and restore the window (a visibilitychange) or wait out
   // the three-minute heartbeat.
   useFacilityLiveView();
-  // Opens Cockpit — see HUD.tsx's identical rename for why (the bare
-  // unavailable-devices list is now a drill-down inside it, not opened
-  // directly). Name kept close to ReadinessTab's own onOpenUnavailableDevices
-  // prop, which is still accurate from ITS perspective: a "N offline" link
-  // that shows those devices, however that's implemented on this end.
-  const [cockpitOpen, setCockpitOpen] = useState(false);
   // The Readiness tab's "View doors" / "View lights" shortcuts. Deliberately
   // NOT the failing check's own (narrower) entityIds — the operator taps
   // "View doors" expecting the SAME modal the bottom-bar "Locks" tile opens
@@ -191,15 +213,26 @@ export default function FacilityModal({
             <h2>Facility</h2>
           </div>
 
+          {/* ⚠️ `.fm-tabs` SCROLLS HORIZONTALLY, so an entry request can land on
+              a tab that is off screen with the row still showing the first one
+              highlighted — an operator who tapped "report a fault" sees the
+              fault form under a tab bar that appears to be on Cockpit. Seven
+              tabs made that reachable on a phone where six had not; the ref
+              below scrolls the active tab into view. `block: "nearest"` is what
+              keeps it horizontal in practice — the row is already vertically in
+              view whenever this dialog is open, and "nearest" then asks for no
+              vertical movement at all. */}
           <div className="fm-tabs" role="tablist" aria-label="Facility sections">
             {TABS.map((t) => {
               const Icon = t.icon;
+              const active = tab === t.id;
               return (
                 <button
                   key={t.id}
+                  ref={active ? activeTabRef : undefined}
                   role="tab"
-                  aria-selected={tab === t.id}
-                  className={`fm-tab${tab === t.id ? " active" : ""}`}
+                  aria-selected={active}
+                  className={`fm-tab${active ? " active" : ""}`}
                   onClick={() => setTab(t.id)}
                 >
                   <Icon size={16} /><span>{t.label}</span>
@@ -211,12 +244,33 @@ export default function FacilityModal({
           <div className="settings-body">
             {saveError && <div className="fm-banner warn">{saveError}</div>}
             {!ready && <p className="muted body-text">Loading the maintenance record…</p>}
+            {/* ⚠️ GATED ON `ready` LIKE EVERY OTHER TAB, although it is mostly
+                about live HA state: its "Needs attention" list counts open
+                faults and overdue maintenance, so a Cockpit rendered before the
+                facility record loads would under-report and then silently
+                correct itself. */}
+            {ready && tab === "cockpit" && (
+              <CockpitTab
+                mappedEntityIds={mappedEntityIds}
+                onOpenEntity={onOpenEntity}
+                onOpenGroup={setCheckPanelGroup}
+                // ⚠️ THIS DIALOG IS ALREADY THE DESTINATION, so a record row
+                // does not travel back out through Dashboard — it just switches
+                // this tab. The standalone Cockpit has no Facility around it and
+                // must ask Dashboard to open one; both end in the same place, by
+                // the shortest route each has.
+                onOpenRecord={(kind, recordId) => {
+                  if (kind === "fault") { setOwnFaultId(recordId); setTab("faults"); }
+                  else setTab("schedule");
+                }}
+              />
+            )}
             {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
             {ready && tab === "readiness" && (
               <ReadinessTab
                 report={readiness}
                 onOpenEntity={onOpenEntity}
-                onOpenUnavailableDevices={() => setCockpitOpen(true)}
+                onOpenUnavailableDevices={() => setTab("cockpit")}
                 onOpenCheckDevices={openCheckDevices}
               />
             )}
@@ -249,24 +303,11 @@ export default function FacilityModal({
         </div>
       </div>
 
-      {/* ⚠️ THIS DIALOG IS ALREADY THE DESTINATION, so a record row does not
-          travel back out through Dashboard — it closes Cockpit and switches
-          this tab. The other Cockpit, in the HUD, has no Facility around it and
-          must ask Dashboard to open one; both end in the same place, by the
-          shortest route each has. */}
-      {cockpitOpen && (
-        <CockpitModal
-          mappedEntityIds={mappedEntityIds}
-          onClose={() => setCockpitOpen(false)}
-          onOpenEntity={(id) => { setCockpitOpen(false); onOpenEntity(id); }}
-          onOpenRecord={(kind, recordId) => {
-            setCockpitOpen(false);
-            if (kind === "fault") { setOwnFaultId(recordId); setTab("faults"); }
-            else setTab("schedule");
-          }}
-        />
-      )}
-
+      {/* ⚠️ ONE PANEL SLOT, TWO CALLERS. Readiness' "View doors"/"View lights"
+          and the Cockpit tab's room/floor rows both land here rather than each
+          rendering their own — and it is a SIBLING of the dialog above, not a
+          child, because it brings its own `.modal-backdrop` and a nested one
+          would let a click meant to dismiss the panel close Facility with it. */}
       {checkPanelGroup && (
         <SummaryGroupPanel
           group={checkPanelGroup}

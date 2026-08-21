@@ -25,7 +25,7 @@ import { useEntityLabel } from "@/hooks/useEntityLabel";
 import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceSheet";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
-import FacilityModal from "@/components/fm/FacilityModal";
+import FacilityModal, { type FacilityTab } from "@/components/fm/FacilityModal";
 import ReportsModal from "@/components/reports/ReportsModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
@@ -81,6 +81,11 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
   const [facilityOpen, setFacilityOpen] = useState(false);
+  /** Which tab Facility should land on when it next opens. ⚠️ CLEARED WITH
+   *  THE DIALOG, or the next unrelated open would inherit it — the HUD's
+   *  alert icon asks for "cockpit", and without the reset the Facility icon
+   *  beside it would go there too. */
+  const [facilityTab, setFacilityTab] = useState<FacilityTab | undefined>(undefined);
   const [reportsOpen, setReportsOpen] = useState(false);
   /** Device the Facility modal should open a blank fault for — set by a
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
@@ -822,7 +827,9 @@ export default function Dashboard() {
         onSaveOverviewDefault={saveOverviewDefault}
         mappedEntityIds={effectiveMappedEntityIds}
         onOpenEntity={openEntityPanel}
-        onOpenFacility={canManageFacility ? () => setFacilityOpen(true) : undefined}
+        onOpenFacility={canManageFacility
+          ? (tab) => { setFacilityTab(tab); setFacilityOpen(true); }
+          : undefined}
         onOpenFacilityRecord={canManageFacility ? (kind, id) => {
           setFacilityRecord({ kind, id });
           setFacilityOpen(true);
@@ -1038,6 +1045,7 @@ export default function Dashboard() {
         <FacilityModal
           onClose={() => {
             setFacilityOpen(false); setFaultForEntity(null); setFacilityRecord(null);
+            setFacilityTab(undefined);
           }}
           mappedEntityIds={effectiveMappedEntityIds}
           onOpenEntity={(id) => { setFacilityOpen(false); openEntityPanel(id); }}
@@ -1045,6 +1053,7 @@ export default function Dashboard() {
           onFaultFormOpened={() => { setFaultForEntity(null); setFacilityRecord(null); }}
           openFaultId={facilityRecord?.kind === "fault" ? facilityRecord.id : undefined}
           openScheduleTab={facilityRecord?.kind === "schedule"}
+          openTab={facilityTab}
         />
       )}
 
