@@ -4337,6 +4337,16 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   tab-size: 2;
 }
 
+/* The action buttons in a modal footer, kept together on the right. ⚠️ A FOOTER
+   IS WHERE THIS FAMILY PUTS ITS ACTIONS, and a Save at the foot of the tab
+   CONTENT is below the fold on a laptop — so the button that commits the work
+   was the one you could not see while Close sat pinned the whole time. Wraps,
+   and both keep their touch target when it does. */
+.reports-footer-actions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.reports-footer-actions > button { min-height: var(--touch-min); }
+
 /* The plain-language answer to "when does this actually go out", under the row
    it belongs to. ⚠️ IT IS THE FIX FOR A REAL WEEK LOST: "weekly" meant Monday
    and nothing said so, so a schedule created on a Friday for two minutes' time

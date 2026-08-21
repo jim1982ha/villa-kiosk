@@ -47,7 +47,7 @@
 // operator ends up with one place without losing what they configured.
 
 import { useEffect, useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { ReportsDiagnostics } from "@/reports/reportsApi";
 import NarrationSection from "./NarrationSection";
 import DestinationList, { RecipientButton } from "./DestinationList";
@@ -153,12 +153,23 @@ export function adoptSharedTargets(config: ReportsConfig): ReportsConfig {
 }
 
 export default function ScheduleTab({
-  config, diagnostics, busy, onSave, secretsConfigured, onSaveSecret,
+  config, diagnostics, busy, onDraft, secretsConfigured, onSaveSecret,
 }: {
   config: ReportsConfig | null;
   diagnostics: ReportsDiagnostics | null;
   busy: boolean;
-  onSave: (next: ReportsConfig) => void;
+  /** ⚠️ THE SAVE BUTTON LIVES IN THE MODAL'S FOOTER, NOT AT THE FOOT OF THIS
+   *  TAB, so this tab has to hand its draft up. It was at the bottom of the
+   *  content — below the fold on a laptop, under a NarrationSection that
+   *  unfolds when ticked — so the one button that commits the work was the one
+   *  you could not see, while Close sat pinned in the footer the whole time.
+   *  Every other dialog in this family puts its actions in that footer;
+   *  `test_modal_shell` exists because this one had already skipped it once.
+   *
+   *  Published through an effect rather than during render — a parent setState
+   *  in a child's render body is a loop — and cleared on unmount, so switching
+   *  tabs cannot leave a Save button offering a draft nothing is showing. */
+  onDraft: (draft: ReportsConfig | null) => void;
   secretsConfigured: Record<string, boolean>;
   onSaveSecret: (provider: string, value: string) => void;
 }) {
@@ -172,6 +183,16 @@ export default function ScheduleTab({
   // Re-seed only when the server's copy changes, so typing is never clobbered
   // by a background reload — the same ordering rule `DeviceConfigSync` follows.
   useEffect(() => { if (config) setDraft(adoptSharedTargets(config)); }, [config]);
+
+  // ⚠️ THE DRAFT ITSELF, NOT A DIRTY FLAG. The footer button has to SAVE it, so
+  // handing up a boolean would mean keeping a second copy somewhere to save
+  // from — and two copies of an edit is how one of them goes stale.
+  const settled = config ? JSON.stringify(adoptSharedTargets(config)) : null;
+  const current = JSON.stringify(draft);
+  useEffect(() => {
+    onDraft(settled !== null && current !== settled ? JSON.parse(current) : null);
+    return () => onDraft(null);
+  }, [current, settled, onDraft]);
 
   if (!config) {
     return <p className="muted body-text">Reading the schedule…</p>;
@@ -383,9 +404,6 @@ export default function ScheduleTab({
         onSaveSecret={onSaveSecret}
       />
 
-      <button className="btn primary" disabled={busy} onClick={() => onSave(draft)}>
-        <Save size={16} /><span>{busy ? "Saving…" : "Save"}</span>
-      </button>
     </div>
   );
 }

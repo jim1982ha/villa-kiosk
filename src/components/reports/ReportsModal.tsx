@@ -39,7 +39,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, CalendarClock, FileText, History, ShieldQuestion, SlidersHorizontal,
+  Activity, CalendarClock, FileText, History, Save as SaveIcon, ShieldQuestion,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
@@ -79,6 +80,13 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
   // ⚠️ WHETHER A CREDENTIAL EXISTS, NEVER THE CREDENTIAL. `/reports-secret` has
   // no read path for the value at all — see `secrets.configured()`.
   const [secretsConfigured, setSecretsConfigured] = useState<Record<string, boolean>>({});
+  /** The Schedule tab's unsaved edit, or null. ⚠️ IT LIVES HERE BECAUSE THE
+   *  SAVE BUTTON DOES. Every dialog in this family puts its actions in the
+   *  pinned footer; this one had Save at the foot of the tab CONTENT, below the
+   *  fold on a laptop and under a section that unfolds when ticked — so the one
+   *  button that commits the work was the one you could not see, while Close
+   *  sat visible the whole time. Reported as exactly that. */
+  const [pending, setPending] = useState<ReportsConfig | null>(null);
 
   // ⚠️ THREE STATES, NOT TWO. "Not loaded yet", "loaded and empty" and
   // "could not be reached" are different things, and collapsing the last two
@@ -265,7 +273,7 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
               config={config}
               diagnostics={diagnostics}
               busy={busy}
-              onSave={(next) => void save(next)}
+              onDraft={setPending}
               secretsConfigured={secretsConfigured}
               onSaveSecret={(provider, value) => void saveSecret(provider, value)}
             />
@@ -288,7 +296,33 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
           <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
             Briefings are composed by the add-on and delivered by Home Assistant
           </span>
-          <button className="btn primary" onClick={onClose}>Close</button>
+          <div className="reports-footer-actions">
+            {/* ⚠️ ALWAYS PRESENT ON THE TAB THAT HAS A FORM, DISABLED WHEN
+                THERE IS NOTHING TO SAVE — not conditionally rendered. A button
+                that appears and vanishes is a button whose position you cannot
+                learn, which is the complaint this fixes in a new costume. The
+                other tabs have no draft: Checks writes on each toggle, and the
+                rest are read-only. */}
+            {tab === "schedule" && (
+              <button
+                className="btn primary"
+                disabled={busy || pending === null}
+                onClick={() => { if (pending) void save(pending); }}
+              >
+                <SaveIcon size={16} />
+                <span>{busy ? "Saving…" : "Save"}</span>
+              </button>
+            )}
+            {/* ⚠️ GHOST WHEN SAVE IS BESIDE IT. Two primary buttons in one
+                footer say "these are equally what you came to do", and one of
+                them discards an edit. */}
+            <button
+              className={`btn ${tab === "schedule" ? "ghost" : "primary"}`}
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

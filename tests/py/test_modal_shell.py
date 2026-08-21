@@ -120,3 +120,51 @@ def test_the_family_marker_still_matches_the_stylesheet() -> None:
         assert f".{part}" in css, (
             f".{part} is not in styles.css — this test's anchors moved and it "
             f"would otherwise pass on an empty comparison")
+
+#: A dialog's tab components live beside it. ⚠️ SCANNED TOO, because the defect
+#: this pins was in a CHILD: `ReportsModal`'s footer had only Close while
+#: `ScheduleTab` carried the Save at the bottom of its own content.
+def _family(path: str, source: str) -> Dict[str, str]:
+    """The dialog plus the sibling components it renders."""
+    out = {path: source}
+    folder = os.path.dirname(os.path.join(REPO_ROOT, path))
+    for name in re.findall(r'from "\./(\w+)"', source):
+        kid = os.path.join(folder, name + ".tsx")
+        if os.path.exists(kid):
+            with open(kid, encoding="utf-8") as handle:
+                out[os.path.relpath(kid, REPO_ROOT)] = handle.read()
+    return out
+
+
+#: A primary button whose label commits the form.
+COMMIT = re.compile(r'<button[^>]*?\bprimary\b[^>]*?>(.{0,160}?)</button>', re.DOTALL)
+COMMIT_WORD = re.compile(r'>\s*(Save|Apply)\s*<|<span>\{[^}]*?["\'](Save|Saving)')
+
+
+def test_the_button_that_commits_a_form_is_in_the_footer() -> None:
+    """⚠️ THE ONE BUTTON THAT COMMITS THE WORK WAS THE ONE YOU COULD NOT SEE.
+
+    `ReportsModal`'s Save sat at the bottom of the Schedule tab's CONTENT —
+    below the fold on a laptop, and under a section that unfolds further when
+    ticked — while Close stayed pinned in the footer the whole time. Reported
+    as: "a proper UX expects all the buttons to appear at the same spot".
+
+    The footer is where this family puts its actions and every other dialog
+    already did; there was nothing to violate but the convention, which is why
+    nothing caught it. Now something does.
+
+    ⚠️ PRIMARY BUTTONS ONLY. A tab may perfectly well have a secondary,
+    row-scoped action in its body — "Store key" writes a different file,
+    "Raise fault" acts on one record. What must not be in the body is the
+    button that commits the DIALOG's form.
+    """
+    problems: List[str] = []
+    for path, source in sorted(_dialogs().items()):
+        for kid_path, kid in _family(path, source).items():
+            cut = kid.index("settings-footer") if "settings-footer" in kid else len(kid)
+            for block in COMMIT.findall(kid[:cut]):
+                if COMMIT_WORD.search(block) or COMMIT_WORD.search("><" + block + "</button>"):
+                    problems.append(
+                        f"{kid_path}: a primary Save/Apply outside the footer — "
+                        f"{' '.join(block.split())[:60]}")
+    assert not problems, "\n".join(problems)
