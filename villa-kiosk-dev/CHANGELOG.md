@@ -1,3 +1,13 @@
+## 2.581.0
+
+### Added — nothing checked that standing state leads the brief
+
+`SECTIONS_FOR` documents that ordering as load-bearing — a reader comparing the
+notification against the tablet must meet the matching list first — and no test
+held it. The test that claimed to check section order checked three sections and
+omitted that one. Also corrected the stale section list where v2.580.0 had fixed
+it in only one of five places.
+
 ## 2.580.0
 
 ### Changed — three comments asserted things nothing checked, and one of them was wrong
