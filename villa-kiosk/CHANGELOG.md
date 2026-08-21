@@ -1,3 +1,13 @@
+## 2.538.0
+
+### Fixed — an unrecognised urgency would have been shown as the least urgent
+
+The reports panel put the add-on's own urgency value straight into a style name
+without checking it was one of the four it knows, while the neighbouring history
+list did check. An urgency from a newer add-on would have rendered as the
+quietest thing on the page; it now shows as a warning instead, because not
+knowing how urgent something is must not read as not urgent.
+
 ## 2.537.0
 
 ### Added — reports can be read and configured from the kiosk

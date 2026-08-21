@@ -26,14 +26,14 @@ export interface ReportsDiagnostics {
   ready: boolean;
   contractVersion: number;
   enabled: boolean;
-  modules: { name: string; requires: string[]; audiences: string[]; minDays: number }[];
+  modules: { name: string; requires: string[]; audiences: Audience[]; minDays: number }[];
   reachable: boolean;
   error: string;
   capabilities: string[];
   capabilitiesMissing: string[];
   capabilityMeaning: Record<string, string>;
   capabilityAbsent: Record<string, string>;
-  preflight: { severity: string; detail: string; code: string }[];
+  preflight: { severity: Severity; detail: string; code: string }[];
   collector: {
     connected: boolean;
     connectedSince: string;
@@ -56,6 +56,11 @@ export interface ReportPreview {
   severity: Severity;
   analysis: {
     ran: string[];
+    /** ⚠️ PROSE, NOT A `SkipReason` CODE, and typing it as one would be
+     *  wrong. `analyse()` returns `describe_skips(skipped)`, which has already
+     *  mapped `missing_capability` to "not possible on this property" — the
+     *  code never reaches this endpoint. Checked because /dry-audit flagged
+     *  `SkipReason` as an unused export and the obvious fix was to use it here. */
     skipped: { module: string; reason: string }[];
     aggregated: {
       eventsSeen: number;
@@ -97,11 +102,24 @@ const texts = (v: unknown): Record<string, string> => {
   for (const [k, t] of Object.entries(obj(v))) if (typeof t === "string") out[k] = t;
   return out;
 };
-/** A value from a closed set, or the set's first member. ⚠️ Never the raw
- *  string: these drive rendering decisions, and an unrecognised one from a
- *  newer add-on must degrade to something displayable rather than leak out. */
-const oneOf = <T extends readonly string[]>(v: unknown, set: T): T[number] =>
-  (set as readonly string[]).includes(str(v)) ? (str(v) as T[number]) : set[0];
+/** A value from a closed set, or `fallback` (the set's first member by
+ *  default). ⚠️ NEVER THE RAW STRING: these drive rendering decisions —
+ *  `severity` is interpolated straight into a CSS class name — so an
+ *  unrecognised value from a newer add-on must degrade to something
+ *  displayable rather than reach the DOM. */
+const oneOf = <T extends readonly string[]>(
+  v: unknown, set: T, fallback?: T[number],
+): T[number] =>
+  (set as readonly string[]).includes(str(v))
+    ? (str(v) as T[number])
+    : (fallback ?? set[0]);
+
+/** ⚠️ Members of a closed set, DROPPED rather than coerced when unknown.
+ *  Coercing an unrecognised audience to the first one would claim a module
+ *  serves a brief it does not; omitting it says only that this client does not
+ *  know about it, which is true. */
+const membersOf = <T extends readonly string[]>(v: unknown, set: T): T[number][] =>
+  strs(v).filter((x): x is T[number] => (set as readonly string[]).includes(x));
 
 // ── config ─────────────────────────────────────────────────────────────────
 //
@@ -266,7 +284,7 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
         return {
           name: str(mod.name),
           requires: strs(mod.requires),
-          audiences: strs(mod.audiences),
+          audiences: membersOf(mod.audiences, AUDIENCE),
           minDays: num(mod.min_days),
         };
       }),
@@ -279,7 +297,13 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
       preflight: arr(d.preflight).map((p) => {
         const item = obj(p);
         return {
-          severity: str(item.severity, "notice"),
+          // ⚠️ UNKNOWN DEGRADES UPWARD, NOT DOWN. `oneOf`'s default is the
+          // set's first member — "info" — so an unrecognised severity from a
+          // newer add-on would render a preflight item as the LEAST urgent
+          // thing on the page. "I do not know how urgent this is" must not
+          // read as "not urgent"; `HistoryTab` narrows the same convention and
+          // this site did not, which is what /dry-audit found.
+          severity: oneOf(item.severity, SEVERITY, "warning") as Severity,
           detail: str(item.detail),
           code: str(item.code),
         };
