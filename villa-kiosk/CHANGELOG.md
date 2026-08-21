@@ -1,11 +1,12 @@
-## 2.559.0
+## 2.560.0
 
-### Fixed — underscores vanished from briefings delivered to Telegram
+### Fixed — the briefing still carried internal names, and the previous fix could not reach them
 
-A briefing arrived reading "criticalschedule---poolpump" where the add-on had
-written "critical_schedule---pool_pump". Telegram is configured to interpret
-messages as Markdown, in which an underscore starts italics, so it consumed
-them. Every briefing was affected and nothing on this side could tell: the
-message was sent exactly as composed and the delivery was logged as successful.
-Any service that offers a "do not interpret this" option is now told to use it.
+Underscored identifiers were reaching the delivered message — "level_anomaly did
+not run", "entity_id (use entities)" — where Telegram reads an underscore as the
+start of italics and ran the emphasis on through the following sentences. The
+previous release tried to stop Telegram interpreting the text at all, which
+cannot work for a message addressed to a specific chat: that route offers no
+such setting. The names are now written out properly instead — "Meters that
+stopped reporting did not run" — so there is nothing left to misread.
 

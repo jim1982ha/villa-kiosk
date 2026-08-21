@@ -353,10 +353,20 @@ def schema_drift(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         key = str(data.get("blueprint") or "").strip() or f"({category})"
         categories.setdefault(key, category)
         counts[key] = counts.get(key, 0) + 1
-        missing_by.setdefault(key, set()).update(missing)
+        missing_by.setdefault(key, set()).update(
+            readable_label(field) for field in missing)
+        # ⚠️ HUMANISED HERE, WHERE THE PHRASE IS BUILT. `readable_label` leaves
+        # anything containing a space alone — deliberately, so a label a person
+        # wrote is never rewritten — and this composes an identifier INTO a
+        # sentence, so by the time the renderer sees "entity_id (use entities)"
+        # the guard correctly declines to touch it. The brief carried that
+        # underscore to the owner's phone, where a markup-parsing platform read
+        # it as emphasis and italicised the rest of the paragraph.
         legacy_by.setdefault(key, set()).update(
-            f"{old} (use {LEGACY_SPELLINGS[old]})" if old in LEGACY_SPELLINGS
-            else f"{old}={data.get(old)!r} is not a severity this report knows"
+            f"{readable_label(old)} (use {readable_label(LEGACY_SPELLINGS[old])})"
+            if old in LEGACY_SPELLINGS
+            else f"{readable_label(old)} is not a severity this report knows "
+                 f"({data.get(old)!r})"
             for old in legacy)
 
     return {

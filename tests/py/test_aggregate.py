@@ -294,7 +294,11 @@ def test_a_legacy_payload_is_named_not_silently_absorbed() -> None:
     assert drift["count"] == 1
     entry = drift["blueprints"][0]
     assert entry["category"] == "critical"
-    assert "entity_id (use entities)" in entry["legacy"]
+    # ⚠️ HUMANISED, AND THE OLD FORM IS THE DEFECT. This asserted
+    # `entity_id (use entities)` — an identifier composed into a sentence, which
+    # reached the owner's phone and, on a markup-parsing platform, italicised
+    # the rest of the paragraph from its underscore onward.
+    assert "Entity id (use entities)" in entry["legacy"]
     assert "blueprint" in entry["missing"] and "timestamp" in entry["missing"]
 
 

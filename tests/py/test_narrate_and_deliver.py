@@ -184,7 +184,10 @@ def test_the_renderer_never_invents_a_number() -> None:
 def test_skipped_modules_are_named() -> None:
     _, body = DeterministicNarrator().render(_ctx(skipped=[
         {"module": "standby_creep", "reason": "insufficient history"}]))
-    assert "standby_creep" in body and "insufficient history" in body
+    # ⚠️ THE CHECK'S NAME, NOT ITS KEY — see `_skipped_lines`. A module that has
+    # declared a `title` prints that; one that has not (this fixture) falls back
+    # to its identifier humanised.
+    assert "Standby creep" in body and "insufficient history" in body
 
 
 # ── delivery ─────────────────────────────────────────────────────────────────
@@ -672,3 +675,58 @@ def test_the_no_parse_option_is_read_from_the_service_not_a_platform_list() -> N
     assert _plain_mode({"message": {"required": True}, "title": {}}) == ""
     assert _plain_mode({"parse_mode": {"selector": {"select": {
         "options": ["html", "markdown"]}}}}) == ""
+
+
+def test_every_builder_of_a_target_record_sets_every_field() -> None:
+    """⚠️ THIS IS WHY v2.559.0 DID NOTHING FOR THE ROUTE IT WAS WRITTEN FOR.
+
+    `plain_mode` was added to the SERVICE loop in `_notify_targets` and the
+    ENTITY builder beside it was left untouched, so every entity target carried
+    no such key and `deliver` read "" for all of them. The owner's Telegram
+    goes through an entity target, so the fix shipped, ran, and changed nothing
+    they could see.
+
+    Verbatim the `reachY` failure CLAUDE.md records in the badge tier: a second
+    builder of the same record shape, copying nine fields and not the tenth.
+    There is no type to enforce it — these are plain dicts crossing into JSON —
+    so the shape is pinned here instead, derived from the builders themselves.
+    """
+    import asyncio
+    from reports import discovery
+
+    class _Hass:
+        async def command(self, kind: str, **kw: object) -> object:
+            if kind == "get_services":
+                return {"notify": {"mobile_app_x": {
+                    "name": "Mobile", "fields": {"message": {"required": True},
+                                                 "title": {}}}}}
+            return [{"entity_id": "notify.a_bot_chat",
+                     "attributes": {"friendly_name": "A chat"}}]
+
+    targets = asyncio.run(discovery._notify_targets(_Hass()))  # type: ignore[arg-type]
+    services = [t for t in targets if not t["service"].startswith("entity:")]
+    entities = [t for t in targets if t["service"].startswith("entity:")]
+    assert services and entities, "the fixture must exercise BOTH builders"
+    assert set(services[0]) == set(entities[0]), (
+        f"the two builders disagree on the record shape: "
+        f"only-in-service={set(services[0]) - set(entities[0])}, "
+        f"only-in-entity={set(entities[0]) - set(services[0])}")
+
+
+def test_an_entity_target_cannot_be_told_not_to_parse_and_says_so() -> None:
+    """⚠️ THE SECOND REASON, AND IT IS STRUCTURAL RATHER THAN AN OVERSIGHT.
+
+    An entity target is delivered through `notify.send_message`, whose live
+    schema is `message` + `title` and nothing else — there is no `parse_mode`
+    to set, so a platform that parses markup cannot be told to stop. That is
+    why the identifiers were taken OUT of the prose (`readable_label`'s
+    callers) rather than defended against at the wire.
+
+    Pinned as an expectation so that if Home Assistant ever adds the field, the
+    failure is a prompt to use it rather than a silent missed opportunity.
+    """
+    from reports.discovery import _plain_mode
+    send_message_schema = {"message": {"required": True}, "title": {}}
+    assert _plain_mode(send_message_schema) == "", (
+        "notify.send_message now offers a parse mode — entity targets can be "
+        "defended at the wire after all; wire it through _notify_entities")

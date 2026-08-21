@@ -683,8 +683,13 @@ class DeterministicNarrator:
         for entry in (drift.get("blueprints") or [])[:MAX_LINES]:
             if not isinstance(entry, dict):
                 continue
-            name = str(entry.get("blueprint") or "an automation")
-            fields = list(entry.get("missing") or []) + list(entry.get("legacy") or [])
+            name = readable_label(str(entry.get("blueprint") or "an automation"))
+            # ⚠️ FIELD NAMES ARE IDENTIFIERS TOO. This printed `entity_id (use
+            # entities)` verbatim — the same defect as the rule id, one line
+            # over, and the reason the whole sentence came out italic on a
+            # platform that reads `_` as emphasis.
+            fields = [readable_label(str(f)) for f in
+                      (list(entry.get("missing") or []) + list(entry.get("legacy") or []))]
             lines.append(
                 f"- {name} reports in an older format ({', '.join(fields)}). "
                 f"Its findings are still counted; updating it would make them "
@@ -705,7 +710,13 @@ class DeterministicNarrator:
         for item in context.skipped[:MAX_LINES]:
             if not isinstance(item, dict):
                 continue
-            name = item.get("module", "a check")
+            # ⚠️ THE CHECK'S NAME, NOT ITS IDENTIFIER. The brief read
+            # "level_anomaly did not run" — the same identifier-in-prose defect
+            # the Checks tab had, reaching the owner's phone. `title` is what
+            # the module calls itself; `readable_label` is the fallback for a
+            # module that has not declared one.
+            name = str(item.get("title") or "") or readable_label(
+                str(item.get("module") or "a check"))
             detail = item.get("detail") or item.get("reason", "no reason given")
             out.append(f"- {name} did not run: {detail}")
         return out

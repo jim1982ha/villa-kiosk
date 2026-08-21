@@ -255,7 +255,7 @@ def test_a_skipped_module_says_so() -> None:
     body = _render(skipped=[{"module": "standby_creep",
                              "reason": "insufficient_history",
                              "detail": "needs 14 days, has 3"}])
-    assert "standby_creep did not run" in body
+    assert "Standby creep did not run" in body
 
 
 # ── 8. coverage ──────────────────────────────────────────────────────────────

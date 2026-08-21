@@ -333,6 +333,20 @@ async def _notify_entities(hass: HassClient) -> List[Dict[str, Any]]:
             # to prefer it — it can never be the fan-out.
             "broadcast": False,
             "needs_target": False,
+            # ⚠️ EVERY BUILDER OF A TARGET RECORD MUST SET EVERY FIELD, AND
+            # THIS ONE DID NOT — v2.559.0 added `plain_mode` to the SERVICE loop
+            # and left this builder untouched, so entity targets carried no such
+            # key and `deliver` read "" for all of them. Verbatim the `reachY`
+            # failure CLAUDE.md records in the badge tier: a second builder of
+            # the same shape, copying nine fields and not the tenth.
+            #
+            # ⚠️ AND IT IS "" HERE ON PURPOSE, not by omission. An entity target
+            # is delivered through `notify.send_message`, whose schema on a live
+            # deployment is `message` + `title` and NOTHING ELSE — there is no
+            # `parse_mode` to set, so a platform that parses markup cannot be
+            # told not to. That is why the identifiers were taken OUT of the
+            # prose rather than defended against: see `readable_label`'s callers.
+            "plain_mode": "",
         })
     return out
 

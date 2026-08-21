@@ -171,9 +171,28 @@ def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
         # automation layer, which sees occupancy and cost context these checks
         # cannot": the generic reason restated by the specific one, with "this
         # property" twice in a line the owner reads three times over.
-        out.append({"module": item.get("module", "a check"),
+        # ⚠️ THE TITLE TRAVELS WITH THE SKIP. The renderer printed
+        # `level_anomaly did not run` — an identifier in prose, on the owner's
+        # phone. Modules declare a `title`; carrying it here means the sentence
+        # is built from a name rather than from a key, and the renderer needs no
+        # table of its own.
+        name = item.get("module", "a check")
+        out.append({"module": name,
+                    "title": _title_of(str(name)),
                     "reason": detail or reason})
     return out
+
+
+def _title_of(name: str) -> str:
+    """A registered module's own title, or "" if it has none.
+
+    Looked up rather than passed through because `skip()` records are built in
+    several places and a field every caller must remember is a field one of them
+    will forget — which is exactly how `plain_mode` came to be missing from the
+    entity-target builder one release earlier.
+    """
+    module = _REGISTRY.get(name)
+    return str(getattr(module, "title", "") or "") if module else ""
 
 
 def _reset_for_tests() -> None:
