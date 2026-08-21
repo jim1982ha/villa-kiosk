@@ -1,3 +1,16 @@
+## 2.572.0
+
+### Fixed — a property with the blueprint pack and no automations detected nothing
+
+Any covering blueprint being installed switched a whole built-in check off,
+forever — so a brand-new property that imported the pack and had built no
+automations yet was watched by nobody, and a rule covering four of five pumps
+left the fifth unreported by anyone. Both layers run now and the report prints
+each device once, always preferring the blueprint. Readiness' camera and climate
+checks stopped ignoring dismissed devices, the tablet and the briefing derive
+their severity from one table, and Cockpit now says whether briefings are being
+recorded at all.
+
 ## 2.571.0
 
 ### Added — the briefing now reports what the kiosk is showing, and a test proves they agree

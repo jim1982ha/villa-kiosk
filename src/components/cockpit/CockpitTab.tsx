@@ -32,11 +32,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2, LayoutGrid,
-  Activity, Zap, RefreshCw, ChevronRight,
+  Activity, Zap, RefreshCw, ChevronRight, RadioTower,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
+import { hasCapability } from "@/auth/permissions";
+import {
+  fetchReportsDiagnostics, fetchReportsHistory, type ReportsDiagnostics,
+} from "@/reports/reportsApi";
+import type { ReportHistoryEntry } from "@/reports/reportsTypes";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { isUnavailable } from "@/utils/stateColors";
@@ -138,6 +143,37 @@ export default function CockpitTab({
     if (role !== "owner") return null;
     return Object.values(entities).filter((e) => e.entity_id.startsWith("update.") && e.state === "on").length;
   }, [entities, role]);
+
+  // ── What the BRIEFING knows, on the screen that shows the same villa ─────
+  //
+  // ⚠️ WITHOUT THIS THE TWO SURFACES CANNOT BE RECONCILED EVEN WHEN THEY AGREE.
+  // The Cockpit is live state; a briefing covers a window and can only report
+  // what the collector was listening for. So a period the add-on missed
+  // produces a thin brief beside a tablet showing the full truth, with nothing
+  // on the tablet to explain the gap — a reader compares them and concludes one
+  // is broken. `collect.coverage()` has always known this; it was only ever
+  // said in the brief, to the person who had already stopped trusting it.
+  //
+  // ⚠️ OWNER ONLY, AND NOT BY HIDING A 403. `/reports-diagnostics` is owner-only
+  // server-side whatever the browser sends; asking as a guest would be a
+  // pointless request per open AND would put "the briefing subsystem exists" in
+  // front of a profile that cannot act on it. Gated on the same capability that
+  // gates the Briefings workspace itself.
+  const canSeeMonitoring = role != null && hasCapability(role, "editConfig");
+  const [monitoring, setMonitoring] = useState<{
+    diagnostics: ReportsDiagnostics | null; history: ReportHistoryEntry[] | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!canSeeMonitoring) return;
+    let cancelled = false;
+    void (async () => {
+      const [diagnostics, history] = await Promise.all([
+        fetchReportsDiagnostics(), fetchReportsHistory(),
+      ]);
+      if (!cancelled) setMonitoring({ diagnostics, history });
+    })();
+    return () => { cancelled = true; };
+  }, [canSeeMonitoring]);
 
   // "Other" (not "Unplaced" or any other invented word) for the no-floor
   // bucket — the SAME label the room pivot's own no-room bucket already
@@ -295,6 +331,49 @@ export default function CockpitTab({
             </div>
           ))}
         </div>
+      )}
+
+      {/* ── Briefing coverage (Owner only) ─────────────────────── */}
+      {canSeeMonitoring && monitoring && (
+        <>
+          <div className="settings-section-title">
+            <RadioTower size={16} style={{ verticalAlign: -2 }} /> Briefing coverage
+          </div>
+          <div className="cockpit-coverage">
+            {monitoring.diagnostics === null ? (
+              <p className="muted body-text">
+                The add-on could not be reached, so it is not known whether
+                briefings are being composed.
+              </p>
+            ) : (
+              <>
+                {/* ⚠️ "LISTENING" IS THE LIVE FIELD, NOT `onlineSince`. The
+                    latter is persisted and answers "has this villa EVER had a
+                    listener" — it reads true forever after the first connect,
+                    which is the exact lie `connected` was added to replace. */}
+                <p className={monitoring.diagnostics.collector.connected
+                  ? "muted body-text" : "body-text cockpit-coverage-warn"}>
+                  {monitoring.diagnostics.collector.connected
+                    ? `Listening for alerts${monitoring.diagnostics.collector.onlineSince
+                        ? ` since ${new Date(monitoring.diagnostics.collector.onlineSince).toLocaleDateString()}` : ""}.`
+                    : "Not listening — anything that happens now will be missing from the next briefing."}
+                </p>
+                {monitoring.diagnostics.collector.silentTypes.length > 0 && (
+                  <p className="muted body-text">
+                    No {monitoring.diagnostics.collector.silentTypes.length} alert
+                    {monitoring.diagnostics.collector.silentTypes.length === 1 ? " category has" : " categories have"}
+                    {" "}ever reported.
+                  </p>
+                )}
+                <p className="muted body-text">
+                  {monitoring.history && monitoring.history.length > 0
+                    ? `Last briefing ${new Date(monitoring.history[monitoring.history.length - 1].at).toLocaleString()}.`
+                    : "No briefing has been sent yet."}
+                </p>
+              </>
+            )}
+          </div>
+        </>
       )}
 
       {/* ── Updates available (Owner only, small) ──────────────── */}

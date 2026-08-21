@@ -60,6 +60,16 @@ class Finding:
     #: can tell a NEW problem from one the owner has already been told about
     #: three weeks running. Alert fatigue is the primary product risk.
     dedup_key: str = ""
+    #: WHICH DEVICE this is about, as an opaque hash — see `subject_key`.
+    #:
+    #: ⚠️ THE HASH IS THE WHOLE DESIGN. The report must be able to tell that a
+    #: built-in check and a blueprint are talking about the SAME equipment, so
+    #: it can print it once; and a Finding may not carry an entity id, because
+    #: entity ids name rooms and people and Phase 6 ships findings to a
+    #: third-party model. Hashing both sides satisfies both: the comparison is
+    #: exact, and there is nothing to leak. `dedup_key` cannot serve — it is
+    #: prefixed by the MODULE, so two layers describing one pump never match.
+    subject_key: str = ""
 
     def __post_init__(self) -> None:
         if self.kind not in FINDING_KIND:
@@ -77,6 +87,12 @@ class Finding:
             "confidence": round(self.confidence, 3),
             "completeness": round(self.completeness, 3),
             "horizon_days": self.horizon_days, "dedup_key": self.dedup_key,
+            # ⚠️ TRAVELS AS FAR AS THE PIPELINE AND NO FURTHER. It is what the
+            # blueprint layer is deduplicated against, and it is a hash — but
+            # it is not on `PAYLOAD_ALLOWED_FIELDS`, so `payload.build` (which
+            # loops over the ALLOW-LIST, never over the input) leaves it behind,
+            # and `_withheld_fields` names it as dropped on the inspector.
+            "subject_key": self.subject_key,
         }
 
 
@@ -110,6 +126,17 @@ class ModuleContext:
     #: blueprint which has never reported is covered in theory only, and the
     #: brief now says which.
     silent_blueprints: Sequence[str] = ()
+    #: How long the collector has been listening, in days — or None when it
+    #: cannot say (never connected, or the buffer has no `online_since`).
+    #:
+    #: ⚠️ NOT "HOW LONG SINCE THE BLUEPRINT LAST FIRED", AND THE DIFFERENCE IS
+    #: THE WHOLE POINT. A listener that came up an hour ago has no standing to
+    #: conclude anything about a rule that fires monthly, however long that rule
+    #: has actually been quiet. The question the gate asks is "have I been
+    #: watching long enough for this silence to mean something", which is a fact
+    #: about the LISTENER. None means "cannot say", and the gate then leaves the
+    #: stand-down in place — the conservative direction.
+    heard_nothing_for_days: Optional[float] = None
 
     @property
     def zone(self) -> Any:
@@ -185,6 +212,22 @@ def resolve_threshold(settings: Dict[str, Any], key: str,
     if learned is not None and learned == learned:  # not NaN
         return float(learned)
     return float(default)
+
+
+def subject_key(subject: str) -> str:
+    """WHICH DEVICE, opaquely — the join key between the two detection layers.
+
+    ⚠️ NO PREFIX, AND THAT IS THE POINT. `dedup_key` answers "is this the same
+    FINDING as last week" and is prefixed by the module so two checks about one
+    pump stay distinct. This answers "is this the same EQUIPMENT as that one",
+    and it has to match across a built-in module and a blueprint that have
+    nothing else in common — so the module may not appear in it.
+
+    ⚠️ SAME HASH, SAME TRUNCATION as `dedup_key`, deliberately: two hashes of
+    the same string that disagree because one was cut at 16 and the other at 12
+    is the shape of bug this whole subsystem keeps paying for.
+    """
+    return hashlib.sha256(subject.encode("utf-8")).hexdigest()[:16]
 
 
 def dedup_key(module: str, subject: str) -> str:

@@ -200,3 +200,40 @@ def test_the_landing_tab_follows_the_badge() -> None:
     front of the board somebody opened Facility to reach."""
     hud = _code(HUD)
     assert 'onOpenFacility(attention > 0 ? "cockpit" : undefined)' in hud
+
+
+# ── briefing coverage on the tablet (2.572.0, P5) ────────────────────────────
+
+def test_the_coverage_block_is_gated_the_same_way_briefings_is() -> None:
+    """⚠️ NOT BY LETTING A 403 DECIDE. `/reports-diagnostics` is owner-only
+    server-side whatever the browser sends, so asking as a guest is a pointless
+    request per open AND puts "the briefing subsystem exists" in front of a
+    profile that cannot act on it."""
+    tab = _code(os.path.join(SRC, "components", "cockpit", "CockpitTab.tsx"))
+    assert 'hasCapability(role, "editConfig")' in tab
+    guard = re.search(r"if \(!canSeeMonitoring\) return;", tab)
+    assert guard, "the fetch is not gated on the capability at all"
+
+
+def test_the_tablet_reads_the_live_listening_field() -> None:
+    """⚠️ `onlineSince` IS PERSISTED AND ANSWERS A DIFFERENT QUESTION — "has
+    this villa ever had a listener", which reads true forever after the first
+    connect. That is the precise lie `connected` was added to replace, and
+    reintroducing it here would put it on a second surface."""
+    tab = _code(os.path.join(SRC, "components", "cockpit", "CockpitTab.tsx"))
+    # ⚠️ ANCHORED ON CLASS NAMES, NOT ON THE COMMENT HEADINGS. `_code` strips
+    # comments — which is what stops these tests matching prose — so the two
+    # `{/* ── ... ── */}` section markers this first tried to bracket between
+    # are not in the text it reads. The className is the durable landmark.
+    block = re.search(r"cockpit-coverage\"(.*?)cockpit-updates", tab, re.DOTALL)
+    assert block, "the coverage block moved — this test is blind"
+    assert "collector.connected" in block.group(1), (
+        "liveness must come from `connected`, not from a persisted timestamp")
+
+
+def test_an_unreachable_addon_says_so_rather_than_reading_as_healthy() -> None:
+    """Three kinds of empty, again: "not listening", "listening and quiet" and
+    "could not ask" mean different things and the last must not render as the
+    second."""
+    tab = _code(os.path.join(SRC, "components", "cockpit", "CockpitTab.tsx"))
+    assert "monitoring.diagnostics === null" in tab

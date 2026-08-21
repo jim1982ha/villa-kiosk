@@ -34,9 +34,9 @@ from __future__ import annotations
 
 import collections
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from .analysis.base import Finding, dedup_key
+from .analysis.base import Finding, dedup_key, subject_key
 from .contracts import SEVERITY, severity_rank
 # ⚠️ THIS RULE LIVES IN `text` NOW, not here — `analysis.registry` needs it too
 # and importing `aggregate` from there would reverse an arrow the analysis
@@ -413,6 +413,23 @@ class Group:
             self.severity = item.severity
         if not self.label:
             self.label = item.label
+
+    @property
+    def subject_keys(self) -> Set[str]:
+        """WHICH EQUIPMENT this group is about, opaquely.
+
+        ⚠️ THE JOIN KEY WITH THE BUILT-IN CHECKS, and it is hashed on both
+        sides for the same reason `dedup_key` is: `Item.entities` holds real
+        entity ids, which name rooms and people, and a `Finding` may not carry
+        one. Hashing lets the two layers recognise the same pump without either
+        of them holding an identifier.
+
+        ⚠️ A SET, BECAUSE A BLUEPRINT WATCHES SEVERAL THINGS. `maintenance_silence`
+        fires with every silent entity in its payload; a group covering four
+        devices must suppress a built-in finding about any of the four, not just
+        about whichever one happened to be first.
+        """
+        return {subject_key(e) for item in self.items for e in item.entities if e}
 
     # ── what the group is worth ──────────────────────────────────────────────
 

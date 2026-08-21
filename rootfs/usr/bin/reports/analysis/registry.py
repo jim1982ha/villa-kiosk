@@ -39,6 +39,19 @@ MODULE_TIMEOUT_S = 30.0
 #: Consecutive failures before a module is switched off and the operator told.
 FAILURES_BEFORE_DISABLE = 3
 
+#: How long a covering blueprint may stay silent before "installed" stops being
+#: evidence that it works, and the built-in check runs beside it.
+#:
+#: ⚠️ LONGER THAN THE LONGEST CADENCE, DELIBERATELY. A monthly brief is 31 days;
+#: a rule that legitimately fires once a month must not be declared silent by a
+#: check that waited three weeks. 45 days is the shortest span that cannot
+#: mistake one quiet month for an absent automation.
+#:
+#: ⚠️ AND EXPIRY IS SAFE ONLY BECAUSE OF THE SUBJECT DEDUPLICATION. Without it,
+#: this constant would simply reintroduce the duplicate findings the stand-down
+#: exists to prevent. The two ship together and neither is correct alone.
+BLUEPRINT_GRACE_DAYS = 45
+
 _REGISTRY: Dict[str, AnalysisModule] = {}
 
 
@@ -69,32 +82,48 @@ def gate(module: AnalysisModule, context: ModuleContext,
     # deployment is detected rather than configured.
     covered_by = list(getattr(module, "superseded_by", ()) or ())
     if covered_by and "blueprint_layer" in context.capabilities:
-        # ⚠️ SHORT, BECAUSE IT IS PRINTED IN A NOTIFICATION. This was
-        # "covered by this property's own automation layer, which sees
-        # occupancy and cost context these checks cannot" — ninety-eight
-        # characters, three times over in one brief, in the section a
-        # reader is least likely to reach. WHY the automations are better
-        # belongs on the Checks tab, which has room and already says it;
-        # what a brief needs is which checks did not run and why.
+        # ⚠️ SUPERSEDED BY A BETTER-INFORMED LAYER — WHILE THAT LAYER IS
+        # ACTUALLY ANSWERING. On a property whose own automations detect this,
+        # running the built-in module duplicates it, and duplicates it WORSE: a
+        # blueprint sees occupancy, schedules and tariffs while these modules
+        # see only statistics. On the reference villa that gap produced five
+        # false positives in one week, and standing the modules down is what
+        # stopped it. That reasoning is unchanged and this branch still exists.
         #
-        # ⚠️ AND IT WAS A CLAIM NOTHING VERIFIED (2.568.0). "Your own
-        # automations already cover this" was true of the LAYER and said
-        # nothing about the RULE. On the reference villa `sensor_health` stood
-        # down for `maintenance_silence`, which had `last_triggered: null` on
-        # every one of its four instances since the day it was installed — so
-        # three dead sensors and a dead TV, visible on the kiosk's own home
-        # screen, appeared in no brief at all and the brief's only comment on
-        # the subject was a reassurance. The owner found it by comparing the
-        # two screens. A stand-down is still correct (installed beats fired,
-        # see `collect.blueprint_layer_present`); asserting it WORKS, without
-        # a single event to show for it, was not.
+        # ⚠️ WHAT CHANGED IN 2.572.0 IS THE UNCONDITIONAL HALF. "Installed
+        # beats fired" was correct as far as it went and had no floor, so a
+        # property that imported the VESTA blueprint pack and built NO
+        # automations from it stood every check down FOREVER while nothing could
+        # ever fire — the worst-behaved deployment in the whole system being the
+        # brand-new one. Installation is evidence that the layer is there; after
+        # long enough with not one event from that blueprint, it stops being
+        # evidence that it WORKS.
+        #
+        # ⚠️ THE GRACE IS MEASURED FROM WHEN THE COLLECTOR STARTED LISTENING,
+        # never from now: a listener that has been up for an hour has no
+        # standing to conclude anything about a rule that fires monthly.
+        # `heard_nothing_for_days` is None when the collector cannot say.
         silent = [b for b in covered_by if b in set(context.silent_blueprints)]
-        if silent:
+        if not silent:
+            # ⚠️ SHORT, BECAUSE IT IS PRINTED IN A NOTIFICATION. This was
+            # "covered by this property's own automation layer, which sees
+            # occupancy and cost context these checks cannot" — ninety-eight
+            # characters, three times over in one brief, in the section a
+            # reader is least likely to reach. WHY the automations are better
+            # belongs on the Checks tab, which has room and already says it.
             return (False, "missing_capability",
-                    f"covered by {readable_label(silent[0])}, which has not "
-                    f"reported since it was installed — check that rule")
+                    "your own automations already cover this")
+        listening = context.heard_nothing_for_days
+        if listening is not None and listening >= BLUEPRINT_GRACE_DAYS:
+            # Runs. ⚠️ AND IT IS NOT A DUPLICATE RISK: the pipeline drops any
+            # finding whose SUBJECT the blueprint layer also reported this
+            # period (`pipeline._without_blueprint_subjects`), so the moment
+            # that rule starts speaking about a device, the built-in check
+            # yields on it — per device, not per property.
+            return (True, "", "")
         return (False, "missing_capability",
-                "your own automations already cover this")
+                f"covered by {readable_label(silent[0])}, which has not "
+                f"reported since it was installed — check that rule")
 
     missing = [c for c in module.requires if c not in context.capabilities]
     if missing:
@@ -159,6 +188,7 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             # reassurance this release removes. Same shape as the `reachY` the
             # badge tier lost in 2.429.0.
             silent_blueprints=context.silent_blueprints,
+            heard_nothing_for_days=context.heard_nothing_for_days,
         )
 
         ok, reason, detail = gate(module, module_context, counts, history_days)

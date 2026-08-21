@@ -14,7 +14,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import type { DeviceGroup } from "@/config/AppConfig";
 import { isUnavailable } from "@/utils/stateColors";
-import { unavailableDeviceIds } from "@/config/deviceGroups";
+import { selectableDeviceIds, unavailableDeviceIds } from "@/config/deviceGroups";
 import { scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 
@@ -63,11 +63,28 @@ export function buildReadiness(
 ): ReadinessReport {
   const checks: ReadinessCheck[] = [];
 
-  const relevant = (id: string) =>
-    !entityMap[id]?.disabled && (mappedEntityIds.has(id) || !!entities[id]);
+  // ⚠️ ONE DEFINITION OF "A DEVICE OF THIS VILLA", AND THIS FILE USED TO HAVE
+  // TWO. The `devices-online` check below correctly calls the shared
+  // `unavailableDeviceIds`; the camera and climate checks did not — they
+  // scanned by domain through a local predicate that applied `disabled` and
+  // nothing else. So a camera the owner had DISMISSED stayed red on Readiness
+  // while being absent from the Cockpit, on the same screen, and a two-entity
+  // device counted twice here and once there. That is the exact drift
+  // `unavailableDeviceIds`' own docstring records having already been paid for
+  // once, in this very file, for a different check (2.572.0 — D6).
+  const villaDevices = new Set(selectableDeviceIds(
+    entityMap, [...deviceGroups], mappedEntityIds, entities, dismissedEntityIds));
 
+  // ⚠️ THE CANDIDATE SET NARROWED WITH THE PREDICATE, AND THAT IS THE POINT.
+  // The old rule scanned EVERY entity Home Assistant has; this one starts from
+  // the villa's own devices. On an unconfigured install that is empty, so the
+  // lock/light/climate/camera checks do not render at all — which is the honest
+  // answer ("nobody has told us which locks are yours") rather than "all 47
+  // locks secured" over a list that includes the neighbours'. `devices-online`
+  // already answered 0 there, so the tab is now consistent with itself too.
   const byDomain = (d: string) =>
-    Object.values(entities).filter((e) => e.entity_id.startsWith(`${d}.`) && relevant(e.entity_id));
+    Object.values(entities).filter(
+      (e) => e.entity_id.startsWith(`${d}.`) && villaDevices.has(e.entity_id));
 
   // ── Devices online ───────────────────────────────────────────────────────
   // Shared with the HUD's unavailable-devices badge — deliberately the SAME

@@ -258,3 +258,58 @@ def test_the_dismissal_rule_matches() -> None:
     entities = {"switch.kept": {"entity_id": "switch.kept", "state": "off"}}
     dismissed = devices_mod.dismissed_set(["switch.kept", "sensor.ghost"], entities)
     assert dismissed == {"sensor.ghost"}
+
+
+def test_the_danger_split_matches_the_kiosks() -> None:
+    """⚠️ THREE SEVERITY SCALES, AND UNTIL 2.572.0 NOTHING RELATED ANY TWO.
+    The kiosk's ok/warn/danger, Readiness' pass/warn/fail and the report's
+    critical/warning/notice/info — one condition could read `danger` on the
+    tablet and `notice` in the brief with no code disagreeing. The one that
+    reaches a person on two screens at once is this split, so it is the one
+    pinned: the tablet's headline colour and the notification's title marker
+    must come from the same set of kinds."""
+    source = _ts_source(os.path.join("components", "cockpit", "cockpitData.ts"))
+    block = re.search(r"DANGER_KINDS[^=]*=\s*\[(.*?)\];", source, re.DOTALL)
+    assert block, "DANGER_KINDS moved — this test is blind"
+    kiosk = set(re.findall(r'"(\w+)"', block.group(1)))
+    assert kiosk == set(standing_mod.DANGER_KINDS), (
+        f"tablet {sorted(kiosk)} vs brief {sorted(standing_mod.DANGER_KINDS)}")
+
+
+def test_every_standing_kind_has_a_severity() -> None:
+    """A kind with no entry falls to the default. That default is `warning` and
+    not `info` on purpose — a kind nobody has classified must not arrive as the
+    quietest thing in the report — but every kind the builder actually emits
+    should be classified deliberately rather than by that fallback."""
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+                               "standing.py"), encoding="utf-8").read()
+    emitted = set(re.findall(r'kind="(\w+)"', source))
+    assert emitted, "could not read the emitted kinds — this test is blind"
+    missing = sorted(emitted - set(standing_mod.SEVERITY_OF_KIND))
+    assert not missing, f"kinds falling through to the default: {missing}"
+    assert standing_mod.DEFAULT_KIND_SEVERITY != "info"
+
+
+def test_the_danger_kinds_are_the_critical_ones() -> None:
+    """The two tables must not be able to disagree with each other either."""
+    for kind, severity in standing_mod.SEVERITY_OF_KIND.items():
+        assert (severity == "critical") == (kind in standing_mod.DANGER_KINDS), (
+            f"{kind} is {severity} but "
+            f"{'is' if kind in standing_mod.DANGER_KINDS else 'is not'} a danger kind")
+
+
+def test_readiness_uses_the_shared_device_rule() -> None:
+    """⚠️ D6: `readiness.ts` had TWO definitions of "a device of this villa".
+    `devices-online` called the shared rule; the camera and climate checks
+    scanned by domain through a local predicate applying `disabled` and nothing
+    else — so a DISMISSED camera stayed red on Readiness while being absent from
+    the Cockpit, on the same screen."""
+    source = _ts_source(os.path.join("fm", "readiness.ts"))
+    assert "selectableDeviceIds" in source, (
+        "readiness no longer derives its device set from the shared rule")
+    body = re.search(r"const byDomain = \(d: string\) =>(.*?);", source, re.DOTALL)
+    assert body, "byDomain moved — this test is blind"
+    assert "villaDevices" in body.group(1), (
+        "byDomain filters by something other than the shared device set")
+    assert "disabled" not in body.group(1), (
+        "a local relevance predicate is back, and it will drift again")

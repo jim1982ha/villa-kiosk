@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from ..base import (Finding, ModuleContext, dedup_key, label_for,
+from ..base import (Finding, ModuleContext, dedup_key, subject_key, label_for,
                     resolve_threshold)
 from ..registry import register
 from ..series import (daily_totals, hourly_by_day, last_reading_day,
@@ -134,6 +134,7 @@ class SensorHealth:
                 confidence=1.0,
                 completeness=round(min(1.0, len(days) / float(WINDOW_DAYS)), 3),
                 dedup_key=dedup_key(f"{self.name}:silent", statistic_id),
+                subject_key=subject_key(statistic_id),
             )
 
         # STUCK: it USED TO VARY AND HAS STOPPED.
@@ -173,6 +174,7 @@ class SensorHealth:
                 confidence=0.8,
                 completeness=round(min(1.0, len(totals) / float(WINDOW_DAYS)), 3),
                 dedup_key=dedup_key(f"{self.name}:stuck", statistic_id),
+                subject_key=subject_key(statistic_id),
             )
         return None
 

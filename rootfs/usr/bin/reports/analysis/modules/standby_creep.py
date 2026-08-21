@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from ..base import (Finding, ModuleContext, dedup_key, label_for,
+from ..base import (Finding, ModuleContext, dedup_key, subject_key, label_for,
                     resolve_threshold)
 from ..registry import register
 from ..robust import median, percentile, relative_change, robust_sigma
@@ -265,6 +265,7 @@ class StandbyCreep:
             confidence=confidence,
             completeness=round(completeness, 3),
             dedup_key=dedup_key(self.name, statistic_id),
+            subject_key=subject_key(statistic_id),
         )
 
     def _note(self, rejected: Optional[List[Dict[str, Any]]], statistic_id: str,

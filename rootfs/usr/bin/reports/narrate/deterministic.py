@@ -42,7 +42,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
-from ..standing import DANGER_KINDS as STANDING_DANGER
+from ..standing import (DANGER_KINDS as STANDING_DANGER,
+                        severity_of as standing_severity)
 from ..text import readable_label
 from .style import BULLET, heading, title_mark
 from ..contracts import severity_rank
@@ -321,8 +322,7 @@ class DeterministicNarrator:
         for row in context.standing or []:
             if not isinstance(row, dict):
                 continue
-            candidate = ("critical" if str(row.get("kind") or "") in STANDING_DANGER
-                         else "warning")
+            candidate = standing_severity(str(row.get("kind") or ""))
             if severity_rank(candidate) > severity_rank(worst):
                 worst = candidate
         return worst

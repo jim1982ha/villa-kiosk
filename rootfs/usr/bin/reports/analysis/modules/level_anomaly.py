@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence
 
-from ..base import (Finding, ModuleContext, dedup_key, label_for,
+from ..base import (Finding, ModuleContext, dedup_key, subject_key, label_for,
                     resolve_threshold)
 from ..registry import register
 from ..materiality import has_stable_baseline, is_material
@@ -206,6 +206,7 @@ class LevelAnomaly:
                     confidence=round(min(1.0, 0.5 + 0.1 * len(samples)), 3),
                     completeness=round(min(1.0, len(totals) / float(WINDOW_DAYS)), 3),
                     dedup_key=dedup_key(self.name, statistic_id),
+                    subject_key=subject_key(statistic_id),
                 )
         return worst
 

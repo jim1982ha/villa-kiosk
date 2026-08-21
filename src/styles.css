@@ -4206,6 +4206,16 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   border-color: var(--status-warning); color: var(--status-warning);
 }
 
+/* Cockpit's briefing-coverage block — what the ADD-ON knows, on the screen
+   that shows the same villa. Plain stacked sentences rather than a card: it is
+   a caveat on the other sections, not a section competing with them. */
+.cockpit-coverage { display: flex; flex-direction: column; gap: 4px; }
+.cockpit-coverage > p { margin: 0; }
+/* ⚠️ THE STATUS COLOUR, NEVER A LITERAL — `--status-warning` is what the Map
+   colours legend documents for "lost contact with a device", and a collector
+   that is not listening is the same claim about the add-on itself. */
+.cockpit-coverage-warn { color: var(--status-warning); }
+
 .reports-pane { display: flex; flex-direction: column; gap: 12px; }
 
 /* ⚠️ A HEADING AND THE SENTENCE UNDER IT ARE ONE BLOCK. `.reports-pane` is a

@@ -59,6 +59,57 @@ def _rejected_candidates() -> List[Dict[str, Any]]:
     return out
 
 
+def _blueprint_subjects(aggregated: Dict[str, Any]) -> Set[str]:
+    """Every piece of equipment the automation layer reported on this period.
+
+    Hashed — see `analysis.base.subject_key`. Tolerant of both shapes the
+    aggregation arrives in, because a stored history entry hands back plain
+    dicts where a live pass hands back `Group` objects, and a reader that works
+    for one and raises on the other is this renderer's oldest trap.
+    """
+    subjects: Set[str] = set()
+    for group in aggregated.get("groups") or []:
+        keys = getattr(group, "subject_keys", None)
+        if keys:
+            subjects |= set(keys)
+    return subjects
+
+
+def _without_blueprint_subjects(
+        findings: List[Dict[str, Any]],
+        subjects: Set[str]) -> Tuple[List[Dict[str, Any]], int]:
+    """Drop built-in findings about equipment a blueprint already reported.
+
+    ⚠️ THIS IS WHAT MAKES BOTH LAYERS SAFE TO RUN AT ONCE, and it is per DEVICE,
+    not per property. The old arrangement switched a whole check off because a
+    covering blueprint existed anywhere; a property could therefore have a rule
+    watching four pumps, a fifth pump watched by nobody, and no way to hear
+    about the fifth. Now the check runs, and yields on exactly the four.
+
+    ⚠️ THE BLUEPRINT WINS, ALWAYS, and not because it fired first: it sees
+    occupancy, schedules and tariffs that a statistical module cannot, which is
+    the same reason the stand-down was introduced. Preferring the richer witness
+    is the whole content of this function.
+
+    ⚠️ A FINDING WITH NO SUBJECT IS NEVER DROPPED. `subject_key` defaults to ""
+    and a bare `in` test on an empty string would match nothing — but a future
+    finding that forgets to set one must not silently become undroppable OR
+    silently dropped, so the empty case is stated rather than left to fall
+    through the comparison.
+    """
+    if not subjects:
+        return findings, 0
+    kept: List[Dict[str, Any]] = []
+    dropped = 0
+    for finding in findings:
+        key = str(finding.get("subject_key") or "")
+        if key and key in subjects:
+            dropped += 1
+            continue
+        kept.append(finding)
+    return kept, dropped
+
+
 def _standing_rows(states: Any) -> List[Dict[str, Any]]:
     """Live HA states -> the same list the kiosk's Cockpit is showing.
 
@@ -217,6 +268,7 @@ async def analyse(
         # which parts of it have ever spoken, and that is the difference
         # between "covered" and "covered on paper" — see `registry.gate`.
         silent_blueprints=list(collect.state().get("silent_blueprints") or []),
+        heard_nothing_for_days=collect.listening_days(),
     )
     # History depth is not yet measured per statistic; the recorder's presence
     # is the proxy for it, and each module applies its own `min_days` to the
@@ -330,6 +382,23 @@ async def run_report(
     except Exception as err:  # noqa: BLE001 - a report must still go out
         swallow("aggregation failed; reporting without it", err)
         aggregated = {}
+
+    # ── deduplicate ─────────────────────────────────────────────────────────
+    # ⚠️ THE BUILT-IN CHECKS AND THE BLUEPRINTS NOW BOTH RUN, so the report is
+    # what keeps them from saying the same thing twice — by SUBJECT, per device.
+    # Until 2.572.0 the arrangement was cruder: any covering blueprint being
+    # INSTALLED switched a whole check off, which is why a property that had
+    # imported the pack and built no automations detected nothing at all, and
+    # why a rule watching four of five pumps left the fifth unreported by anyone.
+    #
+    # ⚠️ COUNTED, NOT SILENT. `suppressed` is the number of findings this
+    # property's own automations already covered; a zero here on a villa with a
+    # busy blueprint layer means the join is not matching, and a count nobody
+    # records is the four-instruments-reading-zero problem again.
+    findings, suppressed = _without_blueprint_subjects(
+        findings, _blueprint_subjects(aggregated))
+    if suppressed:
+        log(f"{suppressed} finding(s) already covered by the automation layer")
 
     # ── reconcile ───────────────────────────────────────────────────────────
     # ⚠️ THE SAME TASK ARRIVES BY TWO ROUTES. A blueprint fires its event AND

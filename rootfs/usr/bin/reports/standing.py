@@ -246,10 +246,35 @@ def build(entities: Mapping[str, Any],
     return items
 
 
-#: Danger vs. warning, matching `cockpitData.villaHealthFrom`: something broken
-#: or unsafe RIGHT NOW against something that needs doing. A schedule a few days
+#: Danger vs. warning, matching `cockpitData.DANGER_KINDS`: something broken or
+#: unsafe RIGHT NOW against something that needs doing. A schedule a few days
 #: late must not paint the villa the same colour as a leak sensor going off.
+#:
+#: ⚠️ PINNED AGAINST THE TYPESCRIPT, which now exports the same constant by
+#: name. Three severity scales exist in this system — the kiosk's ok/warn/danger,
+#: Readiness' pass/warn/fail and the report's critical/warning/notice/info — and
+#: until 2.572.0 nothing anywhere asserted a relationship between any two of
+#: them, so one condition could read `danger` on the tablet and `notice` in the
+#: brief with no code disagreeing.
 DANGER_KINDS = frozenset({"unavailable", "alarm"})
+
+#: THE mapping from a standing kind to `contracts.SEVERITY`. One table, read by
+#: the renderer's title marker; a second opinion computed at the call site is
+#: how the tablet and the notification came to be able to disagree at all.
+SEVERITY_OF_KIND: Dict[str, str] = {
+    "unavailable": "critical",
+    "alarm": "critical",
+    "fault": "warning",
+    "schedule": "warning",
+}
+DEFAULT_KIND_SEVERITY = "warning"
+
+
+def severity_of(kind: str) -> str:
+    """⚠️ AN UNKNOWN KIND IS A WARNING, NEVER `info`. A kind this table has not
+    heard of is a kind nobody has classified, and silently ranking it as the
+    quietest thing in the report is how a new hazard arrives unnoticed."""
+    return SEVERITY_OF_KIND.get(kind, DEFAULT_KIND_SEVERITY)
 
 
 def health(items: Sequence[Item]) -> str:

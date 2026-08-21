@@ -530,6 +530,27 @@ class Collector:
             await asyncio.sleep(retry_seconds)
 
 
+def listening_days() -> Optional[float]:
+    """How long the collector has been listening, in days. None if it cannot say.
+
+    ⚠️ FROM `online_since`, WHICH PERSISTS ACROSS RESTARTS — the point is total
+    observation time, not this process's uptime. `connected_since` is the
+    in-memory liveness field and would answer a different question badly: a
+    restart would reset the grace window in `registry.gate` and a property that
+    reboots weekly would never accumulate enough silence to conclude anything.
+    """
+    online_since = str(read_buffer().get("online_since") or "")
+    if not online_since:
+        return None
+    try:
+        started = datetime.fromisoformat(online_since)
+    except ValueError:
+        return None
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - started).total_seconds() / 86400.0
+
+
 def blueprint_layer_present(within_days: int = 30) -> bool:
     """Has the automation layer emitted anything recently?
 

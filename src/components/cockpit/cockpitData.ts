@@ -135,14 +135,23 @@ export interface VillaHealth {
   summary: string;
 }
 
-/** Unavailable devices and active alarms are the "something is actually
- *  broken or unsafe right now" tier (danger); open faults and overdue
- *  maintenance are "needs doing, not urgent" (warn) — a schedule running a
- *  few days late shouldn't paint the whole villa red the same as a leak
- *  sensor going off. */
+/** The kinds that mean "something is actually broken or unsafe RIGHT NOW".
+ *
+ *  ⚠️ NAMED, BECAUSE THE ADD-ON HAS TO AGREE WITH IT. The briefing's title
+ *  marker is derived from the same split (`standing.DANGER_KINDS` in
+ *  `reports/`), and `test_consistency_parity.py` reads this constant out of
+ *  this file and fails if the two ever differ — a villa painted red on the
+ *  tablet and amber in the notification is the same discrepancy the whole
+ *  consistency effort exists to remove, one layer up from the findings.
+ *
+ *  Open faults and overdue maintenance are "needs doing, not urgent": a
+ *  schedule running a few days late must not paint the villa the same colour
+ *  as a leak sensor going off. */
+export const DANGER_KINDS: readonly AttentionKind[] = ["unavailable", "alarm"];
+
 export function villaHealthFrom(items: AttentionItem[]): VillaHealth {
   if (items.length === 0) return { level: "ok", summary: "Everything looks fine." };
-  const hasDanger = items.some((i) => i.kind === "unavailable" || i.kind === "alarm");
+  const hasDanger = items.some((i) => DANGER_KINDS.includes(i.kind));
   const n = items.length;
   return {
     level: hasDanger ? "danger" : "warn",
