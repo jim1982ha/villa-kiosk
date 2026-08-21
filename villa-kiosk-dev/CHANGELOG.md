@@ -1,10 +1,11 @@
-## 2.565.0
+## 2.566.0
 
-### Changed — briefings now read like the villa's other notifications
+### Changed — the briefing says the same things in fewer, plainer words
 
-A briefing arrived as an unbroken wall of text, while every alert this property
-already sends leads with an icon and a short line. The title now says at a
-glance whether anything is wrong, each section is marked so it can be found
-without reading it, and list items use a bullet that no messaging app tries to
-interpret. Turning the AI writer on keeps the same shape rather than losing it.
+The monitoring section repeated one ninety-eight character sentence three times,
+once per check that stood down, and hedged another line with twenty words that
+amounted to "unknown". Checks that stood down for the same reason now share a
+line, a silent category is named instead of counted, and the older-format notice
+leads with what to change. Two headings that ran together without a gap are
+separated.
 
