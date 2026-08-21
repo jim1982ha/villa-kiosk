@@ -42,8 +42,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Sequence, Tuple
 
-from ..standing import (DANGER_KINDS as STANDING_DANGER,
-                        severity_of as standing_severity)
+from ..standing import severity_of as standing_severity
 from ..text import readable_label
 from .style import BULLET, heading, title_mark
 from ..contracts import severity_rank
@@ -315,10 +314,12 @@ class DeterministicNarrator:
         # state is the present tense. The title is often all that is read, so
         # that tick is the whole message for most readers.
         #
-        # ⚠️ THE MAPPING IS `standing.DANGER_KINDS`, NOT A LOCAL GUESS. The kiosk
-        # already decides which kinds are "broken or unsafe right now" and which
-        # are "needs doing" — a second opinion here would put the tablet on red
-        # and the notification on amber for one villa.
+        # ⚠️ THE MAPPING IS `standing.SEVERITY_OF_KIND`, NOT A LOCAL GUESS. The
+        # kiosk already decides which kinds are "broken or unsafe right now" and
+        # which are "needs doing" — a second opinion here would put the tablet on
+        # red and the notification on amber for one villa. (This sentence named
+        # `DANGER_KINDS` until 2.573.0, which is the constant the table is
+        # derived from and pinned against, but not the one this line calls.)
         for row in context.standing or []:
             if not isinstance(row, dict):
                 continue

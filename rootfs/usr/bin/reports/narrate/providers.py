@@ -373,6 +373,17 @@ def _flatten(text: str) -> str:
     a model that returns markdown produces literal asterisks and hashes on the
     platforms that do not parse them. Asking nicely in the prompt is not a
     guarantee; this is.
+
+    ⚠️ NOT CONVERGED WITH `style.inert`, AND THE REASON IS THAT THEY ANSWER
+    DIFFERENT QUESTIONS. This one turns a model's markdown STRUCTURE into this
+    project's own — headings dropped, `* `/`- ` normalised to `BULLET`, per line
+    — and it is the only place that can, because only here is the text known to
+    be a model's answer. `inert` neutralises markup-active CHARACTERS in the
+    finished message and is the guarantee (2.573.0); it now runs over this
+    output too, so the character-stripping below is a belt beside a brace rather
+    than the enforcement. Deleting it would still be wrong: `**bold**` left for
+    `inert` becomes `bold` with no space problem, but `### ` would survive as a
+    literal `### ` on a platform that does not parse headings.
     """
     out: List[str] = []
     for line in text.splitlines():

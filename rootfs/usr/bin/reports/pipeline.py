@@ -40,6 +40,7 @@ from .hass import fetch_timezone
 from .log import log, swallow, warn
 from .narrate import DeterministicNarrator, ReportContext
 from .narrate import payload as payload_mod, providers as providers_mod
+from .narrate import style as style_mod
 from .schedule import period_key, period_start
 
 
@@ -510,6 +511,15 @@ async def run_report(
             # otherwise unanswerable — and the five causes call for different
             # actions (configure a key, wait, raise a limit, or nothing).
             log(f"not narrated by a provider: {narration_why}")
+
+    # ── make it inert ───────────────────────────────────────────────────────
+    # ⚠️ AFTER BOTH NARRATORS AND BEFORE EVERYTHING ELSE, so the deterministic
+    # body, a provider's prose and the history entry are the same string that
+    # was sent. A platform configured with `parse_mode: markdown` reads an
+    # underscore in a device name as an unclosed italic and rejects the whole
+    # message with an HTTP 500 — see `style.inert`, which this exists to call at
+    # the one point every path has already converged on.
+    title, body = style_mod.inert(title), style_mod.inert(body)
 
     # ── deliver ─────────────────────────────────────────────────────────────
     # ⚠️ A PREVIEW COMPOSES EVERYTHING AND SENDS NOTHING. An operator deciding

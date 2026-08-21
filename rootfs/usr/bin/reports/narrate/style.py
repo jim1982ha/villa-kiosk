@@ -66,6 +66,61 @@ SECTION_MARK: Dict[str, str] = {
 }
 
 
+#: Characters a notify platform may read as MARKUP. See `inert`.
+#:
+#: ⚠️ REPLACED, NOT ESCAPED, and not merely dropped either — the replacement is
+#: chosen so a real name stays readable. `Timmerflotte_8343` becoming
+#: `Timmerflotte 8343` is what a person would have written anyway; becoming
+#: `Timmerflotte8343` is a different string.
+_MARKUP_ACTIVE = {
+    "_": " ",    # Markdown italic. THE ONE THAT BROKE A DELIVERY — see `inert`.
+    "*": "",     # Markdown bold/italic.
+    "`": "'",    # Markdown code.
+    "~": "-",    # MarkdownV2 strikethrough.
+    "[": "(",    # Markdown link.
+    "]": ")",
+    "<": "(",    # HTML parse mode.
+    ">": ")",
+}
+
+
+def inert(text: str) -> str:
+    """Text that cannot be parsed as markup by anything, in any mode.
+
+    ⚠️ THIS FILE'S OPENING RULE, FINALLY ENFORCED RATHER THAN ASSERTED. The
+    header above has said since it was written that emoji are the only
+    formatting that survives every destination and that the fix for a
+    markup-active character is to REMOVE it. Nothing did. The deterministic
+    renderer emits no markup of its own, so the rule held for as long as every
+    string it printed came from somewhere already sanitised.
+
+    ⚠️ IT STOPPED HOLDING THE DAY THE BRIEF STARTED PRINTING DEVICE NAMES
+    (2.571.0). Standing state puts Home Assistant friendly names into prose, and
+    a real one on the reference villa is `Timmerflotte_8343 Temperature`. That
+    is a perfectly good name — it has a space, so it is not a raw slug and is
+    shown verbatim, correctly — and to a platform with `parse_mode: markdown`
+    the underscore opens an italic that never closes:
+
+        telegram.error.BadRequest: Can't parse entities:
+        can't find end of the entity starting at byte offset 400
+
+    Home Assistant returns that to the caller as an HTTP 500, so every delivery
+    to that target failed and the brief reached nobody. Offset 400 is where the
+    new section landed: it leads, so it is the first prose in the message.
+
+    ⚠️ APPLIED ONCE, AT THE BOUNDARY, ON THE WHOLE MESSAGE. Sanitising per call
+    site is the version of this that ships broken again the first time a name
+    reaches a site nobody thought of. Six exist today — device labels, room
+    names, ticket titles, schedule titles, a delivery target's own name inside a
+    preflight notice, and a blueprint's `label` — and the number is not the
+    point: it is that the set grows with ordinary work. The renderer emits no
+    intentional markup anywhere, so there is nothing for a whole-message pass to
+    damage, and after it there is no site left that can forget.
+    """
+    return "".join(_MARKUP_ACTIVE.get(character, character)
+                   for character in text)
+
+
 def heading(section: str, text: str) -> str:
     """A section heading: marker, then the words, then nothing else.
 

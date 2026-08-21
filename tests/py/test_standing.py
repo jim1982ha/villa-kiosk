@@ -90,8 +90,15 @@ def test_only_the_danger_kinds_reach_critical() -> None:
                   "detail": "Overdue", "room": "Pool"}]
     title, _ = DeterministicNarrator().render(_context(warn_only))
     assert title.startswith("\U0001F7E0"), f"expected an amber mark, got {title!r}"
-    assert det.STANDING_DANGER is standing_mod.DANGER_KINDS, (
-        "the renderer has its own copy of which kinds are urgent")
+    # ⚠️ THIS USED TO ASSERT IDENTITY ON A NAME THE RENDERER NO LONGER USES.
+    # P4 switched the call to `severity_of`, orphaning the `DANGER_KINDS` import
+    # — and this line kept it alive, so a test was the only reason a dead import
+    # survived. What matters is that the two tables agree, which is the property
+    # the title marker actually depends on.
+    for kind in standing_mod.SEVERITY_OF_KIND:
+        assert (standing_mod.severity_of(kind) == "critical") \
+            == (kind in standing_mod.DANGER_KINDS), (
+                f"{kind} is ranked and coloured differently")
 
 
 # ── the section itself ───────────────────────────────────────────────────────

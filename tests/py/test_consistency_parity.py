@@ -20,10 +20,22 @@ here: `tests/consistency/kiosk_view.ts` imports `deviceGroups.ts` and
 `test:placement` already relies on). A transcription would agree with itself
 forever while the app moved, which is the failure being guarded against.
 
-⚠️ AND IT SHIPPED BEFORE THE CODE IT JUDGES. `feedback_instrument-before-fix`:
-never ship a counter and the fix it measures in one release, or the reading
-becomes uninterpretable. The four fixtures and this harness landed first, red,
-and the phases that follow are measured against that baseline.
+⚠️ IT DID NOT SHIP BEFORE THE CODE IT JUDGES, AND THIS PARAGRAPH SAID IT DID.
+`feedback_instrument-before-fix` — never ship an instrument and the fix it
+measures in one release — was cited here in a sentence describing something that
+did not happen: `57de49d` contains this harness AND `reports/devices.py`, and the
+parity assertions were green on their first run. A harness written alongside the
+implementation it checks agrees with itself by construction; its first green is a
+self-portrait, and /dry-audit caught the claim two releases later (2.573.0).
+
+⚠️ SO THE EVIDENCE IS MUTATION TESTING, NOT THE FIRST GREEN. Nine deliberate
+breaks of `devices.py` — dismissal, group folding, config debris, `disabled`,
+`isUnavailable(absent)`, the stored-label precedence, the raw-slug prettifier,
+the repeated-prefix dedupe — of which FIVE initially survived, because the
+fixture dropped the entity before the rule was reached. Those five are what made
+the fixtures real, and it is the reason for the rule recorded in CLAUDE.md: add a
+rule to `devices.py` and you must add a fixture row that a REPORTED item passes
+through. A parity test nobody has tried to break is a parity test that passes.
 
 The four fixtures are deployment SHAPES, not this villa:
     bare              nothing configured anywhere

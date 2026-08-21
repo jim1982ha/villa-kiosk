@@ -1,6 +1,8 @@
 """Where reports state lives on disk, and what shape it has.
 
-Three documents under `/data`, all owned by this subsystem alone:
+Four documents under `/data`, all owned by this subsystem alone — the count
+said "three" from before `reports-events.json` was added until /dry-audit read
+the list under the sentence (2.573.0):
 
   reports-config.json   operator settings. Owner-writable from the SPA.
   reports-history.json  a bounded ring of what was produced and delivered.
@@ -9,6 +11,14 @@ Three documents under `/data`, all owned by this subsystem alone:
                         Never shown to anyone; not an API.
   reports-events.json   findings caught live from the blueprint layer's
                         `vesta_*` events. SERVER-WRITTEN, single writer.
+
+⚠️ AND FOUR IS THE COUNT OF WHAT THIS SUBSYSTEM OWNS, NOT OF THE PATHS IT
+NAMES. `ledger.py`, `devices.py` and `model.py` each carry a `/data` path of
+their own — `fm-data.json`, `device-config.json`, `www/villa.glb` — because they
+READ stores this subsystem does not own and must not write. Centralising those
+here would put the villa's maintenance record and device configuration behind a
+module whose whole contract is "these are ours"; each reader states its own path
+beside the docstring explaining why it may only read it.
 
 ⚠️ REPORTS WRITE ONLY THESE FILES. Specifically NOT `fm-data.json`, even
 though appending a scheduled report to `FmData.savedDocuments` is the obvious
