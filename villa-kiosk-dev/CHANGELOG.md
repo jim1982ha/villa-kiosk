@@ -1,10 +1,11 @@
-## 2.558.0
+## 2.559.0
 
-### Changed — Save moved into the Briefings footer, beside Close
+### Fixed — underscores vanished from briefings delivered to Telegram
 
-It was at the bottom of the Schedule tab's content, below the fold on a laptop
-and further down still once the AI section is expanded — so the button that
-commits the work was the one you could not see, while Close sat pinned the whole
-time. It now sits in the footer where every other dialog puts its actions,
-always in the same place and greyed out when there is nothing to save.
+A briefing arrived reading "criticalschedule---poolpump" where the add-on had
+written "critical_schedule---pool_pump". Telegram is configured to interpret
+messages as Markdown, in which an underscore starts italics, so it consumed
+them. Every briefing was affected and nothing on this side could tell: the
+message was sent exactly as composed and the delivery was logged as successful.
+Any service that offers a "do not interpret this" option is now told to use it.
 
