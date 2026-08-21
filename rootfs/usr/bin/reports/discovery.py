@@ -604,9 +604,16 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
             # internal one is a LAN address and must never reach a notify
             # platform. See that module's rule 1.
             if isinstance(config, dict):
+                # ⚠️ HOME ASSISTANT'S OWN KEY NAMES, CARRIED THROUGH UNCHANGED.
+                # This renamed them to `external`/`internal` while `links` read
+                # `external_url`/`internal_url` — so every link was silently
+                # withheld and the owner asked where they had gone. Exactly the
+                # shape `test_store_envelope` exists for: two files, a string
+                # literal in each, and nothing between them. Renaming a field on
+                # the way past buys nothing and costs a whole feature.
                 inventory["urls"] = {
-                    "external": str(config.get("external_url") or ""),
-                    "internal": str(config.get("internal_url") or ""),
+                    "external_url": str(config.get("external_url") or ""),
+                    "internal_url": str(config.get("internal_url") or ""),
                 }
             timezone = config.get("time_zone") if isinstance(config, dict) else None
             # ⚠️ ASKED FOR, NOT GUESSED — AND THE DISTINCTION IS THE WHOLE

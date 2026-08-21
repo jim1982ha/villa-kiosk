@@ -884,3 +884,23 @@ def test_a_single_day_window_is_not_announced() -> None:
         "kind": "ANOMALY", "label": "AC", "severity": "warning",
         "detail": "odd", "window_days": 1}])
     assert "measured over" not in body
+
+
+def test_no_two_headings_share_a_glyph_unless_they_are_mutually_exclusive() -> None:
+    """⚠️ THE RULE, ENFORCED INSTEAD OF RESTATED. "One glyph per HEADING, not
+    per section" was written in v2.577.0 and broken in a delivered brief the
+    whole time: "Still open from earlier" and "Maintenance signals" are both
+    `preventive` sections, so both rendered 📅 — two consecutive headings a
+    reader cannot tell apart, which is the one job a marker has.
+
+    The single permitted collision is `money` / `money_unpriced`: one replaces
+    the other and they can never both appear, so there is nothing to confuse.
+    """
+    from reports.narrate.deterministic import SECTION_TITLE, section_heading
+    by_glyph: Dict[str, List[str]] = {}
+    for key in SECTION_TITLE:
+        by_glyph.setdefault(section_heading(key, "daily").split()[0], []).append(key)
+    clashes = {g: k for g, k in by_glyph.items() if len(k) > 1
+               and set(k) != {"money", "money_unpriced"}}
+    assert not clashes, (
+        f"these headings share a marker and can appear in one report: {clashes}")

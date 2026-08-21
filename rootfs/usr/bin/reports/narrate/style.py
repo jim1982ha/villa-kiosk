@@ -72,6 +72,14 @@ SECTION_MARK: Dict[str, str] = {
     "verified": "\u2611\ufe0f",         # ballot box with check — confirmed over
     "selfclear": "\U0001F504",     # arrows counterclockwise — resolved on its own
     "preventive": "\U0001F4C5",     # calendar
+    # ⚠️ ITS OWN MARK. "Still open from earlier" and "Maintenance signals"
+    # are both `preventive` sections and so BOTH rendered as the calendar —
+    # two consecutive headings a reader could not tell apart by scanning,
+    # which is the one job a marker has. Found in a delivered brief while
+    # redesigning the layout; the rule it breaks (one glyph per HEADING,
+    # not per section) was written three releases earlier.
+    "preventive_open": "\U0001F5C2",   # card index dividers — still filed
+
     "trends": "\U0001F4C8",         # chart increasing
     "health": "\U0001FA7A",         # stethoscope
     # ⚠️ A SUB-HEADING INSIDE `health` STILL NEEDS ITS OWN GLYPH. It first

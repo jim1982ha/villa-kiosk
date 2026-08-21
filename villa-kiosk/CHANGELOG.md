@@ -1,3 +1,14 @@
+## 2.591.0
+
+### Fixed — the kiosk link never worked, and two headings shared a marker
+
+`discovery` stored the URLs under `external`/`internal` while `links` read
+`external_url`/`internal_url`, so every link was withheld — silently, because
+withholding is that module's correct behaviour and looks the same whether the
+cause is policy or a typo. The brief now also says WHY a link is missing when
+the owner can fix it. Separately, "Still open from earlier" and "Maintenance
+signals" both rendered as the calendar.
+
 ## 2.590.0
 
 ### Changed — "Right now" groups each state under its own sub-heading

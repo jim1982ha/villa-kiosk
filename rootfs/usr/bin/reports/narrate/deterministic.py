@@ -69,6 +69,7 @@ from ..analysis.registry import BLUEPRINT_GRACE_DAYS
 from ..schedule import PERIOD_SCOPE_WORD, WINDOW_PHRASE, period_span
 from ..standing import severity_of as standing_severity
 from ..devices import prettify_entity_slug
+from .. import links as links_mod
 from ..text import readable_label
 from .style import BULLET, heading, name_of, title_mark
 from ..contracts import severity_rank
@@ -176,7 +177,10 @@ def section_heading(key: str, cadence: str = "") -> str:
     heading is a one-line change rather than a one-line change plus seven
     assertions nobody remembers are there.
     """
-    section = key.split("_")[0] if key.startswith(("money_", "preventive_")) else key
+    # ⚠️ `preventive_open` KEEPS ITS OWN KEY so it can carry its own glyph; only
+    # `money_unpriced` collapses to its section, because the two money headings
+    # are mutually exclusive and can never appear together to be confused.
+    section = "money" if key == "money_unpriced" else key
     word = PERIOD_SCOPE_WORD.get(cadence, "") if section in PERIOD_SCOPED else ""
     text = SECTION_TITLE[key]
     return heading(section, f"{text} {word}" if word else text)
@@ -1194,6 +1198,13 @@ class DeterministicNarrator:
             lines.append(f"{BULLET}{body}" + (f" — {who}" if who else ""))
 
         lines.extend(self._noise_lines(context))
+
+        # ⚠️ WHY THERE IS NO LINK, WHEN THE OWNER CAN FIX IT. See `links.reason`.
+        why = links_mod.reason(
+            (context.discovery.get("inventory") or {}).get("urls"),
+            context.discovery.get("ingress_entry") or "")
+        if why:
+            lines.append(f"{BULLET}{why}")
 
         silent = context.collector.get("silent_types") or []
         if silent and context.collector.get("connected"):

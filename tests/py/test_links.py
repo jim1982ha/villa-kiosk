@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 import sys
 from typing import Any, Dict, List
 
@@ -161,3 +162,36 @@ def test_the_happy_path_points_at_the_kiosk_and_not_at_home_assistant() -> None:
     assert url == f"https://villa.example.org{ENTRY}"
     assert "/lovelace" not in url and "/config" not in url
     assert links.footer(EXTERNAL, ENTRY).endswith(url)
+
+
+# ── the join, which is where this feature actually broke ────────────────────
+
+def test_links_reads_the_keys_discovery_actually_writes() -> None:
+    """⚠️ THE FEATURE SHIPPED DEAD AND EVERY TEST WAS GREEN.
+
+    `discovery` stored `{"external": …, "internal": …}` and `links` read
+    `external_url` / `internal_url`, so every link was withheld — silently,
+    because withholding is this module's correct behaviour and looks identical
+    whether the reason is policy or a typo. The owner ran the release, got no
+    link, and asked where it was.
+
+    The unit tests could not see it: they pass Home Assistant's raw shape
+    straight to `links`, testing the reader against its own assumption. This is
+    `test_store_envelope`'s shape one layer out — two files, a string literal in
+    each, nothing between them — so it is checked the same way: derive the keys
+    from the WRITER and assert the READER accepts them.
+    """
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+                               "discovery.py"), encoding="utf-8").read()
+    block = source[source.index('inventory["urls"] = {'):]
+    block = block[:block.index("}") + 1]
+    written = set(re.findall(r'"(\w+)":', block))
+    assert written, "the urls block moved — this test is blind"
+
+    # Every key the writer emits must be one the reader looks for, proved by
+    # building a config from the WRITER's names and getting a real link back.
+    config: Dict[str, Any] = {k: "https://villa.example.org" for k in written}
+    assert links.kiosk_url("cockpit", config, ENTRY), (
+        f"discovery writes {sorted(written)} and links reads neither — the "
+        f"link is withheld for a reason nobody can see")
+    assert links.footer(config, ENTRY)

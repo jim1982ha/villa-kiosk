@@ -153,7 +153,12 @@ def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
                    "preflight": []},
         carried_tasks=[_parse(PM01)])
     body = DeterministicNarrator().render(context)[1]
-    assert heading("preventive", "Still open from earlier") in body
+    # ⚠️ ITS OWN GLYPH, DERIVED. This asserted `heading("preventive", …)`, which
+    # is how the shared-calendar bug survived: "Still open from earlier" and
+    # "Maintenance signals" are both `preventive` sections, so both rendered 📅
+    # and two consecutive headings could not be told apart by scanning.
+    from reports.narrate.deterministic import section_heading
+    assert section_heading("preventive_open") in body
     assert "Raised for the caretaker:" not in body
     assert "sensor." not in body
 

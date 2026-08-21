@@ -86,6 +86,38 @@ def _base(ha_config: Any, ingress_entry: str) -> str:
     return f"{parts.scheme}://{parts.netloc}{entry.rstrip('/')}"
 
 
+def reason(ha_config: Any, ingress_entry: str) -> str:
+    """Why no link was produced — one short, FIXABLE sentence, or "".
+
+    ⚠️ FAIL-CLOSED WITHOUT THIS IS FAIL-SILENT, AND THAT IS A DIFFERENT BUG.
+    The owner ran a version that had links, received a brief with none, and
+    asked where they were — the refusal was correct and unreadable. A rule that
+    withholds something has to be able to say so, or the person who could
+    satisfy it never learns it exists. Same principle as `capabilities_missing`:
+    absence is stated, never implied.
+
+    ⚠️ ONLY WHEN THE OWNER CAN ACT. "No ingress entry" means the Supervisor did
+    not answer at boot — that is this add-on's problem, not theirs, and telling
+    them would be noise they cannot use. An unset or plaintext external URL is a
+    Home Assistant setting they own.
+    """
+    if not isinstance(ha_config, dict):
+        return ""
+    external = str(ha_config.get("external_url") or "").strip()
+    if not external:
+        # ⚠️ THE COMMON CASE ON THIS PRODUCT'S OWN TARGET, and worth saying
+        # plainly: a villa with no WAN has no external URL, so it will never get
+        # a link, and that is correct rather than broken. The alternative — the
+        # LAN address — must not travel to a chat platform (rule 1).
+        return ("No link to the kiosk is included: Home Assistant has no "
+                "external URL set, and the local address must not be sent to a "
+                "messaging service.")
+    if urlsplit(external).scheme != "https":
+        return ("No link to the kiosk is included: Home Assistant's external "
+                "URL is not https, and a plaintext login link is not sent.")
+    return ""
+
+
 def kiosk_url(page: str, ha_config: Any, ingress_entry: str) -> str:
     """An absolute link to one kiosk page, or "" if it cannot be built safely."""
     if page not in PAGES:
