@@ -1,3 +1,13 @@
+## 2.620.0
+
+### Added — the model SDK, pinned while the base images keep floating
+
+The base tags float on purpose so every build takes security patches. The SDK
+must not: it decides retry behaviour, streaming and tool-call shapes, so a
+floating version would let the villa's supervision change because a package was
+published, with no release here to explain it. Verified against the real base
+image, including that it replaces the OS-provided `idna` the proxy also uses.
+
 ## 2.619.0
 
 ### Added — an audit that can show a crash, and kill switches that ship off
