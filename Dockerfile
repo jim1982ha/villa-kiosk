@@ -32,7 +32,35 @@ FROM ${BUILD_FROM}
 
 # nginx serves the static build; python3 + aiohttp run the token-injecting
 # Supervisor proxy (supervisor-proxy.py). /run/nginx holds the pid/temp files.
-RUN apk add --no-cache nginx python3 py3-aiohttp && mkdir -p /run/nginx
+RUN apk add --no-cache nginx python3 py3-aiohttp py3-pip && mkdir -p /run/nginx
+
+# The Anthropic SDK, for the agent's reasoning tiers.
+#
+# ⚠️ PINNED, WHILE THE BASE TAGS ABOVE DELIBERATELY FLOAT, AND THE INCONSISTENCY
+# IS THE POINT. A floating base is right for security patches: the thing that
+# changes is the OS underneath, and taking its fixes automatically is worth
+# losing byte-for-byte reproducibility. This is the opposite kind of
+# dependency. The SDK decides how the agent talks to a model — retry
+# behaviour, streaming, tool-call shapes, defaults — so a floating version
+# means the villa's supervision can change because a package was published,
+# with no release here and nothing in the changelog to explain it. Agent
+# behaviour must move when WE move it, and the eval corpus is what proves a
+# move was safe (ADR-016). Raise this number deliberately, then run the evals.
+#
+# ⚠️ `--break-system-packages` is required because Alpine's python3 marks its
+# site-packages externally managed (PEP 668). This image has exactly one
+# consumer of that directory and no system Python tooling to conflict with, so
+# the flag is stating a fact about this container rather than overriding a
+# safety rule that applies here.
+#
+# ⚠️ IT REPLACES THE apk-PROVIDED `idna`, AND THAT WAS VERIFIED RATHER THAN
+# ASSUMED. The SDK's dependency chain pulls idna 3.19 over Alpine's 3.16, which
+# `aiohttp` also uses — so this line reaches a package the proxy depends on.
+# Built against the real base image and confirmed both still import
+# (anthropic 1.0.0, aiohttp 3.13.5). If a future SDK bump breaks the proxy, this
+# is the interaction to look at first; nothing else in this image shares a
+# dependency tree with it.
+RUN pip install --no-cache-dir --break-system-packages 'anthropic==1.0.0'
 
 # Our nginx config, the Supervisor proxy, and the s6 services that run them.
 COPY rootfs /
