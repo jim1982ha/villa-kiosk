@@ -1,3 +1,11 @@
+## 2.648.0
+
+### Fixed — an unclassified severity sorted to the bottom of the list
+The order of severities was written out by hand in three places, and two of them
+put anything unrecognised last — the quietest position — in the briefing and on
+the wall alike. The project's own rule is the opposite: something nobody has
+classified is treated as a warning. One ordering now, derived, in both languages.
+
 ## 2.647.0
 
 ### Fixed — the previous release shipped with one test red

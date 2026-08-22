@@ -24,12 +24,7 @@ import { Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 import { loadConcerns, sendConcernFeedback } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
-import type { Concern } from "@/agent/agentTypes";
-
-/** Worst first. ⚠️ With no prose to carry the weight, the ORDER is the report. */
-const RANK: Record<string, number> = {
-  critical: 0, warning: 1, notice: 2, info: 3,
-};
+import { severityRank, type Concern } from "@/agent/agentTypes";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
  *  record, not the state of the villa. */
@@ -54,8 +49,12 @@ export default function CockpitConcerns() {
   const load = useCallback(async () => {
     const found = await loadConcerns();
     setRows(found.filter((c) => LIVE.has(String(c.state ?? "open")))
-      .sort((a, b) => (RANK[String(a.severity)] ?? 9)
-        - (RANK[String(b.severity)] ?? 9)));
+      // ⚠️ `severityRank`, NOT A LOCAL MAP. This carried its own copy with an
+      // unknown severity defaulting to 9 — LAST, the quietest position — which
+      // is the opposite of the project's stated rule. Found by /dry-audit
+      // Part 4; the identical map existed in `agent/fallback.py`.
+      .sort((a, b) => severityRank(String(a.severity))
+        - severityRank(String(b.severity))));
   }, []);
 
   useEffect(() => { void load(); }, [load]);

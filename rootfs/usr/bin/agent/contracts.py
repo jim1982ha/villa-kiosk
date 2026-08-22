@@ -54,6 +54,29 @@ RUN_STATUS: Final[Tuple[str, ...]] = ("answered", "declined", "failed", "partial
 #: the duplication cannot drift.
 SEVERITY: Final[Tuple[str, ...]] = ("info", "notice", "warning", "critical")
 
+
+def severity_rank(severity: Any) -> int:
+    """Worst first: 0 is `critical`. THE ordering, for every renderer.
+
+    ⚠️ IT WAS WRITTEN THREE TIMES AND THE TWO COPIES DISAGREED WITH THE
+    PROJECT'S OWN RULE. `fallback.py` and `CockpitConcerns.tsx` each carried
+    `{critical: 0, warning: 1, notice: 2, info: 3}` with an unknown severity
+    defaulting to 9 — so a severity nobody had classified sorted LAST, into the
+    quietest position, in both the brief and the wall. `route.py` and
+    `standing.severity_of` both state the opposite rule in as many words: an
+    unknown severity is treated as a WARNING, never as the quietest thing,
+    because that is how a new hazard arrives unnoticed.
+
+    ⚠️ DERIVED FROM `SEVERITY`, NOT RESTATED. Adding a fifth severity to that
+    tuple now orders it everywhere; a hand-written map would have to be found
+    twice, in two languages.
+    """
+    name = str(severity or "").lower()
+    if name in SEVERITY:
+        return len(SEVERITY) - 1 - SEVERITY.index(name)
+    # ⚠️ AN UNKNOWN SEVERITY RANKS AS A WARNING. Same rule, same reason.
+    return len(SEVERITY) - 1 - SEVERITY.index("warning")
+
 # ── CTR-012 · who it is for ─────────────────────────────────────────────────
 #: ⚠️ TAKEN FROM `reports.contracts`, NEVER RESTATED, AND THIS LINE INVENTED A
 #: THIRD AUDIENCE FOR SIXTEEN RELEASES. It read `("owner", "facility", "ops")`,

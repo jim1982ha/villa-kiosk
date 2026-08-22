@@ -15,10 +15,17 @@ misconfigure for no benefit.
 `observe/cycle.py` states. An operator who lowers the cadence because the bill
 is climbing should not have to restart the add-on to be listened to.
 
-⚠️ AND EVERY GUARD IS ASKED PER PASS, IN COST ORDER. Switched off, then shadow,
-then budget, then the provider — each refusing before the next costs anything.
-A scheduler that checked the budget after calling the model would discover it
-was over the limit by going over it.
+⚠️ AND EVERY GUARD IS ASKED PER PASS, IN COST ORDER: switched off, then the
+trigger, then the budget, then the provider — each refusing before the next
+costs anything. A scheduler that checked the budget after calling the model
+would discover it was over the limit by going over it.
+
+⚠️ SHADOW IS **NOT** ONE OF THOSE GUARDS, AND THIS DOCSTRING LISTED IT AS ONE
+UNTIL /dry-audit CHECKED. Triage running during a shadow period is the entire
+point — the evidence has to accumulate somehow — and a guard here would have
+made the shadow store fill only when somebody asked, which is the defect this
+module was written to fix. Shadow suppresses DELIVERY, in `route.plan`, and
+nowhere else.
 """
 
 from __future__ import annotations

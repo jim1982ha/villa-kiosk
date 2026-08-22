@@ -37,6 +37,24 @@ export type RunStatus = (typeof RUN_STATUS)[number];
 export const SEVERITY = ["info", "notice", "warning", "critical"] as const;
 export type Severity = (typeof SEVERITY)[number];
 
+/**
+ * Worst first: 0 is `critical`. THE ordering, for every renderer.
+ *
+ * ⚠️ DERIVED FROM `SEVERITY`, NOT A HAND-WRITTEN MAP. Two copies existed —
+ * here and in `agent/fallback.py` — each defaulting an unknown severity to 9,
+ * which sorted it LAST, into the quietest position, in both the brief and the
+ * wall. That contradicts the rule `route.py` and `standing.severity_of` both
+ * state: an unclassified severity is treated as a WARNING, never as the
+ * quietest thing, because that is how a new hazard arrives unnoticed.
+ *
+ * Mirrors `contracts.severity_rank`; `test_contract_parity` pins the pair.
+ */
+export function severityRank(severity: string): number {
+  const at = (SEVERITY as readonly string[]).indexOf(String(severity ?? "").toLowerCase());
+  const known = at >= 0 ? at : (SEVERITY as readonly string[]).indexOf("warning");
+  return SEVERITY.length - 1 - known;
+}
+
 /** Who a concern is for. Three, not two. */
 export const AUDIENCE = ["owner", "facility"] as const;
 export type Audience = (typeof AUDIENCE)[number];

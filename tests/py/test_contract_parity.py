@@ -274,3 +274,72 @@ def test_an_audience_is_NOT_a_role() -> None:
         "the agent invented its own audience vocabulary")
     assert "ops" not in agent_contracts.AUDIENCE
     assert "facility" not in agent_contracts.SENDER_ROLE
+
+
+def test_the_severity_ORDERING_agrees_across_both_languages() -> None:
+    """⚠️ IT WAS WRITTEN THREE TIMES AND TWO COPIES BROKE THE PROJECT'S RULE.
+
+    `fallback.py` and `CockpitConcerns.tsx` each carried
+    `{critical: 0, warning: 1, notice: 2, info: 3}` with an unknown severity
+    defaulting to 9 — so a severity nobody had classified sorted LAST, into the
+    quietest position, in the brief AND on the wall. `route.py` and
+    `standing.severity_of` both state the opposite: an unclassified severity is
+    a WARNING, never the quietest thing, because that is how a new hazard
+    arrives unnoticed.
+
+    Both sides now DERIVE from the same tuple, and this pins that they agree —
+    including on the unknown case, which is the half that was wrong.
+    """
+    import re
+
+    from agent import contracts as agent_contracts
+
+    ts = _agent_ts_source()
+    assert "export function severityRank" in ts, (
+        "the TypeScript mirror lost its ranking function")
+    assert re.search(r"indexOf\(\"warning\"\)", ts), (
+        "the TS mirror no longer falls back to warning for an unknown severity")
+
+    for name in agent_contracts.SEVERITY:
+        expected = len(agent_contracts.SEVERITY) - 1 \
+            - agent_contracts.SEVERITY.index(name)
+        assert agent_contracts.severity_rank(name) == expected, name
+
+    assert agent_contracts.severity_rank("critical") == 0
+    # ⚠️ THE CASE THAT WAS WRONG: an unknown severity ranks as a WARNING, which
+    # is ABOVE notice and info — never at the bottom of the list.
+    unknown = agent_contracts.severity_rank("catastrophic")
+    assert unknown == agent_contracts.severity_rank("warning")
+    assert unknown < agent_contracts.severity_rank("notice")
+    assert unknown < agent_contracts.severity_rank("info")
+
+
+def test_no_module_hand_writes_a_severity_ORDER_map() -> None:
+    """The applicable set, not the two sites that were found."""
+    import os
+    import re
+
+    offenders = []
+    for root, _dirs, files in os.walk(os.path.join(REPO_ROOT, "rootfs", "usr",
+                                                   "bin", "agent")):
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(root, name), encoding="utf-8") as handle:
+                source = handle.read()
+            body = re.sub(r"#[^\n]*", "", source)
+            if re.search(r'"critical"\s*:\s*0', body):
+                offenders.append(name)
+    # ⚠️ `SRC` DOES NOT EXIST IN THIS MODULE — its path constant is
+    # `AGENT_TS_PATH`. Caught by a NameError, which is the cheap version of the
+    # failure this whole file exists to prevent: a test reaching for a name
+    # from a sibling because both files look alike.
+    src_root = os.path.join(REPO_ROOT, "src")
+    for rel in ("components/cockpit/CockpitConcerns.tsx",):
+        with open(os.path.join(src_root, rel), encoding="utf-8") as handle:
+            body = re.sub(r"//[^\n]*", "", handle.read())
+        if re.search(r"critical\s*:\s*0", body):
+            offenders.append(rel)
+    assert not offenders, (
+        f"{offenders} hand-write a severity order; derive it from "
+        f"`contracts.severity_rank` / `severityRank` instead")

@@ -63,10 +63,15 @@ def from_concerns(concerns: Sequence[Mapping[str, Any]], *,
     ordering IS the report — a reader scanning a bare list needs the critical
     item at the top, not in date order.
     """
-    order = {"critical": 0, "warning": 1, "notice": 2, "info": 3}
+    # ⚠️ `contracts.severity_rank`, NOT A LOCAL MAP. This carried its own copy
+    # with an unknown severity defaulting to 9 — LAST, the quietest position —
+    # which contradicts the rule `route.py` and `standing.py` both state: an
+    # unclassified severity is a warning, never the quietest thing in the
+    # report. Found by /dry-audit Part 4; the same map existed in the Cockpit.
+    from agent.contracts import severity_rank
     rows = sorted(
         (c for c in concerns if isinstance(c, Mapping)),
-        key=lambda c: (order.get(str(c.get("severity") or "notice"), 9),
+        key=lambda c: (severity_rank(c.get("severity")),
                        str(c.get("title") or "")))
     out = _lines(title, "concerns")
     if not rows:
