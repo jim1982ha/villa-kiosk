@@ -299,6 +299,50 @@ def test_the_agent_config_client_sends_a_WHOLE_DOCUMENT() -> None:
         "the carried document is not spread UNDER the patch")
 
 
+def test_no_SERVER_side_reader_unwraps_the_wire_envelope() -> None:
+    """⚠️ THE ENVELOPE IS A WIRE FORMAT. IT IS NOT ON DISK.
+
+    `_read_json_store` returns the stored DOCUMENT; the `{"config": …}` wrapper
+    is added by `_json_store_handlers`' GET, for the browser. A server-side
+    reader that unwraps it finds no such key and gets `{}` — which `view()` then
+    fills with DEFAULTS, so the caller sees a perfectly valid config that is not
+    the one the operator saved.
+
+    Shipped exactly that: `_chat_dispatch` read `stored.get("config")`, so
+    `enabled` was always False and every Telegram message was refused with
+    "chat trigger disabled" while both switches showed ticked on screen. The
+    mirror image of 2.545.0 — that was a client using the wrong wrapper, this
+    was the server inventing one — and this module covered only the client half.
+
+    ⚠️ THE FIX IS UNMISTAKEABLE AND THE BUG IS NOT: `view(_read_json_store(…))`
+    versus `view(_read_json_store(…).get("config"))` differ by six words and
+    behave identically until somebody changes a setting.
+    """
+    proxy = _proxy()
+    keys = set(store_keys().values()) | {"config", "data", "history"}
+    offenders = []
+    for match in re.finditer(r"_read_json_store\([^)]*\)\s*\.get\(\s*[\"']"
+                             r"(\w+)[\"']", proxy):
+        if match.group(1) in keys:
+            line = proxy[:match.start()].count("\n") + 1
+            offenders.append(f"supervisor-proxy.py:{line} unwraps "
+                             f"{match.group(1)!r}")
+    # Two-step form: `stored = _read_json_store(…)` then `stored.get("config")`.
+    for match in re.finditer(r"(\w+)\s*=\s*_read_json_store\(", proxy):
+        name = match.group(1)
+        window = proxy[match.end():match.end() + 400]
+        hit = re.search(rf"{name}\.get\(\s*[\"'](\w+)[\"']", window)
+        if hit and hit.group(1) in keys:
+            line = proxy[:match.start()].count("\n") + 1
+            offenders.append(f"supervisor-proxy.py:{line} unwraps "
+                             f"{hit.group(1)!r} from {name}")
+    assert not offenders, (
+        f"{offenders}. `_read_json_store` returns the DOCUMENT — the envelope "
+        f"is added by the GET handler and exists only on the wire. Unwrapping "
+        f"it yields {{}}, which `view()` fills with defaults, so the operator's "
+        f"saved settings are silently replaced by the shipped ones.")
+
+
 def test_the_client_speaks_every_key_the_store_defines() -> None:
     """⚠️ THE STORE SPEAKS snake_case AND THE APP SPEAKS camelCase, and a key
     that differs between them is ACCEPTED AND IGNORED rather than refused:

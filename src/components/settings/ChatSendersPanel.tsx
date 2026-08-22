@@ -240,9 +240,16 @@ export default function ChatSendersPanel() {
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
+          {/* ⚠️ `btn danger icon-only`, THE SAME CLASSES BRIEFINGS USES, and
+              the shared block already said so: `.editable-row > .btn.danger`
+              sits in styles.css next to the row rules. This used `icon-btn` —
+              the app's neutral glass chrome — so the one destructive control in
+              the row was the only delete in the app that did not read as one.
+              Reported from the screen. Removing somebody's access is exactly
+              the action that should look different from everything beside it. */}
           <button
             type="button"
-            className="icon-btn"
+            className="btn danger icon-only"
             disabled={saving}
             aria-label={row.id ? `Remove ${row.id}` : "Remove this row"}
             onClick={() => commit(rows.filter((_, n) => n !== i))}

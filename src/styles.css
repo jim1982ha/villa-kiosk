@@ -4356,6 +4356,11 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   flex: 1 1 auto; min-width: 0;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
 }
+/* ⚠️ A ROW'S DELETE IS `btn danger icon-only` — SOLID `--status-danger`, NOT
+   the neutral `.icon-btn` glass chrome. This rule has always implied it by
+   naming `.btn.danger`, and the second caller still used `.icon-btn` and
+   shipped the only delete in the app that did not read as destructive. Pinned
+   by `test_editable_rows` so the third caller cannot repeat it. */
 .editable-row > .btn.danger { flex: 0 0 auto; }
 /* ⚠️ DIRECT CHILD, NOT A DESCENDANT. `.editable-row select` would reach
    into any component that later sits inside a schedule row and restyle a

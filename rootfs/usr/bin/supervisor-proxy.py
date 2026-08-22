@@ -2182,9 +2182,8 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
         body = {}
 
     from agent import config as agent_config
-    stored = _read_json_store(AGENT_CONFIG_FILE, {})
-    config = agent_config.view(stored.get("config") if isinstance(stored, dict)
-                               else {})
+    # ⚠️ THE STORED DOCUMENT, NOT AN ENVELOPE — see `_chat_dispatch`.
+    config = agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {}))
     document = await _agent_document_text()
     if body.get("preview"):
         return web.json_response({"ok": True, "preview": True,
@@ -2249,9 +2248,14 @@ def _chat_dispatch(app: Any) -> Any:
 
         if str(event.get("event_type") or "") != agent_chat.EVENT_TYPE:
             return
-        stored = _read_json_store(AGENT_CONFIG_FILE, {})
-        config = agent_config.view(stored.get("config")
-                                   if isinstance(stored, dict) else {})
+        # ⚠️ THE STORED DOCUMENT, NOT AN ENVELOPE. `_read_json_store` returns
+        # what is ON DISK; the `{"config": …}` wrapper is added by the HTTP
+        # handler and exists only on the wire. Unwrapping it here found no such
+        # key, so the config read as ALL DEFAULTS — `enabled: False` — and the
+        # agent answered every message with "chat trigger disabled" however the
+        # switches were set. The envelope bug's mirror image: 2.545.0 was a
+        # client using the wrong wrapper; this was the server inventing one.
+        config = agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {}))
         outcome = await agent_chat.handle_event(
             event, session=app["session"], config=config,
             targets=_chat_targets(config),
