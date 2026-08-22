@@ -1042,3 +1042,45 @@ def test_a_severity_less_event_still_routes() -> None:
     body = _render(aggregated=_events(event))
     assert "Check the valve" in body, "a severity-less event must still render"
     assert _severity_of("", "maintenance") == DEFAULT_SEVERITY["maintenance"]
+
+
+def test_the_catalogs_whole_severity_scale_is_understood() -> None:
+    """⚠️ P4 WAS MISSING AND THE CATALOG DEFINES P1..P4. PM-08 and PM-16 both
+    carry it. So the moment somebody adds the `severity` input those blueprints
+    are SPECIFIED to have, this report accused them of an "older alert format" —
+    a false accusation against a rule doing exactly what the spec says, printed
+    in the section an operator reads to find out what is wrong with their rules.
+
+    Found by asking what would happen IF the catalog's own advice were followed,
+    rather than by waiting for the brief that says it.
+    """
+    from reports.aggregate import SEVERITY_ALIASES, _severity_of
+    for tier, expected in (("P1", "critical"), ("P2", "warning"),
+                           ("P3", "notice"), ("P4", "info")):
+        assert SEVERITY_ALIASES[tier.lower()] == expected
+        assert _severity_of(tier, "maintenance") == expected
+
+    event = _maintenance("Do the thing")
+    event["data"]["severity"] = "P4"
+    body = _render(aggregated=_events(event))
+    assert "older alert format" not in body, (
+        "a blueprint sending the catalog's own P4 is told it is out of date")
+
+
+def test_severity_orders_the_maintenance_section() -> None:
+    """⚠️ WITHOUT THIS, EMITTING SEVERITY CHANGES NOTHING. `rank` orders by COST,
+    which is right for money and leaves unpriced groups in arrival order — so a
+    P2 finding rendered below a P4 one because its event happened to arrive
+    second. Advising the operator to emit severity while ignoring it would be
+    advice with no effect."""
+    def ev(bucket: str, sev: str) -> Dict[str, Any]:
+        e = _maintenance("Do the thing")
+        e["data"]["report_bucket"] = bucket
+        e["data"]["severity"] = sev
+        return e
+
+    body = _render(aggregated=_events(ev("Quiet thing", "P4"),
+                                      ev("Urgent thing", "P2")))
+    block = body.split(section_heading("preventive"))[1]
+    assert block.index("Urgent thing") < block.index("Quiet thing"), (
+        "the P4 finding outranks the P2 one:\n" + block)

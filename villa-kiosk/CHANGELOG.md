@@ -1,3 +1,13 @@
+## 2.597.0
+
+### Fixed — the report knew P1..P3 while the catalog defines P1..P4, and ignored severity once it had it
+
+Two rules already carry P4, so adding the `severity` input they are specified to
+have would have had the report accuse them of sending an older alert format.
+And ordering was by cost only, leaving every unpriced finding in arrival order —
+so a P2 rendered below a P4. Both are on the path an operator takes when they
+follow the catalog, and both would have punished them for doing so.
+
 ## 2.596.0
 
 ### Fixed — a clear event from anything but a critical rule was thrown away

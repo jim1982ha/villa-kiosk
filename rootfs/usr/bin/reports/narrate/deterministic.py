@@ -1257,8 +1257,22 @@ class DeterministicNarrator:
 
     # ── 5. preventive ────────────────────────────────────────────────────────
 
+    def _by_severity(self, groups: Sequence[Any]) -> List[Any]:
+        """Worst first, stable within a rank.
+
+        ⚠️ WITHOUT THIS, EMITTING SEVERITY CHANGES NOTHING. `aggregate.rank`
+        orders by COST, which is right for the money section and leaves every
+        unpriced group in arrival order — so a P2 maintenance finding rendered
+        below a P4 one purely because its event arrived second. The catalog
+        distinguishes them (PM-04 is P3, PM-08 is P4) and the report could not.
+        Advising the operator to emit severity while ignoring it would have been
+        advice with no effect.
+        """
+        return sorted(groups, key=lambda g: -severity_rank(
+            self._text(g, "severity") or ""))
+
     def _preventive(self, context: ReportContext) -> List[str]:
-        groups = self._groups(context, "maintenance")
+        groups = self._by_severity(self._groups(context, "maintenance"))
         # ⚠️ BOTH SOURCES. `SECTION_FOR_KIND` sends FORECAST findings here, and
         # a section that reads only the aggregation would route them into
         # silence — the table naming a section that renders nothing is a

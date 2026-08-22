@@ -114,6 +114,15 @@ SEVERITY_ALIASES = {
     "p1": "critical",   # pages immediately
     "p2": "warning",    # reported, not escalated
     "p3": "notice",
+    # ⚠️ P4 WAS MISSING AND THE CATALOG DEFINES P1..P4. Its Severity & Routing
+    # sheet: "P4 — informational or a trend. No action expected on its own.
+    # Report appendix." Two rules already carry it (PM-08, PM-16), so the moment
+    # somebody adds the `severity` input those blueprints are specified to have,
+    # this report would have accused them of sending an "older alert format" —
+    # a false accusation against a rule doing exactly what the spec says, in the
+    # section an operator reads to find out what is wrong with their rules.
+    # Found by asking what would happen IF the catalog's advice were followed.
+    "p4": "info",
     "warn": "warning",
     "error": "critical",
     "err": "critical",
