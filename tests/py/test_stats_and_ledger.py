@@ -109,11 +109,21 @@ def test_accumulating_and_measurement_are_disjoint() -> None:
 
 def _fm() -> Dict[str, Any]:
     return {
+        # ⚠️ `status` IS THE FIELD THAT DECIDES, NOT `resolvedAt` (D12). These
+        # rows carried only `resolvedAt` and the summary read it, which
+        # disagreed with `fmEngine.ticketStats` — the rule the Facility Report
+        # prints from. `t4` is the row that used to be answered two ways: no
+        # `status` at all, which the kiosk counted RESOLVED via a bare `else`
+        # and which is now OPEN on both sides, because a fault must not be
+        # removed from a report by bad data.
         "tickets": [
-            {"id": "t1", "entityId": "sensor.pump", "resolvedAt": "2026-08-01",
+            {"id": "t1", "entityId": "sensor.pump", "status": "resolved",
+             "resolvedAt": "2026-08-01",
              "photoIds": ["p1", "p2"], "note": "operator free text"},
-            {"id": "t2", "resolvedAt": "2026-07-01", "photoIds": []},
-            {"id": "t3", "photoIds": ["p3"]},
+            {"id": "t2", "status": "resolved", "resolvedAt": "2026-07-01",
+             "photoIds": []},
+            {"id": "t3", "status": "open", "photoIds": ["p3"]},
+            {"id": "t4", "photoIds": []},
         ],
         "costs": [
             {"id": "c1", "amount": 120.0, "date": "2026-08-02", "photoIds": []},
@@ -136,9 +146,27 @@ def test_corrupt_store_degrades_rather_than_raising(tmp_path: Any) -> None:
 
 def test_summary_counts_tickets_by_resolution() -> None:
     summary = ledger.summarise(_fm())
-    assert summary["tickets_open"] == 1
+    # t3 (open) and t4 (no status — see the fixture note) are both OPEN.
+    assert summary["tickets_open"] == 2
     assert summary["tickets_resolved"] == 2
     assert summary["tickets_resolved_with_entity"] == 1
+
+
+def test_a_ticket_with_no_status_is_open_not_resolved() -> None:
+    """⚠️ THE DIRECTION THIS MAY NOT FAIL IN. A row whose status is missing or
+    corrupt must surface as a fault, never vanish into the resolved count —
+    the kiosk's bare `else` used to do exactly that."""
+    assert ledger.ticket_is_open({"id": "x"})
+    assert ledger.ticket_is_open({"id": "x", "status": ""})
+    assert ledger.ticket_is_open({"id": "x", "status": "in_progress"})
+    assert ledger.ticket_is_resolved({"id": "x", "status": "resolved"})
+
+
+def test_resolved_at_alone_does_not_close_a_ticket() -> None:
+    """`resolvedAt` answers WHEN, not WHETHER — see `ticket_is_resolved`.
+    A stamp on a row still marked open is data debris and the status wins."""
+    assert ledger.ticket_is_open({"status": "open", "resolvedAt": "2026-08-01"})
+    assert ledger.ticket_is_resolved({"status": "resolved"})
 
 
 def test_summary_counts_photos_and_never_names_them() -> None:

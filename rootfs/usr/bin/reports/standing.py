@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from . import devices as devices_mod
+from . import ledger
 
 DAY_MS = 86_400_000.0
 
@@ -195,7 +196,10 @@ def build(entities: Mapping[str, Any],
             entity_id=entity_id))
 
     for ticket in _rows(fm_data, "tickets"):
-        if str(ticket.get("status") or "") == "resolved":
+        # ⚠️ THE SHARED PREDICATE, not a fourth copy of the same comparison.
+        # This one was already correct; routing it through `ledger` is what
+        # stops it drifting away from the Facility Report's `ticketStats`.
+        if ledger.ticket_is_resolved(ticket):
             continue
         items.append(Item(
             subject=f"fault:{ticket.get('id')}", kind="fault",

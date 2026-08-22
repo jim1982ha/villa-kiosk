@@ -17,6 +17,10 @@
 // harness exists to prevent, so it may not commit it in its own implementation.
 
 import { selectableDeviceIds, unavailableDeviceIds } from "../../src/config/deviceGroups.ts";
+// ⚠️ D12: the FACILITY REPORT's own arithmetic, from the module that prints
+// it. `fmReport`'s "Faults and response" section is `ticketStats` rendered,
+// so comparing this is comparing that report against the brief.
+import { isTicketOpen, ticketStats } from "../../src/fm/fmEngine.ts";
 import { buildAttentionItems, villaHealthFrom } from "../../src/components/cockpit/cockpitData.ts";
 import type { AppConfig } from "../../src/config/AppConfig.ts";
 import type { FmData } from "../../src/fm/fmTypes.ts";
@@ -83,4 +87,17 @@ process.stdout.write(JSON.stringify({
     .map((a) => ({ id: a.id, kind: a.kind, title: a.title, room: a.room ?? "" }))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
   health: villaHealthFrom(attention).level,
+  // ⚠️ `open + inProgress`, NOT `open`. The Facility Report shows the two
+  // separately and the brief shows one list; they agree when the SUM matches,
+  // and an in-progress fault dropped from either is the divergence.
+  faultsOpen: ticketStats(fmData.tickets).open
+            + ticketStats(fmData.tickets).inProgress,
+  faultsResolved: ticketStats(fmData.tickets).resolved,
+  // ⚠️ THE IDS, NOT ONLY THE COUNTS. Two rules that disagree about which
+  // tickets are open can still produce the same TOTAL when their errors offset
+  // — the first version of this fixture did exactly that (tkt-4 moved one way,
+  // tkt-6 the other) and a mutation reverting the add-on's rule passed
+  // cleanly. A count is the weakest possible pin because it survives a swap.
+  faultsOpenIds: fmData.tickets.filter(isTicketOpen)
+    .map((t) => String(t.id)).sort(),
 }, null, 2) + "\n");

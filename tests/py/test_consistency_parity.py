@@ -67,6 +67,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from reports import devices as devices_mod       # noqa: E402
 from reports import standing as standing_mod     # noqa: E402
+from reports import ledger as ledger_mod         # noqa: E402
 
 FIXTURE_NAMES = ["bare", "pack-only", "blueprints-live", "both"]
 
@@ -116,6 +117,17 @@ def _addon(name: str) -> Dict[str, Any]:
              for i in items],
             key=lambda row: row["id"]),
         "health": standing_mod.health(items),
+        # ⚠️ D12: THE SAME QUESTION THE FACILITY REPORT ANSWERS. Through
+        # `ledger.summarise`, which is the add-on's own counter — not a
+        # transcription of the kiosk's rule, or this test would agree with
+        # itself while the two shipped rules drifted.
+        "faultsOpen": ledger_mod.summarise(fm)["tickets_open"],
+        "faultsResolved": ledger_mod.summarise(fm)["tickets_resolved"],
+        # See kiosk_view.ts: the counts alone survive an offsetting swap.
+        "faultsOpenIds": sorted(
+            str(t.get("id"))
+            for t in (fm.get("tickets") or [])
+            if isinstance(t, dict) and ledger_mod.ticket_is_open(t)),
     }
 
 
@@ -385,3 +397,68 @@ def test_readiness_and_its_drill_down_count_the_same_devices() -> None:
     assert not unscoped, (
         f"these drill-down groups are not scoped to the villa's own devices, "
         f"so they contradict the check that opens them: {unscoped}")
+
+
+# ── D12: the Facility Report and the briefing ────────────────────────────────
+
+@pytest.mark.parametrize("name", FIXTURE_NAMES)
+def test_both_sides_agree_on_how_many_faults_are_open(name: str) -> None:
+    """⚠️ D12. The Facility Report's "Faults and response" section and the
+    brief's standing state both answer "how many faults are open" from the SAME
+    `/data/fm-data` store, and they answered it with three different rules.
+
+    `fmEngine.ticketStats` switched on `status`; `standing.build` switched on
+    `status`; `ledger.summarise` used `not resolvedAt`. So a fault marked
+    resolved before the timestamp field existed was open to one and closed to
+    another, and a monthly report handed to an owner could contradict the brief
+    delivered the same morning.
+
+    ⚠️ AND THE KIOSK'S `else` WAS THE UNSAFE DIRECTION. Any row whose status was
+    missing or corrupt fell into the resolved branch — a fault removed from the
+    report by bad data. Both sides now count an unknown status as OPEN.
+
+    The counts are compared as `open + inProgress` against `tickets_open`,
+    because the report shows those two separately and the brief shows one list.
+    """
+    kiosk, addon = _kiosk(name), _addon(name)
+    assert kiosk["faultsOpen"] == addon["faultsOpen"], (
+        f"{name}: the Facility Report counts {kiosk['faultsOpen']} open "
+        f"fault(s) and the briefing counts {addon['faultsOpen']} — same store, "
+        f"two rules")
+    # ⚠️ THE SETS, WHICH IS WHAT THE COUNTS COULD NOT CATCH. See the note in
+    # `kiosk_view.ts`: the first fixture produced identical totals from two
+    # rules that disagreed about two specific tickets.
+    assert kiosk["faultsOpenIds"] == addon["faultsOpenIds"], (
+        f"{name}: the two sides disagree about WHICH faults are open — "
+        f"report {kiosk['faultsOpenIds']} vs brief {addon['faultsOpenIds']}")
+    assert kiosk["faultsResolved"] == addon["faultsResolved"], (
+        f"{name}: resolved counts differ — "
+        f"{kiosk['faultsResolved']} vs {addon['faultsResolved']}")
+
+
+def test_the_fixtures_can_actually_catch_the_divergence() -> None:
+    """⚠️ THE FRAGILE HALF, AND THE LESSON THIS SUBSYSTEM ALREADY PAID FOR.
+    Nine deliberate breaks of `devices.py` once produced five that SURVIVED,
+    because no fixture reached the rule. The fault rules only disagree on rows
+    where `status` and `resolvedAt` tell different stories, so a fixture set of
+    well-formed tickets would pass against either rule and prove nothing.
+
+    This asserts the corpus contains the discriminating shapes, rather than
+    trusting that it does.
+    """
+    shapes = {"missing_status": False, "status_without_stamp": False,
+              "stamp_without_resolved_status": False}
+    for name in FIXTURE_NAMES:
+        for ticket in ((_fixture(name).get("fmData") or {}).get("tickets") or []):
+            status = str(ticket.get("status") or "")
+            stamp = ticket.get("resolvedAt")
+            if not status:
+                shapes["missing_status"] = True
+            if status == "resolved" and not stamp:
+                shapes["status_without_stamp"] = True
+            if stamp and status != "resolved":
+                shapes["stamp_without_resolved_status"] = True
+    missing = sorted(k for k, present in shapes.items() if not present)
+    assert not missing, (
+        f"no fixture exercises {missing}; the parity test above would pass "
+        f"against either of the rules it exists to tell apart")

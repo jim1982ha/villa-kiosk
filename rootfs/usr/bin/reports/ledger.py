@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from .hass import HassClient, HassUnavailable
 from .log import warn
@@ -40,6 +40,52 @@ FM_DATA_FILE = "/data/fm-data.json"
 # whatever keys the file happens to have, so a future collection is invisible
 # here until someone decides what a report should say about it.
 COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedDocuments")
+
+#: The status a fault reaches when it is done. `FmTicketStatus` in `fmTypes.ts`
+#: is exactly "open" | "in_progress" | "resolved".
+TICKET_RESOLVED = "resolved"
+
+
+def ticket_is_resolved(ticket: Mapping[str, Any]) -> bool:
+    """Is this fault finished? ⚠️ THE STATUS DECIDES, NEVER `resolvedAt`.
+
+    ⚠️ THREE IMPLEMENTATIONS OF THIS ONE QUESTION EXISTED, AND TWO OF THEM WERE
+    BOTH IN THIS PACKAGE (D12, 2026-08-22). `fmEngine.ticketStats` — which the
+    Facility Report's "Faults and response" section prints — switches on
+    `status`; `standing.build` also switches on `status`; and `summarise` below
+    used `not resolvedAt`. So the same store answered "how many faults are
+    open" two ways, and the Facility Report and the briefing could disagree
+    about a villa in the same minute. That is the divergence class the whole
+    consistency programme exists to close, surviving inside the add-on itself.
+
+    ⚠️ `status` WINS BECAUSE IT IS THE FIELD THE UI WRITES. A fault is moved
+    between states by a person pressing a control, and `resolvedAt` is a
+    timestamp stamped alongside — so a row can carry one without the other and
+    real stores do: a fault marked resolved before the timestamp field existed
+    has a status and no stamp, and `resolvedAt` would call it open forever.
+    The reverse (a stamp on a row still marked open) is data debris, and
+    reading the status is what makes the tablet and the brief agree about it
+    rather than each guessing.
+
+    ⚠️ `resolvedAt` IS STILL THE RIGHT FIELD FOR *WHEN*, and `resolved_tickets_
+    for` keeps using it — "which faults were closed in this window" is a
+    question about a time, and a resolved row with no stamp cannot answer it.
+    That is a different question from "is it open", which is the confusion
+    this function ends.
+    """
+    return str(ticket.get("status") or "") == TICKET_RESOLVED
+
+
+def ticket_is_open(ticket: Mapping[str, Any]) -> bool:
+    """Not resolved — which INCLUDES `in_progress`.
+
+    ⚠️ IN PROGRESS IS OPEN, and the Facility Report shows it separately without
+    disagreeing: `ticketStats` returns `open` and `inProgress` as two counts
+    whose SUM is this predicate. A brief that said "2 open" beside a report
+    saying "1 open, 1 in progress" is consistent; one that dropped the
+    in-progress fault entirely would not be.
+    """
+    return not ticket_is_resolved(ticket)
 
 
 def read(path: str = FM_DATA_FILE) -> Dict[str, Any]:
@@ -74,8 +120,10 @@ def summarise(data: Dict[str, Any]) -> Dict[str, Any]:
     Phase 1 happens to need; it is the shape this module is allowed to have.
     """
     tickets = _rows(data, "tickets")
-    open_tickets = [t for t in tickets if not t.get("resolvedAt")]
-    resolved = [t for t in tickets if t.get("resolvedAt")]
+    # ⚠️ THROUGH THE SHARED PREDICATE — see `ticket_is_resolved`. This used to
+    # read `resolvedAt` and disagreed with both other implementations.
+    open_tickets = [t for t in tickets if ticket_is_open(t)]
+    resolved = [t for t in tickets if ticket_is_resolved(t)]
     return {
         "present": any(_rows(data, name) for name in COLLECTIONS),
         "counts": {name: len(_rows(data, name)) for name in COLLECTIONS},

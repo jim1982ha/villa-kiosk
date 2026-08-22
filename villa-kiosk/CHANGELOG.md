@@ -1,3 +1,13 @@
+## 2.605.0
+
+### Fixed — the report and the briefing could disagree about open faults
+
+Three rules answered "is this fault open" from one store: two read the status,
+one read `resolvedAt`. A fault marked resolved before that field existed was
+closed to one and open to another. The kiosk also counted a row with a missing
+status as RESOLVED, removing a fault from the report by bad data; unknown is
+now open on both sides, and the parity harness diffs them.
+
 ## 2.604.0
 
 ### Added — findings carry the room they happened in

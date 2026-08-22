@@ -162,11 +162,42 @@ export interface TicketStats {
   meanResolutionHours: number | null;
 }
 
+/** Is this fault finished? ⚠️ THE STATUS DECIDES, NEVER `resolvedAt`, and an
+ *  UNKNOWN STATUS IS OPEN.
+ *
+ *  ⚠️ EXPORTED SO THERE IS ONE RULE, NOT A SHAPE REPEATED WHEREVER TICKETS ARE
+ *  COUNTED (D12, 2026-08-22). `ticketStats` had it inline as a bare `else`,
+ *  which counted any row with a missing or corrupt status as RESOLVED — a fault
+ *  removed from the Facility Report by bad data. The add-on's
+ *  `ledger.ticket_is_resolved` is the same sentence in Python and
+ *  `test_consistency_parity` diffs the two over fixtures built to disagree.
+ *
+ *  `resolvedAt` still answers WHEN a fault closed; it does not answer WHETHER,
+ *  and real stores carry rows with one and not the other. */
+export function isTicketResolved(t: Pick<FmTicket, "status">): boolean {
+  return t.status === "resolved";
+}
+
+/** Not resolved — which INCLUDES `in_progress`. The report shows those two
+ *  separately; their SUM is this predicate, which is what the brief lists. */
+export function isTicketOpen(t: Pick<FmTicket, "status">): boolean {
+  return !isTicketResolved(t);
+}
+
 export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   let open = 0, inProgress = 0, resolved = 0, totalMs = 0, timed = 0;
   for (const t of tickets) {
     if (t.status === "open") open++;
     else if (t.status === "in_progress") inProgress++;
+    // ⚠️ EXPLICIT, AND AN UNKNOWN STATUS COUNTS AS OPEN (D12, 2026-08-22).
+    // This was a bare `else`, so ANY row whose status was missing or corrupt
+    // was counted RESOLVED — a fault silently removed from the report by bad
+    // data, which is the one direction this must never fail in. The add-on's
+    // `ledger.ticket_is_resolved` is the same rule stated the same way, and
+    // `test_consistency_parity` now diffs the two over fixtures that include a
+    // status-less row precisely because it is the case the two sides used to
+    // answer differently.
+    else if (!isTicketResolved(t)) open++;
     else {
       resolved++;
       if (t.resolvedAt) {
