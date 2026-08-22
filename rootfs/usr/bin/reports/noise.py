@@ -25,7 +25,9 @@ and reports; it never notifies. Putting the timer here would move urgency out of
 the detection layer, which is the same mistake as computing grouping in the
 renderer.
 
-⚠️ MEDIAN TIME TO CLEAR IS NOT COMPUTABLE AND IS DELIBERATELY ABSENT. The
+⚠️ MEDIAN TIME TO CLEAR IS NOT COMPUTABLE AND IS DELIBERATELY ABSENT. CLOSED
+AS IMPOSSIBLE, NOT CARRIED (2026-08-22) — it is off the open-items list, and it
+should not return there without Home Assistant growing a completion timestamp. The
 workbook asks for four figures per rule: fires, acknowledgements, median time to
 clear, and fires with no clear. Home Assistant's `todo/item/list` returns
 `status` but no completion TIMESTAMP, so "when was it acked" is not a fact this

@@ -1,3 +1,13 @@
+## 2.606.0
+
+### Added — Done and Need help buttons on the phone, and escalation
+
+A caretaker task now arrives with two buttons. Done completes the same todo item
+the tablet ticks, so the brief's acknowledgement counter keeps working unchanged;
+Need help tells the owner and leaves the job open, because "I cannot do this" is
+the opposite of done. Unanswered tasks are re-asked at 15 minutes and escalated
+at 45 — and never closed by a timeout.
+
 ## 2.605.0
 
 ### Fixed — the report and the briefing could disagree about open faults
