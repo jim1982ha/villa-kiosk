@@ -140,6 +140,8 @@ from reports.analysis import registry as reports_registry  # noqa: E402
 from reports.analysis import modules as _reports_modules  # noqa: E402,F401
 from reports import schedule as reports_schedule    # noqa: E402
 from reports import secrets as reports_secrets      # noqa: E402
+from reports import hass as reports_hass          # noqa: E402
+from reports import tasks as reports_tasks        # noqa: E402
 from reports.narrate import providers as reports_narrate_providers  # noqa: E402
 from reports import store as reports_store          # noqa: E402
 
@@ -2322,6 +2324,70 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
     }, headers={"Cache-Control": "no-store"})
 
 
+#: Who may tick a caretaker task off. ⚠️ `ops` IS THE POINT OF THE FEATURE —
+#: the Facility Manager is the person who does the work, and an acknowledgement
+#: loop only the owner can close is not an acknowledgement loop. Guests are
+#: excluded: they can raise a fault report (see `_fm_write_guard`) and must not
+#: be able to declare one finished.
+TASK_ACK_ROLES = ("owner", "ops")
+
+
+async def reports_tasks_get_handler(request: web.Request) -> web.Response:
+    """Outstanding caretaker tasks, as the brief lists them.
+
+    Readable by any authorized session, because the same tasks already appear in
+    a delivered brief and in the Facility tab; the restriction that matters is
+    on COMPLETING one.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    try:
+        async with ClientSession() as session:
+            async with reports_hass.HassClient(session) as hass:
+                items = await reports_tasks.open_tasks(hass)
+    except Exception as err:  # noqa: BLE001 - a panel must render without HA
+        print(f"[supervisor-proxy] could not list caretaker tasks: {err}",
+              flush=True)
+        return web.json_response({"tasks": [], "reachable": False},
+                                 headers={"Cache-Control": "no-store"})
+    return web.json_response({"tasks": items, "reachable": True},
+                             headers={"Cache-Control": "no-store"})
+
+
+async def reports_tasks_complete_handler(request: web.Request) -> web.Response:
+    """Mark one caretaker task done, from the kiosk.
+
+    ⚠️ THE VALIDATION IS IN `reports.tasks`, NOT HERE, and deliberately so: the
+    rule is "only an item this system wrote", which is a property of the todo
+    list's contents rather than of the request. A handler that checked the uid
+    against a list it fetched separately would be a second reader of the same
+    filter — see that module's header for why one is already the maximum.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in TASK_ACK_ROLES:
+        return _forbidden("Only the owner or facility manager may complete a "
+                          "caretaker task.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    entity_id = str(body.get("entity_id") or "")
+    uid = str(body.get("uid") or "")
+    try:
+        async with ClientSession() as session:
+            async with reports_hass.HassClient(session) as hass:
+                result = await reports_tasks.complete(hass, entity_id, uid)
+    except Exception as err:  # noqa: BLE001
+        print(f"[supervisor-proxy] task completion failed: {err}", flush=True)
+        return web.json_response({"ok": False, "error": str(err)}, status=502)
+    status = 200 if result.get("ok") else 400
+    return web.json_response(result, status=status,
+                             headers={"Cache-Control": "no-store"})
+
+
 async def reports_run_now_handler(request: web.Request) -> web.Response:
     """Compose and deliver one report immediately, ignoring the schedule.
 
@@ -2486,6 +2552,8 @@ def main() -> None:
     app.router.add_get("/reports-secret", reports_secret_get_handler)
     app.router.add_put("/reports-secret", reports_secret_put_handler)
     app.router.add_post("/reports-run-now", reports_run_now_handler)
+    app.router.add_get("/reports-tasks", reports_tasks_get_handler)
+    app.router.add_post("/reports-tasks-complete", reports_tasks_complete_handler)
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_get("/auth/session", auth_session_handler)

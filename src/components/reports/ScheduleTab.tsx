@@ -331,6 +331,14 @@ export default function ScheduleTab({
                 owner called both cluttered; they were right, and a set of
                 three is not worth a permanent row. */}
             <div className="reports-schedule">
+              {/* ⚠️ THE FIELDS WRAP; THE DELETE DOES NOT. All five controls used
+                  to be siblings in one wrapping row, so on a phone the fourth
+                  or fifth dropped to a second line and took the delete button
+                  with it — reported from a 390px screen, where it sat alone
+                  under the row looking like an action on the whole card rather
+                  than on that schedule. Grouping the fields lets them wrap
+                  among themselves while the button stays on the first line. */}
+              <div className="reports-schedule-fields">
               <select
                 aria-label="How often"
                 value={s.cadence}
@@ -389,6 +397,7 @@ export default function ScheduleTab({
                 open={openRecipients === i}
                 onToggle={() => setOpenRecipients(openRecipients === i ? null : i)}
               />
+              </div>
               <button
                 className="btn danger icon-only"
                 aria-label="Remove this schedule. Press and hold to send it now."

@@ -1058,7 +1058,16 @@ export default function Dashboard() {
       )}
 
       {reportsOpen && canEditConfig && (
-        <ReportsModal onClose={() => setReportsOpen(false)} />
+        <ReportsModal
+          onClose={() => setReportsOpen(false)}
+          /* ⚠️ A SEPARATE CAPABILITY FROM THE ONE THAT OPENS THIS MODAL.
+             Briefings is gated on `editConfig` (owner only) and completing a
+             caretaker task is gated on `manageFacility`, which the facility
+             manager also holds. Passing the real capability rather than `true`
+             keeps the two independent: if Briefings is ever opened to `ops`,
+             the Tasks tab is already correct. The server checks anyway. */
+          canAck={canManageFacility}
+        />
       )}
 
       {guestReportFor !== null && (

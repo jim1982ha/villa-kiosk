@@ -1,3 +1,14 @@
+## 2.599.0
+
+### Added — caretaker tasks can be acknowledged from the kiosk
+
+A Tasks tab in Briefings lists what the villa's automations have asked for and
+lets it be ticked off without opening Home Assistant. Only items this system
+wrote can be completed — the caretaker list is also the household's shopping
+list on a real deployment — and the uid a browser sends is re-verified server
+side. Also fixes the schedule row's delete button wrapping onto its own line on
+a phone.
+
 ## 2.598.0
 
 ### Fixed — the no-villa-data guard scanned two directories of a three-directory repo

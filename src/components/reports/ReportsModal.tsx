@@ -39,8 +39,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, AlertTriangle, CalendarClock, CheckCircle2, FileText, History,
-  Loader2, Save as SaveIcon, ShieldQuestion, SlidersHorizontal,
+  Activity, AlertTriangle, CalendarClock, CheckCircle2, ClipboardList,
+  FileText, History, Loader2, Save as SaveIcon, ShieldQuestion,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
@@ -56,20 +57,24 @@ import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
 import DiagnosticsTab from "./DiagnosticsTab";
+import TasksTab from "./TasksTab";
 import ModulesTab from "./ModulesTab";
 
-type Tab = "preview" | "coverage" | "checks" | "schedule" | "history" | "diagnostics";
+type Tab = "preview" | "coverage" | "checks" | "schedule" | "tasks" | "history" | "diagnostics";
 
 const TABS: { id: Tab; label: string; icon: typeof FileText }[] = [
   { id: "preview", label: "Preview", icon: FileText },
   { id: "coverage", label: "Coverage", icon: ShieldQuestion },
   { id: "checks", label: "Checks", icon: SlidersHorizontal },
   { id: "schedule", label: "Schedule", icon: CalendarClock },
+  { id: "tasks", label: "Tasks", icon: ClipboardList },
   { id: "history", label: "History", icon: History },
   { id: "diagnostics", label: "Diagnostics", icon: Activity },
 ];
 
-export default function ReportsModal({ onClose }: { onClose: () => void }) {
+export default function ReportsModal(
+  { onClose, canAck }: { onClose: () => void; canAck: boolean },
+) {
   const dialogRef = useModalA11y(onClose);
   const [tab, setTab] = useState<Tab>("preview");
 
@@ -365,6 +370,11 @@ export default function ReportsModal({ onClose }: { onClose: () => void }) {
               onSaveSecret={(provider, value) => void saveSecret(provider, value)}
             />
           )}
+          {/* ⚠️ `canAck` IS A RENDERING CONVENIENCE, NEVER THE GATE. The
+              server checks `TASK_ACK_ROLES` on every completion; a browser can
+              send whatever it likes. This only decides whether a guest is shown
+              a button they would be refused. */}
+          {tab === "tasks" && <TasksTab canAck={canAck} />}
           {tab === "history" && <HistoryTab entries={history} />}
           {tab === "diagnostics" && <DiagnosticsTab diagnostics={diagnostics} />}
         </div>

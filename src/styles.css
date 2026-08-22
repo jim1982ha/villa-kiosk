@@ -4315,24 +4315,35 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    (Said "four" until v2.552.0, one release after the recipients button made it
    five: the count is the thing this comment is FOR, so a stale one is worse
    than none.) */
+/* ⚠️ THE ROW ITSELF NO LONGER WRAPS. Its two children are the FIELD GROUP,
+   which wraps internally, and the delete button, which must not leave the first
+   line — on a 390px phone the fifth control pushed the button onto a line of
+   its own, where it read as an action on the whole card rather than on that
+   schedule. `align-items: flex-start` keeps the button beside the first row of
+   fields rather than centred against a two-line group. */
 .reports-schedule {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 8px;
   padding: 8px; border-radius: var(--radius-md, 8px); background: var(--bg-input);
 }
+.reports-schedule-fields {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+}
+.reports-schedule > .btn.danger { flex: 0 0 auto; }
 /* ⚠️ DIRECT CHILD, NOT A DESCENDANT. `.reports-schedule select` would reach
    into any component that later sits inside a schedule row and restyle a
    control it does not own — the CSS form of the applicable-set bug, and the
    reason `.fm-field > input` is written that way. The selects here ARE direct
    children, so `>` costs nothing and closes the door. */
-.reports-schedule > select,
-.reports-schedule > input[type="time"] {
+.reports-schedule-fields > select,
+.reports-schedule-fields > input[type="time"] {
   flex: 1 1 96px; min-height: var(--touch-min);
 }
 /* ⚠️ SAFARI GIVES `input[type=time]` A DIFFERENT INTRINSIC BOX and ignores the
    form-control inheritance the selects get, so it renders at the browser's own
    font and sits a few pixels off its neighbours on the one platform this
    product is operated from. Stated explicitly rather than inherited. */
-.reports-schedule > input[type="time"] {
+.reports-schedule-fields > input[type="time"] {
   font: inherit; font-size: var(--text-sm);
   padding: 0 10px;
   border-radius: var(--radius-md, 8px);
@@ -4341,7 +4352,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 /* The recipients button sizes to its label and does not stretch — it is the
    answer to a question, not a field. */
-.reports-schedule > button { flex: 0 1 auto; min-height: var(--touch-min); }
+.reports-schedule-fields > button { flex: 0 1 auto; min-height: var(--touch-min); }
 
 /* Two labelled fields side by side, collapsing to one column when there is no
    room. ⚠️ SAME IDIOM AS `.fm-summary` — auto-fit with a minimum — rather than
@@ -4482,3 +4493,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 .reports-freshness > span { flex: 1 1 200px; }
 .reports-freshness > button { min-height: var(--touch-min); }
+
+/* Caretaker tasks, acknowledgeable from the kiosk.
+   ⚠️ THE ACTION SITS ON THE SAME LINE AS THE TASK AND DOES NOT WRAP AWAY FROM
+   IT — the same rule the schedule row was just fixed for. A task's text is a
+   sentence and will wrap; the button must stay beside it or it reads as an
+   action on the list rather than on that row. */
+.reports-tasks { list-style: none; margin: 12px 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px; }
+.reports-task {
+  display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-md, 8px);
+  background: var(--bg-input); border-left: 3px solid var(--hairline);
+}
+.reports-task-text { flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); }
+.reports-task > .btn { flex: 0 0 auto; min-height: var(--touch-min); }

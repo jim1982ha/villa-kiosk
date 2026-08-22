@@ -253,7 +253,17 @@ async def todo_tasks(hass: HassClient,
                 continue
             text = clean_summary(match.group(2))
             if text:
-                out.append({"rule_id": match.group(1).strip(), "text": text})
+                # ⚠️ `uid` AND `entity_id` RIDE ALONG SO NOTHING PARSES THIS
+                # TWICE. Acknowledging a task from the kiosk needs the item's
+                # id and the list it is on, and the ONLY safe way to get them is
+                # from the same pass that already decided this item is one of
+                # ours — `TASK_PREFIX` is what separates a caretaker task from
+                # somebody's groceries, and the reference deployment keeps both
+                # on one list. A second reader would be a second chance to get
+                # that filter wrong.
+                out.append({"rule_id": match.group(1).strip(), "text": text,
+                            "uid": str(item.get("uid") or ""),
+                            "entity_id": entity_id})
     return out
 
 

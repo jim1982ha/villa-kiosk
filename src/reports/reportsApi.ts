@@ -336,6 +336,57 @@ export function parseReportsConfig(raw: unknown): ReportsConfig {
  *
  *  `raw` carries keys this app version does not recognise, so an older client
  *  cannot delete a newer one's field on write. Same rule as the FM store. */
+/** An outstanding caretaker task, as the brief lists it.
+ *
+ *  ⚠️ `uid` AND `entityId` ARE OPAQUE HANDLES, NOT ADDRESSES. The client sends
+ *  them back to complete a task and the SERVER re-verifies both against the
+ *  same parser that produced them — a uid from a browser proves only that
+ *  somebody typed it. See `reports/tasks.py`; the caretaker list is also the
+ *  household's shopping list on a real deployment. */
+export type CaretakerTask = {
+  ruleId: string;
+  text: string;
+  uid: string;
+  entityId: string;
+};
+
+export async function fetchTasks(): Promise<{ tasks: CaretakerTask[]; reachable: boolean }> {
+  const r = await fetch("reports-tasks", { headers: { Accept: "application/json" } });
+  if (!r.ok) return { tasks: [], reachable: false };
+  const body = (await r.json()) as { tasks?: unknown; reachable?: unknown };
+  const rows = Array.isArray(body.tasks) ? body.tasks : [];
+  return {
+    reachable: body.reachable !== false,
+    tasks: rows.flatMap((row) => {
+      const t = row as Record<string, unknown>;
+      const uid = typeof t.uid === "string" ? t.uid : "";
+      const entityId = typeof t.entity_id === "string" ? t.entity_id : "";
+      // A task with no handle cannot be completed, so listing it would offer a
+      // button that always fails. Older items predate the uid being carried.
+      if (!uid || !entityId) return [];
+      return [{
+        uid, entityId,
+        ruleId: typeof t.rule_id === "string" ? t.rule_id : "",
+        text: typeof t.text === "string" ? t.text : "",
+      }];
+    }),
+  };
+}
+
+export async function completeTask(
+  task: CaretakerTask,
+): Promise<{ ok: boolean; error?: string }> {
+  const r = await fetch("reports-tasks-complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entity_id: task.entityId, uid: task.uid }),
+  });
+  const body = (await r.json().catch(() => ({}))) as { ok?: unknown; error?: unknown };
+  if (r.ok && body.ok === true) return { ok: true };
+  return { ok: false, error: typeof body.error === "string" ? body.error
+    : `Home Assistant refused the update (HTTP ${r.status}).` };
+}
+
 export async function fetchReportsConfig(): Promise<
   { config: ReportsConfig; rev: string; raw: Record<string, unknown> } | null
 > {
