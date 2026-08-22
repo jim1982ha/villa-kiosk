@@ -27,7 +27,15 @@ def _clean(tmp_path, monkeypatch) -> None:
     # swallows, by design — so every assertion about a row would read an empty
     # list and pass vacuously.
     from agent import audit as audit_mod
+    from agent import budget as budget_mod
     monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "audit.json"))
+    # ⚠️ THE BUDGET PERSISTS TOO. Patching only the audit left three tests
+    # failing on a PermissionError about the VILLA's /data path — the third
+    # time this session that a rule was applied to the site in view instead of
+    # to everything it applies to.
+    monkeypatch.setattr(budget_mod, "BUDGET_FILE", str(tmp_path / "budget.json"))
+    monkeypatch.setattr(budget_mod, "_BREAKER", None)
+    chat.forget_targets()
 
 
 def _event(**over: Any) -> Dict[str, Any]:
@@ -381,7 +389,11 @@ def _handle(event: Dict[str, Any], **kw: Any) -> str:
 
 
 def test_a_message_from_a_listed_sender_produces_a_run() -> None:
-    assert _handle(_event()) == "answered"
+    got = _handle(_event())
+    assert got.startswith("answered"), got
+    assert "notify.owner" in got, (
+        f"the outcome does not say where the answer went: {got!r} — "
+        f'"it worked" and "you got nothing" must not be the same line')
 
 
 def test_the_chat_trigger_switch_stops_it_before_anything_costs_anything() -> None:
@@ -486,7 +498,7 @@ def test_a_declined_run_TELLS_the_person_who_asked() -> None:
     finally:
         reply_mod.ReplyTool = original  # type: ignore[misc]
 
-    assert got == "declined"
+    assert got.startswith("declined"), got
     assert sent and "could not answer" in sent[0]
     assert "no credit left" in sent[0], (
         "the reason was dropped, so the reader learns nothing actionable")
@@ -505,7 +517,8 @@ def test_a_successful_run_does_not_ALSO_send_a_decline() -> None:
     original = reply_mod.ReplyTool
     reply_mod.ReplyTool = Recording  # type: ignore[misc]
     try:
-        assert _handle(_event(), provider=FakeProvider([says("fine")])) == "answered"
+        assert _handle(_event(),
+                       provider=FakeProvider([says("fine")])).startswith("answered")
     finally:
         reply_mod.ReplyTool = original  # type: ignore[misc]
     assert not any("could not answer" in m for m in sent)
@@ -535,3 +548,110 @@ def test_an_UNLISTED_sender_is_never_told_anything() -> None:
         reply_mod.ReplyTool = original  # type: ignore[misc]
     assert got == "sender not allowed"
     assert sent == [], "a stranger was told the bot exists"
+
+
+# ── who the answer goes to ──────────────────────────────────────────────────
+class _Registry:
+    """A fake HassClient serving one entity-registry listing."""
+
+    def __init__(self, entries: List[Dict[str, Any]]) -> None:
+        self.entries = entries
+        self.calls = 0
+
+    async def __aenter__(self) -> "_Registry":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        return None
+
+    async def command(self, name: str, **_kw: Any) -> Any:
+        assert name == "config/entity_registry/list"
+        self.calls += 1
+        return self.entries
+
+
+REGISTRY_ROWS = [
+    {"entity_id": "notify.bot_private", "platform": "telegram_bot",
+     "unique_id": "8859711452_765979167"},
+    {"entity_id": "notify.bot_group", "platform": "telegram_bot",
+     "unique_id": "8859711452_-1003932943049"},
+    {"entity_id": "notify.a_phone", "platform": "mobile_app",
+     "unique_id": "8859711452_765979167"},
+]
+
+
+def _resolve(chat_id: str, rows: Any = None) -> str:
+    import reports.hass as hass_mod
+
+    fake = _Registry(REGISTRY_ROWS if rows is None else rows)
+    original = hass_mod.HassClient
+    hass_mod.HassClient = lambda session: fake   # type: ignore[assignment,misc]
+    try:
+        return asyncio.run(chat.target_for(None, chat_id))
+    finally:
+        hass_mod.HassClient = original           # type: ignore[assignment]
+
+
+def test_a_private_chat_resolves_to_its_own_notify_entity() -> None:
+    """⚠️ THE FIX FOR AN ANSWER THAT WENT TO THE WRONG ROOM. Measured on the
+    villa: a question asked in a private chat was answered in the group,
+    because the target came from the BRIEFING configuration."""
+    assert _resolve("765979167") == "notify.bot_private"
+
+
+def test_a_GROUP_chat_id_is_negative_and_still_resolves() -> None:
+    """⚠️ `rsplit`, NOT `split`, AND THIS IS THE CASE THAT PROVES IT.
+
+    HA stamps `unique_id` as `<bot_id>_<chat_id>` and a group's chat id is
+    NEGATIVE — `8859711452_-1003932943049`. Splitting on the FIRST underscore
+    compares the bot id, which matches nothing at best and one arbitrary chat
+    at worst.
+    """
+    assert _resolve("-1003932943049") == "notify.bot_group"
+
+
+def test_an_unknown_chat_resolves_to_NOTHING_rather_than_a_guess() -> None:
+    """⚠️ THE SECURITY PROPERTY. The chat id is a LOOKUP KEY into a set Home
+    Assistant was configured with, never an address — so an invented one
+    reaches nobody and the caller falls back, rather than a stranger's id
+    addressing the first entity in the list."""
+    assert _resolve("999999999") == ""
+
+
+def test_only_the_telegram_platform_is_considered() -> None:
+    """A mobile_app entity sharing the numeric suffix must not be picked."""
+    assert _resolve("765979167") == "notify.bot_private"
+
+
+def test_an_unreadable_registry_falls_back_rather_than_raising() -> None:
+    import reports.hass as hass_mod
+
+    class _Broken:
+        async def __aenter__(self) -> "_Broken":
+            raise RuntimeError("core is restarting")
+
+        async def __aexit__(self, *exc: Any) -> None:
+            return None
+
+    original = hass_mod.HassClient
+    hass_mod.HassClient = lambda session: _Broken()  # type: ignore[assignment,misc]
+    try:
+        assert asyncio.run(chat.target_for(None, "765979167")) == ""
+    finally:
+        hass_mod.HassClient = original               # type: ignore[assignment]
+
+
+def test_the_lookup_is_cached_rather_than_asked_per_message() -> None:
+    """The registry changes when somebody adds a chat to the bot, which is
+    rare; a websocket round trip per message is a cost with no answer."""
+    import reports.hass as hass_mod
+
+    fake = _Registry(REGISTRY_ROWS)
+    original = hass_mod.HassClient
+    hass_mod.HassClient = lambda session: fake       # type: ignore[assignment,misc]
+    try:
+        for _ in range(3):
+            assert asyncio.run(chat.target_for(None, "765979167")) == "notify.bot_private"
+    finally:
+        hass_mod.HassClient = original               # type: ignore[assignment]
+    assert fake.calls == 1, f"asked the registry {fake.calls} times"

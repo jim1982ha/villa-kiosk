@@ -1,3 +1,12 @@
+## 2.635.0
+
+### Fixed — the answer went to the wrong chat
+A question asked in a private chat was answered in the group, because the reply
+used the briefing recipients. It now resolves the asking chat through Home
+Assistant's entity registry, so only a chat the bot is already configured for
+can be reached at all. The log also says which entity the answer went to —
+"it worked" and "you got nothing" were previously the same line.
+
 ## 2.634.0
 
 ### Fixed — the agent was being handed readings with the numbers removed

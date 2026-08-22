@@ -356,13 +356,19 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     from agent.registry import build_registry, run as run_loop
     from agent.tools import reply as reply_mod
 
-    record_turn(message.thread_key, "user", message.text)
+    # ⚠️ THE CHAT THAT ASKED, RESOLVED THROUGH THE REGISTRY, BEFORE THE
+    # CONFIGURED FALLBACK. Measured on the villa: without this the answer went
+    # to the BRIEFING targets, so a question asked in a private chat was
+    # answered in the group — every member reading a reply to somebody else,
+    # and the asker seeing nothing.
+    resolved = await target_for(session, message.chat_id)
+    bound = [resolved] if resolved else list(targets)
     registry = build_registry()
     # ⚠️ THE REPLY TOOL IS BUILT HERE, BOUND TO THIS MESSAGE'S CHAT, AND ADDED
     # TO A COPY OF THE REGISTRY. It is deliberately absent from `ALL_TOOLS`,
     # because an unbound one can reach nobody and would be offered to every
     # scheduled run as a verb the model cannot use.
-    replier = reply_mod.build(targets=targets, session=session,
+    replier = reply_mod.build(targets=bound, session=session,
                               thread_key=message.thread_key)
     registry = registry.with_tool(replier)
 
@@ -395,4 +401,87 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     if result.status == "declined" and result.declined_reason:
         await replier.call({"text": f"I could not answer that. "
                                     f"{result.declined_reason}"})
-    return result.status
+    # ⚠️ THE OUTCOME NAMES WHERE IT WENT. `answered` alone cost a round trip:
+    # the run succeeded, the reply was delivered, and neither the log nor the
+    # asker could say to WHOM — so "it worked" and "you got nothing" were the
+    # same line. `bound` is an entity id, not a chat id, and it is the villa's
+    # own configuration rather than anything a message supplied.
+    where = bound[0] if bound else "nobody"
+    return f"{result.status} -> {where}{'' if resolved else ' (fallback)'}"
+
+
+# ── who to answer ───────────────────────────────────────────────────────────
+#: `chat_id -> notify entity`, with the moment it was learned. The entity
+#: registry changes when somebody adds a chat to the bot, which is rare, so a
+#: lookup per message would be a websocket round trip per message for an answer
+#: that is stable for weeks.
+_TARGETS: Dict[str, Tuple[str, float]] = {}
+
+TARGET_TTL_S: int = 15 * 60
+
+
+async def target_for(session: Any, chat_id: str,
+                     *, now: Optional[float] = None) -> str:
+    """The notify entity that reaches THIS chat, or `""`.
+
+    ⚠️ THIS IS WHY A REPLY MAY BE BOUND TO THE INBOUND MESSAGE AFTER ALL. The
+    objection was that a recipient taken from the payload is a recipient an
+    attacker can set, which is why `_chat_targets` read config instead — and the
+    consequence was measured on the villa: the owner asked from their private
+    chat and the answer arrived in the group, because config falls back to the
+    BRIEFING targets.
+
+    The resolution is that the chat id is not used as an ADDRESS. It is a lookup
+    key into the entity registry, and Home Assistant's `telegram_bot` platform
+    stamps each notify entity's `unique_id` as `<bot_id>_<chat_id>` — so only a
+    chat that HA has already been configured for can be reached at all. An
+    invented id resolves to nothing and the caller falls back. The sender was
+    already checked against `allowed_senders` several steps earlier, so this is
+    the second gate, not the first.
+
+    ⚠️ AND `telegram_bot.send_message` TAKES ONLY `entity_id`. There is no
+    `chat_id` and no `target` field on that service — verified against the
+    running instance, not assumed — so a bare chat id could not be addressed
+    even if it were trusted. The registry lookup is the only route.
+
+    ⚠️ RETURNS `""` RATHER THAN RAISING OR GUESSING. A villa whose bot has one
+    chat, or whose registry cannot be read, must fall back to configuration
+    rather than send somebody else's answer to whoever is first in the list.
+    """
+    key = str(chat_id)
+    at = _now() if now is None else now
+    cached = _TARGETS.get(key)
+    if cached and (at - cached[1]) < TARGET_TTL_S:
+        return cached[0]
+
+    try:
+        from reports.hass import HassClient
+        async with HassClient(session) as hass:
+            entries = await hass.command("config/entity_registry/list")
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        from reports.log import swallow
+        swallow("could not read the entity registry for a chat target", err)
+        return ""
+
+    found = ""
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, Mapping):
+            continue
+        if str(entry.get("platform") or "") != "telegram_bot":
+            continue
+        unique = str(entry.get("unique_id") or "")
+        # ⚠️ `rsplit`, NOT `split`. A chat id is NEGATIVE for a group —
+        # `8859711452_-1003932943049` — so splitting on the first underscore
+        # would compare the BOT id and match nothing, or worse, match one chat
+        # for every entity the bot owns.
+        if "_" in unique and unique.rsplit("_", 1)[1] == key:
+            found = str(entry.get("entity_id") or "")
+            break
+
+    _TARGETS[key] = (found, at)
+    return found
+
+
+def forget_targets() -> None:
+    """Drop the resolved map. For tests, and for a registry that has changed."""
+    _TARGETS.clear()

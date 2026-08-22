@@ -2270,11 +2270,20 @@ def _chat_dispatch(app: Any) -> Any:
 
 
 def _chat_targets(config: Dict[str, Any]) -> List[str]:
-    """Where a reply goes. ⚠️ FROM CONFIG, NEVER FROM THE MESSAGE.
+    """The FALLBACK for where a reply goes, when the asking chat cannot be
+    resolved.
 
-    A recipient derived from the inbound payload would be a recipient an
-    attacker can set. The reply tool is bound to these, and they are the
-    notify targets an owner configured for this villa.
+    ⚠️ IT USED TO BE THE ONLY ANSWER AND THAT WAS WRONG ON THE VILLA. The
+    reasoning was sound — a recipient taken from the payload is a recipient an
+    attacker can set — and the consequence was that a question asked in a
+    private chat was answered in the GROUP, because this falls through to the
+    BRIEFING targets. Every member read a reply to somebody else and the person
+    who asked saw nothing.
+
+    `chat.target_for` resolves the asking chat through the ENTITY REGISTRY
+    instead, so the chat id is a lookup key into a set Home Assistant was
+    configured with rather than an address. This remains the fallback for a
+    villa whose registry cannot be read.
     """
     raw = config.get("chat_targets")
     if isinstance(raw, list):
