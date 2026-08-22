@@ -242,11 +242,42 @@ def may_use_tool(policy: RunPolicy, tool_name: str, mode: str = "READ") -> Decis
     name = str(tool_name or "")
     if name not in policy.allowed_tools:
         return Decision("deny", f"{name!r} is not registered for this run")
-    if str(mode).upper() != "READ":
-        if policy.tier == "triage":
-            return Decision("deny", "triage may not call a write tool")
-        if not policy.act_enabled:
-            return Decision("deny", "actuation is disabled for this run")
+
+    kind = str(mode).upper()
+    if kind == "READ":
+        return Decision("allow", "registered and permitted")
+
+    # ⚠️ TRIAGE CANNOT WRITE AND CANNOT ACT. It is the volume tier and the one
+    # most likely to be pointed at a cheaper model; it ranks and escalates.
+    if policy.tier == "triage":
+        return Decision("deny", "triage may not call a write tool")
+
+    # ⚠️ `WRITE` IS NOT `ACT`, AND CONFLATING THEM MADE THE PRODUCT UNUSABLE.
+    # This tested `mode != "READ"` and then demanded `act_enabled` — so every
+    # WRITE tool was gated on the ACTUATION switch, which ships off and must.
+    # Measured: the model could not call `reply` at all, so the villa could
+    # never answer mid-run; and `raise_concern` — the one write on the whole
+    # reasoning path, the thing this system exists to produce — would have been
+    # denied for the same reason the moment PH-3 turned it on.
+    #
+    # The two are different in kind. A WRITE records something a person then
+    # reads: a concern, an answer into a conversation somebody opened. An ACT
+    # changes the villa. `act_enabled` guards the second, and the deny-list in
+    # `may_act` guards it again regardless of that switch.
+    #
+    # ⚠️ THE MODE VOCABULARY BECAME THREE-VALUED IN 2.623.0 AND THIS TEST DID
+    # NOT FOLLOW. `contracts.TOOL_MODE` gained `ACT` so the MCP surface could
+    # exclude actuation by construction, and the gate kept asking a
+    # two-valued question.
+    if kind == "ACT" and not policy.act_enabled:
+        return Decision("deny", "actuation is disabled for this run")
+
+    # ⚠️ AN UNKNOWN MODE DENIES. A tool whose mode nobody has classified is a
+    # tool nobody has reviewed, and defaulting it to the permissive side is how
+    # a fourth mode would arrive already allowed.
+    if kind not in contracts.TOOL_MODE:
+        return Decision("deny", f"unknown tool mode {kind!r}")
+
     return Decision("allow", "registered and permitted")
 
 

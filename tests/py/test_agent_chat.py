@@ -655,3 +655,61 @@ def test_the_lookup_is_cached_rather_than_asked_per_message() -> None:
     finally:
         hass_mod.HassClient = original               # type: ignore[assignment]
     assert fake.calls == 1, f"asked the registry {fake.calls} times"
+
+
+def test_a_PROSE_answer_is_delivered_even_though_no_tool_was_called() -> None:
+    """⚠️ THE BUG THAT COST THE WHOLE FEATURE, AND EVERY INSTRUMENT SAID
+    SUCCESS.
+
+    A model asked a question answers in prose; it does not call a tool to
+    speak. `run_loop` returns that prose in `result.text` and stops — and
+    nothing sent it. The villa logged `answered`, the run had genuinely read
+    the question, called tools and reasoned, and the reply reached NOBODY in
+    either chat.
+    """
+    from fake_provider import FakeProvider, says
+
+    sent: List[str] = []
+
+    class Recording(reply_mod.ReplyTool):
+        async def _send(self, body: str) -> bool:
+            sent.append(body)
+            return True
+
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = Recording  # type: ignore[misc]
+    try:
+        got = _handle(_event(),
+                      provider=FakeProvider([says("The pump is fine.")]))
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+
+    assert got.startswith("answered"), got
+    assert sent == ["The pump is fine."], (
+        f"the answer was never delivered: {sent}")
+
+
+def test_an_answer_the_model_ALREADY_replied_is_not_sent_twice() -> None:
+    """⚠️ The model has a `reply` tool and may use it mid-run — say something
+    now, keep working. Sending `result.text` unconditionally would answer
+    twice, which reads as a stutter and bills twice for one question."""
+    from fake_provider import FakeProvider, asks, says
+
+    sent: List[str] = []
+
+    class Recording(reply_mod.ReplyTool):
+        async def _send(self, body: str) -> bool:
+            sent.append(body)
+            return True
+
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = Recording  # type: ignore[misc]
+    try:
+        _handle(_event(), provider=FakeProvider([
+            asks("reply", {"text": "Looking now."}),
+            says("Looking now."),
+        ]))
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+
+    assert sent == ["Looking now."], f"answered twice: {sent}"

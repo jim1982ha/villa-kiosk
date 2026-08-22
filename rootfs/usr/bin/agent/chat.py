@@ -381,6 +381,26 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
         messages=context_for(message),
         config=config, actor=role, trigger="chat", kind="chat")
 
+    # ⚠️ THE ANSWER ITSELF IS DELIVERED HERE, AND FORGETTING THAT COST THE
+    # WHOLE FEATURE. `run_loop` returns the model's final prose in
+    # `result.text` and stops; nothing downstream sent it. So a run that
+    # WORKED — question read, tools called, answer written — logged `answered`
+    # and reached nobody, in either chat. Measured on the villa, and the most
+    # expensive kind of bug in this session precisely because every instrument
+    # said success.
+    #
+    # ⚠️ ONLY IF THE MODEL DID NOT ALREADY REPLY. It has a `reply` tool and may
+    # use it; `replier.sent` is the record of that. Sending unconditionally
+    # would answer twice, which reads as a stutter and bills twice for one
+    # question.
+    #
+    # ⚠️ AND THE `reply` TOOL STAYS ON THE REGISTRY EVEN SO. It is what lets a
+    # model answer MID-RUN — say something now, keep working — and removing it
+    # in favour of this line would take that away. The two are the same channel
+    # reached two ways, not a duplicate.
+    if result.status == "answered" and result.text and not replier.sent:
+        await replier.call({"text": result.text})
+
     # ⚠️ A DECLINE MUST NOT BE SILENCE — SOMEBODY IS WAITING FOR AN ANSWER.
     # The degradation ladder's rule is that nothing on it is silent, and in
     # chat the person who typed the question IS the instrument: they cannot

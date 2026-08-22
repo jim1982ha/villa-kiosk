@@ -68,9 +68,13 @@ class _Leaky(BaseTool):
 
 class _Act(BaseTool):
     name = "act_service"
-    description = "A WRITE tool, to prove the registry refuses it when unarmed."
+    description = "An ACT tool, to prove the registry refuses it when unarmed."
     inputSchema = {"type": "object", "properties": {}}
-    mode = "WRITE"
+    # ⚠️ `ACT`, NOT `WRITE`. This fixture was declared WRITE while the gate
+    # asked `mode != "READ"`, which made the two agree for the wrong reason and
+    # helped hide that every WRITE — `reply`, `raise_concern` — was gated on the
+    # ACTUATION switch. A tool named `act_service` actuates; that is the mode.
+    mode = "ACT"
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
         return [text("acted")]
@@ -184,7 +188,7 @@ def test_a_hallucinated_tool_is_DATA_not_an_error() -> None:
     assert sent[0]["error"]["code"] == "not_found"
 
 
-def test_a_WRITE_tool_is_refused_when_actuation_is_off() -> None:
+def test_an_ACT_tool_is_refused_when_actuation_is_off() -> None:
     p = FakeProvider([asks("act_service"), says("I cannot act.")])
     out = _run(p)
     sent = p.calls[1]["messages"][-1]["content"][0]["content"]

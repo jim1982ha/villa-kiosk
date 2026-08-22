@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from agent import contracts, policy  # noqa: E402
 
-TOOLS = ("read_villa", "read_state", "act_service")
+TOOLS = ("read_villa", "read_state", "act_service", "raise_concern", "reply")
 
 
 def _policy(**cfg: Any) -> policy.RunPolicy:
@@ -222,10 +222,48 @@ def test_an_unregistered_tool_is_denied() -> None:
     assert policy.may_use_tool(_policy(), "").verdict == "deny"
 
 
-def test_a_write_tool_needs_actuation_enabled() -> None:
+def test_an_ACT_tool_needs_actuation_enabled() -> None:
     assert policy.may_use_tool(_policy(act_enabled=False),
-                               "act_service", "WRITE").verdict == "deny"
-    assert policy.may_use_tool(_policy(), "act_service", "WRITE").verdict == "allow"
+                               "act_service", "ACT").verdict == "deny"
+    assert policy.may_use_tool(_policy(), "act_service", "ACT").verdict == "allow"
+
+
+def test_a_WRITE_tool_does_NOT_need_actuation_enabled() -> None:
+    """⚠️ THIS TEST ASSERTED THE OPPOSITE AND THE OPPOSITE WAS THE BUG.
+
+    `may_use_tool` asked `mode != "READ"` and then demanded `act_enabled`, so
+    every WRITE was gated on the ACTUATION switch — which ships off and must.
+    Measured on the villa: the model could not call `reply` at all, so the house
+    could never answer mid-run; and `raise_concern`, the one write on the whole
+    reasoning path and the thing this system exists to produce, would have been
+    denied the same way the moment PH-3 turned it on.
+
+    ⚠️ THE TWO ARE DIFFERENT IN KIND, and the plan says so in one line:
+    `act_enabled: false` leaves the agent "reading and reasoning but unable to
+    TOUCH THE VILLA". A WRITE records something a person then reads. An ACT
+    changes the property. Neither replying into a conversation somebody opened
+    nor filing a concern touches anything.
+
+    The old test was not wrong about the code; it was wrong about the rule, and
+    it made the defect look deliberate for four releases.
+    """
+    assert policy.may_use_tool(_policy(act_enabled=False),
+                               "raise_concern", "WRITE").verdict == "allow"
+    assert policy.may_use_tool(_policy(act_enabled=False),
+                               "reply", "WRITE").verdict == "allow"
+
+
+def test_triage_may_neither_write_nor_act_whatever_the_switch_says() -> None:
+    for mode in ("WRITE", "ACT"):
+        snap = policy.for_run({"act_enabled": True}, tier="triage",
+                              tool_names=TOOLS)
+        assert policy.may_use_tool(snap, "act_service", mode).verdict == "deny"
+
+
+def test_an_unknown_MODE_denies_rather_than_defaulting_open() -> None:
+    """A tool whose mode nobody has classified is one nobody has reviewed."""
+    assert policy.may_use_tool(_policy(), "act_service", "TRANSFER").verdict == "deny"
+    assert policy.may_use_tool(_policy(), "act_service", "").verdict == "deny"
 
 
 def test_a_read_tool_is_allowed_when_registered() -> None:
