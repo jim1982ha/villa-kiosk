@@ -58,7 +58,7 @@ NOT_ENTITY_IDS: Set[str] = {
     "lock.unlock", "todo.add_item",
     # HA SERVICE names used as policy fixtures — `light.turn_off` is a service
     # call, not an entity. Same class as `lock.unlock` directly above.
-    "light.turn_off", "fan.turn_off", "switch.turn_off",
+    "light.turn_off", "fan.turn_off", "switch.turn_off", "switch.turn_on",
     "scene.active", "scene.block", "scene.clear", "scene.collisions",
     "scene.dispose", "scene.environment", "scene.get", "scene.js",
     "scene.lights", "scene.materials", "scene.meshes", "scene.on",

@@ -1,3 +1,9 @@
+## 2.647.0
+
+### Fixed — the previous release shipped with one test red
+A service name in a new fixture was read as an entity id by the hard-rules pin.
+Classified correctly; nothing about the release's behaviour changes.
+
 ## 2.646.0
 
 ### Added — the agent can act, on nothing, until you say otherwise
