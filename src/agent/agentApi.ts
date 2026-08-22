@@ -19,6 +19,7 @@
  */
 
 import { ingressPath } from "@/ha/ingress";
+import type { Concern } from "@/agent/agentTypes";
 
 /** Wire name (what the store stores) → client name (what this app calls it). */
 const AGENT_WIRE_KEYS = {
@@ -100,4 +101,31 @@ export async function loadAgentConfig(
     ? (d.config as Record<string, unknown>)
     : {};
   return { config: fromWire(raw), rev: String(d.rev ?? "0") };
+}
+
+/**
+ * Read the agent's concerns. ⚠️ Envelope key `concerns`, not `config` —
+ * `_json_store_handlers` takes the key as an ARGUMENT, so a client written by
+ * copying a sibling inherits the wrong one and the GET then parses to nothing.
+ * That failure is invisible: a concern store that reads as empty renders
+ * exactly like a villa with nothing wrong, which is the correct display for a
+ * subsystem that has never run. Pinned by `test_store_envelope`.
+ */
+export async function loadConcerns(): Promise<Concern[]> {
+  const r = await fetch(ingressPath("agent-concerns"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => ({}))) as { concerns?: unknown };
+  const inner = (d.concerns && typeof d.concerns === "object")
+    ? (d.concerns as { concerns?: unknown })
+    : {};
+  const rows = Array.isArray(inner.concerns) ? inner.concerns : [];
+  return rows.filter((c): c is Concern => !!c && typeof c === "object");
+}
+
+/** Runs the agent has made, most recent last. Any authorised session. */
+export async function loadAgentRuns(): Promise<Record<string, string>[]> {
+  const r = await fetch(ingressPath("agent-runs"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => ({}))) as { runs?: unknown };
+  return Array.isArray(d.runs) ? (d.runs as Record<string, string>[]) : [];
 }

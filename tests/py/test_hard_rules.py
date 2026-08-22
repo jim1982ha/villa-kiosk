@@ -81,6 +81,10 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.a", "sensor.b", "sensor.moon_phase",
     "fan.ceiling_fan_",  # a PREFIX in a matcher, not an id
     "todo.shopping_list",  # HA's own default list name
+    # `test_agent_mcp.py`. A deliberately fictional id, and the test's whole
+    # point is that a tool result carrying ANY raw id is refused — so the id
+    # must be a real-SHAPED one and must not be a real device.
+    "light.some_room_lamp",
     # `observe/journal.py` and its tests. Every one is a placeholder chosen to
     # be obviously fictional — the SHAPE of a state_changed event is what is
     # under test, and the allow-list comment needs *an* entity to point at.

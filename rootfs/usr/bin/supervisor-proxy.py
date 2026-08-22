@@ -2106,6 +2106,147 @@ agent_config_get_handler, agent_config_put_handler = _json_store_handlers(
     AGENT_CONFIG_FILE, "config", {}, AGENT_CONFIG_MAX_BYTES,
     "agent configuration")
 
+# ⚠️ CONCERNS ARE SERVER-WRITTEN, SO THE PUT IS BUILT AND NOT ROUTED — the same
+# decision reports-history documents, for the same reason. A concern is the
+# agent's own claim with its own evidence rows; an endpoint letting a browser
+# rewrite one would make the whole record worthless as a description of what the
+# agent concluded. Dismissing a concern is a LIFECYCLE transition (TASK-062),
+# not a document edit, and gets its own verb when it is built.
+AGENT_CONCERNS_FILE = "/data/vesta/concerns.json"
+AGENT_CONCERNS_MAX_BYTES = 2_000_000
+agent_concerns_get_handler, _agent_concerns_put_unrouted = _json_store_handlers(
+    AGENT_CONCERNS_FILE, "concerns", {"concerns": []}, AGENT_CONCERNS_MAX_BYTES,
+    "agent concerns")
+
+
+async def agent_runs_handler(request: web.Request) -> web.Response:
+    """What the agent has been doing: one row per run, most recent last.
+
+    ⚠️ READABLE BY ANY AUTHORISED SESSION, WHERE `/agent-audit` IS OWNER-ONLY,
+    and the difference is what each carries. A run row says a run started and
+    how it ended — the reader of a tablet is entitled to know the supervisor is
+    alive. The audit carries argument digests, tool names and refusal reasons,
+    which is a description of what the villa is being asked about.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    from agent import audit as agent_audit
+    rows = [r for r in agent_audit.rows(500)
+            if str(r.get("tool") or "").startswith("run:")]
+    return web.json_response({"runs": rows[-100:],
+                              "summary": agent_audit.summary()})
+
+
+async def agent_audit_handler(request: web.Request) -> web.Response:
+    """The append-only ledger, in full. Owner-only.
+
+    ⚠️ AND `unfinished` IS THE FIELD WORTH READING. A pair with no outcome is an
+    action that started and never reported back — a crash mid-action or one
+    still running — and it is the single most useful number the ledger produces.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read the agent audit.")
+    from agent import audit as agent_audit
+    return web.json_response({
+        "rows": agent_audit.rows(500),
+        "unfinished": agent_audit.unfinished(),
+        "summary": agent_audit.summary(),
+    })
+
+
+async def agent_run_now_handler(request: web.Request) -> web.Response:
+    """Start one run immediately. Owner-only, because it spends the budget.
+
+    ⚠️ `{"preview": true}` ASSEMBLES THE VILLA DOCUMENT AND CALLS NO PROVIDER,
+    which is the mode that matters before anything is switched on: it is how an
+    operator reads what would be SENT to a model before agreeing to send it.
+    The reports tab's own preview exists for the same reason and the wording
+    here is deliberately the same, so the two panels teach one habit.
+
+    ⚠️ IT DECLINES RATHER THAN FAILING WHEN NOTHING IS CONFIGURED. No key, no
+    model, the master switch off and a spent budget are all correct outcomes
+    with a reason a person can act on, and collapsing them into a 500 would make
+    an unconfigured install look broken.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may start an agent run.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    from agent import config as agent_config
+    stored = _read_json_store(AGENT_CONFIG_FILE, {})
+    config = agent_config.view(stored.get("config") if isinstance(stored, dict)
+                               else {})
+    document = await _agent_document(request)
+    if body.get("preview"):
+        return web.json_response({"ok": True, "preview": True,
+                                  "document": document,
+                                  "chars": len(document)})
+    if not config.get("enabled"):
+        return web.json_response({"ok": False, "status": "declined",
+                                  "reason": "the agent is switched off "
+                                            "(agent.enabled)"})
+    return web.json_response(await _agent_run(config, document))
+
+
+async def _agent_document(request: web.Request) -> str:
+    """The Villa Document as the agent would see it right now.
+
+    ⚠️ NEVER RAISES — the same contract `reports_diagnostics_handler` states.
+    The panel exists to be readable exactly when something is wrong, so a Home
+    Assistant restart makes it report a thin document rather than a 500.
+    """
+    try:
+        from observe import snapshot
+        return snapshot.villa_document(
+            profile_text=snapshot.profile(),
+            delta_text=snapshot.delta())
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        print(f"[supervisor-proxy] villa document failed: {err}", flush=True)
+        return f"The villa document could not be assembled: {err}"
+
+
+async def _agent_run(config: Dict[str, Any], document: str) -> Dict[str, Any]:
+    """One run through the registry loop. Declines with a reason, never raises."""
+    try:
+        from agent import policy as agent_policy
+        from agent.llm import anthropic_sdk
+        from agent.registry import build_registry, run as run_loop
+
+        provider = anthropic_sdk.build(api_key=reports_secrets.get("anthropic") or "")
+        if provider is None or not provider.configured():
+            return {"ok": False, "status": "declined",
+                    "reason": "no model provider is configured"}
+        registry = build_registry()
+        policy = agent_policy.for_run(
+            config, tier="reason",
+            tool_names=[t["name"] for t in registry.describe()])
+        result = await run_loop(
+            run_id=f"now{int(time.time())}", provider=provider,
+            registry=registry, policy=policy,
+            model=str(config.get("model_reason") or ""),
+            system=[{"type": "text", "text": document}],
+            messages=[{"role": "user",
+                       "content": "Report anything here worth a person's "
+                                  "attention, or say that nothing is."}],
+            config=config, actor="owner", trigger="manual")
+        return {"ok": result.status == "answered", "status": result.status,
+                "reason": result.declined_reason, "text": result.text,
+                "turns": result.turns, "toolCalls": result.tool_calls,
+                "usage": result.usage}
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        print(f"[supervisor-proxy] agent run failed: {err}", flush=True)
+        return {"ok": False, "status": "failed", "reason": str(err)}
+
+
 # ── /agent-mcp · the extraction seam ────────────────────────────────────────
 # ⚠️ THE ONE ROUTE IN THIS FILE WITH NO SESSION CHECK AND NO RBAC, AND THAT IS
 # NOT A GAP. Its caller is not a browser and holds no `vk_session`: it is
@@ -2582,6 +2723,10 @@ def main() -> None:
     app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_post("/model-upload", model_upload_handler)
     app.router.add_get("/agent-config", agent_config_get_handler)
+    app.router.add_get("/agent-concerns", agent_concerns_get_handler)
+    app.router.add_get("/agent-runs", agent_runs_handler)
+    app.router.add_get("/agent-audit", agent_audit_handler)
+    app.router.add_post("/agent-run-now", agent_run_now_handler)
     app.router.add_get("/device-config", device_config_get_handler)
     app.router.add_get("/fm-data", fm_data_get_handler)
     app.router.add_put("/fm-data", fm_data_put_handler)

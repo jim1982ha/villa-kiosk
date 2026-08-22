@@ -1,3 +1,12 @@
+## 2.624.0
+
+### Added — the agent's endpoints, and the one nginx block that must not exist
+`/agent-concerns`, `/agent-runs`, `/agent-audit` and `/agent-run-now`, the last
+two owner-only. Each gets its own exact nginx location rather than one tidy
+`/agent-` prefix block, because a prefix block would also match `/agent-mcp` and
+publish the tool surface to any browser tab — silently, with every test green.
+The security suite now asserts that prefix block does not exist.
+
 ## 2.623.0
 
 ### Added — an external agent can now reach the read tools, behind the same gate
