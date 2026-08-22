@@ -1,3 +1,11 @@
+## 2.646.0
+
+### Added — the agent can act, on nothing, until you say otherwise
+Actuation ships switched off with an empty device list, and the two are AND-ed:
+turning it on authorises nothing by itself. Anything that could let somebody in
+or silence an alarm is offered for a person to confirm and never executed, at any
+confidence. Repeating an action that already happened is refused.
+
 ## 2.645.0
 
 ### Added — the villa's own conclusions on the wall, with two buttons
