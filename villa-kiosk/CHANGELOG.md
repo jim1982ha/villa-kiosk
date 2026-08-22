@@ -1,3 +1,14 @@
+## 2.622.0
+
+### Added — the agent loop, runnable end to end with no network
+
+The registry and the run loop, exercised by a scripted fake provider: budget
+exhaustion, an open breaker, a raising tool, a hallucinated one, a refused write
+and a repeat loop all have cases and none needs an API key. Running it for the
+first time found that every tool error was being scrubbed away to nothing before
+the model could read it, and that error codes were having their underscores
+stripped into values outside the contract.
+
 ## 2.621.0
 
 ### Added — the provider seam, and a credential that would have reached the log

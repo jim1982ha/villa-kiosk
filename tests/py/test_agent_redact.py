@@ -209,3 +209,59 @@ def test_the_allow_list_carries_no_identifier_key() -> None:
                       "summary", "body", "detail", "message"):
         assert forbidden not in redact.ALLOWED_FIELDS, (
             f"{forbidden!r} must never be on the tool-result allow-list")
+
+
+# ── the error envelope is a SCOPED exception ───────────────────────────────
+
+def test_a_tool_error_SURVIVES_scrubbing() -> None:
+    """⚠️ IT DID NOT, AND THAT WAS A REAL BUG. `fail()` returns
+    `{"error": {"code", "message"}}` and neither name was on the allow-list, so
+    every tool error was scrubbed to nothing and the model received an EMPTY
+    result — no error to read, no reason to route around, silence where a
+    refusal should have been. Found by the runtime loop's first end-to-end
+    test."""
+    out = redact.scrub({"error": {"code": "not_found", "message": "no such d9"}})
+    assert out == {"error": {"code": "not_found", "message": "no such d9"}}
+    assert redact.audit(out) == []
+
+
+def test_message_is_permitted_ONLY_inside_an_error_envelope() -> None:
+    """⚠️ THE SCOPE IS THE POINT. `ALLOWED_FIELDS` is flat and by NAME, so
+    admitting `message` globally would also admit a villa field called
+    `message` — guest-authored free text straight into the transcript, which is
+    what `read_ledger` strips at source."""
+    assert "message" not in redact.ALLOWED_FIELDS
+    assert "code" not in redact.ALLOWED_FIELDS
+    # Top level: dropped.
+    assert redact.scrub({"message": "a guest wrote this"}) == {}
+    assert redact.audit({"message": "a guest wrote this"})
+
+
+def test_an_unlisted_key_inside_the_error_envelope_is_dropped() -> None:
+    out = redact.scrub({"error": {"code": "internal", "message": "x",
+                                  "raw_request": "x-api-key: sk-live"}})
+    assert out["error"] == {"code": "internal", "message": "x"}
+    assert "sk-live" not in repr(out)
+    assert any("raw_request" in p
+               for p in redact.audit({"error": {"raw_request": "x"}}))
+
+
+def test_an_error_CODE_is_validated_not_scrubbed() -> None:
+    """⚠️ `inert` replaces `_` with a space — correct for villa text and
+    catastrophic for an enum. `not_found` became `not found`, which is not a
+    member of TOOL_ERROR_CODE, so the model would receive a code it was never
+    told about. Found by an end-to-end test, not by review."""
+    out = redact.scrub({"error": {"code": "not_found", "message": "x"}})
+    assert out["error"]["code"] == "not_found", "the underscore must survive"
+    # ...and a code outside the contract is replaced, not passed through.
+    assert redact.scrub({"error": {"code": "banana"}})["error"]["code"] == "internal"
+    assert redact.audit({"error": {"code": "banana"}})
+
+
+def test_an_error_message_is_still_scrubbed_like_any_scalar() -> None:
+    out = redact.scrub({"error": {"code": "internal",
+                                  "message": "Pump_1 failed *badly*\x00"}})
+    assert "_" not in out["error"]["message"]
+    assert "*" not in out["error"]["message"]
+    assert "\x00" not in out["error"]["message"]
+    assert redact.audit(out) == []

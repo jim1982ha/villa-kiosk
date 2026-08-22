@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
+from agent import contracts
 from reports.narrate.style import inert
 
 #: Keys a tool result may carry into the transcript. Everything else is dropped
@@ -65,7 +66,22 @@ ALLOWED_FIELDS: Tuple[str, ...] = (
     "attributes", "counts", "cache_prefix_chars", "limit", "window", "type",
     "text", "json", "temperature", "hvac_action", "hvac_mode", "preset_mode",
     "fan_mode", "battery_level", "current_position",
+    "error",
 )
+
+#: ⚠️ A SCOPED EXCEPTION, NOT A GLOBAL ONE, AND THE DISTINCTION IS THE WHOLE
+#: POINT. `fail()` returns `{"error": {"code", "message"}}`, and omitting those
+#: names scrubbed every tool error to NOTHING — the model received an empty
+#: result where a refusal should have been, which is exactly the failure "a tool
+#: error is DATA, not an exception" exists to prevent. Found by the loop's first
+#: end-to-end test, not by review.
+#:
+#: But `message` cannot join `ALLOWED_FIELDS` globally: that list is flat and by
+#: NAME, so admitting it would also admit a villa field called `message` —
+#: guest-authored free text straight into the transcript, which is what
+#: `read_ledger` strips at source. So these two names are permitted ONLY inside
+#: an `error` envelope, and nowhere else.
+ERROR_FIELDS: Tuple[str, ...] = ("code", "message")
 
 #: Control characters that are not a newline or a tab. A model reads them as
 #: nothing; a terminal or a downstream renderer may not.
@@ -133,6 +149,29 @@ def scrub(node: Any, _depth: int = 0) -> Any:
             if key not in node:
                 continue
             value = node[key]
+            if key == "error" and isinstance(value, Mapping):
+                out_error: Dict[str, Any] = {}
+                # ⚠️ THE CODE IS VALIDATED, NOT TRANSFORMED, AND SCRUBBING IT
+                # MANGLED IT. `inert` replaces `_` with a space — correct for
+                # villa text, catastrophic for an enum: `not_found` became
+                # `not found`, which is not a member of
+                # `contracts.TOOL_ERROR_CODE` and so is a code the model was
+                # never told about. It is OUR vocabulary, not the villa's, so
+                # it is checked against the contract and passed through
+                # verbatim or replaced with `internal`.
+                if "code" in value:
+                    raw = str(value["code"])
+                    out_error["code"] = (
+                        raw if contracts.is_valid(raw, contracts.TOOL_ERROR_CODE)
+                        else "internal")
+                # The MESSAGE is free text and IS scrubbed like any scalar.
+                if "message" in value:
+                    cleaned = _scalar(value["message"])
+                    if cleaned is not None:
+                        out_error["message"] = cleaned
+                if out_error:
+                    out[key] = out_error
+                continue
             if isinstance(value, (Mapping, list, tuple)):
                 nested = scrub(value, _depth + 1)
                 if nested not in (None, {}, []):
@@ -188,7 +227,10 @@ def audit(payload: Any) -> List[str]:
                 if not isinstance(key, str):
                     problems.append(f"{path}: non-string key {key!r}")
                     continue
-                if key not in ALLOWED_FIELDS:
+                # The scoped exception, mirrored in the audit so the two agree.
+                permitted = (ALLOWED_FIELDS if not path.endswith(".error")
+                             else ERROR_FIELDS)
+                if key not in permitted:
                     problems.append(f"{path}.{key}: not on the allow-list")
                 walk(value, f"{path}.{key}", depth + 1)
         elif isinstance(node, (list, tuple)):
@@ -197,7 +239,14 @@ def audit(payload: Any) -> List[str]:
         elif isinstance(node, str):
             if any(ch in _CONTROL for ch in node):
                 problems.append(f"{path}: control characters survived")
-            if node != inert(node):
+            # ⚠️ An error CODE is exempt from the markup check for the same
+            # reason it is exempt from `inert`: it is a contract enum whose
+            # members legitimately contain underscores. It is validated
+            # against `TOOL_ERROR_CODE` instead, which is stricter.
+            if path.endswith(".error.code"):
+                if not contracts.is_valid(node, contracts.TOOL_ERROR_CODE):
+                    problems.append(f"{path}: {node!r} is not a contract code")
+            elif node != inert(node):
                 problems.append(f"{path}: markup-active characters survived")
             if len(node) > MAX_FIELD_CHARS + len(TRUNCATION_MARK):
                 problems.append(f"{path}: longer than the field cap")
