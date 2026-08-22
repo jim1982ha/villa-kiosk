@@ -82,7 +82,7 @@ def profile(*, floors: Sequence[str] = (), areas: Sequence[str] = (),
             metered: Sequence[Mapping[str, str]] = (),
             helpers: Sequence[str] = (),
             equipment: Sequence[Mapping[str, str]] = (),
-            absent_capabilities: Sequence[str] = ()) -> str:
+            absent_capabilities: Optional[Sequence[str]] = None) -> str:
     """The stable half. A pure function of the villa's structure.
 
     ⚠️ EVERY ARGUMENT IS A FACT ABOUT THE PROPERTY THAT CHANGES WHEN THE
@@ -141,14 +141,27 @@ def profile(*, floors: Sequence[str] = (), areas: Sequence[str] = (),
     # is a claim worth making explicitly: an absent section reads as an
     # unanswered question, and the whole point of this block is that the model
     # knows the shape of its own blindness before it starts reasoning.
+    #
+    # ⚠️ AND IT IS THREE-VALUED, BECAUSE THE TWO-VALUED VERSION OVER-CLAIMED AND
+    # THE AGENT CAUGHT IT ON THE REFERENCE VILLA. `None` means nobody has
+    # surveyed this property's blind spots; `[]` means somebody did and found
+    # none. Both used to print "Nothing known to be unmeasured", which reads as
+    # FULL COVERAGE — and its own words were quoted back at me: "it is only a
+    # statement about gaps someone has already catalogued, and this property has
+    # evidently catalogued none." Exactly the failure the rest of this block
+    # exists to prevent, in the line that claims to prevent it.
     lines.append("What this villa cannot be asked about:")
-    if absent_capabilities:
+    if absent_capabilities is None:
+        lines.append("  - NOT SURVEYED. Nobody has catalogued this property's "
+                     "blind spots, so treat every absence below as unexplained "
+                     "rather than as coverage.")
+    elif absent_capabilities:
         for sentence in absent_capabilities:
             text = str(sentence).strip()
             if text:
                 lines.append(f"  - {text}")
     else:
-        lines.append("  - Nothing known to be unmeasured.")
+        lines.append("  - Surveyed, and nothing was found to be unmeasured.")
     lines.append("")
     lines.append(CACHE_BREAKPOINT)
     return "\n".join(lines)

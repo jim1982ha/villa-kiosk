@@ -400,3 +400,32 @@ def test_limits_are_clamped_rather_than_trusted() -> None:
                        ("banana", read_tools.DEFAULT_SALIENT_LIMIT),
                        (None, read_tools.DEFAULT_SALIENT_LIMIT)):
         assert _run(tool.call({"limit": junk}))[0]["json"]["limit"] == want
+
+
+def test_an_UNWIRED_tool_REFUSES_rather_than_returning_empty() -> None:
+    """⚠️ `feedback_instruments-never-skip`, MEASURED ON THE VILLA.
+
+    A tool built with no data source returned `{"salient": []}` and
+    `{"lines": []}` — identical to "this villa has nothing unusual" and "no log
+    lines in seven days", which are the OPPOSITE facts. The agent, asked about a
+    pump on a property journalling 17,845 entries, had to infer the difference
+    from the shape of the silence: "getting neither scored nor unscorable
+    entities is unusual in itself". It was right, and it should never have had
+    to guess.
+
+    ⚠️ `read_ledger` IS THE EXCEPTION AND IS NOT A BUG: it falls back to reading
+    the real module, so unwired it still answers truthfully. That asymmetry is
+    exactly why one paragraph of that reply had content and the rest did not.
+    """
+    import asyncio
+
+    from agent.tools import logs as logs_mod
+    from agent.tools import read as read_mod
+
+    for tool in (read_mod.ReadSalient(), logs_mod.LOG_TOOLS[0]()):
+        blocks = asyncio.run(tool.call({"window_hours": 24}))
+        assert blocks and "error" in blocks[0], (
+            f"{tool.name} returned {blocks!r} with no source — indistinguishable "
+            f"from a quiet villa")
+        assert blocks[0]["error"]["code"] == "unavailable"
+        assert "not connected" in blocks[0]["error"]["message"]

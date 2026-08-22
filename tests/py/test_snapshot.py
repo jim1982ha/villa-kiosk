@@ -122,9 +122,33 @@ def test_a_missing_breakpoint_caches_nothing_rather_than_guessing() -> None:
 def test_the_absent_block_is_always_present_even_when_empty() -> None:
     """⚠️ "Nothing is unmeasured here" is a claim worth making. An absent
     section reads as an unanswered question."""
-    text = snapshot.profile(floors=["Ground"])
+    text = snapshot.profile(floors=["Ground"], absent_capabilities=[])
     assert "What this villa cannot be asked about:" in text
-    assert "Nothing known to be unmeasured." in text
+    assert "Surveyed, and nothing was found to be unmeasured." in text
+
+
+def test_an_UNSURVEYED_villa_does_not_claim_coverage() -> None:
+    """⚠️ THE AGENT CAUGHT THIS ON THE REFERENCE VILLA AND QUOTED IT BACK.
+
+    "The profile's line 'nothing known to be unmeasured' reads like full
+    coverage, but it is only a statement about gaps someone has already
+    catalogued, and this property has evidently catalogued none."
+
+    Correct, and it was the same over-claim in the very line written to prevent
+    over-claiming. `None` (nobody surveyed) and `[]` (surveyed, clean) printed
+    the same sentence, and the difference is the whole value of the block.
+    """
+    text = snapshot.profile(floors=["Ground"])
+    assert "NOT SURVEYED" in text
+    assert "Nothing known to be unmeasured" not in text
+    assert "unexplained" in text
+
+
+def test_the_two_empty_states_read_DIFFERENTLY() -> None:
+    """The guard against somebody collapsing them back into one branch."""
+    unsurveyed = snapshot.profile(floors=["Ground"])
+    clean = snapshot.profile(floors=["Ground"], absent_capabilities=[])
+    assert unsurveyed != clean
 
 
 def test_a_thin_deployment_produces_a_NON_EMPTY_absent_block() -> None:

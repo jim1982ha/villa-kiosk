@@ -85,6 +85,14 @@ class ReadLogs(BaseTool):
         self._refs = refs
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        # ⚠️ REFUSES WHEN UNWIRED. "Zero matching lines in seven days" and
+        # "nobody connected me to the log" are the same answer to a reader and
+        # opposite facts. See `read.py`'s ReadSalient for the measurement.
+        if not callable(self._source):
+            return [fail("unavailable",
+                         "this tool is not connected to the villa's logs, so "
+                         "an empty result here means a fault rather than a "
+                         "quiet week")]
         hours = _clamp(args.get("window_hours"), 24, 1, MAX_WINDOW_HOURS)
         want = _clamp(args.get("context_lines"), DEFAULT_CONTEXT_LINES,
                       1, MAX_CONTEXT_LINES)

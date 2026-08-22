@@ -96,7 +96,20 @@ class ReadSalient(BaseTool):
         self._scorer = scorer
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
-        scored = self._scorer() if callable(self._scorer) else []
+        # ⚠️ AN UNWIRED TOOL REFUSES; IT DOES NOT RETURN AN EMPTY LIST. Both
+        # read as `{"salient": []}` to a model, and the two mean opposite
+        # things: "this villa has nothing unusual" against "nobody connected me
+        # to the villa". Measured — the agent was asked about a pump on a
+        # property journalling 17,845 entries and had to INFER the difference
+        # from the shape of the silence: "getting neither scored nor unscorable
+        # entities is unusual in itself". It was right, and it should never have
+        # had to guess. `feedback_instruments-never-skip`.
+        if not callable(self._scorer):
+            return [fail("unavailable",
+                         "this tool is not connected to the observation floor, "
+                         "so it can tell you nothing about this villa — that is "
+                         "a fault here, not a quiet property")]
+        scored = self._scorer()
         if not isinstance(scored, Sequence):
             return [fail("unavailable", "salience produced no ranking")]
         limit = _clamp_int(args.get("limit"), DEFAULT_SALIENT_LIMIT,
