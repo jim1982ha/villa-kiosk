@@ -580,11 +580,11 @@ def test_state_carries_no_event_payloads() -> None:
     ids and operator free text."""
     import json
 
-    _collect([_event(rule_id="ROI-01", report_bucket="Emma's bedroom lamp",
-                     entity_id="light.emmas_bedroom")])
+    _collect([_event(rule_id="ROI-01", report_bucket="<firstname>'s bedroom lamp",
+                     entity_id="light.bedroom_lamp")])
     rendered = json.dumps(collect.state())
-    assert "light.emmas_bedroom" not in rendered
-    assert "Emma's bedroom lamp" not in rendered
+    assert "light.bedroom_lamp" not in rendered
+    assert "<firstname>'s bedroom lamp" not in rendered
 
 
 def test_state_is_safe_before_anything_has_happened() -> None:

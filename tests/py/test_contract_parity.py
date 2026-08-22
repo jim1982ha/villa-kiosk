@@ -114,7 +114,7 @@ def test_payload_allow_list_excludes_identifiers() -> None:
     Phase 6 sends this payload to a third-party LLM. These particular names are
     the ones a future module would most plausibly reach for, and each is barred
     for a stated reason: entity IDs carry room and person names
-    (`sensor.emmas_bedroom_window`), photographs are evidence of the villa's
+    (`sensor.bedroom_window`), photographs are evidence of the villa's
     interior, and raw logs carry occupancy patterns.
 
     Pinned here, not only in review, because the allow-list is one line to edit

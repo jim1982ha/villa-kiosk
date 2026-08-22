@@ -1,3 +1,12 @@
+## 2.598.0
+
+### Fixed — the no-villa-data guard scanned two directories of a three-directory repo
+
+`tests/` is tracked and therefore published, and the scan covered `rootfs/` and
+`src/` only. So v2.581.1 sanitised a real first name at four sites and left it
+at nineteen more, in files the guard could not see. The name is gone from every
+tracked file, and the scan now covers everything the repository publishes.
+
 ## 2.597.0
 
 ### Fixed — the report knew P1..P3 while the catalog defines P1..P4, and ignored severity once it had it

@@ -243,7 +243,7 @@ def test_a_payload_that_fails_its_own_audit_is_never_sent(monkeypatch: Any) -> N
 
     narrator = _narrator(monkeypatch, never)
     tainted = _payload()
-    tainted["findings"][0]["entity_id"] = "sensor.emmas_bedroom_window"
+    tainted["findings"][0]["entity_id"] = "sensor.bedroom_window"
     prose, why = _run(narrator.narrate(None, tainted))  # type: ignore[arg-type]
     assert prose is None and "privacy audit" in why
     assert calls == [], "a payload that failed its audit was transmitted"

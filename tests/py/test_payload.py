@@ -52,7 +52,7 @@ def test_the_free_TEXT_does_not_travel_but_the_NUMBERS_do() -> None:
     rephrase. That is a better division anyway — it is what stops a provider
     laundering an operator's free text into prose that looks like the add-on's.
     """
-    out = P.finding_payload(_finding(detail="Emma said the pump is loud"))
+    out = P.finding_payload(_finding(detail="<firstname> said the pump is loud"))
     assert "detail" not in out
     assert out["observed"] == 1.4 and out["baseline"] == 0.9
     assert out["unit"] == "kWh"
@@ -73,7 +73,7 @@ def test_an_unknown_field_is_dropped_by_construction() -> None:
     anticipated; this drops it. A new `Finding` field is excluded until someone
     deliberately writes its name in the contract."""
     out = P.finding_payload(_finding(
-        entity_id="sensor.emmas_bedroom_window",
+        entity_id="sensor.bedroom_window",
         photo_id="abc123",
         raw_event={"anything": "at all"},
         occupant_home=True,
@@ -85,7 +85,7 @@ def test_an_unknown_field_is_dropped_by_construction() -> None:
 def test_a_permitted_key_holding_a_nested_value_is_dropped() -> None:
     """⚠️ AN ALLOW-LIST KEYED ON NAMES IS DEFEATED BY A VALUE. A `label` that
     is a dict could carry an entire event payload under an approved name."""
-    out = P.finding_payload(_finding(label={"entity_id": "light.emma"}))
+    out = P.finding_payload(_finding(label={"entity_id": "light.bedroom_lamp"}))
     assert "label" not in out
     out = P.finding_payload(_finding(detail=["sensor.a", "sensor.b"]))
     assert "detail" not in out
@@ -141,7 +141,7 @@ def test_audit_catches_a_key_reintroduced_after_build() -> None:
 def test_audit_catches_an_entity_id_smuggled_inside_a_permitted_key() -> None:
     """The allow-list governs KEYS. This is the value check: a `label` copied
     from an entity id by a module that meant well."""
-    out = P.build([_finding(label="sensor.emmas_bedroom_window")],
+    out = P.build([_finding(label="sensor.bedroom_window")],
                   audience="owner", cadence="weekly", period="P")
     problems = P.audit(out)
     assert any("looks like an entity id" in p for p in problems)
@@ -216,13 +216,13 @@ def test_a_preview_carries_the_payload_that_would_actually_be_sent() -> None:
         discovery={"reachable": True, "capabilities": [],
                    "capabilities_missing": ["energy_cost"],
                    "capability_absent": {"energy_cost": "No tariff is configured."}},
-        findings=[_finding(entity_id="sensor.emmas_bedroom_window")],
+        findings=[_finding(entity_id="sensor.bedroom_window")],
     )
     shown = P.from_context(context)
     assert P.audit(shown) == []
     import json
     text = json.dumps(shown)
-    assert "emmas_bedroom" not in text
+    assert "bedroom_window" not in text
     assert "No tariff is configured." in text, (
         "blind spots travel, so the provider cannot write confidently about "
         "something this property cannot measure")
@@ -237,14 +237,14 @@ def test_the_withheld_list_names_fields_and_never_values() -> None:
     from reports.pipeline import _withheld_fields
     context = ReportContext(
         audience="owner", cadence="weekly", period="P", generated_at="",
-        findings=[_finding(entity_id="sensor.emmas_bedroom_window",
-                           detail="Emma said the pump is loud")],
+        findings=[_finding(entity_id="sensor.bedroom_window",
+                           detail="<firstname> said the pump is loud")],
     )
     withheld = _withheld_fields(context, P.from_context(context))
     assert "entity_id" in withheld and "detail" in withheld
     assert "label" not in withheld, "an allow-listed field is not withheld"
     for name in withheld:
-        assert "emmas_bedroom" not in name and "Emma" not in name
+        assert "bedroom_window" not in name and "<firstname>" not in name
 
 
 def test_withheld_means_the_policy_dropped_it_not_that_it_was_empty() -> None:
@@ -268,7 +268,7 @@ def test_withheld_means_the_policy_dropped_it_not_that_it_was_empty() -> None:
     context = ReportContext(
         audience="owner", cadence="weekly", period="P", generated_at="",
         findings=[_finding(area="", baseline=None, delta=None,
-                           detail="Emma said the pump is loud")],
+                           detail="<firstname> said the pump is loud")],
     )
     withheld = _withheld_fields(context, P.from_context(context))
     assert "detail" in withheld, "the one field nobody can bound must be named"

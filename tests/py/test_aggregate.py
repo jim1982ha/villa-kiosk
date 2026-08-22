@@ -416,9 +416,9 @@ def test_summary_carries_no_bucket_or_entity_id() -> None:
     Diagnostics, not a data export — the same rule as `collect.state()`."""
     import json
     rendered = json.dumps(aggregate.summary(aggregate.aggregate([
-        _roi("Emma's bedroom lamp"),
-        _maintenance(bucket="Emma's bedroom", task="check the lamp")])))
-    for forbidden in ("Emma", "light.a", "sensor.pump_pf", "check the lamp"):
+        _roi("<firstname>'s bedroom lamp"),
+        _maintenance(bucket="<firstname>'s bedroom", task="check the lamp")])))
+    for forbidden in ("<firstname>", "light.a", "sensor.pump_pf", "check the lamp"):
         assert forbidden not in rendered, f"{forbidden} leaked into diagnostics"
 
 

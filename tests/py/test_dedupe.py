@@ -78,11 +78,11 @@ def test_the_subject_key_matches_across_layers_and_carries_no_identifier() -> No
     """⚠️ THE HASH IS THE WHOLE DESIGN. The two layers must recognise the same
     equipment, and a `Finding` may not carry an entity id — entity ids name
     rooms and people, and findings are shipped to a third-party model."""
-    key = subject_key("sensor.emmas_bedroom_window")
-    assert "emmas" not in key and "bedroom" not in key and "sensor." not in key
-    assert key == subject_key("sensor.emmas_bedroom_window")
+    key = subject_key("sensor.bedroom_window")
+    assert "bedroom" not in key and "bedroom" not in key and "sensor." not in key
+    assert key == subject_key("sensor.bedroom_window")
     assert key != subject_key("sensor.other")
-    assert key in _Group("sensor.emmas_bedroom_window").subject_keys
+    assert key in _Group("sensor.bedroom_window").subject_keys
 
 
 def test_the_dedup_key_cannot_serve_as_the_subject_key() -> None:

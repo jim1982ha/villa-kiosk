@@ -101,13 +101,70 @@ ACCEPTED_IN_COMMENTS: Set[str] = {
     "switch.outdoor_swimming_pool_light_patio_top",
 }
 
-KNOWN = NOT_ENTITY_IDS | ILLUSTRATIVE | ACCEPTED_IN_COMMENTS
+#: ⚠️ TEST FIXTURES, WHICH THIS PIN DID NOT SCAN UNTIL 2026-08-22. `tests/` is
+#: tracked and therefore published, and the scan covered `rootfs/` and `src/`
+#: only — the two directories I happened to be fixing when I wrote it. So
+#: v2.581.1 sanitised a real first name at four sites and left it at NINETEEN
+#: more, in files this very test could not see. `grep -l` inside the test built
+#: to enforce `grep -L`.
+#:
+#: ⚠️ MOST OF THESE ARE DELIBERATELY SYNTHETIC and are listed rather than
+#: pattern-matched, because "looks synthetic" is a judgement no regex makes:
+#: `sensor.pump_power` and `sensor.house_pump_power` differ only in whether a
+#: real villa happens to have one. Freezing the set is the same discipline the
+#: groups above use — a new fixture id fails until somebody classifies it.
+FIXTURES: Set[str] = {
+    # Single letters and obvious stand-ins.
+    "sensor.a_energy", "sensor.b_energy", "sensor.c", "sensor.j", "sensor.n",
+    "sensor.p", "sensor.p_energy", "sensor.s", "sensor.s0", "sensor.x",
+    "sensor.x_energy", "sensor.new_energy", "sensor.old_energy",
+    "binary_sensor.x", "binary_sensor.leak_x", "climate.b", "light.a",
+    "automation.rule_", "automation.outdoor_",
+    # Named for the behaviour under test, not for a device.
+    "sensor.debris", "sensor.ghost", "sensor.night", "sensor.odd", "sensor.ok",
+    "sensor.only_one", "sensor.other", "sensor.mesh_only", "sensor.total",
+    "sensor.energy", "sensor.tariff", "sensor.temperature",
+    "sensor.meter_cost", "sensor.meter_export", "sensor.meter_import",
+    "sensor.combo_humidity", "sensor.combo_temperature",
+    "switch.hidden", "switch.kept",
+    # Generic rooms and equipment — no villa has a claim on these.
+    "binary_sensor.hall_motion", "binary_sensor.laundry_leak",
+    "binary_sensor.leak", "binary_sensor.leak_kitchen",
+    "climate.living", "cover.blind", "cover.blind__open",
+    "light.bedroom_lamp", "light.hall", "light.kitchen", "light.terrace_string",
+    "lock.front", "sensor.bedroom_window",
+    "sensor.pump", "sensor.pump_pf", "sensor.pump_power",
+    "switch.pool_pump", "switch.pump_relay",
+    # ⚠️ REAL, AND KEPT BECAUSE THE TEST IS ABOUT THE REAL SHAPE. The todo
+    # parser is checked against the exact strings the villa's blueprints write;
+    # a sanitised copy would stop proving the parser handles what it meets.
+    # Listed so the decision is visible rather than accidental.
+    "sensor.house_pump_pf", "sensor.house_pump_power",
+    "sensor.jacuzzi_pump_power_factor", "sensor.pool_pump_power",
+    "sensor.swimming_pool_massage_jet_pump_power_factor",
+    "light.master_bedroom_master_bedroom_light_ceiling",
+}
+
+KNOWN = NOT_ENTITY_IDS | ILLUSTRATIVE | ACCEPTED_IN_COMMENTS | FIXTURES
 
 
 def _tracked_source() -> List[str]:
-    out = subprocess.run(["git", "ls-files", "rootfs/", "src/"],
+    """Everything the public repository publishes, not two directories of it.
+
+    ⚠️ THIS SCANNED `rootfs/` AND `src/` ONLY, AND `tests/` IS TRACKED TOO. The
+    rule is "this repo is public and nothing villa-specific may ship"; the
+    applicable set is therefore every tracked file, and I scoped the pin to the
+    two directories I happened to be fixing when I wrote it — `grep -l` inside
+    the very test built to enforce `grep -L`. Asked directly whether anything
+    villa-specific had reached the repo, which is how it surfaced.
+    """
+    out = subprocess.run(["git", "ls-files", "rootfs/", "src/", "tests/"],
                          cwd=REPO_ROOT, capture_output=True, text=True)
-    return [p for p in out.stdout.split() if p]
+    return [p for p in out.stdout.split()
+            # ⚠️ EXCEPT THIS FILE. The allow-list below NAMES every id, so
+            # scanning it would report each one as its own violation — the same
+            # reason `text.py` is exempt from the hand-quoting scan.
+            if p and not p.endswith("test_hard_rules.py")]
 
 
 def _found() -> Dict[str, List[str]]:

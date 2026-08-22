@@ -380,10 +380,10 @@ def test_the_dedup_key_carries_no_identifier_but_is_stable() -> None:
     text. A dedup key only needs to be stable and unique, never readable."""
     from reports.analysis.base import dedup_key
 
-    key = dedup_key("standby_creep", "sensor.emmas_bedroom_window")
-    assert "emmas" not in key and "bedroom" not in key and "sensor." not in key
+    key = dedup_key("standby_creep", "sensor.bedroom_window")
+    assert "bedroom" not in key and "bedroom" not in key and "sensor." not in key
     assert key.startswith("standby_creep:"), "the module must stay diagnosable"
-    assert key == dedup_key("standby_creep", "sensor.emmas_bedroom_window")
+    assert key == dedup_key("standby_creep", "sensor.bedroom_window")
     assert key != dedup_key("standby_creep", "sensor.other")
 
 
