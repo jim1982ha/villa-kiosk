@@ -30,6 +30,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from agent.llm.base import ToolCall, Turn
+from agent.tools.base import flatten_blocks
 from reports.log import log, swallow
 
 #: The provider's API host. ⚠️ THIS STRING LIVES HERE AND NOWHERE ELSE — see the
@@ -110,7 +111,7 @@ class AnthropicProvider:
             "model": str(model),
             "max_tokens": max(1, int(max_tokens)),
             "system": list(system),
-            "messages": list(messages),
+            "messages": [_message_wire(m) for m in messages],
         }
         if tools:
             request["tools"] = [_tool_wire(t) for t in tools]
@@ -134,6 +135,37 @@ class AnthropicProvider:
             return Turn(declined=f"the provider could not be reached: {safe}")
 
         return _turn_of(reply)
+
+
+def _message_wire(message: Mapping[str, Any]) -> Dict[str, Any]:
+    """One conversation turn in this provider's wire shape.
+
+    ⚠️ THE ONLY THING IT CHANGES IS `tool_result` CONTENT, and it changes it
+    because this API's content vocabulary is not ours. A tool returns `text`,
+    `json` and `error` blocks; the API accepts text/image/document/… and
+    rejects both of the others — `json` by name, and an `error` object because
+    it carries no `type` at all. Measured on the villa:
+    `messages.3.content.0.tool_result.content.1: Input tag 'json' … does not
+    match any of the expected tags`, three turns in, with the tools already run.
+
+    ⚠️ TEXT AND TOOL_USE BLOCKS PASS THROUGH UNTOUCHED. This is a translation,
+    not a filter: rewriting blocks it does not need to would make the adapter a
+    second author of the transcript, and the transcript is what the model reads
+    back on every later turn.
+    """
+    content = message.get("content")
+    if not isinstance(content, list):
+        return dict(message)
+    out: List[Any] = []
+    for block in content:
+        if (isinstance(block, Mapping)
+                and str(block.get("type") or "") == "tool_result"):
+            converted = dict(block)
+            converted["content"] = flatten_blocks(block.get("content"))
+            out.append(converted)
+        else:
+            out.append(block)
+    return {**message, "content": out}
 
 
 def _tool_wire(tool: Mapping[str, Any]) -> Dict[str, Any]:

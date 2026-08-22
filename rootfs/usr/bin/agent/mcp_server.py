@@ -42,7 +42,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import contracts, policy as policy_mod
 from agent.registry import Registry, build_registry, invoke
-from agent.tools.base import BaseTool
+from agent.tools.base import BaseTool, flatten_blocks
 from reports import secrets
 from reports.log import log
 
@@ -205,25 +205,11 @@ async def handle(message: Mapping[str, Any], *,
 def _as_content(blocks: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     """Our content blocks in MCP's own shape.
 
-    ⚠️ MCP HAS NO `json` BLOCK, so a structured result is serialised into a text
-    block rather than dropped. Dropping it would make a tool that returns data
-    look like a tool that returned nothing — the failure being indistinguishable
-    from success is what makes it worth the four lines.
+    ⚠️ DELEGATES. The reduction is identical for every wire out of this package
+    — see `tools.base.flatten_blocks` — and having it here as well is how the
+    provider path came to be missing it entirely.
     """
-    out: List[Dict[str, Any]] = []
-    for block in blocks:
-        if not isinstance(block, Mapping):
-            continue
-        kind = str(block.get("type") or "")
-        if kind == "text":
-            out.append({"type": "text", "text": str(block.get("text") or "")})
-        elif kind == "json":
-            out.append({"type": "text",
-                        "text": json.dumps(block.get("json"), default=str)})
-        elif "error" in block:
-            out.append({"type": "text",
-                        "text": json.dumps(block["error"], default=str)})
-    return out
+    return flatten_blocks(list(blocks))
 
 
 _SEQ: List[int] = [0]

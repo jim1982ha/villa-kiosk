@@ -278,6 +278,34 @@ def _capture_request(tools: Any) -> Dict[str, Any]:
     return seen
 
 
+def _capture_request_messages(messages: Any) -> Dict[str, Any]:
+    """`_capture_request`, driving the MESSAGES half instead of the tools."""
+    import types
+
+    seen: Dict[str, Any] = {}
+
+    class _Messages:
+        async def create(self, **kw: Any) -> Any:
+            seen.update(kw)
+            return types.SimpleNamespace(
+                content=[types.SimpleNamespace(type="text", text="ok")],
+                usage=None, stop_reason="end_turn")
+
+    class _Client:
+        def __init__(self, **_kw: Any) -> None:
+            self.messages = _Messages()
+
+    fake = types.ModuleType("anthropic")
+    fake.AsyncAnthropic = _Client          # type: ignore[attr-defined]
+    sys.modules["anthropic"] = fake
+    try:
+        _run(anthropic_sdk.AnthropicProvider("k").run(
+            system=[], messages=messages, tools=[], model="claude-opus-5"))
+    finally:
+        sys.modules.pop("anthropic", None)
+    return seen
+
+
 def test_a_tool_is_sent_as_input_schema_not_inputSchema() -> None:
     """⚠️ THE REGISTRY PUBLISHES MCP'S SHAPE; THIS API WANTS ITS OWN.
 
@@ -326,3 +354,78 @@ def test_no_tools_means_the_field_is_ABSENT_not_empty() -> None:
     """An empty `tools` list is not the same as no tools; the API treats a
     present-but-empty list as a tool-using request."""
     assert "tools" not in _capture_request([])
+
+
+def test_a_tool_result_carrying_JSON_is_flattened_to_text() -> None:
+    """⚠️ THE API HAS NO `json` CONTENT BLOCK.
+
+    Measured on the real villa, three turns into a real conversation with the
+    tools already run: `messages.3.content.0.tool_result.content.1: Input tag
+    'json' found using 'type' does not match any of the expected tags`. The
+    reduction existed — for MCP, written when the MCP server was built — and the
+    provider path simply never got it.
+    """
+    from agent.tools.base import data, fail, text as text_block
+
+    request = _capture_request_messages([{
+        "role": "user",
+        "content": [{"type": "tool_result", "tool_use_id": "t1",
+                     "content": [text_block("here"), data({"w": 340})]}],
+    }])
+    blocks = request["messages"][0]["content"][0]["content"]
+    assert [b["type"] for b in blocks] == ["text", "text"]
+    assert "340" in blocks[1]["text"], (
+        "the payload was dropped, so a tool that returned data looks like one "
+        "that returned nothing")
+
+
+def test_a_tool_ERROR_is_flattened_too() -> None:
+    """⚠️ `fail()` RETURNS AN OBJECT WITH NO `type` AT ALL, so it is rejected
+    for a different reason than `json` is — and it was the next 400 queued
+    behind that one, unreached only because no tool had failed yet."""
+    from agent.tools.base import fail
+
+    request = _capture_request_messages([{
+        "role": "user",
+        "content": [{"type": "tool_result", "tool_use_id": "t1",
+                     "content": [fail("not_found", "no such device")]}],
+    }])
+    blocks = request["messages"][0]["content"][0]["content"]
+    assert blocks and blocks[0]["type"] == "text"
+    assert "not_found" in blocks[0]["text"]
+
+
+def test_text_and_tool_use_blocks_are_NOT_rewritten() -> None:
+    """⚠️ A TRANSLATION, NOT A FILTER. The transcript is what the model reads
+    back on every later turn; an adapter that rewrites blocks it does not need
+    to becomes a second author of it."""
+    original = [{"type": "text", "text": "thinking"},
+                {"type": "tool_use", "id": "t1", "name": "read_villa",
+                 "input": {"window": "12h"}}]
+    request = _capture_request_messages([{"role": "assistant",
+                                          "content": original}])
+    assert request["messages"][0]["content"] == original
+
+
+def test_a_message_with_plain_string_content_survives() -> None:
+    request = _capture_request_messages([{"role": "user", "content": "hello"}])
+    assert request["messages"][0] == {"role": "user", "content": "hello"}
+
+
+def test_the_flattener_has_exactly_one_implementation() -> None:
+    """⚠️ IT WAS WRITTEN TWICE-MINUS-ONE: once for MCP, not at all for the
+    provider, which is precisely how the provider path shipped broken. Both
+    wires need the same reduction, so it lives in the module that owns the
+    block vocabulary and both callers delegate."""
+    import inspect
+
+    from agent import mcp_server
+    from agent.tools import base as tools_base
+
+    assert "flatten_blocks" in inspect.getsource(mcp_server._as_content)
+    for name in ("mcp_server", "anthropic_sdk"):
+        module = (mcp_server if name == "mcp_server" else anthropic_sdk)
+        source = inspect.getsource(module)
+        assert 'json.dumps(block.get("json")' not in source, (
+            f"{name} re-implements the reduction instead of delegating")
+    assert callable(tools_base.flatten_blocks)

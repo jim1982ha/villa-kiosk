@@ -24,6 +24,8 @@ truncation is a model reasoning confidently about the half it was given.
 
 from __future__ import annotations
 
+import json
+
 from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
 
 from agent import contracts
@@ -55,6 +57,43 @@ def fail(code: str, message: str) -> Dict[str, Any]:
     """
     safe = code if contracts.is_valid(code, contracts.TOOL_ERROR_CODE) else "internal"
     return {"error": {"code": safe, "message": str(message)}}
+
+
+def flatten_blocks(blocks: Any) -> List[Dict[str, Any]]:
+    """Our block vocabulary reduced to TEXT ONLY, for a wire that has no others.
+
+    ⚠️ THIS PACKAGE SPEAKS THREE KINDS AND EVERY WIRE OUT OF IT SPEAKS ONE.
+    `text()`, `data()` (a `json` block) and `fail()` (an `error` object with no
+    `type` at all) are the internal vocabulary. MCP publishes text/image/audio/
+    resource; the Anthropic Messages API accepts text/image/document/…; NEITHER
+    has a `json` block and neither will take an untyped object. So both need the
+    same reduction, and it lives here — in the module that owns the vocabulary —
+    rather than once per consumer.
+
+    ⚠️ IT WAS WRITTEN ONCE, FOR MCP, AND NOT FOR THE PROVIDER, WHICH IS WHAT
+    SHIPPED. The villa's own log: `messages.3.content.0.tool_result.content.1:
+    Input tag 'json' … does not match any of the expected tags`. Three turns in,
+    tools called and run, and the RESULTS could not be sent back. The error
+    branch had not been reached yet and was the next 400 queued behind it.
+
+    ⚠️ SERIALISED, NEVER DROPPED. A tool that returned data must not look like a
+    tool that returned nothing — the failure being indistinguishable from
+    success is the whole reason this is not two lines.
+    """
+    out: List[Dict[str, Any]] = []
+    for block in blocks if isinstance(blocks, (list, tuple)) else []:
+        if not isinstance(block, Mapping):
+            continue
+        kind = str(block.get("type") or "")
+        if kind == "text":
+            out.append({"type": "text", "text": str(block.get("text") or "")})
+        elif kind == "json":
+            out.append({"type": "text",
+                        "text": json.dumps(block.get("json"), default=str)})
+        elif "error" in block:
+            out.append({"type": "text",
+                        "text": json.dumps(block["error"], default=str)})
+    return out
 
 
 def truncate(body: str, limit: int = DEFAULT_MAX_RESULT_CHARS) -> str:
