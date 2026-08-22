@@ -1,3 +1,13 @@
+## 2.615.0
+
+### Added — the agent's vocabulary, and four tools over what PH-1 records
+
+`agent/contracts.py` and its TypeScript twin define the records the reasoning
+layer produces, with the same parity check that already guards the report
+vocabulary — extended rather than duplicated. The four read tools are MCP-shaped
+from the start, because that interface is the extraction seam and a private one
+would be a migration later. Nothing calls any of it yet.
+
 ## 2.614.0
 
 ### Fixed — salience ranked "the pump is on", which nobody would call out
