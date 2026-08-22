@@ -92,7 +92,13 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.drift", "sensor.new", "sensor.x", "sensor.q", "sensor.weak",
     "sensor.quiet", "sensor.loud", "sensor.unscorable", "sensor.pool",
     "light.gone", "light.ok",  # observe/cycle.py's diff fixtures
-    "sensor.thin",             # agent tool fixtures
+    # agent tool fixtures and the dotted-path probes. `sensor.probe` is the
+    # literal prefix of an f-string (`f"sensor.probe{i}_power"`), which is what
+    # the scanner sees — a real id never has that shape.
+    "sensor.thin", "sensor.a_thing", "sensor.b_thing", "sensor.x_thing",
+    "sensor.hidden_thing", "switch.buried_thing", "sensor.probe",
+    "sensor.probe_temperature", "binary_sensor.probe_moisture",
+    "lock.probe_entrance", "automation.a_rule",
 }
 
 #: ⚠️ REAL DEVICES OF THE REFERENCE DEPLOYMENT, IN COMMENTS THAT RECORD A
