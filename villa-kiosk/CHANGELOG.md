@@ -1,3 +1,10 @@
+## 2.638.0
+
+### Changed — pick who may message the villa by name, not by number
+The sender list offered a numeric Telegram id copied out of a raw event. It now
+lists the bot's own private chats by their names. Groups are deliberately absent:
+a group names a room rather than a person, so it could never match a sender.
+
 ## 2.637.0
 
 ### Fixed — the reply was composed, addressed correctly, and refused by Home Assistant

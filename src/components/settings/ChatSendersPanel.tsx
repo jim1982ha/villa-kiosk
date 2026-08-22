@@ -17,7 +17,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
-import { loadAgentConfig, saveAgentConfig, type AgentConfig } from "@/agent/agentApi";
+import { loadAgentConfig, loadBotChats, saveAgentConfig,
+         type AgentConfig, type BotChat } from "@/agent/agentApi";
 
 /** The roles the backend accepts. ⚠️ An unknown role resolves to NOBODY there,
  *  so offering a free-text field would produce entries that silently do
@@ -62,6 +63,11 @@ export default function ChatSendersPanel() {
    *  this version does not know about (a newer add-on's settings) through a
    *  save unharmed. Sending only what changed deleted the sender list once. */
   const [carryOver, setCarryOver] = useState<Record<string, unknown>>({});
+  /** ⚠️ THE BOT'S OWN CHATS, SO NOBODY COPIES A NUMBER OUT OF A RAW PAYLOAD.
+   *  Empty is a normal state — a villa whose core is restarting, or whose bot
+   *  has no private chats — and the row falls back to typing the id, which is
+   *  what existed before. It is never a reason to block the edit. */
+  const [chats, setChats] = useState<BotChat[]>([]);
   /** Triggers as stored, so flipping `chat` cannot silently clear a sibling. */
   const [triggers, setTriggers] = useState<Record<string, boolean>>({});
 
@@ -86,6 +92,7 @@ export default function ChatSendersPanel() {
     });
     setCarryOver(got?.raw ?? {});
     setTriggers((got?.config.triggers ?? {}) as Record<string, boolean>);
+    setChats(await loadBotChats());
     setRev(got?.rev ?? null);
     setLoading(false);
   }, []);
@@ -220,16 +227,41 @@ export default function ChatSendersPanel() {
       {rows.map((row, i) => (
         <div className="editable-row" key={i} style={{ marginTop: 8 }}>
           <div className="editable-row-fields">
-            <input
-              value={row.id}
-              disabled={saving}
-              aria-label="Telegram user id"
-              placeholder="Telegram user id"
-              inputMode="numeric"
-              onChange={(e) => setRows(rows.map((r, n) =>
-                (n === i ? { ...r, id: e.target.value } : r)))}
-              onBlur={() => commit(rows)}
-            />
+            {/* ⚠️ A NAME WHEN WE KNOW ONE, THE NUMBER WHEN WE DO NOT. In a
+                PRIVATE chat the chat id and the sender id are the same number,
+                so the bot's own chat list is exactly the right menu — groups
+                are excluded by the backend because there the two differ and an
+                entry could never match anybody. An id already stored but no
+                longer among the chats keeps its own option, or editing an
+                existing row would silently retarget it. */}
+            {chats.length > 0 ? (
+              <select
+                value={row.id}
+                disabled={saving}
+                aria-label="Who"
+                onChange={(e) => commit(rows.map((r, n) =>
+                  (n === i ? { ...r, id: e.target.value } : r)))}
+              >
+                <option value="">Choose a chat…</option>
+                {chats.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+                {row.id && !chats.some((c) => c.id === row.id) && (
+                  <option value={row.id}>{row.id} (not a current chat)</option>
+                )}
+              </select>
+            ) : (
+              <input
+                value={row.id}
+                disabled={saving}
+                aria-label="Telegram user id"
+                placeholder="Telegram user id"
+                inputMode="numeric"
+                onChange={(e) => setRows(rows.map((r, n) =>
+                  (n === i ? { ...r, id: e.target.value } : r)))}
+                onBlur={() => commit(rows)}
+              />
+            )}
             <select
               value={row.role}
               disabled={saving}
@@ -268,8 +300,12 @@ export default function ChatSendersPanel() {
 
       <p className="muted body-text" style={{ marginTop: 10,
         fontSize: "var(--text-xs)" }}>
-        A numeric Telegram user id, not a username — it is in the
-        <code> user_id </code> field of any message the bot receives.
+        {chats.length > 0
+          ? "The bot's own private chats. Group chats are not listed: a group "
+            + "names a room rather than a person, so it could never match who "
+            + "sent a message."
+          : "No chats found, so type the numeric Telegram user id — it is in "
+            + "the user_id field of any message the bot receives."}
       </p>
     </>
   );

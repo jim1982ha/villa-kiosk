@@ -516,3 +516,75 @@ async def target_for(session: Any, chat_id: str,
 def forget_targets() -> None:
     """Drop the resolved map. For tests, and for a registry that has changed."""
     _TARGETS.clear()
+
+
+@dataclass
+class Chat:
+    """One conversation the bot can be reached in, as a person names it."""
+
+    chat_id: str
+    name: str
+    #: `entity:notify.…`, ready for `deliver`.
+    target: str
+
+
+async def known_chats(session: Any) -> List[Chat]:
+    """Every PRIVATE chat this villa's bot has, named as a person would.
+
+    ⚠️ PRIVATE ONLY, AND THE EXCLUSION IS CORRECTNESS RATHER THAN TASTE.
+    `allowed_senders` keys on WHO SPEAKS (`user_id`); a notify entity gives
+    WHERE (`chat_id`). In a private chat those are the same number — verified
+    on the reference villa, `765979167` for both. In a GROUP they differ: the
+    chat id identifies the room and the user id identifies whichever member
+    typed. Offering a group here would store a number that can never match a
+    sender, and it would fail SILENTLY — the bot would simply keep ignoring
+    everyone, which is indistinguishable from an empty list.
+
+    ⚠️ TELEGRAM'S OWN CONVENTION IS THE DISCRIMINATOR: a private chat id is
+    POSITIVE, a group or supergroup is NEGATIVE. Read off the id rather than
+    off the name, because a name is whatever somebody typed.
+
+    ⚠️ THE NAME COMES FROM THE STATE, NOT THE REGISTRY. Both registry entries
+    on the reference villa carry `name: null` and `original_name: null`, and the
+    human label lives in the state's `friendly_name` — checked against the
+    running instance rather than assumed, which is how the last four bugs in
+    this feature were found.
+    """
+    try:
+        from reports import deliver
+        from reports.hass import HassClient
+        async with HassClient(session) as hass:
+            entries = await hass.command("config/entity_registry/list")
+            states = await hass.command("get_states")
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        from reports.log import swallow
+        swallow("could not list the bot's chats", err)
+        return []
+
+    labels: Dict[str, str] = {}
+    for state in states if isinstance(states, list) else []:
+        if not isinstance(state, Mapping):
+            continue
+        attrs = state.get("attributes")
+        if isinstance(attrs, Mapping) and attrs.get("friendly_name"):
+            labels[str(state.get("entity_id") or "")] = \
+                str(attrs["friendly_name"])
+
+    out: List[Chat] = []
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, Mapping):
+            continue
+        if str(entry.get("platform") or "") != "telegram_bot":
+            continue
+        unique = str(entry.get("unique_id") or "")
+        if "_" not in unique:
+            continue
+        chat_id = unique.rsplit("_", 1)[1]
+        if chat_id.startswith("-"):
+            continue                      # a group: see the docstring
+        entity_id = str(entry.get("entity_id") or "")
+        out.append(Chat(chat_id=chat_id,
+                        name=labels.get(entity_id) or entity_id,
+                        target=f"{deliver.ENTITY_PREFIX}{entity_id}"))
+    out.sort(key=lambda c: c.name.lower())
+    return out

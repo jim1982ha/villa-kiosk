@@ -739,3 +739,97 @@ def test_an_answer_the_model_ALREADY_replied_is_not_sent_twice() -> None:
         reply_mod.ReplyTool = original  # type: ignore[misc]
 
     assert sent == ["Looking now."], f"answered twice: {sent}"
+
+
+# ── naming the chats, so nobody copies a number ─────────────────────────────
+def _chats(rows: Any = None, states: Any = None) -> List[Any]:
+    import reports.hass as hass_mod
+
+    class _Both(_Registry):
+        async def command(self, name: str, **_kw: Any) -> Any:
+            self.calls += 1
+            if name == "get_states":
+                return states if states is not None else [
+                    {"entity_id": "notify.bot_private",
+                     "attributes": {"friendly_name": "Jm"}},
+                    {"entity_id": "notify.bot_group",
+                     "attributes": {"friendly_name": "TheLysHouse"}},
+                ]
+            return self.entries
+
+    fake = _Both(REGISTRY_ROWS if rows is None else rows)
+    original = hass_mod.HassClient
+    hass_mod.HassClient = lambda session: fake   # type: ignore[assignment,misc]
+    try:
+        return asyncio.run(chat.known_chats(None))
+    finally:
+        hass_mod.HassClient = original           # type: ignore[assignment]
+
+
+def test_a_chat_is_offered_by_its_NAME() -> None:
+    """Asked for directly: not a numeric id copied out of a raw payload."""
+    found = _chats()
+    assert [c.name for c in found] == ["Jm"]
+    assert found[0].chat_id == "765979167"
+
+
+def test_a_GROUP_is_NOT_offered_and_the_exclusion_is_correctness() -> None:
+    """⚠️ `allowed_senders` KEYS ON WHO SPEAKS; A NOTIFY ENTITY GIVES WHERE.
+
+    In a private chat those are the same number — verified on the reference
+    villa, 765979167 for both. In a group they differ: the chat id names the
+    room, the user id names whichever member typed. Offering a group would
+    store a value that can never match a sender, and it would fail SILENTLY —
+    the bot would go on ignoring everybody, which looks exactly like an empty
+    list.
+
+    ⚠️ Discriminated on TELEGRAM'S OWN CONVENTION — private ids are positive,
+    groups negative — rather than on the name, because a name is whatever
+    somebody typed.
+    """
+    assert all(not c.chat_id.startswith("-") for c in _chats())
+    assert "TheLysHouse" not in [c.name for c in _chats()]
+
+
+def test_the_name_comes_from_the_STATE_not_the_registry() -> None:
+    """⚠️ Both registry entries on the reference villa carry `name: null` and
+    `original_name: null`; the human label lives in the state's
+    `friendly_name`. Checked against the running instance rather than assumed,
+    which is how the last four bugs in this feature were found."""
+    found = _chats(states=[{"entity_id": "notify.bot_private",
+                            "attributes": {"friendly_name": "Jean-Marie"}}])
+    assert found[0].name == "Jean-Marie"
+
+
+def test_a_chat_with_no_friendly_name_falls_back_to_its_entity_id() -> None:
+    """Never blank: a nameless row is unpickable and looks like a bug."""
+    found = _chats(states=[])
+    assert found[0].name == "notify.bot_private"
+
+
+def test_each_chat_carries_a_target_deliver_can_actually_use() -> None:
+    from reports import deliver
+
+    found = _chats()
+    assert found[0].target.startswith(deliver.ENTITY_PREFIX)
+    assert deliver._service_path(found[0].target) == deliver.ENTITY_SERVICE
+
+
+def test_an_unreachable_core_yields_an_EMPTY_list_not_an_error() -> None:
+    """The panel falls back to typing the number, which is what existed
+    before — a villa whose core is restarting must not lose the editor."""
+    import reports.hass as hass_mod
+
+    class _Broken:
+        async def __aenter__(self) -> "_Broken":
+            raise RuntimeError("core is restarting")
+
+        async def __aexit__(self, *exc: Any) -> None:
+            return None
+
+    original = hass_mod.HassClient
+    hass_mod.HassClient = lambda session: _Broken()  # type: ignore[assignment,misc]
+    try:
+        assert asyncio.run(chat.known_chats(None)) == []
+    finally:
+        hass_mod.HassClient = original               # type: ignore[assignment]

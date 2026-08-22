@@ -178,3 +178,22 @@ export async function loadAgentRuns(): Promise<Record<string, string>[]> {
   const d = (await r.json().catch(() => ({}))) as { runs?: unknown };
   return Array.isArray(d.runs) ? (d.runs as Record<string, string>[]) : [];
 }
+
+/** One conversation the villa's bot can be reached in, as a person names it. */
+export interface BotChat { id: string; name: string }
+
+/**
+ * The bot's private chats, named. ⚠️ PRIVATE ONLY, and the backend excludes
+ * groups deliberately: the sender list keys on WHO SPEAKS, a group's chat id
+ * identifies the ROOM, and storing one would silently match nobody.
+ */
+export async function loadBotChats(): Promise<BotChat[]> {
+  const r = await fetch(ingressPath("agent-chats"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => ({}))) as { chats?: unknown };
+  const rows = Array.isArray(d.chats) ? d.chats : [];
+  return rows.filter((c): c is BotChat =>
+    !!c && typeof c === "object"
+    && typeof (c as BotChat).id === "string"
+    && typeof (c as BotChat).name === "string");
+}
