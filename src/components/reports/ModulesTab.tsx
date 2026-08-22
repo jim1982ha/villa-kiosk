@@ -1,6 +1,26 @@
 // src/components/reports/ModulesTab.tsx
-// The checks this add-on can run, whether each one is switched on, and — for
-// every one that will not run — the reason.
+// The whole detection picture on one tab: whether anything is listening, what
+// this property's own automations have reported, which built-in checks are
+// switched on, and — for every one that will not run — the reason.
+//
+// ⚠️ THIS WAS TWO TABS, "Checks" AND "Diagnostics", AND THEY ANSWERED ONE
+// QUESTION BETWEEN THEM (2026-08-22, owner request). The split forced the
+// reader to hold half an answer while they went to find the other half:
+// Diagnostics listed the built-in checks as `name · needs N days`, which is a
+// strictly thinner copy of the rows below, and this tab's own closing sentence
+// ended "Diagnostics lists what has been heard, which is how you confirm a new
+// one is arriving" — a cross-reference to a tab that no longer exists, which is
+// the tell that the two belonged together. A duplicated list is also a list
+// that can disagree with itself, and the thin copy had no toggle, so a check
+// switched OFF still appeared there as if it were running.
+//
+// The order is the order the answer is actually built, top down, and each
+// section is a precondition for the one under it:
+//
+//   1  Is anything listening?      nothing below means anything if it is not
+//   2  Your automations            the primary detection layer, which WINS
+//   3  Built-in checks             the fallback, on/off, and why each ran
+//   4  Adding your own             how to extend it — blueprints, not code
 //
 // ⚠️ THE PLAN NAMED THIS TAB AND PHASE 5 SHIPPED WITHOUT IT. The interface
 // phase specified "Overview · Modules · History · Schedule · Diagnostics" and
@@ -23,13 +43,26 @@
 // carried a reason since Phase 3 and it reached only the report body. A module
 // silently absent from a list reads as "not applicable", which is a claim
 // nobody made — the same rule `ran` vs `skipped` exists for one layer down.
+//
+// ⚠️ `connected` IS THE LIVE SOCKET, NOT A STORED FLAG, and every count in
+// section 2 is read through it. `silentTypes` means "these categories are
+// quiet" only if something is actually listening; if nothing is, they mean
+// nothing at all. The field this replaced was derived from a persisted
+// timestamp written once and never cleared, so it read `true` forever after the
+// first subscribe — through every drop and restart. See `collect._LIVE`.
 
-import { Check, Ban, Info } from "lucide-react";
+import { Ban, Check, Info, PlugZap, Radio, RefreshCw } from "lucide-react";
 import type { ReportPreview, ReportsDiagnostics } from "@/reports/reportsApi";
 import type { ReportsConfig } from "@/reports/reportsTypes";
 
+function when(iso: string): string {
+  if (!iso) return "never";
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? iso : at.toLocaleString();
+}
+
 export default function ModulesTab({
-  diagnostics, config, preview, busy, onSave,
+  diagnostics, config, preview, busy, onSave, onRefresh,
 }: {
   diagnostics: ReportsDiagnostics | null;
   config: ReportsConfig | null;
@@ -41,11 +74,18 @@ export default function ModulesTab({
   preview: ReportPreview | null;
   busy: boolean;
   onSave: (next: ReportsConfig) => void;
+  /** ⚠️ RE-PROBES LIVE. `/reports-diagnostics` opens a websocket and walks the
+   *  recorder on every request, so this is the real thing rather than a cache
+   *  bust — and it is why nothing here polls. The collector banner is the one
+   *  reading on this tab that can change while the dialog sits open, which is
+   *  why the button came with it from the old Diagnostics tab. */
+  onRefresh: () => void;
 }) {
   if (!diagnostics || !config) {
     return <p className="muted body-text">Reading the check list…</p>;
   }
 
+  const c = diagnostics.collector;
   const slices = config.modules ?? {};
   const isOn = (name: string) => slices[name]?.enabled !== false;
   const ran = new Set(preview?.analysis.ran ?? []);
@@ -58,11 +98,83 @@ export default function ModulesTab({
   return (
     <div className="reports-pane">
       <p className="muted body-text">
-        Checks the add-on runs against this property&rsquo;s own history. Each
-        needs particular data to be possible at all, and one that cannot run
-        says so instead of going quiet.
+        What this property is watched by, and what a brief can therefore be
+        built from. Your own automations do the detecting; the checks further
+        down are what the add-on runs by itself when they do not.
       </p>
 
+      {/* ── 1. Is anything listening? ───────────────────────────────────── */}
+      <div className={`fm-banner ${c.connected ? "" : "warn"}`}>
+        {c.connected ? <Radio size={16} /> : <PlugZap size={16} />}
+        <span>
+          {c.connected
+            ? `Listening since ${when(c.connectedSince)}.`
+            : "Not listening. Findings fired now would not reach a report."}
+          {c.drops > 0 && ` Reconnected ${c.drops} time${c.drops === 1 ? "" : "s"} since this add-on started.`}
+        </span>
+      </div>
+
+      <dl className="reports-facts">
+        <div><dt>Alerts held</dt><dd>{c.buffered}</dd></div>
+        <div><dt>Last alert</dt><dd>{when(c.lastEventAt)}</dd></div>
+        <div><dt>Listening since first ever</dt><dd>{when(c.onlineSince)}</dd></div>
+      </dl>
+
+      <div>
+        <button className="btn ghost" disabled={busy} onClick={onRefresh}>
+          <RefreshCw size={16} aria-hidden="true" />
+          <span>{busy ? "Checking…" : "Check again"}</span>
+        </button>
+      </div>
+
+      {/* ── 2. Your automations ─────────────────────────────────────────── */}
+      <h3 className="reports-h3">Your automations</h3>
+      <ul className="reports-list">
+        {c.blueprintCategories.map((cat) => {
+          const type = `vesta_${cat}_event`;
+          const seen = c.seenTypes[type] ?? 0;
+          return (
+            <li key={cat} className={`reports-item${seen ? "" : " muted"}`}>
+              <span>{cat}</span>
+              <span>{seen ? `${seen} received` : "nothing yet"}</span>
+            </li>
+          );
+        })}
+        {c.blueprintCategories.length === 0 && (
+          <li className="reports-item muted">
+            No automations of this kind are installed, so the built-in checks
+            run instead.
+          </li>
+        )}
+      </ul>
+      {/* ⚠️ A ZERO HERE IS AMBIGUOUS AND MUST SAY SO. Either nothing of that
+          kind happened, or those automations do not report at all — and the
+          second is what once hid an entire alert tier. Naming them is the whole
+          value; pretending the count answers it is not. */}
+      {c.silentTypes.length > 0 && c.connected && (
+        <p className="muted body-text">
+          A category with nothing received is either a quiet period or
+          automations that do not report. This cannot tell which.
+        </p>
+      )}
+      {diagnostics.capabilities.includes("blueprint_layer") ? (
+        <p className="reports-item">
+          <Check size={14} aria-hidden="true" />
+          <span>
+            Your automations are reporting, and they win: a built-in check below
+            steps aside where one covers the same ground, because your
+            automation knows about occupancy, schedules and tariffs and a
+            statistic does not.
+          </span>
+        </p>
+      ) : (
+        <p className="reports-item muted">
+          Nothing has reported yet, so the checks below are the only analysis
+          running.
+        </p>
+      )}
+
+      {/* ── 3. Built-in checks ──────────────────────────────────────────── */}
       <h3 className="reports-h3">Built-in checks</h3>
       {diagnostics.modules.length === 0 && (
         <p className="reports-item sev-warning">
@@ -83,7 +195,11 @@ export default function ModulesTab({
                 did: an identifier is not a name, and a capability list is a
                 precondition rather than a purpose. Somebody deciding whether to
                 switch a check OFF needs to know what it would stop telling
-                them. */}
+                them.
+                ⚠️ `minDays` IS THE ONE FACT THE DELETED Diagnostics TAB HELD
+                THAT THIS ROW DID NOT, so it comes across rather than being
+                dropped with the tab. It rides the head's existing
+                `space-between`, opposite the toggle. */}
             <div className="reports-entry-head">
               <label className="toggle">
                 <input
@@ -94,6 +210,7 @@ export default function ModulesTab({
                 />
                 <span>{m.title}</span>
               </label>
+              <span className="muted">needs {m.minDays} days</span>
             </div>
             {m.description && (
               <p className="muted body-text">{m.description}</p>
@@ -109,7 +226,7 @@ export default function ModulesTab({
                 <Ban size={14} aria-hidden="true" />
                 <span>
                   Not possible here.{" "}
-                  {missing.map((c) => diagnostics.capabilityAbsent[c] || c).join(" ")}
+                  {missing.map((cap) => diagnostics.capabilityAbsent[cap] || cap).join(" ")}
                 </span>
               </p>
             )}
@@ -156,28 +273,12 @@ export default function ModulesTab({
           screen. */}
       <h3 className="reports-h3">Adding your own checks</h3>
       <p className="muted body-text">
-        These three arrive with the add-on — nothing to install, nothing to
-        delete. Your own Home Assistant automations are the ones that extend a
-        brief: anything they report is grouped, priced and written in
-        automatically. Diagnostics lists what has been heard, which is how you
-        confirm a new one is arriving.
+        These arrive with the add-on — nothing to install, nothing to delete.
+        Your own Home Assistant automations are the ones that extend a brief:
+        anything they report is grouped, priced and written in automatically.
+        &ldquo;Your automations&rdquo; above lists what has been heard, which is
+        how you confirm a new one is arriving.
       </p>
-      {diagnostics.capabilities.includes("blueprint_layer") ? (
-        <p className="reports-item">
-          <Check size={14} aria-hidden="true" />
-          <span>
-            Your automations are reporting, and they win: a built-in check above
-            steps aside where one covers the same ground, because your
-            automation knows about occupancy, schedules and tariffs and a
-            statistic does not.
-          </span>
-        </p>
-      ) : (
-        <p className="reports-item muted">
-          Nothing has reported yet, so the checks above are the only analysis
-          running.
-        </p>
-      )}
     </div>
   );
 }

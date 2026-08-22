@@ -834,7 +834,7 @@ export default function Dashboard() {
           setFacilityRecord({ kind, id });
           setFacilityOpen(true);
         } : undefined}
-        onOpenReports={canEditConfig ? () => setReportsOpen(true) : undefined}
+        onOpenReports={canManageFacility ? () => setReportsOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -1057,16 +1057,20 @@ export default function Dashboard() {
         />
       )}
 
-      {reportsOpen && canEditConfig && (
+      {reportsOpen && canManageFacility && (
         <ReportsModal
           onClose={() => setReportsOpen(false)}
-          /* ⚠️ A SEPARATE CAPABILITY FROM THE ONE THAT OPENS THIS MODAL.
-             Briefings is gated on `editConfig` (owner only) and completing a
-             caretaker task is gated on `manageFacility`, which the facility
-             manager also holds. Passing the real capability rather than `true`
-             keeps the two independent: if Briefings is ever opened to `ops`,
-             the Tasks tab is already correct. The server checks anyway. */
+          /* ⚠️ THREE CAPABILITIES, DELIBERATELY NOT COLLAPSED. Briefings OPENS
+             on `manageFacility` (owner + facility manager, 2026-08-22 — it was
+             `editConfig`, so the facility manager could not reach the tasks a
+             brief raised for them). Completing one is `manageFacility` too, but
+             passing the real capability rather than `true` keeps them
+             independent. `editConfig` decides which TABS render, because four
+             of them read owner-only endpoints — see the table in
+             ReportsModal's header. Every one of these is a rendering
+             convenience; `supervisor-proxy.py` re-checks all three. */
           canAck={canManageFacility}
+          canConfigure={canEditConfig}
         />
       )}
 

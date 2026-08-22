@@ -1,3 +1,12 @@
+## 2.600.0
+
+### Fixed — the facility manager could not open Briefings, and Checks was two tabs
+
+Briefings was gated on `editConfig`, so the one role the server permits to
+complete a task could not reach the tab listing them; it now opens on
+`manageFacility`, owner-only tabs filtered inside rather than refused. Checks
+absorbed Diagnostics, whose check list was a thinner copy of its own.
+
 ## 2.599.0
 
 ### Added — caretaker tasks can be acknowledged from the kiosk

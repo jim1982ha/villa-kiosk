@@ -157,8 +157,14 @@ export default function CockpitTab({
   // ⚠️ OWNER ONLY, AND NOT BY HIDING A 403. `/reports-diagnostics` is owner-only
   // server-side whatever the browser sends; asking as a guest would be a
   // pointless request per open AND would put "the briefing subsystem exists" in
-  // front of a profile that cannot act on it. Gated on the same capability that
-  // gates the Briefings workspace itself.
+  // front of a profile that cannot act on it.
+  //
+  // ⚠️ THIS IS NO LONGER "THE SAME CAPABILITY THAT OPENS BRIEFINGS", WHICH IS
+  // WHAT THIS COMMENT SAID UNTIL 2026-08-22. Briefings now opens on
+  // `manageFacility` so the facility manager can reach Tasks and History; this
+  // block stays on `editConfig` because it reads the owner-only diagnostics
+  // document, which is the same reason Briefings hides its own four owner tabs
+  // from `ops`. The gate tracks the ENDPOINT, not the dialog.
   const canSeeMonitoring = role != null && hasCapability(role, "editConfig");
   const [monitoring, setMonitoring] = useState<{
     diagnostics: ReportsDiagnostics | null; history: ReportHistoryEntry[] | null;

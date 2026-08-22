@@ -1,5 +1,6 @@
 // src/components/reports/ReportsModal.tsx
-// The Briefings workspace — one modal, five tabs, owner only.
+// The Briefings workspace — one modal, six tabs, opened by the owner and by the
+// facility manager.
 //
 // ⚠️ LABELLED "BRIEFINGS", NOT "REPORTS", AND ON PURPOSE. Facility already has
 // a tab called "Report" — a DOCUMENT the facility manager generates on demand,
@@ -17,12 +18,21 @@
 // Tab order is the order somebody actually approaches this: read one, see what
 // it can and cannot measure, decide when it arrives, then look at the record.
 //
-//   Preview      compose one now and read it, sending nothing
+//   Preview      compose one now and read it, sending nothing        owner
 //   Coverage     what this property can be asked about, and what it cannot
-//   Checks       the built-in analyses, on/off, and why each did or did not run
+//                                                                    owner
+//   Checks       is anything listening, what this villa's automations have
+//                reported, the built-in analyses on/off, and why each did or
+//                did not run                                         owner
 //   Schedule     when it arrives, for whom, where, and who writes the prose
+//                                                                    owner
+//   Tasks        the maintenance jobs a brief raised, and ticking them off
 //   History      what was produced and whether it was delivered
-//   Diagnostics  the detection layer's own health
+//
+// ⚠️ "Checks" ABSORBED "Diagnostics" (2026-08-22) — see ModulesTab's header for
+// why the two were one question. Nothing was dropped; the collector health that
+// tab owned is now the FIRST section of Checks, because everything under it is
+// meaningless while nothing is listening.
 //
 // ⚠️ THE SHELL IS COPIED FROM `FacilityModal`, NOT INVENTED. A dialog assembled
 // from `.modal-backdrop` + `.modal.settings-modal` renders as a centred card on
@@ -32,14 +42,39 @@
 // Facility has it: these tabs have wildly different content lengths and letting
 // the dialog resize around every switch is jarring.
 //
-// ⚠️ OWNER-GATED HERE AND, INDEPENDENTLY, ON THE SERVER. Hiding this from the
-// HUD is a rendering convenience; `supervisor-proxy.py` refuses a non-owner PUT
-// to /reports-config and a non-owner GET of /reports-diagnostics whatever the
-// browser sends. Never the only gate.
+// ⚠️ TWO CAPABILITIES OPEN THIS, AND THE TABS ARE GATED SEPARATELY FROM THE
+// DIALOG (2026-08-22, owner: "the Facility Manager shall have access to it").
+// The modal opens on `manageFacility`, which the owner and `ops` both hold;
+// `canConfigure` (`editConfig`, owner only) decides which tabs render. That
+// split is not a preference — it MIRRORS the proxy, which is the real gate:
+//
+//   GET  /reports-config        any authorized session
+//   GET  /reports-history       any authorized session
+//   GET  /reports-tasks         any authorized session
+//   POST /reports-tasks-complete  owner + ops   (TASK_ACK_ROLES)
+//   PUT  /reports-config        owner
+//   GET  /reports-diagnostics   owner
+//   POST /reports-run-now       owner
+//   POST /reports-next-run      owner
+//   GET/PUT /reports-secret     owner
+//
+// So a facility manager gets Tasks and History — the two things their job
+// actually needs, reading what was delivered and ticking off what it raised —
+// and the four owner tabs are not rendered rather than rendered-and-403. ⚠️ A
+// TAB THAT 403s IS WORSE THAN AN ABSENT ONE: it invites the reader to conclude
+// the add-on is broken. Hiding is a rendering convenience; the proxy refuses
+// whatever the browser sends. Never the only gate.
+//
+// ⚠️ AND `reload()` MUST NOT ASK FOR WHAT IT CANNOT HAVE. It fetches four
+// documents in parallel and two of them are owner-only, so an `ops` session
+// would fire two guaranteed 403s on every open — noise in the add-on log that
+// looks exactly like an attack, and `unreachable` is derived from the config
+// read, which would still be fine and so would hide nothing. Skipped by
+// capability instead.
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Activity, AlertTriangle, CalendarClock, CheckCircle2, ClipboardList,
+  AlertTriangle, CalendarClock, CheckCircle2, ClipboardList,
   FileText, History, Loader2, Save as SaveIcon, ShieldQuestion,
   SlidersHorizontal,
 } from "lucide-react";
@@ -56,27 +91,34 @@ import PreviewTab from "./PreviewTab";
 import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
-import DiagnosticsTab from "./DiagnosticsTab";
 import TasksTab from "./TasksTab";
 import ModulesTab from "./ModulesTab";
 
-type Tab = "preview" | "coverage" | "checks" | "schedule" | "tasks" | "history" | "diagnostics";
+type Tab = "preview" | "coverage" | "checks" | "schedule" | "tasks" | "history";
 
-const TABS: { id: Tab; label: string; icon: typeof FileText }[] = [
-  { id: "preview", label: "Preview", icon: FileText },
-  { id: "coverage", label: "Coverage", icon: ShieldQuestion },
-  { id: "checks", label: "Checks", icon: SlidersHorizontal },
-  { id: "schedule", label: "Schedule", icon: CalendarClock },
+/** ⚠️ `configure: true` MEANS "THE PROXY WOULD REFUSE THIS TAB TO ANYONE BUT
+ *  THE OWNER" — see the endpoint table in this file's header. It is not a
+ *  judgement about who ought to see what; changing one of these without
+ *  changing the matching handler puts a tab on screen that cannot work. */
+const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[] = [
+  { id: "preview", label: "Preview", icon: FileText, configure: true },
+  { id: "coverage", label: "Coverage", icon: ShieldQuestion, configure: true },
+  { id: "checks", label: "Checks", icon: SlidersHorizontal, configure: true },
+  { id: "schedule", label: "Schedule", icon: CalendarClock, configure: true },
   { id: "tasks", label: "Tasks", icon: ClipboardList },
   { id: "history", label: "History", icon: History },
-  { id: "diagnostics", label: "Diagnostics", icon: Activity },
 ];
 
 export default function ReportsModal(
-  { onClose, canAck }: { onClose: () => void; canAck: boolean },
+  { onClose, canAck, canConfigure }:
+  { onClose: () => void; canAck: boolean; canConfigure: boolean },
 ) {
   const dialogRef = useModalA11y(onClose);
-  const [tab, setTab] = useState<Tab>("preview");
+  const tabs = TABS.filter((t) => canConfigure || !t.configure);
+  // ⚠️ THE DEFAULT TAB IS THE FIRST VISIBLE ONE, NOT A LITERAL. Hard-coding
+  // "preview" opened a facility manager on a tab that is not in their list, so
+  // the body rendered nothing while every tab button looked unselected.
+  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "tasks");
 
   const [config, setConfig] = useState<ReportsConfig | null>(null);
   const [rev, setRev] = useState<string | null>(null);
@@ -139,9 +181,16 @@ export default function ReportsModal(
   useEffect(() => { setNoticeOpen(notice?.bad ?? false); }, [notice]);
 
   const reload = useCallback(async () => {
-    const [c, d, h, k] = await Promise.all([
-      fetchReportsConfig(), fetchReportsDiagnostics(), fetchReportsHistory(),
-      fetchNarrationSecrets(),
+    // ⚠️ THE TWO OWNER-ONLY READS ARE SKIPPED, NOT FIRED-AND-CAUGHT. See the
+    // endpoint table in the header: `/reports-diagnostics` and
+    // `/reports-secret` are owner-only, and the tabs that consume them are not
+    // rendered for a facility manager anyway — so asking would buy nothing and
+    // cost two 403s in the add-on log on every open.
+    const [c, h, d, k] = await Promise.all([
+      fetchReportsConfig(),
+      fetchReportsHistory(),
+      canConfigure ? fetchReportsDiagnostics() : Promise.resolve(null),
+      canConfigure ? fetchNarrationSecrets() : Promise.resolve({}),
     ]);
     if (c) {
       setConfig(c.config);
@@ -151,8 +200,11 @@ export default function ReportsModal(
     setDiagnostics(d);
     setHistory(h);
     setSecretsConfigured(k);
+    // ⚠️ DERIVED FROM THE CONFIG READ, WHICH EVERY ROLE MAY MAKE. Deriving it
+    // from the diagnostics read instead would show "the add-on could not be
+    // reached" to every facility manager, on an add-on that answered fine.
     setUnreachable(c === null);
-  }, []);
+  }, [canConfigure]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -301,7 +353,7 @@ export default function ReportsModal(
         </div>
 
         <div className="fm-tabs" role="tablist" aria-label="Briefing sections">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon;
             return (
               <button
@@ -357,6 +409,7 @@ export default function ReportsModal(
               preview={preview}
               busy={busy}
               onSave={(next) => void save(next)}
+              onRefresh={() => void refresh()}
             />
           )}
           {tab === "schedule" && (
@@ -376,7 +429,6 @@ export default function ReportsModal(
               a button they would be refused. */}
           {tab === "tasks" && <TasksTab canAck={canAck} />}
           {tab === "history" && <HistoryTab entries={history} />}
-          {tab === "diagnostics" && <DiagnosticsTab diagnostics={diagnostics} />}
         </div>
 
         {/* ⚠️ THE SHELL WAS COPIED FROM `FacilityModal` AND THE FOOTER WAS NOT.

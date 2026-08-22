@@ -250,3 +250,76 @@ def test_the_matcher_survives_an_arrow_function_in_the_attributes() -> None:
     assert COMMIT_WORD.search(found[0]), "the label was not reached"
     assert not _in_record_row(markup, found[0]), (
         "a bare pane is not a .modal-actions row")
+
+
+def _component_path(name: str) -> str:
+    """Where a modal component lives, by name — the repo has one of each."""
+    for folder in ("reports", "fm", "cockpit", "settings", "panels"):
+        candidate = os.path.join("src", "components", folder, f"{name}.tsx")
+        if os.path.exists(os.path.join(REPO_ROOT, candidate)):
+            return candidate
+    raise AssertionError(f"cannot locate {name}.tsx")
+
+
+def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
+    """⚠️ THE TASKS TAB SHIPPED BEHIND A DOOR ITS OWN USER COULD NOT OPEN.
+
+    Completing a caretaker task is the FACILITY MANAGER's job — the server
+    gates it on `TASK_ACK_ROLES = ("owner", "ops")`. The tab was built into
+    Briefings, which `Dashboard` gated on `editConfig`, a capability `ops` does
+    not hold. So every check passed, the RBAC was correct on both sides, and the
+    feature was unreachable by the only person it existed for.
+
+    ⚠️ FIXED ON THE DIALOG, NOT ON THIS TEST (2026-08-22). It passed throughout
+    the bug, because `FacilityModal` renders TasksTab too and IS gated on
+    `manageFacility` — one reachable host satisfies it, so a second host being
+    walled off was invisible here. The owner reported the wall directly: "the
+    Facility Manager role don't have access to the Briefings modal". Briefings
+    now opens on `manageFacility` as well, and its four owner-only TABS are
+    filtered inside the dialog by `canConfigure` instead, which is what keeps
+    this from becoming a licence to show `ops` a Schedule tab the proxy refuses.
+    The assertion is unchanged and still derives every side from source.
+
+    ⚠️ NEITHER HALF WAS WRONG ON ITS OWN, which is why nothing caught it. The
+    server's role list was right, the modal's capability gate was right, and
+    nobody owned the question "can the role the server permits actually GET
+    here". That question is this test.
+
+    Derived from three sources rather than restated: the roles from the proxy,
+    the capabilities from `permissions.ts`, and the gating from `Dashboard.tsx`.
+    A new host for the tab, or a change to either gate, is covered on the day it
+    lands.
+    """
+    dashboard = _read("src/pages/Dashboard.tsx")
+    permissions = _read("src/auth/permissions.ts")
+
+    hosts = [name for name in ("ReportsModal", "FacilityModal")
+             if f"<{name}" in dashboard]
+    assert hosts, "neither modal is rendered — this test is blind"
+
+    # Which capability gates each host, read from the render site.
+    gates: Dict[str, str] = {}
+    for host in hosts:
+        line = next((l for l in dashboard.splitlines() if f"<{host}" in l), "")
+        block = dashboard[max(0, dashboard.index(line) - 200):dashboard.index(line)]
+        found = re.findall(r"can([A-Z]\w+)\s*&&", block)
+        assert found, f"cannot tell what gates {host}"
+        gates[host] = found[-1][0].lower() + found[-1][1:]
+
+    # Which hosts actually render the Tasks tab.
+    rendering = [h for h in hosts
+                 if "TasksTab" in _read(_component_path(h))]
+    assert rendering, "nothing renders TasksTab — the feature is gone"
+
+    # Which capabilities `ops` holds.
+    ops_block = permissions[permissions.index("ops: {"):]
+    ops_block = ops_block[:ops_block.index("},")]
+    ops_caps = set(re.findall(r'"(\w+)"', ops_block))
+    assert "manageFacility" in ops_caps, "permissions.ts moved — test is blind"
+
+    reachable = [h for h in rendering if gates.get(h) in ops_caps]
+    assert reachable, (
+        f"the facility manager cannot reach the Tasks tab. It renders in "
+        f"{rendering}, gated on {[gates.get(h) for h in rendering]}, and `ops` "
+        f"holds {sorted(ops_caps)}. The server permits `ops` to complete a "
+        f"task; the UI must let them get to one.")

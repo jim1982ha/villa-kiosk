@@ -28,7 +28,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog, Gauge,
+  ClipboardCheck, ClipboardList, ListChecks, Wrench, Wallet, FileText,
+  CalendarCog, Gauge,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -46,10 +47,12 @@ import ReadinessTab from "./ReadinessTab";
 import FaultsTab from "./FaultsTab";
 import SpendTab from "./SpendTab";
 import ReportTab from "./ReportTab";
+import TasksTab from "@/components/reports/TasksTab";
 import ScheduleEditor from "./ScheduleEditor";
 
 export type FacilityTab =
-  | "cockpit" | "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
+  | "cockpit" | "today" | "readiness" | "faults" | "tasks" | "spend"
+  | "schedule" | "report";
 
 const TABS: { id: FacilityTab; label: string; icon: typeof ListChecks }[] = [
   // First, because "how is the villa" precedes "what shall I do about it" —
@@ -59,6 +62,26 @@ const TABS: { id: FacilityTab; label: string; icon: typeof ListChecks }[] = [
   { id: "today", label: "Today", icon: ListChecks },
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "faults", label: "Faults", icon: Wrench },
+  // ⚠️ THE SAME TAB AS BRIEFINGS', AND THE SECOND ENTRY POINT IS THE POINT.
+  // Acknowledging a caretaker task is the FACILITY MANAGER's job. This tab was
+  // added because Briefings was gated on `editConfig`, which `ops` does not
+  // hold, so the tab built for them sat behind a door only the owner could
+  // open; Facility is gated on `manageFacility`, exactly the capability the
+  // server requires to complete a task.
+  //
+  // ⚠️ BRIEFINGS OPENED TO `ops` THE SAME WEEK (2026-08-22) AND THIS TAB STAYS.
+  // It is no longer the ONLY way in, which is the sentence above's original
+  // justification, and keeping it is still right for a different reason: this
+  // is the facility manager's home workspace — the villa's faults, readiness
+  // and schedule are here — and a job list belongs beside the work it is about,
+  // not only in the dialog that happens to have raised it. Deleting it now
+  // would move the FM's daily task out of their daily screen.
+  //
+  // ⚠️ THE COMPONENT IS IMPORTED, NOT COPIED. A second implementation of the
+  // list would be a second place for the "only items this system wrote may be
+  // completed" rule to be got wrong, and that rule is what stops the kiosk
+  // ticking off somebody's groceries.
+  { id: "tasks", label: "Tasks", icon: ClipboardList },
   { id: "spend", label: "Spend", icon: Wallet },
   // Before Report: configuring the schedule is what the report and the Today
   // board both read from, so it belongs upstream of the annex that summarises
@@ -296,6 +319,7 @@ export default function FacilityModal({
                 openTicketId={openFaultId ?? ownFaultId ?? undefined}
                 onTicketOpened={() => { setOwnFaultId(null); onFaultFormOpened?.(); }} />
             )}
+            {ready && tab === "tasks" && <TasksTab canAck />}
             {ready && tab === "spend" && (
               <SpendTab onOpenEntity={onOpenEntity} deviceOptions={deviceOptions} />
             )}
