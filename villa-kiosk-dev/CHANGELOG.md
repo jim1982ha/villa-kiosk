@@ -1,3 +1,11 @@
+## 2.639.0
+
+### Fixed — silence that could not be told apart from good news
+Two tools returned an empty result when they had no data source, which reads
+identically to "this villa has nothing unusual". They refuse now, and say so.
+The villa profile made the same over-claim: "nothing known to be unmeasured"
+printed whether the property had been surveyed or never looked at.
+
 ## 2.638.0
 
 ### Changed — pick who may message the villa by name, not by number
