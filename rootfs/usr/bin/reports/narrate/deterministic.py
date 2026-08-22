@@ -88,6 +88,22 @@ AUDIENCE_WORD = {"owner": "property brief", "facility": "facility brief"}
 #: and the ranked sections put the ones that matter first.
 MAX_LINES = 8
 
+#: The MONEY section's own ceiling, which is lower than the shared one.
+#:
+#: ⚠️ NOT A CHANGE TO `MAX_LINES`, WHICH SIXTEEN SECTIONS READ. The workbook's
+#: Report Spec caps avoidable-cost at five lines and the code was emitting eight;
+#: retuning the shared constant to satisfy that would silently truncate standing
+#: state, caretaker tasks, forecasts, rules and drift as well — a spec item for
+#: one section applied to fifteen that never asked for it.
+#:
+#: ⚠️ FIVE IS A READING BUDGET, NOT A DATA LIMIT, AND THE REST IS NOT LOST. This
+#: section is ranked by cost, so the tail is by construction the cheap end, and
+#: `_money`'s "and N more — X between them" carries their combined figure. That
+#: tail is what keeps the headline total derivable from the page (the owner
+#: asked directly whether it was), so lowering the cap moves cost from named
+#: lines into a counted remainder without making the arithmetic unreachable.
+MONEY_MAX_LINES = 5
+
 #: The four standing kinds, in the order the Cockpit paints them and with the
 #: word each is summarised by when a group is truncated.
 #: ⚠️ DERIVED FROM NOTHING — it is a presentation order, and the KINDS
@@ -983,7 +999,7 @@ class DeterministicNarrator:
             if chart:
                 noun = trend_mod.PERIOD_NOUN.get(context.cadence, "period")
                 lines.append(f"   {_plural(len(past) + 1, noun)}: {chart}")
-            for group in self._top(billable):
+            for group in self._top(billable, MONEY_MAX_LINES):
                 lines.append(self._money_line(group, whole=whole))
             # ⚠️ THE TAIL CARRIES ITS COST, OR THE TOTAL CANNOT BE REACHED.
             # `_and_more` prints "and N more." with no figure, so beyond
@@ -991,9 +1007,9 @@ class DeterministicNarrator:
             # page — asked directly: "are you sure this number can be derived
             # from the rest of the report?". It was, in the brief that prompted
             # the question, because it had two lines. With nine it would not be.
-            hidden = [g for g in billable[MAX_LINES:]
+            hidden = [g for g in billable[MONEY_MAX_LINES:]
                       if self._number(g, "total_cost") is not None]
-            extra = len(billable) - MAX_LINES
+            extra = len(billable) - MONEY_MAX_LINES
             if extra > 0:
                 spent = sum(self._as_shown(self._number(g, "total_cost") or 0.0,
                                            whole) for g in hidden)
@@ -2007,8 +2023,12 @@ class DeterministicNarrator:
         return f"{hours / 24:.1f} days".replace(".0 ", " ")
 
     @staticmethod
-    def _top(groups: Sequence[Any]) -> Sequence[Any]:
-        return groups[:MAX_LINES]
+    def _top(groups: Sequence[Any], limit: int = MAX_LINES) -> Sequence[Any]:
+        """The first `limit` groups. ⚠️ THE LIMIT IS A PARAMETER BECAUSE MONEY
+        DIFFERS — see `MONEY_MAX_LINES`. It defaults to the shared `MAX_LINES`,
+        so the other four call sites are unchanged and a new one gets the
+        general rule without having to know there is an exception."""
+        return groups[:limit]
 
     @staticmethod
     def _and_more(groups: Sequence[Any]) -> List[str]:

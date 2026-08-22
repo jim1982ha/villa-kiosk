@@ -1,3 +1,14 @@
+## 2.603.0
+
+### Changed — the avoidable-cost list is five lines, as the Report Spec says
+
+It was eight, from a `MAX_LINES` that sixteen other sections also read — so
+retuning that constant would have truncated standing state, tasks, forecasts and
+drift to satisfy a spec item about money alone. The money section now has its
+own ceiling. Nothing is lost: the list is ranked by cost, so the tail is the
+cheap end, and it still carries the combined figure that keeps the headline
+total derivable from the page.
+
 ## 2.602.0
 
 ### Fixed — six tests were failing, and one had never run at all

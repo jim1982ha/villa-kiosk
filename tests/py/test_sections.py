@@ -886,11 +886,33 @@ def test_the_headline_total_is_derivable_from_the_page() -> None:
 
 
 def test_a_truncated_money_list_still_reaches_its_total() -> None:
-    """Nine findings, eight lines. The ninth must be accounted for, not hidden
-    behind a bare "and 1 more."."""
-    groups = [_roi(f"Load {i}", 10.0) for i in range(9)]
+    """Nine findings, five lines. The other four must be accounted for, not
+    hidden behind a bare "and 4 more.".
+
+    ⚠️ THE CAP IS THE MONEY SECTION'S OWN (`MONEY_MAX_LINES`, v2.603.0), not the
+    shared `MAX_LINES` — the workbook specifies five here and sixteen other
+    sections keep eight. Derived from the constant AND pinned to the literal 5:
+    importing it alone would let a mutation move the constant and the expectation
+    together, which is the self-referential trap that made an earlier pin
+    worthless.
+    """
+    from reports.narrate.deterministic import MONEY_MAX_LINES
+    assert MONEY_MAX_LINES == 5, "the workbook's Report Spec caps money at five"
+    total_findings = MONEY_MAX_LINES + 4
+    groups = [_roi(f"Load {i}", 10.0) for i in range(total_findings)]
     body = _render(aggregated=_events(*groups), currency="IDR")
-    assert "and 1 more" in body
+    assert f"and {total_findings - MONEY_MAX_LINES} more" in body
+    # ⚠️ AND THE CAP IS ACTUALLY APPLIED, not merely announced in the tail. A
+    # version that printed every line and still said "and 4 more" would satisfy
+    # the sum below, because that sum is over what is VISIBLE.
+    #
+    # ⚠️ NAMED LINES, NOT `_money_figures`. That helper returns every figure in
+    # the section INCLUDING the tail's combined one — which is the figure that
+    # makes the total derivable and must be there. Counting it as a line is how
+    # this assertion first read 6 and blamed the code.
+    named = [l for l in body.splitlines() if l.startswith("• Load ")]
+    assert len(named) == MONEY_MAX_LINES, (
+        f"expected {MONEY_MAX_LINES} named money lines, got {len(named)}")
     figures = _money_figures(body)
     headline = next(l for l in body.splitlines()
                     if "Avoidable cost identified" in l)
