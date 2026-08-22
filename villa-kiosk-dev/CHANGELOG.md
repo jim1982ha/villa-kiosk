@@ -1,3 +1,13 @@
+## 2.607.0
+
+### Fixed — a redacted task read as a missing word, not a withheld one
+
+The Tasks tab showed "Critical automation(s) found OFF: . Re-enable, or
+document as a deliberate decision" — an instruction to re-enable nothing in
+particular. The stored task was complete; the entity-id redaction stranded the
+colon in front of the full stop. It only handled ids at the start of a line,
+and this shape puts them mid-sentence.
+
 ## 2.606.0
 
 ### Added — Done and Need help buttons on the phone, and escalation
