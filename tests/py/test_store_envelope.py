@@ -85,14 +85,30 @@ def _ts_sources() -> List[Tuple[str, str]]:
     return out
 
 
-#: How far around a `fetch(ingressPath("…"))` to look for the envelope. Wide
-#: enough to span a whole small client function, narrow enough that the next
-#: function's envelope cannot be mistaken for this one's.
+#: An upper bound on how far to look for the envelope after a fetch. ⚠️ IT IS
+#: NO LONGER THE ONLY DELIMITER — see `_uses`. It remains as a backstop for the
+#: last client in a file, which has no following declaration to stop at.
 WINDOW = 1400
+
+#: ⚠️ THE REAL DELIMITER, AND IT REPLACED A PURE CHARACTER WINDOW THAT PRODUCED
+#: A FALSE POSITIVE THE DAY A THIRD CLIENT WAS ADDED TO `agentApi.ts`. The
+#: window's own comment claimed it was "narrow enough that the next function's
+#: envelope cannot be mistaken for this one's" — which was true of the two
+#: files that existed when it was written and stopped being true as soon as a
+#: client with a long docstring sat between two others. It then read
+#: `loadAgentRuns`' `{runs}` as `loadAgentConfig`'s envelope and reported a
+#: mismatch in correct code. A test that cries wolf on correct code gets its
+#: assertion loosened, which is how a real pin dies.
+DECL = re.compile(r"\n(?:export\s+)?(?:async\s+)?function\s", re.MULTILINE)
 
 
 def _uses(route: str) -> List[Tuple[str, str]]:
-    """Every `(file, excerpt)` that fetches this route."""
+    """Every `(file, excerpt)` that fetches this route.
+
+    The excerpt runs from the fetch to the START OF THE NEXT DECLARATION, or
+    `WINDOW` characters, whichever comes first — so an envelope belonging to the
+    next client can never be attributed to this one.
+    """
     out: List[Tuple[str, str]] = []
     needle = f'ingressPath("{route.lstrip("/")}")'
     for path, source in _ts_sources():
@@ -101,7 +117,9 @@ def _uses(route: str) -> List[Tuple[str, str]]:
             at = source.find(needle, start)
             if at < 0:
                 break
-            out.append((path, source[at:at + WINDOW]))
+            chunk = source[at:at + WINDOW]
+            boundary = DECL.search(chunk)
+            out.append((path, chunk[:boundary.start()] if boundary else chunk))
             start = at + 1
     return out
 

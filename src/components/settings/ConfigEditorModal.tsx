@@ -15,6 +15,7 @@ import CentralModelInfo from "./CentralModelInfo";
 import { useGlbUpload } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
+import ChatSendersPanel from "./ChatSendersPanel";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 
@@ -235,6 +236,15 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           {/* Owner only: the endpoint itself 403s other roles (it carries
               other people's user-agents and error text), so don't render a
               panel that could only ever show an error for them. */}
+          {/* Owner only: /agent-config's PUT is owner-restricted, and this
+              list is the only thing standing between the villa and anyone who
+              finds the bot. */}
+          {role === "owner" && (
+            <CollapsibleSection title="Who may message the villa">
+              <ChatSendersPanel />
+            </CollapsibleSection>
+          )}
+
           {role === "owner" && (
             <CollapsibleSection title="Device telemetry">
               <TelemetryPanel />

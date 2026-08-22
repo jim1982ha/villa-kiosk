@@ -333,6 +333,29 @@ def test_a_list_shaped_response_is_accepted_too() -> None:
     assert collect._categories_from_blueprints(listing) == ["roi"]
 
 
+def test_the_chat_event_is_on_the_DERIVED_path_too() -> None:
+    """⚠️ THE PATH A CONFIGURED VILLA ACTUALLY TAKES, and the only one the
+    fallback tests do not cover.
+
+    Found as a mutation survivor: dropping `_with_chat` from the derived return
+    left every chat test green, because they all exercised the HELPER directly
+    and the two fallback tests exercise the other branch. A villa WITH VESTA
+    blueprints — the normal case — would have gone deaf to chat and nothing
+    would have said so.
+    """
+    async def run() -> Any:
+        class Installed:
+            async def command(self, *a: Any, **k: Any) -> Any:
+                return {"vesta/roi_idle_load.yaml":
+                        {"metadata": {"author": "VESTA", "name": "VESTA ROI"}}}
+        return await collect.discover_event_types(Installed())  # type: ignore[arg-type]
+
+    types, stems = asyncio.run(run())
+    assert "telegram_text" in types, (
+        "a villa with blueprints installed cannot answer a question")
+    assert "vesta_roi_event" in types and stems, "the derived half still works"
+
+
 def test_no_vesta_blueprints_falls_back_rather_than_going_deaf() -> None:
     async def run() -> Any:
         class Empty:
@@ -341,7 +364,11 @@ def test_no_vesta_blueprints_falls_back_rather_than_going_deaf() -> None:
         return await collect.discover_event_types(Empty())  # type: ignore[arg-type]
 
     types, categories = asyncio.run(run())
-    assert types == list(collect.FALLBACK_EVENT_TYPES)
+    # ⚠️ THE CHAT EVENT IS ON THE FALLBACK PATH TOO. A property with no VESTA
+    # blueprints, or one whose core is unreachable, must still be able to
+    # answer a question — the conversation has nothing to do with the detection
+    # layer and must not degrade with it.
+    assert types == list(collect.FALLBACK_EVENT_TYPES) + ["telegram_text"]
     assert categories == [], (
         "a fallback must not claim a blueprint layer — that decides whether the "
         "built-in modules stand down")
@@ -358,7 +385,11 @@ def test_an_unreachable_core_falls_back_rather_than_going_deaf() -> None:
         return await collect.discover_event_types(Broken())  # type: ignore[arg-type]
 
     types, categories = asyncio.run(run())
-    assert types == list(collect.FALLBACK_EVENT_TYPES)
+    # ⚠️ THE CHAT EVENT IS ON THE FALLBACK PATH TOO. A property with no VESTA
+    # blueprints, or one whose core is unreachable, must still be able to
+    # answer a question — the conversation has nothing to do with the detection
+    # layer and must not degrade with it.
+    assert types == list(collect.FALLBACK_EVENT_TYPES) + ["telegram_text"]
     assert categories == [], "an unreachable Core proves nothing about the property"
 
 

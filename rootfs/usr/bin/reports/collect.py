@@ -193,14 +193,37 @@ async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
         listing: Any = await hass.command("blueprint/list", domain="automation")
     except HassUnavailable as err:
         warn(f"could not list blueprints ({err}); using the fallback event list")
-        return list(FALLBACK_EVENT_TYPES), []
+        return _with_chat(FALLBACK_EVENT_TYPES), []
 
     stems = _stems_from_blueprints(listing)
     if not stems:
         warn("no VESTA blueprints found; using the fallback event list")
-        return list(FALLBACK_EVENT_TYPES), []
+        return _with_chat(FALLBACK_EVENT_TYPES), []
     categories = sorted({category_of(s) for s in stems})
-    return ([EVENT_TEMPLATE.format(category=c) for c in categories], stems)
+    return (_with_chat([EVENT_TEMPLATE.format(category=c) for c in categories]),
+            stems)
+
+
+#: ⚠️ ADDED TO EVERY SUBSCRIPTION, INCLUDING THE FALLBACK ONE, AND THAT IS THE
+#: POINT. The blueprint event names are DERIVED from what is installed; the chat
+#: event is not derived from anything, because a property with no VESTA
+#: blueprints at all must still be able to answer a question. Deriving it would
+#: make the conversation depend on a detection layer it has nothing to do with.
+#:
+#: ⚠️ AND IT RIDES THIS CONNECTION RATHER THAN OPENING ANYTHING. One more event
+#: type on a websocket already held: no webhook, no public URL, no inbound
+#: firewall hole. It is low-volume by nature — a person typing — so it cannot
+#: put the loop behind the villa's own state traffic.
+CHAT_EVENT_TYPES = ("telegram_text",)
+
+
+def _with_chat(types: Sequence[str]) -> List[str]:
+    """The derived list plus the chat event, without duplicating it."""
+    out = list(types)
+    for name in CHAT_EVENT_TYPES:
+        if name not in out:
+            out.append(name)
+    return out
 
 
 def read_buffer() -> Dict[str, Any]:

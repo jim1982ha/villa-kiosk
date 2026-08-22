@@ -37,6 +37,7 @@ const AGENT_WIRE_KEYS = {
   model_brief: "modelBrief",
   allowed_senders: "allowedSenders",
   actuable_refs: "actuableRefs",
+  allowed_services: "allowedServices",
   suppressed_subjects: "suppressedSubjects",
 } as const;
 
@@ -59,6 +60,9 @@ export interface AgentConfig {
   allowedSenders: Record<string, "owner" | "facility" | "ops">;
   /** ⚠️ EMPTY MEANS THE AGENT MAY ACT ON NOTHING. Never seed this. */
   actuableRefs: string[];
+  /** Which SERVICES, as distinct from `actuableRefs`' which DEVICES. Both
+   *  allow-lists must pass. ⚠️ Never seed this either. */
+  allowedServices: string[];
   suppressedSubjects: string[];
 }
 
@@ -120,6 +124,32 @@ export async function loadConcerns(): Promise<Concern[]> {
     : {};
   const rows = Array.isArray(inner.concerns) ? inner.concerns : [];
   return rows.filter((c): c is Concern => !!c && typeof c === "object");
+}
+
+/**
+ * Save a slice of the agent config. Owner-only server-side; returns whether the
+ * write was accepted.
+ *
+ * ⚠️ A PARTIAL, AND THE STORE MERGES IT. `agent.config.view` spreads stored
+ * values over defaults at READ time and persists no defaults, so sending only
+ * the keys being changed is what keeps a key the owner DELETED deleted — the
+ * "stale entities I can't delete" bug this project has already shipped once.
+ *
+ * ⚠️ AND IT SENDS THE REVISION IT READ. The store is conditional-write; without
+ * `expected_rev` two tabs silently overwrite each other. A 409 comes back as
+ * `false` and the caller reloads rather than retrying, because re-sending the
+ * same body would discard whatever the other tab just saved.
+ */
+export async function saveAgentConfig(
+  patch: Partial<AgentConfig>, rev: string | null,
+): Promise<boolean> {
+  const r = await fetch(ingressPath("agent-config"), {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config: toWire(patch), expected_rev: rev ?? "" }),
+  });
+  return r.ok;
 }
 
 /** Runs the agent has made, most recent last. Any authorised session. */

@@ -227,6 +227,77 @@ def test_tool_names_are_unique() -> None:
     assert len(set(names)) == len(names)
 
 
+def test_every_BaseTool_subclass_reaches_ALL_TOOLS_or_is_a_stated_exception() -> None:
+    """⚠️ `agent/tools/__init__.py` HAS CLAIMED THIS TEST EXISTED SINCE IT WAS
+    WRITTEN, AND IT DID NOT. Nothing walked the package; the assertion was in a
+    docstring. A tool that exists but is registered nowhere is one the model
+    never learns about, which fails silently and looks exactly like a model
+    choosing not to call it — invisible in a capture. Found by dry-audit Part 3
+    while adding the first tool that must NOT be collected.
+
+    ⚠️ AND THE EXEMPTION IS NAMED HERE, NOT INFERRED. `ReplyTool` is bound to
+    one conversation at construction and has no zero-argument form that can
+    reach anybody; collected into `ALL_TOOLS` it would be offered to every
+    scheduled run as a verb the model cannot use.
+    """
+    import importlib
+    import pkgutil
+
+    from agent.tools.base import BaseTool
+
+    #: name -> why it is not collected. Anything else must be in ALL_TOOLS.
+    EXEMPT = {
+        "ReplyTool": "bound to one conversation at construction; an unbound "
+                     "instance can reach nobody, so offering it to a scheduled "
+                     "run teaches a verb that cannot work",
+        "BaseTool": "the base class itself",
+    }
+
+    collected = {cls.__name__ for cls in ALL_TOOLS}
+    found: Dict[str, str] = {}
+    package = importlib.import_module("agent.tools")
+    for info in pkgutil.iter_modules(package.__path__):
+        module = importlib.import_module(f"agent.tools.{info.name}")
+        for attr in vars(module).values():
+            if (isinstance(attr, type) and issubclass(attr, BaseTool)
+                    and attr.__module__ == module.__name__):
+                found[attr.__name__] = module.__name__
+
+    assert found, "the package walk found no tools; this test is vacuous"
+    unregistered = sorted(n for n in found
+                          if n not in collected and n not in EXEMPT)
+    assert not unregistered, (
+        f"BaseTool subclass(es) that never reach ALL_TOOLS: {unregistered}. "
+        f"Add them to their module's export tuple, or to this test's EXEMPT "
+        f"map with the reason.")
+    stale = sorted(n for n in EXEMPT if n != "BaseTool" and n not in found)
+    assert not stale, (
+        f"EXEMPT names a tool that no longer exists: {stale}. An exemption for "
+        f"a deleted class is an exemption nobody notices is doing nothing.")
+
+
+def test_the_reply_tool_cannot_be_told_who_to_reply_to() -> None:
+    """TOOL-010. ⚠️ THE ABSENCE IS THE ENFORCEMENT.
+
+    A tool that took a recipient and validated it would be one validation bug
+    away from an agent that can message anybody it can name. A tool with no
+    vocabulary for a recipient is not.
+    """
+    from agent.tools import reply as reply_mod
+
+    tool = reply_mod.build(targets=["notify.a"], thread_key="telegram:1")
+    props = set(tool.inputSchema.get("properties", {}))
+    assert props == {"text"}, f"reply exposes more than text: {props}"
+    for forbidden in ("to", "target", "targets", "chat_id", "recipient",
+                      "entity_id", "channel"):
+        assert forbidden not in props
+    # ⚠️ AND TWO CONVERSATIONS MUST NOT SHARE A RECIPIENT. If the target were a
+    # class attribute rather than set at construction, the second person to
+    # message the villa would be answered into the first person's chat.
+    other = reply_mod.build(targets=["notify.b"], thread_key="telegram:2")
+    assert tool._targets == ("notify.a",) and other._targets == ("notify.b",)
+
+
 def test_every_read_tool_is_declared_READ() -> None:
     """The registry enforces the mode; no tool is trusted to behave."""
     for cls in read_tools.READ_TOOLS:

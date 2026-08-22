@@ -193,6 +193,46 @@ class Decision:
         return self.verdict == "allow"
 
 
+def sender_role(config: Optional[Mapping[str, Any]], *, channel: str,
+                sender_id: Any) -> str:
+    """Who is this, in one lookup? `""` means nobody — no run and no reply.
+
+    ⚠️ RESOLVED BEFORE THE MESSAGE TEXT IS READ, AND THAT ORDER IS THE WHOLE
+    CONTROL. The chat channel is the one place an attacker can inject text, so
+    nothing in a message may influence which role it is treated as. This
+    function takes no message and cannot be given one.
+
+    ⚠️ AN UNLISTED SENDER GETS SILENCE, NOT A REFUSAL. An error reply confirms
+    the bot is live to whoever is probing it, and the bot's username is
+    discoverable. The caller records one audit row and returns.
+
+    ⚠️ THE MAP IS SEEDED EMPTY AND A DEFAULT HERE WOULD BE A SECURITY BUG, not
+    a convenience — see `config.MUST_BE_EMPTY`. Empty means the bot answers
+    nobody, which is the correct state for a villa where nobody has said who may
+    talk to it.
+
+    ⚠️ KEYED `channel:sender_id`, NOT ON THE ID ALONE. A Telegram user id and a
+    future WhatsApp id are integers from different namespaces and would
+    eventually collide; a bare id map would then grant one person's role to a
+    stranger on another platform. Lookup is on the STRING of the id because
+    JSON object keys are strings and an int id round-trips as one.
+    """
+    cfg = agent_config.view(config)
+    senders = cfg.get("allowed_senders")
+    if not isinstance(senders, Mapping):
+        return ""
+    key = f"{str(channel).strip().lower()}:{str(sender_id).strip()}"
+    role = senders.get(key)
+    if not isinstance(role, str):
+        return ""
+    role = role.strip().lower()
+    # ⚠️ AN UNKNOWN ROLE IS NOBODY, NOT A DEFAULT ONE. Defaulting would grant
+    # some access to a typo, and this map is the only thing standing between the
+    # villa and anyone who finds the bot. `config.errors` refuses such a role on
+    # the way in; this is the second half, for a document written by hand.
+    return role if role in ("owner", "facility", "ops") else ""
+
+
 def may_use_tool(policy: RunPolicy, tool_name: str, mode: str = "READ") -> Decision:
     """May this run call this tool at all?
 
