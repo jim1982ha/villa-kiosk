@@ -680,3 +680,88 @@ def test_coverage_compares_in_utc_as_well() -> None:
     assert collect.coverage("2026-08-21T00:00:00+08:00")["complete"] is False
     # 09:00 local on the 21st — the collector was already up. Complete.
     assert collect.coverage("2026-08-21T09:00:00+08:00")["complete"] is True
+
+
+# ── the event consumer hook (TASK-036) ──────────────────────────────────────
+def _with_consumer(events: Sequence[Dict[str, Any]],
+                   consumer: Any) -> _FakeHass:
+    """`_collect`, but with an `on_event` callback wired in."""
+    fake = _FakeHass(events)
+    collector = collect.Collector(None, ["vesta_roi_event"],  # type: ignore[arg-type]
+                                  on_event=consumer)
+    import reports.collect as module
+
+    original = module.HassClient
+    module.HassClient = lambda session: fake  # type: ignore[assignment,misc]
+    try:
+        asyncio.run(collector.run_once())
+    finally:
+        module.HassClient = original  # type: ignore[assignment]
+    return fake
+
+
+def test_every_event_reaches_the_consumer() -> None:
+    """⚠️ THE HOOK IS THE ONLY PATH FROM AN INBOUND MESSAGE TO THE AGENT.
+
+    Found as a mutation survivor: deleting the `await self._dispatch(event)`
+    line left every chat test green, because they all call `handle_event`
+    directly and nothing exercised the wiring that would call it in production.
+    Chat would have been silently dead on a real villa.
+    """
+    seen: List[str] = []
+
+    async def consume(event: Dict[str, Any]) -> None:
+        seen.append(str(event.get("event_type") or ""))
+
+    _with_consumer([{"event_type": "telegram_text", "data": {"text": "hi"}},
+                    {"event_type": "vesta_roi_event", "data": {}}], consume)
+    assert seen == ["telegram_text", "vesta_roi_event"]
+
+
+def test_a_consumer_that_RAISES_does_not_close_the_subscription() -> None:
+    """⚠️ THE COLLECTOR'S CONTRACT IS THAT IT KEEPS RECORDING. An agent failure
+    taking the observation floor down with it inverts the dependency this
+    design deliberately puts them in — the floor is underneath the agent."""
+    seen: List[str] = []
+
+    async def explode(event: Dict[str, Any]) -> None:
+        seen.append("called")
+        raise RuntimeError("the agent fell over")
+
+    _with_consumer([{"event_type": "telegram_text", "data": {"text": "a"}},
+                    {"event_type": "telegram_text", "data": {"text": "b"}}],
+                   explode)
+    assert seen == ["called", "called"], (
+        "the second event never arrived; the first exception closed the loop")
+
+
+def test_no_consumer_is_the_normal_case_and_costs_nothing() -> None:
+    fake = _collect([{"event_type": "vesta_roi_event", "data": {}}])
+    assert fake.subscribed == ["vesta_roi_event"]
+
+
+# ── connected_seconds: the LIVE socket, never the persisted stamp ───────────
+def test_connected_seconds_is_zero_when_nothing_is_listening() -> None:
+    collect._LIVE["connected_since"] = ""
+    assert collect.connected_seconds() == 0.0
+
+
+def test_connected_seconds_reads_the_LIVE_stamp() -> None:
+    """⚠️ NEVER `online_since`, WHICH IS PERSISTED AND READS TRUE FOREVER after
+    the first connect — the exact lie `connected` was added to replace. The
+    chat backlog guard asks how long THIS connection has been up, and a
+    persisted answer says "months" one second after a restart, which is
+    precisely when a replayed backlog arrives."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    collect._LIVE["connected_since"] = now.isoformat()
+    got = collect.connected_seconds()
+    assert abs(got - now.timestamp()) < 2.0
+    collect._LIVE["connected_since"] = ""
+
+
+def test_an_unparseable_stamp_reads_as_not_connected() -> None:
+    collect._LIVE["connected_since"] = "not a date"
+    assert collect.connected_seconds() == 0.0
+    collect._LIVE["connected_since"] = ""

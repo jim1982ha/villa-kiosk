@@ -21,6 +21,12 @@ from agent.llm.base import ToolCall, Turn
 class FakeProvider:
     """Returns `script[i]` on the i-th call, then declines."""
 
+    def configured(self) -> bool:
+        """⚠️ PART OF THE PROTOCOL, so the fake stands in for a real adapter
+        rather than for a convenient subset of one. A fake missing a method the
+        caller uses tests the caller's fallback, not the caller."""
+        return True
+
     name = "fake"
 
     def __init__(self, script: Sequence[Turn]) -> None:

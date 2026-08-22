@@ -56,6 +56,23 @@ class Provider(Protocol):
 
     name: str
 
+    def configured(self) -> bool:
+        """Can this provider actually be called?
+
+        ⚠️ PART OF THE SEAM, NOT A CONVENTION, AND IT WAS THE SECOND FOR A
+        WHILE. `anthropic_sdk` had it and this protocol did not, so a caller had
+        to reach for it with `getattr(provider, "configured", lambda: False)` —
+        which treats a SECOND adapter that simply never implemented it as
+        permanently unconfigured. Adding a provider is meant to be a table
+        entry (ADR-013); a table entry that silently never runs is worse than
+        one that fails.
+
+        ⚠️ SEPARATE FROM HOLDING THE CREDENTIAL, so a diagnostic can ask whether
+        a provider is usable without putting the key on the caller's stack —
+        the same split `reports/secrets.py` makes.
+        """
+        ...
+
     async def run(self, *, system: Sequence[Mapping[str, Any]],
                   messages: Sequence[Mapping[str, Any]],
                   tools: Sequence[Mapping[str, Any]],

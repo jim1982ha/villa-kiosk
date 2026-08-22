@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from reports.narrate.style import inert
 
@@ -299,3 +299,79 @@ def stats() -> Dict[str, int]:
     return {"threads": len(_THREADS),
             "turns": sum(len(t.turns) for t in _THREADS.values()),
             "concerns": sum(len(t.concerns) for t in _THREADS.values())}
+
+
+# ── the entry point ─────────────────────────────────────────────────────────
+async def handle_event(event: Mapping[str, Any], *, session: Any,
+                       config: Optional[Mapping[str, Any]] = None,
+                       targets: Sequence[str] = (),
+                       document: str = "",
+                       provider: Any = None,
+                       model: str = "") -> str:
+    """One HA event → at most one run. Returns why it stopped, for the log.
+
+    ⚠️ THE ORDER OF THESE CHECKS IS THE DESIGN, AND EACH ONE REFUSES BEFORE THE
+    NEXT COSTS ANYTHING. Not ours → not enabled → not fresh → not permitted →
+    only then is a model asked. Reordering any pair either spends money on a
+    message that will be discarded, or reads a message before deciding whether
+    its sender may be listened to at all.
+
+    ⚠️ AND IT RETURNS A REASON RATHER THAN A BOOLEAN. "Nothing happened" has six
+    causes here and they need different responses from an operator — a
+    misconfigured allow-list, a switched-off trigger, a replayed backlog and a
+    spent budget all look identical from outside.
+    """
+    message = parse(event)
+    if message is None:
+        return ""
+
+    from agent import config as agent_config
+    if not agent_config.trigger_enabled(config, "chat"):
+        return "chat trigger disabled"
+
+    from reports import collect
+    if not is_fresh(message, connected_since=collect.connected_seconds()):
+        # ⚠️ COUNTED IN THE LOG, NOT SILENTLY DROPPED. A villa whose clock or
+        # whose Telegram platform is wrong would otherwise answer nothing with
+        # no explanation anywhere.
+        return "message too old to answer"
+
+    from agent import audit as audit_mod
+    from agent import policy as policy_mod
+    role = policy_mod.sender_role(config, channel=message.channel,
+                                  sender_id=message.sender_id)
+    if not role:
+        # ⚠️ ONE AUDIT ROW AND NO REPLY. Silence is the answer — an error reply
+        # confirms the bot is live to whoever is probing it. The row is what
+        # makes "somebody is trying to talk to the villa" visible to the owner
+        # without telling the prober anything.
+        audit_mod.record_run(f"chat{int(_now())}", actor="unknown",
+                             trigger="chat", verdict="refused",
+                             detail="sender not in allowed_senders")
+        return "sender not allowed"
+
+    if provider is None or not provider.configured():
+        return "no model provider configured"
+
+    from agent.registry import build_registry, run as run_loop
+    from agent.tools import reply as reply_mod
+
+    record_turn(message.thread_key, "user", message.text)
+    registry = build_registry()
+    # ⚠️ THE REPLY TOOL IS BUILT HERE, BOUND TO THIS MESSAGE'S CHAT, AND ADDED
+    # TO A COPY OF THE REGISTRY. It is deliberately absent from `ALL_TOOLS`,
+    # because an unbound one can reach nobody and would be offered to every
+    # scheduled run as a verb the model cannot use.
+    replier = reply_mod.build(targets=targets, session=session,
+                              thread_key=message.thread_key)
+    registry = registry.with_tool(replier)
+
+    policy = policy_mod.for_run(config, tier="reason",
+                                tool_names=[t["name"] for t in registry.describe()])
+    result = await run_loop(
+        run_id=f"chat{int(_now())}", provider=provider, registry=registry,
+        policy=policy, model=model,
+        system=[{"type": "text", "text": document}],
+        messages=context_for(message),
+        config=config, actor=role, trigger="chat", kind="chat")
+    return result.status

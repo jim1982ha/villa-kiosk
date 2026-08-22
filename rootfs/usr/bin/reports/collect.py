@@ -27,7 +27,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import (Any, Awaitable, Callable, Dict, List, Optional, Sequence,
+                    Tuple)
 
 from aiohttp import ClientSession
 
@@ -398,8 +399,16 @@ class Collector:
     """Holds one subscription open and appends what arrives."""
 
     def __init__(self, session: ClientSession,
-                 event_types: Optional[Sequence[str]] = None) -> None:
+                 event_types: Optional[Sequence[str]] = None,
+                 on_event: Optional["Callable[[Dict[str, Any]], Awaitable[None]]"] = None) -> None:
         self._session = session
+        # ⚠️ A CALLBACK RATHER THAN AN IMPORT, AND THE DIRECTION IS THE POINT.
+        # `reports/` must not import `agent/`: the collector predates the agent,
+        # runs on a villa where the agent is switched off, and is the honest
+        # observation floor underneath it. Handing the dispatch in from the
+        # proxy keeps this file free of any knowledge that a conversation
+        # exists — it records events, as it always has.
+        self._on_event = on_event
         #: None means "ask the deployment on connect" — see discover_event_types.
         self._types = list(event_types) if event_types else []
         self._pending: List[Dict[str, Any]] = []
@@ -522,6 +531,7 @@ class Collector:
                 async for event in hass.events():
                     self._record(event)
                     self._flush()
+                    await self._dispatch(event)
             finally:
                 # Cleared on ANY exit — a clean close, an error, or the
                 # cancellation raised at shutdown. A `finally` rather than a
@@ -530,6 +540,19 @@ class Collector:
                 # a collector that has stopped.
                 _LIVE["connected_since"] = ""
         self._flush(force=True)
+
+    async def _dispatch(self, event: Dict[str, Any]) -> None:
+        """Hand the event to the optional consumer. ⚠️ NEVER RAISES INTO THE
+        LOOP. A consumer that throws must not close the subscription — the
+        collector's whole contract is that it keeps recording, and an agent
+        failure taking the observation floor down with it inverts the
+        dependency this design puts them in."""
+        if self._on_event is None:
+            return
+        try:
+            await self._on_event(event)
+        except Exception as err:  # noqa: BLE001 - degrade, never fail
+            swallow("event consumer failed", err)
 
     async def run_forever(self, retry_seconds: float = 30.0) -> None:
         """Keep the subscription up for the life of the process.
@@ -574,6 +597,27 @@ def listening_days() -> Optional[float]:
     return (datetime.now(timezone.utc) - started).total_seconds() / 86400.0
 
 
+def connected_seconds() -> float:
+    """Unix seconds when the LIVE subscription was established, or 0.
+
+    ⚠️ THE LIVE SOCKET, NEVER `online_since`. That value is PERSISTED and reads
+    true forever after the first connect — the exact lie `connected` was added
+    to replace. The chat backlog guard asks "how long has this connection been
+    up", and a persisted answer would say "months" one second after a restart,
+    which is precisely when a replayed backlog arrives.
+    """
+    stamp = str(_LIVE["connected_since"] or "")
+    if not stamp:
+        return 0.0
+    try:
+        started = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return 0.0
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return started.timestamp()
+
+
 def blueprint_layer_present(within_days: int = 30) -> bool:
     """Has the automation layer emitted anything recently?
 
@@ -596,10 +640,12 @@ def blueprint_layer_present(within_days: int = 30) -> bool:
 
 
 async def run_forever(session: ClientSession,
-                      event_types: Optional[Sequence[str]] = None) -> None:
+                      event_types: Optional[Sequence[str]] = None,
+                      on_event: Optional["Callable[[Dict[str, Any]], Awaitable[None]]"] = None
+                      ) -> None:
     """Entry point for the proxy's startup hook.
 
     `event_types` is normally None so the deployment decides — an operator
     override exists for a property whose blueprints use a different convention.
     """
-    await Collector(session, event_types).run_forever()
+    await Collector(session, event_types, on_event).run_forever()

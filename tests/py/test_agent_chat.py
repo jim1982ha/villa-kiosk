@@ -21,8 +21,13 @@ from agent.tools import reply as reply_mod
 
 
 @pytest.fixture(autouse=True)
-def _clean() -> None:
+def _clean(tmp_path, monkeypatch) -> None:
     chat.reset()
+    # ⚠️ WITHOUT THIS THE AUDIT WRITES GO TO /data AND FAIL SILENTLY — `_append`
+    # swallows, by design — so every assertion about a row would read an empty
+    # list and pass vacuously.
+    from agent import audit as audit_mod
+    monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "audit.json"))
 
 
 def _event(**over: Any) -> Dict[str, Any]:
@@ -359,3 +364,97 @@ def test_no_webhook_and_no_port_were_added() -> None:
     for server in ("aiohttp", "aiohttp.web", "http.server", "socket",
                    "socketserver"):
         assert server not in imported, f"agent/chat.py imports {server}"
+
+
+# ── the whole path, with no network ─────────────────────────────────────────
+def _handle(event: Dict[str, Any], **kw: Any) -> str:
+    from fake_provider import FakeProvider, says
+
+    kw.setdefault("session", None)
+    kw.setdefault("provider", FakeProvider([says("The pump is fine.")]))
+    kw.setdefault("model", "m")
+    kw.setdefault("targets", ["notify.owner"])
+    kw.setdefault("config", {"enabled": True,
+                             "triggers": {"chat": True},
+                             "allowed_senders": {"telegram:222": "owner"}})
+    return asyncio.run(chat.handle_event(event, **kw))
+
+
+def test_a_message_from_a_listed_sender_produces_a_run() -> None:
+    assert _handle(_event()) == "answered"
+
+
+def test_the_chat_trigger_switch_stops_it_before_anything_costs_anything() -> None:
+    got = _handle(_event(), config={"enabled": True,
+                                    "triggers": {"chat": False},
+                                    "allowed_senders": {"telegram:222": "owner"}})
+    assert got == "chat trigger disabled"
+
+
+def test_the_master_switch_stops_it_too() -> None:
+    got = _handle(_event(), config={"enabled": False,
+                                    "triggers": {"chat": True},
+                                    "allowed_senders": {"telegram:222": "owner"}})
+    assert got == "chat trigger disabled"
+
+
+def test_an_unlisted_sender_gets_no_run_and_no_reply() -> None:
+    """TEST-029. ⚠️ EXACTLY ONE AUDIT ROW AND NO REPLY — silence is the answer,
+    because an error reply confirms the bot is live to whoever is probing it."""
+    from agent import audit as audit_mod
+
+    before = len(audit_mod.rows(500))
+    assert _handle(_event(), config={"enabled": True,
+                                     "triggers": {"chat": True},
+                                     "allowed_senders": {}}) == "sender not allowed"
+    rows = audit_mod.rows(500)[before:]
+    assert len(rows) == 1, f"expected one audit row, got {len(rows)}"
+    assert rows[0]["verdict"] == "refused"
+    assert "222" not in str(rows[0]), (
+        "the row must not record the prober's id verbatim")
+
+
+def test_a_replayed_backlog_message_is_refused_before_the_model() -> None:
+    got = _handle(_event(date=int(time.time()) - 6 * 3600))
+    assert got == "message too old to answer"
+
+
+def test_no_provider_means_no_run_rather_than_a_crash() -> None:
+    assert _handle(_event(), provider=None) == "no model provider configured"
+
+
+def test_the_checks_run_in_the_order_that_costs_least() -> None:
+    """⚠️ A message that is BOTH stale AND from an unlisted sender must report
+    the cheaper refusal, or the order has been changed to read a message before
+    deciding whether its sender may be listened to."""
+    got = _handle(_event(date=int(time.time()) - 6 * 3600),
+                  config={"enabled": True, "triggers": {"chat": True},
+                          "allowed_senders": {}})
+    assert got == "message too old to answer"
+
+
+def test_the_reply_tool_is_offered_only_on_the_chat_path() -> None:
+    from fake_provider import FakeProvider, says
+
+    seen: List[List[str]] = []
+
+    class Watching(FakeProvider):
+        async def run(self, **kw: Any) -> Any:
+            seen.append([t["name"] for t in kw["tools"]])
+            return await super().run(**kw)
+
+    _handle(_event(), provider=Watching([says("ok")]))
+    assert seen and "reply" in seen[0]
+
+
+def test_adding_the_reply_tool_does_not_mutate_the_shared_registry() -> None:
+    """⚠️ A mutated registry would leave a binding to whoever last messaged the
+    villa in place for every later run, including scheduled briefs."""
+    from agent.registry import build_registry
+    from agent.tools import reply as reply_mod
+
+    base = build_registry()
+    before = set(base.names)
+    widened = base.with_tool(reply_mod.build(targets=["notify.a"]))
+    assert set(base.names) == before, "the shared registry was mutated"
+    assert "reply" in set(widened.names)

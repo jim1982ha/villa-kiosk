@@ -105,7 +105,7 @@ import sys
 import tempfile
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
@@ -2185,7 +2185,7 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
     stored = _read_json_store(AGENT_CONFIG_FILE, {})
     config = agent_config.view(stored.get("config") if isinstance(stored, dict)
                                else {})
-    document = await _agent_document(request)
+    document = await _agent_document_text()
     if body.get("preview"):
         return web.json_response({"ok": True, "preview": True,
                                   "document": document,
@@ -2195,23 +2195,6 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
                                   "reason": "the agent is switched off "
                                             "(agent.enabled)"})
     return web.json_response(await _agent_run(config, document))
-
-
-async def _agent_document(request: web.Request) -> str:
-    """The Villa Document as the agent would see it right now.
-
-    ⚠️ NEVER RAISES — the same contract `reports_diagnostics_handler` states.
-    The panel exists to be readable exactly when something is wrong, so a Home
-    Assistant restart makes it report a thin document rather than a 500.
-    """
-    try:
-        from observe import snapshot
-        return snapshot.villa_document(
-            profile_text=snapshot.profile(),
-            delta_text=snapshot.delta())
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        print(f"[supervisor-proxy] villa document failed: {err}", flush=True)
-        return f"The villa document could not be assembled: {err}"
 
 
 async def _agent_run(config: Dict[str, Any], document: str) -> Dict[str, Any]:
@@ -2245,6 +2228,68 @@ async def _agent_run(config: Dict[str, Any], document: str) -> Dict[str, Any]:
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         print(f"[supervisor-proxy] agent run failed: {err}", flush=True)
         return {"ok": False, "status": "failed", "reason": str(err)}
+
+
+def _chat_dispatch(app: Any) -> Any:
+    """The collector's event consumer: hand a chat message to the agent.
+
+    ⚠️ WIRED HERE RATHER THAN INSIDE `collect.py`, AND THE DIRECTION MATTERS.
+    `reports/` must not import `agent/`: the collector predates the agent, runs
+    on a villa where the agent is switched off, and is the honest observation
+    floor underneath it. The proxy knows about both, so the proxy joins them.
+
+    ⚠️ AND IT READS CONFIG PER MESSAGE RATHER THAN AT STARTUP. Turning
+    `triggers.chat` off must take effect on the next message, not on the next
+    restart — a kill switch you have to reboot to use is not one.
+    """
+    async def dispatch(event: Dict[str, Any]) -> None:
+        from agent import chat as agent_chat
+        from agent import config as agent_config
+        from agent.llm import anthropic_sdk
+
+        if str(event.get("event_type") or "") != agent_chat.EVENT_TYPE:
+            return
+        stored = _read_json_store(AGENT_CONFIG_FILE, {})
+        config = agent_config.view(stored.get("config")
+                                   if isinstance(stored, dict) else {})
+        outcome = await agent_chat.handle_event(
+            event, session=app["session"], config=config,
+            targets=_chat_targets(config),
+            document=await _agent_document_text(),
+            provider=anthropic_sdk.build(
+                api_key=reports_secrets.get("anthropic") or ""),
+            model=str(config.get("model_reason") or ""))
+        if outcome:
+            print(f"[supervisor-proxy] chat: {outcome}", flush=True)
+
+    return dispatch
+
+
+def _chat_targets(config: Dict[str, Any]) -> List[str]:
+    """Where a reply goes. ⚠️ FROM CONFIG, NEVER FROM THE MESSAGE.
+
+    A recipient derived from the inbound payload would be a recipient an
+    attacker can set. The reply tool is bound to these, and they are the
+    notify targets an owner configured for this villa.
+    """
+    raw = config.get("chat_targets")
+    if isinstance(raw, list):
+        return [str(t) for t in raw if str(t).strip()]
+    stored = _read_json_store(reports_store.REPORTS_CONFIG_FILE,
+                              reports_store.EMPTY_CONFIG)
+    reports_config = reports_store.config_view(stored)
+    return list(reports_pipeline.targets_for(reports_config, {}))
+
+
+async def _agent_document_text() -> str:
+    """The Villa Document, or a sentence saying why there isn't one."""
+    try:
+        from observe import snapshot
+        return snapshot.villa_document(profile_text=snapshot.profile(),
+                                       delta_text=snapshot.delta())
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        print(f"[supervisor-proxy] villa document failed: {err}", flush=True)
+        return f"The villa document could not be assembled: {err}"
 
 
 # ── /agent-mcp · the extraction seam ────────────────────────────────────────
@@ -2696,7 +2741,8 @@ def main() -> None:
         # Assistant discards immediately; without this task those findings are
         # lost and the weekly report has nothing to report.
         a["reports_collector"] = asyncio.create_task(
-            reports_collect.run_forever(a["session"]))
+            reports_collect.run_forever(a["session"],
+                                        on_event=_chat_dispatch(a)))
         # ⚠️ The observation floor (Tier 1). A THIRD task in the SAME loop
         # rather than a third s6 service: the two above already prove the
         # pattern, and a supervised service would be another thing to start,

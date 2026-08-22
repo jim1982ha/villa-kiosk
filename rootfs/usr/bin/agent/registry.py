@@ -61,6 +61,16 @@ class Registry:
     def get(self, name: str) -> Optional[BaseTool]:
         return self._tools.get(str(name))
 
+    def with_tool(self, tool: BaseTool) -> "Registry":
+        """A NEW registry carrying one more tool. ⚠️ NEW, NOT MUTATED.
+
+        The chat path adds a `reply` bound to one conversation. Mutating the
+        shared registry would leave that binding in place for every later run —
+        including scheduled ones with no conversation at all — so the next
+        brief would hold a tool pointing at whoever last sent a message.
+        """
+        return Registry(list(self._tools.values()) + [tool])
+
 
 def build_registry(tools: Optional[Sequence[BaseTool]] = None) -> Registry:
     """The deployment's registry. ⚠️ ONE construction site, so the MCP server

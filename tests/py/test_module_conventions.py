@@ -259,3 +259,47 @@ def test_a_groups_members_are_read_through_one_accessor() -> None:
     assert len(hits) == 1, (
         "the tolerant items read belongs only inside _items():\n  "
         + "\n  ".join(hits))
+
+
+def test_reports_never_imports_agent() -> None:
+    """⚠️ THE DEPENDENCY RUNS ONE WAY AND ONLY ONE WAY.
+
+    `reports/` is the observation floor and the delivery plumbing. It predates
+    the agent, runs unchanged on a villa where the agent is switched off, and is
+    what the degradation ladder falls back TO. `agent/` may import it freely;
+    the reverse would mean an agent failure can take the floor down with it, and
+    would make the offline path depend on a subsystem that needs a WAN.
+
+    The chat wiring is where this was nearly lost: the collector needed to hand
+    a `telegram_text` event to the agent, and the small version of that is one
+    import. It takes an `on_event` callback instead, wired by the proxy — which
+    is the only layer that legitimately knows about both.
+    """
+    import ast
+    import os
+
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), "rootfs", "usr", "bin", "reports")
+    offenders = []
+    seen = 0
+    for base, _dirs, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            seen += 1
+            path = os.path.join(base, name)
+            with open(path, encoding="utf-8") as handle:
+                tree = ast.parse(handle.read())
+            for node in ast.walk(tree):
+                mod = ""
+                if isinstance(node, ast.Import):
+                    mod = " ".join(a.name for a in node.names)
+                elif isinstance(node, ast.ImportFrom):
+                    mod = node.module or ""
+                if mod.split(".")[0] == "agent" or mod.startswith("agent "):
+                    offenders.append(f"{name}:{node.lineno}")
+
+    assert seen > 10, f"the walk found only {seen} modules; this test is vacuous"
+    assert not offenders, (
+        f"reports/ imports agent/: {offenders}. Pass a callback in from the "
+        f"proxy instead — see Collector.on_event.")
