@@ -56,6 +56,9 @@ NOT_ENTITY_IDS: Set[str] = {
     "light.diffuse", "light.excluded", "light.intensity", "light.range",
     "light.set", "light.specular",
     "lock.unlock", "todo.add_item",
+    # HA SERVICE names used as policy fixtures — `light.turn_off` is a service
+    # call, not an entity. Same class as `lock.unlock` directly above.
+    "light.turn_off", "fan.turn_off", "switch.turn_off",
     "scene.active", "scene.block", "scene.clear", "scene.collisions",
     "scene.dispose", "scene.environment", "scene.get", "scene.js",
     "scene.lights", "scene.materials", "scene.meshes", "scene.on",
@@ -99,6 +102,16 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.hidden_thing", "switch.buried_thing", "sensor.probe",
     "sensor.probe_temperature", "binary_sensor.probe_moisture",
     "lock.probe_entrance", "automation.a_rule",
+    # agent/policy.py fixtures. Every one is shaped to isolate ONE rule of the
+    # harm gate — the domain probes carry no access word, and the anchor probes
+    # carry "outdoor"/"indoor" precisely to prove `door` does not match inside
+    # them.
+    "alarm_control_panel.house", "camera.hall_cam", "camera.living_room",
+    "climate.lounge_unit", "light.a_thing", "light.hall_thing",
+    "light.indoor_lighting", "light.outdoor_terrace", "lock.a_thing",
+    "media_player.a_thing", "sensor.a_secret_thing", "switch.gate_opener",
+    "switch.outdoor_probe_light", "switch.parking_door_1_relay",
+    "switch.plain_thing", "switch.some_relay",
 }
 
 #: ⚠️ REAL DEVICES OF THE REFERENCE DEPLOYMENT, IN COMMENTS THAT RECORD A
