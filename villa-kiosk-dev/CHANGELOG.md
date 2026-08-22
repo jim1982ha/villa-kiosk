@@ -1,3 +1,14 @@
+## 2.628.0
+
+### Fixed — turning the agent on deleted the list of who may message it
+The config store replaces the whole document rather than merging, so a save that
+sent only the changed switch wrote that switch as the entire config. Reported
+the first time the switch was used. Saves now carry the stored document.
+
+### Fixed — a greyed-out toggle looked identical to an available one
+Nothing styled the disabled state at all, so the only clue was that clicking did
+nothing. The dependent switch is also indented under the one it needs.
+
 ## 2.627.0
 
 ### Added — the two switches that turn the agent on, on screen
