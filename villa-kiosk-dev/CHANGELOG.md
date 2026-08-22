@@ -1,3 +1,13 @@
+## 2.595.1
+
+### Fixed — the zone separators wrapped onto a second line on a phone
+
+They were padded to 44 characters and Telegram fits about 32, so all three
+arrived split with a ragged stub of box-drawing below them. A decorative rule is
+the one element that must never wrap — prose wrapping is normal and invisible.
+The separator is now a short fixed prefix that cannot reach any plausible
+margin, rather than a narrower guess at a width nobody knows.
+
 ## 2.595.0
 
 ### Fixed — "vs 1-day average" was not an average, and the worklist led with the wrong half of each line
