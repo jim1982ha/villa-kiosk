@@ -1,3 +1,12 @@
+## 2.625.0
+
+### Added — the villa can be messaged, by people you name and nobody else
+Inbound Telegram rides the websocket the collector already holds, so no webhook
+and no open port. A thread remembers the concerns VESTA sent into it, which is
+what lets a reply of "why?" resolve without naming the subject. Nothing is
+written to disk: a durable chat log is a transcript of a household. A new owner
+panel lists who may talk to the villa; empty means nobody, which is how it ships.
+
 ## 2.624.0
 
 ### Added — the agent's endpoints, and the one nginx block that must not exist
