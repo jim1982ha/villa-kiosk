@@ -113,7 +113,7 @@ class AnthropicProvider:
             "messages": list(messages),
         }
         if tools:
-            request["tools"] = list(tools)
+            request["tools"] = [_tool_wire(t) for t in tools]
         # ⚠️ PASSED THROUGH OPAQUELY, NOT PROMOTED INTO THE PROTOCOL. `thinking`
         # and friends are this provider's vocabulary; naming them in `base.py`
         # would make the seam this adapter's client with extra steps.
@@ -134,6 +134,34 @@ class AnthropicProvider:
             return Turn(declined=f"the provider could not be reached: {safe}")
 
         return _turn_of(reply)
+
+
+def _tool_wire(tool: Mapping[str, Any]) -> Dict[str, Any]:
+    """One tool in THIS provider's wire shape. `inputSchema` -> `input_schema`.
+
+    ⚠️ THE REGISTRY PUBLISHES MCP'S SHAPE AND THIS API WANTS ITS OWN, AND THE
+    TRANSLATION BELONGS HERE. `agent/tools/base.py` is MCP-shaped on purpose
+    (ADR-006): `name`, `description`, `inputSchema` is what MCP publishes, and
+    that is what makes the extraction seam free. The Messages API spells the
+    third one `input_schema`. Passing the registry's dict straight through was
+    the whole failure — the villa answered nothing and the API said
+    `tools.0.custom.input_schema: Field required`.
+
+    ⚠️ AND IT IS THE ADAPTER'S JOB BY THIS MODULE'S OWN CONTRACT: "everything
+    provider-specific stops here". Renaming the field in `base.py` would fix
+    one caller and break MCP, which is the surface the name was chosen for; a
+    second adapter will have its own spelling and its own mapping right here.
+
+    ⚠️ CAMELCASE IS DROPPED, NOT MIRRORED. Sending both is how a payload starts
+    carrying two names for one thing, and this provider rejects unknown tool
+    fields rather than ignoring them.
+    """
+    out: Dict[str, Any] = {"name": str(tool.get("name") or ""),
+                           "description": str(tool.get("description") or "")}
+    schema = tool.get("input_schema", tool.get("inputSchema"))
+    out["input_schema"] = (dict(schema) if isinstance(schema, Mapping)
+                           else {"type": "object", "properties": {}})
+    return out
 
 
 def _turn_of(reply: Any) -> Turn:

@@ -248,3 +248,81 @@ def test_there_is_exactly_ONE_adapter() -> None:
     against a single example is how an abstraction acquires the shape of its
     only implementation and then fits nothing else."""
     assert len(anthropic_sdk.ADAPTERS) == 1
+
+
+def _capture_request(tools: Any) -> Dict[str, Any]:
+    """Run the adapter against a fake SDK and return the request it built."""
+    import types
+
+    seen: Dict[str, Any] = {}
+
+    class _Messages:
+        async def create(self, **kw: Any) -> Any:
+            seen.update(kw)
+            return types.SimpleNamespace(
+                content=[types.SimpleNamespace(type="text", text="ok")],
+                usage=None, stop_reason="end_turn")
+
+    class _Client:
+        def __init__(self, **_kw: Any) -> None:
+            self.messages = _Messages()
+
+    fake = types.ModuleType("anthropic")
+    fake.AsyncAnthropic = _Client          # type: ignore[attr-defined]
+    sys.modules["anthropic"] = fake
+    try:
+        _run(anthropic_sdk.AnthropicProvider("k").run(
+            system=[], messages=[], tools=tools, model="claude-opus-5"))
+    finally:
+        sys.modules.pop("anthropic", None)
+    return seen
+
+
+def test_a_tool_is_sent_as_input_schema_not_inputSchema() -> None:
+    """⚠️ THE REGISTRY PUBLISHES MCP'S SHAPE; THIS API WANTS ITS OWN.
+
+    `agent/tools/base.py` emits `inputSchema` on purpose — that is what MCP
+    publishes and what makes the extraction seam free (ADR-006). The Messages
+    API spells it `input_schema`. The registry's dict was passed straight
+    through, so the villa answered nothing and the API said
+    `tools.0.custom.input_schema: Field required`. Found on the real property,
+    on the first call that ever reached Anthropic with a tool attached.
+
+    ⚠️ NOTHING CAUGHT IT BECAUSE THE FAKE PROVIDER DOES NOT VALIDATE THE WIRE.
+    It stands in for the LOOP, which is the right scope for it — this is the
+    test that stands in for the API.
+    """
+    from agent.registry import build_registry
+
+    published = {t["name"]: t for t in build_registry().describe()}
+    request = _capture_request(list(published.values()))
+    assert request["tools"], "no tools reached the request"
+    for tool in request["tools"]:
+        assert "input_schema" in tool, f"{tool.get('name')} has no input_schema"
+        assert "inputSchema" not in tool, (
+            f"{tool.get('name')} still carries MCP's camelCase spelling; this "
+            f"provider rejects unknown tool fields rather than ignoring them")
+        assert set(tool) == {"name", "description", "input_schema"}
+        # ⚠️ THE CONTENT, NOT ONLY THE KEY. Asserting `isinstance(dict)` let a
+        # mutation survive that renamed nothing and simply DROPPED the schema —
+        # every tool would have been sent an empty one, telling the model each
+        # takes no arguments, with no 400 and nothing on screen to show for it.
+        assert tool["input_schema"] == published[tool["name"]]["inputSchema"], (
+            f"{tool['name']}'s schema was not carried across")
+    assert any(t["input_schema"].get("properties")
+               for t in request["tools"]), (
+        "every schema is empty; the comparison above is vacuous")
+
+
+def test_a_tool_with_no_schema_still_sends_a_valid_one() -> None:
+    """⚠️ `input_schema` is REQUIRED, so an absent one must become an empty
+    object rather than being omitted — omitting it is the 400 this fixes."""
+    request = _capture_request([{"name": "x", "description": "y"}])
+    assert request["tools"][0]["input_schema"] == {"type": "object",
+                                                   "properties": {}}
+
+
+def test_no_tools_means_the_field_is_ABSENT_not_empty() -> None:
+    """An empty `tools` list is not the same as no tools; the API treats a
+    present-but-empty list as a tool-using request."""
+    assert "tools" not in _capture_request([])
