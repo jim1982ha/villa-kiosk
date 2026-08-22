@@ -35,6 +35,8 @@ failed for a day. That was one character in a device name.
 
 from __future__ import annotations
 
+import re
+
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from agent import contracts
@@ -82,6 +84,42 @@ ALLOWED_FIELDS: Tuple[str, ...] = (
 #: `read_ledger` strips at source. So these two names are permitted ONLY inside
 #: an `error` envelope, and nowhere else.
 ERROR_FIELDS: Tuple[str, ...] = ("code", "message")
+
+#: How long a key may be to qualify as a measurement name, and what it may
+#: contain. Keys reach here from Home Assistant attribute dictionaries, so they
+#: are villa-authored even when their values are not.
+_MEASURE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
+
+
+def is_measurement(key: str, value: Any) -> bool:
+    """May this key/value pass WITHOUT being named on the allow-list?
+
+    ⚠️ NUMBERS PASS ON THEIR OWN MERIT; STRINGS DO NOT. The allow-list is flat
+    and by NAME, and it was silently deleting every measurement nobody had
+    thought to list: a tool returning `{"watts": 340}` handed the model
+    `{}`. Found by the wire test, never by a 400 — the API accepts a request
+    that says nothing perfectly well, so the agent would have reasoned about a
+    pump with the number removed and no signal anywhere that it was missing.
+
+    ⚠️ THE ASYMMETRY IS THE SECURITY ARGUMENT, NOT A CONVENIENCE. Everything the
+    allow-list defends against lives in STRINGS: prompt injection, entity ids,
+    guest free text, a device name somebody typed. A bare `int`, `float` or
+    `bool` can carry none of them, and it is precisely what the agent exists to
+    reason about. Naming every measurement instead — `watts`, `humidity`,
+    `flow_rate`, `power_factor`, … — is a list that is wrong the moment anyone
+    installs a device, and wrong SILENTLY.
+
+    ⚠️ THE KEY IS STILL CONSTRAINED, because keys arrive from HA attribute maps
+    and are villa-authored even when values are not: lower-case identifier,
+    bounded length. A key that cannot be a measurement name is not one.
+
+    ⚠️ `bool` BEFORE `int` MATTERS NOWHERE HERE and is stated so nobody
+    "simplifies" it: `isinstance(True, int)` is True in Python, so booleans are
+    already covered by the numeric branch — they are named only for the reader.
+    """
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        return bool(_MEASURE_KEY.match(str(key)))
+    return False
 
 #: Control characters that are not a newline or a tab. A model reads them as
 #: nothing; a terminal or a downstream renderer may not.
@@ -180,6 +218,24 @@ def scrub(node: Any, _depth: int = 0) -> Any:
             safe = _scalar(value)
             if safe is not None:
                 out[key] = safe
+        # ⚠️ THE SECOND PASS, AND IT IS STILL NOT A LOOP OVER THE INPUT'S RULES.
+        # The allow-list above remains authoritative for every string and every
+        # nested structure; this admits ONLY numeric scalars under a
+        # measurement-shaped key. Written as a separate pass rather than folded
+        # into the first so that "the loop is over ALLOWED_FIELDS" stays true of
+        # the part that gates untrusted text.
+        for key, value in node.items():
+            if not (isinstance(key, str) and key not in out
+                    and is_measurement(key, value)):
+                continue
+            # ⚠️ THROUGH `_scalar`, NOT STRAIGHT IN. The first version assigned
+            # the value directly and NaN and infinity walked past the one place
+            # that rejects them — neither is JSON-serialisable, so the request
+            # would have failed to encode at all. Caught by the existing test,
+            # which is what a second pass added beside a gate should expect.
+            safe = _scalar(value)
+            if safe is not None:
+                out[key] = safe
         return out
     if isinstance(node, (list, tuple)):
         items = [scrub(item, _depth + 1) for item in node]
@@ -230,7 +286,11 @@ def audit(payload: Any) -> List[str]:
                 # The scoped exception, mirrored in the audit so the two agree.
                 permitted = (ALLOWED_FIELDS if not path.endswith(".error")
                              else ERROR_FIELDS)
-                if key not in permitted:
+                # ⚠️ MIRRORS `is_measurement`, OR THE AUDIT REJECTS SCRUB'S OWN
+                # OUTPUT. The two have disagreed before — the truncation marker
+                # used brackets that `inert` strips — and a second opinion that
+                # contradicts the first is not a check, it is an outage.
+                if key not in permitted and not is_measurement(key, value):
                     problems.append(f"{path}.{key}: not on the allow-list")
                 walk(value, f"{path}.{key}", depth + 1)
         elif isinstance(node, (list, tuple)):

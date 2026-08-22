@@ -1,3 +1,15 @@
+## 2.634.0
+
+### Fixed — the agent was being handed readings with the numbers removed
+The redaction allow-list is by field name, so a tool returning a wattage handed
+the model an empty object. Numbers now pass on their own merit; strings are
+still allow-listed, which is where injection and identifiers actually live.
+
+### Added — the request is checked locally before it is ever sent
+Three malformed requests were found one at a time by sending them to the real
+API. A scripted conversation now runs the real loop against a validator built
+from those refusals, including the tool-error shape that had never been sent.
+
 ## 2.633.0
 
 ### Fixed — tool results could not be sent back to the model
