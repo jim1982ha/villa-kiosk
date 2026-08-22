@@ -1,3 +1,12 @@
+## 2.629.0
+
+### Changed — the sender list now works like the Briefings schedule list
+It had invented its own idiom: a draft field plus a ⊕, beside a screen that
+already does this with an "Add" button and rows edited in place. Both now share
+one set of classes, so the phone-wrap behaviour is inherited rather than
+restated. Saving also no longer flashes the panel through a loading state, and
+no longer deletes a row you are halfway through typing.
+
 ## 2.628.0
 
 ### Fixed — turning the agent on deleted the list of who may message it
