@@ -1,3 +1,14 @@
+## 2.618.0
+
+### Added — a spending ceiling that survives a restart
+
+The existing budget lives in memory and says so, which was right for one
+narrated sentence per brief. At a fifteen-minute cadence the runaway to stop is
+a restart loop, and a counter that resets on restart never binds against exactly
+that. The new one persists, rolls on the UTC calendar month, and gives chat its
+own slice so a long conversation cannot starve the supervision it is an
+interface to. Nothing calls it yet.
+
 ## 2.617.0
 
 ### Added — the authorization boundary, and the scrubber in front of it
