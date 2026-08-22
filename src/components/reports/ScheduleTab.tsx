@@ -322,7 +322,7 @@ export default function ScheduleTab({
       {schedules.map((s, i) => {
         const own = s.targets ?? [];
         return (
-          <div key={s.id || i} className="reports-schedule-card">
+          <div key={s.id || i} className="editable-row-card">
             {/* ⚠️ ONE LINE: when · for whom · to whom · remove. The recipients
                 are a BUTTON here rather than a list, because "who gets this
                 one" is a one-glance question and the answer is short — the
@@ -330,7 +330,7 @@ export default function ScheduleTab({
                 the destinations on their own row under the schedule and the
                 owner called both cluttered; they were right, and a set of
                 three is not worth a permanent row. */}
-            <div className="reports-schedule">
+            <div className="editable-row">
               {/* ⚠️ THE FIELDS WRAP; THE DELETE DOES NOT. All five controls used
                   to be siblings in one wrapping row, so on a phone the fourth
                   or fifth dropped to a second line and took the delete button
@@ -338,7 +338,7 @@ export default function ScheduleTab({
                   under the row looking like an action on the whole card rather
                   than on that schedule. Grouping the fields lets them wrap
                   among themselves while the button stays on the first line. */}
-              <div className="reports-schedule-fields">
+              <div className="editable-row-fields">
               <select
                 aria-label="How often"
                 value={s.cadence}

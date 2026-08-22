@@ -4348,29 +4348,38 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    its own, where it read as an action on the whole card rather than on that
    schedule. `align-items: flex-start` keeps the button beside the first row of
    fields rather than centred against a two-line group. */
-.reports-schedule {
+.editable-row {
   display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 8px;
   padding: 8px; border-radius: var(--radius-md, 8px); background: var(--bg-input);
 }
-.reports-schedule-fields {
+.editable-row-fields {
   flex: 1 1 auto; min-width: 0;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
 }
-.reports-schedule > .btn.danger { flex: 0 0 auto; }
-/* ⚠️ DIRECT CHILD, NOT A DESCENDANT. `.reports-schedule select` would reach
+.editable-row > .btn.danger { flex: 0 0 auto; }
+/* ⚠️ DIRECT CHILD, NOT A DESCENDANT. `.editable-row select` would reach
    into any component that later sits inside a schedule row and restyle a
    control it does not own — the CSS form of the applicable-set bug, and the
    reason `.fm-field > input` is written that way. The selects here ARE direct
    children, so `>` costs nothing and closes the door. */
-.reports-schedule-fields > select,
-.reports-schedule-fields > input[type="time"] {
+/* ⚠️ AND THE FLEX BASIS IS WHAT NEUTRALISES `.modal input, .modal select
+   { width: 100% }` — a DESCENDANT selector at line ~2111 that reaches into any
+   component sitting inside a modal. A flex item defaults to `0 1 auto`, so
+   without a basis stated here its flex-basis resolves to that 100%: every
+   control demands the whole row and whichever sibling has basis 0 collapses to
+   nothing. Roomy on a laptop, unreadable on a 360px phone. The chat-senders
+   panel hit exactly that and carried a local `width: auto` workaround for one
+   release; stating the basis on the shared class means the next caller gets it
+   by USING the class rather than by rediscovering it. */
+.editable-row-fields > select,
+.editable-row-fields > input {
   flex: 1 1 96px; min-height: var(--touch-min);
 }
 /* ⚠️ SAFARI GIVES `input[type=time]` A DIFFERENT INTRINSIC BOX and ignores the
    form-control inheritance the selects get, so it renders at the browser's own
    font and sits a few pixels off its neighbours on the one platform this
    product is operated from. Stated explicitly rather than inherited. */
-.reports-schedule-fields > input[type="time"] {
+.editable-row-fields > input[type="time"] {
   font: inherit; font-size: var(--text-sm);
   padding: 0 10px;
   border-radius: var(--radius-md, 8px);
@@ -4379,7 +4388,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 /* The recipients button sizes to its label and does not stretch — it is the
    answer to a question, not a field. */
-.reports-schedule-fields > button { flex: 0 1 auto; min-height: var(--touch-min); }
+.editable-row-fields > button { flex: 0 1 auto; min-height: var(--touch-min); }
 
 /* Two labelled fields side by side, collapsing to one column when there is no
    room. ⚠️ SAME IDIOM AS `.fm-summary` — auto-fit with a minimum — rather than
@@ -4495,7 +4504,16 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    previous design put destinations in a separate section further down the page
    and made the operator cross-reference two lists to answer "who gets this
    one". The border is what says the contents are one thing. */
-.reports-schedule-card {
+/* ⚠️ RENAMED FROM `.reports-schedule*` WHEN IT GAINED A SECOND CALLER. A flat
+   list of small records, each edited IN PLACE, with an "Add" button appending a
+   blank one: Briefings' schedules and Advanced Settings' chat senders are both
+   this. The FM tabs deliberately are NOT — they open a form with Cancel/Save,
+   because an FM task has eight fields and a half-filled row saved on every
+   keystroke is not wanted there. The old names are GONE rather than aliased:
+   two names for one thing is the drift this rename exists to stop, and every
+   phone-parity note below is inherited by using the class rather than by
+   remembering to restate it. */
+.editable-row-card {
   display: flex; flex-direction: column; gap: 8px;
   padding: 10px;
   border-radius: var(--radius-md, 8px);
@@ -4503,12 +4521,12 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 /* The controls row inside a card sits flush — the card already provides the
    inset, and a second background reads as a box inside a box. */
-.reports-schedule-card > .reports-schedule { padding: 0; background: none; }
+.editable-row-card > .editable-row { padding: 0; background: none; }
 
 /* A schedule's own destinations, indented under its row. Full width so it
    wraps below the selects rather than competing with them for the same line,
    and `flex-basis: 100%` on the row it sits in does the same job the selects'
-   own `flex: 1 1 96px` does — see .reports-schedule's wrap note. */
+   own `flex: 1 1 96px` does — see .editable-row's wrap note. */
 
 /* When a panel was measured, beside the control that measures it again.
    ⚠️ WRAPS, and the button keeps its touch target when it does — on a 360px

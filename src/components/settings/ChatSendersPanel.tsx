@@ -15,7 +15,7 @@
 // it likes and the proxy refuses a non-owner write to /agent-config.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Trash2, UserPlus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { loadAgentConfig, saveAgentConfig, type AgentConfig } from "@/agent/agentApi";
 
@@ -24,19 +24,6 @@ import { loadAgentConfig, saveAgentConfig, type AgentConfig } from "@/agent/agen
  *  nothing — the select is what keeps the two ends agreeing. */
 const ROLES = ["owner", "facility", "ops"] as const;
 
-/**
- * ⚠️ `width: auto` IS LOAD-BEARING AND MUST NOT BE TIDIED AWAY. `styles.css`
- * carries `.modal input, .modal select { width: 100% }` — a DESCENDANT
- * selector, so it reaches into every component that happens to sit inside a
- * modal, which is the pattern CLAUDE.md warns about and this panel is a new
- * victim of. A flex item defaults to `0 1 auto`, so its flex-basis resolves to
- * that `width: 100%`: each select would demand the whole row while the id
- * field (`flex: 1`, basis `0%`) collapsed to nothing. Roomy on a laptop,
- * unreadable on a 360px phone — the shape of every regression the parity
- * checklist exists for. Fixed HERE rather than by narrowing the shared rule to
- * `>`, because other panels rely on it for their full-width fields.
- */
-const SELECT_STYLE = { width: "auto", flex: "0 0 auto" } as const;
 type Role = (typeof ROLES)[number];
 
 /** ⚠️ Keyed `channel:id`, because a Telegram user id and a future WhatsApp id
@@ -69,8 +56,6 @@ export default function ChatSendersPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draftId, setDraftId] = useState("");
-  const [draftRole, setDraftRole] = useState<Role>("owner");
   const [sw, setSw] = useState<Switches>({ enabled: false, chat: false });
   /** ⚠️ THE STORED DOCUMENT AS IT ARRIVED. The store REPLACES on write, so
    *  every save must send the whole thing — and this copy is what carries keys
@@ -80,10 +65,21 @@ export default function ChatSendersPanel() {
   /** Triggers as stored, so flipping `chat` cannot silently clear a sibling. */
   const [triggers, setTriggers] = useState<Record<string, boolean>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  /** ⚠️ `quiet` EXISTS BECAUSE A REFRESH IS NOT A LOAD. Every save used to call
+   *  this plainly, so `loading` went true and the whole panel was replaced by
+   *  "Loading…" for a moment — reported as the modal refreshing on every click.
+   *  The spinner belongs to the FIRST read, when there is genuinely nothing to
+   *  show; after that the panel already has content and swapping it out is a
+   *  flicker that reads as a fault. */
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     const got = await loadAgentConfig();
-    setRows(toRows(got?.config.allowedSenders as Record<string, string>));
+    // ⚠️ BLANK ROWS SURVIVE A REFRESH. They are local by definition — an
+    // unnamed sender is never stored — so replacing the list wholesale would
+    // delete whatever the operator is halfway through typing.
+    setRows((current) => [...toRows(got?.config.allowedSenders as
+                                    Record<string, string>),
+                          ...current.filter((r) => !r.id.trim())]);
     setSw({
       enabled: got?.config.enabled === true,
       chat: got?.config.triggers?.chat === true,
@@ -96,23 +92,30 @@ export default function ChatSendersPanel() {
 
   useEffect(() => { void load(); }, [load]);
 
+  /** ⚠️ IT DOES NOT TOUCH `rows`, AND THAT IS THE POINT. The caller owns what
+   *  is on screen; this only writes it. An earlier version called `setRows` with
+   *  the SAVED subset and then reloaded, which deleted a blank row the operator
+   *  was still typing into — add two, fill the first, blur, and the second
+   *  vanished under the cursor.
+   *
+   *  ⚠️ AND IT RELOADS ONLY ON FAILURE. On success the local state already IS
+   *  the truth, so re-reading buys nothing and costs a round trip plus a
+   *  repaint. A refused write is almost always a revision conflict — another
+   *  tab saved first — so re-sending the same body would discard their edit;
+   *  reloading rebases on theirs. Same rule DeviceConfigSync states. */
   const persist = useCallback(async (next: Row[]) => {
     setSaving(true);
     setError(null);
     const map: AgentConfig["allowedSenders"] = {};
-    for (const r of next) map[`${CHANNEL}:${r.id}`] = r.role;
+    for (const r of next) map[`${CHANNEL}:${r.id.trim()}`] = r.role;
     const ok = await saveAgentConfig({ allowedSenders: map }, carryOver, rev);
     setSaving(false);
     if (!ok) {
-      // ⚠️ RELOAD RATHER THAN RETRY. A refused write is almost always a
-      // revision conflict — another tab saved first — and re-sending the same
-      // body would discard their edit. The same rule DeviceConfigSync states.
-      setError("That change was not saved. Reloading the current list.");
-      void load();
+      setError("That change was not saved — reloading the current list.");
+      void load(true);
       return;
     }
-    setRows(next);
-    void load();
+    void load(true);
   }, [carryOver, rev, load]);
 
   /** ⚠️ `triggers` IS SPREAD FROM WHAT WAS STORED, never rebuilt from
@@ -131,20 +134,32 @@ export default function ChatSendersPanel() {
       carryOver, rev);
     setSaving(false);
     if (!ok) {
-      setError("That change was not saved. Reloading.");
-      void load();
+      setError("That change was not saved — reloading.");
+      void load(true);
       return;
     }
     setSw(next);
-    void load();
+    void load(true);
   }, [sw, triggers, carryOver, rev, load]);
 
-  const add = useCallback(() => {
-    const id = draftId.trim();
-    if (!id) return;
-    setDraftId("");
-    void persist([...rows.filter((r) => r.id !== id), { id, role: draftRole }]);
-  }, [draftId, draftRole, rows, persist]);
+  /** ⚠️ APPENDS A BLANK ROW EDITED IN PLACE — the same idiom as Briefings'
+   *  "Add a schedule", which is what this panel was rebuilt onto. The first
+   *  version had a separate draft field plus a ⊕, which is a second way to do
+   *  the same thing on the same screen and left "press Enter or press ⊕?"
+   *  ambiguous. */
+  const add = useCallback(() => setRows([...rows, { id: "", role: "owner" }]),
+                          [rows]);
+
+  /** ⚠️ SAVED ONLY ONCE A ROW HAS AN ID, and there is no footer Save button
+   *  here to defer to — this section lives in a CollapsibleSection, not a
+   *  modal with actions. A blank row is local until it names somebody; an
+   *  empty key would be a sender nobody can be, stored. */
+  const commit = useCallback((next: Row[]) => {
+    setRows(next);
+    const named = next.filter((r) => r.id.trim());
+    if (named.length !== new Set(named.map((r) => r.id.trim())).size) return;
+    void persist(named);
+  }, [persist]);
 
   if (loading) {
     return (
@@ -198,56 +213,49 @@ export default function ChatSendersPanel() {
 
       {rows.length === 0 && (
         <p className="muted body-text">
-          Nobody is listed, so the villa answers nobody. This is the shipped
-          state; add yourself to start a conversation.
+          None yet. The villa answers nobody until you add someone.
         </p>
       )}
 
-      {rows.map((row) => (
-        <div className="row" key={row.id} style={{ gap: 8, marginTop: 8 }}>
-          <span className="body-text" style={{ flex: 1, minWidth: 0,
-            overflow: "hidden", textOverflow: "ellipsis" }}>{row.id}</span>
-          <select
-            style={SELECT_STYLE}
-            value={row.role}
-            disabled={saving}
-            onChange={(e) => void persist(rows.map((r) =>
-              (r.id === row.id ? { ...r, role: e.target.value as Role } : r)))}
-          >
-            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
+      {rows.map((row, i) => (
+        <div className="editable-row" key={i} style={{ marginTop: 8 }}>
+          <div className="editable-row-fields">
+            <input
+              value={row.id}
+              disabled={saving}
+              aria-label="Telegram user id"
+              placeholder="Telegram user id"
+              inputMode="numeric"
+              onChange={(e) => setRows(rows.map((r, n) =>
+                (n === i ? { ...r, id: e.target.value } : r)))}
+              onBlur={() => commit(rows)}
+            />
+            <select
+              value={row.role}
+              disabled={saving}
+              aria-label="Role"
+              onChange={(e) => commit(rows.map((r, n) =>
+                (n === i ? { ...r, role: e.target.value as Role } : r)))}
+            >
+              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
           <button
             type="button"
             className="icon-btn"
             disabled={saving}
-            aria-label={`Remove ${row.id}`}
-            onClick={() => void persist(rows.filter((r) => r.id !== row.id))}
+            aria-label={row.id ? `Remove ${row.id}` : "Remove this row"}
+            onClick={() => commit(rows.filter((_, n) => n !== i))}
           >
             <Trash2 size={16} aria-hidden />
           </button>
         </div>
       ))}
 
-      <div className="row" style={{ gap: 8, marginTop: 12 }}>
-        <input
-          value={draftId}
-          disabled={saving}
-          onChange={(e) => setDraftId(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-          aria-label="Telegram user id"
-          placeholder="Telegram user id"
-          style={{ flex: 1, minWidth: 0 }}
-        />
-        <select style={SELECT_STYLE} value={draftRole} disabled={saving}
-                aria-label="Role"
-                onChange={(e) => setDraftRole(e.target.value as Role)}>
-          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <button type="button" className="icon-btn" disabled={saving || !draftId.trim()}
-                aria-label="Add sender" onClick={add}>
-          <UserPlus size={16} aria-hidden />
-        </button>
-      </div>
+      <button className="btn" disabled={saving} onClick={add}
+              style={{ marginTop: 10, alignSelf: "flex-start" }}>
+        <Plus size={16} aria-hidden /><span>Add someone</span>
+      </button>
 
       {error && <p className="body-text" role="alert">{error}</p>}
 

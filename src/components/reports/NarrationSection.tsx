@@ -24,7 +24,7 @@
 // claim, in the one place that can prove it; this section points at it.
 //
 // ⚠️ AND THE FIELDS ARE `.fm-field`, THE APP'S SHARED LABELLED CONTROL. They
-// were `.reports-schedule` — a SCHEDULE ROW — plus four inline `style`
+// were `.editable-row` — an EDITABLE ROW — plus four inline `style`
 // attributes, which is how a settings form came to look like a schedule that
 // had lost its selects. `.fm-field` owns the label rhythm
 // (`--field-label-gap`/`--field-label-size`), the control padding, the focus
