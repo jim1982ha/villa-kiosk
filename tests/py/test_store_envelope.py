@@ -225,6 +225,80 @@ def config_defaults() -> List[str]:
     return re.findall(r"^\s{4}\"(\w+)\":", block, re.MULTILINE)
 
 
+def _no_comments(source: str) -> str:
+    """Source with `//` and `/* */` removed.
+
+    ⚠️ WITHOUT THIS, A TEST MATCHES THE PROSE EXPLAINING THE BUG IT CHECKS FOR.
+    The first version of the revision pin below flagged `agentApi.ts` for the
+    word `expected_rev` — which appears there only in the docstring recording
+    that `expected_rev` was WRONG.
+    """
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    return re.sub(r"//[^\n]*", "", source)
+
+
+def test_every_store_client_sends_the_REVISION_KEY_THE_PROXY_READS() -> None:
+    """⚠️ THE PROXY READS `body.get("rev")` AND TREATS ANYTHING ELSE AS ABSENT.
+
+    That is the dangerous half: a client sending `expected_rev` is not refused,
+    it is ACCEPTED and the conditional write is skipped entirely. Every write
+    then goes through unconditionally, and a lost update looks exactly like a
+    save that worked. `agentApi.ts` shipped that way and nothing noticed — the
+    same shape as the 2.545.0 wire-key bug, one field along.
+
+    ⚠️ SNAKE_CASE ONLY. `expectedRev` is the local VARIABLE every working client
+    uses (`...(expectedRev === null ? {} : { rev: expectedRev })`) and is
+    correct; the wire key is what must be `rev`.
+    """
+    proxy = _proxy()
+    assert 'raw_rev = body.get("rev")' in proxy, (
+        "the proxy's revision field changed; this test now checks a name "
+        "nothing reads")
+    offenders = []
+    for path, source in _ts_sources():
+        if "ingressPath(" not in source:
+            continue
+        if "expected_rev" in _no_comments(source):
+            offenders.append(path)
+    assert not offenders, (
+        f"{offenders} send `expected_rev`. The proxy reads `rev` and silently "
+        f"ignores any other name, so the conditional write is skipped and two "
+        f"tabs overwrite each other with no 409.")
+
+
+def test_the_agent_config_client_sends_a_WHOLE_DOCUMENT() -> None:
+    """⚠️ THE STORES REPLACE THE WHOLE DOCUMENT — THEY DO NOT MERGE.
+
+    `_json_store_handlers` writes `body[key]` verbatim, so a client sending only
+    the keys it changed DELETES everything else. `saveAgentConfig` did exactly
+    that: ticking the agent on wrote `{enabled: true}` as the entire config and
+    destroyed the owner's `allowed_senders` list, reported the first time the
+    switch was used. The reasoning behind it was a real merge in the wrong
+    place — `agent.config.view` spreads DEFAULTS under stored values at READ
+    time, which has nothing to do with what a write does.
+
+    ⚠️ THIS PINS ONE CLIENT, NOT THE RULE IN GENERAL, AND THE LIMIT IS HONEST.
+    "Sends a whole document" is not decidable from source shape: `deviceConfig`
+    PUTs `{ config: merged }` where `merged` was assembled earlier and is
+    perfectly correct. A general test would have to flag that or miss this, and
+    a pin that cries wolf on correct code gets its assertion loosened — which is
+    how a real pin dies. So this checks the one client that got it wrong, in the
+    way it got it wrong: the carried copy must be a PARAMETER, so it cannot be
+    forgotten at a call site without the compiler saying so.
+    """
+    import inspect
+    import os
+
+    path = os.path.join(SRC, "agent", "agentApi.ts")
+    with open(path, encoding="utf-8") as handle:
+        source = _no_comments(handle.read())
+    assert "carryOver: Record<string, unknown>" in source, (
+        "saveAgentConfig no longer takes the carried document as a parameter; "
+        "a caller can now omit it and silently delete every key it did not set")
+    assert "...carryOver, ...toWire(patch)" in source, (
+        "the carried document is not spread UNDER the patch")
+
+
 def test_the_client_speaks_every_key_the_store_defines() -> None:
     """⚠️ THE STORE SPEAKS snake_case AND THE APP SPEAKS camelCase, and a key
     that differs between them is ACCEPTED AND IGNORED rather than refused:

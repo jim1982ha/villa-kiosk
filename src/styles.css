@@ -2518,6 +2518,33 @@ label.toggle input[type="checkbox"]:checked {
   background: var(--accent);
   border-color: var(--accent);
 }
+/* ⚠️ A DISABLED TOGGLE WAS INDISTINGUISHABLE FROM AN ENABLED ONE, and this was
+   reported from the screen rather than found by review. `appearance: none` plus
+   an explicit background means the UA's own disabled rendering is thrown away
+   and NOTHING replaces it — so a control that could not be clicked looked
+   exactly like one that could, and the only clue was that clicking did nothing.
+
+   ⚠️ THE SIGNAL IS ON THE CHECKBOX ITSELF, NOT ON THE ROW VIA `:has()`. This
+   file already uses `:has()` once and justifies it as an enhancement whose
+   absence "simply keeps today's layout, which is the right fallback". Absence
+   is NOT harmless here — it is the bug — so the box is styled directly, which
+   works everywhere, and the row dimming below is the enhancement.
+
+   0.45 matches .pinpad-key:disabled and .btn:disabled: the house value for
+   "present, explained, not available yet". */
+label.toggle input[type="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: transparent;
+  border-style: dashed;
+}
+/* The enhancement: dim the words too, so the whole row reads as one unavailable
+   thing rather than a bright label beside a faded box. A browser without
+   `:has()` still gets the checkbox treatment above. */
+label.toggle:has(input[type="checkbox"]:disabled) {
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
 label.toggle input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;

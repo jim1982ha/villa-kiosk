@@ -72,6 +72,13 @@ export default function ChatSendersPanel() {
   const [draftId, setDraftId] = useState("");
   const [draftRole, setDraftRole] = useState<Role>("owner");
   const [sw, setSw] = useState<Switches>({ enabled: false, chat: false });
+  /** ⚠️ THE STORED DOCUMENT AS IT ARRIVED. The store REPLACES on write, so
+   *  every save must send the whole thing — and this copy is what carries keys
+   *  this version does not know about (a newer add-on's settings) through a
+   *  save unharmed. Sending only what changed deleted the sender list once. */
+  const [carryOver, setCarryOver] = useState<Record<string, unknown>>({});
+  /** Triggers as stored, so flipping `chat` cannot silently clear a sibling. */
+  const [triggers, setTriggers] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +88,8 @@ export default function ChatSendersPanel() {
       enabled: got?.config.enabled === true,
       chat: got?.config.triggers?.chat === true,
     });
+    setCarryOver(got?.raw ?? {});
+    setTriggers((got?.config.triggers ?? {}) as Record<string, boolean>);
     setRev(got?.rev ?? null);
     setLoading(false);
   }, []);
@@ -92,7 +101,7 @@ export default function ChatSendersPanel() {
     setError(null);
     const map: AgentConfig["allowedSenders"] = {};
     for (const r of next) map[`${CHANNEL}:${r.id}`] = r.role;
-    const ok = await saveAgentConfig({ allowedSenders: map }, rev);
+    const ok = await saveAgentConfig({ allowedSenders: map }, carryOver, rev);
     setSaving(false);
     if (!ok) {
       // ⚠️ RELOAD RATHER THAN RETRY. A refused write is almost always a
@@ -104,21 +113,22 @@ export default function ChatSendersPanel() {
     }
     setRows(next);
     void load();
-  }, [rev, load]);
+  }, [carryOver, rev, load]);
 
-  /** ⚠️ SENDS ONLY WHAT CHANGED, and `triggers` as a WHOLE object because the
-   *  store merges that one slice a level deep — see `agent.config.view`. A
-   *  partial `triggers` would still work, but stating both keys makes what is
-   *  being asserted visible in the request rather than in a merge rule. */
+  /** ⚠️ `triggers` IS SPREAD FROM WHAT WAS STORED, never rebuilt from
+   *  literals. The first version wrote `{scheduled: true, event: false, chat}`
+   *  — three assertions where one was intended, so flipping chat would have
+   *  silently turned `scheduled` ON at a property that had deliberately turned
+   *  it off. */
   const flip = useCallback(async (patch: Partial<Switches>) => {
     const next = { ...sw, ...patch };
     setSaving(true);
     setError(null);
     const ok = await saveAgentConfig(
       patch.enabled === undefined
-        ? { triggers: { scheduled: true, event: false, chat: next.chat } }
+        ? { triggers: { ...triggers, chat: next.chat } as AgentConfig["triggers"] }
         : { enabled: next.enabled },
-      rev);
+      carryOver, rev);
     setSaving(false);
     if (!ok) {
       setError("That change was not saved. Reloading.");
@@ -127,7 +137,7 @@ export default function ChatSendersPanel() {
     }
     setSw(next);
     void load();
-  }, [sw, rev, load]);
+  }, [sw, triggers, carryOver, rev, load]);
 
   const add = useCallback(() => {
     const id = draftId.trim();
@@ -156,20 +166,29 @@ export default function ChatSendersPanel() {
         briefings, no answers, no cost.
       </p>
 
-      <label className="toggle">
-        {/* ⚠️ DISABLED, NOT HIDDEN, while the master is off. Hiding it would
-            make the reason for the silence invisible; greyed with the sentence
-            below says which switch to reach for. */}
-        <input type="checkbox" checked={sw.chat && sw.enabled}
-               disabled={saving || !sw.enabled}
-               onChange={(e) => void flip({ chat: e.target.checked })} />
-        <span>Answer messages</span>
-      </label>
-      <p className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-        {sw.enabled
-          ? "Lets the people below start a conversation with the villa."
-          : "Needs the master switch above."}
-      </p>
+      {/* ⚠️ INDENTED BECAUSE IT DEPENDS ON THE SWITCH ABOVE, and the nesting is
+          the half of that signal which survives everything. Greying alone
+          carries it through colour only — which fails on a sunlit wall tablet,
+          fails for a colour-blind reader, and failed outright until the
+          disabled state had any styling at all. Structure says "this belongs
+          to that" with no CSS support required. */}
+      <div style={{ marginLeft: 18, borderLeft: "1px solid var(--hairline)",
+                    paddingLeft: 14 }}>
+        <label className="toggle">
+          {/* ⚠️ DISABLED, NOT HIDDEN, while the master is off. Hiding it would
+              make the reason for the silence invisible; disabled with the
+              sentence below says which switch to reach for. */}
+          <input type="checkbox" checked={sw.chat && sw.enabled}
+                 disabled={saving || !sw.enabled}
+                 onChange={(e) => void flip({ chat: e.target.checked })} />
+          <span>Answer messages</span>
+        </label>
+        <p className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
+          {sw.enabled
+            ? "Lets the people below start a conversation with the villa."
+            : "Turn on ‘VESTA agent’ above to use this."}
+        </p>
+      </div>
 
       <p className="muted body-text" style={{ marginTop: 14 }}>
         People who may message the villa and get an answer. Anyone not listed is

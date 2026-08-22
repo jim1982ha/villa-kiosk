@@ -87,7 +87,8 @@ export function fromWire(raw: Record<string, unknown>): Partial<AgentConfig> {
 
 /** Read the agent config. ⚠️ Envelope key `config`. */
 export async function loadAgentConfig(
-): Promise<{ config: Partial<AgentConfig>; rev: string } | null> {
+): Promise<{ config: Partial<AgentConfig>; rev: string;
+             raw: Record<string, unknown> } | null> {
   // ⚠️ `ingressPath`, LIKE EVERY SIBLING CLIENT. Not decoration: the envelope
   // test finds clients by searching for this exact idiom, and the first draft
   // of this file used a template literal — so the test found NO client for
@@ -104,7 +105,13 @@ export async function loadAgentConfig(
   const raw = (d.config && typeof d.config === "object")
     ? (d.config as Record<string, unknown>)
     : {};
-  return { config: fromWire(raw), rev: String(d.rev ?? "0") };
+  // ⚠️ THE RAW DOCUMENT COMES BACK TOO, AND IT IS NOT REDUNDANT. `fromWire`
+  // keeps only the keys THIS version knows, so a round trip through
+  // fromWire → toWire silently drops anything a NEWER add-on wrote — the
+  // downgrade case `config_view` deliberately preserves on the server. The
+  // caller spreads `raw` underneath its changes, exactly as `reportsApi`'s
+  // `carryOver` does.
+  return { config: fromWire(raw), rev: String(d.rev ?? "0"), raw };
 }
 
 /**
@@ -127,27 +134,39 @@ export async function loadConcerns(): Promise<Concern[]> {
 }
 
 /**
- * Save a slice of the agent config. Owner-only server-side; returns whether the
- * write was accepted.
+ * Save the agent config: `carryOver` with `patch` applied over it.
  *
- * ⚠️ A PARTIAL, AND THE STORE MERGES IT. `agent.config.view` spreads stored
- * values over defaults at READ time and persists no defaults, so sending only
- * the keys being changed is what keeps a key the owner DELETED deleted — the
- * "stale entities I can't delete" bug this project has already shipped once.
+ * ⚠️ THE STORE REPLACES THE WHOLE DOCUMENT — IT DOES NOT MERGE — AND SENDING A
+ * PATCH DESTROYED CONFIG IN THE FIELD. This function's first version PUT only
+ * the changed keys, on the stated reasoning that "the store merges it". It does
+ * not: `_json_store_handlers` writes `body[key]` verbatim, so ticking the agent
+ * on wrote `{enabled: true}` as the ENTIRE document and DELETED the owner's
+ * `allowed_senders` list. Reported the first time it was used. The confusion was
+ * between two different merges — `agent.config.view` spreads DEFAULTS under
+ * stored values at READ time, which is real, and has nothing to do with what a
+ * write does. Every sibling client sends the whole document; `reportsApi` calls
+ * its carried copy `carryOver`.
  *
- * ⚠️ AND IT SENDS THE REVISION IT READ. The store is conditional-write; without
- * `expected_rev` two tabs silently overwrite each other. A 409 comes back as
- * `false` and the caller reloads rather than retrying, because re-sending the
- * same body would discard whatever the other tab just saved.
+ * ⚠️ AND THE REVISION FIELD IS `rev`, NOT `expected_rev`. The handler reads
+ * `body.get("rev")` and treats a non-string as ABSENT — so the first version's
+ * `expected_rev` was accepted, ignored, and every write went through with no
+ * concurrency check at all. Silent, because a lost update looks like a save
+ * that worked. Same shape as the wire-key bug in 2.545.0: Python one side, a
+ * string literal the other, nothing between them.
  */
 export async function saveAgentConfig(
-  patch: Partial<AgentConfig>, rev: string | null,
+  patch: Partial<AgentConfig>,
+  carryOver: Record<string, unknown>,
+  rev: string | null,
 ): Promise<boolean> {
   const r = await fetch(ingressPath("agent-config"), {
     method: "PUT",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ config: toWire(patch), expected_rev: rev ?? "" }),
+    body: JSON.stringify({
+      config: { ...carryOver, ...toWire(patch) },
+      ...(rev === null ? {} : { rev }),
+    }),
   });
   return r.ok;
 }
