@@ -1,3 +1,16 @@
+## 2.645.0
+
+### Added — the villa's own conclusions on the wall, with two buttons
+The Cockpit shows what the agent has concluded beside what the kiosk measures.
+Useful / not useful sits on each one, and three dismissals of the same subject
+stop it being raised — by a counter, so "stop telling me about the gym lights"
+works reliably rather than probably.
+
+### Added — routing that re-evaluates instead of counting down
+A condition that cleared on its own now stands down rather than escalating, and
+an unreachable facility manager with guests in residence reaches the owner
+immediately rather than after forty-five minutes.
+
 ## 2.644.0
 
 ### Fixed — the agent had never read its own constitution
