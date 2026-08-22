@@ -1,3 +1,10 @@
+## 2.637.0
+
+### Fixed — the reply was composed, addressed correctly, and refused by Home Assistant
+A notify service and a notify entity are identical as strings, and the two are
+called different ways; the resolved chat was handed over as the wrong one, so
+every answer ended in HTTP 400 at the last step.
+
 ## 2.636.0
 
 ### Fixed — the answer was written and never sent

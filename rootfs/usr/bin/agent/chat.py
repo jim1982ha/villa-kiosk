@@ -475,6 +475,7 @@ async def target_for(session: Any, chat_id: str,
         return cached[0]
 
     try:
+        from reports import deliver
         from reports.hass import HassClient
         async with HassClient(session) as hass:
             entries = await hass.command("config/entity_registry/list")
@@ -495,7 +496,17 @@ async def target_for(session: Any, chat_id: str,
         # would compare the BOT id and match nothing, or worse, match one chat
         # for every entity the bot owns.
         if "_" in unique and unique.rsplit("_", 1)[1] == key:
-            found = str(entry.get("entity_id") or "")
+            # ⚠️ ENTITY-PREFIXED, AND `deliver.py` PREDICTED THIS EXACT BUG IN A
+            # COMMENT I DID NOT READ: "a service and an entity are the same
+            # shape … calling one the other way 404s or 400s at delivery time".
+            # A bare `notify.x` is treated as a legacy notify SERVICE and posted
+            # to `notify/x`, which does not exist on the entity platform. What
+            # this function resolves is an ENTITY, from the entity registry, so
+            # it returns the entity-addressed form rather than leaving the
+            # caller to know. Measured: `delivery to
+            # notify.living_room_… failed: HTTP 400`, with the answer composed,
+            # routed correctly and thrown away at the last step.
+            found = f"{deliver.ENTITY_PREFIX}{entry.get('entity_id') or ''}"
             break
 
     _TARGETS[key] = (found, at)

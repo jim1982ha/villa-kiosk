@@ -596,7 +596,32 @@ def test_a_private_chat_resolves_to_its_own_notify_entity() -> None:
     """⚠️ THE FIX FOR AN ANSWER THAT WENT TO THE WRONG ROOM. Measured on the
     villa: a question asked in a private chat was answered in the group,
     because the target came from the BRIEFING configuration."""
-    assert _resolve("765979167") == "notify.bot_private"
+    assert _resolve("765979167") == "entity:notify.bot_private"
+
+
+def test_the_resolved_target_is_ENTITY_ADDRESSED() -> None:
+    """⚠️ `deliver.py` PREDICTED THIS BUG IN A COMMENT AND I DID NOT READ IT.
+
+    "A service and an entity are the same shape … calling one the other way
+    404s or 400s at delivery time." A bare `notify.x` is posted to the legacy
+    service `notify/x`, which does not exist on the entity platform. Measured:
+    the answer was composed, routed to the correct chat, and refused —
+    `delivery to notify.living_room_… failed: HTTP 400`.
+
+    What `target_for` resolves comes OUT OF THE ENTITY REGISTRY, so it is an
+    entity by construction and returns the addressed form rather than leaving
+    each caller to remember.
+    """
+    from reports import deliver
+
+    got = _resolve("765979167")
+    assert got.startswith(deliver.ENTITY_PREFIX), got
+    assert deliver._service_path(got) == deliver.ENTITY_SERVICE, (
+        "the target does not route through the entity service, so Home "
+        "Assistant is asked to call a service by that name")
+    body = deliver._payload_for(got, "", "hello")
+    assert body["entity_id"] == "notify.bot_private", (
+        "the entity id never reaches the payload")
 
 
 def test_a_GROUP_chat_id_is_negative_and_still_resolves() -> None:
@@ -607,7 +632,7 @@ def test_a_GROUP_chat_id_is_negative_and_still_resolves() -> None:
     compares the bot id, which matches nothing at best and one arbitrary chat
     at worst.
     """
-    assert _resolve("-1003932943049") == "notify.bot_group"
+    assert _resolve("-1003932943049") == "entity:notify.bot_group"
 
 
 def test_an_unknown_chat_resolves_to_NOTHING_rather_than_a_guess() -> None:
@@ -620,7 +645,7 @@ def test_an_unknown_chat_resolves_to_NOTHING_rather_than_a_guess() -> None:
 
 def test_only_the_telegram_platform_is_considered() -> None:
     """A mobile_app entity sharing the numeric suffix must not be picked."""
-    assert _resolve("765979167") == "notify.bot_private"
+    assert _resolve("765979167") == "entity:notify.bot_private"
 
 
 def test_an_unreadable_registry_falls_back_rather_than_raising() -> None:
@@ -651,7 +676,8 @@ def test_the_lookup_is_cached_rather_than_asked_per_message() -> None:
     hass_mod.HassClient = lambda session: fake       # type: ignore[assignment,misc]
     try:
         for _ in range(3):
-            assert asyncio.run(chat.target_for(None, "765979167")) == "notify.bot_private"
+            assert asyncio.run(
+                chat.target_for(None, "765979167")) == "entity:notify.bot_private"
     finally:
         hass_mod.HassClient = original               # type: ignore[assignment]
     assert fake.calls == 1, f"asked the registry {fake.calls} times"
