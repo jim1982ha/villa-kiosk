@@ -1,3 +1,14 @@
+## 2.610.0
+
+### Added — a journal of what the villa actually did
+
+The historical record until now held only `vesta_*` events, so anything no
+blueprint was watching never happened as far as a report could tell. `observe/`
+records every material state change to a bounded ring that survives a restart,
+where material means a value change, any availability transition, or a commanded
+attribute — never a measurement that already has its own entity. Nothing reads
+it yet.
+
 ## 2.609.0
 
 ### Fixed — a smoke test counted as 209 IDR the villa could have saved
