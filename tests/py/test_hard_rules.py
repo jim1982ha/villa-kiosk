@@ -78,6 +78,19 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.a", "sensor.b", "sensor.moon_phase",
     "fan.ceiling_fan_",  # a PREFIX in a matcher, not an id
     "todo.shopping_list",  # HA's own default list name
+    # `observe/journal.py` and its tests. Every one is a placeholder chosen to
+    # be obviously fictional — the SHAPE of a state_changed event is what is
+    # under test, and the allow-list comment needs *an* entity to point at.
+    # ⚠️ These arrived with v2.610.0 and this pin did not fire on them, because
+    # it scans TRACKED source and `observe/` was still untracked when the gate
+    # was run. The commit is what made them visible. A new module therefore
+    # passes this rule right up until it is committed, which is the one moment
+    # nobody re-runs the suite — see the note in `_tracked_source`.
+    "climate.lounge", "climate.x", "light.a", "light.b", "light.hall",
+    "light.n", "lock.c", "switch.a", "switch.new", "lock.front", "lock.a",
+    "sensor.pump", "sensor.seeded", "sensor.flat", "sensor.spike",
+    "sensor.drift", "sensor.new", "sensor.x", "sensor.q", "sensor.weak",
+    "sensor.quiet", "sensor.loud", "sensor.unscorable", "sensor.pool",
 }
 
 #: ⚠️ REAL DEVICES OF THE REFERENCE DEPLOYMENT, IN COMMENTS THAT RECORD A

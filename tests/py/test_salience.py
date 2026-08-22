@@ -1,0 +1,331 @@
+"""Salience — novelty against an entity's own past, with no tunable constant.
+
+⚠️ THE ACCEPTANCE CRITERION INCLUDES A GREP. TASK-011 says "no threshold literal
+in the module", so one test reads the source and fails on the shapes a real
+threshold takes. That test is the reason this module can be trusted to travel to
+install #2, and it is the first thing to run after anyone edits salience.py.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+from typing import Any, Dict, List, Optional
+
+import pytest
+
+REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+
+from observe import salience  # noqa: E402
+
+SOURCE = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "observe", "salience.py")
+
+#: ⚠️ ANCHORED ON `(?:^|[._])`, NOT ON `\b`, AND THIS EXACT BUG WAS SHIPPED IN
+#: THE FIRST DRAFT OF THIS FILE. `\bTHRESHOLD\b` does not match
+#: `ALERT_THRESHOLD`, because `_` is a word character so there is no boundary
+#: in front of it — the same reason CLAUDE.md records that `door` matches
+#: inside `outdoor` and `\b` does not help. The companion test below feeds this
+#: pattern a smuggled threshold and fails if it does not fire, which is how the
+#: defect was caught: a guard that matches nothing passes forever.
+_FORBIDDEN = re.compile(
+    r"(?:^|[._])(THRESHOLD|LIMIT|CAP|CUTOFF|TRIP|FLOOR|CEILING|BAND|"
+    r"MAX_[A-Z_]*(?:WATT|POWER|COST|TEMP|LEVEL|LOAD)|"
+    r"MIN_[A-Z_]*(?:WATT|POWER|COST|TEMP|LEVEL|LOAD)|"
+    r"SIGMA[A-Z_]*|[A-Z_]*_PCT|[A-Z_]*_PERCENT)(?:$|[._\s=:])")
+#: A bare magnitude beside a unit is the other shape a smuggled threshold takes.
+_UNITS = re.compile(r"\b\d+(?:\.\d+)?[\s#:,]*(?:W|kW|kWh|IDR|USD|EUR|degC|%)\b")
+
+
+def _executable_source() -> str:
+    """`salience.py` with every docstring removed.
+
+    ⚠️ STRUCTURAL, NOT LINE-BASED. Stripping lines that *start* with a quote
+    leaves the MODULE docstring's body intact, and this module's prose
+    necessarily discusses thresholds at length — so the first version of this
+    guard failed on the very paragraph explaining why there are none. The
+    question is "does the CODE contain a threshold", and only a parser can
+    separate code from prose reliably.
+    """
+    import ast
+    with open(SOURCE, encoding="utf-8") as handle:
+        text = handle.read()
+    tree = ast.parse(text)
+    spans: List[range] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+            continue
+        body = getattr(node, "body", [])
+        if (body and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)):
+            doc = body[0]
+            spans.append(range(doc.lineno, (doc.end_lineno or doc.lineno) + 1))
+    lines = text.splitlines()
+    kept = [line for n, line in enumerate(lines, 1)
+            if not any(n in span for span in spans)
+            and not line.lstrip().startswith("#")]
+    return "\n".join(kept)
+
+
+def _rows(values: List[float], start_day: int = 1,
+          month: str = "2026-08") -> List[Dict[str, Any]]:
+    """`{"day", "value"}` rows, oldest first — series.hourly_by_day's shape."""
+    return [{"day": f"{month}-{start_day + i:02d}", "value": v}
+            for i, v in enumerate(values)]
+
+
+# ── TEST-003 · a seeded anomaly ranks top; a normal day does not ────────────
+
+def test_a_seeded_anomaly_scores_far_above_a_normal_reading() -> None:
+    history = _rows([340, 338, 342, 339, 341, 337, 343, 340, 340, 339])
+    anomaly = salience.score_numeric(history, 1900, entity_id="sensor.pump")
+    normal = salience.score_numeric(history, 341, entity_id="sensor.pump")
+    assert anomaly.score is not None and normal.score is not None
+    assert anomaly.score > normal.score * 10, (
+        "a 1.9 kW reading against a 340 W median must dominate a normal one")
+    assert anomaly.baseline == 340 and anomaly.spread is not None
+
+
+def test_a_seeded_anomaly_ranks_in_the_top_five_of_its_cycle() -> None:
+    """REQ-002's acceptance criterion, stated as it is written."""
+    quiet = [salience.score_numeric(_rows([10, 10.2, 9.8, 10.1, 9.9, 10, 10.3]),
+                                    10.05, entity_id=f"sensor.q{i}")
+             for i in range(30)]
+    seeded = salience.score_numeric(
+        _rows([10, 10.2, 9.8, 10.1, 9.9, 10, 10.3]), 95.0,
+        entity_id="sensor.seeded")
+    top5 = salience.rank(quiet + [seeded], limit=5)
+    assert "sensor.seeded" in [s.entity_id for s in top5]
+    assert top5[0].entity_id == "sensor.seeded"
+
+
+def test_a_normal_weekday_does_not_rank() -> None:
+    quiet = [salience.score_numeric(_rows([10, 10.2, 9.8, 10.1, 9.9, 10, 10.3]),
+                                    10.0, entity_id=f"sensor.q{i}")
+             for i in range(10)]
+    assert all(s.score is not None and s.score < 1.0 for s in quiet), (
+        "an ordinary reading must not accumulate score merely by being measured")
+
+
+# ── TEST-004 · short history returns None with a reason ────────────────────
+
+def test_too_little_history_returns_None_and_says_why() -> None:
+    """⚠️ NEVER A FABRICATED SCORE. A confident number from four readings ranks,
+    and whatever it displaces was real."""
+    out = salience.score_numeric(_rows([1, 2, 3, 4]), 99, entity_id="sensor.new")
+    assert out.score is None
+    assert "only 4 usable reading" in out.reason
+    assert str(salience.MIN_SAMPLES) in out.reason
+
+
+def test_a_non_numeric_current_reading_is_refused() -> None:
+    """⚠️ `unavailable` MUST NOT BECOME A NUMBER. maintenance_* shipped exactly
+    this bug: unavailable read as -999999, below every threshold, so any sensor
+    dropping off the mesh fired its own low-battery alert."""
+    # ⚠️ NOT a flat history: with one, the zero-spread guard returns None on
+    # its own and this test passes even when _numeric coerces junk to 0.0.
+    history = _rows([10, 12, 8, 11, 9, 10, 13])
+    for junk in ("unavailable", "unknown", None, "", "n/a", True, float("nan")):
+        out = salience.score_numeric(history, junk, entity_id="sensor.x")
+        assert out.score is None, f"{junk!r} must not be scored"
+    assert salience.score_numeric(history, "unavailable").observed is None
+
+
+def test_unscorable_entities_are_a_first_class_result() -> None:
+    """"I could not assess 40 of your devices, and here is why" is the honest
+    half of a coverage claim."""
+    scored = [salience.score_numeric(_rows([1, 2]), 5, entity_id="sensor.a"),
+              salience.score_numeric(_rows([1] * 8), 1, entity_id="sensor.b")]
+    missing = salience.unscorable(scored)
+    assert [s.entity_id for s in missing] == ["sensor.a"]
+    assert missing[0].reason
+
+
+# ── the zero-spread case robust.py's docstring demands be handled ──────────
+
+def test_a_perfectly_flat_history_does_not_divide_by_zero() -> None:
+    """⚠️ robust.mad RETURNS 0.0 LEGITIMATELY — a well-behaved always-on
+    appliance draws the same amount every hour. Dividing would make the
+    quietest equipment in the house the loudest alarm."""
+    flat = _rows([500] * 10)
+    steady = salience.score_numeric(flat, 500, entity_id="sensor.flat")
+    assert steady.score == 0.0 and steady.spread == 0.0
+
+    moved = salience.score_numeric(flat, 620, entity_id="sensor.flat")
+    assert moved.score is None, (
+        "a departure from a flat history must be reported as novel, not given "
+        "an arithmetic infinity that heads every ranking forever")
+    assert "flat at 500" in moved.reason and "620" in moved.reason
+
+
+# ── the duration term ───────────────────────────────────────────────────────
+
+def test_a_sustained_departure_outranks_a_single_spike_at_equal_sigma() -> None:
+    """The two call for different responses, and the difference belongs in the
+    ranking rather than in a tunable weight."""
+    spike = salience.score_numeric(
+        _rows([10, 11, 9, 10, 11, 9, 10, 11, 9]), 20, entity_id="sensor.spike")
+    drift = salience.score_numeric(
+        _rows([10, 10, 10, 10, 18, 19, 19, 20, 19]), 20, entity_id="sensor.drift")
+    assert spike.score is not None and drift.score is not None
+    assert drift.persistence > spike.persistence
+
+
+def test_the_duration_term_is_bounded_at_double() -> None:
+    """⚠️ Bounded BY CONSTRUCTION so it cannot become a weight. Persistence is a
+    fraction in [0,1] and maps to a multiple in [1,2]; an unbounded term is the
+    first per-villa constant back in the door."""
+    history = _rows([10] * 6 + [40] * 6)
+    out = salience.score_numeric(history, 40, entity_id="sensor.x")
+    assert out.score is not None and out.baseline is not None
+    assert out.spread is not None and out.spread > 0
+    z = abs(40 - out.baseline) / out.spread
+    assert z <= out.score <= z * 2.0 + 1e-9
+    assert 0.0 <= out.persistence <= 1.0
+
+
+# ── the weekday refinement ─────────────────────────────────────────────────
+
+def test_a_weekday_baseline_is_used_when_the_data_supports_one() -> None:
+    """A villa's Sunday genuinely differs from its Tuesday."""
+    rows: List[Dict[str, Any]] = []
+    for week in range(4):                      # 2026-08-03 is a Monday
+        rows.append({"day": f"2026-08-{3 + week * 7:02d}", "value": 10.0})   # Mon
+        rows.append({"day": f"2026-08-{4 + week * 7:02d}", "value": 10.0})   # Tue
+        rows.append({"day": f"2026-08-{9 + week * 7:02d}", "value": 90.0})   # Sun
+    sunday = salience.score_numeric(rows, 90.0, entity_id="sensor.pool", weekday=6)
+    assert sunday.weekday_scoped is True
+    assert sunday.baseline == 90.0
+    assert sunday.score == 0.0, "90 on a Sunday is this entity's normal Sunday"
+
+
+def test_it_falls_back_to_the_whole_window_when_a_weekday_is_thin() -> None:
+    """⚠️ The fallback is not a failure. A new install has no four-Tuesday
+    history, and that is exactly when it most needs an answer."""
+    rows = _rows([10, 10, 10, 10, 10, 10, 10, 10])
+    out = salience.score_numeric(rows, 10, entity_id="sensor.x", weekday=6)
+    assert out.weekday_scoped is False and out.score is not None
+
+
+# ── categoricals ────────────────────────────────────────────────────────────
+
+def test_a_never_seen_state_is_flagged_with_its_evidence() -> None:
+    out = salience.score_categorical(
+        ["locked", "unlocked", "locked"], "jammed", entity_id="lock.front")
+    assert out.novel_state == "jammed" and out.score == 1.0
+    assert "never been seen" in out.reason and "'locked'" in out.reason
+
+
+def test_a_usual_state_is_not_novel() -> None:
+    out = salience.score_categorical(["on", "off"], "off", entity_id="switch.a")
+    assert out.novel_state is None and out.score == 0.0
+
+
+def test_no_history_yields_no_claim() -> None:
+    out = salience.score_categorical([], "on", entity_id="switch.new")
+    assert out.score is None and "no history" in out.reason
+
+
+# ── ranking ─────────────────────────────────────────────────────────────────
+
+def test_numeric_and_categorical_are_not_compared_as_numbers() -> None:
+    """⚠️ A sigma and a boolean have no common unit. A novel state scores 1.0;
+    treating that as 'less salient than 1.1 sigma' is a units error."""
+    weak = salience.score_numeric(
+        _rows([10, 12, 8, 11, 9, 10, 13, 7]), 10.5, entity_id="sensor.weak")
+    novel = salience.score_categorical(["locked"], "jammed", entity_id="lock.a")
+    assert weak.score is not None and 0 < weak.score < 2.0
+    ordered = [s.entity_id for s in salience.rank([novel, weak])]
+    assert ordered.index("sensor.weak") < ordered.index("lock.a"), (
+        "numeric ranks first as a block; the novel state is never dropped")
+
+
+def test_ranking_puts_unscorable_last_and_never_discards() -> None:
+    items = [
+        salience.score_numeric(_rows([1, 2]), 9, entity_id="sensor.unscorable"),
+        salience.score_numeric(_rows([10] * 8), 10, entity_id="sensor.quiet"),
+        salience.score_numeric(_rows([10, 11, 9, 10, 11, 9, 10, 30]), 30,
+                               entity_id="sensor.loud"),
+    ]
+    ordered = salience.rank(items)
+    assert len(ordered) == 3, "ranking truncates only when asked"
+    assert ordered[0].entity_id == "sensor.loud"
+    assert ordered[-1].entity_id == "sensor.unscorable"
+
+
+def test_limit_truncates_the_shown_set_only() -> None:
+    items = [salience.score_numeric(_rows([10] * 8), 10 + i, entity_id=f"s.{i}")
+             for i in range(9)]
+    assert len(salience.rank(items, limit=3)) == 3
+    assert len(salience.rank(items)) == 9
+
+
+# ── the score carries its own evidence ─────────────────────────────────────
+
+def test_every_score_travels_with_its_baseline_and_spread() -> None:
+    """⚠️ A ranked list of bare numbers cannot be checked, explained or
+    debugged. '1.9 kW against a median of 340 W' is a sentence."""
+    out = salience.score_numeric(
+        _rows([340, 338, 342, 339, 341, 337, 343]), 1900, entity_id="sensor.pump")
+    for field_name in ("observed", "baseline", "spread", "samples"):
+        assert getattr(out, field_name) is not None
+    assert out.reason and "sigma" in out.reason
+    blob = out.as_dict()
+    assert blob["baseline"] == 340 and blob["observed"] == 1900
+
+
+# ── ARCH-004 · the grep the acceptance criterion asks for ──────────────────
+
+def test_the_module_contains_no_threshold_literal() -> None:
+    """⚠️ TASK-011's ACCEPTANCE CRITERION, MECHANISED. A threshold answers "how
+    much is too much" and is a per-villa judgement wearing a number's clothes.
+    The three constants this module does define are statistical VALIDITY
+    requirements — "is this sample big enough to say anything" — which have the
+    same answer at every property.
+    """
+    body = _executable_source()
+
+    # ⚠️ ANY module-level UPPERCASE binding, annotated or not. Matching only
+    # `NAME: Final` let a bare `IDLE_FLOOR = 340` through untouched - found by
+    # mutation testing, not by review.
+    # A LEADING UNDERSCORE IS STILL IN SCOPE — a private constant hides a
+    # threshold exactly as well as a public one.
+    declared = set(re.findall(r"^(_?[A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=", body, re.M))
+    assert declared == {"WINDOW_DAYS", "MIN_SAMPLES", "MIN_SAMPLES_PER_WEEKDAY",
+                        "_PERSISTENCE_MAX_MULTIPLE"}, (
+        f"undeclared module constant(s): {sorted(declared)}. Every constant "
+        "here must be a validity requirement, named and justified in the header")
+
+    forbidden = re.compile(
+        r"\b(THRESHOLD|LIMIT|MAX_[A-Z]*(?:WATT|POWER|COST|TEMP|LEVEL)"
+        r"|MIN_[A-Z]*(?:WATT|POWER|COST|TEMP|LEVEL)|SIGMA_[A-Z]+|_PCT|_PERCENT)\b")
+    assert not forbidden.search(body), (
+        f"threshold-shaped constant: {forbidden.search(body).group(0)}")   # type: ignore[union-attr]
+
+    # A bare number next to a unit is the other shape a smuggled threshold takes.
+    units = re.compile(r"\b\d+(?:\.\d+)?\s*(?:W|kW|kWh|IDR|USD|EUR|degC|%)\b")
+    assert not units.search(body), (
+        f"villa-specific magnitude: {units.search(body).group(0)}")  # type: ignore[union-attr]
+
+
+def test_the_grep_would_actually_catch_a_smuggled_threshold(
+        tmp_path: Any) -> None:
+    """⚠️ MUTATION-PROOFING THE GUARD ITSELF. A pattern that matches nothing
+    passes forever and proves nothing — four ways a test can measure nothing are
+    on record in this project, and 'the regex never matched' is one of them."""
+    forbidden, units = _FORBIDDEN, _UNITS
+    assert forbidden.search("ALERT_THRESHOLD = 3.0")
+    assert forbidden.search("MAX_WATT = 340")
+    assert forbidden.search("SIGMA_TRIP = 3")
+    assert forbidden.search("IDLE_FLOOR = 340")
+    assert forbidden.search("POWER_CEILING = 2200")
+    assert units.search("IDLE_FLOOR = 340  # W")
+    assert units.search("idle draw above 340 W is waste")
+    assert units.search("costs 2380 IDR")
+    # ...and does not fire on the module's own legitimate vocabulary.
+    assert not forbidden.search("MIN_SAMPLES_PER_WEEKDAY: Final[int] = 4")
+    assert not units.search("28 days is four of every weekday")

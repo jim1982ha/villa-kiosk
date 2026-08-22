@@ -1,3 +1,13 @@
+## 2.611.0
+
+### Added — the villa's own history decides what counts as unusual
+
+Every threshold in the blueprint pack answers "how much is too much" for one
+property's equipment, which is why the pack does not travel. `observe/salience.py`
+scores each entity against its own recent distribution instead, so it needs no
+tuning and works on install day. It never fabricates a score: too little history
+returns nothing, with a reason. Nothing reads it yet.
+
 ## 2.610.0
 
 ### Added — a journal of what the villa actually did
