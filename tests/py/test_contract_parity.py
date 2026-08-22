@@ -27,13 +27,21 @@ from typing import Dict, List, Tuple
 import pytest
 
 from reports.contracts import CONTRACT_SETS, CONTRACT_VERSION
+from agent.contracts import CONTRACT_SETS as AGENT_SETS
+from agent.contracts import CONTRACT_VERSION as AGENT_VERSION
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TS_PATH = os.path.join(REPO_ROOT, "src", "reports", "reportsTypes.ts")
+AGENT_TS_PATH = os.path.join(REPO_ROOT, "src", "agent", "agentTypes.ts")
 
 
 def _ts_source() -> str:
     with open(TS_PATH, encoding="utf-8") as handle:
+        return handle.read()
+
+
+def _agent_ts_source() -> str:
+    with open(AGENT_TS_PATH, encoding="utf-8") as handle:
         return handle.read()
 
 
@@ -158,3 +166,69 @@ def test_parser_actually_reads_values() -> None:
         name for name, values in _parse_ts_sets(_ts_source()).items() if not values
     )
     assert not empty, f"parsed as empty from reportsTypes.ts: {empty}"
+
+
+# ── the agent's own contract, same rules ───────────────────────────────────
+#
+# ⚠️ A SECOND PAIR, NOT A SECOND MECHANISM. `agent/contracts.py` mirrors
+# `src/agent/agentTypes.ts` under exactly the rules above, and reuses this
+# module's parser — a second regex would be a second thing to break, and the
+# one that broke would pass vacuously.
+#
+# ⚠️ THE AGENT SETS ARE DELIBERATELY NOT MERGED INTO `CONTRACT_SETS`. Doing so
+# would require `reports` to import `agent`, which is the wrong direction:
+# `reports` is dismantled in PH-5 and `agent` is what replaces it.
+
+
+def test_agent_parser_finds_every_set() -> None:
+    """The guard, for the agent pair. Fails identically whether the mirror is
+    missing a set or the parser has stopped working — both mean nothing below
+    is being compared."""
+    ts_sets = _parse_ts_sets(_agent_ts_source())
+    missing = sorted(set(AGENT_SETS) - set(ts_sets))
+    assert not missing, (
+        f"not found in agentTypes.ts: {missing}. Either the mirror is missing "
+        f"these, or the declarations left the `export const NAME = [...] as "
+        f"const;` shape — in which case every assertion below passes vacuously.")
+
+
+def test_no_extra_sets_in_agent_typescript() -> None:
+    ts_sets = _parse_ts_sets(_agent_ts_source())
+    extra = sorted(set(ts_sets) - set(AGENT_SETS))
+    assert not extra, (
+        f"declared in agentTypes.ts but absent from agent/contracts.py: "
+        f"{extra}. The Python side is the source of truth.")
+
+
+@pytest.mark.parametrize("name", sorted(AGENT_SETS))
+def test_agent_values_match_exactly(name: str) -> None:
+    """Same values, same ORDER. SEVERITY is ordered least to most urgent and
+    routing sorts by it, so a differently-ordered mirror would route a correct
+    concern wrongly."""
+    ts_sets = _parse_ts_sets(_agent_ts_source())
+    assert name in ts_sets, f"{name} missing from agentTypes.ts"
+    assert ts_sets[name] == AGENT_SETS[name], (
+        f"{name} differs:\n"
+        f"  agent/contracts.py {list(AGENT_SETS[name])}\n"
+        f"  agentTypes.ts      {list(ts_sets[name])}")
+
+
+def test_agent_contract_version_matches() -> None:
+    match = re.search(r"export const AGENT_CONTRACT_VERSION\s*=\s*(\d+)",
+                      _agent_ts_source())
+    assert match, "AGENT_CONTRACT_VERSION not declared in agentTypes.ts"
+    assert int(match.group(1)) == AGENT_VERSION
+
+
+def test_the_two_severity_scales_are_IDENTICAL() -> None:
+    """⚠️ P4 OF THE CONSISTENCY WORK FOUND THREE SEVERITY SCALES WITH NOTHING
+    RELATING ANY TWO, and the agent adopting a fourth would reopen it. They are
+    declared separately because `agent` must not import `reports` for a constant
+    it would then be unable to change independently — so the duplication is
+    deliberate and this is what stops it drifting."""
+    assert AGENT_SETS["SEVERITY"] == CONTRACT_SETS["SEVERITY"], (
+        "the agent and the report pipeline must agree on severity, or the "
+        "tablet and the notification can disagree about how bad something is")
+    assert AGENT_SETS["AUDIENCE"][:2] == CONTRACT_SETS["AUDIENCE"], (
+        "the agent's audiences must EXTEND the report pipeline's, not diverge "
+        "from them — it adds `ops`, it does not rename the other two")

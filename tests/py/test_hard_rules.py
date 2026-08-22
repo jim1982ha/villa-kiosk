@@ -92,6 +92,7 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.drift", "sensor.new", "sensor.x", "sensor.q", "sensor.weak",
     "sensor.quiet", "sensor.loud", "sensor.unscorable", "sensor.pool",
     "light.gone", "light.ok",  # observe/cycle.py's diff fixtures
+    "sensor.thin",             # agent tool fixtures
 }
 
 #: ⚠️ REAL DEVICES OF THE REFERENCE DEPLOYMENT, IN COMMENTS THAT RECORD A

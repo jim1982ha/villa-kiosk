@@ -1,0 +1,85 @@
+/**
+ * VESTA Agent — the SPA's half of the agent vocabulary.
+ *
+ * ⚠️ THIS FILE HAS A TWIN: `rootfs/usr/bin/agent/contracts.py`. It is the source
+ * of truth (the backend writes the stored concerns); this file mirrors it.
+ * `tests/py/test_contract_parity.py` FAILS THE BUILD if the two disagree in
+ * either direction, including a value present on only one side.
+ *
+ * Each set is a `const` array with the union DERIVED from it via
+ * `typeof X[number]`. Writing the union by hand would give the parity test
+ * nothing to read — a TypeScript type is erased before anything can compare it
+ * — and would let the array and the union drift, which is the same bug one
+ * level down.
+ *
+ * ⚠️ NO IMPORTS, and nothing villa-specific: no entity_id, no room, no
+ * threshold. Vocabulary only.
+ */
+
+/** Bumped when a value's MEANING changes; never for an addition.
+ *
+ *  ⚠️ NOTHING IN THIS APP IMPORTS THIS, AND DELETING IT BREAKS A TEST — the
+ *  parity check reads it out of this file's SOURCE TEXT. Said here so the next
+ *  unused-export sweep stops at this line instead of turning that pin into a
+ *  vacuous pass, exactly as its twin in reportsTypes.ts records. */
+export const AGENT_CONTRACT_VERSION = 1;
+
+/** What caused a run. `chat` is a first-class trigger, not a special case. */
+export const TRIGGER = ["manual", "scheduled", "event", "chat"] as const;
+export type Trigger = (typeof TRIGGER)[number];
+
+/** How a run ended. `declined` is a CORRECT outcome and is not `failed`. */
+export const RUN_STATUS = ["answered", "declined", "failed", "partial"] as const;
+export type RunStatus = (typeof RUN_STATUS)[number];
+
+/** Ordered least to most urgent. Identical to reports' SEVERITY, deliberately —
+ *  three unrelated severity scales is the defect that work removed. */
+export const SEVERITY = ["info", "notice", "warning", "critical"] as const;
+export type Severity = (typeof SEVERITY)[number];
+
+/** Who a concern is for. Three, not two. */
+export const AUDIENCE = ["owner", "facility", "ops"] as const;
+export type Audience = (typeof AUDIENCE)[number];
+
+/** A concern's lifecycle. `dismissed` is not `closed`: one was dealt with, the
+ *  other a person said did not matter, and alert-fatigue reads the difference. */
+export const CONCERN_STATE = [
+  "open", "acted", "verified", "closed", "dismissed",
+] as const;
+export type ConcernState = (typeof CONCERN_STATE)[number];
+
+/** The second axis of the action gate. Reversibility alone is not a safety
+ *  test: unlocking a door is reversible and the harm is instantaneous. */
+export const HARM_CLASS = ["low", "high"] as const;
+export type HarmClass = (typeof HARM_CLASS)[number];
+
+/** Three answers, not a boolean — "propose to a person" is the middle one. */
+export const POLICY_VERDICT = ["allow", "propose", "deny"] as const;
+export type PolicyVerdict = (typeof POLICY_VERDICT)[number];
+
+/** Why a tool call failed. A tool error is DATA the model routes around. */
+export const TOOL_ERROR_CODE = [
+  "not_found", "unavailable", "invalid_args", "not_permitted",
+  "too_large", "rate_limited", "internal",
+] as const;
+export type ToolErrorCode = (typeof TOOL_ERROR_CODE)[number];
+
+/** MCP content blocks. */
+export const CONTENT_KIND = ["text", "json"] as const;
+export type ContentKind = (typeof CONTENT_KIND)[number];
+
+/** One concern, as the backend stores it (CTR-010). */
+export interface Concern {
+  id: string;
+  subjectKey: string;
+  title: string;
+  body: string;
+  severity: Severity;
+  audience: Audience;
+  evidence: Array<{ tool: string; argsDigest: string; at: string; summary: string }>;
+  action?: { kind: string; targetRef: string; reversible: boolean; harmClass: HarmClass };
+  confidence: number;
+  openedAt: string;
+  state: ConcernState;
+  supersedes: string[];
+}
