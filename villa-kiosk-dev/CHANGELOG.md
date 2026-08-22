@@ -1,3 +1,13 @@
+## 2.594.1
+
+### Changed — two comments from the last release claimed more than they check
+
+`add_heading` recorded three missed sites and omitted the fourth its own pin
+found, which is the evidence the pin works; and it now says why a section that
+OPENS with a heading must not call it. The pin's docstring claimed nothing
+appends a heading any other way — four sections build one via a list literal,
+correctly, and a reader would have hunted a gap that is not there.
+
 ## 2.594.0
 
 ### Changed — /dry-audit: two enums shipped unpinned, the zone list existed twice, and a heading rule had four copies
