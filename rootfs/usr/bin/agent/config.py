@@ -66,6 +66,12 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: no run and no reply — silence rather than a refusal, because an error
     #: reply confirms the bot is live to whoever is probing it.
     "allowed_senders": {},
+    #: ⚠️ WHICH SERVICES, as distinct from `actuable_refs`' WHICH DEVICES —
+    #: both allow-lists must pass, so `light.turn_off` on an unlisted lamp and
+    #: `lock.unlock` on a listed door are refused for different reasons. Empty
+    #: by the same requirement: a seeded service list authorises a verb nobody
+    #: chose, on every device that ever reaches the ref list.
+    "allowed_services": [],
     #: ⚠️ EMPTY MEANS THE AGENT MAY ACT ON NOTHING. Even with `act_enabled`
     #: true, an empty list is a complete stop — the two are AND-ed, so turning
     #: actuation on does not by itself authorise a single device.
@@ -79,7 +85,7 @@ DEFAULTS: Final[Dict[str, Any]] = {
 #: test asserts each of these is falsy in DEFAULTS, so a helpful seed cannot be
 #: added without the build failing.
 MUST_BE_EMPTY: Final[Tuple[str, ...]] = ("allowed_senders", "actuable_refs",
-                                        "suppressed_subjects")
+                                        "allowed_services", "suppressed_subjects")
 
 
 def view(raw: Any) -> Dict[str, Any]:
@@ -163,7 +169,7 @@ def errors(value: Any) -> List[str]:
                         f"allowed_senders[{sender}] role {role!r} is not one "
                         f"of owner, facility, ops")
 
-    for name in ("actuable_refs", "suppressed_subjects"):
+    for name in ("actuable_refs", "allowed_services", "suppressed_subjects"):
         if name in value and not isinstance(value[name], list):
             problems.append(f"{name} must be a list")
 

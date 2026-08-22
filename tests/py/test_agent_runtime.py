@@ -81,7 +81,7 @@ def _registry() -> reg.Registry:
 
 
 def _policy(**cfg: Any) -> policy.RunPolicy:
-    base: Dict[str, Any] = {"agent_max_turns": 6, "agent_max_tool_calls": 10}
+    base: Dict[str, Any] = {"max_turns": 6, "max_tool_calls": 10}
     base.update(cfg)
     return policy.for_run(base, tool_names=_registry().names)
 
@@ -158,7 +158,7 @@ def test_the_turn_cap_stops_a_repeat_loop() -> None:
     """⚠️ The monthly ceiling cannot catch a single run that loops, because it
     is one run."""
     p = FakeProvider([asks("echo") for _ in range(50)])
-    out = _run(p, pol=policy.for_run({"agent_max_turns": 3},
+    out = _run(p, pol=policy.for_run({"max_turns": 3},
                                      tool_names=_registry().names))
     assert out.status == "declined" and "turn cap" in out.declined_reason
     assert out.turns == 3

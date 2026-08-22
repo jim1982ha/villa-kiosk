@@ -68,6 +68,15 @@ export type ToolErrorCode = (typeof TOOL_ERROR_CODE)[number];
 export const CONTENT_KIND = ["text", "json"] as const;
 export type ContentKind = (typeof CONTENT_KIND)[number];
 
+/**
+ * What a tool does to the world. ⚠️ THREE, NOT TWO: `ACT` exists before any
+ * actuating tool does, because the MCP surface is an ALLOW-list over this
+ * vocabulary — so `act_service` is off that surface the day it is written,
+ * rather than the day somebody remembers to deny it.
+ */
+export const TOOL_MODE = ["READ", "WRITE", "ACT"] as const;
+export type ToolMode = (typeof TOOL_MODE)[number];
+
 /** One concern, as the backend stores it (CTR-010). */
 export interface Concern {
   id: string;

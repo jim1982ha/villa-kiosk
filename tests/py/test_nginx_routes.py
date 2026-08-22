@@ -64,6 +64,15 @@ def _locations() -> Tuple[Set[str], Set[str]]:
     return exact, prefix
 
 
+#: ⚠️ ROUTES THAT MUST **NOT** HAVE AN NGINX LOCATION — the inverse of what the
+#: rest of this module checks, and each one is a security requirement rather
+#: than an oversight. nginx is the explicit allow-list in front of Ingress, so a
+#: route with no block is unreachable from the tablet, from a phone, and from
+#: anything Home Assistant proxies. Adding a `location /agent-mcp` would fix a
+#: test that is not failing and open a tool surface to every browser.
+NOT_INGRESS_REACHABLE: Set[str] = {"/agent-mcp"}
+
+
 def _reachable(path: str, exact: Set[str], prefix: Set[str]) -> bool:
     if path in exact:
         return True
@@ -92,9 +101,28 @@ def test_the_parser_finds_the_known_locations() -> None:
     assert "/" in prefix, "the SPA catch-all should still exist"
 
 
+def test_the_MCP_route_is_deliberately_UNREACHABLE_through_nginx() -> None:
+    """REQ-046, TEST-018. The assertion runs in the opposite direction.
+
+    ⚠️ AND IT ASSERTS THE ROUTE EXISTS FIRST. Without that, deleting
+    `/agent-mcp` from the proxy entirely would make this test pass — a vacuous
+    green on the one check that stands between a tool surface and the LAN.
+    """
+    routes = _routes()
+    exact, prefix = _locations()
+    for path in NOT_INGRESS_REACHABLE:
+        assert path in routes, (
+            f"{path} is not registered on the proxy at all; this test would "
+            f"pass vacuously")
+        assert not _reachable(path, exact, prefix), (
+            f"{path} has an nginx location and is therefore Ingress-reachable")
+
+
 def test_every_route_is_reachable_through_nginx() -> None:
     exact, prefix = _locations()
-    unreachable = sorted({r for r in _routes() if not _reachable(r, exact, prefix)})
+    unreachable = sorted({r for r in _routes()
+                          if r not in NOT_INGRESS_REACHABLE
+                          and not _reachable(r, exact, prefix)})
     assert not unreachable, (
         "these proxy routes have no nginx location and would be answered with "
         f"the SPA's index.html (HTTP 200, text/html): {unreachable}\n"

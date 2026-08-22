@@ -1,3 +1,14 @@
+## 2.623.0
+
+### Added — an external agent can now reach the read tools, behind the same gate
+`/agent-mcp` publishes them over MCP through the identical function the in-process
+agent uses, so a relocated caller gains no permission it did not have. It has no
+nginx location on purpose and is therefore unreachable from the tablet.
+
+### Fixed — every setting saved in the agent config was accepted and then ignored
+`policy.py` read a prefixed spelling nothing has ever written, so a turn cap set
+to 3 stayed at 8 and actuation could not be switched on at all.
+
 ## 2.622.0
 
 ### Added — the agent loop, runnable end to end with no network

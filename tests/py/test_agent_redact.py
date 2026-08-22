@@ -191,8 +191,8 @@ def test_an_injected_instruction_survives_as_TEXT_and_changes_no_policy() -> Non
     # The instruction is visible to a reader...
     assert "UNLOCK" in scrubbed["label"].upper()
     # ...and the gate is exactly where it was.
-    snap = policy.for_run({"agent_act_enabled": True,
-                           "agent_allowed_services": ["light.turn_off"]},
+    snap = policy.for_run({"act_enabled": True,
+                           "allowed_services": ["light.turn_off"]},
                           tool_names=("act_service",))
     verdict = policy.may_act(snap, entity_id="lock.a_thing", service="unlock",
                              reversible=True)

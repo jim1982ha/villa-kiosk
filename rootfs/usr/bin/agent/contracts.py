@@ -90,6 +90,14 @@ TOOL_ERROR_CODE: Final[Tuple[str, ...]] = (
     "not_found", "unavailable", "invalid_args", "not_permitted",
     "too_large", "rate_limited", "internal")
 
+#: ⚠️ WHAT A TOOL DOES TO THE WORLD, AND THE REASON THERE ARE THREE RATHER THAN
+#: TWO. `ACT` exists BEFORE any actuating tool does, because the MCP surface is
+#: an allow-list over this vocabulary (`READ`, plus one named write) — so
+#: `act_service` is excluded from that surface the day it is written, by being
+#: what it is, rather than by somebody remembering to add it to a deny-list.
+#: REQ-047 is then structural instead of a rule in a comment.
+TOOL_MODE: Final[Tuple[str, ...]] = ("READ", "WRITE", "ACT")
+
 #: ⚠️ MCP CONTENT BLOCKS, WHICH IS WHY THIS SET EXISTS AT ALL. A tool returns
 #: blocks rather than a string so the protocol this is shaped for needs no
 #: translation layer later — see ADR-006 and `__init__.py`.
@@ -108,6 +116,7 @@ CONTRACT_SETS: Final[Dict[str, Tuple[str, ...]]] = {
     "POLICY_VERDICT": POLICY_VERDICT,
     "TOOL_ERROR_CODE": TOOL_ERROR_CODE,
     "CONTENT_KIND": CONTENT_KIND,
+    "TOOL_MODE": TOOL_MODE,
 }
 
 

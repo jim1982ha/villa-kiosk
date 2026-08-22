@@ -147,28 +147,51 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
         convo.append({"role": "user", "content": results})
 
 
-async def _invoke(call: ToolCall, *, registry: Registry,
-                  policy: policy_mod.RunPolicy, run_id: str, actor: str,
-                  result: RunResult) -> Dict[str, Any]:
-    """One tool call: gate it, run it, scrub it, record it."""
-    result.tool_calls += 1
-    tool = registry.get(call.name)
+@dataclass
+class Invocation:
+    """CTR-017. One gated tool call, whoever asked for it."""
+
+    blocks: List[Dict[str, Any]]
+    allowed: bool = True
+    verdict: str = "allow"
+
+
+async def invoke(registry: Registry, *, policy: policy_mod.RunPolicy,
+                 name: str, args: Mapping[str, Any], run_id: str,
+                 actor: str) -> Invocation:
+    """Gate it, run it, scrub it, record it. THE one place all four happen.
+
+    ⚠️ ARCH-012 — THIS FUNCTION IS WHY "ONE GATE, TWO CONSUMERS" IS A FACT
+    RATHER THAN A CLAIM. The in-process loop and the MCP server both reach a
+    tool only through here, so there is exactly ONE call to `may_use_tool`,
+    exactly ONE call to `record_intent`, and exactly one scrub. Two paths that
+    each did their own gating would agree on the day they were written and
+    diverge on the first change to either — and the second gate is the one
+    nobody tests. TEST-017 asserts the AUDIT ROWS match across both paths,
+    which is the assertion that would fail if this were ever inlined back.
+
+    ⚠️ IT NEVER RAISES. Every refusal is a `fail()` block the caller can hand
+    back, because a tool error is data on both paths.
+    """
+    tool = registry.get(name)
     if tool is None:
         # ⚠️ A HALLUCINATED TOOL IS DATA, NOT AN ERROR. The model must be able
         # to read that the tool does not exist and choose another one.
-        return _tool_result(call, [fail("not_found",
-                                        f"no tool named {call.name!r}")])
+        return Invocation([fail("not_found", f"no tool named {str(name)!r}")],
+                          allowed=False, verdict="deny")
 
-    verdict = policy_mod.may_use_tool(policy, call.name, tool.mode)
-    audit_mod.record_intent(run_id, actor=actor, tool=call.name,
-                            args=call.args, verdict=verdict.verdict)
+    verdict = policy_mod.may_use_tool(policy, name, tool.mode)
+    audit_mod.record_intent(run_id, actor=actor, tool=name,
+                            args=args, verdict=verdict.verdict)
     if not verdict.allowed:
-        return _tool_result(call, [fail("not_permitted", verdict.reason)])
+        return Invocation([fail("not_permitted", verdict.reason)],
+                          allowed=False, verdict=verdict.verdict)
 
-    blocks = await tool.call(call.args)
+    blocks = await tool.call(args)
 
-    # ⚠️ SCRUBBED ON THE WAY IN, BEFORE ANYTHING SEES IT. Once it is in the
-    # transcript it is re-sent on every later turn.
+    # ⚠️ SCRUBBED ON THE WAY IN, BEFORE ANYTHING SEES IT. Once it is in a
+    # transcript it is re-sent on every later turn; and over MCP the caller is
+    # by definition outside this process.
     scrubbed = redact.scrub(blocks)
     problems = redact.audit(scrubbed)
     if problems:
@@ -177,15 +200,27 @@ async def _invoke(call: ToolCall, *, registry: Registry,
         # leak cannot describe itself to the model.
         swallow("tool result refused by the redaction audit",
                 RuntimeError("; ".join(problems[:3])))
-        return _tool_result(call, [fail("internal",
-                                        "the result could not be shown safely")])
+        return Invocation([fail("internal",
+                                "the result could not be shown safely")],
+                          allowed=False, verdict="deny")
 
-    result.evidence.append({
-        "tool": call.name,
-        "args_digest": contracts.args_digest(call.args),
-        "summary": _summarise(scrubbed),
-    })
-    return _tool_result(call, scrubbed)
+    return Invocation(scrubbed, allowed=True, verdict=verdict.verdict)
+
+
+async def _invoke(call: ToolCall, *, registry: Registry,
+                  policy: policy_mod.RunPolicy, run_id: str, actor: str,
+                  result: RunResult) -> Dict[str, Any]:
+    """The loop's wrapper around `invoke`: count it, and keep the evidence."""
+    result.tool_calls += 1
+    outcome = await invoke(registry, policy=policy, name=call.name,
+                           args=call.args, run_id=run_id, actor=actor)
+    if outcome.allowed:
+        result.evidence.append({
+            "tool": call.name,
+            "args_digest": contracts.args_digest(call.args),
+            "summary": _summarise(outcome.blocks),
+        })
+    return _tool_result(call, outcome.blocks)
 
 
 def _assistant_content(turn: Turn) -> List[Dict[str, Any]]:

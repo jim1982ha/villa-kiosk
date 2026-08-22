@@ -27,8 +27,8 @@ TOOLS = ("read_villa", "read_state", "act_service")
 
 def _policy(**cfg: Any) -> policy.RunPolicy:
     base: Dict[str, Any] = {
-        "agent_act_enabled": True,
-        "agent_allowed_services": ["light.turn_off", "fan.turn_off",
+        "act_enabled": True,
+        "allowed_services": ["light.turn_off", "fan.turn_off",
                                    "switch.turn_off"],
     }
     base.update(cfg)
@@ -176,14 +176,14 @@ def test_config_cannot_grant_a_HIGH_harm_action() -> None:
     door lock into autonomous actuation, because no chain of reasoning should
     open a door in an empty villa. Harm is decided BEFORE the allow-list is
     consulted; reversing those two lines makes the deny-list a default."""
-    permissive = _policy(agent_allowed_services=["lock.unlock", "unlock"])
+    permissive = _policy(allowed_services=["lock.unlock", "unlock"])
     out = policy.may_act(permissive, entity_id="lock.a_thing",
                          service="unlock", reversible=True)
     assert out.verdict == "propose", "config must not be able to widen this"
 
 
 def test_actuation_disabled_denies_every_low_harm_action() -> None:
-    out = policy.may_act(_policy(agent_act_enabled=False),
+    out = policy.may_act(_policy(act_enabled=False),
                          entity_id="light.hall_thing", service="turn_off",
                          reversible=True)
     assert out.verdict == "deny" and "disabled" in out.reason
@@ -194,11 +194,11 @@ def test_actuation_disabled_denies_every_low_harm_action() -> None:
 def test_the_snapshot_is_frozen_so_a_mid_run_change_cannot_widen_it() -> None:
     """⚠️ The run already reasoning about an action is exactly the wrong moment
     to grant it more authority."""
-    live: Dict[str, Any] = {"agent_act_enabled": False,
-                            "agent_allowed_services": []}
+    live: Dict[str, Any] = {"act_enabled": False,
+                            "allowed_services": []}
     snap = policy.for_run(live, tool_names=TOOLS)
-    live["agent_act_enabled"] = True
-    live["agent_allowed_services"] = ["light.turn_off"]
+    live["act_enabled"] = True
+    live["allowed_services"] = ["light.turn_off"]
     assert snap.act_enabled is False
     assert policy.may_act(snap, entity_id="light.a_thing",
                           service="turn_off", reversible=True).verdict == "deny"
@@ -209,7 +209,7 @@ def test_the_snapshot_is_frozen_so_a_mid_run_change_cannot_widen_it() -> None:
 def test_triage_can_never_act_however_config_is_set() -> None:
     """⚠️ It is the volume tier — 96 runs a day — and the one most likely to be
     pointed at a cheaper model later."""
-    snap = policy.for_run({"agent_act_enabled": True}, tier="triage",
+    snap = policy.for_run({"act_enabled": True}, tier="triage",
                           tool_names=TOOLS)
     assert snap.act_enabled is False
     assert policy.may_use_tool(snap, "act_service", "WRITE").verdict == "deny"
@@ -223,7 +223,7 @@ def test_an_unregistered_tool_is_denied() -> None:
 
 
 def test_a_write_tool_needs_actuation_enabled() -> None:
-    assert policy.may_use_tool(_policy(agent_act_enabled=False),
+    assert policy.may_use_tool(_policy(act_enabled=False),
                                "act_service", "WRITE").verdict == "deny"
     assert policy.may_use_tool(_policy(), "act_service", "WRITE").verdict == "allow"
 
@@ -236,7 +236,7 @@ def test_a_read_tool_is_allowed_when_registered() -> None:
 
 def test_suppression_is_deterministic_by_key() -> None:
     key = contracts.subject_key("the gym lights")
-    snap = policy.for_run({"agent_suppressed_subjects": [key]},
+    snap = policy.for_run({"suppressed_subjects": [key]},
                           tool_names=TOOLS)
     assert policy.is_suppressed(snap, key)
     assert not policy.is_suppressed(snap, contracts.subject_key("the pool pump"))
@@ -244,7 +244,7 @@ def test_suppression_is_deterministic_by_key() -> None:
 
 def test_a_suppressed_subject_cannot_produce_a_concern() -> None:
     key = contracts.subject_key("gym")
-    snap = policy.for_run({"agent_suppressed_subjects": [key]}, tool_names=TOOLS)
+    snap = policy.for_run({"suppressed_subjects": [key]}, tool_names=TOOLS)
     concern = {"id": "c1", "subject_key": key, "title": "Gym lights on",
                "severity": "notice", "audience": "owner", "state": "open",
                "evidence": [{"tool": "read_salient", "args_digest": "a",
@@ -261,7 +261,7 @@ def test_a_malformed_concern_reads_as_malformed_not_as_suppressed() -> None:
 
 
 def test_budget_caps_deny_at_the_boundary_not_past_it() -> None:
-    snap = policy.for_run({"agent_max_turns": 3, "agent_max_tool_calls": 5},
+    snap = policy.for_run({"max_turns": 3, "max_tool_calls": 5},
                           tool_names=TOOLS)
     assert policy.within_budget(snap, turns=2, tool_calls=4).allowed
     assert not policy.within_budget(snap, turns=3, tool_calls=0).allowed
@@ -270,7 +270,7 @@ def test_budget_caps_deny_at_the_boundary_not_past_it() -> None:
 
 def test_a_junk_budget_falls_back_to_the_default_not_to_zero_or_infinity() -> None:
     for junk in (None, 0, -5, "banana", 1.5e400):
-        snap = policy.for_run({"agent_max_turns": junk}, tool_names=TOOLS)
+        snap = policy.for_run({"max_turns": junk}, tool_names=TOOLS)
         assert snap.max_turns > 0
 
 

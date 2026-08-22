@@ -2106,6 +2106,19 @@ agent_config_get_handler, agent_config_put_handler = _json_store_handlers(
     AGENT_CONFIG_FILE, "config", {}, AGENT_CONFIG_MAX_BYTES,
     "agent configuration")
 
+# ── /agent-mcp · the extraction seam ────────────────────────────────────────
+# ⚠️ THE ONE ROUTE IN THIS FILE WITH NO SESSION CHECK AND NO RBAC, AND THAT IS
+# NOT A GAP. Its caller is not a browser and holds no `vk_session`: it is
+# another PROCESS — a relocated agent, a desktop client — authenticating with a
+# bearer token from the 0600 secrets file. The rule that matters is downstream
+# and unchanged: `agent/mcp_server.py` runs every call through the SAME
+# `registry.invoke` the in-process agent uses, so the authority a caller gains
+# by arriving over the wire is exactly none (ARCH-011).
+async def agent_mcp_handler(request: web.Request) -> web.StreamResponse:
+    from agent.mcp_server import http_handler
+    return await http_handler(request)
+
+
 # ⚠️ The history store's PUT handler is built and then DELIBERATELY NOT ROUTED.
 # History is written by the scheduler (Phase 2), server-side, and is read-only
 # to every client — an endpoint that let a browser rewrite the record of what
@@ -2595,6 +2608,13 @@ def main() -> None:
     app.router.add_post("/auth/logout", auth_logout_handler)
     app.router.add_post("/auth/logout-all", auth_logout_all_handler)
     app.router.add_get("/auth/check", auth_check_handler)
+    # ⚠️ NO NGINX `location` FOR THIS ONE, DELIBERATELY (REQ-046). Every other
+    # route here is paired with a block in nginx.conf; this route is the single
+    # exception, because nginx is the allow-list in front of Ingress and a
+    # route with no block is unreachable from the tablet, from a phone and from
+    # anything Home Assistant proxies. `test_nginx_routes` knows it is exempt
+    # and asserts the absence rather than tolerating it.
+    app.router.add_post("/agent-mcp", agent_mcp_handler)
     app.router.add_get("/core/websocket", ws_handler)
     app.router.add_route("*", "/core/api/{path:.*}", rest_handler)
     # aiohttp's own shutdown_timeout defaults to 60s: on SIGTERM it waits that

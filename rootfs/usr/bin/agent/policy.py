@@ -40,7 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 
-from agent import contracts
+from agent import config as agent_config, contracts
 
 # ── the high-harm classification ────────────────────────────────────────────
 
@@ -137,13 +137,25 @@ def for_run(config: Optional[Mapping[str, Any]],
     here rather than requested in a prompt. It is the volume tier — 96 runs a
     day — and the one most likely to be pointed at a cheaper model later.
     """
-    cfg = config if isinstance(config, Mapping) else {}
-    act = bool(cfg.get("agent_act_enabled", False)) and tier != "triage"
+    # ⚠️ THROUGH `agent.config.view`, WHICH IS THE STORE'S OWN VOCABULARY, AND
+    # THIS FILE READ A DIFFERENT ONE FOR SIX RELEASES. It asked for
+    # `agent_act_enabled`, `agent_max_turns`, `agent_max_tool_calls` and
+    # `agent_suppressed_subjects` — a prefixed spelling NOTHING has ever
+    # written. `/agent-config` stores `act_enabled`, `max_turns` and the rest
+    # unprefixed, so every setting an owner saved was accepted, returned 200,
+    # and then ignored here: the turn cap stayed at its default however low it
+    # was set, and actuation could not be enabled at all. The same defect as
+    # the 2.545.0 wire-key bug one level down — Python one side, a JSON
+    # document the other, a string literal in each and nothing between them.
+    # Found by a mutation that SURVIVED: setting `act_enabled: True` in a test
+    # changed nothing, so a mutation deleting the act guard was invisible.
+    cfg = agent_config.view(config)
+    act = bool(cfg.get("act_enabled", False)) and tier != "triage"
     allowed = frozenset(
-        str(n) for n in (cfg.get("agent_allowed_services") or ())
+        str(n) for n in (cfg.get("allowed_services") or ())
         if isinstance(n, str))
     suppressed = frozenset(
-        str(k) for k in (cfg.get("agent_suppressed_subjects") or ())
+        str(k) for k in (cfg.get("suppressed_subjects") or ())
         if isinstance(k, str))
     tools = frozenset(str(n) for n in tool_names)
     return RunPolicy(
@@ -151,8 +163,8 @@ def for_run(config: Optional[Mapping[str, Any]],
         allowed_tools=tools,
         allowed_services=allowed,
         suppressed_subjects=suppressed,
-        max_turns=_positive(cfg.get("agent_max_turns"), 8),
-        max_tool_calls=_positive(cfg.get("agent_max_tool_calls"), 24),
+        max_turns=_positive(cfg.get("max_turns"), 8),
+        max_tool_calls=_positive(cfg.get("max_tool_calls"), 24),
         tier=str(tier),
     )
 
