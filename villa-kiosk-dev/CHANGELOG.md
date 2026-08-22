@@ -1,3 +1,13 @@
+## 2.602.0
+
+### Fixed — six tests were failing, and one had never run at all
+
+The Python suite could not run here (no venv), so two releases shipped against
+it blind. Restored, it found six failures: four pinned the naming defect fixed
+in 2.601.0, one had a broken path, and the sixth called a helper that does not
+exist. That one also asserted "at least one" surface was reachable — true during
+the bug it was written for — and now checks every surface.
+
 ## 2.601.0
 
 ### Fixed — a device name arrived in the brief half-humanised
