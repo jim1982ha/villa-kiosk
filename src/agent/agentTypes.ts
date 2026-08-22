@@ -38,8 +38,22 @@ export const SEVERITY = ["info", "notice", "warning", "critical"] as const;
 export type Severity = (typeof SEVERITY)[number];
 
 /** Who a concern is for. Three, not two. */
-export const AUDIENCE = ["owner", "facility", "ops"] as const;
+export const AUDIENCE = ["owner", "facility"] as const;
 export type Audience = (typeof AUDIENCE)[number];
+
+/**
+ * Who may be a SENDER — the app's own three profiles, and the only three there
+ * are. ⚠️ NOT the audience list above: an AUDIENCE is who a finding is written
+ * for, a ROLE is who is logged in, and the owner may perfectly well read the
+ * facility brief. Conflating them is what put a non-existent third profile in
+ * the sender picker — `facility` and `ops` are two names for one person, and
+ * `guest` was missing.
+ *
+ * ⚠️ Label these with `roleLabel()` from `@/auth/roles`, never with the raw id:
+ * `ops` reads as the Facility Manager everywhere a person can see it.
+ */
+export const SENDER_ROLE = ["guest", "owner", "ops"] as const;
+export type SenderRole = (typeof SENDER_ROLE)[number];
 
 /** A concern's lifecycle. `dismissed` is not `closed`: one was dealt with, the
  *  other a person said did not matter, and alert-fatigue reads the difference. */

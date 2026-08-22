@@ -73,10 +73,27 @@ class Registry:
 
 
 def build_registry(tools: Optional[Sequence[BaseTool]] = None) -> Registry:
-    """The deployment's registry. ⚠️ ONE construction site, so the MCP server
-    and the in-process loop cannot drift into two different tool sets."""
-    return Registry(list(tools) if tools is not None
-                    else [cls() for cls in ALL_TOOLS])
+    """The deployment's registry, CONNECTED TO THIS VILLA.
+
+    ⚠️ ONE construction site, so the MCP server and the in-process loop cannot
+    drift into two different tool sets.
+
+    ⚠️ AND IT USED TO BUILD THEM WITH NO ARGUMENTS. Every tool takes its data
+    source as a constructor argument, so `[cls() for cls in ALL_TOOLS]` produced
+    a full registry of tools connected to nothing: `read_salient` returned `[]`
+    forever and `read_logs` zero lines forever. The agent, asked about a pool
+    pump on a property journalling 17,845 entries, reported a villa with no
+    devices — and reasoned about the emptiness better than the tools deserved.
+    `agent/sources.py` is the other half.
+    """
+    if tools is not None:
+        return Registry(list(tools))
+    try:
+        from agent import sources
+        return Registry(sources.build_tools())
+    except Exception as err:  # noqa: BLE001 - a broken source is not a dead
+        swallow("could not wire the tools to this villa", err)   # registry
+        return Registry([cls() for cls in ALL_TOOLS])
 
 
 @dataclass

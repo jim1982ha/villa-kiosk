@@ -30,6 +30,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Final, List, Mapping, Optional, Tuple
 
+from agent import contracts
+
 #: ⚠️ THE SHAPE, NOT THE STORED DOCUMENT. Nothing writes this dict; it is spread
 #: UNDER a stored config at read time. Adding a key here changes what an
 #: unconfigured villa does, and changes nothing about one already configured.
@@ -42,6 +44,17 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: ⚠️ OFF, AND SEPARATELY. Reading and reasoning are safe; acting is not.
     "act_enabled": False,
     "triggers": {"scheduled": True, "event": False, "chat": False},
+    #: ⚠️ SHADOW MODE: run everything, deliver NOTHING (ARCH-016). Not a push,
+    #: not a brief line, not a kiosk badge. It is how the claim that the agent
+    #: outperforms the rules stops being a prediction — the concerns are
+    #: recorded and diffed against what the blueprints found, with no
+    #: user-visible risk while that evidence is gathered.
+    #:
+    #: ⚠️ DEFAULT TRUE, WHICH IS THE OPPOSITE OF EVERY OTHER FLAG HERE. The
+    #: others ship off so nothing happens; this ships ON so that when the agent
+    #: IS switched on, its first period is observed rather than delivered.
+    #: Turning it off is the cutover decision, and it should be a decision.
+    "shadow": True,
 
     # ── cadence ──────────────────────────────────────────────────────────
     "triage_minutes": 15,
@@ -160,14 +173,14 @@ def errors(value: Any) -> List[str]:
             for sender, role in senders.items():
                 if not str(sender).strip():
                     problems.append("allowed_senders has an empty sender id")
-                if role not in ("owner", "facility", "ops"):
+                if role not in contracts.SENDER_ROLE:
                     # ⚠️ AN UNKNOWN ROLE IS REFUSED, not defaulted. Defaulting
                     # would grant SOME access to a typo, and this map is the
                     # only thing standing between the villa and anyone who
                     # finds the bot.
                     problems.append(
                         f"allowed_senders[{sender}] role {role!r} is not one "
-                        f"of owner, facility, ops")
+                        f"of {', '.join(contracts.SENDER_ROLE)}")
 
     for name in ("actuable_refs", "allowed_services", "suppressed_subjects"):
         if name in value and not isinstance(value[name], list):

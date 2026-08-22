@@ -20,6 +20,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import type { Concern } from "@/agent/agentTypes";
+import type { Role } from "@/auth/roles";
 
 /** Wire name (what the store stores) → client name (what this app calls it). */
 const AGENT_WIRE_KEYS = {
@@ -56,8 +57,13 @@ export interface AgentConfig {
   modelTriage: string;
   modelReason: string;
   modelBrief: string;
-  /** ⚠️ EMPTY MEANS NOBODY MAY TALK TO THE BOT. Never seed this. */
-  allowedSenders: Record<string, "owner" | "facility" | "ops">;
+  /** ⚠️ EMPTY MEANS NOBODY MAY TALK TO THE BOT. Never seed this.
+   *
+   *  ⚠️ THE VALUE IS THE APP'S OWN PROFILE ID (`@/auth/roles`), not an audience
+   *  name. This was typed `"owner" | "facility" | "ops"` — `facility` and `ops`
+   *  being two names for one person, with `guest` missing — which is what put a
+   *  profile that does not exist in the picker. */
+  allowedSenders: Record<string, Role>;
   /** ⚠️ EMPTY MEANS THE AGENT MAY ACT ON NOTHING. Never seed this. */
   actuableRefs: string[];
   /** Which SERVICES, as distinct from `actuableRefs`' which DEVICES. Both

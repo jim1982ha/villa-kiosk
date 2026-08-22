@@ -125,10 +125,15 @@ def test_an_unlisted_sender_resolves_to_nobody() -> None:
 
 
 def test_a_listed_sender_gets_their_role() -> None:
+    # ⚠️ `ops` IS THE FACILITY MANAGER — the app's own profile id, per
+    # `src/auth/roles.ts`. This fixture said `facility`, which is an AUDIENCE
+    # word and was never a profile; the picker offering it was the bug.
     cfg = {"allowed_senders": {"telegram:222": "owner",
-                               "telegram:333": "facility"}}
+                               "telegram:333": "ops",
+                               "telegram:444": "guest"}}
     assert policy.sender_role(cfg, channel="telegram", sender_id="222") == "owner"
-    assert policy.sender_role(cfg, channel="telegram", sender_id=333) == "facility"
+    assert policy.sender_role(cfg, channel="telegram", sender_id=333) == "ops"
+    assert policy.sender_role(cfg, channel="telegram", sender_id=444) == "guest"
 
 
 def test_the_key_carries_the_CHANNEL_not_just_the_id() -> None:
@@ -141,11 +146,16 @@ def test_the_key_carries_the_CHANNEL_not_just_the_id() -> None:
 
 def test_an_unknown_role_is_NOBODY_not_a_default_one() -> None:
     """Defaulting would grant some access to a typo."""
-    for junk in ("admin", "Owner ", "", "guest", None, 7, ["owner"]):
+    for junk in ("admin", "Owner ", "", "facility", None, 7, ["owner"]):
         cfg = {"allowed_senders": {"telegram:222": junk}}
         got = policy.sender_role(cfg, channel="telegram", sender_id="222")
         assert got in ("", "owner"), got
     assert policy.sender_role({"allowed_senders": {"telegram:222": "admin"}},
+                              channel="telegram", sender_id="222") == ""
+    # ⚠️ `facility` IS NOT A PROFILE and must resolve to nobody — it is the
+    # audience word, and admitting it here is what let one person have two
+    # names.
+    assert policy.sender_role({"allowed_senders": {"telegram:222": "facility"}},
                               channel="telegram", sender_id="222") == ""
 
 
@@ -833,3 +843,34 @@ def test_an_unreachable_core_yields_an_EMPTY_list_not_an_error() -> None:
         assert asyncio.run(chat.known_chats(None)) == []
     finally:
         hass_mod.HassClient = original               # type: ignore[assignment]
+
+
+# ── how long an answer may be ───────────────────────────────────────────────
+def test_the_chat_path_HAS_a_system_prompt() -> None:
+    """⚠️ IT HAD NONE — only the villa document — so the model had nothing
+    telling it who it was talking to or how long an answer should be, and
+    replied to a two-part question about a pump with forty lines about its own
+    plumbing. Reported from the phone."""
+    import inspect
+    source = inspect.getsource(chat.handle_event)
+    assert '"text": SYSTEM' in source, "the chat run sends no system prompt"
+
+
+def test_the_prompt_demands_brevity_in_a_checkable_way() -> None:
+    flat = " ".join(chat.SYSTEM.split())
+    assert "Six is the most you may ever send" in flat
+    assert "Lead with the answer" in flat
+    assert "do not list the tools you used" in flat
+
+
+def test_the_cap_is_an_EDITORIAL_bound_not_a_transport_one() -> None:
+    """⚠️ 3,500 was Telegram's ~4,096 limit with headroom, so it only ever
+    stopped a message being REJECTED — never one being unreadable."""
+    assert chat.MAX_REPLY_CHARS <= 1_500, (
+        "the cap is back at transport size; a phone screen is the bound")
+
+
+def test_the_prompt_carries_no_clock_and_no_villa() -> None:
+    """It sits above the cache breakpoint on every chat turn."""
+    import re
+    assert not re.search(r"\d{4}-\d{2}-\d{2}|\{[a-z_]+\}", chat.SYSTEM)

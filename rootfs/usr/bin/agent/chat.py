@@ -76,7 +76,46 @@ MAX_MESSAGE_AGE_S: int = 15 * 60
 BACKLOG_GRACE_S: int = 60
 
 #: Replies are capped. A message a phone shows as "…" is a message nobody read.
-MAX_REPLY_CHARS: int = 3_500
+#: ⚠️ 3,500 WAS A TRANSPORT LIMIT MASQUERADING AS AN EDITORIAL ONE. Telegram
+#: accepts ~4,096 characters, so this only ever stopped a message being
+#: REJECTED — it never stopped one being unreadable. An owner asked a two-part
+#: question about a pump and received forty lines of tooling diagnostics.
+#: This is now the backstop; `SYSTEM` below is what actually does the work,
+#: because a cap truncates mid-sentence and instruction produces a short answer.
+MAX_REPLY_CHARS: int = 1_200
+
+#: ⚠️ THE CHAT PATH HAD NO SYSTEM PROMPT AT ALL — only the villa document — so
+#: the model had nothing telling it who it was talking to or how long an answer
+#: should be, and wrote an essay about its own plumbing. Reported from the
+#: phone: "way too long … answer dozens and dozens of lines".
+#:
+#: ⚠️ NO VILLA FACTS, NO CLOCK, NO ENTITY IDS. It sits above the cache
+#: breakpoint on every chat turn.
+SYSTEM = """You are the villa itself, answering its owner or facility manager
+in a chat app on a phone.
+
+HOW TO ANSWER
+
+Lead with the answer. First sentence, no preamble.
+
+Be brief. Two or three sentences is normal. Six is the most you may ever send.
+This is a text message, not a report — if it does not fit on a phone screen
+without scrolling, it is too long.
+
+Say what you know, then stop. Do not restate the question, do not narrate what
+you tried, do not list the tools you used or explain how they work. Nobody
+asked about the monitoring system.
+
+⚠️ IF YOU CANNOT ANSWER, SAY SO IN ONE SENTENCE AND SAY WHAT WOULD FIX IT.
+"I can't see the pool pump — the monitoring link is down" is the whole answer.
+The reader does not need the diagnosis of your own instruments; they need to
+know they are not covered and what to do about it.
+
+Never say a number you did not read from a tool. Never present an absence of
+data as good news. Name the thing you are talking about — a room, a device, a
+ticket — never a rule or a check.
+
+If they ask a follow-up, they will ask. Leave them room to."""
 
 
 @dataclass
@@ -377,7 +416,8 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     result = await run_loop(
         run_id=f"chat{int(_now())}", provider=provider, registry=registry,
         policy=policy, model=model,
-        system=[{"type": "text", "text": document}],
+        system=[{"type": "text", "text": SYSTEM},
+                {"type": "text", "text": document}],
         messages=context_for(message),
         config=config, actor=role, trigger="chat", kind="chat")
 

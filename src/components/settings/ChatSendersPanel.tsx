@@ -19,13 +19,24 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 
 import { loadAgentConfig, loadBotChats, saveAgentConfig,
          type AgentConfig, type BotChat } from "@/agent/agentApi";
+import { ROLE_LABELS, ROLE_ORDER, type Role } from "@/auth/roles";
 
-/** The roles the backend accepts. ⚠️ An unknown role resolves to NOBODY there,
- *  so offering a free-text field would produce entries that silently do
- *  nothing — the select is what keeps the two ends agreeing. */
-const ROLES = ["owner", "facility", "ops"] as const;
+/**
+ * The roles the backend accepts. ⚠️ An unknown role resolves to NOBODY there,
+ * so a free-text field would produce entries that silently do nothing — the
+ * select is what keeps the two ends agreeing.
+ *
+ * ⚠️ AND IT IS THE APP'S OWN PROFILE LIST, NOT A LIST OF ITS OWN. This read
+ * `["owner", "facility", "ops"]`, which offered a `facility` profile that does
+ * not exist: `ops` IS the Facility Manager — `ROLE_LABELS` has said so since
+ * long before this panel — and `guest`, a real profile, was missing. Reported
+ * from the picker. `ROLE_ORDER` and `ROLE_LABELS` are the authority for both
+ * the set and the words, so a fourth profile can never appear here without
+ * appearing on the sign-in screen too.
+ */
+const ROLES = ROLE_ORDER;
 
-type Role = (typeof ROLES)[number];
+
 
 /** ⚠️ Keyed `channel:id`, because a Telegram user id and a future WhatsApp id
  *  are integers from different namespaces and would eventually collide. */
@@ -269,7 +280,9 @@ export default function ChatSendersPanel() {
               onChange={(e) => commit(rows.map((r, n) =>
                 (n === i ? { ...r, role: e.target.value as Role } : r)))}
             >
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {ROLES.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
             </select>
           </div>
           {/* ⚠️ `btn danger icon-only`, THE SAME CLASSES BRIEFINGS USES, and

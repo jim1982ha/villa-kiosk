@@ -230,7 +230,11 @@ def sender_role(config: Optional[Mapping[str, Any]], *, channel: str,
     # some access to a typo, and this map is the only thing standing between the
     # villa and anyone who finds the bot. `config.errors` refuses such a role on
     # the way in; this is the second half, for a document written by hand.
-    return role if role in ("owner", "facility", "ops") else ""
+    # ⚠️ THE APP'S OWN PROFILES, from `contracts.SENDER_ROLE`. This listed
+    # `("owner", "facility", "ops")` — `facility` and `ops` being two names for
+    # ONE person (the Facility Manager, whose profile id is `ops`), with the
+    # real third profile, `guest`, missing entirely.
+    return role if role in contracts.SENDER_ROLE else ""
 
 
 def may_use_tool(policy: RunPolicy, tool_name: str, mode: str = "READ") -> Decision:

@@ -55,11 +55,28 @@ RUN_STATUS: Final[Tuple[str, ...]] = ("answered", "declined", "failed", "partial
 SEVERITY: Final[Tuple[str, ...]] = ("info", "notice", "warning", "critical")
 
 # ── CTR-012 · who it is for ─────────────────────────────────────────────────
-#: ⚠️ `ops` IS THE THIRD, AND THE WORKBOOK'S AUDIENCE MODEL SAID TWO WHILE
-#: BEHAVING LIKE FOUR — section 7 was labelled Ops and section 8 Owner
-#: (quarterly). Naming it here makes the third audience explicit instead of
-#: implicit in a section heading.
-AUDIENCE: Final[Tuple[str, ...]] = ("owner", "facility", "ops")
+#: ⚠️ TAKEN FROM `reports.contracts`, NEVER RESTATED, AND THIS LINE INVENTED A
+#: THIRD AUDIENCE FOR SIXTEEN RELEASES. It read `("owner", "facility", "ops")`,
+#: which is wrong twice over: `ops` is a ROLE — the internal id of the Facility
+#: Manager PROFILE — and the file it diverged from says in as many words that
+#: audiences "are AUDIENCES, not roles … they intentionally do not map
+#: one-to-one onto `auth/permissions.ts` profiles". So the list mixed the two
+#: vocabularies and then named the same person twice: `facility` (the audience)
+#: and `ops` (their profile). Reported from the role picker, where it read as a
+#: third profile that does not exist.
+#:
+#: ⚠️ AN AUDIENCE IS WHO A FINDING IS WRITTEN FOR; A ROLE IS WHO IS LOGGED IN.
+#: The owner may perfectly well read the facility brief, which is exactly why
+#: the two sets are separate and neither may be derived from the other.
+from reports.contracts import AUDIENCE  # noqa: E402  (re-exported, not copied)
+
+#: Who may be a SENDER — the app's own profiles, and the only three there are.
+#: ⚠️ MIRRORS `supervisor-proxy.AUTH_ROLES`, which is the authority, and
+#: `test_role_vocabulary` fails if the two ever differ. `ops` is the Facility
+#: Manager: `src/auth/roles.ts` has carried that label since long before this
+#: subsystem existed, and inventing `facility` as a fourth name for the same
+#: person is what produced a picker offering `facility` AND `ops`.
+SENDER_ROLE: Final[Tuple[str, ...]] = ("guest", "owner", "ops")
 
 # ── CTR-010 · a concern's lifecycle ─────────────────────────────────────────
 #: ⚠️ `dismissed` IS NOT `closed`. Closed means the thing was dealt with;
@@ -111,6 +128,7 @@ CONTRACT_SETS: Final[Dict[str, Tuple[str, ...]]] = {
     "RUN_STATUS": RUN_STATUS,
     "SEVERITY": SEVERITY,
     "AUDIENCE": AUDIENCE,
+    "SENDER_ROLE": SENDER_ROLE,
     "CONCERN_STATE": CONCERN_STATE,
     "HARM_CLASS": HARM_CLASS,
     "POLICY_VERDICT": POLICY_VERDICT,

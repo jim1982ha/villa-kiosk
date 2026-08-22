@@ -122,7 +122,16 @@ def test_an_unknown_SENDER_ROLE_is_refused_not_defaulted() -> None:
     only thing between the villa and anyone who finds the bot."""
     problems = config.errors({"allowed_senders": {"123": "admin"}})
     assert any("admin" in p and "owner" in p for p in problems)
-    assert config.errors({"allowed_senders": {"123": "facility"}}) == []
+    # ⚠️ THE APP HAS THREE PROFILES AND `facility` IS NOT ONE OF THEM. This
+    # fixture accepted it, which is how one person came to have two names: the
+    # Facility Manager's profile id is `ops` (see `src/auth/roles.ts`), and
+    # `facility` is the AUDIENCE word from `reports/contracts.py`, which that
+    # file explicitly says is not a role. Reported from the role picker, where
+    # it offered a profile that exists nowhere in the app.
+    assert config.errors({"allowed_senders": {"123": "facility"}}), (
+        "an audience word was accepted as a profile")
+    for real in ("guest", "owner", "ops"):
+        assert config.errors({"allowed_senders": {"123": real}}) == [], real
 
 
 def test_a_non_boolean_kill_switch_is_refused() -> None:

@@ -232,3 +232,45 @@ def test_the_two_severity_scales_are_IDENTICAL() -> None:
     assert AGENT_SETS["AUDIENCE"][:2] == CONTRACT_SETS["AUDIENCE"], (
         "the agent's audiences must EXTEND the report pipeline's, not diverge "
         "from them — it adds `ops`, it does not rename the other two")
+
+
+def test_the_sender_roles_are_the_APPS_OWN_PROFILES() -> None:
+    """⚠️ ONE PERSON, ONE NAME. `agent/contracts` listed the sender roles as
+    `("owner", "facility", "ops")`, which named the Facility Manager TWICE —
+    `facility` is an AUDIENCE word and `ops` is their profile id — and omitted
+    `guest`, which is a real profile. It surfaced as a role picker offering a
+    third profile that does not exist anywhere in the app.
+
+    ⚠️ `supervisor-proxy.AUTH_ROLES` IS THE AUTHORITY. It is what the PIN flow
+    mints and what every RBAC check compares against; anything else is a copy
+    that can drift, and this one did.
+    """
+    import re
+
+    from agent import contracts as agent_contracts
+
+    proxy = _read(PROXY_PATH) if "PROXY_PATH" in globals() else open(
+        os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
+                     "supervisor-proxy.py"), encoding="utf-8").read()
+    match = re.search(r"AUTH_ROLES\s*=\s*\(([^)]*)\)", proxy)
+    assert match, "AUTH_ROLES not found; this test is checking nothing"
+    auth = tuple(re.findall(r'"([a-z]+)"', match.group(1)))
+    assert auth, "AUTH_ROLES parsed empty"
+    assert agent_contracts.SENDER_ROLE == auth, (
+        f"the agent offers {agent_contracts.SENDER_ROLE} while the app's "
+        f"profiles are {auth}")
+
+
+def test_an_audience_is_NOT_a_role() -> None:
+    """⚠️ `reports/contracts.py` states the rule and the agent broke it:
+    audiences "are AUDIENCES, not roles … they intentionally do not map
+    one-to-one onto `auth/permissions.ts` profiles". The owner may perfectly
+    well read the facility brief, which is why neither set may be derived from
+    the other — and why `ops` had no business being in the audience list."""
+    from agent import contracts as agent_contracts
+    from reports import contracts as reports_contracts
+
+    assert agent_contracts.AUDIENCE == reports_contracts.AUDIENCE, (
+        "the agent invented its own audience vocabulary")
+    assert "ops" not in agent_contracts.AUDIENCE
+    assert "facility" not in agent_contracts.SENDER_ROLE
