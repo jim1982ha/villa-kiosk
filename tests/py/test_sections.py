@@ -965,9 +965,17 @@ def test_no_section_appends_a_heading_without_the_shared_helper() -> None:
     that method was split — each time at the site somebody happened to be
     looking at. That is `grep -l` three releases running.
 
-    `add_heading` is the one owner. This asserts the applicable set is empty:
-    nothing appends a section heading any other way, so a fourth site gets the
-    blank line by CALLING rather than by remembering.
+    `add_heading` is the one owner. This asserts the applicable set is empty
+    for the case that matters: nothing APPENDS a section heading onto existing
+    lines any other way, so a new site gets the blank line by CALLING.
+
+    ⚠️ IT DOES NOT COVER `lines = [section_heading(...)]`, AND SAYING SO IS THE
+    POINT. Four sections open that way and they are correct — `render` prepends
+    a blank line to every section block, so those are separated already and
+    calling `add_heading` would insert a second one. An earlier draft of this
+    docstring claimed "nothing appends a section heading any other way", which
+    was false about four sites and would send the next reader hunting a gap that
+    is not one.
     """
     # ⚠️ THE MODULE'S OWN FILE, VIA `inspect`. There is no REPO_ROOT in this
     # file (conftest puts the package on the path), and hard-coding one would

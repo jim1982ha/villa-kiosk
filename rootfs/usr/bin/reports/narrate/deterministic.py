@@ -232,6 +232,18 @@ def add_heading(lines: List[str], key: str, cadence: str = "") -> None:
 
     A caller now gets the blank line by CALLING, and a fourth heading cannot
     forget it.
+
+    ⚠️ AND THE PIN FOUND A FOURTH SITE ON ITS FIRST RUN — `_skipped_lines`,
+    which wrote its own blank line and had always been CORRECT. That is the
+    part worth keeping: a correct copy is why nobody saw the pattern, because
+    it makes "four copies" look like "three bugs and some code". When the same
+    shape is fixed twice, stop fixing sites and count the copies.
+
+    ⚠️ A SECTION THAT STARTS WITH ITS HEADING DOES NOT CALL THIS, and must not.
+    `render` prepends a blank line to every section block, so
+    `lines = [section_heading(...)]` is separated already; calling here would
+    put two blanks in. Four sections do that and they are correct. This function
+    is for a heading that follows CONTENT.
     """
     if lines:
         lines.append("")
