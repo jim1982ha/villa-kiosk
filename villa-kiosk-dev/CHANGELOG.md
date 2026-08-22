@@ -1,3 +1,11 @@
+## 2.633.0
+
+### Fixed — tool results could not be sent back to the model
+A tool returns text, JSON and error blocks; the model's API accepts only text.
+The reduction existed but had been written for the MCP surface alone, so a
+conversation ran three turns, called its tools, and then could not report what
+they found. There is now one flattener and both surfaces use it.
+
 ## 2.632.0
 
 ### Fixed — the model was sent tools it could not read
