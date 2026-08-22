@@ -49,3 +49,7 @@ __pycache__/
 
 # Local dev TLS certs (mkcert) — never commit
 certs/
+
+# Local test venv — pytest + mypy. Never committed; recreate with:
+#   python3 -m venv .venv && .venv/bin/pip install pytest mypy aiohttp
+.venv/

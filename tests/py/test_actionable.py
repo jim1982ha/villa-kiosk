@@ -65,6 +65,22 @@ LEGACY_CRITICAL = {
 DISPLAY_NAME = "critical_doorbell---parking_gate"
 LABELS = {"automation.outdoor_unified_doorbell_call_and_unlock": DISPLAY_NAME}
 
+#: What the READER sees, which is not what Home Assistant supplied (v2.601.0).
+#:
+#: ⚠️ THESE ASSERTIONS USED TO PIN THE DEFECT. They searched for DISPLAY_NAME
+#: itself, and `test_the_quotes_survive_the_markup_pass` went further and
+#: asserted the exact string `'critical doorbell---parking gate'` — underscores
+#: spaced, hyphens intact — which is not a name anybody would write. That is
+#: `inert()`'s output, not a rendering decision: the markup pass spaces the
+#: underscores because they open an italic, and has no opinion about hyphens.
+#: So a half-converted identifier had a test defending it, and the owner
+#: reported it from a delivered brief instead.
+#:
+#: The two are kept separate rather than the constant being rewritten, because
+#: the INPUT genuinely is an identifier — that is the whole case under test —
+#: and collapsing them would lose the distinction that makes it meaningful.
+SHOWN_NAME = "Critical doorbell — parking gate"
+
 
 def _render(events: List[Dict[str, Any]], **kw: Any) -> str:
     context = ReportContext(
@@ -102,7 +118,7 @@ def test_the_code_is_appended_not_turned_into_a_symbol() -> None:
 def test_an_audit_finding_names_the_thing_it_is_about() -> None:
     body = _render([AUDIT_EVENT], labels=LABELS)
     assert "critical automation off" in body, "the finding itself is gone"
-    assert DISPLAY_NAME in body, (
+    assert SHOWN_NAME in body, (
         "the brief still says a critical automation is off without saying "
         "which — the event named it and the renderer dropped it")
 
@@ -119,7 +135,7 @@ def test_it_names_the_display_name_and_not_the_entity_id() -> None:
 def test_a_caretaker_task_says_what_it_is_about() -> None:
     body = _render([AUDIT_EVENT], labels=LABELS)
     line = next(l for l in body.splitlines() if "Re-enable" in l)
-    assert DISPLAY_NAME in line, (
+    assert SHOWN_NAME in line, (
         f"'Re-enable, or document...' with nothing to re-enable: {line!r}")
 
 
@@ -416,7 +432,7 @@ def test_a_named_rule_is_quoted() -> None:
     audit = next(l for l in body.splitlines() if "critical automation off" in l)
     task = next(l for l in body.splitlines() if "Re-enable" in l)
     for line in (audit, task):
-        assert name_of(DISPLAY_NAME) in line, f"unquoted rule name: {line!r}"
+        assert name_of(SHOWN_NAME) in line, f"unquoted rule name: {line!r}"
 
 
 def test_the_quotes_survive_the_markup_pass() -> None:
@@ -425,7 +441,7 @@ def test_the_quotes_survive_the_markup_pass() -> None:
     is why it is the quoting that reaches the reader."""
     from reports.narrate.style import inert
     body = inert(_render([AUDIT_EVENT], labels=LABELS))
-    assert name_of("critical doorbell---parking gate") in body
+    assert name_of(SHOWN_NAME) in body
 
 
 # ── three headings, three marks ──────────────────────────────────────────────

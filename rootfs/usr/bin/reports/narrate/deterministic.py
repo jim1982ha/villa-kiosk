@@ -1229,7 +1229,7 @@ class DeterministicNarrator:
                     # is the line the owner read it on — "Critical automation
                     # health 'critical doorbell---parking gate'".
                     who = ", ".join(
-                        name_of(readable_label(self._labels.get(e))
+                        name_of(readable_label(self._labels.get(e) or "")
                                 or prettify_entity_slug(e))
                         for e in (task.get("entities") or [])[:3])
                     # ⚠️ THE SUBJECT LEADS, BECAUSE THIS IS A WORKLIST. A
@@ -1976,7 +1976,7 @@ class DeterministicNarrator:
         # read as a bug rather than a missing rule. `readable_label` returns
         # anything containing a space exactly as it arrived, so a real label is
         # never rewritten.
-        names = [readable_label(self._labels.get(e)) or prettify_entity_slug(e)
+        names = [readable_label(self._labels.get(e) or "") or prettify_entity_slug(e)
                  for e in (getattr(group, "entities", None) or [])]
         if not names:
             return ""

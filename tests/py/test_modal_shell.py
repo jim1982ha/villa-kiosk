@@ -252,6 +252,21 @@ def test_the_matcher_survives_an_arrow_function_in_the_attributes() -> None:
         "a bare pane is not a .modal-actions row")
 
 
+def _read(relative: str) -> str:
+    """One tracked source file, as text.
+
+    ⚠️ THIS DID NOT EXIST AND THE TEST BELOW CALLED IT (fixed 2026-08-22). The
+    reachability test was written in a session where `pytest` could not be run —
+    there was no venv on the machine — so `NameError: _read is not defined` was
+    never seen, and it shipped in v2.600.0 under a commit message asserting the
+    test "passed throughout the bug". It had never run at all. The lesson is not
+    about this helper: a test written against a suite that cannot execute is a
+    claim, not a check, and must be labelled as one until it has gone red once.
+    """
+    with open(os.path.join(REPO_ROOT, relative), encoding="utf-8") as handle:
+        return handle.read()
+
+
 def _component_path(name: str) -> str:
     """Where a modal component lives, by name — the repo has one of each."""
     for folder in ("reports", "fm", "cockpit", "settings", "panels"):
@@ -317,9 +332,23 @@ def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
     ops_caps = set(re.findall(r'"(\w+)"', ops_block))
     assert "manageFacility" in ops_caps, "permissions.ts moved — test is blind"
 
-    reachable = [h for h in rendering if gates.get(h) in ops_caps]
-    assert reachable, (
-        f"the facility manager cannot reach the Tasks tab. It renders in "
-        f"{rendering}, gated on {[gates.get(h) for h in rendering]}, and `ops` "
-        f"holds {sorted(ops_caps)}. The server permits `ops` to complete a "
-        f"task; the UI must let them get to one.")
+    # ⚠️ EVERY HOST, NOT "AT LEAST ONE" — AND THAT WAS THE WHOLE BUG (2026-08-22).
+    # The first version asserted `reachable` was non-empty, which `FacilityModal`
+    # satisfied on its own whatever gated Briefings. So the test passed during
+    # the defect, passed after the fix, and passed again when the fix was
+    # deliberately reverted to check it — three identical greens across two
+    # different behaviours, which is the definition of an instrument that is not
+    # measuring. Its own docstring described the blind spot while the assertion
+    # kept it.
+    #
+    # The property is not "somewhere to complete a task"; it is that a surface
+    # offering the tab must be OPENABLE by the role the server permits to use
+    # it. A second entry point that is walled off is not a bonus, it is a door
+    # marked with a job you cannot do.
+    unreachable = {h: gates.get(h) for h in rendering
+                   if gates.get(h) not in ops_caps}
+    assert not unreachable, (
+        f"the facility manager cannot reach the Tasks tab in {sorted(unreachable)}. "
+        f"It renders in {rendering}, gated on {[gates.get(h) for h in rendering]}, "
+        f"and `ops` holds {sorted(ops_caps)}. The server permits `ops` to complete "
+        f"a task; every surface that offers one must let them in.")

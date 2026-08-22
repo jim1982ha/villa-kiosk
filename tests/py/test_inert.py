@@ -304,17 +304,15 @@ def test_both_readers_of_the_label_map_humanise_it() -> None:
     so a fourth reader added later fails here rather than in a brief: any
     `.get(` on a label map that is NOT wrapped in `readable_label`.
     """
-    import os
     import re
 
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     targets = [
         "rootfs/usr/bin/reports/narrate/deterministic.py",
         "rootfs/usr/bin/reports/analysis/base.py",
     ]
     offenders = []
     for rel in targets:
-        with open(os.path.join(root, rel), encoding="utf-8") as handle:
+        with open(os.path.join(REPO_ROOT, rel), encoding="utf-8") as handle:
             for number, line in enumerate(handle, 1):
                 if re.search(r"_?labels\.get\(", line) and "readable_label" not in line:
                     offenders.append(f"{rel}:{number}: {line.strip()[:80]}")
