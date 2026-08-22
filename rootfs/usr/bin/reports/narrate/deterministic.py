@@ -1091,6 +1091,35 @@ class DeterministicNarrator:
 
     # ── 4. fixed and suggested ───────────────────────────────────────────────
 
+    def _phased_groups(self, context: ReportContext) -> List[Any]:
+        """Every group whose blueprint reports a lifecycle, in any category.
+
+        ⚠️ THIS WAS `critical` ONLY, AND THAT MADE A WHOLE HALF OF THE CATALOG
+        INVISIBLE BEFORE IT WAS WRITTEN. Every PM row in the workbook defines a
+        "Clear / recovery rule" and a "Re-arm / cooldown" — PM-04 clears at
+        "Power factor > 0.70 for 3 runs", re-arms after 7 days — and none of the
+        `maintenance_*` blueprints emit one yet. When they do, the report would
+        have thrown the clear away: `_closed` asked only `critical` groups
+        whether they had ended, so a resolved pump alert would still have read
+        as an open one, and the operator's work would have produced no visible
+        change. Found by reading the catalog against this renderer rather than
+        by waiting for the field report.
+
+        ⚠️ ASKED OF THE DATA, NOT OF A CATEGORY LIST. A group qualifies because
+        one of its events carries a `phase`, so a category that starts reporting
+        a lifecycle is included the day it does — no table to edit, which is the
+        `grep -l` mistake this project keeps paying for.
+
+        `_critical_recap` deliberately stays critical-only: "What went wrong" is
+        about incidents, and a pump drifting is not one.
+        """
+        out: List[Any] = []
+        for category in SECTION_FOR_CATEGORY:
+            for group in self._groups(context, category):
+                if any(self._text(i, "phase") for i in self._items(group)):
+                    out.append(group)
+        return out
+
     def _closed(self, context: ReportContext) -> List[str]:
         """What ENDED: confirmed fixed, and what cleared without anybody acting.
 
@@ -1102,7 +1131,7 @@ class DeterministicNarrator:
         PERIOD. One builder, one zone.
         """
         verified = self._findings_for(context, "fixed")
-        resolved = [g for g in self._groups(context, "critical")
+        resolved = [g for g in self._phased_groups(context)
                     if not self._is_open(g)]
         if not verified and not resolved:
             return []

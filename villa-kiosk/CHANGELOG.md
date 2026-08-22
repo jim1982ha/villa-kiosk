@@ -1,3 +1,13 @@
+## 2.596.0
+
+### Fixed — a clear event from anything but a critical rule was thrown away
+
+Every PM row in the catalog defines a clear/recovery rule and none of the
+maintenance blueprints emit one yet. The report asked only critical groups
+whether they had ended, so the day somebody implements those rules a resolved
+alert would still have read as open — the work would have produced no visible
+change. It now asks the data, not a category list.
+
 ## 2.595.1
 
 ### Fixed — the zone separators wrapped onto a second line on a phone

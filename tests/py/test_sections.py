@@ -993,3 +993,52 @@ def test_no_section_appends_a_heading_without_the_shared_helper() -> None:
     assert not offenders, (
         "these append a heading directly and will run it into the line above:\n  "
         + "\n  ".join(offenders))
+
+
+def test_a_clear_event_is_honoured_whatever_category_sends_it() -> None:
+    """⚠️ READINESS FOR WORK THE OPERATOR HAS NOT DONE YET, WHICH IS THE POINT.
+
+    Every PM row in the catalog defines a "Clear / recovery rule" — PM-04 clears
+    at "Power factor > 0.70 for 3 runs" — and none of the `maintenance_*`
+    blueprints emit one. The `critical_*` family does, via `clear_for`.
+
+    `_closed` asked only `critical` groups whether they had ended, so the day
+    somebody implements the catalog's clear rules the report would have thrown
+    every one away: a resolved pump alert would still have read as open, and the
+    work would have produced no visible change at all. That is the worst kind of
+    gap — it punishes the person who fixes the thing.
+
+    Asked of the DATA (does any event carry a phase?) rather than of a category
+    list, so a category that starts reporting a lifecycle is included the day it
+    does and there is no table to remember to edit.
+    """
+    raised = _maintenance("Check the valve")
+    raised["data"]["phase"] = "raised"
+    cleared = _maintenance("Check the valve")
+    cleared["data"]["phase"] = "cleared"
+
+    body = _render(aggregated=_events(raised, cleared))
+    assert section_heading("selfclear", "weekly") in body, (
+        "a maintenance incident that cleared is invisible — the operator's "
+        "clear rule produced no change in the report")
+
+    # And one still open must NOT be reported as closed.
+    still_open = _render(aggregated=_events(raised))
+    assert section_heading("selfclear", "weekly") not in still_open
+
+
+def test_a_severity_less_event_still_routes() -> None:
+    """⚠️ A CLAIM WORTH DISPROVING RATHER THAN ACTING ON. An analysis of the
+    catalog concluded the `maintenance_*` blueprints "carry no severity field,
+    so the report cannot route them". Routing is by CATEGORY — `maintenance`
+    goes to `preventive` — and a missing severity falls back to that category's
+    documented default. The recommendation to emit severity is still right, but
+    for a different reason: without it the report cannot tell PM-04 (P3) from
+    PM-08 (P4), so it cannot rank them.
+    """
+    from reports.aggregate import DEFAULT_SEVERITY, _severity_of
+    event = _maintenance("Check the valve")
+    event["data"].pop("severity", None)
+    body = _render(aggregated=_events(event))
+    assert "Check the valve" in body, "a severity-less event must still render"
+    assert _severity_of("", "maintenance") == DEFAULT_SEVERITY["maintenance"]
