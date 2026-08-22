@@ -1,3 +1,14 @@
+## 2.612.0
+
+### Added — the villa described to a model, stable half first
+
+`observe/snapshot.py` assembles the Villa Document: a profile of the property's
+structure, then the period's fresh delta. The order is a cost requirement, not a
+style one — prompt caching matches an exact prefix, so a timestamp anywhere in
+the profile would end caching silently and quadruple the bill for identical
+output. The profile also states what this villa cannot be asked about, in
+discovery's own words. Nothing reads it yet.
+
 ## 2.611.0
 
 ### Added — the villa's own history decides what counts as unusual
