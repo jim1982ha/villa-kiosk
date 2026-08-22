@@ -1224,8 +1224,13 @@ class DeterministicNarrator:
                     # deliberate, intentional decision. (Critical automation
                     # health)" is a blueprint's own task text plus its bucket —
                     # correct, and unusable without knowing what to re-enable.
+                    # ⚠️ `readable_label` ON THE HA NAME TOO, NOT ONLY ON THE
+                    # FALLBACK. See `_entity_names` for the whole argument; this
+                    # is the line the owner read it on — "Critical automation
+                    # health 'critical doorbell---parking gate'".
                     who = ", ".join(
-                        name_of(self._labels.get(e) or prettify_entity_slug(e))
+                        name_of(readable_label(self._labels.get(e))
+                                or prettify_entity_slug(e))
                         for e in (task.get("entities") or [])[:3])
                     # ⚠️ THE SUBJECT LEADS, BECAUSE THIS IS A WORKLIST. A
                     # Telegram screenshot showed seven of these, each opening
@@ -1958,7 +1963,20 @@ class DeterministicNarrator:
         # title-cases the rest, which is what `display_label` does when Home
         # Assistant has no friendly name either, so both surfaces degrade the
         # same way rather than two different ways.
-        names = [self._labels.get(e) or prettify_entity_slug(e)
+        # ⚠️ AND `readable_label` WRAPS THE HA NAME, NOT ONLY THE FALLBACK
+        # (2.601.0). The comment above explains why the FALLBACK is
+        # `prettify_entity_slug`; nothing humanised the branch that actually
+        # fires, because "Home Assistant supplied it" was treated as "it is
+        # prose". It is not: this villa's automations are NAMED
+        # `critical_doorbell---parking_gate`, so the friendly name IS an
+        # identifier and arrived verbatim. `inert()` then turned the
+        # underscores into spaces at the delivery boundary and left the `---`,
+        # producing "critical doorbell---parking gate" — half-humanised by a
+        # function whose job is markup safety, not readability, which is why it
+        # read as a bug rather than a missing rule. `readable_label` returns
+        # anything containing a space exactly as it arrived, so a real label is
+        # never rewritten.
+        names = [readable_label(self._labels.get(e)) or prettify_entity_slug(e)
                  for e in (getattr(group, "entities", None) or [])]
         if not names:
             return ""

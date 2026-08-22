@@ -1,3 +1,12 @@
+## 2.601.0
+
+### Fixed — a device name arrived in the brief half-humanised
+
+Both readers of the Home Assistant label map humanised only their FALLBACK, on
+the assumption that a supplied name is already prose. Where an automation is
+named like an identifier it reached delivery untouched, and only the markup pass
+altered it — leaving a half-converted string. All three sites now humanise.
+
 ## 2.600.0
 
 ### Fixed — the facility manager could not open Briefings, and Checks was two tabs

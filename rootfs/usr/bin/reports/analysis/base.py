@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Sequence
 
 from ..contracts import FINDING_KIND, SEVERITY
+from ..text import readable_label
 
 
 @dataclass
@@ -271,7 +272,13 @@ def label_for(statistic_id: str, labels: Dict[str, str]) -> str:
     crossing a module boundary, which is the tell that a helper has no home.
     Three readers, two definitions, no owner. Found by /dry-audit.
     """
-    known = labels.get(statistic_id)
+    # ⚠️ HUMANISED EVEN WHEN HOME ASSISTANT SUPPLIED IT. A friendly name is not
+    # automatically prose: this villa's automations are named
+    # `critical_doorbell---parking_gate`, and that IS the friendly name, so the
+    # `known` branch used to be the one path on which a raw identifier reached
+    # the reader. `readable_label` returns anything containing a space exactly
+    # as it arrived, so a real label ("House Pump Power") is untouched.
+    known = readable_label(labels.get(statistic_id) or "")
     if known:
         return known
     tail = statistic_id.split(".", 1)[-1]

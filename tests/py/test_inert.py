@@ -257,3 +257,68 @@ def test_no_reader_ever_sees_the_word_caretaker() -> None:
         "these strings can reach a delivered brief and say 'caretaker'; the "
         "kiosk calls that role the Facility Manager everywhere, so a second "
         "word reads as a second person:\n  " + "\n  ".join(offenders))
+
+
+# ── a friendly name is not automatically prose ───────────────────────────────
+
+def test_a_home_assistant_name_is_humanised_before_it_is_printed() -> None:
+    """⚠️ THE OWNER READ THIS IN A DELIVERED BRIEF (2026-08-22, v2.601.0):
+
+        • Critical automation health 'critical doorbell---parking gate'
+
+    Half-humanised, by the wrong function. `readable_label` has collapsed
+    `-{2,}` to an em-dash since v2.568.0 (the function itself is v2.556.0 — the
+    em-dash rule landed twelve releases later), and this name never reached it:
+    both readers of the HA label map wrapped only their FALLBACK
+    (`prettify_entity_slug`), on the assumption that a value Home Assistant
+    supplied is already prose. It is not — this villa's automations are NAMED
+    `critical_doorbell---parking_gate` — so the identifier travelled verbatim to
+    `inert()`, whose job is markup safety, not readability. It turned the
+    underscores into spaces and left the `---`, which is the exact string above.
+
+    Two properties, because fixing only the first is how a real label gets
+    damaged in the name of tidiness (see `readable_label`'s own docstring).
+    """
+    from reports.text import readable_label
+
+    assert readable_label("critical_doorbell---parking_gate") == (
+        "Critical doorbell — parking gate")
+    assert "---" not in readable_label("critical_schedule---pool_pump")
+
+    # ⚠️ AND A NAME A PERSON WROTE IS RETURNED BYTE FOR BYTE. Whitespace is the
+    # tell; a single hyphen inside a real label must survive.
+    for human in ("House Pump Power", "Lights - monitored rooms",
+                  "Timmerflotte_8343 Temperature"):
+        assert readable_label(human) == human
+
+    # ⚠️ AND IT MUST STAY FALSY ON A MISS, or `readable_label(x) or fallback`
+    # silently stops falling back and prints "" for an unlabelled entity.
+    assert not readable_label(None)  # type: ignore[arg-type]
+    assert not readable_label("")
+
+
+def test_both_readers_of_the_label_map_humanise_it() -> None:
+    """The applicable set, not the reported line — `grep -L`, not `grep -l`.
+
+    Three sites read a Home-Assistant-supplied name into prose. Pinned by SHAPE
+    so a fourth reader added later fails here rather than in a brief: any
+    `.get(` on a label map that is NOT wrapped in `readable_label`.
+    """
+    import os
+    import re
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    targets = [
+        "rootfs/usr/bin/reports/narrate/deterministic.py",
+        "rootfs/usr/bin/reports/analysis/base.py",
+    ]
+    offenders = []
+    for rel in targets:
+        with open(os.path.join(root, rel), encoding="utf-8") as handle:
+            for number, line in enumerate(handle, 1):
+                if re.search(r"_?labels\.get\(", line) and "readable_label" not in line:
+                    offenders.append(f"{rel}:{number}: {line.strip()[:80]}")
+    assert not offenders, (
+        "a Home Assistant name reaches prose without `readable_label`, so an "
+        "identifier-shaped friendly name prints as one:\n  "
+        + "\n  ".join(offenders))
