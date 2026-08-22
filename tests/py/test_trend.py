@@ -319,3 +319,25 @@ def test_a_worklist_line_leads_with_its_subject() -> None:
     line = next(l for l in body.splitlines() if "stuck check valve" in l)
     assert line.index("Check for a stuck") > line.index("House pump"), (
         f"the instruction leads and the subject trails: {line!r}")
+
+
+def test_no_decorative_line_can_wrap_on_a_phone() -> None:
+    """⚠️ ALL THREE ZONE RULES ARRIVED SPLIT ACROSS TWO LINES, reported from a
+    Telegram screenshot. They were padded to 44 characters; Telegram fits about
+    32 on a phone, so each one wrapped and left a ragged stub of box-drawing on
+    the line below.
+
+    ⚠️ THE FIX IS NOT A NARROWER PAD. No width is right — the destination's is
+    unknown and moves with the reader's font size, language and device. PROSE
+    wrapping is normal and invisible; a broken decorative rule is neither. So
+    the separator is short by construction.
+
+    The bound is deliberately a literal and not `ZONE_RULE_LEAD + max(title)`:
+    that would be self-referential, passing for any prefix however long, which
+    is the trap `MAX_LEAD_CHARS` fell into two releases ago.
+    """
+    from reports.narrate.deterministic import ZONE_ORDER, zone_heading
+    for zone in ZONE_ORDER:
+        rendered = zone_heading(zone)
+        assert len(rendered) <= 24, (
+            f"{rendered!r} is {len(rendered)} chars and will wrap on a phone")

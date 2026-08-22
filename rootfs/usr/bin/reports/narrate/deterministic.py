@@ -250,11 +250,23 @@ def add_heading(lines: List[str], key: str, cadence: str = "") -> None:
     lines.append(section_heading(key, cadence))
 
 
-def zone_heading(zone: str, width: int = 44) -> str:
-    """A zone separator: the name, then rule to a fixed width."""
-    title = ZONE_TITLE[zone]
-    tail = max(0, width - len(title) - 4)
-    return f"{ZONE_RULE * 2} {title} {ZONE_RULE * tail}"
+#: How much rule precedes a zone title. ⚠️ A FIXED PREFIX, NOT A PADDED WIDTH.
+#: The first cut padded every separator to 44 characters, which is wider than a
+#: phone: Telegram wraps at roughly 32, so all three rules arrived split across
+#: two lines with a ragged stub on the second — reported from a screenshot.
+#:
+#: ⚠️ AND THE FIX IS NOT A NARROWER PAD. There is no width that is right, because
+#: the destination's is unknown and varies with the reader's font size, their
+#: language and their device. A decorative rule is the one element that MUST NOT
+#: wrap — prose wrapping is normal and invisible, a broken box-drawing line is
+#: neither. So the separator is short by construction and cannot reach any
+#: plausible margin: three characters plus the longest title is 21.
+ZONE_RULE_LEAD = 3
+
+
+def zone_heading(zone: str) -> str:
+    """A zone separator, short enough that no destination can wrap it."""
+    return f"{ZONE_RULE * ZONE_RULE_LEAD} {ZONE_TITLE[zone]}"
 
 
 def section_heading(key: str, cadence: str = "") -> str:
