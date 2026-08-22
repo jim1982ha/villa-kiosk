@@ -1,3 +1,12 @@
+## 2.604.0
+
+### Added — findings carry the room they happened in
+
+The Report Spec asks for a roll-up by room then category, and the code refused
+it because a report bucket is not a room. True, but the room was never the
+bucket's to give: it comes from the entities, via the same map the kiosk itself
+renders from, so the brief and the tablet cannot place one device in two rooms.
+
 ## 2.603.0
 
 ### Changed — the avoidable-cost list is five lines, as the Report Spec says
