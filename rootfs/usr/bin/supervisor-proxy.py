@@ -2342,9 +2342,12 @@ async def reports_tasks_get_handler(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _unauthorized()
     try:
-        async with ClientSession() as session:
-            async with reports_hass.HassClient(session) as hass:
-                items = await reports_tasks.open_tasks(hass)
+        # ⚠️ THE APP'S SESSION, like every other handler. A per-request
+        # ClientSession opens its own connector and TLS context for one call and
+        # throws both away, so it cannot reuse a connection and it re-does the
+        # handshake on every tap of the Facility tab.
+        async with reports_hass.HassClient(request.app["session"]) as hass:
+            items = await reports_tasks.open_tasks(hass)
     except Exception as err:  # noqa: BLE001 - a panel must render without HA
         print(f"[supervisor-proxy] could not list caretaker tasks: {err}",
               flush=True)
@@ -2377,9 +2380,8 @@ async def reports_tasks_complete_handler(request: web.Request) -> web.Response:
     entity_id = str(body.get("entity_id") or "")
     uid = str(body.get("uid") or "")
     try:
-        async with ClientSession() as session:
-            async with reports_hass.HassClient(session) as hass:
-                result = await reports_tasks.complete(hass, entity_id, uid)
+        async with reports_hass.HassClient(request.app["session"]) as hass:
+            result = await reports_tasks.complete(hass, entity_id, uid)
     except Exception as err:  # noqa: BLE001
         print(f"[supervisor-proxy] task completion failed: {err}", flush=True)
         return web.json_response({"ok": False, "error": str(err)}, status=502)

@@ -625,14 +625,24 @@ async def run_report(
         # exact thing the slot exists to protect. Cheap to check, and the
         # fallback is the deterministic sentence that was already there.
         lead = usable_lead(prose)
+        # ⚠️ "DID IT ANSWER" IS THE FLATTENED TEXT, NOT THE OBJECT. `"   \n  "`
+        # is truthy and pure markup flattens to nothing — the same trap the
+        # narration layer already records — so a bare `bool(prose)` here would
+        # blame the provider's PHRASING for what was actually an empty answer.
+        answered = bool(str(prose or "").strip())
         if lead:
             context.slots = {"lead": lead}
             title, body = narrator.render(context)
             narration_mode = provider.name
-        elif lead:
+        elif answered:
+            # ⚠️ REACHABLE SINCE 2.608.0. This arm read `elif lead:` under an
+            # `if lead:`, so it could never run and the reason it exists to
+            # record was unreachable: a provider that answered with a PARAGRAPH
+            # was reported with whatever `narration_why` the adapter happened to
+            # leave behind, which is the one cause this branch can name exactly.
             narration_why = "the answer was not a single short sentence"
             log(f"not narrated by a provider: {narration_why}")
-        elif not lead:
+        else:
             # ⚠️ A REASON, RECORDED. "This week's brief reads differently" is
             # otherwise unanswerable — and the five causes call for different
             # actions (configure a key, wait, raise a limit, or nothing).

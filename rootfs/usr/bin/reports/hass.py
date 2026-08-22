@@ -327,27 +327,6 @@ async def fetch_timezone(session: ClientSession) -> Optional[str]:
     return zone if isinstance(zone, str) and zone else None
 
 
-async def probe(session: ClientSession) -> Dict[str, Any]:
-    """Can we talk to Core at all, and what is it?
-
-    Used by diagnostics so "reports produced nothing" can be told apart from
-    "reports could not reach Home Assistant" — the two look identical in an
-    empty report and have completely different fixes.
-    """
-    started = time.monotonic()
-    try:
-        async with HassClient(session) as hass:
-            config: Any = await hass.command("get_config")
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        version = config.get("version") if isinstance(config, dict) else None
-        timezone = config.get("time_zone") if isinstance(config, dict) else None
-        log(f"connected to Home Assistant {version} in {elapsed_ms}ms")
-        return {"ok": True, "version": version, "timezone": timezone,
-                "latency_ms": elapsed_ms}
-    except HassUnavailable as err:
-        return {"ok": False, "error": str(err)}
-
-
 def statistic_ids_of(sources: List[Dict[str, Any]], key: str) -> List[str]:
     """Pull one statistic-id field out of a list of energy source dicts,
     dropping absent/null entries. Trivial, but it is done in several places and

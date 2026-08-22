@@ -53,3 +53,10 @@ certs/
 # Local test venv — pytest + mypy. Never committed; recreate with:
 #   python3 -m venv .venv && .venv/bin/pip install pytest mypy aiohttp
 .venv/
+
+# Agentic-architecture working documents — the reference workbook, its source
+# data and the development plan. Local-only by the owner's decision (2026-08-22):
+# these are working engineering documents, not shipped artifacts. Same posture as
+# sources/ and tests/. Regenerate the workbook with:
+#   .venv/bin/python docs/build_reference_workbook.py
+docs/

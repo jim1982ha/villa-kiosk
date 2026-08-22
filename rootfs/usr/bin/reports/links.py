@@ -73,9 +73,15 @@ from urllib.parse import urlsplit
 #: kiosk SPA, which is what the add-on serves. Never a Home Assistant page.
 PAGES: Dict[str, str] = {
     "cockpit": "",            # the kiosk opens on the villa view; Cockpit is a tab
-    "facility": "",
-    "briefings": "",
 }
+#: ⚠️ ONE KEY, BECAUSE ONE LINK IS EVER BUILT. `footer()` is the only caller of
+#: `kiosk_url` and it asks for "cockpit" — see its own docstring for why a
+#: brief carries one address rather than one per section. "facility" and
+#: "briefings" were decorative: both mapped to the same empty path, so they
+#: could only ever have produced the identical URL, and nothing asked for them.
+#: A key here is a PROMISE that a destination is reachable; an unused one is a
+#: promise nobody checks. Adding one back is fine — it is a literal, which is
+#: rule 3 — but it needs a caller in the same change.
 
 
 def _base(ha_config: Any, ingress_entry: str) -> str:

@@ -5,9 +5,13 @@
 //        tests/consistency/kiosk_view.ts <fixture.json>
 //
 // ⚠️ THIS IS HALF OF AN INSTRUMENT, NOT A TEST. Its counterpart is
-// `reports/consistency.py`, which answers the same questions about the same
-// fixture from the add-on's side, and `tests/py/test_consistency_parity.py`
-// diffs the two. The whole point is to make "the tablet and the briefing agree"
+// `reports/devices.py` with `reports/standing.py` and `reports/ledger.py`,
+// which answer the same questions about the same fixture from the add-on's
+// side, and `tests/py/test_consistency_parity.py` imports those three, runs
+// THIS file through `node --experimental-strip-types`, and diffs the two.
+// (This comment named a single `reports/consistency.py` until 2.608.0. No such
+// module has ever existed — the Python side is those three, which is why the
+// parity test imports three names and not one.) The whole point is to make "the tablet and the briefing agree"
 // a thing CI can fail on, rather than a thing a person notices from a
 // screenshot — which is how every divergence in this subsystem has been found
 // so far, including the one that prompted the work.

@@ -6,9 +6,19 @@ blueprint that fired the event had occupancy, schedules and a tariff in hand,
 and this module has a JSON payload. Where the two could disagree, the blueprint
 wins by construction because its number is the only one here.
 
-⚠️ THE SCHEMA WAS READ FROM THE BLUEPRINT SOURCES, NOT FROM THEIR PROSE. All 30
-blueprint files were parsed for their emit sites: 28 of them across four
-categories. Building this against the descriptions would have repeated 2.511.0,
+⚠️ THE SCHEMA WAS READ FROM THE BLUEPRINT SOURCES, NOT FROM THEIR PROSE. All 31
+blueprint files were parsed for their emit sites: 22 of them emit, across four
+categories. Re-check both numbers with, from the repository root:
+
+    ls sources/files/blueprint/*.yaml | wc -l              # 31 - the total
+    grep -L vesta_ sources/files/blueprint/*.yaml | wc -l  #  9 - the non-emitters
+
+The 9 are the 8 `control_*` automations, which are not supervision and emit
+nothing by design, plus `critical_doorbell.yaml`, which acts and does not
+report. So 23 supervision blueprints, 22 emitters. (This header said 30 and 28
+until 2.608.0; both were counted before the pack last grew.)
+
+Building this against the descriptions would have repeated 2.511.0,
 where the fixtures and the code agreed with each other and both disagreed with
 Home Assistant, and 11,859 rows produced nothing.
 
@@ -165,7 +175,11 @@ class Item:
     basis: str
     task_text: str
     data: Dict[str, Any]
-    #: raised/cleared, critical only. ⚠️ None is NOT "cleared".
+    #: raised/cleared. ⚠️ None is NOT "cleared".
+    #: Emitted by the `critical_*` family AND by `maintenance_condition.yaml`
+    #: (lines 347 and 446) — this said "critical only" until 2.608.0, which
+    #: would have made a maintenance raise/clear pair look like a schema
+    #: violation to anyone reading the comment rather than the blueprints.
     phase: Optional[str] = None
     kwh: Optional[float] = None
     cost: Optional[float] = None
@@ -320,8 +334,9 @@ def normalise(event: Dict[str, Any],
         # `label` exists only on critical; elsewhere the bucket IS the label.
         label=str(data.get("label") or bucket or "").strip(),
         severity=_severity_of(data.get("severity"), category),
-        # raised/cleared, critical only. None everywhere else — and that is not
-        # the same as "cleared", so it must stay None rather than defaulting.
+        # raised/cleared, from the critical family and maintenance_condition.
+        # None everywhere else — and that is not the same as "cleared", so it
+        # must stay None rather than defaulting.
         phase=(str(data["phase"]) if data.get("phase") else None),
         entities=entities,
         detail=_readable(data.get("detail"), data.get("finding")),
