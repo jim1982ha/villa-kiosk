@@ -1,3 +1,12 @@
+## 2.608.0
+
+### Fixed — a brief that declined to narrate gave the wrong reason
+
+A provider answering with a paragraph rather than one sentence had its refusal
+recorded as whatever reason the adapter last left behind: the branch naming that
+case sat under `elif lead:` inside `if lead:` and could never run. Also clears
+four dead code residues and four comments asserting counts the pack outgrew.
+
 ## 2.607.0
 
 ### Fixed — a redacted task read as a missing word, not a withheld one
