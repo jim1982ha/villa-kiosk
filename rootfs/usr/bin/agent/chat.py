@@ -374,4 +374,25 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
         system=[{"type": "text", "text": document}],
         messages=context_for(message),
         config=config, actor=role, trigger="chat", kind="chat")
+
+    # ⚠️ A DECLINE MUST NOT BE SILENCE — SOMEBODY IS WAITING FOR AN ANSWER.
+    # The degradation ladder's rule is that nothing on it is silent, and in
+    # chat the person who typed the question IS the instrument: they cannot
+    # read the add-on log, so an unspoken decline is indistinguishable from a
+    # broken bot and they retry, which costs another turn and another refusal.
+    # Measured: a spent API balance declined every message and the villa said
+    # nothing at all.
+    #
+    # ⚠️ ONLY TO AN ALREADY-AUTHORISED SENDER, which is guaranteed here — the
+    # allow-list was checked far above, before the text was read. The silence
+    # rule applies to STRANGERS, and telling an owner why their villa cannot
+    # answer is the opposite of leaking anything to one.
+    #
+    # ⚠️ AND IT REPORTS OUR OWN REASON, WHICH IS ALREADY REDACTED. Provider
+    # error text reaches here through `anthropic_sdk._redacted`, so a client
+    # that echoed its request headers has had the key removed before this
+    # point; `clean_reply` then flattens and caps it.
+    if result.status == "declined" and result.declined_reason:
+        await replier.call({"text": f"I could not answer that. "
+                                    f"{result.declined_reason}"})
     return result.status

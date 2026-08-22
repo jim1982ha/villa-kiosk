@@ -458,3 +458,80 @@ def test_adding_the_reply_tool_does_not_mutate_the_shared_registry() -> None:
     widened = base.with_tool(reply_mod.build(targets=["notify.a"]))
     assert set(base.names) == before, "the shared registry was mutated"
     assert "reply" in set(widened.names)
+
+
+# ── a decline is spoken, not swallowed ──────────────────────────────────────
+def test_a_declined_run_TELLS_the_person_who_asked() -> None:
+    """⚠️ THE PERSON WHO TYPED THE QUESTION IS THE INSTRUMENT.
+
+    They cannot read the add-on log, so an unspoken decline is
+    indistinguishable from a broken bot — they retry, which costs another turn
+    and another refusal. Measured on the real villa: a spent API balance
+    declined every message and nothing was said at all.
+    """
+    from fake_provider import FakeProvider, declines
+
+    sent: List[str] = []
+
+    class Recording(reply_mod.ReplyTool):
+        async def _send(self, body: str) -> bool:
+            sent.append(body)
+            return True
+
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = Recording  # type: ignore[misc]
+    try:
+        got = _handle(_event(),
+                      provider=FakeProvider([declines("no credit left")]))
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+
+    assert got == "declined"
+    assert sent and "could not answer" in sent[0]
+    assert "no credit left" in sent[0], (
+        "the reason was dropped, so the reader learns nothing actionable")
+
+
+def test_a_successful_run_does_not_ALSO_send_a_decline() -> None:
+    from fake_provider import FakeProvider, says
+
+    sent: List[str] = []
+
+    class Recording(reply_mod.ReplyTool):
+        async def _send(self, body: str) -> bool:
+            sent.append(body)
+            return True
+
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = Recording  # type: ignore[misc]
+    try:
+        assert _handle(_event(), provider=FakeProvider([says("fine")])) == "answered"
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+    assert not any("could not answer" in m for m in sent)
+
+
+def test_an_UNLISTED_sender_is_never_told_anything() -> None:
+    """⚠️ THE SILENCE RULE STILL HOLDS WHERE IT WAS WRITTEN FOR. It protects
+    against a stranger learning the bot is live; it was never about hiding a
+    fault from the owner. This is the boundary between the two."""
+    from fake_provider import FakeProvider, declines
+
+    sent: List[str] = []
+
+    class Recording(reply_mod.ReplyTool):
+        async def _send(self, body: str) -> bool:
+            sent.append(body)
+            return True
+
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = Recording  # type: ignore[misc]
+    try:
+        got = _handle(_event(),
+                      provider=FakeProvider([declines("no credit left")]),
+                      config={"enabled": True, "triggers": {"chat": True},
+                              "allowed_senders": {}})
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+    assert got == "sender not allowed"
+    assert sent == [], "a stranger was told the bot exists"
