@@ -211,3 +211,121 @@ def test_escalation_keeps_the_channel_out_of_the_agents_hands() -> None:
     text = " ".join(_read(os.path.join(SYSTEM_DIR, "escalation.md")).split())
     assert "You do not choose the channel" in text
     assert "already stopped" in text, "no rule about a condition that cleared"
+
+
+# ── the wiring, which is what /dry-audit found missing ──────────────────────
+def test_the_system_playbooks_are_ACTUALLY_LOADED_by_a_prompt() -> None:
+    """⚠️ THEY WERE WRITTEN, SHIPPED AND CI-GATED, AND NOTHING LOADED THEM.
+
+    `agent/playbooks.py` was imported by nobody: the agent had no constitution,
+    no severity scale, no evidence rule and no voice, while every test in this
+    file passed. The identical shape as `build_registry()` building tools with
+    no data sources — the content delivered, the wiring forgotten — and found by
+    /dry-audit Part 2 asking which modules nothing imports.
+
+    ⚠️ THIS TEST IS THE ONE THAT COULD NOT HAVE PASSED VACUOUSLY. Everything
+    else here checks the FILES; this checks that a prompt reads them.
+    """
+    import ast
+    import inspect
+    import os
+
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")
+    importers = []
+    for base, _dirs, names in os.walk(root):
+        for name in names:
+            if not name.endswith(".py") or name == "playbooks.py":
+                continue
+            path = os.path.join(base, name)
+            with open(path, encoding="utf-8") as handle:
+                tree = ast.parse(handle.read())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module == "agent":
+                    if any(a.name == "playbooks" for a in node.names):
+                        importers.append(name)
+                elif isinstance(node, ast.Import):
+                    if any(a.name.endswith("playbooks") for a in node.names):
+                        importers.append(name)
+    assert importers, (
+        "nothing imports agent/playbooks.py, so the constitution, the severity "
+        "scale, the evidence rule and both voices are shipped and never read")
+    assert "chat.py" in importers, "the chat path answers with no constitution"
+    assert "triage.py" in importers, "the triage pass runs with no constitution"
+
+    # ⚠️ AND THE IMPORT IS NOT THE POINT — THE USE IS. The first version of
+    # this test asserted only the import, so deleting `system_prompt(...)` from
+    # the system array left it GREEN: the module would be imported, unused, and
+    # the agent would once again run with no constitution. Caught by mutation,
+    # and it is the same weakness that let the original defect through — a
+    # check on the wiring's existence rather than on its effect.
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import chat as chat_mod
+    from agent import triage as triage_mod
+
+    for module, label in ((chat_mod.handle_event, "chat"),
+                          (triage_mod.run, "triage")):
+        source = inspect.getsource(module)
+        assert "playbooks.system_prompt(" in source, (
+            f"the {label} path imports playbooks but never calls "
+            f"system_prompt, so it runs with no constitution")
+
+
+def test_only_ONE_voice_is_ever_loaded() -> None:
+    """⚠️ They are deliberately CONTRADICTORY — one wants the entity id, the
+    other forbids it — because a work order and a pushed alert are different
+    documents. Loading both instructs the model to do and not do the same
+    thing in one breath."""
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    owner = playbooks.system_prompt("owner", root=SHIPPED)
+    facility = playbooks.system_prompt("facility", root=SHIPPED)
+    assert "No entity ids" in owner and "entity id IS wanted here" not in owner
+    assert "entity id IS wanted here" in facility and "No entity ids" not in facility
+
+
+def test_triage_loads_NO_voice_at_all() -> None:
+    """It emits ESCALATE lines for another machine stage, not prose for a
+    person, so a voice file is cached tokens about a document it never writes."""
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    text = playbooks.system_prompt("", root=SHIPPED)
+    assert "competent facility manager" in text, "no constitution either"
+    assert "five-second test" not in text.lower()
+    assert "entity id IS wanted here" not in text
+
+
+def test_a_missing_playbook_tree_DEGRADES_rather_than_raising() -> None:
+    """A deployment whose files are absent must still answer — the alternative
+    is an agent that cannot speak because a documentation file is missing."""
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    assert playbooks.system_prompt("owner", root="/nope/nothing/here") == ""
+
+
+def test_a_playbook_NAME_cannot_traverse_the_filesystem() -> None:
+    """⚠️ This reads files chosen by a MODEL. A name that can traverse is a
+    model that can read the secrets file."""
+    import inspect
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    for evil in ("../../../data/reports-secrets", "a/b", "..", "", "x\\y"):
+        assert playbooks.body(evil, roots=[SHIPPED]) == "", evil
+
+    # ⚠️ AND THE GUARD IS DEFENCE IN DEPTH, NOT THE PROTECTION — a mutation
+    # deleting it stayed green, because `body` matches a BASENAME inside
+    # `os.walk`, and a basename can never contain a separator. That is what
+    # actually stops traversal today. The guard is kept because it would become
+    # load-bearing the moment anyone replaced the walk with a path join, and
+    # this comment exists so the next reader does not delete it as dead.
+    assert "os.walk" in inspect.getsource(playbooks.body), (
+        "body() no longer matches a basename, so the traversal guard above is "
+        "now the ONLY protection and must be tested as such")

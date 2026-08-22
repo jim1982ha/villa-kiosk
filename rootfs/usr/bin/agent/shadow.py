@@ -6,10 +6,23 @@ the existing blueprints, producing concerns that are RECORDED AND NOT
 DELIVERED. Then the diff: what did the rules catch that the agent missed, and
 what did the agent catch that no rule could express?
 
-⚠️ NOTHING MAY BE DELIVERED. Not a push, not a brief line, not a kiosk badge.
-`suppressed()` is the one predicate every delivery path asks, and it is a
-predicate rather than a flag threaded through call sites because a thread has
-ends and one of them gets forgotten.
+⚠️ NO UNSOLICITED DELIVERY. Not a push, not a brief line, not a kiosk badge —
+nothing the villa decides by itself to say.
+
+⚠️ AND THAT IS NARROWER THAN "NOTHING", WHICH IS WHAT THIS SAID UNTIL
+/dry-audit CHECKED IT. The claim was that `suppressed()` is "the one predicate
+every delivery path asks", and ZERO delivery paths asked it — `chat.py` sends an
+answer and a decline, `reply.py` calls `deliver`, and none of the three consults
+this module. The code is right and the sentence was wrong: an answer to a
+question a human just typed is not the villa deciding to speak, and suppressing
+it would make chat look broken while an operator waited for a shadow period to
+end.
+
+So the rule is: **a reply to a direct question is delivered; anything the agent
+originates is not.** The unsolicited paths — routing a concern to a phone,
+composing a brief — arrive in Phase 4, and `test_shadow.py` pins that each one
+asks `suppressed()` as it is added, because the reminder cannot be a comment
+nobody reads at the moment they are written.
 
 ⚠️ THE EXISTING PIPELINE IS UNTOUCHED AND MUST STAY SO. The blueprints keep
 firing, the collector keeps recording, the briefs keep going out exactly as

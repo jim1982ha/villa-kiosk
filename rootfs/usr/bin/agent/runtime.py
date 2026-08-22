@@ -206,11 +206,8 @@ async def investigate(*, provider: Provider,
     return out
 
 
-def is_shadow(config: Optional[Mapping[str, Any]] = None) -> bool:
-    """Is this deployment recording without delivering? ARCH-016.
-
-    ⚠️ READ AT EVERY DECISION POINT, NEVER CACHED AT START-UP. Shadow mode is
-    the switch an operator reaches for when something is going wrong, and one
-    that needs a restart is one that does not help then.
-    """
-    return bool(agent_config.view(config).get("shadow"))
+# ⚠️ `is_shadow` LIVED HERE AND IS GONE. It was a second predicate for the
+# question `shadow.suppressed` already answers, written because this module
+# needed the answer and the other module was not in view — the same shape as
+# every duplication /dry-audit exists to find, and nothing ever called it.
+# `agent/shadow.py` owns the question and carries the reasoning.

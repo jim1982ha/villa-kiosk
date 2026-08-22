@@ -392,6 +392,7 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     if provider is None or not provider.configured():
         return "no model provider configured"
 
+    from agent import playbooks
     from agent.registry import build_registry, run as run_loop
     from agent.tools import reply as reply_mod
 
@@ -416,7 +417,21 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     result = await run_loop(
         run_id=f"chat{int(_now())}", provider=provider, registry=registry,
         policy=policy, model=model,
-        system=[{"type": "text", "text": SYSTEM},
+        # ⚠️ THE CONSTITUTION FIRST, THEN THIS PATH'S OWN INSTRUCTIONS, THEN
+        # THE VILLA. The `_system` playbooks were written, shipped and
+        # CI-gated in 2.641.0 and NOTHING LOADED THEM — /dry-audit found
+        # `playbooks.py` imported by nobody, so the agent had no constitution,
+        # no severity scale, no evidence rule and no voice. The identical shape
+        # as `build_registry()` building tools with no sources: the content
+        # delivered, the wiring forgotten.
+        #
+        # ⚠️ THE VOICE FOLLOWS THE ASKER'S ROLE. A facility manager gets the
+        # file that WANTS the entity id; an owner gets the one that forbids it.
+        # They are deliberately contradictory and only one may load.
+        system=[{"type": "text",
+                 "text": playbooks.system_prompt(
+                     playbooks.AUDIENCE_OF_ROLE.get(role, "owner"))},
+                {"type": "text", "text": SYSTEM},
                 {"type": "text", "text": document}],
         messages=context_for(message),
         config=config, actor=role, trigger="chat", kind="chat")

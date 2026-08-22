@@ -38,6 +38,14 @@ SYSTEM_ORDER: Tuple[str, ...] = ("constitution", "severity", "evidence",
 #: Chosen by audience, never both. See the module docstring.
 VOICE_OF: Dict[str, str] = {"owner": "voice-owner", "facility": "voice-facility"}
 
+#: A SENDER's profile -> the audience whose voice they should be answered in.
+#: ⚠️ `ops` IS THE FACILITY MANAGER and reads the facility voice — the one that
+#: WANTS the entity id. A guest gets the owner voice: non-technical, no
+#: identifiers, which is the safer of the two to give somebody whose role the
+#: villa cannot fully vouch for.
+AUDIENCE_OF_ROLE: Dict[str, str] = {"owner": "owner", "ops": "facility",
+                                    "guest": "owner"}
+
 
 def _read(path: str) -> str:
     try:

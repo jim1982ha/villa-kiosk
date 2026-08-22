@@ -1,3 +1,11 @@
+## 2.644.0
+
+### Fixed — the agent had never read its own constitution
+Six files give it a voice, one severity scale and the rule that an absence of
+evidence is never good news. They shipped, they passed their content checks, and
+nothing loaded them into a prompt. Both the chat and triage paths read them now,
+and the voice follows who is asking.
+
 ## 2.643.0
 
 ### Added — the agent now checks the villa on its own schedule

@@ -143,3 +143,52 @@ def test_the_shadow_path_is_COMPUTED_not_string_replaced() -> None:
     assert shadow.shadow_path("/tmp/x/c.json") == "/tmp/x/c-shadow.json"
     assert shadow.shadow_path("noext") == "noext-shadow"
     assert shadow.shadow_path("/a/b/c.json") != "/a/b/c.json"
+
+
+def test_every_UNSOLICITED_delivery_path_asks_suppressed() -> None:
+    """⚠️ THE CLAIM THAT WAS FALSE, NOW PINNED SO IT CANNOT BE AGAIN.
+
+    `shadow.py` said "`suppressed()` is the one predicate every delivery path
+    asks" and ZERO delivery paths asked it. The code was right and the sentence
+    wrong: an answer to a question a human just typed is not the villa deciding
+    to speak, and suppressing it would make chat look broken while an operator
+    waited out a shadow period.
+
+    ⚠️ SO THIS PINS THE NARROW RULE AND FAILS WHEN PHASE 4 ADDS THE PATHS IT
+    ACTUALLY COVERS. `route.py` and the brief composer do not exist yet; when
+    they do, each must consult `suppressed` before delivering, and this test is
+    the reminder — which cannot be a comment nobody reads at the moment they are
+    written.
+    """
+    import ast
+    import os
+
+    root = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "rootfs", "usr", "bin", "agent")
+    #: Modules that ORIGINATE a message. A reply is not one of them.
+    UNSOLICITED = ("route.py", "brief.py", "notify.py")
+    present = [n for n in UNSOLICITED if os.path.exists(os.path.join(root, n))]
+    for name in present:
+        with open(os.path.join(root, name), encoding="utf-8") as handle:
+            source = handle.read()
+        calls = {n.func.attr for n in ast.walk(ast.parse(source))
+                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+        assert "suppressed" in calls, (
+            f"{name} delivers without asking shadow.suppressed(), so a shadow "
+            f"period would push to somebody's phone")
+    # ⚠️ NOT AN ASSERTION THAT THEY EXIST. They arrive in Phase 4; this test
+    # covers each one on the day it is written and says nothing before then.
+    assert isinstance(present, list)
+
+
+def test_a_reply_to_a_HUMAN_is_deliberately_not_suppressed() -> None:
+    """The other half of the rule, so nobody 'fixes' it later by suppressing
+    chat and making the villa look dead to the person asking it questions."""
+    import inspect
+
+    from agent import chat as chat_mod
+    source = inspect.getsource(chat_mod.handle_event)
+    assert "suppressed" not in source, (
+        "the chat path now suppresses answers; an operator running a shadow "
+        "period would get silence from a bot they just messaged")

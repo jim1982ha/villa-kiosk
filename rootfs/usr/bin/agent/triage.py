@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from agent import config as agent_config
+from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
 from agent.registry import Registry, build_registry
@@ -138,7 +139,12 @@ async def run(*, provider: Provider, document: str,
     cfg = agent_config.view(config)
     result = await runtime.investigate(
         provider=provider,
-        system=[{"type": "text", "text": SYSTEM},
+        # ⚠️ THE CONSTITUTION, AND NO VOICE. Triage emits `ESCALATE:` lines for
+        # another machine stage, not prose for a person, so a voice file is
+        # ~350 cached tokens of instructions about a document it never writes.
+        # `system_prompt("")` selects none — see `VOICE_OF`.
+        system=[{"type": "text", "text": playbooks.system_prompt("")},
+                {"type": "text", "text": SYSTEM},
                 {"type": "text", "text": document}],
         messages=[{"role": "user",
                    "content": "Is anything here worth a closer look?"}],
