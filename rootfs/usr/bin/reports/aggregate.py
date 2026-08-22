@@ -298,6 +298,36 @@ def _room_of(entities: Sequence[str],
     return ""
 
 
+def is_probe(event: Any) -> bool:
+    """True for an event a person fired by hand to check the bus is alive.
+
+    ⚠️ THE REPORT MUST BE ABLE TO TELL A PROBE FROM A FINDING. RPT-02: a
+    hand-fired "Event bus smoke test" sat in the buffer and contributed 209 IDR
+    to the villa's avoidable-cost total, so the owner's savings headline
+    included money nobody could ever have saved. Waiting for it to age out of
+    the ring fixes this instance and none of the next ones — anyone testing
+    the bus poisons the total again.
+
+    ⚠️ STRINGS COUNT, because a payload arrives through YAML, through a
+    template, and through the websocket, and only the first of those reliably
+    yields a real bool. A template that renders `test: "true"` means the same
+    thing as `test: true` and must not be read as a finding on a technicality.
+    Anything unrecognised is NOT a probe: the default has to be "this is real",
+    or a typo silently deletes a genuine event.
+    """
+    if not isinstance(event, dict):
+        return False
+    data = event.get("data")
+    if not isinstance(data, dict):
+        return False
+    flag = data.get("test")
+    if isinstance(flag, bool):
+        return flag
+    if isinstance(flag, str):
+        return flag.strip().lower() in ("true", "yes", "1", "on")
+    return flag == 1
+
+
 def normalise(event: Dict[str, Any],
               rooms: Optional[Mapping[str, str]] = None) -> Optional[Item]:
     """One buffered event -> one `Item`, or None if it is not ours.
@@ -316,6 +346,14 @@ def normalise(event: Dict[str, Any],
     etype = str(event.get("type") or "")
     category = CATEGORY_OF_EVENT.get(etype)
     if category is None:
+        return None
+    # ⚠️ DROPPED HERE, NOT FILTERED LATER. An Item that exists can be counted,
+    # summed, ranked and rendered by any of a dozen consumers, and each would
+    # need its own guard; one that was never built cannot reach the money
+    # section by any route. Same rule as the report pipeline's: "the data is
+    # not there" beats "the filter is careful". `aggregate()` counts the drop
+    # so it stays visible.
+    if is_probe(event):
         return None
     data = event.get("data")
     if not isinstance(data, dict):
@@ -406,6 +444,13 @@ def schema_drift(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
             continue
         category = CATEGORY_OF_EVENT.get(str(event.get("type") or ""))
         if category is None:
+            continue
+        # ⚠️ A PROBE IS NOT A DRIFTED BLUEPRINT. A hand-fired test event names
+        # no blueprint and no entities — two of the four HOUSE_SCHEMA_FIELDS,
+        # which is enough — so without this it is reported as a blueprint
+        # that needs updating, sending someone to fix a file that is not wrong.
+        # This runs over the RAW buffer, so `normalise`'s drop does not cover it.
+        if is_probe(event):
             continue
         data = event.get("data")
         if not isinstance(data, dict):
@@ -916,6 +961,12 @@ def aggregate(events: Sequence[Dict[str, Any]],
         "open_incidents": [g for g in groups if g.open_incident],
         "events_seen": len(items),
         "events_dropped": len(events) - len(items),
+        # ⚠️ A SUBSET OF `events_dropped`, NOT A SEPARATE TALLY. Everything that
+        # did not become an Item is dropped; this says how many of those were
+        # deliberate probes rather than unrecognised traffic. Reported so that
+        # "the bus was tested twice this period" is a fact the health section
+        # can state, instead of a silent subtraction from the savings total.
+        "events_probe": sum(1 for e in events if is_probe(e)),
         # ⚠️ FOR THE MONITORING-HEALTH SECTION, NOT FOR THE READER'S SAVINGS.
         # A blueprint that has drifted out of the convention still produces
         # usable findings; this says which one to update, and never suppresses

@@ -612,3 +612,76 @@ def test_a_later_member_never_moves_a_group_that_already_has_a_room() -> None:
     assert unplaced.room == ""
     unplaced.add(aggregate.normalise_all([second], ROOMS)[0])
     assert unplaced.room == "Kitchen", "an unplaced group must stay placeable"
+
+
+# ── probes: a hand-fired event is not a finding (RPT-02) ─────────────────────
+
+def _probe(cost: float = 209.0, *, flag: Any = True) -> Dict[str, Any]:
+    """RPT-02's actual shape — the "Event bus smoke test" someone fires by
+    hand to prove the bus is alive.
+
+    ⚠️ IT IS A REAL `vesta_roi_event` IN EVERY OTHER RESPECT, which is exactly
+    why it reached the owner's savings headline and contributed 209 IDR of
+    avoidable cost nobody could ever have avoided. Only `test` separates it
+    from a genuine finding, so only `test` may be what this fixture varies.
+    """
+    when = "2026-08-20T11:00:00+08:00"
+    return {"type": "vesta_roi_event", "fired": when, "at": when, "data": {
+        "blueprint": "", "rule_id": "", "report_bucket": "Event bus smoke test",
+        "entities": [], "kwh": 0.1, "cost_local": cost, "basis": "measured",
+        "timestamp": when, "test": flag}}
+
+
+def test_a_probe_never_becomes_an_item() -> None:
+    """Dropped at normalise, so no downstream consumer needs its own guard."""
+    assert aggregate.normalise(_probe()) is None
+    assert aggregate.normalise_all([_probe(), _roi(), _probe()]) == [
+        aggregate.normalise(_roi())]
+
+
+def test_a_probe_never_reaches_the_money_section() -> None:
+    """The acceptance criterion, stated as the symptom it was reported as."""
+    with_probe = aggregate.savings_total(aggregate.group(
+        aggregate.normalise_all([_roi(cost=100.0), _probe(cost=209.0)])))
+    without = aggregate.savings_total(aggregate.group(
+        aggregate.normalise_all([_roi(cost=100.0)])))
+    assert with_probe["total"] == 100.0, (
+        "a hand-fired probe must not add to the villa's avoidable cost - "
+        "209 IDR of it is what RPT-02 recorded")
+    assert with_probe == without, (
+        "a probe must be invisible to the money section, not merely small")
+
+
+def test_the_probe_drop_is_counted_rather_than_silent() -> None:
+    """⚠️ A SILENT DROP IS THE OTHER FAILURE. If probes vanish with no count,
+    "the bus was tested twice this period" stops being knowable and the health
+    section cannot tell a quiet villa from a filtered one."""
+    result = aggregate.aggregate([_roi(), _probe(), _probe()])
+    assert result["events_probe"] == 2
+    assert result["events_seen"] == 1
+    assert result["events_dropped"] == 2, (
+        "events_probe is a SUBSET of events_dropped, not a separate tally")
+
+
+def test_a_probe_is_not_reported_as_a_drifted_blueprint() -> None:
+    """It names no blueprint and no entities — two of the four
+    HOUSE_SCHEMA_FIELDS, which is enough — so without an explicit skip it is
+    reported as a blueprint needing repair, sending someone to fix a file that
+    is not wrong. schema_drift reads the RAW buffer, so normalise's drop does
+    not cover it."""
+    assert aggregate.schema_drift([_probe()])["blueprints"] == []
+
+
+def test_only_a_recognised_truth_value_marks_a_probe() -> None:
+    """⚠️ THE DEFAULT MUST BE "THIS IS REAL". A payload reaches here through
+    YAML, a template and the websocket, and only the first reliably yields a
+    bool - so the strings count. But anything unrecognised has to stay a
+    finding, or a typo silently deletes genuine events."""
+    for truthy in (True, "true", "True", " yes ", "1", "on", 1):
+        assert aggregate.is_probe(_probe(flag=truthy)), f"{truthy!r} is a probe"
+    for falsy in (False, "false", "no", "0", "", None, "banana", 2, [], {}):
+        assert not aggregate.is_probe(_probe(flag=falsy)), (
+            f"{falsy!r} must NOT delete a real event")
+    assert not aggregate.is_probe(_roi()), "no test key at all is not a probe"
+    assert not aggregate.is_probe("not a dict")
+    assert not aggregate.is_probe({"type": "vesta_roi_event", "data": None})
