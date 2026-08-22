@@ -149,6 +149,7 @@ from reports import store as reports_store          # noqa: E402
 # PH-5; keeping them apart means that cleanup is a directory rather than a
 # filename audit. Same layering rule applies: the proxy imports from both, and
 # neither imports the proxy.
+from agent import scheduler as agent_scheduler      # noqa: E402
 from observe import cycle as observe_cycle          # noqa: E402
 
 SUPERVISOR = "supervisor"
@@ -2254,6 +2255,18 @@ async def _agent_run(config: Dict[str, Any], document: str) -> Dict[str, Any]:
         return {"ok": False, "status": "failed", "reason": str(err)}
 
 
+def _agent_config_now() -> Dict[str, Any]:
+    """The stored agent config, read from disk.
+
+    ⚠️ PASSED AS A FUNCTION, NEVER AS ITS RESULT. The scheduler calls this once
+    per pass, so a cadence change or a kill switch takes effect on the next
+    cycle rather than on the next restart — which is the whole point of a kill
+    switch. The first version passed `_agent_config_now()` and froze both at
+    boot, in the same commit as a comment explaining why that is wrong.
+    """
+    return agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {}))
+
+
 def _chat_dispatch(app: Any) -> Any:
     """The collector's event consumer: hand a chat message to the agent.
 
@@ -2790,9 +2803,22 @@ def main() -> None:
         # PH-2 it only fills the journal.
         a["observe_cycle"] = asyncio.create_task(
             observe_cycle.run_forever(a["session"]))
+        # ⚠️ THE TRIAGE CLOCK, AND WITHOUT IT SHADOW MODE NEVER FILLS. Triage
+        # existed and nothing called it, so the store stayed empty and the
+        # emptiness looked like a quiet villa — the failure this subsystem
+        # keeps rediscovering. A shadow period has to accumulate while nobody
+        # is watching or the PH-3 checkpoint can never happen.
+        #
+        # ⚠️ A FOURTH TASK IN THE SAME LOOP, not a fourth s6 service: the three
+        # above already prove the pattern, and every guard it needs — the kill
+        # switches, the budget, the provider — is asked per pass rather than at
+        # start-up, so an operator's change takes effect on the next cycle.
+        a["agent_triage"] = asyncio.create_task(
+            agent_scheduler.run_forever(a["session"], _agent_config_now))
 
     async def on_cleanup(a: web.Application) -> None:
-        for key in ("reports_task", "reports_collector", "observe_cycle"):
+        for key in ("reports_task", "reports_collector", "observe_cycle",
+                    "agent_triage"):
             task = a.get(key)
             if task is not None:
                 task.cancel()

@@ -35,6 +35,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Final, Mapping, Optional, Tuple
 
+from agent import config as agent_config
 from reports import store
 from reports.log import log, swallow
 
@@ -134,15 +135,24 @@ def _rolled(now: Optional[float] = None) -> Dict[str, Any]:
 
 def limit_of(config: Optional[Mapping[str, Any]]) -> int:
     """The ceiling, from config. NEVER stored beside the counter."""
-    cfg = config if isinstance(config, Mapping) else {}
-    raw = cfg.get("agent_monthly_limit", DEFAULT_MONTHLY_LIMIT)
+    # ⚠️ THE STORE'S OWN KEY, AND THIS READ A PREFIXED ONE NOTHING WRITES.
+    # `/agent-config` saves `monthly_limit`; this asked for
+    # `agent_monthly_limit`, so an owner's ceiling was accepted, returned 200,
+    # and then ignored — the budget ran on its shipped default whatever they
+    # set. The same defect was found and fixed in `policy.py` two releases ago
+    # and NOT swept for elsewhere, which is `feedback_audit-applicable-set`
+    # exactly: rolled out by the call site in view rather than by what the rule
+    # applies to. `test_store_envelope` now derives the key set and refuses any
+    # prefixed read anywhere under `agent/`.
+    cfg = agent_config.view(config)
+    raw = cfg.get("monthly_limit", DEFAULT_MONTHLY_LIMIT)
     value = _int(raw)
     return value if value > 0 else DEFAULT_MONTHLY_LIMIT
 
 
 def chat_limit_of(config: Optional[Mapping[str, Any]]) -> int:
-    cfg = config if isinstance(config, Mapping) else {}
-    explicit = cfg.get("agent_chat_monthly_limit")
+    cfg = agent_config.view(config)
+    explicit = cfg.get("chat_monthly_limit")
     if explicit is not None:
         value = _int(explicit)
         if value > 0:

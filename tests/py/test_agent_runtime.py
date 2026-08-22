@@ -97,7 +97,7 @@ def _run(provider: Any, *, pol: Any = None, cfg: Any = None,
                 policy=pol or _policy(), model="fake-model",
                 system=[{"type": "text", "text": "villa profile"}],
                 messages=[{"role": "user", "content": "what is unusual?"}],
-                config=cfg if cfg is not None else {"agent_monthly_limit": 50},
+                config=cfg if cfg is not None else {"monthly_limit": 50},
                 kind=kind))
 
 
@@ -137,7 +137,7 @@ def test_budget_exhaustion_DECLINES_with_a_reason() -> None:
     for _ in range(3):
         budget.spend()
     out = _run(FakeProvider([says("never reached")]),
-               cfg={"agent_monthly_limit": 3})
+               cfg={"monthly_limit": 3})
     assert out.status == "declined" and "ceiling" in out.declined_reason
     assert out.turns == 0, "a refused run must not reach the provider"
 
@@ -220,14 +220,14 @@ def test_a_leaking_tool_result_NEVER_reaches_the_transcript() -> None:
 
 def test_the_budget_is_spent_per_CALL_not_per_check() -> None:
     _run(FakeProvider([asks("echo"), says("done")]))
-    assert budget.status({"agent_monthly_limit": 50})["used"] == 2
+    assert budget.status({"monthly_limit": 50})["used"] == 2
 
 
 def test_a_refused_run_costs_nothing() -> None:
     for _ in range(3):
         budget.spend()
-    _run(FakeProvider([says("x")]), cfg={"agent_monthly_limit": 3})
-    assert budget.status({"agent_monthly_limit": 3})["used"] == 3
+    _run(FakeProvider([says("x")]), cfg={"monthly_limit": 3})
+    assert budget.status({"monthly_limit": 3})["used"] == 3
 
 
 def test_every_tool_call_leaves_an_audit_row_including_the_refused_one() -> None:
@@ -241,8 +241,8 @@ def test_every_tool_call_leaves_an_audit_row_including_the_refused_one() -> None
 
 def test_chat_spends_against_the_chat_ceiling() -> None:
     _run(FakeProvider([says("hi")]), kind="chat",
-         cfg={"agent_monthly_limit": 50})
-    assert budget.status({"agent_monthly_limit": 50})["chat_used"] == 1
+         cfg={"monthly_limit": 50})
+    assert budget.status({"monthly_limit": 50})["chat_used"] == 1
 
 
 # ── the registry ───────────────────────────────────────────────────────────

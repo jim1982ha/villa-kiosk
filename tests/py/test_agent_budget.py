@@ -32,7 +32,7 @@ def _isolated(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _cfg(**over: Any) -> Dict[str, Any]:
-    base: Dict[str, Any] = {"agent_monthly_limit": 10}
+    base: Dict[str, Any] = {"monthly_limit": 10}
     base.update(over)
     return base
 
@@ -136,7 +136,7 @@ def test_raising_the_limit_does_NOT_reset_the_count() -> None:
     for _ in range(10):
         budget.spend(now=JAN)
     assert not budget.check(_cfg(), now=JAN).allowed
-    raised = budget.check(_cfg(agent_monthly_limit=12), now=JAN)
+    raised = budget.check(_cfg(monthly_limit=12), now=JAN)
     assert raised.allowed and raised.used == 10, (
         "the headroom moves; the count does not")
     assert raised.remaining == 2
@@ -147,7 +147,7 @@ def test_the_limit_is_never_stored_beside_the_counter() -> None:
     budget.spend(now=JAN)
     with open(budget.BUDGET_FILE, encoding="utf-8") as handle:
         stored = json.load(handle)
-    assert "limit" not in stored and "agent_monthly_limit" not in stored, (
+    assert "limit" not in stored and "monthly_limit" not in stored, (
         "a stored limit is one an old file can carry back after config changed")
     assert set(stored) == {"month", "used", "chat_used"}
 
@@ -158,7 +158,7 @@ def test_chat_has_its_own_ceiling_inside_the_same_budget() -> None:
     """⚠️ A person can type all day; supervision cannot. Two INDEPENDENT
     budgets could both be under while the bill is over, so this is a slice of
     one ceiling rather than a second one."""
-    cfg = _cfg(agent_monthly_limit=100)          # chat share -> 25
+    cfg = _cfg(monthly_limit=100)          # chat share -> 25
     assert budget.chat_limit_of(cfg) == 25
     for _ in range(25):
         budget.spend("chat", now=JAN)
@@ -168,7 +168,7 @@ def test_chat_has_its_own_ceiling_inside_the_same_budget() -> None:
 
 
 def test_chat_declining_says_supervision_is_unaffected() -> None:
-    cfg = _cfg(agent_monthly_limit=4)
+    cfg = _cfg(monthly_limit=4)
     for _ in range(budget.chat_limit_of(cfg)):
         budget.spend("chat", now=JAN)
     reason = budget.check(cfg, kind="chat", now=JAN).reason
@@ -183,7 +183,7 @@ def test_chat_spending_counts_against_the_MAIN_ceiling_too() -> None:
 
 
 def test_an_explicit_chat_limit_cannot_exceed_the_main_one() -> None:
-    cfg = _cfg(agent_monthly_limit=10, agent_chat_monthly_limit=999)
+    cfg = _cfg(monthly_limit=10, chat_monthly_limit=999)
     assert budget.chat_limit_of(cfg) == 10
 
 
@@ -200,10 +200,10 @@ def test_checking_does_not_charge() -> None:
 # ── junk config ────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("junk", [None, {}, "not a mapping", 42,
-                                  {"agent_monthly_limit": 0},
-                                  {"agent_monthly_limit": -5},
-                                  {"agent_monthly_limit": "banana"},
-                                  {"agent_monthly_limit": float("inf")}])
+                                  {"monthly_limit": 0},
+                                  {"monthly_limit": -5},
+                                  {"monthly_limit": "banana"},
+                                  {"monthly_limit": float("inf")}])
 def test_junk_config_falls_back_to_the_default_never_to_zero_or_infinity(
         junk: Any) -> None:
     """⚠️ Zero would refuse everything and infinity would refuse nothing; both

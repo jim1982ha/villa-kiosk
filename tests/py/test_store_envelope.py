@@ -343,6 +343,53 @@ def test_no_SERVER_side_reader_unwraps_the_wire_envelope() -> None:
         f"saved settings are silently replaced by the shipped ones.")
 
 
+def test_no_module_reads_a_PREFIXED_agent_config_key() -> None:
+    """⚠️ THE THIRD INSTANCE OF ONE DEFECT, AND THE SECOND SWEEP THAT MISSED IT.
+
+    `/agent-config` stores `monthly_limit`, `max_turns`, `act_enabled` and the
+    rest UNPREFIXED. `policy.py` read `agent_act_enabled`, `agent_max_turns` and
+    two more — fixed in 2.640.0 — and `budget.py` was still reading
+    `agent_monthly_limit` two releases later, so an owner's spend ceiling was
+    accepted, returned 200 and silently ignored while the budget ran on its
+    shipped default.
+
+    ⚠️ FIXING THE SITE IN VIEW RATHER THAN THE APPLICABLE SET IS THE ACTUAL
+    BUG HERE — `feedback_audit-applicable-set`, twice paid for. This derives the
+    key set from `config.DEFAULTS` and refuses `agent_<key>` anywhere under
+    `agent/`, so the fourth instance cannot exist.
+    """
+    import ast
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import config as agent_config
+
+    banned = {f"agent_{name}" for name in agent_config.DEFAULTS}
+    assert banned, "no keys derived; this test is checking nothing"
+
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")
+    offenders = []
+    for base, _dirs, files in os.walk(root):
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(base, name)
+            with open(path, encoding="utf-8") as handle:
+                source = handle.read()
+            # ⚠️ AST, NOT A GREP — the comment recording this fix names the
+            # prefixed keys, and a text search would match the explanation.
+            for node in ast.walk(ast.parse(source)):
+                if (isinstance(node, ast.Constant)
+                        and isinstance(node.value, str)
+                        and node.value in banned):
+                    offenders.append(f"{name}:{node.lineno} {node.value}")
+    assert not offenders, (
+        f"{offenders} read a prefixed key nothing writes. The store's names are "
+        f"{sorted(agent_config.DEFAULTS)}; read them through "
+        f"`agent.config.view`.")
+
+
 def test_the_client_speaks_every_key_the_store_defines() -> None:
     """⚠️ THE STORE SPEAKS snake_case AND THE APP SPEAKS camelCase, and a key
     that differs between them is ACCEPTED AND IGNORED rather than refused:

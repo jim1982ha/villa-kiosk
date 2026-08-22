@@ -1,3 +1,15 @@
+## 2.643.0
+
+### Added — the agent now checks the villa on its own schedule
+Triage existed and nothing called it, so a shadow period only filled when
+somebody asked. It runs on the configured cadence now, with every switch read
+per pass rather than at start-up.
+
+### Fixed — the spend ceiling you set was ignored
+The budget read a key name nothing writes, so it ran on its shipped default
+whatever was configured. The same defect was fixed elsewhere two releases ago
+and not swept for; a test now derives the key set and covers the whole package.
+
 ## 2.642.0
 
 ### Added — shadow mode, so the agent can be judged before it is trusted
