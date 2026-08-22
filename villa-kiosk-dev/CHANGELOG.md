@@ -1,3 +1,18 @@
+## 2.640.0
+
+### Fixed — the tools were not connected to the villa
+Every tool takes its data source as an argument and the registry built them all
+with none, so the agent answered about an empty property while the journal held
+thousands of entries. They are wired now, in one place.
+
+### Fixed — a role picker offering a profile that does not exist
+"Facility" and "ops" were two names for one person and "guest" was missing. The
+list now comes from the app's own profiles and shows their real names.
+
+### Changed — chat answers are short
+The chat path sent no instructions at all, so a two-line question could return
+forty lines about the monitoring system itself. It leads with the answer now.
+
 ## 2.639.0
 
 ### Fixed — silence that could not be told apart from good news
