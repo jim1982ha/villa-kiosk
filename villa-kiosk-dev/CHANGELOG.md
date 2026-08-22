@@ -1,3 +1,14 @@
+## 2.636.0
+
+### Fixed — the answer was written and never sent
+The model replies in prose, and the run returned that prose to nobody: the villa
+logged a successful answer and delivered nothing, to either chat.
+
+### Fixed — the agent could not speak or file a concern unless actuation was on
+Writing and acting were treated as one permission, so the switch that guards
+touching the villa also blocked replying and recording a finding. They are now
+separate, and actuation stays off by default as before.
+
 ## 2.635.0
 
 ### Fixed — the answer went to the wrong chat
