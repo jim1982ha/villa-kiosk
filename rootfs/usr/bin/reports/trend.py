@@ -33,6 +33,11 @@ BLOCKS = "▁▂▃▄▅▆▇█"
 #: call site so both the renderer and the narration payload agree on "flat".
 FLAT_BAND_PCT = 10.0
 
+#: How many EARLIER periods a comparison needs before it may be stated. Below
+#: this there is a number but no baseline, and "vs 1-day average" is a sentence
+#: that cannot be true.
+MIN_TREND_PERIODS = 2
+
 
 def sparkline(series: Sequence[float]) -> str:
     """A series as block characters, scaled to its own range.
@@ -101,7 +106,13 @@ def phrase(current: float, history: Sequence[float], unit: str = "",
     """
     past = [float(v) for v in history if isinstance(v, (int, float))
             and not isinstance(v, bool)]
-    if not past:
+    # ⚠️ TWO PRIOR PERIODS MINIMUM, THE SAME BAR THE CHART ALREADY SET. A
+    # delivered brief read "↑ 2934% vs 1-day AVERAGE of 74 IDR" — an average of
+    # one sample is not an average, and a 2934% swing computed off a single
+    # quiet day is noise presented as insight, at the top of the money section.
+    # The chart already refused below two points; the sentence did not, so the
+    # two halves of one feature disagreed about when they had enough data.
+    if len(past) < MIN_TREND_PERIODS:
         return ""
     way, pct = direction(current, past)
     mean = sum(past) / len(past)

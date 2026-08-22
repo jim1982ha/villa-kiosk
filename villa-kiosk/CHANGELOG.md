@@ -1,3 +1,13 @@
+## 2.595.0
+
+### Fixed — "vs 1-day average" was not an average, and the worklist led with the wrong half of each line
+
+A delivered brief compared today against a single previous day and called it an
+average, reporting a 2934% swing off one quiet sample at the top of the money
+section; the chart already refused below two points and the sentence did not.
+And the facility-manager lines opened with the instruction, so the left edge —
+the only part a reader scans — never said which equipment a line was about.
+
 ## 2.594.1
 
 ### Changed — two comments from the last release claimed more than they check

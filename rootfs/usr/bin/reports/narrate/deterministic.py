@@ -967,7 +967,7 @@ class DeterministicNarrator:
             # a chart that cannot show a shape is decoration where the rest of
             # this report is measurement.
             chart = (trend_mod.sparkline(list(past) + [shown_total])
-                     if len(past) >= 2 else "")
+                     if len(past) >= trend_mod.MIN_TREND_PERIODS else "")
             if chart:
                 noun = trend_mod.PERIOD_NOUN.get(context.cadence, "period")
                 lines.append(f"   {_plural(len(past) + 1, noun)}: {chart}")
@@ -1186,8 +1186,17 @@ class DeterministicNarrator:
                     who = ", ".join(
                         name_of(self._labels.get(e) or prettify_entity_slug(e))
                         for e in (task.get("entities") or [])[:3])
-                    tail = f" ({where})" if where else ""
-                    lines.append(f"{BULLET}{text}" + (f" — {who}" if who else "") + tail)
+                    # ⚠️ THE SUBJECT LEADS, BECAUSE THIS IS A WORKLIST. A
+                    # Telegram screenshot showed seven of these, each opening
+                    # with a different instruction and wrapping to three lines,
+                    # so the left edge — the only part a reader scans — said
+                    # nothing about which piece of equipment each one was. The
+                    # instruction is what you read AFTER deciding a line is
+                    # yours. Same facts, same order of importance, reversed on
+                    # the page.
+                    head = " ".join(p for p in (where, who) if p)
+                    lines.append(f"{BULLET}{head} — {text}" if head
+                                 else f"{BULLET}{text}")
             if len(tasks) > MAX_LINES:
                 lines.append(f"{BULLET}and {len(tasks) - MAX_LINES} more.")
 

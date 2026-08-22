@@ -110,7 +110,8 @@ def test_the_phrase_names_the_baseline_and_its_window() -> None:
 def test_the_period_noun_follows_the_cadence() -> None:
     for cadence, noun in (("daily", "day"), ("weekly", "week"),
                           ("monthly", "month")):
-        assert f"-{noun} average" in trend.phrase(74, [10], "IDR", cadence)
+        # Two prior periods: one is not an average — see MIN_TREND_PERIODS.
+        assert f"-{noun} average" in trend.phrase(74, [10, 12], "IDR", cadence)
 
 
 def test_history_is_filtered_to_the_same_cadence() -> None:
@@ -282,3 +283,39 @@ def test_the_lead_sentence_agrees_with_its_own_count() -> None:
         return DeterministicNarrator().render(_ctx(standing=rows))[1].splitlines()[0]
     assert lead(1) == "1 unavailable device needs attention right now."
     assert lead(3) == "3 unavailable devices need attention right now."
+
+
+def test_one_prior_period_is_not_an_average() -> None:
+    """⚠️ A DELIVERED BRIEF SAID "↑ 2934% vs 1-day AVERAGE of 74 IDR", at the top
+    of the money section, on the second report ever. An average of one sample is
+    not an average, and a 2934% swing computed off a single quiet day is noise
+    presented as insight.
+
+    ⚠️ THE CHART ALREADY REFUSED BELOW TWO POINTS AND THE SENTENCE DID NOT, so
+    the two halves of one feature disagreed about when they had enough data —
+    and the half that spoke was the one a reader believes. Both read
+    `MIN_TREND_PERIODS` now.
+    """
+    assert trend.phrase(2245, [74], "IDR", "daily") == ""
+    assert trend.phrase(2245, [74, 80], "IDR", "daily") != ""
+
+    from reports.narrate.deterministic import DeterministicNarrator
+    import test_sections as sections
+    one = sections._render(cadence="daily", currency="IDR",
+                           history={"avoidableCost": [74.0]},
+                           aggregated=sections._events(
+                               sections._roi("Lights", 2245.0)))
+    assert "average" not in one and "▁" not in one and "▅" not in one
+
+
+def test_a_worklist_line_leads_with_its_subject() -> None:
+    """⚠️ A TELEGRAM SCREENSHOT SHOWED SEVEN, each opening with a different
+    instruction and wrapping to three lines, so the left edge — the only part a
+    reader scans — said nothing about which equipment each line was. The
+    instruction is what you read AFTER deciding a line is yours."""
+    import test_sections as sections
+    body = sections._render(aggregated=sections._events(
+        sections._maintenance("Check for a stuck check valve.")))
+    line = next(l for l in body.splitlines() if "stuck check valve" in l)
+    assert line.index("Check for a stuck") > line.index("House pump"), (
+        f"the instruction leads and the subject trails: {line!r}")
