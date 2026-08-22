@@ -1,3 +1,11 @@
+## 2.626.0
+
+### Added — an inbound message now actually reaches the agent
+The collector hands chat events to a callback the proxy wires in, so a message
+becomes a run: switch, freshness, sender, then a model — each refusing before the
+next costs anything. The collector itself still imports nothing from the agent,
+because it is the floor the agent stands on and must not fall over with it.
+
 ## 2.625.0
 
 ### Added — the villa can be messaged, by people you name and nobody else
