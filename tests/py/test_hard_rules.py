@@ -89,6 +89,12 @@ ILLUSTRATIVE: Set[str] = {
     # `probe`/`new_thing` so they are obviously invented — the SHAPE of a
     # journal row is what is under test, and a row needs an id to have a shape.
     "sensor.probe_power", "binary_sensor.probe_door", "sensor.new_thing",
+    # `test_agent_route.py` and `test_agent_act.py`. Single-letter and `probe`
+    # placeholders — the SHAPE of an occupancy answer and of a door relay that
+    # is an ordinary `switch.*` is what is under test, and both need an id to
+    # have a shape.
+    "person.a", "device_tracker.b", "light.x",
+    "light.probe_lamp", "switch.probe_door_relay",
     # `observe/journal.py` and its tests. Every one is a placeholder chosen to
     # be obviously fictional — the SHAPE of a state_changed event is what is
     # under test, and the allow-list comment needs *an* entity to point at.

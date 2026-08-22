@@ -250,6 +250,11 @@ def test_every_BaseTool_subclass_reaches_ALL_TOOLS_or_is_a_stated_exception() ->
         "ReplyTool": "bound to one conversation at construction; an unbound "
                      "instance can reach nobody, so offering it to a scheduled "
                      "run teaches a verb that cannot work",
+        "ActService": "bound to one run at construction — it needs a policy, a "
+                      "service caller and a run id, and an unbound instance "
+                      "could act on nothing while appearing in the registry the "
+                      "MCP server filters, where its exclusion should never "
+                      "have to be relied upon",
         "BaseTool": "the base class itself",
     }
 
