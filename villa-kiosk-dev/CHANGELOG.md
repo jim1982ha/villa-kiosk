@@ -1,3 +1,14 @@
+## 2.619.0
+
+### Added — an audit that can show a crash, and kill switches that ship off
+
+Every action writes an intent row before and an outcome row after, so an action
+that started and never reported back is visible by the gap rather than looking
+like success. A replayed action key is refused across restarts. Alongside it,
+`/agent-config` carries three independent kill switches, all off on a fresh
+install, and two lists that ship empty because a seeded default in either would
+be an open bot or an agent acting on a device nobody authorised.
+
 ## 2.618.0
 
 ### Added — a spending ceiling that survives a restart
