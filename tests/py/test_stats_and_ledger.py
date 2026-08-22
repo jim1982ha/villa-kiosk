@@ -223,3 +223,55 @@ def test_resolved_tickets_are_newest_first() -> None:
     ]}
     got = ledger.resolved_tickets_for(data, "sensor.x")
     assert [row["id"] for row in got] == ["new", "old"]
+
+
+# ── a redacted line must not read as a missing word ──────────────────────────
+
+def test_ids_removed_mid_sentence_do_not_strand_their_separator() -> None:
+    """⚠️ THE OWNER READ THIS ON THE TASKS TAB (2026-08-22):
+
+        Critical automation(s) found OFF: . Re-enable, or document as a
+        deliberate, intentional decision.
+
+    An instruction to re-enable nothing in particular. The stored item was
+    complete — it named `automation.outdoor_unified_doorbell_call_and_unlock` —
+    so this was the redaction, not the blueprint, and `clean_summary`'s own
+    docstring said the senders write "two shapes" while this was the third.
+
+    ⚠️ WITHHELD MUST NOT LOOK LIKE MISSING. That is the whole property: a
+    reader who sees "found OFF: ." concludes the system lost the name, and
+    reasonably distrusts the rest of the line. "found OFF." reads as a complete
+    sentence about a fact they can go and check.
+    """
+    from reports import ledger
+
+    line = ("Critical automation(s) found OFF: "
+            "automation.outdoor_unified_doorbell_call_and_unlock. "
+            "Re-enable, or document as a deliberate, intentional decision.")
+    out = ledger.clean_summary(line)
+    assert "OFF: ." not in out and ": ." not in out, out
+    assert out.startswith("Critical automation(s) found OFF."), out
+    assert "automation." not in out, "the id must still be removed"
+
+
+def test_a_separator_that_still_introduces_something_survives() -> None:
+    """⚠️ THE BOUND ON THE FIX. A dash joining two live clauses is not stranded
+    and must not be eaten — removing it would maul every ROI line, which is a
+    worse defect than the one being fixed and would look like a typo."""
+    from reports import ledger
+
+    out = ledger.clean_summary(
+        "sensor.pool_pump_power is drawing 761.7 W outside its scheduled "
+        "window - confirm whether this run was intentional.")
+    assert "window - confirm" in out, out
+    assert out.startswith("A monitored device is drawing 761.7 W"), out
+
+
+def test_the_leading_id_list_shape_is_unchanged() -> None:
+    """The shape that already worked, pinned so the new rule cannot regress it."""
+    from reports import ledger
+
+    out = ledger.clean_summary(
+        "sensor.a_power_factor, sensor.b_power_factor - Check the pump for a "
+        "failing capacitor.")
+    assert out == "Check the pump for a failing capacitor.", out

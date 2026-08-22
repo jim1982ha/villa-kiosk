@@ -242,11 +242,12 @@ def clean_summary(summary: str) -> str:
     prints "[redacted] has drifted" invites the reader to ask what was redacted,
     and Phase 6 would send the sentence either way.
 
-    ⚠️ AND A SENTENCE CAN LOSE ITS SUBJECT. The nine blueprints write two
-    shapes, measured on the reference deployment:
+    ⚠️ AND A SENTENCE CAN LOSE ITS SUBJECT. The blueprints write THREE shapes,
+    measured on the reference deployment:
 
         "[PM-04] sensor.a, sensor.b - Check the pump for a failing capacitor"
         "[PM-01] sensor.a has drifted -99.9% from baseline. Check the pump for"
+        "[DQ-02] Critical automation(s) found OFF: automation.a. Re-enable, or"
 
     Stripping the first is clean; stripping the second leaves "has drifted
     -99.9% from baseline." — a dangling verb. Dropping that clause would be
@@ -254,12 +255,30 @@ def clean_summary(summary: str) -> str:
     on the line, so a generic subject is restored instead. It invents nothing:
     the thing that drifted genuinely was a monitored device, and which one is
     exactly what must not travel.
+
+    ⚠️ THE THIRD WAS MISSED, AND THIS DOCSTRING SAID "TWO SHAPES" WHILE THE
+    OWNER LOOKED AT THE THIRD ON THEIR TABLET (2026-08-22). Where the ids sit
+    MID-SENTENCE after a colon, removing them leaves the separator stranded
+    against the full stop — the Tasks tab read "Critical automation(s) found
+    OFF: . Re-enable, or document as a deliberate, intentional decision.", an
+    instruction to re-enable nothing in particular. None of the three cleanups
+    below touched it: two only fix commas, and the third only fixes the START
+    of the line. A count of shapes in a comment is a claim that rots the day a
+    tenth blueprint writes an eleventh sentence, so the cleanup is now shaped
+    by what the removal can STRAND rather than by an inventory of senders.
     """
     without = ENTITY_ID.sub("", summary)
     # Collapse the punctuation the removal leaves behind — ", , -" and friends.
     without = re.sub(r"\s*,\s*(?=,|-|$)", "", without)
     without = re.sub(r"^\s*[-,.]\s*", "", without)
-    text = re.sub(r"\s{2,}", " ", without).strip(" ,-")
+    # ⚠️ A SEPARATOR THAT NOW INTRODUCES NOTHING. `:` and `-` join a clause to
+    # the thing it is about; with that thing gone they must go too, or the
+    # sentence reads as a missing word rather than a withheld one. Bounded to a
+    # separator directly against terminal punctuation or the end of the line,
+    # so "drawing 761.7 W outside its window - confirm whether..." keeps its
+    # dash: there the dash still introduces something.
+    without = re.sub(r"\s*[:\-]\s*(?=[.;,]|$)", "", without)
+    text = re.sub(r"\s{2,}", " ", without).strip(" ,-:")
     if text[:1].islower():
         return f"A monitored device {text}"
     return text

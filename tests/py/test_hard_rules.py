@@ -68,6 +68,9 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # Placeholders in `clean_summary`'s docstring and its tests: the SHAPE of a
+    # redacted line is what is under test, not any villa's device.
+    "automation.a", "sensor.a_power_factor", "sensor.b_power_factor",
     "binary_sensor.motion0", "binary_sensor.motion1",
     "camera.driveway", "sensor.hallway_temperature",  # the two above, replaced
     "cover.x", "cover.x__closed", "cover.x__half", "cover.x__open",
