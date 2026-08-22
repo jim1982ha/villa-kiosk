@@ -1,3 +1,16 @@
+## 2.641.0
+
+### Added — concerns have a lifecycle, and a fix can be checked
+A concern is opened, acted on, verified and closed with a timestamp at every
+step. A second concern about a subject already open is refused unless it says
+what it replaces. Verification says "cannot verify" when the villa was not being
+watched, rather than reporting that nothing recurred.
+
+### Added — the agent's constitution, and the ladder beneath it
+Six files give it a voice, one severity scale and the rule that an absence of
+evidence is never good news. When a layer is unreachable the brief still
+arrives, in plainer words, saying which layer was missing.
+
 ## 2.640.0
 
 ### Fixed — the tools were not connected to the villa
