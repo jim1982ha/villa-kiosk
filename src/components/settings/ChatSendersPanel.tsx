@@ -45,6 +45,15 @@ const CHANNEL = "telegram";
 
 type Row = { id: string; role: Role };
 
+/** ⚠️ TWO SWITCHES, AND THEY NEST RATHER THAN DUPLICATE. `enabled` is the whole
+ *  agent — briefings, triage, chat, everything — and `triggers.chat` is this
+ *  feature alone. Both ship OFF: an add-on that begins reasoning about a villa
+ *  the moment it is installed, before anybody has set a budget or a recipient,
+ *  is one that spends money nobody agreed to. Showing only the chat switch
+ *  would leave an owner ticking it and getting silence, with the real reason a
+ *  level up and invisible. */
+type Switches = { enabled: boolean; chat: boolean };
+
 function toRows(map: Record<string, string> | undefined): Row[] {
   return Object.entries(map ?? {})
     .filter(([key]) => key.startsWith(`${CHANNEL}:`))
@@ -62,11 +71,16 @@ export default function ChatSendersPanel() {
   const [error, setError] = useState<string | null>(null);
   const [draftId, setDraftId] = useState("");
   const [draftRole, setDraftRole] = useState<Role>("owner");
+  const [sw, setSw] = useState<Switches>({ enabled: false, chat: false });
 
   const load = useCallback(async () => {
     setLoading(true);
     const got = await loadAgentConfig();
     setRows(toRows(got?.config.allowedSenders as Record<string, string>));
+    setSw({
+      enabled: got?.config.enabled === true,
+      chat: got?.config.triggers?.chat === true,
+    });
     setRev(got?.rev ?? null);
     setLoading(false);
   }, []);
@@ -92,6 +106,29 @@ export default function ChatSendersPanel() {
     void load();
   }, [rev, load]);
 
+  /** ⚠️ SENDS ONLY WHAT CHANGED, and `triggers` as a WHOLE object because the
+   *  store merges that one slice a level deep — see `agent.config.view`. A
+   *  partial `triggers` would still work, but stating both keys makes what is
+   *  being asserted visible in the request rather than in a merge rule. */
+  const flip = useCallback(async (patch: Partial<Switches>) => {
+    const next = { ...sw, ...patch };
+    setSaving(true);
+    setError(null);
+    const ok = await saveAgentConfig(
+      patch.enabled === undefined
+        ? { triggers: { scheduled: true, event: false, chat: next.chat } }
+        : { enabled: next.enabled },
+      rev);
+    setSaving(false);
+    if (!ok) {
+      setError("That change was not saved. Reloading.");
+      void load();
+      return;
+    }
+    setSw(next);
+    void load();
+  }, [sw, rev, load]);
+
   const add = useCallback(() => {
     const id = draftId.trim();
     if (!id) return;
@@ -109,7 +146,32 @@ export default function ChatSendersPanel() {
 
   return (
     <>
-      <p className="muted body-text">
+      <label className="toggle">
+        <input type="checkbox" checked={sw.enabled} disabled={saving}
+               onChange={(e) => void flip({ enabled: e.target.checked })} />
+        <span>VESTA agent</span>
+      </label>
+      <p className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
+        The master switch. Off means the agent does nothing at all — no
+        briefings, no answers, no cost.
+      </p>
+
+      <label className="toggle">
+        {/* ⚠️ DISABLED, NOT HIDDEN, while the master is off. Hiding it would
+            make the reason for the silence invisible; greyed with the sentence
+            below says which switch to reach for. */}
+        <input type="checkbox" checked={sw.chat && sw.enabled}
+               disabled={saving || !sw.enabled}
+               onChange={(e) => void flip({ chat: e.target.checked })} />
+        <span>Answer messages</span>
+      </label>
+      <p className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
+        {sw.enabled
+          ? "Lets the people below start a conversation with the villa."
+          : "Needs the master switch above."}
+      </p>
+
+      <p className="muted body-text" style={{ marginTop: 14 }}>
         People who may message the villa and get an answer. Anyone not listed is
         ignored in silence — no reply, so a stranger who finds the bot learns
         nothing from it.

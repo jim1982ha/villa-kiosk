@@ -1,3 +1,11 @@
+## 2.627.0
+
+### Added — the two switches that turn the agent on, on screen
+The agent and its chat trigger both ship off and had no UI at all, so the only
+way to enable either was to PUT the config store by hand. Both now sit above the
+sender list in Advanced Settings. The chat switch is greyed rather than hidden
+while the master is off — hiding it makes the reason for the silence invisible.
+
 ## 2.626.0
 
 ### Added — an inbound message now actually reaches the agent
