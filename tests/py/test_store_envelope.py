@@ -114,6 +114,37 @@ READ_ANCHOR = re.compile(r"as\s*\{\s*(\w+)\?:\s*unknown")
 WRITE_ANCHOR = re.compile(r"JSON\.stringify\(\s*\{?\s*(?:\w+\s*===\s*null[^{]*\{\s*)?(\w+)\s*:")
 
 
+#: Routed stores with no SPA client, each for a stated reason. ⚠️ A store
+#: absent from here AND with no client found means the client exists but was
+#: written in a shape `_uses` cannot see — which is the blind spot below.
+NO_CLIENT_BY_DESIGN: Dict[str, str] = {}
+
+
+def test_every_routed_store_actually_HAS_a_client_this_test_can_see() -> None:
+    """⚠️ THE BLIND SPOT THIS TEST HAD, AND IT LET A NEW STORE THROUGH.
+
+    `_uses` finds clients by searching for `ingressPath("route")`. A client
+    written any other way — a template literal, a helper, a constant — yields
+    ZERO matches, and zero matches meant the loop below simply did not run.
+    "No client" and "a client I cannot read" were indistinguishable, and the
+    second one is exactly the case this module exists to catch.
+
+    Found when `/agent-config` was added: its client fetched
+    `` `${base}/agent-config` `` and the whole suite passed green while checking
+    nothing about it. Deliberately breaking that client's envelope key still
+    passed — the proof that it was vacuous.
+    """
+    routes = store_keys()
+    unseen = sorted(r for r in routes
+                    if not _uses(r) and r not in NO_CLIENT_BY_DESIGN)
+    assert not unseen, (
+        f"routed store(s) with no client this test can see: {unseen}. Either "
+        f"the client does not exist (add it to NO_CLIENT_BY_DESIGN with a "
+        f"reason), or it fetches the route in a shape `_uses` cannot find — "
+        f"use `ingressPath(\"route\")` like every sibling client, or this "
+        f"module silently stops covering that store.")
+
+
 def test_every_store_client_uses_its_own_envelope_key() -> None:
     routes = store_keys()
     assert routes, "no JSON stores found in the proxy — this test's anchors moved"

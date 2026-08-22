@@ -2092,6 +2092,20 @@ reports_config_get_handler, reports_config_put_handler = _json_store_handlers(
     reports_store.REPORTS_CONFIG_MAX_BYTES, "reports configuration",
     write_guard=_reports_config_guard)
 
+# The agent's settings and every kill switch. ⚠️ ON THE SAME FACTORY, not a
+# bespoke pair — it exists for this, and a fork would be a fourth place for the
+# revision check, the write lock and the 409 handling to drift.
+#
+# ⚠️ THE EMPTY DEFAULT IS `{}`, NOT `agent_config.DEFAULTS`. Defaults are
+# applied at READ time by `agent.config.view` and are never persisted: a seed
+# spread underneath stored config resurrects entries the operator deleted, which
+# is a bug this project has already shipped once and been reported for.
+AGENT_CONFIG_FILE = "/data/vesta/agent-config.json"
+AGENT_CONFIG_MAX_BYTES = 256_000
+agent_config_get_handler, agent_config_put_handler = _json_store_handlers(
+    AGENT_CONFIG_FILE, "config", {}, AGENT_CONFIG_MAX_BYTES,
+    "agent configuration")
+
 # ⚠️ The history store's PUT handler is built and then DELIBERATELY NOT ROUTED.
 # History is written by the scheduler (Phase 2), server-side, and is read-only
 # to every client — an endpoint that let a browser rewrite the record of what
@@ -2554,6 +2568,7 @@ def main() -> None:
     app.on_cleanup.append(on_cleanup)
     app.router.add_get("/addon-config", addon_config_handler)
     app.router.add_post("/model-upload", model_upload_handler)
+    app.router.add_get("/agent-config", agent_config_get_handler)
     app.router.add_get("/device-config", device_config_get_handler)
     app.router.add_get("/fm-data", fm_data_get_handler)
     app.router.add_put("/fm-data", fm_data_put_handler)
@@ -2571,6 +2586,7 @@ def main() -> None:
     app.router.add_post("/reports-run-now", reports_run_now_handler)
     app.router.add_get("/reports-tasks", reports_tasks_get_handler)
     app.router.add_post("/reports-tasks-complete", reports_tasks_complete_handler)
+    app.router.add_put("/agent-config", agent_config_put_handler)
     app.router.add_put("/device-config", device_config_put_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_get("/auth/session", auth_session_handler)
