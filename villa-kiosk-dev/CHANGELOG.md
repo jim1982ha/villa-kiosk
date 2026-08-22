@@ -1,3 +1,11 @@
+## 2.632.0
+
+### Fixed — the model was sent tools it could not read
+The tool list is published in MCP's shape, which spells one field
+`inputSchema`; the Messages API wants `input_schema` and rejected every request
+carrying tools. The adapter translates now, which is where anything
+provider-specific belongs.
+
 ## 2.631.0
 
 ### Fixed — a question that could not be answered got silence
