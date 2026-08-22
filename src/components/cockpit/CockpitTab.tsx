@@ -48,6 +48,7 @@ import { isUnavailable } from "@/utils/stateColors";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
+import CockpitConcerns from "./CockpitConcerns";
 import { useVillaAttention } from "./useVillaAttention";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
@@ -220,6 +221,21 @@ export default function CockpitTab({
           </div>
         </>
       )}
+
+      {/* ── What the agent concluded ───────────────────────────────
+          ⚠️ BESIDE "Needs attention", NOT INSTEAD OF IT. That list is
+          computed by the kiosk from live HA state and works with no network
+          and no agent; this one is what the agent has REASONED. They answer
+          different questions and the plan keeps both until the parity harness
+          is green on the new one. */}
+      {/* ⚠️ NO CAPABILITY IS READ HERE OR PASSED IN, AND THAT IS THE PIN
+          `test_cockpit_is_gated_nowhere` PROTECTS. The Cockpit VIEW is
+          reachable by every profile — neither shell may even MENTION
+          `manageFacility`, because the modal exists precisely to let a profile
+          without it reach this view. The two feedback buttons are a CONTROL,
+          not the view, so the leaf component owns its own check: it is not in
+          either open path and cannot become a gate on one. */}
+      <CockpitConcerns />
 
       {/* ── Room / floor / category breakdown ──────────────────── */}
       {/* One selector, one section — category used to be its own

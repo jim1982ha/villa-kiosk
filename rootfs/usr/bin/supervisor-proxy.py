@@ -2120,6 +2120,53 @@ agent_concerns_get_handler, _agent_concerns_put_unrouted = _json_store_handlers(
     "agent concerns")
 
 
+async def agent_feedback_handler(request: web.Request) -> web.Response:
+    """Record a person's verdict on a concern. TASK-062.
+
+    ⚠️ OWNER AND FACILITY MANAGER, THE SAME PAIR THAT MAY ACKNOWLEDGE A TASK.
+    A guest may FILE a fault report and may not judge one — dismissing a concern
+    suppresses a whole subject after three goes, which is a decision about what
+    the villa stops watching.
+
+    ⚠️ THE REASON IS OPTIONAL AND IS THE MORE VALUABLE HALF. "Not useful — the
+    gym is closed for renovation" is a fact about the property that should stop
+    the whole family of gym concerns; PH-7 turns it into a memory. It is stored
+    verbatim rather than counted.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in TASK_ACK_ROLES:
+        return _forbidden("Only an owner or facility manager may judge a "
+                          "concern.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "expected an object"}, status=400)
+
+    concern_id = str(body.get("id") or "").strip()
+    if not concern_id:
+        return web.json_response({"error": "no concern id"}, status=400)
+    # ⚠️ EXPLICIT, NOT TRUTHY. A missing `useful` must not read as "not
+    # useful" — that is the verdict that suppresses a subject, and defaulting
+    # to it would let a malformed request silence the villa.
+    if not isinstance(body.get("useful"), bool):
+        return web.json_response({"error": "useful must be true or false"},
+                                 status=400)
+
+    from agent import concerns as agent_concerns
+    ok, reason = agent_concerns.feedback(
+        concern_id, useful=bool(body["useful"]),
+        reason=str(body.get("reason") or "")[:500])
+    if not ok:
+        return web.json_response({"error": reason}, status=400)
+    return web.json_response({
+        "ok": True,
+        "suppressed": agent_concerns.suppressed_subjects(),
+    })
+
+
 async def agent_chats_handler(request: web.Request) -> web.Response:
     """The bot's private chats, named. Owner-only, because it enumerates who
     can talk to this villa.
@@ -2835,6 +2882,7 @@ def main() -> None:
     app.router.add_get("/agent-config", agent_config_get_handler)
     app.router.add_get("/agent-concerns", agent_concerns_get_handler)
     app.router.add_get("/agent-chats", agent_chats_handler)
+    app.router.add_post("/agent-feedback", agent_feedback_handler)
     app.router.add_get("/agent-runs", agent_runs_handler)
     app.router.add_get("/agent-audit", agent_audit_handler)
     app.router.add_post("/agent-run-now", agent_run_now_handler)

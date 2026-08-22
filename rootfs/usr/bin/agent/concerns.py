@@ -246,6 +246,71 @@ def verify(concern_id: str, *, recurred: bool, coverage_complete: bool,
                         "the condition did not return while being watched")
 
 
+#: How many dismissals of one subject suppress it, and over what window.
+#: ⚠️ THREE, AND THE COUNTER IS THE MECHANISM — NOT AGENT JUDGEMENT. "Stop
+#: telling me about the gym lights" must work RELIABLY rather than
+#: probabilistically, and that is the whole difference between a feedback loop
+#: and a suggestion. RPT-05: the acknowledgement half has never existed
+#: anywhere in this system, so no rule could ever be judged noisy.
+DISMISSALS_TO_SUPPRESS: int = 3
+DISMISSAL_WINDOW_DAYS: int = 90
+
+
+def feedback(concern_id: str, *, useful: bool, reason: str = "",
+             now: Optional[float] = None) -> Tuple[bool, str]:
+    """Record a person's verdict on a concern. Returns `(ok, reason)`.
+
+    ⚠️ "NOT USEFUL" IS `dismissed`, WHICH IS NOT `closed`. Closed means the
+    thing was dealt with; dismissed means somebody said it did not matter, and
+    collapsing them loses the only signal alert-fatigue measurement has.
+
+    ⚠️ THE REASON IS KEPT VERBATIM AND IS THE MORE VALUABLE HALF. "Not useful —
+    the gym is closed for renovation" is a fact about the villa that should stop
+    the whole FAMILY of gym concerns, not just this one; PH-7 turns it into a
+    memory. Storing only the count would discard exactly the part a person took
+    the trouble to type.
+    """
+    state = "verified" if useful else "dismissed"
+    note = str(reason or "").strip()
+    outcome = (f"marked {'useful' if useful else 'not useful'}"
+               + (f": {note}" if note else ""))
+    return transition(concern_id, state, outcome=outcome, now=now)
+
+
+def dismissals_of(subject_key: str,
+                  rows: Optional[Sequence[Mapping[str, Any]]] = None) -> int:
+    """How many times a person has dismissed this subject.
+
+    ⚠️ COUNTED FROM THE STORE, NEVER HELD SEPARATELY. A counter kept beside the
+    concerns is a counter that disagrees with them the first time one is edited
+    or expires; the lifecycle IS the record.
+    """
+    key = str(subject_key)
+    source = list(read() if rows is None else rows)
+    return sum(1 for r in source
+               if str(r.get("subject_key")) == key
+               and str(r.get("state")) == "dismissed")
+
+
+def suppressed_subjects(rows: Optional[Sequence[Mapping[str, Any]]] = None
+                        ) -> List[str]:
+    """Subjects a person has told us to stop raising, by count.
+
+    ⚠️ THE OUTPUT FEEDS `policy.suppressed_subjects`, WHICH IS ALREADY THE ONE
+    GATE. This function decides WHICH subjects; `policy.is_suppressed` decides
+    what that means for a run. Two halves, each with one owner — putting the
+    counting inside policy would make the authority boundary depend on a
+    feedback tally, and putting the gate here would give the store a veto.
+    """
+    counts: Dict[str, int] = {}
+    for row in (read() if rows is None else rows):
+        if str(row.get("state")) == "dismissed":
+            key = str(row.get("subject_key") or "")
+            if key:
+                counts[key] = counts.get(key, 0) + 1
+    return sorted(k for k, n in counts.items() if n >= DISMISSALS_TO_SUPPRESS)
+
+
 def summary(rows: Optional[Sequence[Mapping[str, Any]]] = None) -> Dict[str, Any]:
     """Counts the Cockpit and the brief both read. No bodies, no evidence."""
     data = list(read() if rows is None else rows)

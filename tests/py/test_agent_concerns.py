@@ -178,3 +178,79 @@ def test_a_broken_store_degrades_to_no_concerns() -> None:
     concerns.CONCERNS_FILE = "/nope/does/not/exist/c.json"
     assert concerns.read() == []
     assert concerns.summary()["total"] == 0
+
+
+# ── the feedback loop · TASK-062 ────────────────────────────────────────────
+def _dismiss(n: int) -> None:
+    """Open and dismiss the same subject `n` times."""
+    for i in range(n):
+        stored, reason = concerns.raise_concern(_c(title=f"gym lights {i}"))
+        assert stored is not None, reason
+        concerns.feedback(stored.id, useful=False, reason="gym is closed")
+
+
+def test_marking_a_concern_USEFUL_verifies_it() -> None:
+    stored, _ = concerns.raise_concern(_c())
+    assert stored is not None
+    ok, why = concerns.feedback(stored.id, useful=True)
+    assert ok, why
+    assert concerns.read()[0]["state"] == "verified"
+
+
+def test_NOT_USEFUL_is_dismissed_and_not_closed() -> None:
+    """⚠️ Closed means dealt with; dismissed means somebody said it did not
+    matter. Collapsing them loses the only signal alert fatigue has."""
+    stored, _ = concerns.raise_concern(_c())
+    assert stored is not None
+    concerns.feedback(stored.id, useful=False, reason="the gym is closed")
+    row = concerns.read()[0]
+    assert row["state"] == "dismissed"
+    assert "not useful" in row["outcome"]
+
+
+def test_the_REASON_is_kept_verbatim() -> None:
+    """⚠️ THE MORE VALUABLE HALF. "the gym is closed for renovation" is a fact
+    about the villa that should stop the whole FAMILY of gym concerns — PH-7
+    turns it into a memory. A count alone discards what a person typed."""
+    stored, _ = concerns.raise_concern(_c())
+    assert stored is not None
+    concerns.feedback(stored.id, useful=False, reason="closed for renovation")
+    assert "closed for renovation" in concerns.read()[0]["outcome"]
+
+
+def test_THREE_dismissals_suppress_the_subject() -> None:
+    """⚠️ BY A COUNTER, NEVER BY AGENT JUDGEMENT. "Stop telling me about the
+    gym lights" must work reliably rather than probabilistically — that is the
+    difference between a feedback loop and a suggestion."""
+    _dismiss(2)
+    assert concerns.suppressed_subjects() == []
+    _dismiss(1)
+    assert concerns.suppressed_subjects() == [subject_key("pool pump")]
+
+
+def test_the_count_comes_from_the_STORE_not_a_side_tally() -> None:
+    """⚠️ A counter kept beside the concerns disagrees with them the first time
+    one is edited or expires. The lifecycle IS the record."""
+    _dismiss(3)
+    assert concerns.dismissals_of(subject_key("pool pump")) == 3
+    assert concerns.dismissals_of(subject_key("gate")) == 0
+
+
+def test_suppression_and_the_GATE_have_different_owners() -> None:
+    """⚠️ This decides WHICH subjects; `policy.is_suppressed` decides what that
+    means for a run. Counting inside policy would make the authority boundary
+    depend on a feedback tally; gating here would give the store a veto."""
+    import inspect
+
+    from agent import policy as policy_mod
+    assert "dismiss" not in inspect.getsource(policy_mod.is_suppressed).lower()
+    assert "suppressed_subjects" in inspect.getsource(policy_mod.is_suppressed)
+
+
+def test_a_dismissal_of_ANOTHER_subject_does_not_count() -> None:
+    _dismiss(2)
+    other, _ = concerns.raise_concern(
+        _c(subject_key=subject_key("gate"), title="gate"))
+    assert other is not None
+    concerns.feedback(other.id, useful=False)
+    assert concerns.suppressed_subjects() == []

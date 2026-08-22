@@ -203,3 +203,22 @@ export async function loadBotChats(): Promise<BotChat[]> {
     && typeof (c as BotChat).id === "string"
     && typeof (c as BotChat).name === "string");
 }
+
+/**
+ * Record a verdict on a concern. Owner and facility manager only, server-side.
+ *
+ * ⚠️ `useful` IS EXPLICIT, NEVER INFERRED FROM ABSENCE. "Not useful" is the
+ * verdict that suppresses a whole subject after three goes, so a missing field
+ * must be a 400 rather than a silent dismissal.
+ */
+export async function sendConcernFeedback(
+  id: string, useful: boolean, reason = "",
+): Promise<boolean> {
+  const r = await fetch(ingressPath("agent-feedback"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, useful, reason }),
+  });
+  return r.ok;
+}

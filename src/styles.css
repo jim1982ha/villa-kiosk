@@ -4395,6 +4395,29 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    answer to a question, not a field. */
 .editable-row-fields > button { flex: 0 1 auto; min-height: var(--touch-min); }
 
+/* A concern's severity, as a short word rather than a colour alone.
+   ⚠️ THE WORD IS THE SIGNAL AND THE COLOUR IS THE ENHANCEMENT — a wall tablet
+   in daylight and a colour-blind reader both need the text, which is the same
+   lesson the disabled-toggle fix learned. It reuses `.cockpit-attention-*` for
+   the hue so the two lists on this screen cannot drift into two vocabularies
+   for one severity. */
+.cockpit-concern-sev {
+  flex: 0 0 auto; align-self: center;
+  font-size: var(--text-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+/* ⚠️ FOUR CLASSES, NOT `.cockpit-attention-${severity}`. Those are KIND names —
+   unavailable, alarm, fault, schedule — and reusing them for severities would
+   have emitted classes that do not exist: no colour at all, and silently,
+   because a missing class is not an error. Caught before it shipped by asking
+   what the existing selectors actually are. The hues come from the app's one
+   status vocabulary (STATUS_COLOR / --status-*), so the Cockpit and the badges
+   cannot disagree about what "danger" looks like. */
+.cockpit-sev-critical { color: var(--status-danger); }
+.cockpit-sev-warning  { color: var(--status-warning); }
+.cockpit-sev-notice   { color: var(--text-secondary); }
+.cockpit-sev-info     { color: var(--text-secondary); }
+
 /* Two labelled fields side by side, collapsing to one column when there is no
    room. ⚠️ SAME IDIOM AS `.fm-summary` — auto-fit with a minimum — rather than
    a fixed two-column grid, because a 360px phone must stack them and a media
