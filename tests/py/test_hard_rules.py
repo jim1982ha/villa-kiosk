@@ -85,6 +85,10 @@ ILLUSTRATIVE: Set[str] = {
     # point is that a tool result carrying ANY raw id is refused — so the id
     # must be a real-SHAPED one and must not be a real device.
     "light.some_room_lamp",
+    # `test_agent_sources.py`. Journal fixtures for the wiring tests, named
+    # `probe`/`new_thing` so they are obviously invented — the SHAPE of a
+    # journal row is what is under test, and a row needs an id to have a shape.
+    "sensor.probe_power", "binary_sensor.probe_door", "sensor.new_thing",
     # `observe/journal.py` and its tests. Every one is a placeholder chosen to
     # be obviously fictional — the SHAPE of a state_changed event is what is
     # under test, and the allow-list comment needs *an* entity to point at.
