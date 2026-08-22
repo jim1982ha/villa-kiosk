@@ -1,3 +1,11 @@
+## 2.631.0
+
+### Fixed — a question that could not be answered got silence
+The villa now says why. A spent API balance declined every message and nothing
+was sent back, which is indistinguishable from a broken bot to the only person
+who cannot read the add-on log — the one who asked. Strangers are still ignored
+in silence; that rule was never about hiding a fault from the owner.
+
 ## 2.630.0
 
 ### Fixed — the agent refused every message while both switches showed on
