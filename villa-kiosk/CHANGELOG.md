@@ -1,3 +1,13 @@
+## 2.613.0
+
+### Added — the observation cycle now runs, in the loop that already existed
+
+A third asyncio task beside the scheduler and the collector, not a third
+service: it polls Home Assistant on a cadence read from config, journals what
+changed since the last pass, and logs one line with the counts. Only
+allow-listed attributes are held between cycles, so a room warming by a tenth of
+a degree cannot manufacture a journal row. Nothing downstream consumes it yet.
+
 ## 2.612.0
 
 ### Added — the villa described to a model, stable half first

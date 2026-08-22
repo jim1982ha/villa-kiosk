@@ -91,6 +91,7 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.pump", "sensor.seeded", "sensor.flat", "sensor.spike",
     "sensor.drift", "sensor.new", "sensor.x", "sensor.q", "sensor.weak",
     "sensor.quiet", "sensor.loud", "sensor.unscorable", "sensor.pool",
+    "light.gone", "light.ok",  # observe/cycle.py's diff fixtures
 }
 
 #: ⚠️ REAL DEVICES OF THE REFERENCE DEPLOYMENT, IN COMMENTS THAT RECORD A

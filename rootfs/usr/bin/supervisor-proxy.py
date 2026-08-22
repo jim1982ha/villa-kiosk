@@ -144,6 +144,12 @@ from reports import hass as reports_hass          # noqa: E402
 from reports import tasks as reports_tasks        # noqa: E402
 from reports.narrate import providers as reports_narrate_providers  # noqa: E402
 from reports import store as reports_store          # noqa: E402
+# ⚠️ A SECOND PACKAGE BESIDE `reports`, NOT INSIDE IT. `observe` is the
+# agent-era observation floor and `reports` is the pipeline being dismantled in
+# PH-5; keeping them apart means that cleanup is a directory rather than a
+# filename audit. Same layering rule applies: the proxy imports from both, and
+# neither imports the proxy.
+from observe import cycle as observe_cycle          # noqa: E402
 
 SUPERVISOR = "supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -2523,9 +2529,18 @@ def main() -> None:
         # lost and the weekly report has nothing to report.
         a["reports_collector"] = asyncio.create_task(
             reports_collect.run_forever(a["session"]))
+        # ⚠️ The observation floor (Tier 1). A THIRD task in the SAME loop
+        # rather than a third s6 service: the two above already prove the
+        # pattern, and a supervised service would be another thing to start,
+        # stop, watch and misconfigure for no benefit. It polls on a cadence
+        # read from config, so it cannot starve the loop the way a tight
+        # subscription could, and nothing downstream consumes it yet — until
+        # PH-2 it only fills the journal.
+        a["observe_cycle"] = asyncio.create_task(
+            observe_cycle.run_forever(a["session"]))
 
     async def on_cleanup(a: web.Application) -> None:
-        for key in ("reports_task", "reports_collector"):
+        for key in ("reports_task", "reports_collector", "observe_cycle"):
             task = a.get(key)
             if task is not None:
                 task.cancel()

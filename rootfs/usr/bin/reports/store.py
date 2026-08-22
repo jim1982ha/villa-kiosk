@@ -117,6 +117,12 @@ CONFIG_DEFAULTS: Final[Dict[str, Any]] = {
     # rule broken. See `noise.py` for what they gate.
     "noise_threshold_fires": 20,
     "noise_window_days": 30,
+    # ⚠️ THE OBSERVATION FLOOR'S CADENCE, AND IT IS CONFIG FOR THE SAME REASON
+    # THE TWO ABOVE ARE. A villa with a slow Home Assistant and one with 3,000
+    # entities want different numbers, and a period compiled into the image is
+    # a per-property constant by another name. `observe/cycle.py` re-reads this
+    # every cycle, so a change takes effect without restarting the add-on.
+    "observe_cycle_minutes": 15,
 }
 
 
