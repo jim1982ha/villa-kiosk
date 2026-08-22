@@ -1,3 +1,14 @@
+## 2.614.0
+
+### Fixed — salience ranked "the pump is on", which nobody would call out
+
+Reading a Villa Document built from this villa's real data put three pumps at the
+top, all saying the same thing: they were running. The baseline was a
+distribution of daily means and the reading was instantaneous, an order of
+magnitude apart by construction. The comparison's basis is now printed beside
+every score so a mismatch is visible, and a value beyond the whole recorded range
+says so. Also: "1 climate units", and a concern reading "(open, open 2 days)".
+
 ## 2.613.0
 
 ### Added — the observation cycle now runs, in the loop that already existed

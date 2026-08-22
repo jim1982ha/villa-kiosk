@@ -23,6 +23,28 @@ arithmetic rather than about plumbing. The test suite greps this module for the
 shapes a real threshold takes, and each of these is named and justified rather
 than tolerated.
 
+⚠️ THE CALLER MUST COMPARE LIKE WITH LIKE, AND THIS MODULE CANNOT CHECK IT FOR
+YOU. `samples` and `observed` must be the SAME STATISTIC. Scoring an
+INSTANTANEOUS reading against a distribution of DAILY MEANS produces a perfect
+z-score that describes nothing: a pump running three hours a day has a daily mean
+near 250 W and draws 2,516 W while running, an order of magnitude apart BY
+CONSTRUCTION, every day, forever.
+
+That is not hypothetical. The PH-1 checkpoint fed this module real 28-day daily
+means and real instantaneous readings from the reference villa, and the top three
+"most unusual" items were all the same fact — the pumps were on. A facility
+manager would have said "yes, it is the afternoon". Left alone it would have
+ranked the same four pumps first on every cycle forever, escalated them, spent
+the budget explaining that pumps draw power, and buried the one real finding —
+which is the alert-fatigue failure this redesign exists to remove, arriving by a
+new route.
+
+`score_numeric` is handed two numbers and has no way to know they are different
+quantities, so the contract cannot be enforced here. What IS done here: `basis`
+travels with the score and is printed in the reason, so the comparison is
+LEGIBLE — "against 28 daily means" beside an instantaneous value is visible to
+a reader and to the agent, where a bare sigma is not.
+
 ⚠️ AND IT NEVER FABRICATES A SCORE. An entity without enough history returns
 `score=None` and a reason a person can read. That is not a lesser answer than a
 number: a confident score computed from four readings is worse than no score,
@@ -83,6 +105,7 @@ class Salience:
     spread: Optional[float] = None             # robust sigma
     samples: int = 0
     persistence: float = 0.0                   # 0..1 of the window off-baseline
+    basis: str = ""                            # what BOTH sides are measuring
     weekday_scoped: bool = False               # was the baseline weekday-local
     novel_state: Optional[str] = None          # categoricals only
     seen_states: Tuple[str, ...] = field(default_factory=tuple)
@@ -95,6 +118,8 @@ class Salience:
             "observed": self.observed, "baseline": self.baseline,
             "spread": self.spread, "samples": self.samples,
         }
+        if self.basis:
+            out["basis"] = self.basis
         if self.persistence:
             out["persistence"] = round(self.persistence, 3)
         if self.weekday_scoped:
@@ -155,14 +180,21 @@ def _window(samples: Sequence[Mapping[str, Any]],
 # ── numeric ─────────────────────────────────────────────────────────────────
 def score_numeric(samples: Sequence[Mapping[str, Any]],
                   observed: Any, *, entity_id: str = "",
-                  weekday: Optional[int] = None) -> Salience:
+                  weekday: Optional[int] = None,
+                  basis: str = "") -> Salience:
     """Novelty of `observed` against this entity's own history.
+
+    ⚠️ `basis` NAMES WHAT BOTH SIDES ARE — "daily mean", "hourly mean",
+    "instantaneous". It is not used in the arithmetic and cannot be: this
+    function sees two numbers. It is printed in the reason so a mismatch is
+    VISIBLE, which is the only defence available at this layer. See the module
+    header for the mismatch that made it necessary.
 
     `samples` are `{"day": "YYYY-MM-DD", "value": float}` rows, oldest first —
     the shape `series.hourly_by_day` already produces, so the journal and the
     statistics API can both feed this without a second adapter.
     """
-    out = Salience(entity_id=entity_id, kind="numeric")
+    out = Salience(entity_id=entity_id, kind="numeric", basis=str(basis or ""))
     current = _numeric(observed)
     if current is None:
         out.reason = "the current reading is not numeric"
@@ -223,9 +255,18 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
     # [1, 2]: unusual AND sustained is at most twice as salient as unusual once.
     out.score = z * (1.0 + out.persistence * (_PERSISTENCE_MAX_MULTIPLE - 1.0))
     direction = "above" if current > baseline else "below"
+    against = f" across {len(values)} {out.basis}s" if out.basis else ""
     out.reason = (f"{current:g} is {z:.1f} sigma {direction} its "
                   f"{'weekday ' if out.weekday_scoped else ''}median of "
-                  f"{baseline:g} (spread {spread:g}, n={len(values)})")
+                  f"{baseline:g}{against} (spread {spread:g}, n={len(values)})")
+    # ⚠️ OUTSIDE THE WHOLE RANGE IS WORTH SAYING SEPARATELY FROM "n sigma". A
+    # value beyond every reading ever recorded is either a genuine extreme or a
+    # unit mismatch, and a reader can tell those apart where the arithmetic
+    # cannot. Stated, never scored — it must not become a second ranking term.
+    low, high = min(values), max(values)
+    if current > high or current < low:
+        out.reason += (f"; outside the entire {len(values)}-sample range "
+                       f"[{low:g}, {high:g}]")
     return out
 
 

@@ -48,6 +48,22 @@ def _plural(count: int, singular: str, plural: str = "") -> str:
     return f"{count} {singular if count == 1 else (plural or singular + 's')}"
 
 
+def _singular(label: str) -> str:
+    """A regular English plural made singular, for a count of one.
+
+    ⚠️ A HEURISTIC, AND BOUNDED SO IT CANNOT MANGLE. Only regular `-ies` and
+    trailing `-s` are touched, and a word ending in `-ss` is left alone, so
+    "1 climate units" becomes "1 climate unit" while "1 status" stays itself.
+    Anything irregular is the CALLER's to label correctly — the renderer is not
+    the place for an English lexicon.
+    """
+    if label.endswith("ies") and len(label) > 4:
+        return label[:-3] + "y"
+    if label.endswith("s") and not label.endswith("ss"):
+        return label[:-1]
+    return label
+
+
 def _counted(items: Mapping[str, int]) -> str:
     """"3 pumps, 11 lights, 2 locks" — sorted so the string is stable.
 
@@ -56,8 +72,8 @@ def _counted(items: Mapping[str, int]) -> str:
     make the profile differ byte-for-byte between two runs over an unchanged
     villa — destroying the cache for a reason nobody would ever look for.
     """
-    parts = [f"{count} {name}" for name, count in sorted(items.items())
-             if count]
+    parts = [f"{count} {_singular(name) if count == 1 else name}"
+             for name, count in sorted(items.items()) if count]
     return ", ".join(parts) if parts else "none"
 
 
@@ -189,11 +205,17 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
             title = str(row.get("title") or "").strip() or "(untitled)"
             age = row.get("age_days")
             state = str(row.get("state") or "").strip()
+            # ⚠️ THE STATE AND THE AGE BOTH SAID "open" — a real reading found
+            # "(open, open 2 days)" in the first generated document. The age
+            # phrase already implies the state when the state IS open, so only
+            # a state that adds something is printed.
             suffix = []
-            if state:
+            if state and state.lower() != "open":
                 suffix.append(state)
             if isinstance(age, (int, float)):
                 suffix.append(f"open {_plural(int(age), 'day')}")
+            elif state:
+                suffix.append(state)
             lines.append(f"  {title}"
                          + (f" ({', '.join(suffix)})" if suffix else ""))
     else:

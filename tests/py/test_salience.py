@@ -329,3 +329,45 @@ def test_the_grep_would_actually_catch_a_smuggled_threshold(
     # ...and does not fire on the module's own legitimate vocabulary.
     assert not forbidden.search("MIN_SAMPLES_PER_WEEKDAY: Final[int] = 4")
     assert not units.search("28 days is four of every weekday")
+
+
+# ── the like-for-like contract · PH-1 checkpoint, Finding 1 ────────────────
+
+def test_the_basis_travels_with_the_score_so_a_mismatch_is_LEGIBLE() -> None:
+    """⚠️ THE CHECKPOINT'S HEADLINE FINDING. Real 28-day DAILY MEANS scored
+    against a real INSTANTANEOUS reading produced three perfect z-scores that
+    described one fact: the pumps were on. This module sees two numbers and
+    cannot detect that — so the basis is printed, which makes the comparison
+    visible to a reader where a bare sigma is not."""
+    rows = _rows([157, 97, 65, 17, 248, 104, 261, 364])
+    out = salience.score_numeric(rows, 2516.1, entity_id="sensor.pump",
+                                 basis="daily mean")
+    assert out.basis == "daily mean"
+    assert "daily mean" in out.reason
+    assert out.as_dict()["basis"] == "daily mean"
+
+
+def test_no_basis_given_prints_no_basis_rather_than_a_guess() -> None:
+    # ⚠️ NOT a flat history: the zero-spread message legitimately contains
+    # "across", so a flat fixture would fail this assertion against correct
+    # code. Second time this fixture shape has bitten in this file.
+    out = salience.score_numeric(_rows([10, 12, 8, 11, 9, 10, 13, 7]), 40,
+                                 entity_id="sensor.x")
+    assert out.basis == ""
+    assert "across" not in out.reason
+    assert "basis" not in out.as_dict()
+
+
+def test_a_value_outside_the_whole_range_is_STATED_not_scored() -> None:
+    """⚠️ Either a genuine extreme or a unit mismatch, and a reader can tell
+    those apart where the arithmetic cannot. It must NOT become a second
+    ranking term — the score is unchanged by the note."""
+    rows = _rows([10, 11, 9, 10, 11, 9, 10, 12])
+    inside = salience.score_numeric(rows, 11.5, entity_id="sensor.a")
+    outside = salience.score_numeric(rows, 99.0, entity_id="sensor.b")
+    assert "outside the entire" not in inside.reason
+    assert "outside the entire" in outside.reason and "[9, 12]" in outside.reason
+    # The note is prose. The score is still just z x persistence.
+    assert outside.baseline is not None and outside.spread is not None
+    z = abs(99.0 - outside.baseline) / outside.spread
+    assert outside.score is not None and z <= outside.score <= z * 2.0 + 1e-9
