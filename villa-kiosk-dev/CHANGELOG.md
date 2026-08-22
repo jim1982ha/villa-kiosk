@@ -1,3 +1,14 @@
+## 2.617.0
+
+### Added — the authorization boundary, and the scrubber in front of it
+
+`policy.py` decides what the agent may do; nothing in it is a model, and its
+config is snapshotted per run so a mid-run change cannot widen authority. High
+harm is judged on physical effect rather than entity domain, and it is never
+executed autonomously — a door relay published as a switch is still a door.
+`redact.py` scrubs every tool result by looping over an allow-list, never over
+the input. Both are mutation-tested; nothing calls them yet.
+
 ## 2.616.0
 
 ### Added — the agent can read Home Assistant without ever seeing an entity id
