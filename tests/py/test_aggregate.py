@@ -491,3 +491,124 @@ def test_humanising_never_damages_a_label_a_person_wrote() -> None:
                   "Bathroom VMC", "Living room AC",
                   "Entrance unlocked while vacant", "Event bus smoke test", ""):
         assert readable_label(human) == human, human
+
+
+# ── roll up by room, then by category ────────────────────────────────────────
+#
+# ⚠️ THE WORKBOOK ASKED FOR THIS AND THE MODULE DOCSTRING REFUSED IT, on the
+# grounds that "`report_bucket` IS NOT A ROOM". True — and it does not have to
+# be. A room comes from the ENTITIES, exactly as `standing.build` resolves one.
+# The same paragraph also claimed an area was attached "where an entity resolves
+# to one", which was false: nothing attached one and the field did not exist.
+# So the item sat open as a spec-versus-code disagreement that was neither.
+
+ROOMS = {
+    "light.a": "Kitchen",
+    "climate.b": "Kitchen",
+    "binary_sensor.leak_kitchen": "Kitchen",
+    "sensor.pump_pf": "Plant room",
+}
+
+
+def test_a_room_comes_from_the_entities_not_the_bucket() -> None:
+    """⚠️ THE WHOLE POINT, AND THE ONE WAY TO GET IT WRONG. `report_bucket` here
+    is "Living room AC" — a room name — while the entities resolve to Kitchen.
+    A version that read the bucket would report Living Room and look plausible
+    on every fixture whose bucket happens to match its devices."""
+    out = aggregate.aggregate([_roi()], ROOMS)
+    group = out["groups"][0]
+    assert group.bucket == "Living room AC"
+    assert group.room == "Kitchen", (
+        "the room must come from the entities; reading the bucket gives the "
+        "wrong room on exactly the payloads the blueprints actually send")
+
+
+def test_no_room_map_is_not_an_error() -> None:
+    """An unconfigured install resolves nothing, and that must degrade rather
+    than fail — `rooms` is optional for the callers that have no config."""
+    for rooms in (None, {}):
+        out = aggregate.aggregate([_roi()], rooms)
+        assert out["groups"][0].room == ""
+        assert list(out["by_room"]) == [""]
+
+
+def test_an_unresolved_room_sorts_last_and_is_not_named() -> None:
+    """⚠️ "" IS NOT "Other". Naming it here would be this module claiming a
+    place exists; the renderer owns that decision. It must also not lead — a
+    report opening with a heap of unplaced devices under a blank heading buries
+    the rooms that did resolve."""
+    events = [_roi(), _maintenance(bucket="Unmapped kit")]
+    out = aggregate.aggregate(events, {"light.a": "Kitchen", "climate.b": "Kitchen"})
+    rooms = list(out["by_room"])
+    assert rooms[-1] == "", f"unknown must sort last, got {rooms}"
+    assert "Other" not in rooms and "Unknown" not in rooms
+
+
+def test_rooms_are_ordered_case_insensitively() -> None:
+    out = aggregate.aggregate(
+        [_roi(), _maintenance(bucket="Pump")],
+        {"light.a": "attic", "climate.b": "attic",
+         "sensor.pump_pf": "Basement"})
+    assert [r for r in out["by_room"] if r] == ["attic", "Basement"]
+
+
+def test_within_a_room_the_worst_category_leads() -> None:
+    """⚠️ NOT ALPHABETICAL. `critical` would sort after `audit` and `maintenance`
+    by name, so a room's emergency would print third. Derived from
+    `severity_rank`, which is the ordering this package already owns — a second
+    CATEGORY_ORDER table is how P4's three severity scales came to disagree."""
+    # ⚠️ THE FIXTURE MUST DISCRIMINATE, AND THE FIRST ONE DID NOT. It used
+    # `critical` + `maintenance`, and "critical" < "maintenance" alphabetically
+    # — so a purely alphabetical implementation passed. Mutation testing caught
+    # it. `audit` sorts BEFORE "critical" by name and carries `info`, so it is
+    # the only pairing where the two orderings disagree.
+    audit = _audit()
+    audit["data"]["entities"] = ["binary_sensor.hall_motion"]
+    events = [audit, _critical(bucket="Leak")]
+    rooms = {"binary_sensor.leak_kitchen": "Kitchen",
+             "binary_sensor.hall_motion": "Kitchen"}
+    out = aggregate.aggregate(events, rooms)
+    order = list(out["by_room"]["Kitchen"])
+    assert order == ["critical", "audit"], (
+        f"the room's most serious category must lead; alphabetically `audit` "
+        f"would come first, which is the ordering this rejects. Got {order}")
+
+
+def test_the_rollup_is_two_levels_not_a_flat_sort() -> None:
+    """"Room then category" is a STRUCTURE. Returning a sorted flat list would
+    satisfy every ordering assertion above and leave the caller to re-derive the
+    grouping, which is the thing being asked for."""
+    out = aggregate.aggregate([_roi()], ROOMS)
+    kitchen = out["by_room"]["Kitchen"]
+    assert isinstance(kitchen, dict), "expected room -> category -> groups"
+    assert isinstance(kitchen["roi"], list)
+
+
+def test_a_later_member_never_moves_a_group_that_already_has_a_room() -> None:
+    """A group is one rule on one bucket; its members can span rooms. The first
+    resolved wins, so a group cannot drift between rooms as events arrive —
+    and a group whose FIRST member was unmapped can still be placed later."""
+    first = _roi(when="2026-08-20T10:00:00+08:00")
+    second = _roi(when="2026-08-20T11:00:00+08:00")
+    out = aggregate.aggregate([first, second], ROOMS)
+    assert out["groups"][0].room == "Kitchen"
+
+    # ⚠️ THE DISCRIMINATING CASE IS A PLACED GROUP MEETING A DIFFERENT ROOM.
+    # Adding a placed member to an UNPLACED group cannot tell "first wins" from
+    # "last wins" — both yield Kitchen — and that was this test's first version,
+    # which a mutation to `if item.room:` passed cleanly.
+    kitchen = aggregate.normalise_all([first], ROOMS)[0]
+    group = aggregate.Group(kitchen)
+    assert group.room == "Kitchen"
+    elsewhere = aggregate.normalise_all(
+        [_maintenance(bucket="Pump")], {"sensor.pump_pf": "Plant room"})[0]
+    group.add(elsewhere)
+    assert group.room == "Kitchen", (
+        "a later member must not move a group that is already placed, or a "
+        "group drifts between rooms as events arrive")
+
+    # And the other half: an unplaced group can still be placed later.
+    unplaced = aggregate.Group(aggregate.normalise_all([first], {})[0])
+    assert unplaced.room == ""
+    unplaced.add(aggregate.normalise_all([second], ROOMS)[0])
+    assert unplaced.room == "Kitchen", "an unplaced group must stay placeable"

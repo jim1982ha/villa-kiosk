@@ -440,7 +440,14 @@ async def run_report(
     # would grow forever.
     since = period_start(cadence, now_local).isoformat(timespec="seconds")
     try:
-        aggregated = aggregate_mod.aggregate(collect.events_since(since))
+        # ⚠️ THE SAME ROOM MAP THE KIOSK RENDERS FROM (`resolvedRooms` in
+        # the shared device-config store), so the brief and the tablet
+        # cannot place one device in two rooms. Absent on an unconfigured
+        # install, which `by_room` handles rather than failing over.
+        rooms = devices_mod.read_config().get("resolvedRooms")
+        aggregated = aggregate_mod.aggregate(
+            collect.events_since(since),
+            rooms if isinstance(rooms, dict) else None)
     except Exception as err:  # noqa: BLE001 - a report must still go out
         swallow("aggregation failed; reporting without it", err)
         aggregated = {}

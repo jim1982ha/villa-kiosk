@@ -1672,6 +1672,28 @@ class DeterministicNarrator:
         dishonest one: an owner reading a summary with no mention of cost
         should be told that no tariff is configured, not left to assume energy
         was free.
+
+        ⚠️ THIS SECTION IS NOT THE WORKBOOK'S "QUARTERLY COVERAGE" ITEM, AND
+        THAT ITEM IS ALREADY DONE (adjudicated 2026-08-22, owner's call). A
+        standing note read "coverage is quarterly not weekly; the sheet is right
+        and the code is not". It is not about this code. The catalog line —
+        "quarterly owner annex, not weekly", because asking every week reads as
+        nagging — belongs to the `audit_coverage` BLUEPRINT, which quotes it in
+        its own description and implements it with `digest_month` defaulting to
+        January/April/July/October. The gaps it digests are the DQ- series (no
+        water meter, no door contacts, partial AC monitoring).
+
+        There is no quarterly CADENCE here to move this section onto:
+        `contracts.CADENCE` is daily/weekly/monthly, and the word "quarterly"
+        appears nowhere in the add-on. The two surfaces overlap in content and
+        differ in job: the blueprint sends a periodic ANNEX about hardware the
+        villa does not have, and this prints, on every brief, what THIS report
+        could not measure — including the collector gap, which is specific to
+        the period just covered and would be worthless three months late.
+
+        Do not "fix" this by gating the section on a cadence; that would hide
+        the collector gap, which is the one line here that can invalidate
+        everything above it.
         """
         if not context.discovery.get("reachable", False):
             return []

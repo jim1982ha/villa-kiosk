@@ -25,16 +25,30 @@ a consumer that breaks on the next property.
 
 ⚠️ `report_bucket` IS NOT A ROOM. It is a free-text reporting-group label, and
 the blueprints' own examples are "Living room AC", "Lights - monitored rooms"
-and "Gym lights" — a room, a category and a device. Rolling up "by room" is not
-expressible from the payload; this rolls up by BUCKET, and attaches an area only
-where an entity resolves to one.
+and "Gym lights" — a room, a category and a device. So a bucket cannot be read
+as a room, and `by_bucket` does not try to.
+
+⚠️ BUT THE ROOM IS NOT THE BUCKET'S TO GIVE, AND THIS PARAGRAPH CONFLATED THE
+TWO UNTIL 2026-08-22. It said rolling up "by room" was "not expressible from the
+payload", and that an area was attached "only where an entity resolves to one".
+The second half was FALSE — no area was attached anywhere, and neither `Item`
+nor `Group` had the field — and the workbook's "roll up by room then category"
+sat open as a spec-versus-code disagreement on the strength of it.
+
+A room comes from the ENTITIES, not from the bucket, exactly as `standing.build`
+already resolves one: via `resolvedRooms` in the shared device-config store,
+which is the map the kiosk itself renders from, so the brief and the tablet
+cannot disagree about which room a device is in. `Item.room` is that lookup,
+`Group.room` is the first of its items that resolved, and both are "" when the
+map is absent — the honest answer on an unconfigured install, and why `by_room`
+buckets those under "" rather than inventing a name.
 """
 
 from __future__ import annotations
 
 import collections
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from .analysis.base import Finding, dedup_key, subject_key
 from .contracts import SEVERITY, severity_rank
@@ -156,6 +170,9 @@ class Item:
     kwh: Optional[float] = None
     cost: Optional[float] = None
     minutes: Optional[float] = None
+    #: Resolved from `entities` via `resolvedRooms`; "" when unknown. See the
+    #: module docstring — this is NOT derived from `bucket`.
+    room: str = ""
 
     def key(self) -> Tuple[str, str]:
         """What makes two events "the same finding" for deduplication.
@@ -249,7 +266,26 @@ def unrecognised_severity(raw: Any) -> bool:
     return text not in SEVERITY and text.lower() not in SEVERITY_ALIASES
 
 
-def normalise(event: Dict[str, Any]) -> Optional[Item]:
+def _room_of(entities: Sequence[str],
+             rooms: Optional[Mapping[str, str]]) -> str:
+    """The room of the first entity that has one, or "".
+
+    ⚠️ CASE AND WHITESPACE ARE THE STORE'S, NOT NORMALISED HERE. `roomKey`
+    is the kiosk's comparison rule and lives in TypeScript; this is a plain
+    lookup on the map the kiosk itself wrote, so the two agree by using the
+    same keys rather than by reimplementing the same normalisation twice.
+    """
+    if not rooms:
+        return ""
+    for entity_id in entities:
+        name = rooms.get(entity_id)
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    return ""
+
+
+def normalise(event: Dict[str, Any],
+              rooms: Optional[Mapping[str, str]] = None) -> Optional[Item]:
     """One buffered event -> one `Item`, or None if it is not ours.
 
     ⚠️ THE CATEGORY COMES FROM THE EVENT TYPE, NEVER FROM `data["blueprint"]`.
@@ -300,14 +336,20 @@ def normalise(event: Dict[str, Any]) -> Optional[Item]:
         basis=str(data.get("basis") or ""),
         task_text=str(data.get("task_text") or "").strip(),
         data=data,
+        # ⚠️ THE FIRST ENTITY THAT RESOLVES, not a joined list. A group is one
+        # rule on one bucket; where its members span rooms the bucket is the
+        # thing that names them, and inventing "Kitchen / Hall" would be a
+        # room that does not exist. "" means unknown and is not a room either.
+        room=_room_of(entities, rooms),
     )
 
 
-def normalise_all(events: Sequence[Dict[str, Any]]) -> List[Item]:
+def normalise_all(events: Sequence[Dict[str, Any]],
+                  rooms: Optional[Mapping[str, str]] = None) -> List[Item]:
     out: List[Item] = []
     for event in events:
         if isinstance(event, dict):
-            item = normalise(event)
+            item = normalise(event, rooms)
             if item is not None:
                 out.append(item)
     return out
@@ -423,6 +465,7 @@ class Group:
     bucket: str
     label: str
     severity: str
+    room: str
 
     def __init__(self, first: Item) -> None:
         self.items = []
@@ -432,9 +475,16 @@ class Group:
         self.bucket = first.bucket
         self.label = first.label
         self.severity = first.severity
+        self.room = first.room
 
     def add(self, item: Item) -> None:
         self.items.append(item)
+        # ⚠️ FIRST RESOLVED WINS, and a later member never overwrites it — a
+        # group whose first item had no room but whose second did should still
+        # be placed, and one that already has a room must not be moved by a
+        # member that happens to sit elsewhere.
+        if not self.room and item.room:
+            self.room = item.room
         if severity_rank(item.severity) > severity_rank(self.severity):
             self.severity = item.severity
         if not self.label:
@@ -636,6 +686,46 @@ def by_bucket(groups: Sequence[Group]) -> "collections.OrderedDict[str, List[Gro
     return out
 
 
+def by_room(groups: Sequence[Group],
+            ) -> "collections.OrderedDict[str, collections.OrderedDict[str, List[Group]]]":
+    """Roll up by ROOM, then by CATEGORY within each — the workbook's order.
+
+    Two levels, not one, because "room then category" is a structure and
+    flattening it to a sort would leave the caller to re-derive the grouping.
+
+    ⚠️ ROOMS FIRST, UNKNOWN LAST. A property that has mapped nothing resolves
+    every room to "", and sorting that to the top would open the report with a
+    heap of unplaced devices under a blank heading. It goes last; the renderer
+    decides what to call it, because "Other" is a claim this module must not
+    make (`chipRoom` refuses the same one on the kiosk side, for the same
+    reason: a name for a place that does not exist).
+
+    ⚠️ CATEGORY ORDER IS BY WORST SEVERITY PRESENT, NOT ALPHABETICAL AND NOT A
+    NEW TABLE. `critical` leads wherever it appears, because a reader scanning
+    rooms must not have to check whether this one happened to sort its
+    emergency under "a". Deriving it from `severity_rank` — the ordering this
+    package already has — rather than adding a CATEGORY_ORDER constant keeps
+    one answer to "what is more serious than what"; a second table is how the
+    three severity scales of P4 came to disagree.
+    """
+    by_name: Dict[str, Dict[str, List[Group]]] = {}
+    for g in groups:
+        by_name.setdefault(g.room, {}).setdefault(g.category, []).append(g)
+
+    out: "collections.OrderedDict[str, collections.OrderedDict[str, List[Group]]]"
+    out = collections.OrderedDict()
+    named = sorted((r for r in by_name if r), key=str.casefold)
+    for room in named + ([""] if "" in by_name else []):
+        cats = by_name[room]
+        inner: "collections.OrderedDict[str, List[Group]]" = collections.OrderedDict()
+        for category in sorted(
+                cats,
+                key=lambda c: (-max(severity_rank(g.severity) for g in cats[c]), c)):
+            inner[category] = cats[category]
+        out[room] = inner
+    return out
+
+
 def by_category(groups: Sequence[Group]) -> Dict[str, List[Group]]:
     out: Dict[str, List[Group]] = {}
     for g in groups:
@@ -789,9 +879,16 @@ def summary(result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def aggregate(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-    """The whole synthesis, in the order the report needs it."""
-    items = normalise_all(events)
+def aggregate(events: Sequence[Dict[str, Any]],
+              rooms: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
+    """The whole synthesis, in the order the report needs it.
+
+    ⚠️ `rooms` IS OPTIONAL AND ITS ABSENCE IS NOT AN ERROR. Every caller that
+    has the device config should pass it; the ones that do not — diagnostics
+    dumps, `normalise_all` over the raw buffer — get groups with `room == ""`,
+    which `by_room` buckets last rather than failing over.
+    """
+    items = normalise_all(events, rooms)
     groups = rank(group(items))
     return {
         "groups": groups,
@@ -799,6 +896,7 @@ def aggregate(events: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "savings": savings_total(groups),
         "by_bucket": by_bucket(groups),
         "by_category": by_category(groups),
+        "by_room": by_room(groups),
         "tasks": open_tasks(groups),
         "open_incidents": [g for g in groups if g.open_incident],
         "events_seen": len(items),
