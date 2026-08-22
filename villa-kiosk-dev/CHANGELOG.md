@@ -1,3 +1,14 @@
+## 2.616.0
+
+### Added — the agent can read Home Assistant without ever seeing an entity id
+
+Devices reach the model as opaque per-run handles with readable labels, and a
+leak detector scans every tool result to prove it. `read_logs` filters
+server-side and returns a window with a match count rather than the file,
+because tool results are re-sent on every later turn. `read_ledger` returns
+counts and statuses only — a guest can write into that store, so the free text
+is not there rather than filtered.
+
 ## 2.615.0
 
 ### Added — the agent's vocabulary, and four tools over what PH-1 records
