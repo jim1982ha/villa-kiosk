@@ -1,3 +1,13 @@
+## 2.609.0
+
+### Fixed — a smoke test counted as 209 IDR the villa could have saved
+
+Anyone firing a test event onto the bus added its cost to the owner's savings
+headline, because nothing in the payload told a probe from a finding. Events
+carrying `test: true` are now dropped before an Item is built, so no consumer
+downstream needs its own guard, and the count is reported rather than silently
+subtracted.
+
 ## 2.608.0
 
 ### Fixed — a brief that declined to narrate gave the wrong reason
