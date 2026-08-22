@@ -1,3 +1,16 @@
+## 2.630.0
+
+### Fixed — the agent refused every message while both switches showed on
+It read the stored config through the wire envelope, which exists only in the
+HTTP response and not on disk, so every setting read as its shipped default and
+the master switch was always off. Reported as a message that arrived and was
+answered with nothing.
+
+### Changed — a row's delete now reads as destructive
+It used the neutral icon chrome, so the one dangerous control in the row looked
+like every other button. The stylesheet had said otherwise since before that
+panel existed.
+
 ## 2.629.0
 
 ### Changed — the sender list now works like the Briefings schedule list
