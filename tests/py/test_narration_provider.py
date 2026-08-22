@@ -307,10 +307,42 @@ def _provider_hosts() -> List[str]:
     """Every third-party host this add-on may contact, read from the adapters.
 
     Derived, not listed: the second provider is covered on the day it is added.
+
+    ⚠️ AND FROM EVERY ADAPTER MODULE, NOT JUST THE FIRST ONE. This read only
+    `narrate/providers` until the agent's own adapter arrived — at which point a
+    new file naming a provider host would have been invisible to the check
+    written to catch exactly that. The lesson `feedback_audit-applicable-set`
+    records: roll a rule out by what it APPLIES to, not by its existing call
+    sites.
     """
     import inspect
     import re
-    return re.findall(r"https://([a-z0-9.-]+)/", inspect.getsource(PR))
+    from agent.llm import anthropic_sdk as AGENT_PR
+    hosts: List[str] = []
+    for module in (PR, AGENT_PR):
+        hosts += re.findall(r"https://([a-z0-9.-]+)/", inspect.getsource(module))
+    return hosts
+
+
+def test_the_agent_adapter_is_the_only_agent_file_naming_the_host() -> None:
+    """⚠️ ONE FILE, so the grep above has one place to look and a second file
+    cannot quietly acquire a provider host."""
+    import os
+    import re
+    repo_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    agent_dir = os.path.join(repo_root, "rootfs", "usr", "bin", "agent")
+    offenders: List[str] = []
+    for base, _dirs, files in os.walk(agent_dir):
+        for name in files:
+            if not name.endswith(".py") or name == "anthropic_sdk.py":
+                continue
+            path = os.path.join(base, name)
+            with open(path, encoding="utf-8") as handle:
+                if re.search(r"https://api\.[a-z0-9.-]+", handle.read()):
+                    offenders.append(os.path.relpath(path, repo_root))
+    assert not offenders, (
+        f"a provider host appears outside the single adapter: {offenders}")
 
 
 def test_no_provider_hostname_is_reachable_from_the_browser_bundle() -> None:

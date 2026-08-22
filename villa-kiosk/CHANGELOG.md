@@ -1,3 +1,14 @@
+## 2.621.0
+
+### Added — the provider seam, and a credential that would have reached the log
+
+One protocol, one adapter, and the adapter is the only file that imports the SDK
+or names the provider's host. It executes no tool and imports no policy, so
+swapping a model stays a quality decision rather than an authority one. Writing
+its tests found that a failed provider call would have written the API key into
+the add-on log in full: `secrets.redact` only replaces credentials it finds in
+the stored secrets file, and this adapter holds the key directly.
+
 ## 2.620.0
 
 ### Added — the model SDK, pinned while the base images keep floating
