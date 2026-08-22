@@ -1,3 +1,11 @@
+## 2.642.0
+
+### Added — shadow mode, so the agent can be judged before it is trusted
+It runs everything and delivers nothing: no push, no brief line, no kiosk badge.
+Concerns go to their own store and are compared against what the existing
+automations found. Shadow is the shipped default, so switching the agent on
+observes a period rather than acting on it.
+
 ## 2.641.0
 
 ### Added — concerns have a lifecycle, and a fix can be checked
