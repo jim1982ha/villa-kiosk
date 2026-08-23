@@ -82,6 +82,25 @@ function Num({ label, note, value, min, onChange }: {
     setTyped(null);
   };
 
+  /** ⚠️ THE DRAFT LEARNS ABOUT THE EDIT AS IT IS TYPED, AND THE CLAMP STILL
+   *  WAITS FOR THE BLUR. Those are two different questions and the first
+   *  version answered both on blur, so the footer's Save stayed greyed while
+   *  somebody was visibly typing into the box — reported, and fair: a control
+   *  that has changed on screen and a dialog that says nothing has changed
+   *  cannot both be right.
+   *
+   *  Clamping here instead is what made the field untypeable in the first
+   *  place (`max(5, 2)` = 5 before the 4 arrives), so the raw number goes up
+   *  unclamped and blur resolves it. The window in which the draft holds a
+   *  below-minimum value is exactly "while the box has focus" — and pressing
+   *  Save blurs the input before the click lands, so the value that reaches
+   *  the store has been through `commit`. */
+  const type = (raw: string) => {
+    setTyped(raw);
+    const parsed = Number(raw);
+    if (raw.trim() !== "" && Number.isFinite(parsed)) onChange(Math.round(parsed));
+  };
+
   return (
     <label className="fm-field">
       <span>{label}</span>
@@ -90,7 +109,7 @@ function Num({ label, note, value, min, onChange }: {
         inputMode="numeric"
         min={min}
         value={typed ?? String(value)}
-        onChange={(e) => setTyped(e.target.value)}
+        onChange={(e) => type(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
       />

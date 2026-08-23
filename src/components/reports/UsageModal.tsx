@@ -256,13 +256,32 @@ export default function UsageModal({ onClose }: { onClose: () => void }) {
             <>
               <div className="usage-total">
                 <strong>{usd(summary.total.cost)}</strong>
+                {/* ⚠️ THE CACHED SHARE IS SHOWN SEPARATELY, because folding it
+                    into one "in" figure hides the single largest cost lever in
+                    the subsystem. The Villa Document is re-sent on every turn
+                    of every tool loop; with a cache breakpoint those repeats
+                    are billed at a fraction. Adding them together meant the fix
+                    and its absence looked identical here — asked directly, "how
+                    can I test and validate that this is now fixed?", and the
+                    honest answer was that this panel could not tell you. */}
                 <span className="muted">
                   {num(summary.total.requests)} request(s) ·{" "}
-                  {num(summary.total.input + summary.total.cache_read
-                    + summary.total.cache_write)} in ·{" "}
+                  {num(summary.total.input)} fresh in ·{" "}
+                  {num(summary.total.cache_read)} cached ·{" "}
                   {num(summary.total.output)} out
                 </span>
               </div>
+              {/* The number that answers "is caching working": a conversation
+                  of more than one turn should be mostly cache reads. */}
+              {summary.total.cache_read + summary.total.input > 0 && (
+                <p className="muted body-text">
+                  {Math.round(100 * summary.total.cache_read
+                    / (summary.total.cache_read + summary.total.input))}% of
+                  input tokens were served from cache. A tool-using answer is
+                  four or five turns carrying the same villa document, so
+                  anything near zero here means repeats are being re-bought.
+                </p>
+              )}
               {summary.estimated && (
                 <p className="muted body-text">
                   Estimated from published prices and the token counts the
