@@ -236,3 +236,39 @@ def test_the_ROUTE_asks_coverage_with_a_WINDOW_not_with_nothing() -> None:
         assert args.strip(), (
             "the shadow route calls coverage() with no window — every diff it "
             "serves will disclaim itself as INCOMPLETE")
+
+
+def test_a_history_ENTRY_carries_its_findings_not_just_a_count() -> None:
+    """⚠️ THE SHADOW DIFF'S RULES COLUMN READS THIS KEY, and it did not exist.
+
+    `store.py` has claimed since it was written that "a report entry is metadata
+    plus findings, not the rendered prose, so entries are small". Only
+    `findingCount` was ever stored. The consequence surfaced two subsystems
+    away: `TASK-051`'s document reported "the rules found 0" on a villa whose
+    brief that same minute listed pump drift, short-cycling, power factor and a
+    disabled critical automation. The row that DECIDES the cutover — what the
+    rules caught and the agent did not — was structurally always empty.
+
+    Pinned on the RECORD BUILDER rather than on a live run, because the defect
+    is the shape of the dict and that is what a reader of `store.py`'s promise
+    would go looking for.
+    """
+    import inspect
+    import re
+
+    from reports import pipeline as pipeline_mod
+
+    source = inspect.getsource(pipeline_mod.run_report)
+    entry = source[source.index('entry: Dict[str, Any] = {'):]
+    entry = entry[:entry.index("\n    }")]
+    assert '"findings"' in entry, (
+        "a history entry stores only a COUNT again — the shadow diff's rules "
+        "column has nothing to read and reports 0 forever")
+    assert "subject_key" in entry, (
+        "the stored findings carry no subject_key, so the diff cannot join "
+        "them to the agent's concerns and every row lands in one column")
+    # ⚠️ AND NOT THE WHOLE FINDING. The ring is bounded at 200 entries; storing
+    # detail and baselines is how "entries are small" stops being true.
+    assert '"detail"' not in entry, (
+        "the stored findings carry prose — the history ring is bounded and "
+        "this is what makes it expensive")

@@ -717,6 +717,31 @@ async def run_report(
         # What the brief actually reports: this add-on's own checks, the
         # verifications, and the blueprint layer's grouped findings.
         "findingCount": len(findings) + len(grouped),
+        # ⚠️ THE FINDINGS THEMSELVES, WHICH `store.py` HAS CLAIMED WERE HERE
+        # SINCE IT WAS WRITTEN — "a report entry is metadata plus findings, not
+        # the rendered prose, so entries are small". Only the COUNT was ever
+        # stored, and the consequence surfaced two subsystems away: the shadow
+        # diff's rules column reads this key, so `TASK-051`'s document reported
+        # "the rules found 0" on a villa whose brief listed eight of them. The
+        # row that DECIDES the cutover was structurally always empty.
+        #
+        # ⚠️ THREE FIELDS, NOT THE WHOLE FINDING. `subject_key` is what the diff
+        # joins on, the title is what a person reads, and the severity is what
+        # sorts them; `detail`, baselines and observed values are prose and
+        # numbers a stored ring does not need, and including them is how the
+        # 200-entry bound stops being small. This keeps the claim in store.py
+        # true without making it expensive.
+        "findings": ([{"subject_key": str(f.get("subject_key") or ""),
+                       "title": str(f.get("label") or ""),
+                       "severity": str(f.get("severity") or "")}
+                      for f in findings if isinstance(f, dict)]
+                     + [{"subject_key": key,
+                         "title": str(getattr(g, "title", "") or ""),
+                         "severity": str(getattr(g, "severity", "") or "")}
+                        for g in grouped
+                        for key in sorted(getattr(g, "subject_keys", set)()
+                                          if callable(getattr(g, "subject_keys", None))
+                                          else getattr(g, "subject_keys", []) or [])]),
         # ⚠️ STORED SO THE NEXT REPORT CAN COMPARE. Without it "74 IDR" is a
         # number the reader cannot judge — the owner's own diagnosis of the
         # brief — and no wording fixes that, because the comparison was never

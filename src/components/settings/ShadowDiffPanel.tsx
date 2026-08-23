@@ -9,14 +9,24 @@
 // is two whole phases waiting on a page nothing rendered. Same shape as the
 // review queue, found the same way: by asking what actually calls the thing.
 //
-// ⚠️ IT SHOWS THE RENDERED DOCUMENT, NOT A RE-LAYOUT OF ITS PARTS. `report()`
-// orders the sections as an argument — what the agent MISSED first, its wins
-// last, deliberately, because "this page exists to decide whether to retire
-// working automations and a page that opens with the agent's wins is a page
-// written to be agreed with". Rebuilding that as three pretty cards here would
-// be a second opinion about what the reader should weigh first, in a component
-// that has no business having one. The counts above it are navigation, not a
-// summary: they say whether the document is worth opening at all.
+// ⚠️ IT RENDERS THE DIFF'S STRUCTURE, AND THE FIRST VERSION SHOWED `report()`'s
+// TEXT VERBATIM. The reasoning then was that the document's section order is an
+// argument — what the agent MISSED first, its wins last — and that re-laying it
+// out would be a second opinion. The order is still an argument and is still
+// obeyed here; what was wrong was showing a monospace document with three zeros
+// in it and calling that a decision surface. Reported: "very poorly reporting
+// information, not understandable for a user".
+//
+// ⚠️ THE SECTIONS ARE NAMED BY WHAT THEY MEAN FOR THE DECISION, not by which
+// layer produced them. "Caught by the rules and not by the agent" is accurate
+// and makes the reader do the inference; "would be lost if you retired the
+// automations" is the same set and is the question they came with.
+//
+// ⚠️ AND THE PAGE SAYS ONE THING AT A TIME. It used to stack a bold `0`, a
+// sentence about regressions, a coverage caveat and a "nothing recorded yet"
+// banner — four claims about one emptiness, two of them contradicting each
+// other. The verdict line is now the headline, the caveat appears only beside
+// real evidence, and the empty state explains what to wait for instead.
 //
 // ⚠️ AND IT IS DELIBERATELY NOT IN THE COCKPIT. The Cockpit is open to every
 // profile and shows the state of the VILLA; this is a decision about how the
@@ -62,48 +72,112 @@ export default function ShadowDiffPanel() {
     );
   }
 
-  const nothingYet = diff.agentTotal === 0 && diff.rulesTotal === 0;
+  /** ⚠️ THREE STATES, AND THE FIRST VERSION RENDERED ALL THREE AT ONCE. It
+   *  showed a bold `0`, a sentence about regressions, a coverage banner and a
+   *  "nothing recorded yet" banner stacked together — four claims about the
+   *  same emptiness, two of which contradicted each other ("nothing was
+   *  found" beside "you cannot conclude anything"). Reported as poorly
+   *  reporting information, and it was. A page that answers one question gets
+   *  to say one thing. */
+  const ran = diff.agentTotal > 0 || diff.rulesTotal > 0;
+  const verdict = !ran
+    ? "waiting"
+    : diff.rulesOnly.length > 0 ? "blocked" : "clear";
 
   return (
     <div className="fm-stack">
       <p className="muted body-text">
-        While “Observe only” is on, the villa runs everything and delivers
-        nothing. This is what it concluded, beside what the existing automations
-        concluded over the same period — the evidence for deciding, family by
-        family, whether a rule can be retired.
+        While “Observe only” is on the villa runs everything and delivers
+        nothing. This compares what it concluded against what your existing
+        automations concluded, over the same period.
       </p>
 
-      <div className="usage-total">
-        <strong>{diff.rulesOnly.length}</strong>
-        <span className="muted">
-          caught by the rules and not by the agent — the regressions a cutover
-          would ship. {diff.both.length} caught by both;{" "}
-          {diff.agentOnly.length} by the agent alone.
+      {/* ⚠️ THE HEADLINE IS THE DECISION, NOT A NUMBER. "0" answered a question
+          nobody asked; what a reader needs is whether they can act on this
+          page yet, and if so which way it points. */}
+      <div className={`cockpit-health cockpit-health-${
+        verdict === "blocked" ? "warn" : verdict === "clear" ? "ok" : "unknown"}`}>
+        <span>
+          {verdict === "waiting"
+            ? "Not enough evidence yet — neither layer has recorded anything"
+            : verdict === "blocked"
+              ? `${diff.rulesOnly.length} thing${
+                  diff.rulesOnly.length === 1 ? "" : "s"} your automations caught`
+                + " and the villa did not"
+              : "Nothing your automations caught was missed"}
         </span>
       </div>
 
-      {!diff.coverageComplete && (
-        <div className="fm-banner">
-          Coverage was incomplete for this period, so a subject missing from
-          both columns proves nothing — neither layer was watching throughout.
-        </div>
+      {verdict === "waiting" ? (
+        <p className="muted body-text">
+          Leave it until at least one briefing has been delivered — check
+          Briefings → History, not the schedule — and the Cockpit is showing
+          concerns. On a daily briefing that is two or three days. An empty page
+          today means the period has not run, not that the villa was quiet.
+        </p>
+      ) : (
+        <>
+          {/* ⚠️ THE THREE LISTS, NAMED BY WHAT THEY MEAN FOR THE DECISION rather
+              than by which layer produced them. "Caught by the rules and not by
+              the agent" is accurate and makes the reader do the inference; the
+              reader wants to know what retiring a rule would cost. */}
+          <div className="usage-block">
+            <h4 className="usage-block-title">
+              Would be lost if you retired the automations ({diff.rulesOnly.length})
+            </h4>
+            <p className="muted body-text">
+              The villa did not reach these on its own. Each one is a reason to
+              keep the rule that did.
+            </p>
+            {diff.rulesOnly.length === 0
+              ? <p className="muted body-text">Nothing — no regression to ship.</p>
+              : <ul className="body-text">
+                  {diff.rulesOnly.map((t) => <li key={t}>{t}</li>)}
+                </ul>}
+          </div>
+
+          <div className="usage-block">
+            <h4 className="usage-block-title">
+              Both found ({diff.both.length})
+            </h4>
+            <p className="muted body-text">
+              Covered either way — these are the rules a cutover is safe for.
+            </p>
+            {diff.both.length > 0 && (
+              <ul className="body-text">
+                {diff.both.map((t) => <li key={t}>{t}</li>)}
+              </ul>
+            )}
+          </div>
+
+          <div className="usage-block">
+            <h4 className="usage-block-title">
+              Only the villa found ({diff.agentOnly.length})
+            </h4>
+            <p className="muted body-text">
+              No rule covers these. They are what the agent adds, and they are
+              deliberately listed last: this page exists to decide whether to
+              retire working automations, and one that opens with the agent's
+              wins is written to be agreed with.
+            </p>
+            {diff.agentOnly.length > 0 && (
+              <ul className="body-text">
+                {diff.agentOnly.map((t) => <li key={t}>{t}</li>)}
+              </ul>
+            )}
+          </div>
+        </>
       )}
 
-      {nothingYet && (
-        // ⚠️ NAMED RATHER THAN RENDERED AS A CLEAN RESULT. A period neither
-        // layer has reported on yet looks exactly like a period in which
-        // nothing was wrong, and one of those is a reason to cut over.
+      {/* ⚠️ THE COVERAGE CAVEAT IS SHOWN ONLY WHEN IT CHANGES THE READING —
+          beside evidence, never beside an empty page where it was one of two
+          banners saying the same nothing. */}
+      {ran && !diff.coverageComplete && (
         <div className="fm-banner">
-          Neither layer has recorded anything yet. On a villa that has just been
-          switched on this means the period has not run, not that it was quiet —
-          leave it a full cadence before reading anything into this page.
+          Part of this period was not observed, so something missing from all
+          three lists proves nothing.
         </div>
       )}
-
-      {/* ⚠️ `pre`, BECAUSE THE DOCUMENT'S OWN SHAPE IS ITS ARGUMENT. Its
-          section order is deliberate and its indentation carries the grouping;
-          reflowing it as prose would lose both. */}
-      <pre className="diag-report">{diff.report}</pre>
 
       <div className="modal-actions" style={{ margin: 0 }}>
         <button className="btn ghost" disabled={busy} onClick={() => void load()}>

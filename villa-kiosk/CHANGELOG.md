@@ -1,3 +1,13 @@
+## 2.662.0
+
+### Fixed — the cutover evidence could not see the rules it exists to judge
+A brief listed pump drift, short-cycling, power factor and a disabled critical
+automation; the shadow diff said "the rules found 0" the same minute. History
+entries stored only a COUNT, though `store.py` has claimed since it was written
+that an entry is "metadata plus findings" — so the column that decides whether an
+automation can be retired was structurally always empty. The page is also rewritten:
+one verdict, three lists named by what they mean, and the caveat only where it bites.
+
 ## 2.661.0
 
 ### Fixed — every shadow diff said its own evidence was incomplete
