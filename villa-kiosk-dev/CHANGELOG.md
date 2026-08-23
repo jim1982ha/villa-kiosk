@@ -1,3 +1,11 @@
+## 2.678.0
+
+### Fixed — Settings' Save could never enable, and its Cancel could not undo anything
+Every control there applies live, so the footer correctly saw no draft and
+greyed Save permanently — which reads as broken. It now takes a baseline when it
+opens: Save keeps the current values and rebaselines, Cancel writes the old ones
+back through the same path a control uses, so the 3D scene reverts with them.
+
 ## 2.677.0
 
 ### Changed — the model suggestions use the app's own selector, not a third one of their own
