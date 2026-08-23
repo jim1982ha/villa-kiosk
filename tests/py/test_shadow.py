@@ -320,3 +320,91 @@ def test_the_history_record_reads_the_field_a_GROUP_actually_has() -> None:
     assert not re.search(r'getattr\(g,\s*"title"', entry), (
         "the record builder reads Group.title again — a field that does not "
         "exist, so every blueprint finding is stored without one")
+
+
+def test_a_GROUP_reaches_the_diff_with_a_READABLE_title() -> None:
+    """⚠️ THE WHOLE PATH, BECAUSE EACH HALF PASSED ITS OWN TEST WHILE THE PAIR
+    PRODUCED HASHES. v2.662.0 taught the history record to carry findings and
+    v2.665.0 corrected the field it read; neither proved that a real `Group`
+    ends up as a sentence a person can weigh, which is the only property the
+    owner ever sees.
+
+    Drives the record builder's own expression against a real Group and feeds
+    the result to `diff`, so a rename of `Group.label`, a change to the stored
+    shape, or a regression in the fallback all fail here rather than on a
+    villa.
+    """
+    from reports.aggregate import Group, Item
+
+    # ⚠️ A REAL `Item` THROUGH THE REAL CONSTRUCTOR. `Group.__init__` takes the
+    # first item and copies its fields; building one by keyword would be a
+    # fixture of my own shape rather than the object the pipeline makes.
+    group = Group(Item(category="maintenance", blueprint="maintenance_pump",
+                       rule_id="pump_short_cycle", bucket="house_pump",
+                       label="Pump short-cycling 'House Pump Power'",
+                       severity="warning", entities=["sensor.probe_power"],
+                       detail="", when="", basis="", task_text="", data={}))
+
+    # The expression `run_report` stores, applied to one group.
+    # ⚠️ THE SAME DEFENSIVE READ THE PIPELINE USES. `subject_keys` is a
+    # PROPERTY here and calling it raised "'set' object is not callable" — my
+    # test was wrong about the object while the shipped expression, which
+    # checks `callable` first, was right.
+    keys = getattr(group, "subject_keys", set())
+    keys = keys() if callable(keys) else keys
+    stored = [{"subject_key": key,
+               "title": str(getattr(group, "label", "") or ""),
+               "severity": str(getattr(group, "severity", "") or "")}
+              for key in sorted(keys or {"k1"})]
+    assert stored, "the group yielded no subject keys to store"
+
+    rendered = shadow.diff([], stored).rules_only
+    assert rendered, "the stored finding did not reach the diff"
+    for row in rendered:
+        assert row.by_rules == "Pump short-cycling 'House Pump Power'", (
+            f"the cutover page would show {row.by_rules!r} — a reader cannot "
+            f"decide anything from that")
+
+
+def test_a_TITLED_row_beats_an_untitled_one_for_the_same_subject() -> None:
+    """⚠️ THE OWNER REGENERATED A BRIEFING, PRESSED RE-READ, AND GOT THE SAME
+    TEN HASHES. The fix was in the store and the shadow was in the JOIN:
+    `_subjects` kept the FIRST row it saw for a subject, and the handler fed it
+    history oldest-first, so a titleless row recorded by an older release
+    permanently outranked the same finding re-recorded with a title.
+
+    Two halves, and this pins the one that survives whatever order arrives:
+    a real label upgrades a placeholder for the same subject.
+    """
+    stale = {"subject_key": "29d2dd0f3a69762c", "title": ""}
+    fresh = {"subject_key": "29d2dd0f3a69762c",
+             "title": "Pump short-cycling 'House Pump Power'"}
+    for rows in ([stale, fresh], [fresh, stale]):
+        rendered = shadow.diff([], rows).rules_only
+        assert len(rendered) == 1, "one subject must not render twice"
+        assert rendered[0].by_rules == fresh["title"], (
+            f"the placeholder won for order {rows}")
+
+
+def test_the_ROUTE_reads_history_NEWEST_first() -> None:
+    """⚠️ THE OTHER HALF, AND IT HAS ITS OWN PIN BECAUSE A MUTATION OF IT
+    SURVIVED. The upgrade rule above makes the join order-independent for a
+    placeholder; it cannot help when BOTH labels are real and the older one is
+    simply out of date. The ring appends, so the newest description of a
+    finding is last in the file and must be seen first.
+    """
+    import os
+    import re
+
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    with open(os.path.join(root, "rootfs", "usr", "bin", "supervisor-proxy.py"),
+              encoding="utf-8") as handle:
+        proxy = re.sub(r"#[^\n]*", "", handle.read())
+    start = proxy.index("async def agent_shadow_handler")
+    nxt = proxy.find("\nasync def ", start + 1)
+    handler = proxy[start:nxt if nxt > 0 else len(proxy)]
+    assert re.search(r"for entry in reversed\(", handler), (
+        "the shadow route walks history oldest-first, so the diff shows its "
+        "oldest description of every finding and a regenerated brief changes "
+        "nothing on screen")

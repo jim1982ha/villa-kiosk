@@ -108,6 +108,17 @@ def _subjects(rows: Sequence[Mapping[str, Any]], key: str,
             continue
         subject = str(row.get(key) or "")
         if subject:
+            # ⚠️ A BETTER LABEL UPGRADES A WORSE ONE, and `setdefault` alone
+            # could not. The FIRST occurrence used to win outright, so a
+            # titleless row recorded by an older release permanently shadowed
+            # the same finding re-recorded with a title — the owner regenerated
+            # a briefing, pressed Re-read, and got the same ten hashes back,
+            # because the fix was in the store and the shadow was in the join.
+            existing = out.get(subject)
+            better = str(row.get(label) or "")
+            if existing is not None and better and existing.startswith("(untitled"):
+                out[subject] = better
+                continue
             # ⚠️ NEVER THE KEY AS A LABEL. It used to fall back to the
             # subject_key, so a finding stored without a title rendered as a
             # SHA-256 prefix — ten of them on the page a cutover is decided

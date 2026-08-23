@@ -2410,7 +2410,11 @@ async def agent_shadow_handler(request: web.Request) -> web.Response:
                               reports_store.EMPTY_HISTORY)
     entries = reports_store.history_view(stored).get("entries") or []
     theirs: List[Dict[str, Any]] = []
-    for entry in entries:
+    # ⚠️ NEWEST FIRST. The history ring appends, so iterating it in file order
+    # shows the diff its OLDEST description of a finding — and `_subjects` keeps
+    # the first it sees. A brief regenerated after a fix therefore changed
+    # nothing on screen: the stale row was still winning the join.
+    for entry in reversed(list(entries)):
         if not isinstance(entry, dict):
             continue
         for finding in entry.get("findings") or []:

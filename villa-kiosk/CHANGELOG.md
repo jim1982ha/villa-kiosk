@@ -1,3 +1,12 @@
+## 2.672.0
+
+### Fixed — regenerating a briefing changed nothing on the cutover page
+The fix for untitled findings was in the store; the shadow was in the join. The
+diff kept the FIRST row it saw for each finding and read history oldest-first, so
+a stale placeholder outranked the same finding re-recorded properly — for ever,
+however many briefings were generated. It now reads newest-first, and a real
+title upgrades a placeholder whatever order they arrive in.
+
 ## 2.671.0
 
 ### Fixed — a person's row wrapped onto two lines on a phone
