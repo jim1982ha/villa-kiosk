@@ -2552,14 +2552,29 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
     document = await _agent_document_text()
     if body.get("preview"):
         return web.json_response({"ok": True, "preview": True,
-                                  "document": document,
-                                  "chars": len(document)})
-    if not config.get("enabled"):
-        return web.json_response({"ok": False, "status": "declined",
-                                  "reason": "the agent is switched off "
-                                            "(agent.enabled)"})
-    return web.json_response(await _agent_run(config, document))
+                                  "document": await _agent_document_text()})
 
+    # ⚠️ A TRIAGE PASS, NOT A CONVERSATION, WHEN ASKED FOR ONE. The two are
+    # different products of the same machinery and only one of them RAISES A
+    # CONCERN: `_agent_run` asks a question and returns prose, while
+    # `scheduler.run_once` is the pass that escalates. The button on the shadow
+    # page is labelled "Check the villa now" and its whole purpose is to put
+    # evidence into the cutover diff — so pointing it at the conversation meant
+    # it could never do that, and the owner pressed it twice and correctly
+    # reported that nothing changed.
+    #
+    # ⚠️ IT KEEPS EVERY GUARD. `run_once` re-checks enabled, the scheduled
+    # trigger, the budget and shadow mode itself, and returns WHY it stopped
+    # rather than a boolean — five causes that look identical from outside and
+    # four of which are fine. That reason is handed straight back.
+    if body.get("triage"):
+        from agent import scheduler as agent_scheduler
+        reason = await agent_scheduler.run_once(
+            request.app["session"],
+            config=_read_json_store(AGENT_CONFIG_FILE, {}),
+            document=document)
+        return web.json_response({"ok": not reason, "status": "triaged",
+                                  "reason": reason})
 
 async def _agent_run(config: Dict[str, Any], document: str) -> Dict[str, Any]:
     """One run through the registry loop. Declines with a reason, never raises."""

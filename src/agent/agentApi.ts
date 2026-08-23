@@ -471,17 +471,25 @@ export interface ShadowDiff {
  * way to put evidence in front of `TASK-051` was to leave the villa running for
  * days. A gate whose evidence can only accumulate is a gate nobody tests.
  *
- * ⚠️ NOT A PREVIEW. `{preview: true}` assembles the Villa Document and calls no
- * provider, which is right for reading what the agent would be given and
- * useless for producing a concern — and a concern is what the shadow diff
- * compares. This spends real budget, and the button says so.
+ * ⚠️ NOT A PREVIEW AND NOT A CONVERSATION. `{preview: true}` assembles the
+ * Villa Document and calls no provider; a bare run holds one conversation and
+ * returns prose. Neither raises a CONCERN, which is the only thing the shadow
+ * diff compares. `{triage: true}` runs the pass the scheduler runs, with every
+ * guard it applies — enabled, the scheduled trigger, the budget, shadow mode —
+ * and returns WHY it stopped rather than a boolean, because "nothing happened"
+ * has five causes here and four of them are fine. This spends real budget.
  */
 export async function runAgentNow(): Promise<{ ok: boolean; reason: string }> {
   const r = await fetch(ingressPath("agent-run-now"), {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
+    // ⚠️ `triage`, NOT A BARE RUN. A bare run holds a conversation and returns
+    // prose; only the triage pass RAISES A CONCERN, which is the one thing the
+    // shadow diff compares. Pointing this at the conversation meant the button
+    // could never fill the column it exists to fill — pressed twice, reported
+    // twice as changing nothing, and both reports were right.
+    body: JSON.stringify({ triage: true }),
   });
   const d = (await r.json().catch(() => ({}))) as
     { ok?: boolean; reason?: string; status?: string };

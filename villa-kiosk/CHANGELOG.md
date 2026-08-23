@@ -1,3 +1,12 @@
+## 2.674.0
+
+### Fixed — "Check the villa now" ran a conversation, which can never raise a concern
+It was the one button meant to fill the villa's column in the cutover diff, and it
+called the path that answers a question and returns prose. Only the triage pass
+escalates. It now runs that pass — the same one the scheduler runs, with every
+guard it applies — so the evidence for the cutover decision can be produced in a
+minute instead of over days.
+
 ## 2.673.0
 
 ### Fixed — a one-sided diff read as a verdict against the villa

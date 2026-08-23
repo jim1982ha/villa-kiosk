@@ -97,11 +97,15 @@ export default function ShadowDiffPanel() {
     // the diff compares — is raised by the triage path when something crosses
     // the bar. So a finished run legitimately adds nothing here, and the first
     // wording ("anything it concluded is below") implied otherwise.
+    // ⚠️ THE REASON IS SHOWN VERBATIM, because `run_once` returns WHY it
+    // stopped and the five causes need different responses: switched off,
+    // shadowed, over budget, no provider, and nothing to escalate look
+    // identical from outside and four of them are fine.
     setNote(result.ok
-      ? "The run finished. It only adds to the list below if it found "
-        + "something worth raising as a concern — a run that concludes the "
-        + "villa is fine adds nothing, which is not a failure."
-      : `The run did not complete: ${result.reason}`);
+      ? "The check ran. Anything it judged worth raising is in the villa's "
+        + "column below; a check that finds the villa well adds nothing, "
+        + "which is not a failure."
+      : `The check stopped: ${result.reason}`);
     setDiff(await loadShadowDiff());
     setBusy(false);
   }, []);
@@ -291,7 +295,7 @@ export default function ShadowDiffPanel() {
             money must not look like a refresh. */}
         <button className="btn" disabled={busy} onClick={() => void runNow()}>
           <Play size={16} aria-hidden />
-          {busy ? "Running…" : "Check the villa now (spends a request)"}
+          {busy ? "Checking…" : "Run a check now (spends a request)"}
         </button>
       </div>
     </div>
