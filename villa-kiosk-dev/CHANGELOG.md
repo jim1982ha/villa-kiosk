@@ -1,3 +1,17 @@
+## 2.696.0
+
+### Added — findings now reach your phone and your briefing, not just the wall
+Two halves of the same gap. The rules that decide who gets told, what waits until
+morning and what ignores quiet hours were written and complete, and nothing ever
+called them — so anything the villa concluded appeared on the tablet and nowhere
+else. There is now a sweep that delivers them, with a quiet-hours window you can
+set: a warning at 2am with nobody home waits for morning, one with people in the
+house does not, and a critical ignores the window entirely. Separately, briefings
+now carry what the agent concluded alongside what the automations found, without
+repeating anything both layers saw. Together these are what make retiring the
+detection automations safe: until now, retiring one removed its findings from
+every report.
+
 ## 2.695.0
 
 ### Fixed — retiring an automation would have permanently disabled the check meant to replace it
