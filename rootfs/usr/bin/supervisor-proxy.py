@@ -2569,9 +2569,20 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
     # four of which are fine. That reason is handed straight back.
     if body.get("triage"):
         from agent import scheduler as agent_scheduler
+        from agent.llm import anthropic_sdk
+        # ⚠️ THE PROVIDER IS BUILT AND PASSED IN, because `run_once` does not
+        # build one: it takes whatever the caller has and declines with "no
+        # model provider configured" when that is None. The forever-task passes
+        # its own, so the omission was invisible there and fatal here — four
+        # presses of the button, four 76-byte refusals, and an owner correctly
+        # reporting that nothing changed. The reason was in the response body
+        # the whole time and the panel showed it; I did not ask for it and read
+        # the add-on log instead, which is where the byte count gave it away.
         reason = await agent_scheduler.run_once(
             request.app["session"],
             config=_read_json_store(AGENT_CONFIG_FILE, {}),
+            provider=anthropic_sdk.build(
+                api_key=reports_secrets.get("anthropic") or ""),
             document=document)
         return web.json_response({"ok": not reason, "status": "triaged",
                                   "reason": reason})

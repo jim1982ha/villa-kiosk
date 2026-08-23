@@ -142,3 +142,40 @@ def test_the_clock_is_a_task_in_the_EXISTING_loop() -> None:
     cleanup = proxy[proxy.index("reports_task\", \"reports_collector"):]
     assert '"agent_triage"' in cleanup[:200], (
         "the task is never cancelled on shutdown, so aiohttp waits for it")
+
+
+def test_run_once_DECLINES_without_a_provider_so_the_caller_must_pass_one() -> None:
+    """⚠️ THE CONTRACT THAT COST FOUR BUTTON PRESSES. `run_once` does not build
+    a provider — it takes one and declines when it is None. The forever-task
+    passes its own, so the omission is invisible there; the proxy's manual route
+    did not, and every press returned "no model provider configured" while the
+    owner reported that nothing changed.
+
+    Pinned as the CONTRACT plus its one caller, because the failure is silent by
+    design: `run_once` returns a reason rather than raising, which is right for
+    an unattended loop and is exactly what let a caller ignore it.
+    """
+    import asyncio
+    import inspect
+    import os
+    import re
+
+    from agent import scheduler as scheduler_mod
+
+    assert "provider" in inspect.signature(scheduler_mod.run_once).parameters
+    reason = asyncio.run(scheduler_mod.run_once(
+        None, config={"enabled": True, "triggers": {"scheduled": True}},
+        provider=None, document="x"))
+    assert "provider" in reason, (
+        f"a run with no provider no longer says so: {reason!r}")
+
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    with open(os.path.join(root, "rootfs", "usr", "bin", "supervisor-proxy.py"),
+              encoding="utf-8") as handle:
+        proxy = re.sub(r"#[^\n]*", "", handle.read())
+    call = proxy[proxy.index("agent_scheduler.run_once("):]
+    call = call[:call.index(")\n")]
+    assert "provider=" in call, (
+        "the manual triage route calls run_once without a provider, so every "
+        "press declines and the shadow diff can never gain an agent column")
