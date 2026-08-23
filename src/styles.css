@@ -3549,6 +3549,27 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .settings-body > .settings-section-title + * {
   margin-top: calc(var(--hint-gap) - var(--stack-gap));
 }
+/* ⚠️ AND A HINT INSIDE A FIELD IS STILL A HINT — THIS IS THE FOURTH SPACING
+   REPORT AND THE FIRST ONE MEASURED RATHER THAN GUESSED. Every rule above
+   reaches a `p` that is a DIRECT CHILD of the stack or the body. `Num` and
+   `Text` render theirs INSIDE the `label.fm-field`, because a hint wrapped in
+   the label is one tap target with its own control — so not one of those rules
+   applied, and what actually decided the spacing was the BROWSER's own
+   `p { margin: 1em 0 }`. At --text-md that is 15px, and `.fm-field` is a FLEX
+   column, where margins do not collapse — so it is ADDED at both ends:
+
+       above:  7px (--field-label-gap) + 15px = 22px, against --hint-gap's 4
+       below: 15px + 14px (--stack-gap)  = 29px, against --stack-gap's 14
+
+   29px is the "two blank lines between the model sub-sections", reported three
+   times and predicted by the backlog as living "inside .fm-field". Both
+   corrections are DERIVED from the same two variables the stack rule uses, so
+   there is no fourth guessed number here: the top margin restates --hint-gap
+   against this container's own gap, and the bottom is zeroed so the stack gap
+   is the whole separation. */
+.fm-field > p.body-text {
+  margin: calc(var(--hint-gap) - var(--field-label-gap)) 0 0;
+}
 
 /* Summary numbers — the glance layer above the detail. */
 .fm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
@@ -3951,6 +3972,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
 }
 .fm-report-table th { color: var(--text-secondary); font-weight: 600; }
 .fm-report-table td:first-child, .fm-report-table th:first-child { padding-left: 0; }
+/* ⚠️ THE SAME RULE AS `.usage-num`, ON THE OTHER TABLE IMPLEMENTATION. A real
+   `<table>` already agrees with itself about column WIDTHS — the browser does
+   that — so this one never had the alignment defect; what it shared was the
+   readability half, every cell `text-align: left` with proportional figures.
+   Which columns are numeric cannot be known here, because these tables are
+   built from generated markdown, so `ReportPreview` DERIVES it per column and
+   stamps this class. Stated in both places rather than unified: the two are the
+   same RULE over different markup, which is the case /dry-audit says to pin
+   rather than converge. */
+.fm-report-table th.num, .fm-report-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 
 /* Config Editor: a row whose entity Home Assistant no longer knows about, and
    the banner offering to clear them out in one go. Flagged rather than
@@ -4853,23 +4887,57 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .toggle-row { display: flex; align-items: center; gap: 8px; }
 .toggle-row > label.toggle { flex: 1 1 auto; min-width: 0; }
 
-/* ⚠️ `auto` on the key column and fixed minimums on the numbers: the labels are
-   entity names and timestamps of unpredictable length, and a table that lets
-   them push the figures off the right edge hides the column the reader opened
-   the panel for. */
-.usage-table { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+/* ⚠️ THE COLUMN TRACKS BELONG TO THE TABLE, AND UNTIL 2.684.0 THERE WAS NO
+   TABLE — only a stack of independent grids. `.usage-table` was a FLEX column
+   and every `.usage-row` its own `display: grid`, so `auto` tracks were sized
+   per ROW against that row's own content: no two rows could agree, and a column
+   of figures wandered by a character per line. Reported as "the numbers in the
+   different tables are not really aligned and it's hard to read what column
+   number is what", which is both halves of it —
+
+   ⚠️ AND THE SECOND HALF WAS WORSE: `usage-row-3` was applied to the BODY rows
+   only, never to `.usage-head`, so the three-column request list was rendered
+   under a FOUR-column header. "IN/OUT COST" sat over the wrong columns by
+   construction, not by drift. The modifier is now on the TABLE, where a header
+   and its own body cannot be given different tracks.
+
+   Tracks are in `rem`, deliberately NOT `ch` or `auto`: the header is
+   --text-2xs and the body --text-sm, so any font-relative unit resolves to a
+   different width in the two and re-opens the exact defect. */
+.usage-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  /* name · share · requests · cost */
+  --usage-cols: minmax(0, 1fr) 3.25rem 4.75rem 4.5rem;
+}
+/* The per-request list has three columns, not four — it carries no share, and
+   a share per request would be a rounding error printed 500 times. Its middle
+   column holds a PAIR (`9,902/404`) and so is the widest of any of them. */
+.usage-table-3 { --usage-cols: minmax(0, 1fr) 5.5rem 4.5rem; }
+/* ⚠️ THE NAME COLUMN IS WHAT A PHONE RUNS OUT OF, AND FIXED TRACKS ARE WHAT
+   MAKE THAT MEASURABLE. At 360 CSS px the four-column layout spends 236 px on
+   the three number tracks and their gaps, leaving ~92 px for the name — enough
+   to render "claude-h…" and nothing more. The numbers cannot shrink (they are
+   the reason the table exists), so the GAP goes instead: 12 px between four
+   columns is 36 px of the budget. Halving it and tightening the tracks takes
+   the name column from 92 px to 138 px. Measured against the narrowest tier
+   this app targets, not guessed. */
+@media (max-width: 480px) {
+  .usage-row { gap: 6px; }
+  .usage-table { --usage-cols: minmax(0, 1fr) 2.75rem 4rem 4rem; }
+  .usage-table-3 { --usage-cols: minmax(0, 1fr) 5rem 4rem; }
+}
 .usage-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: var(--usage-cols);
   gap: 12px;
   align-items: baseline;
   padding: 4px 0;
   border-bottom: 1px solid var(--border-subtle, rgba(128,128,128,0.18));
   font-size: var(--text-sm);
 }
-/* The per-request list has three columns, not four — it carries no share, and
-   a share per request would be a rounding error printed 500 times. */
-.usage-row-3 { grid-template-columns: minmax(0, 1fr) auto auto; }
 /* ⚠️ A HEADER ROW, BECAUSE THREE UNLABELLED NUMBER COLUMNS ARE A GUESS. The
    first version printed key/requests/cost with nothing saying which was which,
    and "2  $0.0885" reads as a price of two of something. */
@@ -4920,9 +4988,38 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   white-space: nowrap;
   color: var(--text-primary);
 }
-/* Tabular figures so columns of numbers line up rather than shimmering. */
-.usage-num { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+/* ⚠️ RIGHT-ALIGNED, AND THAT IS THE OTHER HALF OF "which column is which".
+   Tabular figures make the digits the same WIDTH; only right-alignment makes
+   them share an EDGE, and a reader identifies a numeric column by its edge —
+   `$0.0042` and `$0.0190` left-aligned under a right-hand heading read as two
+   different columns. The header cell is aligned by the same rule (`.usage-num`
+   is on both), so the label sits over the figures rather than beside them. */
+.usage-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  text-align: right;
+}
 .usage-total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 .usage-total strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
-.usage-since { display: flex; align-items: center; gap: 8px; }
+/* ⚠️ `flex-end`, NOT `center`. The row pairs a LABELLED field with two bare
+   icon buttons, and a labelled field is taller than its own input by the label
+   and `--field-label-gap` above it. Centring the row therefore floats both
+   buttons half a label-height above the box they act on — reported as the
+   reload and CSV icons not lining up with "Count from". Aligning on the BOTTOM
+   edge puts them level with the input, which is the control they belong to. */
+.usage-since { display: flex; align-items: flex-end; gap: 8px; }
 .usage-since > input { flex: 1 1 auto; min-width: 0; }
+/* The buttons match the input's height so the bottom edges are one line, not
+   three that happen to end near each other. */
+.usage-since > .btn { flex: 0 0 auto; }
+
+/* The request log's footer: where you are in the list, and the two ways out of
+   it. ⚠️ THE COUNT AND THE CONTROLS ARE PUSHED APART rather than centred — the
+   count is prose and reads from the left, the buttons are actions and sit where
+   every other action row in this dialog puts them. */
+.usage-pager {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-top: 10px;
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums;
+}
+.usage-pager-controls { display: inline-flex; align-items: center; gap: 8px; }

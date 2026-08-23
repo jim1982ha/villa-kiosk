@@ -385,15 +385,55 @@ export default function TelemetryPanel() {
 
   return (
     <div>
+      {/* ⚠️ SHORT ON PURPOSE. This paragraph explained the panel, the ordering,
+          the retention and what four of the buttons do — a screen of prose over
+          a control row, in a tab a reader opens to look at events. What each
+          button does is on the button's own `title`, where it is read at the
+          moment it is wanted rather than three paragraphs before. */}
       <p className="muted body-text" style={{ marginBottom: 12 }}>
         What every device that opens this kiosk has reported — load timings, JS
-        errors, WebGL context losses and page-lifecycle transitions. This is how
-        a problem on someone else&rsquo;s phone becomes diagnosable. Newest first;
-        the add-on keeps the last 500 events. <strong>Copy</strong> and
-        <strong> Download</strong> give you the raw events (every field, not just
-        the summary shown here); <strong>Clear</strong> empties the store.
+        errors, WebGL losses, page lifecycle. This is how a problem on someone
+        else&rsquo;s phone becomes diagnosable. Newest first, last 500 kept.
       </p>
 
+      {probeText && (
+        <div className="field">
+          <label className="entity-label">
+            Frame cost on this device — what each thing was costing
+          </label>
+          <pre className="diag-report">{probeText}</pre>
+        </div>
+      )}
+
+      {selfReport && (
+        <div className="field">
+          <label className="entity-label">This device — screen, viewport, WebGL, model</label>
+          <pre className="diag-report">{selfReport}</pre>
+        </div>
+      )}
+
+      {error && <div className="muted body-text">{error}</div>}
+      {!error && events?.length === 0 && (
+        <div className="muted body-text">
+          Nothing reported yet. Events appear as devices load the villa (or hit an error).
+        </div>
+      )}
+
+      {/* ⚠️ THE LOG IS THE COLLAPSED PART, AND SINCE 2.684.0 SO ARE ITS
+          CONTROLS — WHICH REVERSES A DECISION RECORDED HERE, DELIBERATELY AND
+          BY THE OWNER. The note this replaces said the button row was pulled
+          OUT of the collapse because hiding the whole section hid "the controls
+          somebody opens this tab FOR". That was true of the old shape, where
+          the collapse swallowed the panel and its explanation. It is a
+          different trade now: the description above no longer explains the
+          ordering, the retention and what four of the buttons do, so the tab
+          opens on what it is about rather than on a wall of prose and six
+          buttons — and every one of those buttons is maintenance —
+          refresh, export, empty, diagnose — which is a deliberate act like
+          reading the log itself. Asked for directly, from the screen. If it is
+          reported as unreachable, the fix is to open this section by default,
+          NOT to lift the row back out. */}
+      <CollapsibleSection title={`Event log — ${events?.length ?? 0} recorded`}>
       <div className="row" style={{ gap: 8, marginBottom: 12 }}>
         <button className="btn ghost" onClick={() => void load()} disabled={busy}
           title="Re-read the events from the add-on">
@@ -438,37 +478,8 @@ export default function TelemetryPanel() {
         </button>
       </div>
 
-      {probeText && (
-        <div className="field">
-          <label className="entity-label">
-            Frame cost on this device — what each thing was costing
-          </label>
-          <pre className="diag-report">{probeText}</pre>
-        </div>
-      )}
-
-      {selfReport && (
-        <div className="field">
-          <label className="entity-label">This device — screen, viewport, WebGL, model</label>
-          <pre className="diag-report">{selfReport}</pre>
-        </div>
-      )}
-
-      {error && <div className="muted body-text">{error}</div>}
-      {!error && events?.length === 0 && (
-        <div className="muted body-text">
-          Nothing reported yet. Events appear as devices load the villa (or hit an error).
-        </div>
-      )}
-
-      {/* ⚠️ THE LOG IS THE COLLAPSED PART, NOT THE PANEL. Advanced Settings
-          used to hide this whole section behind a toggle, which also hid the
-          Refresh / Copy / Download / Probe row above — the controls somebody
-          opens this tab FOR. What is long is the event list, so that is what
-          collapses, and it starts closed because reading raw telemetry is a
-          deliberate act. */}
       {!!events?.length && (
-        <CollapsibleSection title={`Event log — ${events.length} recorded`}>
+        <>
           <div className="config-table">
             {events.slice(0, VISIBLE_ROWS).map((e, i) => (
               /* Layout lives in styles.css (.telemetry-row), NOT inline: the
@@ -499,8 +510,9 @@ export default function TelemetryPanel() {
               <strong> Download</strong> above for the rest.
             </p>
           )}
-        </CollapsibleSection>
+        </>
       )}
+      </CollapsibleSection>
     </div>
   );
 }

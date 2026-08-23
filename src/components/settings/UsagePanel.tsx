@@ -37,7 +37,7 @@
 // figures the bar can only approximate.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Loader2, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw } from "lucide-react";
 
 import { loadUsage, type UsageBucket, type UsageRow, type UsageSummary } from "@/agent/agentApi";
 
@@ -54,6 +54,20 @@ const pct = (share: number) => `${(share * 100).toFixed(share < 0.1 ? 1 : 0)}%`;
  *  not matter. The TABLE below still lists every row, so nothing is hidden by
  *  this; only the picture is simplified. */
 const MAX_SLICES = 5;
+
+/** How many requests one page of the log shows.
+ *
+ *  ⚠️ IT IS A READING LIMIT, NOT A DATA LIMIT. Every figure above the log — the
+ *  total, all three breakdowns — is computed by the server over the WHOLE
+ *  window and is unaffected by this; the CSV likewise exports every row the
+ *  window holds, not the page on screen. Paging only decides how much of a
+ *  500-row list a person is asked to scroll past to reach the section below it.
+ *
+ *  ⚠️ AND THE LEDGER ITSELF IS ALREADY BOUNDED, at `usage.MAX_ROWS` (8,000
+ *  rows, roughly two months of triage). Asked directly whether this log could
+ *  grow indefinitely: it cannot — `record()` rewrites `entries[-MAX_ROWS:]` on
+ *  every append, so the file is a ring like every other store under `/data`. */
+const PAGE_SIZE = 20;
 
 /** ⚠️ A SEQUENTIAL RAMP OF ONE HUE, NEVER THE CATEGORY PALETTE. CLAUDE.md's own
  *  gotcha: reusing `CATEGORY_COLORS` for non-category UI made a room chip read
@@ -121,9 +135,14 @@ function Slices({ rows }: { rows: [string, UsageBucket][] }) {
  *  it, or reconcile it line by line against the provider's own bill. The
  *  breakdowns are all derivable from these columns.
  *
- *  ⚠️ AND THE WINDOW IS THE ONE THAT WAS ASKED FOR. The file contains exactly
- *  what the panel is showing, because a download that quietly widens its range
- *  is a spreadsheet that disagrees with the screen it came from.
+ *  ⚠️ THE WINDOW IS THE ONE THAT WAS ASKED FOR — every row in it, which since
+ *  2.684.0 is MORE than the panel is showing. The log pages at 20 and the file
+ *  does not, deliberately: paging is a reading limit on a list somebody has to
+ *  scroll past, whereas an export exists precisely to carry the rows the screen
+ *  is not showing, and a CSV that stopped at the current page would be the one
+ *  download nobody wants. The RANGE still matches the screen, which is the part
+ *  that must not drift — a file that quietly widened its own window would be a
+ *  spreadsheet disagreeing with the panel it came from.
  *
  *  ⚠️ EVERY FIELD IS QUOTED AND ITS QUOTES DOUBLED. A model id or an actor name
  *  containing a comma would otherwise shift every later column by one, silently
@@ -222,6 +241,17 @@ export default function UsagePanel() {
    *  that begins at the oldest row is a label contradicting its own content. */
   const recent = useMemo(
     () => [...rows].sort((a, b) => b.at - a.at), [rows]);
+
+  /** ⚠️ THE PAGE RESETS WHEN THE WINDOW MOVES. Without this, changing "Count
+   *  from" to a narrower range leaves the reader on page 12 of a list that now
+   *  has three pages — an empty table under a heading that says there are
+   *  requests, which reads as a bug in the ledger rather than in the pager. */
+  const [pageNo, setPageNo] = useState(0);
+  useEffect(() => { setPageNo(0); }, [rows]);
+
+  const lastPage = Math.max(0, Math.ceil(recent.length / PAGE_SIZE) - 1);
+  const first = Math.min(pageNo, lastPage) * PAGE_SIZE;
+  const page = recent.slice(first, first + PAGE_SIZE);
 
   /** ⚠️ A BLOB AND AN OBJECT URL, revoked immediately — the same idiom
    *  `TelemetryPanel.downloadAll` uses, and for the same reason: this add-on
@@ -355,14 +385,18 @@ export default function UsagePanel() {
                       whole window.
                     </p>
                   )}
-                  <div className="usage-table" role="table">
+                  {/* ⚠️ THE TABLE CARRIES THE COLUMN COUNT, NOT THE ROWS. It
+                      was on the body rows alone, so this three-column list was
+                      drawn under the four-column header above — "In/out" and
+                      "Cost" sat over the wrong tracks by construction. */}
+                  <div className="usage-table usage-table-3" role="table">
                     <div className="usage-row usage-head" role="row">
                       <span className="usage-key">When · what · who</span>
                       <span className="usage-num">In/out</span>
                       <span className="usage-num">Cost</span>
                     </div>
-                    {recent.map((r, i) => (
-                      <div className="usage-row usage-row-3" role="row" key={`${r.at}-${i}`}>
+                    {page.map((r, i) => (
+                      <div className="usage-row" role="row" key={`${r.at}-${i}`}>
                         <span className="usage-key">
                           {new Date(r.at * 1000).toLocaleString()} · {r.source}
                           {r.actor && r.actor !== "system" ? ` · ${r.actor}` : ""}
@@ -373,6 +407,41 @@ export default function UsagePanel() {
                         <span className="usage-num">{usd(r.cost)}</span>
                       </div>
                     ))}
+                  </div>
+
+                  {/* ⚠️ THE RANGE IS SPELLED OUT, NOT JUST THE PAGE NUMBER.
+                      "2 / 25" tells a reader nothing about what they are
+                      looking at; "21–40 of 500" says where they are in the
+                      list and how much of it there is. The export sits here
+                      because THIS is the control that hides rows — a reader
+                      who has just been told they are seeing 20 of 500 is
+                      exactly the reader who wants the other 480. */}
+                  <div className="usage-pager">
+                    <span className="muted">
+                      {recent.length <= PAGE_SIZE
+                        ? `${recent.length} request(s)`
+                        : `${first + 1}–${first + page.length} of ${recent.length}`}
+                    </span>
+                    <span className="usage-pager-controls">
+                      <button className="btn ghost" onClick={download}
+                              title="Download every request in this window as a CSV">
+                        <Download size={16} aria-hidden /> CSV
+                      </button>
+                      {recent.length > PAGE_SIZE && (
+                        <>
+                          <button className="btn ghost" disabled={pageNo === 0}
+                                  onClick={() => setPageNo((p) => Math.max(0, p - 1))}
+                                  aria-label="Previous page">
+                            <ChevronLeft size={16} aria-hidden />
+                          </button>
+                          <button className="btn ghost" disabled={pageNo >= lastPage}
+                                  onClick={() => setPageNo((p) => Math.min(lastPage, p + 1))}
+                                  aria-label="Next page">
+                            <ChevronRight size={16} aria-hidden />
+                          </button>
+                        </>
+                      )}
+                    </span>
                   </div>
                 </div>
               )}

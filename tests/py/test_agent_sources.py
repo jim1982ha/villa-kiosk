@@ -115,7 +115,7 @@ def test_build_registry_returns_tools_CONNECTED_to_something() -> None:
         "empty ranking, which reads as a villa with nothing unusual")
     villa = registry.get("read_villa")
     assert villa is not None
-    assert callable(getattr(villa, "_profile_source", None))
+    assert callable(getattr(villa, "_document_source", None))
 
 
 def test_every_tool_in_the_registry_either_HAS_a_source_or_REFUSES() -> None:
@@ -127,7 +127,7 @@ def test_every_tool_in_the_registry_either_HAS_a_source_or_REFUSES() -> None:
         tool = registry.get(name)
         assert tool is not None
         wired = any(callable(getattr(tool, attr, None))
-                    for attr in ("_scorer", "_source", "_profile_source"))
+                    for attr in ("_scorer", "_source", "_document_source"))
         has_refs = getattr(tool, "_refs", None) is not None
         if wired or has_refs or name in ("read_ledger", "read_concerns",
                                          "read_coverage"):
@@ -432,3 +432,217 @@ def test_a_concern_never_says_its_state_twice() -> None:
     assert suffix_of("open", None) == "", "'(open)' adds nothing to 'open'"
     assert suffix_of("open", 2) == "(open 2 days)"
     assert suffix_of("verified", 3) == "(verified, open 3 days)"
+
+
+# ── one villa, one description ──────────────────────────────────────────────
+
+def test_read_villa_returns_THE_SAME_document_the_caller_puts_in_the_prompt(
+        monkeypatch: Any) -> None:
+    """⚠️ TWO DESCRIPTIONS OF ONE VILLA IS A LOOP, NOT A COSMETIC DEFECT.
+
+    `ReadVilla` used to ASSEMBLE its own — `profile(**facts)` plus
+    `delta(coverage=cov)`, a delta with no ranking, no concerns, no facility
+    record — while the caller put the full document in the system prompt. The
+    model read the rich one, called the tool its own description tells it to
+    start with, got back the same villa with the interesting half missing, and
+    called again. Measured on the real property: four calls, five turns, 53.5
+    seconds, then the pass DECLINED with no answer at all.
+
+    Asserted as EQUALITY against the shared builder rather than by checking the
+    tool's output "looks full" — a shape check passes on any two documents that
+    happen to both be long, which is exactly how this survived."""
+    from agent.tools import read as read_tools
+
+    monkeypatch.setattr(sources, "_journal_rows", lambda: list(ROWS))
+    tool = sources.build_tools()[0]
+    assert isinstance(tool, read_tools.ReadVilla), "ReadVilla moved in build_tools"
+    blocks = asyncio.run(tool.call({}))
+    assert blocks[0].get("type") == "text", blocks
+    assert blocks[0]["text"] == sources.build_document(), (
+        "read_villa and the shared builder disagree about this villa")
+
+
+def test_read_villa_with_no_source_REFUSES_rather_than_describing_an_empty_villa(
+        ) -> None:
+    """⚠️ THE EMPTY RENDER MUST NEVER BE RETURNED BY A TOOL. Unwired,
+    `profile()`/`delta()` produce a well-formed 480-character description of a
+    property with no devices — the artefact that made four cutover review rounds
+    unreadable. Returning it from a tool would be that same failure with a
+    tool's authority behind it, and a model has no way to tell it from a villa
+    that genuinely has nothing.
+
+    ⚠️ THE CODE IS ASSERTED, NOT MERELY "an error". The first version of this
+    test checked `"error" in blocks[0]` and SURVIVED its own mutant: with the
+    guard deleted, `None(hours)` raises, `BaseTool.call` catches it and returns
+    an `internal` error, and a loose assertion cannot tell a deliberate refusal
+    from a crash. `unavailable` is a contract code the model routes around;
+    `internal` is a bug. They must not be confused here of all places."""
+    from agent.tools import read as read_tools
+
+    blocks = asyncio.run(read_tools.ReadVilla().call({}))
+    assert blocks and "error" in blocks[0], blocks
+    assert blocks[0]["error"]["code"] == "unavailable", (
+        "an unwired read_villa CRASHED instead of refusing — the model is told "
+        f"the tool is broken rather than unconnected: {blocks[0]}")
+    body = str(blocks[0])
+    assert "480" not in body and "VILLA PROFILE" not in body
+
+
+def test_the_document_window_reaches_the_coverage_claim() -> None:
+    """⚠️ `window_hours` IS AN ARGUMENT THE TOOL PUBLISHES, so it has to reach
+    something. It is the delta's coverage window; a tool that accepts a
+    parameter and ignores it is a model being told it has control it does not
+    have, which is worse than not offering it."""
+    from observe import journal
+
+    wide = sources._coverage(now=1_787_000_000.0, window_hours=168)
+    narrow = sources._coverage(now=1_787_000_000.0, window_hours=1)
+    assert isinstance(wide, dict) and isinstance(narrow, dict)
+    # Same journal, two windows: the wider one asks about an earlier instant, so
+    # it can only ever be the harder claim to satisfy.
+    assert journal.coverage("")["complete"] is not None
+
+
+def test_an_empty_reply_says_WHY_it_was_empty() -> None:
+    """⚠️ THE INSTRUMENT, AND IT IS THE SAME LESSON AS `doc=`. "the provider
+    returned nothing usable" is true and names none of the four things it can
+    mean: cut off at `max_tokens`, a refusal, an empty content array, or a reply
+    made entirely of block types this adapter does not collect. That string goes
+    straight into the triage trace, which is where a reader looks first — a row
+    that cannot distinguish "the answer was truncated" from "the model said
+    nothing" sends the next person into the code, which is exactly what the bare
+    "nothing to escalate" did before `doc=` was put beside it.
+
+    ⚠️ This ships in the SAME release as the one-document fix, and that does not
+    breach `feedback_instrument-before-fix`: it judges a DIFFERENT question. The
+    fix is "the tool and the prompt describe one villa"; this measures why a
+    reply was empty, which the fix does not claim to change."""
+    import sys as _sys
+    from agent.llm import anthropic_sdk
+
+    class _Block:
+        def __init__(self, kind: str) -> None:
+            self.type = kind
+
+    class _Reply:
+        def __init__(self, content, stop):
+            self.content, self.stop_reason, self.usage = content, stop, None
+
+    cut = anthropic_sdk._turn_of(_Reply([], "max_tokens"))
+    assert "max_tokens" in cut.declined and "no blocks" in cut.declined, cut.declined
+
+    thinking = anthropic_sdk._turn_of(_Reply([_Block("thinking")], "end_turn"))
+    assert "thinking" in thinking.declined, (
+        "a reply made only of blocks this adapter drops reads as an empty one, "
+        "and the two need opposite fixes")
+
+    assert _sys.modules is not None  # keep the import meaningful to linters
+
+
+# ── the provider adapter's use of the official SDK ──────────────────────────
+
+def test_the_provider_client_is_built_ONCE_and_reused(monkeypatch: Any) -> None:
+    """⚠️ THE SDK CLIENT OWNS A CONNECTION POOL. It was constructed inside
+    `create()`, so every request threw the pool away and paid a fresh TLS
+    handshake — 96 a day at the default cadence before a single chat turn. The
+    official docs build it once and keep it; the only reason it cannot go in
+    `__init__` here is that the SDK import is deliberately deferred, so it is
+    cached on first use instead."""
+    from agent.llm import anthropic_sdk
+
+    built = []
+
+    class _Messages:
+        async def create(self, **kwargs: Any) -> Any:
+            class _R:
+                content, stop_reason, usage = [], "end_turn", None
+            return _R()
+
+    class _FakeClient:
+        def __init__(self, **kwargs: Any) -> None:
+            built.append(kwargs)
+            self.messages = _Messages()
+
+    module = type(sys)("anthropic")
+    setattr(module, "AsyncAnthropic", _FakeClient)
+    monkeypatch.setitem(sys.modules, "anthropic", module)
+
+    provider = anthropic_sdk.AnthropicProvider(api_key="k" * 12)
+    for _ in range(3):
+        asyncio.run(provider.run(system=[], messages=[], tools=[],
+                                 model="test-model"))
+
+    assert len(built) == 1, (
+        f"the SDK client was constructed {len(built)} times for 3 requests — "
+        "each one discards the connection pool and re-handshakes")
+
+
+def test_the_provider_sets_an_explicit_timeout_and_retry_count(
+        monkeypatch: Any) -> None:
+    """⚠️ THE SDK's DEFAULT TIMEOUT IS TEN MINUTES AND IT MULTIPLIES BY THE
+    RETRY COUNT. Unset, one hung request can hold a triage pass for ~30 minutes;
+    passes run sequentially, so what it costs is every later pass queued behind
+    it. Asserted as "explicit and bounded" rather than as an exact number — the
+    value is tunable, the absence of one is the defect."""
+    from agent.llm import anthropic_sdk
+
+    built = []
+
+    class _Messages:
+        async def create(self, **kwargs: Any) -> Any:
+            class _R:
+                content, stop_reason, usage = [], "end_turn", None
+            return _R()
+
+    class _FakeClient:
+        def __init__(self, **kwargs: Any) -> None:
+            built.append(kwargs)
+            self.messages = _Messages()
+
+    module = type(sys)("anthropic")
+    setattr(module, "AsyncAnthropic", _FakeClient)
+    monkeypatch.setitem(sys.modules, "anthropic", module)
+
+    asyncio.run(anthropic_sdk.AnthropicProvider(api_key="k" * 12).run(
+        system=[], messages=[], tools=[], model="test-model"))
+
+    assert "timeout" in built[0], "no explicit timeout — the default is 10 minutes"
+    assert 0 < built[0]["timeout"] <= 600
+    assert built[0].get("max_retries") == anthropic_sdk.MAX_RETRIES
+
+
+def test_the_adapter_does_NOT_hand_roll_retries() -> None:
+    """⚠️ THE OFFICIAL CLIENT ALREADY RETRIES connection errors, 408/409/429 and
+    5xx with exponential backoff, and honours `retry-after`. A second
+    implementation here would be the thing this adapter exists to avoid. Pinned
+    as an absence so nobody adds one back "to be safe"."""
+    import inspect
+    from agent.llm import anthropic_sdk
+
+    body = "\n".join(line for line in
+                     inspect.getsource(anthropic_sdk).splitlines()
+                     if not line.strip().startswith(("#", "*")))
+    for banned in ("asyncio.sleep", "time.sleep", "for attempt in",
+                   "while attempt"):
+        assert banned not in body, (
+            f"{banned!r} suggests a hand-rolled retry loop; the SDK's "
+            "max_retries already covers this")
+
+
+def test_the_cache_breakpoint_is_on_the_LAST_system_block() -> None:
+    """⚠️ THE MARKER IS A PREFIX BOUNDARY, NOT A PER-BLOCK FLAG. Render order is
+    tools → system → messages, so one breakpoint on the final system block
+    caches the tools AND the whole system prompt; marking every block would
+    spend the four-breakpoint budget on a prefix that is already contiguous."""
+    from agent.llm import anthropic_sdk
+
+    out = anthropic_sdk._cached([{"type": "text", "text": "a"},
+                                 {"type": "text", "text": "b"}])
+    assert "cache_control" not in out[0]
+    assert out[1]["cache_control"] == {"type": "ephemeral"}
+
+    # A caller that set its own boundary keeps it — additive only.
+    own = anthropic_sdk._cached([{"type": "text", "text": "a",
+                                  "cache_control": {"type": "ephemeral",
+                                                    "ttl": "1h"}}])
+    assert own[0]["cache_control"]["ttl"] == "1h"

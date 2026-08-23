@@ -42,6 +42,30 @@ API_HOST = "https://api.anthropic.com/"
 #: Sent so the provider can attribute traffic. Carries no villa information.
 CLIENT_NAME = "vesta-agent"
 
+#: Seconds one request may take before the SDK gives up on it.
+#:
+#: ⚠️ SET EXPLICITLY, BECAUSE THE DEFAULT IS TEN MINUTES AND IT MULTIPLIES. The
+#: SDK retries connection errors, 408, 409, 429 and 5xx twice by default, and a
+#: timeout is a retryable failure — so an unset timeout means ONE triage pass can
+#: occupy up to thirty minutes of wall clock before it reports anything. The
+#: scheduler runs passes sequentially (`run_forever` awaits `_pass` and only then
+#: sleeps the cadence), so nothing overlaps; what it costs instead is every LATER
+#: pass, delayed behind a request that was never going to answer.
+#:
+#: ⚠️ IT IS PER REQUEST, NOT PER PASS. A tool-using investigation is four or five
+#: requests, and the whole run's ceiling is `runtime`'s deadline, which is the
+#: right place for that bound. 120 s is generous against the reference villa's
+#: measured worst turn (53.5 s for a FIVE-turn pass, so ~11 s a turn) while still
+#: cutting the hung-request ceiling from ~30 minutes to ~6.
+REQUEST_TIMEOUT_S: float = 120.0
+
+#: ⚠️ RETRIES ARE THE SDK'S, DELIBERATELY. The official client already retries
+#: connection errors, 408/409/429 and 5xx with exponential backoff (default 2),
+#: and reads `retry-after` on a 429. Hand-rolling that here would be a second,
+#: worse implementation of a solved problem — and it is the exact thing this
+#: adapter exists to avoid re-doing. Stated so the absence reads as a decision.
+MAX_RETRIES: int = 2
+
 
 #: ⚠️ THE SYSTEM BLOCK IS THE VILLA DOCUMENT AND IT IS RE-SENT ON EVERY TURN.
 #: A tool-using answer is four or five requests, each carrying the whole
@@ -76,6 +100,17 @@ class AnthropicProvider:
 
     def __init__(self, api_key: str) -> None:
         self._key = str(api_key or "")
+        #: ⚠️ ONE CLIENT, REUSED — IT WAS CONSTRUCTED PER REQUEST. The official
+        #: SDK's client owns an httpx connection pool, and the documented usage
+        #: is to build it once and keep it; a fresh one per call throws that pool
+        #: away and pays a new TLS handshake on every request. At a 15-minute
+        #: cadence that is 96 needless handshakes a day before a single chat turn.
+        #:
+        #: ⚠️ BUILT LAZILY, NOT IN THIS CONSTRUCTOR, because the SDK import is
+        #: deferred on purpose (see the module docstring) — importing here would
+        #: put the whole add-on back at the mercy of a missing pip package. So the
+        #: cache is filled on first successful use and stays `None` until then.
+        self._client: Any = None
 
     def configured(self) -> bool:
         """⚠️ Separate from holding the key, so a diagnostic can ask whether a
@@ -149,8 +184,12 @@ class AnthropicProvider:
                 request[name] = opts[name]
 
         try:
-            client = anthropic.AsyncAnthropic(api_key=self._key)
-            reply = await client.messages.create(**request)
+            if self._client is None:
+                self._client = anthropic.AsyncAnthropic(
+                    api_key=self._key,
+                    timeout=REQUEST_TIMEOUT_S,
+                    max_retries=MAX_RETRIES)
+            reply = await self._client.messages.create(**request)
         except Exception as err:  # noqa: BLE001 - degrade, never fail
             # ⚠️ REDACTED. An HTTP client that fails mid-request echoes the
             # request — `x-api-key` included — into the exception, and
@@ -255,8 +294,26 @@ def _turn_of(reply: Any) -> Turn:
     # string while quietly declining it downstream.
     text = "".join(text_parts)
     if not text.strip() and not calls:
+        # ⚠️ THE STOP REASON IS IN THE MESSAGE, NOT ONLY ON THE TURN. "the
+        # provider returned nothing usable" is a true sentence that names none
+        # of the four different things it can mean — `max_tokens` (the answer
+        # was cut off before a word of it arrived), `refusal`, an empty content
+        # array, or a reply carrying only block types this adapter does not
+        # collect. `run_once` puts this string straight into the triage trace,
+        # which is the one place a reader looks; without the stop reason that
+        # row sends the next person to read the code, exactly as the bare
+        # "nothing to escalate" did before `doc=` was added beside it.
+        #
+        # ⚠️ AND THE BLOCK TYPES ARE NAMED. A reply that is entirely `thinking`
+        # blocks is indistinguishable here from an empty one, and the two need
+        # opposite fixes — the first is this function's bug, the second is the
+        # provider's answer. `saw=` says which.
+        seen = sorted({str(getattr(b, "type", "?"))
+                       for b in getattr(reply, "content", None) or []})
+        why = str(getattr(reply, "stop_reason", "")) or "no stop_reason"
         return Turn(usage=usage, stop_reason=str(getattr(reply, "stop_reason", "")),
-                    declined="the provider returned nothing usable")
+                    declined="the provider returned nothing usable "
+                             f"(stop_reason={why}, saw={'+'.join(seen) or 'no blocks'})")
 
     return Turn(text=text, tool_calls=tuple(calls),
                 stop_reason=str(getattr(reply, "stop_reason", "")),

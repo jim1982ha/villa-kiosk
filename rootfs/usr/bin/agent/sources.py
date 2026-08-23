@@ -227,7 +227,8 @@ DOCUMENT_WINDOW_HOURS: int = 24
 
 
 def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
-                   now: Optional[float] = None) -> str:
+                   now: Optional[float] = None,
+                   window_hours: Optional[int] = None) -> str:
     """The Villa Document, CONNECTED TO THIS VILLA. Never raises.
 
     ⚠️ ONE BUILDER, BECAUSE THERE WERE TWO CALL SITES AND THEY WERE IDENTICALLY
@@ -272,12 +273,14 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     delta_text = snapshot_mod.delta(
         salient=ranked, unscorable=unscorable,
         concerns=_open_concerns(), ledger=_facility_record(),
-        coverage=_coverage(now=now), label_of=labeller())
+        coverage=_coverage(now=now, window_hours=window_hours),
+        label_of=labeller())
     return snapshot_mod.villa_document(profile_text=profile_text,
                                        delta_text=delta_text)
 
 
-def _coverage(*, now: Optional[float] = None) -> Dict[str, Any]:
+def _coverage(*, now: Optional[float] = None,
+              window_hours: Optional[int] = None) -> Dict[str, Any]:
     """Was the journal listening for the delta's window? Degrades to silence.
 
     ⚠️ RETURNING `{}` WOULD BE A LIE AND `None` IS THE HONEST ANSWER — but
@@ -287,10 +290,11 @@ def _coverage(*, now: Optional[float] = None) -> Dict[str, Any]:
     """
     from observe import journal
     try:
+        hours = int(window_hours or DOCUMENT_WINDOW_HOURS)
         since_iso = time.strftime(
             "%Y-%m-%dT%H:%M:%S+00:00",
             time.gmtime((now if now is not None else time.time())
-                        - DOCUMENT_WINDOW_HOURS * 3600))
+                        - max(1, hours) * 3600))
         return dict(journal.coverage(since_iso))
     except Exception as err:  # noqa: BLE001
         swallow("could not establish observation coverage", err)
@@ -360,7 +364,15 @@ def build_tools(session: Any = None) -> List[BaseTool]:
     rows = _journal_rows()
     refs = build_refs(rows)
     made: List[BaseTool] = [
-        read_tools.ReadVilla(profile_source=build_profile_source(rows)),
+        # ⚠️ THE SAME BUILDER THE SYSTEM PROMPT USES. A tool that described the
+        # villa differently from the document beside it sent the model round the
+        # loop looking for the version it had already been given — see
+        # `ReadVilla.__init__`. The lambda re-reads the journal per call rather
+        # than closing over `rows`, because a tool answering from the rows that
+        # existed when the registry was BUILT is a stale answer in a run that
+        # may last a minute.
+        read_tools.ReadVilla(
+            document_source=lambda hours=None: build_document(window_hours=hours)),
         read_tools.ReadSalient(scorer=build_scorer(rows), refs=refs),
     ]
     # ⚠️ THE REST KEEP THEIR CURRENT SOURCES UNTIL EACH HAS ONE. A tool with no

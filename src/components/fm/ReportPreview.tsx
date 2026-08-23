@@ -87,6 +87,41 @@ function inline(text: string, key: string): ReactNode {
   );
 }
 
+/** Which columns hold numbers, so they can be right-aligned with tabular
+ *  figures — the same readability rule `.usage-num` states for the other table
+ *  in this app.
+ *
+ *  ⚠️ DERIVED PER COLUMN, NEVER GUESSED FROM THE HEADING. These tables come out
+ *  of generated markdown, so the column set is not known here and a heading
+ *  word list ("cost", "total", "kWh") would be a villa-flavoured guess that
+ *  fails on the first report written in another register. A column is numeric
+ *  when every non-empty cell in it parses as one — which is checkable, and
+ *  which no report can surprise.
+ *
+ *  ⚠️ AND A COLUMN OF UNITS IS STILL NUMERIC. `1,240 kWh`, `-269.98 W`, `$14.20`
+ *  and `18%` are all figures a reader compares down the column, so currency,
+ *  percent, thin/comma separators and a trailing unit word are stripped before
+ *  the test. A cell that is prose keeps the whole column left-aligned, which is
+ *  the conservative direction: mis-aligning prose is worse than leaving one
+ *  numeric column alone. */
+function numericColumns(header: string[], rows: string[][]): boolean[] {
+  const looksNumeric = (cell: string) => {
+    const bare = cell
+      .replace(/\*\*|__|`/g, "")
+      .replace(/[\s  ,]/g, "")
+      .replace(/^[-+]?[$€£¥]/, "")
+      .replace(/[%]$/, "")
+      .replace(/[a-zA-Z°/]+$/, "");
+    return bare !== "" && Number.isFinite(Number(bare));
+  };
+  return header.map((_, col) => {
+    const cells = rows
+      .map((r) => (r[col] ?? "").trim())
+      .filter((c) => c !== "" && c !== "—" && c !== "-");
+    return cells.length > 0 && cells.every(looksNumeric);
+  });
+}
+
 export default function ReportPreview({ markdown }: { markdown: string }) {
   const blocks = parseBlocks(markdown);
   return (
@@ -116,25 +151,35 @@ export default function ReportPreview({ markdown }: { markdown: string }) {
                 {b.items.map((it, j) => <li key={`${key}-${j}`}>{inline(it, `${key}-${j}`)}</li>)}
               </ul>
             );
-          case "table":
+          case "table": {
+            const numeric = numericColumns(b.header, b.rows);
             return (
               <div key={key} className="fm-report-table-wrap">
                 <table className="fm-report-table">
                   <thead>
                     <tr>
-                      {b.header.map((h, j) => <th key={`${key}-h${j}`}>{inline(h, `${key}-h${j}`)}</th>)}
+                      {b.header.map((h, j) => (
+                        <th key={`${key}-h${j}`} className={numeric[j] ? "num" : undefined}>
+                          {inline(h, `${key}-h${j}`)}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {b.rows.map((r, j) => (
                       <tr key={`${key}-r${j}`}>
-                        {r.map((c, k) => <td key={`${key}-r${j}-${k}`}>{inline(c, `${key}-r${j}-${k}`)}</td>)}
+                        {r.map((c, k) => (
+                          <td key={`${key}-r${j}-${k}`} className={numeric[k] ? "num" : undefined}>
+                            {inline(c, `${key}-r${j}-${k}`)}
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             );
+          }
         }
       })}
     </div>

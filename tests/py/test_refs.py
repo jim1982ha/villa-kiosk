@@ -316,7 +316,7 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
     leaky = [{"entity_id": "sensor.pool_pump_power", "state": "8.8",
               "attributes": {"friendly_name": "Pool", "temperature": 1}}]
     built = [
-        read.ReadVilla(profile_source=lambda: {"floors": ["1F"]}),
+        read.ReadVilla(document_source=lambda hours=None: "VILLA PROFILE\n\n1 floor."),
         # ⚠️ A SCORER THAT RETURNS A REAL ROW. It was `lambda: []`, so this
         # tool contributed no output to the sweep and the assertion passed over
         # nothing — which is exactly how `read_salient` shipped emitting a raw

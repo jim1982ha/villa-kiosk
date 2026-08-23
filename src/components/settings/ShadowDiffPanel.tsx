@@ -69,7 +69,22 @@ export default function ShadowDiffPanel() {
    *
    *  ⚠️ AND IT CARRIES THE COVERAGE FLAG ON EVERY ROW. The caveat is a banner
    *  on screen and would be lost in an export — a file whose rows look
-   *  conclusive when the period was not fully observed is worse than no file. */
+   *  conclusive when the period was not fully observed is worse than no file.
+   *
+   *  ⚠️ THE TRIAGE PASSES ARE IN THE FILE TOO (2.684.0), AND WITHOUT THEM THIS
+   *  EXPORT WAS THE PH-3 AMBIGUITY IN A NEW CONTAINER. The findings say what
+   *  was caught; only the trace says whether the agent could SEE anything when
+   *  it looked, and `doc=` is the field that separates "looked and agreed" from
+   *  "was handed an empty villa document" — the failure that reads exactly like
+   *  success and cost four review rounds. That field lived on screen only, so
+   *  the artefact somebody sends for a cutover verdict was precisely the one
+   *  that could not support one. A reader with the file alone can now answer it.
+   *
+   *  ⚠️ ONE FILE, TWO SECTIONS, AND THE COLUMNS DIFFER BETWEEN THEM. That is
+   *  deliberate and is why each carries its own header row: the alternative —
+   *  padding both to a union of columns — makes every row half empty and hides
+   *  which section a row belongs to, and the alternative to THAT is two
+   *  downloads, which is two things to remember to send. */
   const download = () => {
     if (!diff) return;
     const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -79,6 +94,18 @@ export default function ShadowDiffPanel() {
     add("rules only — would be lost", diff.rulesOnly);
     add("both", diff.both);
     add("villa only", diff.agentOnly);
+    rows.push("");
+    rows.push(["pass_at", "verdict", "trigger", "detail"].map(cell).join(","));
+    if (passes.length === 0) {
+      // ⚠️ SAID OUT LOUD, NOT LEFT BLANK. An empty section reads as "the trace
+      // was not exported"; this reads as "no pass has run", which is the single
+      // most important thing a cutover reader can learn from this file.
+      rows.push([" ", "no triage pass has been recorded", " ", " "]
+        .map(cell).join(","));
+    }
+    for (const p of passes) {
+      rows.push([p.at, p.verdict, p.trigger, p.detail].map(cell).join(","));
+    }
     const url = URL.createObjectURL(
       new Blob([rows.join("\n") + "\n"], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -297,9 +324,16 @@ export default function ShadowDiffPanel() {
         <button className="btn ghost" disabled={busy} onClick={() => void load()}>
           <RefreshCw size={16} aria-hidden /> Re-read
         </button>
+        {/* ⚠️ NOT GATED ON `ran` ANY MORE, AND THAT GATE WAS BACKWARDS ONCE THE
+            TRACE WENT INTO THE FILE. `ran` is false exactly when NEITHER side
+            has found anything — which is the state a freshly-wired agent is in,
+            and the state in which "did it actually look?" is the only question
+            worth asking. The export was disabled precisely when it carried the
+            most information. It is now available whenever there is either a
+            finding or a pass to report. */}
         <button className="btn ghost" onClick={download}
-                disabled={busy || !ran}
-                title="Download these three lists as a CSV">
+                disabled={busy || (!ran && passes.length === 0)}
+                title="Download the three lists and the triage trace as a CSV">
           <Download size={16} aria-hidden /> CSV
         </button>
         {/* ⚠️ IT SPENDS REAL BUDGET AND THE LABEL SAYS SO. A button that costs

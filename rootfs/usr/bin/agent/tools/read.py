@@ -47,22 +47,44 @@ class ReadVilla(BaseTool):
     }
     mode = "READ"
 
-    def __init__(self, profile_source: Optional[Any] = None) -> None:
+    def __init__(self, document_source: Optional[Any] = None) -> None:
         # ⚠️ INJECTED, NOT IMPORTED. The registry supplies the villa's structure;
         # this tool must not reach into Home Assistant itself, or it becomes the
         # second implementation of something `ha_mcp` already publishes.
-        self._profile_source = profile_source
+        #
+        # ⚠️ AND IT TAKES THE WHOLE DOCUMENT, NOT THE PROFILE FACTS — THE THIRD
+        # AND LAST SITE OF THE DEFECT THAT COST PH-3. This tool used to ASSEMBLE
+        # the document here, from `profile(**facts)` and `delta(coverage=cov)` —
+        # a delta with no ranking, no concerns, no facility record and no
+        # unscorable count, because nothing supplied them. So the same villa had
+        # TWO descriptions of itself: the rich one the caller puts in the system
+        # prompt, and this poorer one, returned by the tool whose own
+        # description says "Start here — it is the cheapest way to know what
+        # this property is".
+        #
+        # Measured on the villa, and it is not a cosmetic disagreement: the
+        # model read a 5,078-character document, called this tool as instructed,
+        # got back 553 characters of the same villa with the interesting half
+        # missing (measured), and called it again — four times, five turns, 53.5s —
+        # then ran out of turns with no answer and the pass DECLINED. Two
+        # documents is a loop; one is an answer. `sources.build_document` is the
+        # single builder and every one of the three call sites now uses it.
+        self._document_source = document_source
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
         hours = _window_hours(args.get("window_hours"))
-        facts = self._profile_source() if callable(self._profile_source) else {}
-        if not isinstance(facts, Mapping):
-            facts = {}
-        profile_text = snapshot.profile(**dict(facts))
-        cov = journal.coverage("")
-        delta_text = snapshot.delta(coverage=cov)
-        document = snapshot.villa_document(profile_text=profile_text,
-                                           delta_text=delta_text)
+        # ⚠️ AN UNWIRED DOCUMENT TOOL REFUSES; IT DOES NOT RETURN THE EMPTY
+        # VILLA. `snapshot.profile()`/`delta()` with nothing supplied render a
+        # well-formed 480-character description of a property with no devices —
+        # the exact artefact that made four cutover review rounds unreadable.
+        # Returning it here would be that failure with a tool's authority behind
+        # it. Same rule as `read_salient`, and for the same reason.
+        if not callable(self._document_source):
+            return [fail("unavailable",
+                         "this tool is not connected to the observation floor, "
+                         "so it cannot describe this property — that is a fault "
+                         "here, not an empty villa")]
+        document = str(self._document_source(hours) or "")
         return [text(truncate(document)),
                 data({"window_hours": hours,
                       "cache_prefix_chars": len(snapshot.cache_prefix_of(document))})]

@@ -26,6 +26,7 @@ from agent import contracts  # noqa: E402
 from agent.tools import ALL_TOOLS  # noqa: E402
 from agent.tools import base as tools_base  # noqa: E402
 from agent.tools import read as read_tools  # noqa: E402
+from observe import snapshot  # noqa: E402
 
 
 def _run(coro: Any) -> Any:
@@ -359,7 +360,10 @@ def test_truncation_SAYS_it_truncated() -> None:
 # ── the four read tools do something ────────────────────────────────────────
 
 def test_read_villa_returns_a_document_with_a_cache_prefix() -> None:
-    tool = read_tools.ReadVilla(profile_source=lambda: {"floors": ["1F"]})
+    tool = read_tools.ReadVilla(
+        document_source=lambda hours=None: snapshot.villa_document(
+            profile_text=snapshot.profile(floors=["1F"]),
+            delta_text=snapshot.delta()))
     blocks = _run(tool.call({}))
     assert blocks[0]["type"] == "text" and "VILLA PROFILE" in blocks[0]["text"]
     assert blocks[1]["json"]["cache_prefix_chars"] > 0
