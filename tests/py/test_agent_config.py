@@ -189,3 +189,27 @@ def test_the_stored_empty_is_a_bare_dict_not_the_defaults() -> None:
         "the agent store's empty document must be {} — writing DEFAULTS would "
         "resurrect keys the operator deleted")
     assert "DEFAULTS" not in block
+
+
+def test_the_agent_config_store_actually_validates_on_write() -> None:
+    """⚠️ `config.errors` WAS WRITTEN, TESTED, AND CALLED BY NOBODY — found by
+    `test_reachability` (TASK-109), not by any test of this module. The store
+    went on the generic `_json_store_handlers` factory, which checks the
+    envelope and the size and knows nothing of this document's vocabulary, so
+    every rule below was dead: `investigate_mode: "banana"` returned 200 and
+    then read as `approve`.
+
+    This pins the WIRE, not the validator — the validator's own tests were
+    green throughout. `feedback_pin-the-caller`, ninth instance."""
+    import re as _re
+
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
+                            "supervisor-proxy.py"), encoding="utf-8").read()
+    guard = _re.search(r"agent_config_get_handler, agent_config_put_handler = "
+                       r"_json_store_handlers\((.*?)\)", src, _re.S)
+    assert guard, "the agent-config store handlers moved; re-point this test"
+    assert "write_guard=" in guard.group(1), (
+        "/agent-config's PUT has no write_guard, so agent.config.errors is "
+        "never called and every validation rule in it is dead")
+    assert "agent_config.errors(" in src, (
+        "the guard exists but does not call the validator")

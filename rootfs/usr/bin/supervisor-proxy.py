@@ -2103,9 +2103,35 @@ reports_config_get_handler, reports_config_put_handler = _json_store_handlers(
 # is a bug this project has already shipped once and been reported for.
 AGENT_CONFIG_FILE = "/data/vesta/agent-config.json"
 AGENT_CONFIG_MAX_BYTES = 256_000
+def _agent_config_guard(request, body, old, new):
+    """⚠️ `agent.config.errors` WAS WRITTEN, TESTED, AND CALLED BY NOBODY.
+
+    The store went on the generic factory, which validates the ENVELOPE and the
+    size and knows nothing about this document's vocabulary — so every rule in
+    `config.errors` was dead: an `investigate_mode` of `"banana"` returned 200
+    and then read as `approve`, a negative cadence was accepted, an unknown
+    sender role was stored. Most of it was harmless only because the READERS
+    re-check (`_cadence` floors, `policy.sender_role` refuses an unlisted role),
+    which is defence in depth doing the work of a gate that was never wired.
+
+    Found by `test_reachability` (TASK-109), which exists because this is the
+    ninth time in this codebase that two correct halves shipped with no wire.
+
+    ⚠️ IT REFUSES, IT DOES NOT REPAIR. A config the app cannot express is a
+    mistake somebody should see, and silently rewriting it is how an operator
+    comes to believe a setting took effect.
+    """
+    from agent import config as agent_config
+    problems = agent_config.errors(new)
+    if problems:
+        return web.json_response(
+            {"error": "; ".join(problems[:5])}, status=400)
+    return None
+
+
 agent_config_get_handler, agent_config_put_handler = _json_store_handlers(
     AGENT_CONFIG_FILE, "config", {}, AGENT_CONFIG_MAX_BYTES,
-    "agent configuration")
+    "agent configuration", write_guard=_agent_config_guard)
 
 # ⚠️ CONCERNS ARE SERVER-WRITTEN, SO THE PUT IS BUILT AND NOT ROUTED — the same
 # decision reports-history documents, for the same reason. A concern is the

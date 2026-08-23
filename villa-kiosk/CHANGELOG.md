@@ -1,13 +1,12 @@
-## 2.689.0
+## 2.690.0
 
-### Added — the approval queue is answerable, and TASK-063's missing precondition is recorded
-`investigate_mode: approve` shipped one release ago writing an audit row per
-flagged subject and nothing more: no list, no way to answer it, so choosing it
-gave a villa that flagged things into a file. The Cockpit now shows what is
-waiting, with a button that runs the investigation the check would have run —
-through the same function the automatic path uses, not a second one — and a
-dismiss that settles it. The queue is derived from the audit rather than stored,
-so approving cannot lose an item. Separately: `agent/route.py` is imported by
-nothing shipped, so "turn off shadow" would have delivered to nobody and a
-supervised period would have measured silence and read as success.
-
+### Fixed — dismissing a concern three times now actually silences it, and agent settings are validated
+Two halves that never met: the dismissal counter computed the right suppression
+list and handed it to the browser, while the gate read a config key nobody ever
+wrote — so "stop telling me about the gym lights" was recorded and discarded.
+`for_run` now unions the earned list into the run snapshot. Found by walking the
+64-requirement catalogue against the code rather than the task ledger, which also
+caught `config.errors` being called by nothing: agent settings went through the
+generic store handler, so an unlisted `investigate_mode` returned 200 and read as
+the wrong one. A new test fails on any public function in `agent/` that only its
+own tests call — the shape eight separate defects here have taken.

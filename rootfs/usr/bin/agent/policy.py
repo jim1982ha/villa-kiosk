@@ -154,9 +154,32 @@ def for_run(config: Optional[Mapping[str, Any]],
     allowed = frozenset(
         str(n) for n in (cfg.get("allowed_services") or ())
         if isinstance(n, str))
+    # ⚠️ TWO SOURCES, UNIONED, AND THE SECOND ONE WAS MISSING FOR THE WHOLE OF
+    # PH-4's DESIGN. `suppressed_subjects` in config is the MANUAL list — a
+    # person naming a subject outright. The EARNED list is the one REQ-039 is
+    # about: three dismissals of a subject suppress it. `concerns.
+    # suppressed_subjects()` computed that list correctly and was pinned by its
+    # own test, and `is_suppressed` honoured this config key and was pinned by
+    # its own test — and NOTHING JOINED THEM. The only place the count surfaced
+    # was the feedback route's response body, which returned it to the browser
+    # and stored it nowhere. So "stop telling me about the gym lights" was
+    # recorded, counted, and then discarded, which is the exact difference
+    # between a feedback loop and a suggestion that `concerns.py` warns about
+    # two lines above its own counter. Found by TASK-100's walk, not by either
+    # test — the eighth instance in this codebase of two correct halves with no
+    # wire between them.
+    #
+    # ⚠️ THE UNION IS TAKEN HERE, IN `for_run`, SO IT IS FROZEN WITH THE REST OF
+    # THE SNAPSHOT. Reading the concern store per decision would let a dismissal
+    # mid-run change what the run may say, and this module's whole contract is
+    # that authority is decided once, at the start.
+    #
+    # ⚠️ AND IT DEGRADES TO THE CONFIG LIST. A concern store that cannot be read
+    # must not widen what the agent may raise, but it must not silence it
+    # either: the manual list still applies and the run continues.
     suppressed = frozenset(
         str(k) for k in (cfg.get("suppressed_subjects") or ())
-        if isinstance(k, str))
+        if isinstance(k, str)) | _earned_suppressions()
     tools = frozenset(str(n) for n in tool_names)
     return RunPolicy(
         act_enabled=act,
@@ -167,6 +190,35 @@ def for_run(config: Optional[Mapping[str, Any]],
         max_tool_calls=_positive(cfg.get("max_tool_calls"), 24),
         tier=str(tier),
     )
+
+
+def _earned_suppressions() -> FrozenSet[str]:
+    """Subjects a person has dismissed often enough to silence. REQ-039.
+
+    ⚠️ THE COUNTING IS NOT DONE HERE AND MUST NOT BE. `concerns.
+    suppressed_subjects()` decides WHICH subjects — from the lifecycle, which is
+    the record — and this module decides what that MEANS for a run. That split
+    is stated at both ends: putting the tally inside policy would make the
+    authority boundary depend on a feedback count, and putting the gate in
+    `concerns` would give the store a veto.
+
+    ⚠️ IMPORTED INSIDE THE FUNCTION. `agent.concerns` imports `reports.store`,
+    which touches the filesystem; this module is the authorization boundary and
+    is imported by everything, including tests that must run without `/data`.
+
+    ⚠️ AND IT NEVER RAISES. An unreadable concern store degrades to "nothing is
+    earned-suppressed", which leaves the manual config list in force. The
+    alternative — failing the run — would let a corrupt file switch off
+    supervision, and the alternative in the other direction — suppressing
+    everything — would do it more quietly.
+    """
+    try:
+        from agent import concerns as concerns_mod
+        return frozenset(str(k) for k in concerns_mod.suppressed_subjects() if k)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        from reports.log import swallow
+        swallow("could not read earned suppressions", err)
+        return frozenset()
 
 
 def _positive(value: Any, default: int) -> int:

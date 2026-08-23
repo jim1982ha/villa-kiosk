@@ -22,6 +22,15 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from agent import contracts, policy  # noqa: E402
 
+
+@pytest.fixture(autouse=True)
+def _isolated_concerns(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ ADDED WITH TASK-107. `policy.for_run` now unions the EARNED
+    suppressions in, so this module reads the concern store — which means every
+    test here needs it isolated, including the ones that never mention it."""
+    from agent import concerns as concerns_mod
+    monkeypatch.setattr(concerns_mod, "CONCERNS_FILE", str(tmp_path / "c.json"))
+
 TOOLS = ("read_villa", "read_state", "act_service", "raise_concern", "reply")
 
 
@@ -328,3 +337,66 @@ def test_absent_or_junk_config_denies_everything() -> None:
 def test_an_unknown_entity_shape_is_not_silently_low_harm() -> None:
     for odd in ("", "no_dot", "....", "switch."):
         assert policy.harm_class_of(odd) in contracts.HARM_CLASS
+
+
+# ── REQ-039 · the suppression loop, closed (TASK-107) ───────────────────────
+def test_three_dismissals_reach_the_gate_without_anyone_editing_config() -> None:
+    """⚠️ THE ASSERTION NOTHING IN THIS SUITE COULD MAKE BEFORE TASK-107, and
+    the reason REQ-039 read as met for as long as it did. Two tests existed:
+    one pinned that `concerns.suppressed_subjects()` counts to three, one pinned
+    that `is_suppressed` honours `config["suppressed_subjects"]` — SUPPLYING
+    THAT KEY ITSELF. Nothing wrote the computed list into the config the gate
+    reads, so a person could dismiss a subject three times and the run policy
+    would never hear about it. `feedback_pin-the-caller`, and the config key
+    here is deliberately EMPTY so only the earned path can satisfy it.
+    """
+    from agent import concerns as concerns_mod
+    from reports.analysis.base import subject_key
+
+    key = subject_key("gym lights")
+    for _ in range(concerns_mod.DISMISSALS_TO_SUPPRESS):
+        stored, why = concerns_mod.raise_concern(concerns_mod.Concern(
+            subject_key=key, title="Gym lights left on", severity="notice",
+            audience="owner", evidence=[{"tool": "read_state", "summary": "on"}]))
+        assert stored is not None, why
+        concerns_mod.feedback(stored.id, useful=False, reason="the gym is shut")
+
+    snap = policy.for_run({}, tier="reason", tool_names=[])
+    assert policy.is_suppressed(snap, key), (
+        "three dismissals did not reach the gate; the counter and the policy "
+        "are still two halves with nothing between them")
+
+
+def test_two_dismissals_are_not_enough() -> None:
+    """⚠️ THE COMPANION THAT MAKES THE ONE ABOVE MEAN SOMETHING. Without it, a
+    mutation suppressing EVERY subject would pass the first test."""
+    from agent import concerns as concerns_mod
+    from reports.analysis.base import subject_key
+
+    key = subject_key("hall lamp")
+    for _ in range(concerns_mod.DISMISSALS_TO_SUPPRESS - 1):
+        stored, _ = concerns_mod.raise_concern(concerns_mod.Concern(
+            subject_key=key, title="Hall lamp", severity="notice",
+            audience="owner", evidence=[{"tool": "read_state", "summary": "on"}]))
+        assert stored is not None
+        concerns_mod.feedback(stored.id, useful=False)
+
+    snap = policy.for_run({}, tier="reason", tool_names=[])
+    assert not policy.is_suppressed(snap, key)
+
+
+def test_the_manual_list_still_applies_when_the_store_cannot_be_read(
+        monkeypatch: Any) -> None:
+    """⚠️ DEGRADE TO THE CONFIG LIST, NEVER TO SILENCE AND NEVER TO NOTHING. A
+    corrupt concern store must not be able to switch supervision off, and must
+    not be able to un-silence a subject a person named by hand either."""
+    from agent import concerns as concerns_mod
+
+    def boom() -> Any:
+        raise RuntimeError("unreadable")
+
+    monkeypatch.setattr(concerns_mod, "suppressed_subjects", boom)
+    snap = policy.for_run({"suppressed_subjects": ["abc123"]},
+                          tier="reason", tool_names=[])
+    assert policy.is_suppressed(snap, "abc123")
+    assert not policy.is_suppressed(snap, "something-else")
