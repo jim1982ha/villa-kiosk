@@ -128,7 +128,7 @@ export default function ModulesTab({
       </div>
 
       {/* ── 2. Your automations ─────────────────────────────────────────── */}
-      <h3 className="reports-h3">Your automations</h3>
+      <h3 className="settings-section-title">Your automations</h3>
       <ul className="reports-list">
         {c.blueprintCategories.map((cat) => {
           const type = `vesta_${cat}_event`;
@@ -175,7 +175,7 @@ export default function ModulesTab({
       )}
 
       {/* ── 3. Built-in checks ──────────────────────────────────────────── */}
-      <h3 className="reports-h3">Built-in checks</h3>
+      <h3 className="settings-section-title">Built-in checks</h3>
       {diagnostics.modules.length === 0 && (
         <p className="reports-item sev-warning">
           None are registered. That is a fault in the add-on, not a setting.
@@ -271,7 +271,7 @@ export default function ModulesTab({
           here is how to tell they arrived. The event-name detail belongs in the
           README with the rest of the integration contract, not on a settings
           screen. */}
-      <h3 className="reports-h3">Adding your own checks</h3>
+      <h3 className="settings-section-title">Adding your own checks</h3>
       <p className="muted body-text">
         These arrive with the add-on — nothing to install, nothing to delete.
         Your own Home Assistant automations are the ones that extend a brief:

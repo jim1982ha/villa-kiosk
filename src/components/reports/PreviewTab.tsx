@@ -38,7 +38,7 @@ export default function PreviewTab({
 
       {preview && (
         <>
-          <h3 className="reports-h3">{preview.title}</h3>
+          <h3 className="settings-section-title">{preview.title}</h3>
           {/* ⚠️ PRE, NOT A PARAGRAPH. The renderer emits plain text with
               meaningful line breaks — `deliver.py` sends the intersection of
               what notify platforms accept — and reflowing it here would show

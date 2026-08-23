@@ -240,80 +240,121 @@ export default function AgentTuningPanel() {
 
   return (
     <div className="fm-stack">
+      {/* ⚠️ EVERY LABEL BELOW SAYS WHAT HAPPENS, NOT WHAT THE CODE DOES. The
+          tab was reported as "very poorly created, descriptions absolutely not
+          user friendly", and the cause was consistent: the words were the
+          implementation's. "Cadence", "shadow", "cutover", "triage pass",
+          "turns" and "tool calls" are all real names in this codebase and none
+          of them is a thing the person who owns the villa has ever heard of.
+          The settings themselves are unchanged — only what they are called. */}
+      <div className="settings-section-title">
+        What supervision is allowed to do
+      </div>
       <label className="toggle">
         <input type="checkbox" checked={draft.enabled}
           onChange={(e) => edit({ enabled: e.target.checked })} />
-        <span>Supervision is switched on</span>
+        <span>Watch the villa and look for problems</span>
       </label>
-      <p className="muted body-text">Off means nothing runs and nothing is spent.</p>
+      <p className="muted body-text">
+        Off means nothing runs and nothing is spent. Home Assistant keeps
+        working exactly as it does today — this only adds the watching.
+      </p>
 
       <label className="toggle">
         <input type="checkbox" checked={draft.shadow}
           onChange={(e) => edit({ shadow: e.target.checked })} />
-        <span>Observe only — record findings, deliver nothing</span>
+        <span>Stay silent — write findings down, tell nobody</span>
       </label>
       <p className="muted body-text">
-        On by default. It still costs money and the Cockpit still shows what it
-        found — turning it off is the moment it starts messaging people.
+        On to begin with, so you can read a few weeks of what it would have sent
+        before it sends anything. ⚠️ It still costs the same while silent — it
+        does all the same thinking and only holds back the message. To spend
+        nothing, switch the watching off above instead.
       </p>
 
       <div className="settings-section-title">
-        How often, and how much
+        How often it checks, and what that costs
       </div>
       <Num
-        label="Check the villa every (minutes)"
-        note={`The largest single cost — about ${perDay} checks a day. Doubling`
-              + ` it roughly halves the bill. Minimum ${MIN_TRIAGE_MINUTES}.`}
+        label="Check the villa every … minutes"
+        note={`About ${perDay} checks a day. This is the single biggest thing`
+              + ` on the bill: doubling the number roughly halves it. Cannot be`
+              + ` set below ${MIN_TRIAGE_MINUTES} minutes.`}
         value={draft.triageMinutes} min={MIN_TRIAGE_MINUTES}
         onChange={(v) => edit({ triageMinutes: v })}
       />
 
       <Num
-        label="Requests a month, at most"
-        note="A hard ceiling. Reaching it stops the agent cleanly and says so."
+        label="Never use more than … AI requests a month"
+        note={"A hard ceiling on everything below. When it is reached the villa"
+              + " stops asking the AI and says so, rather than running up a"
+              + " bill you did not agree to."}
         value={draft.monthlyLimit} min={0}
         onChange={(v) => edit({ monthlyLimit: v })}
       />
       <Num
-        label="Of those, reserved for chat (0 = work it out)"
-        note="Ring-fenced, so a long conversation cannot starve the checks."
+        label="Of those, keep … aside for answering you"
+        note={"So a long conversation with the villa cannot use up the requests"
+              + " its own checks need. Leave at 0 and it works out a sensible"
+              + " share on its own."}
         value={draft.chatMonthlyLimit} min={0}
         onChange={(v) => edit({ chatMonthlyLimit: v })}
       />
 
-      {/* ⚠️ THESE TWO BELONG HERE AND NOT UNDER "How hard it may think", by the
-          owner's own placement (ADR-021). That section is about ONE
-          investigation's depth; this is about how many investigations a check
-          may start, which is where the bill moves from per-check to
-          per-finding — the same question the two boxes above answer. */}
+      {/* ⚠️ STILL ABOVE "how deeply", BY THE OWNER'S OWN PLACEMENT (ADR-021):
+          that section is about ONE investigation's depth, and this is about how
+          many are started at all. The COST box that used to sit under this pair
+          has moved up beside the other two cost boxes, where the question it
+          answers actually is; the two toggles below decide what supervision
+          does on its own and when it may interrupt you, which is a different
+          decision from what it costs and now says so. */}
+      <Num
+        label="Look into at most … things per check"
+        note={"Each investigation is a full, expensive look at one piece of"
+              + " equipment. Anything above this waits for the next check"
+              + " instead of being dropped, so nothing is lost — it is just"
+              + " looked at a little later."}
+        value={draft.maxInvestigationsPerPass} min={0}
+        onChange={(v) => edit({ maxInvestigationsPerPass: v })}
+      />
+
+      <div className="settings-section-title">
+        What it may do without asking
+      </div>
       <label className="toggle">
         <input type="checkbox"
           checked={draft.investigateMode === "auto"}
           onChange={(e) => edit({
             investigateMode: e.target.checked ? "auto" : "approve" })} />
-        <span>Look into what a check flags, without asking first</span>
+        <span>Investigate what it notices, without asking you first</span>
       </label>
       <p className="muted body-text">
-        On by default, because “observe only” above already stops anything being
-        sent. Off records what was flagged and spends nothing until you say so.
+        A check only spots that something looks wrong; an investigation is the
+        slow, expensive part that works out why. On by default, because “stay
+        silent” above already stops anything reaching you. Off, it lists what it
+        wanted to look into and spends nothing until you approve each one.
       </p>
       {/* ⚠️ A SETTING WITH NO CONTROL IS THE SAME DEFECT AS A CONTROL WITH NO
           SETTING, AND I SHIPPED ONE. v2.696.0 added the quiet-hours window to
           the store, the wire map and the TypeScript type, and nothing here
           could edit it — so it stayed empty, which means "never quiet", and the
           feature looked like it was working because nothing was ever held. */}
+      <div className="settings-section-title">
+        When it may interrupt you
+      </div>
       <label className="toggle">
         <input type="checkbox"
           checked={draft.quietHoursStart !== "" && draft.quietHoursEnd !== ""}
           onChange={(e) => edit(e.target.checked
             ? { quietHoursStart: "22:00", quietHoursEnd: "07:00" }
             : { quietHoursStart: "", quietHoursEnd: "" })} />
-        <span>Hold non-urgent alerts overnight</span>
+        <span>Do not wake anyone for something that can wait</span>
       </label>
       <p className="muted body-text">
         Anything urgent still arrives immediately, at any hour — that is what
-        makes it urgent. This only holds the rest, and only when nobody is at the
-        property; if someone is there, they are living with it and get told.
+        makes it urgent. This holds back only the rest, until the morning, and
+        only while the property is empty: if someone is staying there they are
+        living with the problem, so they are told.
       </p>
       {draft.quietHoursStart !== "" && draft.quietHoursEnd !== "" && (
         <div className="editable-row">
@@ -332,27 +373,27 @@ export default function AgentTuningPanel() {
         </div>
       )}
 
-      <Num
-        label="Investigations per check, at most"
-        note={"Each one is a full, expensive look at a single thing."
-              + " Anything over the limit waits for the next check rather"
-              + " than being lost."}
-        value={draft.maxInvestigationsPerPass} min={0}
-        onChange={(v) => edit({ maxInvestigationsPerPass: v })}
-      />
-
       <div className="settings-section-title">
-        How hard it may think
+        How deeply it looks into one problem
       </div>
+      <p className="muted body-text">
+        Both of these bound a single investigation. Lower is cheaper and reaches
+        shallower conclusions; higher costs more and is more likely to find the
+        real cause.
+      </p>
       <Num
-        label="Steps per investigation, at most"
-        note="How many times it may think again. Lower is cheaper and blunter."
+        label="Think again at most … times"
+        note={"Each round it reads what it has found so far and decides what to"
+              + " check next. Running out simply ends the investigation with"
+              + " what it has."}
         value={draft.maxTurns} min={1}
         onChange={(v) => edit({ maxTurns: v })}
       />
       <Num
-        label="Look-ups per investigation, at most"
-        note="How much of the villa's data it may read in one go."
+        label="Read at most … things from Home Assistant"
+        note={"How many separate readings — a device's history, a room's"
+              + " temperature, an automation's log — it may take while looking"
+              + " into one problem."}
         value={draft.maxToolCalls} min={1}
         onChange={(v) => edit({ maxToolCalls: v })}
       />
@@ -363,7 +404,7 @@ export default function AgentTuningPanel() {
           met ten similar boxes and no shape. The models come last because they
           are the one group with a sensible blank. */}
       <div className="settings-section-title">
-        Which models
+        Which AI model does which job
       </div>
       {/* ⚠️ FREE TEXT WITH SUGGESTIONS, not a picker. Pinning a model list in
           the app would make THIS the thing that has to ship for a new model to
@@ -373,27 +414,29 @@ export default function AgentTuningPanel() {
           the box stays typeable, so a model this release never heard of is
           reachable without one. */}
       <p className="muted body-text">
-        Blank uses the default shown in each box. Cheaper is usually right —
-        the villa spends far more requests on routine checks and chat than on
-        investigations.
+        Leave a box empty to use the model named in it. A bigger model is not
+        better here — most of the bill goes on the routine checks and on
+        answering you, and those two want a small fast model.
       </p>
-      <Text label="Model — routine checks" value={draft.modelTriage}
+      <Text label="For the routine checks" value={draft.modelTriage}
         placeholder="claude-haiku-4-5"
-        note="Runs every cycle — a small fast model is the intended fit."
+        note="Runs every few minutes, all day. A small fast model is the right
+              fit, and this is where an expensive choice costs the most."
         onChange={(v) => edit({ modelTriage: v })} />
-      <Text label="Model — answering messages" value={draft.modelChat}
+      <Text label="For answering your questions" value={draft.modelChat}
         placeholder="claude-sonnet-5"
-        note="Every question typed at the villa. This ran on the investigations
-              model until v2.664.0, which is where the bill went."
+        note="Every message you send the villa. Worth a capable model — but not
+              the most expensive one, because you will use it often."
         onChange={(v) => edit({ modelChat: v })} />
-      <Text label="Model — investigations" value={draft.modelReason}
+      <Text label="For investigating a problem" value={draft.modelReason}
         placeholder="claude-opus-5"
-        note="Runs only on something worth a closer look — the one place the
-              frontier model earns its price."
+        note="Runs only on something already worth a closer look, so it runs
+              rarely. This is the one job where the best model earns its price."
         onChange={(v) => edit({ modelReason: v })} />
-      <Text label="Model — written briefings" value={draft.modelBrief}
+      <Text label="For writing your briefings" value={draft.modelBrief}
         placeholder="claude-sonnet-5"
-        note="Used when a briefing is composed."
+        note="Turns the findings into the summary you receive. Runs once per
+              briefing, so the choice barely moves the bill."
         onChange={(v) => edit({ modelBrief: v })} />
 
     </div>

@@ -423,6 +423,14 @@ export default function ReportsModal(
               diagnostics={diagnostics}
               busy={busy}
               onRefresh={() => void refresh()}
+              // ⚠️ `[0]`, BECAUSE `fetchReportsHistory` RETURNS NEWEST FIRST.
+              // The STORE is a ring written oldest-first and the fetcher
+              // reverses it — one line apart in `reportsApi`, and the Cockpit
+              // block this replaces read `[length - 1]` and so printed the
+              // FIRST briefing ever sent under the words "Last briefing". It
+              // was on screen in the owner's own screenshot, dated four days
+              // before the briefing they had just received.
+              lastBriefing={history && history.length > 0 ? history[0].at : ""}
             />
           )}
           {tab === "checks" && (

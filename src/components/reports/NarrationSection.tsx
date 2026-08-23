@@ -71,7 +71,7 @@ export default function NarrationSection({
 
   return (
     <>
-      <h3 className="reports-h3">How briefings are written</h3>
+      <h3 className="settings-section-title">How briefings are written</h3>
 
       {/* ⚠️ THE BUTTON SITS ON THIS ROW AND IS NOT SCOPED TO THIS TOGGLE.
           Spend continues with narration off — triage runs every fifteen

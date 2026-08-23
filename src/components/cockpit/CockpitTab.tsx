@@ -32,16 +32,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2, LayoutGrid,
-  Activity, Zap, RefreshCw, ChevronRight, RadioTower,
+  Activity, Zap, RefreshCw, ChevronRight,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
-import { hasCapability } from "@/auth/permissions";
-import {
-  fetchReportsDiagnostics, fetchReportsHistory, type ReportsDiagnostics,
-} from "@/reports/reportsApi";
-import type { ReportHistoryEntry } from "@/reports/reportsTypes";
 import { CATEGORY_LABELS, CATEGORY_ICONS, categorySurface } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { isUnavailable } from "@/utils/stateColors";
@@ -164,27 +159,13 @@ export default function CockpitTab({
   // pointless request per open AND would put "the briefing subsystem exists" in
   // front of a profile that cannot act on it.
   //
-  // ⚠️ THIS IS NO LONGER "THE SAME CAPABILITY THAT OPENS BRIEFINGS", WHICH IS
-  // WHAT THIS COMMENT SAID UNTIL 2026-08-22. Briefings now opens on
-  // `manageFacility` so the facility manager can reach Tasks and History; this
-  // block stays on `editConfig` because it reads the owner-only diagnostics
-  // document, which is the same reason Briefings hides its own four owner tabs
-  // from `ops`. The gate tracks the ENDPOINT, not the dialog.
-  const canSeeMonitoring = role != null && hasCapability(role, "editConfig");
-  const [monitoring, setMonitoring] = useState<{
-    diagnostics: ReportsDiagnostics | null; history: ReportHistoryEntry[] | null;
-  } | null>(null);
-  useEffect(() => {
-    if (!canSeeMonitoring) return;
-    let cancelled = false;
-    void (async () => {
-      const [diagnostics, history] = await Promise.all([
-        fetchReportsDiagnostics(), fetchReportsHistory(),
-      ]);
-      if (!cancelled) setMonitoring({ diagnostics, history });
-    })();
-    return () => { cancelled = true; };
-  }, [canSeeMonitoring]);
+  // ⚠️ THE OWNER-ONLY DIAGNOSTICS FETCH IS GONE FROM THIS TAB (v2.700.0). It
+  // existed only for the "Briefing coverage" block, which has moved to the
+  // Briefing dialog's Coverage tab — so the Cockpit no longer pays for two
+  // network reads (`/reports-diagnostics` probes Home Assistant live, and
+  // `/reports-history` reads a ring) on every open of a tab whose subject is
+  // the villa's devices. The capability gate moved with the block; it is the
+  // Briefing dialog that hides its owner tabs from `ops`.
 
   // "Other" (not "Unplaced" or any other invented word) for the no-floor
   // bucket — the SAME label the room pivot's own no-room bucket already
@@ -387,48 +368,18 @@ export default function CockpitTab({
         </div>
       )}
 
-      {/* ── Briefing coverage (Owner only) ─────────────────────── */}
-      {canSeeMonitoring && monitoring && (
-        <>
-          <div className="settings-section-title">
-            <RadioTower size={16} style={{ verticalAlign: -2 }} /> Briefing coverage
-          </div>
-          <div className="cockpit-coverage">
-            {monitoring.diagnostics === null ? (
-              <p className="muted body-text">
-                The add-on could not be reached, so it is not known whether
-                briefings are being composed.
-              </p>
-            ) : (
-              <>
-                {/* ⚠️ "LISTENING" IS THE LIVE FIELD, NOT `onlineSince`. The
-                    latter is persisted and answers "has this villa EVER had a
-                    listener" — it reads true forever after the first connect,
-                    which is the exact lie `connected` was added to replace. */}
-                <p className={monitoring.diagnostics.collector.connected
-                  ? "muted body-text" : "body-text cockpit-coverage-warn"}>
-                  {monitoring.diagnostics.collector.connected
-                    ? `Listening for alerts${monitoring.diagnostics.collector.onlineSince
-                        ? ` since ${new Date(monitoring.diagnostics.collector.onlineSince).toLocaleDateString()}` : ""}.`
-                    : "Not listening — anything that happens now will be missing from the next briefing."}
-                </p>
-                {monitoring.diagnostics.collector.silentTypes.length > 0 && (
-                  <p className="muted body-text">
-                    No {monitoring.diagnostics.collector.silentTypes.length} alert
-                    {monitoring.diagnostics.collector.silentTypes.length === 1 ? " category has" : " categories have"}
-                    {" "}ever reported.
-                  </p>
-                )}
-                <p className="muted body-text">
-                  {monitoring.history && monitoring.history.length > 0
-                    ? `Last briefing ${new Date(monitoring.history[monitoring.history.length - 1].at).toLocaleString()}.`
-                    : "No briefing has been sent yet."}
-                </p>
-              </>
-            )}
-          </div>
-        </>
-      )}
+      {/* ⚠️ "BRIEFING COVERAGE" HAS MOVED TO THE BRIEFING DIALOG'S COVERAGE
+          TAB, AND IT MOVED RATHER THAN BEING COPIED (v2.700.0, owner's
+          request). It answered "can the briefing see anything" on the tab about
+          the villa's DEVICES, while the tab literally called Coverage — reading
+          the SAME `/reports-diagnostics` object, one fetch away — answered the
+          other half of the same question and neither said it was a half.
+
+          ⚠️ AND IT CARRIED A REAL FAULT THE WHOLE TIME: `fetchReportsHistory`
+          returns NEWEST FIRST and this read `[length - 1]`, so "Last briefing"
+          printed the FIRST briefing ever sent. It is on screen in the owner's
+          own screenshot. Merging the two surfaces is what made a second reader
+          of that array exist to compare against. */}
 
       {/* ── Updates available (Owner only, small) ──────────────── */}
       {updatesAvailable !== null && updatesAvailable > 0 && (

@@ -358,7 +358,7 @@ export default function ScheduleTab({
         </div>
       )}
 
-      <h3 className="reports-h3">Schedules</h3>
+      <h3 className="settings-section-title">Schedules</h3>
       {/* ⚠️ TWO SENTENCES, AND THE SECOND EARNS ITS PLACE. Prose that repeats
           what the controls show is what makes a panel feel heavy — but the
           profile select is now the only thing on the row that says anything

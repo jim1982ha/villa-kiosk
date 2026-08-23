@@ -33,12 +33,59 @@ function probedAt(iso: string): string {
   return Number.isNaN(when.getTime()) ? "" : when.toLocaleTimeString();
 }
 
+/** The villa's own listening state, as findings rather than as status lines.
+ *
+ *  ⚠️ THIS USED TO LIVE ON THE COCKPIT AND NOWHERE ELSE, which put "can the
+ *  briefing see anything" on a tab about the villa's devices while the tab
+ *  actually called Coverage — reading the SAME `/reports-diagnostics` object —
+ *  showed only what the property can be MEASURED for. Two halves of one
+ *  question, on two screens, neither saying it was a half.
+ *
+ *  ⚠️ AND `connected`, NEVER `onlineSince`. The latter is persisted, so it
+ *  reads true forever after the first connect — the exact lie `connected` was
+ *  added to replace. `onlineSince` is only ever printed as "since when",
+ *  alongside a `connected` that is true now.
+ */
+function listeningFindings(
+  d: ReportsDiagnostics, lastBriefing: string,
+): { tone: "" | "warn"; text: string }[] {
+  const out: { tone: "" | "warn"; text: string }[] = [];
+  out.push(d.collector.connected
+    ? { tone: "",
+        text: `Listening for alerts${d.collector.onlineSince
+          ? ` since ${new Date(d.collector.onlineSince).toLocaleDateString()}`
+          : ""}.` }
+    : { tone: "warn",
+        text: "Not listening — anything that happens now will be missing from "
+              + "the next briefing." });
+  // ⚠️ "HAS NEVER REPORTED" IS NOT "IS BROKEN", and the wording has to carry
+  // that: a category with nothing to say is the commonest reason, and a reader
+  // told "2 categories have ever reported" cannot tell which they were reading.
+  if (d.collector.silentTypes.length > 0) {
+    const n = d.collector.silentTypes.length;
+    out.push({ tone: "warn",
+      text: `${n} kind${n === 1 ? "" : "s"} of alert ${n === 1 ? "has" : "have"}`
+            + ` never reported anything: ${d.collector.silentTypes.join(", ")}.`
+            + " Either nothing has gone wrong of that kind, or nothing is"
+            + " watching for it." });
+  }
+  out.push(lastBriefing
+    ? { tone: "", text: `Last briefing sent ${new Date(lastBriefing).toLocaleString()}.` }
+    : { tone: "warn", text: "No briefing has been sent yet." });
+  return out;
+}
+
 export default function CoverageTab({
-  diagnostics, busy, onRefresh,
+  diagnostics, busy, onRefresh, lastBriefing = "",
 }: {
   diagnostics: ReportsDiagnostics | null;
   busy: boolean;
   onRefresh: () => void;
+  /** When the most recent briefing went out, ISO, or "" if none ever has.
+   *  ⚠️ PASSED IN RATHER THAN FETCHED. The dialog already holds the history for
+   *  its own tab; a second read here would be a second answer to one question
+   *  and they would disagree the moment one of them was stale. */
+  lastBriefing?: string;
 }) {
   if (!diagnostics) {
     return <p className="muted body-text">Reading what this property can measure…</p>;
@@ -68,18 +115,38 @@ export default function CoverageTab({
         </button>
       </div>
 
+      {/* ⚠️ A FINDING IS A CARD; AN INVENTORY IS A LINE. That is the one rule
+          this tab now follows, at the owner's request to make findings look
+          like the Facility Tasks list. "Is anything listening" and "what needs
+          attention" are things that may be WRONG and are worth acting on, so
+          they get the same bordered row a task does; "available" and "not
+          covered" are a list of what exists, where a card per entry would give
+          twenty pieces of furniture the weight of a problem. */}
+      <h3 className="settings-section-title">Is anything listening?</h3>
+      <ul className="reports-tasks">
+        {listeningFindings(diagnostics, lastBriefing).map((f, i) => (
+          <li key={i} className="reports-task">
+            <span className={`reports-task-text${f.tone === "warn" ? " sev-warning" : ""}`}>
+              {f.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+
       {diagnostics.preflight.length > 0 && (
         <>
-          <h3 className="reports-h3">Needs attention</h3>
-          <ul className="reports-list">
+          <h3 className="settings-section-title">Needs attention</h3>
+          <ul className="reports-tasks">
             {diagnostics.preflight.map((p, i) => (
-              <li key={i} className={`reports-item sev-${p.severity}`}>{p.detail}</li>
+              <li key={i} className="reports-task">
+                <span className={`reports-task-text sev-${p.severity}`}>{p.detail}</span>
+              </li>
             ))}
           </ul>
         </>
       )}
 
-      <h3 className="reports-h3">Available</h3>
+      <h3 className="settings-section-title">Available</h3>
       <ul className="reports-list">
         {diagnostics.capabilities.map((c) => (
           <li key={c} className="reports-item">
@@ -92,7 +159,7 @@ export default function CoverageTab({
         )}
       </ul>
 
-      <h3 className="reports-h3">Not covered</h3>
+      <h3 className="settings-section-title">Not covered</h3>
       <ul className="reports-list">
         {diagnostics.capabilitiesMissing.map((c) => (
           <li key={c} className="reports-item muted">

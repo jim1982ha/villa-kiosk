@@ -324,13 +324,19 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
                   which is the only way a trap like that is found; every screen
                   was correct on its own. */}
               <div className="settings-section-title">
-                AI service key
+                Connection to the AI service
               </div>
               <ApiKeyPanel />
 
-              <div className="settings-section-title">
-                Cadence and cost
-              </div>
+              {/* ⚠️ NO WRAPPING HEADING HERE ANY MORE. This read "Cadence and
+                  cost" — the panel's own vocabulary, not the owner's — over a
+                  panel that also holds quiet hours, what it may investigate on
+                  its own, and the model choices, none of which are cadence or
+                  cost. Worse, it rendered at the SAME weight as the panel's own
+                  headings, so a container and its contents looked like peers
+                  and the tab read as seven unrelated groups. The panel names
+                  its own sections; a second name for the same thing is what
+                  made this tab confusing to read. */}
               <AgentTuningPanel />
 
               {/* ⚠️ COLLAPSED, because it is a whole document and this tab is
@@ -338,7 +344,14 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
                   cutover decision is taken. `CollapsibleSection`'s remaining
                   job is exactly this: a block that is not a list and is not
                   what the reader came for. */}
-              <CollapsibleSection title="Shadow period — the cutover evidence">
+              {/* ⚠️ "SHADOW PERIOD — THE CUTOVER EVIDENCE" WAS THREE INTERNAL
+                  WORDS IN A ROW. "Shadow" is this project's name for observe-
+                  only, "cutover" is a phase of its migration plan, and
+                  "evidence" is what the plan calls the document. None of the
+                  three means anything to the person who owns the villa, and the
+                  panel below is simply the list of what supervision noticed
+                  while it was not allowed to tell anyone. */}
+              <CollapsibleSection title="What it found while staying silent">
                 <ShadowDiffPanel />
               </CollapsibleSection>
             </>

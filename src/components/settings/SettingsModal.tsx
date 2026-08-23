@@ -258,7 +258,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             row-half's flex-basis (not an inline style — see its own comment)
             keeps them on that one line on a phone too, matching desktop,
             not just on a roomy screen. */}
-        <div className="row" style={{ gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+        <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
           <div className="segmented settings-row-half" role="group" aria-label="Blue glow for clickable devices">
             <button
               className={config.highlightInteractive ? "active" : ""}
@@ -490,7 +490,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             transition in this modal follows) — a redundant hr-plus-margin
             was the reported inconsistency. */}
         <div className="settings-section-title">First-person view</div>
-        <div className="slider-pair" style={{ marginTop: 10 }}>
+        <div className="slider-pair">
           <div>
             <label>Eye height · {eyeHeight.toFixed(2)} m</label>
             <input

@@ -2218,7 +2218,12 @@ input[type="range"]::-moz-range-thumb {
 /* ⚠️ `min-height: 0` IS LOAD-BEARING — see `.fm-tabs`. Without it a flex item
    that scrolls still claims its content's height as a minimum, so a long tab
    pushed the column and the browser took the difference out of the tab strip. */
-.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
+/* ⚠️ BLOCK FLOW, WHICH IS WHY IT DECLARES A ZERO GAP RATHER THAN NO GAP. It
+   puts nothing between two children, so every rule that cancels the container's
+   spacing must cancel zero here — and a missing token would make those rules
+   `calc(4px - )`, i.e. invalid and silently dropped. Stating 0 is what lets one
+   formula serve a block body and two flex panels. See `--container-gap`. */
+.settings-body { --container-gap: 0px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
 .settings-body label {
   display: block; color: var(--text-secondary);
   font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
@@ -2257,7 +2262,11 @@ input[type="range"]::-moz-range-thumb {
 .settings-footer > div { flex: 0 0 auto; }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
-.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 20px 0 6px; font-weight: 600; }
+/* ⚠️ NO BOTTOM MARGIN, ON PURPOSE — the space under a heading is owned by its
+   SUCCESSOR, once, near `--container-gap`. A bottom margin here COLLAPSES with
+   that rule in block flow and is ADDED to it in a flex column, which is how one
+   heading class came to render two ways in the same dialog. */
+.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 20px 0 0; font-weight: 600; }
 /* ⚠️ THE FIRST HEADING IN A BODY GETS NO TOP MARGIN, AND THIS IS WHY THE TAB
    STRIP LOOKED DIFFERENT PER TAB. Nine call sites carried an inline
    `marginTop: 18` and the first heading of each tab did or did not, depending
@@ -2272,9 +2281,17 @@ input[type="range"]::-moz-range-thumb {
    to a plain full-width row (buttons carry their own background/border/
    padding by default) rather than the app's usual .btn/.icon-btn chrome,
    since this needs to keep reading as a section LABEL, not a button. */
+/* ⚠️ NO BOTTOM MARGIN HERE EITHER, AND IT WAS A THIRD RENDERING OF ONE HEADING.
+   This carries `.settings-section-title` as well and then overrode its margin
+   with `28px 0 8px` — so the collapsible variant collapsed 8px against the
+   successor's -10px into -2px while the plain variant landed on -4px. Same
+   class, same dialog, two different overlaps. It keeps its larger margin ABOVE
+   (a collapsible group is a heavier break) and, like every other heading, owns
+   nothing below. `CollapsibleSection` renders a fragment, so its children are
+   siblings of this button and the shared successor rule reaches them. */
 .settings-section-toggle {
   display: flex; align-items: center; gap: 6px; width: 100%;
-  margin: 28px 0 8px; background: none; border: none; padding: 0;
+  margin: 28px 0 0; background: none; border: none; padding: 0;
   cursor: pointer; text-align: left;
 }
 .settings-section-toggle svg { flex: 0 0 auto; }
@@ -3517,7 +3534,31 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* ⚠️ ONE RHYTHM FOR EVERY MODAL BODY AND EVERY TAB — see --stack-gap. A panel
    that sets its own margins re-opens the per-tab drift 2026-08-23 spent a
    release on. */
-.fm-stack { display: flex; flex-direction: column; gap: var(--stack-gap); }
+/* ⚠️ `--container-gap` IS THE ONE THING EVERY SPACING RULE BELOW HAS TO KNOW,
+   AND IT USED TO BE ASSUMED. A rule that attaches a hint or a field to the
+   thing above it must cancel whatever the container already puts between two
+   children — and that is a `gap` in a flex column and NOTHING in a block one.
+   The shared rules assumed the flex case, so in `.settings-body` (which is
+   plain block flow, and always has been) `calc(var(--hint-gap) -
+   var(--stack-gap))` was a bare -10px margin that COLLAPSED with the title's
+   own +6px into **-4px** — the successor drawn four pixels ON TOP of the
+   heading. Reported as section titles "almost overlapping the text below".
+
+   ⚠️ AND IT WAS INVISIBLE BECAUSE IT WAS INCONSISTENT. Any call site whose
+   next element happened to carry an inline `marginTop` overrode the negative
+   margin and looked correct, so the same heading class rendered two ways in one
+   dialog — `RENDER QUALITY & LOOK` fine (the row under it had `marginTop: 12`)
+   beside `DASHBOARD TITLE` overlapping (a bare `<input>`), and `DEVICE
+   TELEMETRY` fine beside `VILLA LOCATION` overlapping. The owner reported it as
+   exactly that: same text, two styles.
+
+   Each container now DECLARES its own gap once and every rule DERIVES from the
+   token, so the effective space is `--hint-gap` in all three regardless of
+   layout mode. A container added later gets the whole family right by
+   declaring one line — and one that forgets is caught by
+   `tests/py/test_section_rhythm.py`, which refuses a `--container-gap`-reading
+   rule whose container never declares the token. */
+.fm-stack { --container-gap: var(--stack-gap); display: flex; flex-direction: column; gap: var(--container-gap); }
 /* ⚠️ A HINT BELONGS TO THE CONTROL ABOVE IT, and `gap` cannot say that — it is
    uniform by definition. So the hint pulls itself back up to --hint-gap. This
    is the ONE place that relationship is expressed; it applies to every panel
@@ -3565,16 +3606,19 @@ label.toggle span { user-select: none; line-height: 1.4; }
    + p` does not match it, and that one toggle would have kept the blank line
    while the other four lost it. The wrapper inherits the row's height, so it
    inherits the dead space and takes the same correction. */
+/* ⚠️ ONE DECLARATION FOR ALL THREE CONTAINERS SINCE `--container-gap` EXISTS.
+   These were two rules with two different formulas — `- var(--stack-gap)` in
+   the flex one and nothing in the others — which is the same assumption that
+   broke the section titles, written out twice. The block body subtracts 0 and
+   lands on the identical number, so there is nothing left to keep in step. */
 .fm-stack > label.toggle + p.body-text.muted,
-.fm-stack > .toggle-row + p.body-text.muted {
-  margin-top: calc(var(--hint-gap) - var(--stack-gap) - var(--toggle-pad));
-}
+.fm-stack > .toggle-row + p.body-text.muted,
 .settings-body > label.toggle + p.body-text.muted,
 .settings-body > label.toggle + p.muted,
 .settings-body > .toggle-row + p.body-text.muted,
 .reports-pane > label.toggle + p,
 .reports-pane > .toggle-row + p {
-  margin-top: calc(var(--hint-gap) - var(--toggle-pad));
+  margin-top: calc(var(--hint-gap) - var(--container-gap) - var(--toggle-pad));
 }
 .settings-body > * + p.body-text.muted { margin-top: var(--hint-gap); }
 .settings-body > p.body-text.muted + * { margin-top: var(--stack-gap); }
@@ -3589,10 +3633,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
    that ("HOW HARD IT MAY THINK has an empty line after it, WHICH MODELS does
    not"). Stating it on the title's successor makes the heading and its first
    row one block regardless of what that row is. */
+/* ⚠️ THE TITLE CARRIES NO BOTTOM MARGIN (see its declaration), and that is half
+   the fix. One would COLLAPSE with the negative margin below in block flow
+   (6px against -10px gave -4px, the overlap) and be ADDED to the gap in a flex
+   column. One quantity, owned by the successor, cannot do either. */
 .fm-stack > .settings-section-title { margin: 6px 0 0; }
 .fm-stack > .settings-section-title + *,
+.reports-pane > .settings-section-title + *,
 .settings-body > .settings-section-title + * {
-  margin-top: calc(var(--hint-gap) - var(--stack-gap));
+  margin-top: calc(var(--hint-gap) - var(--container-gap));
 }
 /* ⚠️ AND A HINT INSIDE A FIELD IS STILL A HINT — THIS IS THE FOURTH SPACING
    REPORT AND THE FIRST ONE MEASURED RATHER THAN GUESSED. Every rule above
@@ -4445,7 +4494,11 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    that is not listening is the same claim about the add-on itself. */
 .cockpit-coverage-warn { color: var(--status-warning); }
 
-.reports-pane { display: flex; flex-direction: column; gap: 12px; }
+/* ⚠️ 12px, NOT `--stack-gap`, AND THAT IS DELIBERATE — this pane is denser than
+   a settings body. What matters is that the number is declared ONCE, as the
+   token every rhythm rule reads, so the gap and the corrections that cancel it
+   cannot drift apart. See `--container-gap` at `.fm-stack`. */
+.reports-pane { --container-gap: 12px; display: flex; flex-direction: column; gap: var(--container-gap); }
 
 /* ⚠️ A HEADING AND THE SENTENCE UNDER IT ARE ONE BLOCK. `.reports-pane` is a
    flex column with `gap: 12px`, and both the heading and the paragraph also
@@ -4457,17 +4510,21 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    on top of the pane gap. Collapsing the margins inside the pane leaves ONE
    spacing rule — the pane's gap — which is what makes the rhythm predictable
    instead of the sum of three opinions. */
-.reports-pane > h3 + p,
+/* ⚠️ `h3 + p` IS GONE BECAUSE THE SHARED SUCCESSOR RULE NOW COVERS IT — see
+   `--container-gap`. It said "no space under a heading" while the settings
+   dialogs said "--hint-gap under a heading", for the same kind of heading over
+   the same kind of sentence. */
 .reports-pane > label.toggle { margin-top: 0; }
 
-.reports-h3 {
-  margin: 4px 0 0;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
+/* ⚠️ `.reports-h3` IS DELETED, NOT RESTYLED. It was a SECOND DEFINITION of the
+   uppercase section eyebrow — same role as `.settings-section-title`, at
+   --text-sm against --text-xs, 0.04em tracking against 0.18em, and
+   --text-muted against --text-secondary — so the Briefing dialog labelled its
+   sections in a visibly different hand from every other dialog in the app. The
+   owner's report was about two spacings for one heading; this is the same
+   defect one level up, two TYPOGRAPHIES for one heading, and an alias would
+   have left both definitions alive to drift again. The nine call sites now use
+   the shared class. */
 
 /* ⚠️ PRE, PRESERVING LINE BREAKS. The renderer emits plain text whose breaks
    are meaningful — `deliver.py` sends the intersection of what notify
@@ -4504,8 +4561,14 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 .reports-item > span:first-of-type { flex: 1 1 auto; }
 .reports-item.muted { color: var(--text-muted); }
-.reports-item.sev-warning { color: var(--status-warning); }
-.reports-item.sev-critical { color: var(--status-danger); }
+/* ⚠️ SEVERITY IS A TONE, NOT A ROW TYPE. These were welded to `.reports-item`,
+   so the moment a finding was rendered as a CARD instead of a line its severity
+   silently stopped colouring — the same fact needing a second declaration
+   because it had been attached to one presentation of it. Standalone, they
+   apply to whatever element carries the severity, which is what let the
+   coverage findings become cards without a second colour table. */
+.sev-warning { color: var(--status-warning); }
+.sev-critical { color: var(--status-danger); }
 
 .reports-facts {
   display: grid;

@@ -77,7 +77,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="settings-body">
           <div className="settings-section-title">Device category (badge colour when active)</div>
-          <p className="muted body-text" style={{ marginTop: 4 }}>
+          <p className="muted body-text">
             A device's badge is plain and neutral at rest — its category
             colour only appears once it's active or alerting (see below).
           </p>
@@ -94,7 +94,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="settings-section-title">On the map (badge state)</div>
-          <p className="muted body-text" style={{ marginTop: 4 }}>
+          <p className="muted body-text">
             How a device's own badge shows its state in the 3D view — neutral
             by default, colour only when something's actually happening.
           </p>
@@ -122,7 +122,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="settings-section-title">On a device panel (status pill)</div>
-          <p className="muted body-text" style={{ marginTop: 4 }}>
+          <p className="muted body-text">
             Shown when you open a device's controls.
           </p>
           <div className="legend-grid">

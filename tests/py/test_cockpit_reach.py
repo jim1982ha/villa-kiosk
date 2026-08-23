@@ -208,32 +208,51 @@ def test_the_coverage_block_is_gated_the_same_way_briefings_is() -> None:
     """⚠️ NOT BY LETTING A 403 DECIDE. `/reports-diagnostics` is owner-only
     server-side whatever the browser sends, so asking as a guest is a pointless
     request per open AND puts "the briefing subsystem exists" in front of a
-    profile that cannot act on it."""
-    tab = _code(os.path.join(SRC, "components", "cockpit", "CockpitTab.tsx"))
-    assert 'hasCapability(role, "editConfig")' in tab
-    guard = re.search(r"if \(!canSeeMonitoring\) return;", tab)
-    assert guard, "the fetch is not gated on the capability at all"
+    profile that cannot act on it.
+
+    ⚠️ THE SURFACE MOVED IN v2.700.0 AND SO DID THIS TEST, rather than being
+    deleted with the block. The fact it protects did not move: the gate now
+    belongs to the Briefing dialog's owner-only tabs, and the Cockpit must no
+    longer reach that endpoint at all — which is a STRONGER statement than the
+    one this made before, and is what makes the move checkable rather than
+    merely done."""
+    tab = _code(COCKPIT_TAB)
+    assert "fetchReportsDiagnostics" not in tab, (
+        "the Cockpit still probes the owner-only diagnostics endpoint; that "
+        "block moved to the Briefing dialog's Coverage tab")
+    modal = _code(os.path.join(SRC, "components", "reports", "ReportsModal.tsx"))
+    assert "coverage" in modal and "configure: true" in modal, (
+        "the Coverage tab must stay behind the dialog's own owner gate")
 
 
-def test_the_tablet_reads_the_live_listening_field() -> None:
+def test_the_briefing_dialog_reads_the_live_listening_field() -> None:
     """⚠️ `onlineSince` IS PERSISTED AND ANSWERS A DIFFERENT QUESTION — "has
     this villa ever had a listener", which reads true forever after the first
     connect. That is the precise lie `connected` was added to replace, and
-    reintroducing it here would put it on a second surface."""
-    tab = _code(os.path.join(SRC, "components", "cockpit", "CockpitTab.tsx"))
-    # ⚠️ ANCHORED ON CLASS NAMES, NOT ON THE COMMENT HEADINGS. `_code` strips
-    # comments — which is what stops these tests matching prose — so the two
-    # `{/* ── ... ── */}` section markers this first tried to bracket between
-    # are not in the text it reads. The className is the durable landmark.
-    block = re.search(r"cockpit-coverage\"(.*?)cockpit-updates", tab, re.DOTALL)
-    assert block, "the coverage block moved — this test is blind"
+    carrying the block to a new surface is exactly when it would come back."""
+    tab = _code(os.path.join(SRC, "components", "reports", "CoverageTab.tsx"))
+    block = re.search(r"function listeningFindings(.*?)\n}", tab, re.DOTALL)
+    assert block, "the listening block moved again — this test is blind"
     assert "collector.connected" in block.group(1), (
         "liveness must come from `connected`, not from a persisted timestamp")
+
+
+def test_the_last_briefing_is_the_NEWEST_entry() -> None:
+    """⚠️ THE BUG THE MERGE FOUND, AND IT HAD BEEN ON SCREEN FOR RELEASES.
+    `fetchReportsHistory` reverses the stored ring and returns NEWEST FIRST; the
+    Cockpit block read `[length - 1]` and so printed the FIRST briefing ever
+    sent under the words "Last briefing". Two readers of one array is what made
+    it visible, which is the argument for merging rather than copying."""
+    modal = _code(os.path.join(SRC, "components", "reports", "ReportsModal.tsx"))
+    assert "history[0].at" in modal, (
+        "the newest entry is [0] — fetchReportsHistory returns newest first")
+    assert "history[history.length - 1]" not in modal
 
 
 def test_an_unreachable_addon_says_so_rather_than_reading_as_healthy() -> None:
     """Three kinds of empty, again: "not listening", "listening and quiet" and
     "could not ask" mean different things and the last must not render as the
     second."""
-    tab = _code(os.path.join(SRC, "components", "cockpit", "CockpitTab.tsx"))
-    assert "monitoring.diagnostics === null" in tab
+    tab = _code(os.path.join(SRC, "components", "reports", "CoverageTab.tsx"))
+    assert "!diagnostics.reachable" in tab
+    assert "could not be reached" in tab
