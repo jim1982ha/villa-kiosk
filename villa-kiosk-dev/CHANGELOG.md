@@ -1,3 +1,16 @@
+## 2.695.0
+
+### Fixed — retiring an automation would have permanently disabled the check meant to replace it
+Three of the built-in checks stand down while one of your own automations covers
+the same ground, which is right: your automation knows about occupancy and
+schedules and the built-in check only sees statistics. But "this rule is
+installed and quiet" and "this rule has been deleted" looked identical to that
+decision, so deleting the automation left its replacement switched off — and the
+briefing went on saying "your own automations already cover this" about a rule
+that no longer existed. Not for a few weeks: indefinitely, for as long as any
+other automation kept the layer visible, which the critical ones do by design.
+Found while planning the cutover rather than after it.
+
 ## 2.694.0
 
 ### Changed — the architecture review found one principle broken and one written too loosely
