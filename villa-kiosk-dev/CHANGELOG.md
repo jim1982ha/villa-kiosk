@@ -1,3 +1,12 @@
+## 2.653.0
+
+### Changed — a briefing is addressed to a PROFILE, and every modal saves the same way
+v2.651.0 derived the voice from the recipient; the owner asked for the inverse, so a
+schedule names a profile and the new People panel says where it is reached — one nobody
+is configured for is greyed, marked `(missing)`, and will not save. Supervision's two
+panels each held their own revision of one document, so saving either discarded the
+other's edit; there is one draft now, committed from the footer.
+
 ## 2.652.0
 
 ### Changed — Settings is tabbed, like Briefings and Facility
