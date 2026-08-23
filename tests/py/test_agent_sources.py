@@ -646,3 +646,44 @@ def test_the_cache_breakpoint_is_on_the_LAST_system_block() -> None:
                                   "cache_control": {"type": "ephemeral",
                                                     "ttl": "1h"}}])
     assert own[0]["cache_control"]["ttl"] == "1h"
+
+
+def test_a_triage_pass_stores_its_NUMBERS_not_only_its_sentence(
+        monkeypatch: Any, tmp_path: Any) -> None:
+    """⚠️ `record_pass` RECEIVES doc_chars / doc_lines / escalated and used to
+    join them into `detail` — "… | doc=5078c/48L | escalated=2" — so the CSV an
+    owner exports for the cutover could recover the one figure the decision
+    rests on only by re-parsing my own prose. Reported as "can you include the
+    triage passes in the CSV" of a file that already contained them.
+
+    The sentence stays: it is what the panel renders. What is added is the same
+    three values AS VALUES, written in the same statement so they cannot drift
+    from the sentence beside them."""
+    from agent import audit
+
+    monkeypatch.setattr(audit, "AUDIT_FILE", str(tmp_path / "audit.json"))
+    audit.record_pass(reason="nothing to escalate", trigger="manual",
+                      doc_chars=5078, doc_lines=48, escalated=0,
+                      model="claude-sonnet-5")
+    row = audit.passes()[-1]
+
+    assert row["doc_chars"] == "5078", row
+    assert row["doc_lines"] == "48"
+    assert row["escalated"] == "0"
+    assert row["model"] == "claude-sonnet-5"
+    # And the rendered line still carries it, for the reader on the panel.
+    assert "doc=5078c/48L" in row["detail"]
+
+
+def test_the_pass_fields_survive_the_audit_allow_list() -> None:
+    """⚠️ `_clean` REDUCES EVERY ROW TO `ROW_FIELDS` and drops anything else —
+    silently, by design, because that allow-list is what stops a row carrying a
+    raw argument blob. So a field added to `record_pass` and NOT to `ROW_FIELDS`
+    is written, dropped, and never missed. Asserted against the constant rather
+    than against a written row, so the two cannot agree by luck."""
+    from agent import audit
+
+    for field in ("doc_chars", "doc_lines", "escalated", "model"):
+        assert field in audit.ROW_FIELDS, (
+            f"{field} is passed to record_pass but is not in ROW_FIELDS, so "
+            "_clean drops it on the way to disk")

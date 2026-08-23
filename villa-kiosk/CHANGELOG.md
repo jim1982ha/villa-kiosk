@@ -1,3 +1,13 @@
+## 2.685.0
+
+### Fixed — the cutover CSV carried the triage passes and no spreadsheet could show them
+Two sections with two header rows: opened as a CSV, every pass row landed under
+the FINDINGS headers, so `pass_at` sat under "caught_by" and `detail` in a
+column with no header at all. Reported as "can you include the triage passes",
+of a file that already contained them. It is one flat table with a `section`
+column now, and `doc_chars` / `escalated` / `model` are real columns rather than
+figures buried in a sentence — `doc_chars` is what the cutover decision rests on.
+
 ## 2.684.0
 
 ### Fixed — the agent had a second, poorer description of the same villa

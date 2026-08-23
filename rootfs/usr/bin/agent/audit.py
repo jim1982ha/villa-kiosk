@@ -45,6 +45,16 @@ MAX_ROWS: Final[int] = 20_000
 ROW_FIELDS: Final[Tuple[str, ...]] = (
     "at", "run_id", "actor", "tool", "args_digest", "verdict", "outcome",
     "action_key", "detail",
+    # ⚠️ A TRIAGE PASS'S NUMBERS, STORED AS THEMSELVES AND NOT ONLY AS PROSE.
+    # `record_pass` RECEIVES all three and used to join them into `detail`
+    # ("… | doc=5078c/48L | escalated=2"), which reads well on the panel and is
+    # a string to everything else — so the CSV an owner exports for the cutover
+    # decision could only recover the one figure that decides it by re-parsing
+    # my own sentence. This package's own rule is that "the data is not there"
+    # beats "the filter is careful"; the same applies to "the data is prose".
+    # `detail` keeps carrying the rendered line, because the panel reads it and
+    # a reader wants the sentence.
+    "doc_chars", "doc_lines", "escalated", "model",
 )
 
 #: Rows describing an intent that never got an outcome. Named because the count
@@ -149,6 +159,14 @@ def record_pass(*, reason: str, trigger: str, doc_chars: int,
                    f" | escalated={escalated}"
                    + (f" | {subjects}" if subjects else "")
                    + (f" | model={model}" if model else "")),
+        # ⚠️ THE SAME THREE NUMBERS AS THEMSELVES — see ROW_FIELDS. Duplicating
+        # them beside the sentence is deliberate and is not the drift this
+        # project usually forbids: `detail` is what a PERSON reads on the panel
+        # and these are what a SPREADSHEET sorts and filters on. One rendering
+        # each, from one source, written in the same statement — which is what
+        # keeps them from disagreeing.
+        "doc_chars": doc_chars, "doc_lines": doc_lines,
+        "escalated": escalated, "model": model,
     })
 
 

@@ -80,31 +80,57 @@ export default function ShadowDiffPanel() {
    *  the artefact somebody sends for a cutover verdict was precisely the one
    *  that could not support one. A reader with the file alone can now answer it.
    *
-   *  ⚠️ ONE FILE, TWO SECTIONS, AND THE COLUMNS DIFFER BETWEEN THEM. That is
-   *  deliberate and is why each carries its own header row: the alternative —
-   *  padding both to a union of columns — makes every row half empty and hides
-   *  which section a row belongs to, and the alternative to THAT is two
-   *  downloads, which is two things to remember to send. */
+   *  ⚠️ ONE FLAT TABLE WITH A `section` COLUMN — AND THIS COMMENT USED TO
+   *  ARGUE THE OPPOSITE, WRONGLY. It said two sections each with their own
+   *  header beat "padding both to a union of columns", because a union "makes
+   *  every row half empty and hides which section a row belongs to". The first
+   *  half is true and does not matter; the second is exactly backwards — a
+   *  `section` column is PRECISELY what says which section a row belongs to.
+   *
+   *  What the argument missed is how a CSV is actually opened. A mid-file header
+   *  row is not a header to a spreadsheet: every pass row landed under the
+   *  FINDINGS headers, so `pass_at` sat under "caught_by", `verdict` under
+   *  "finding", and `detail` in a fourth column with no header at all. Reported
+   *  as "can you include the triage passes in the CSV" — of a file that already
+   *  contained them. That is this subsystem's own recurring failure (data that
+   *  is present and unreadable is indistinguishable from data that is absent)
+   *  landing in the very artefact built to resolve it.
+   *
+   *  ⚠️ AND THE PASS NUMBERS GET THEIR OWN COLUMNS. `doc_chars` is what the
+   *  cutover rests on — a pass handed an empty villa document reports "nothing
+   *  to escalate" exactly as a genuinely quiet one does — and it was reachable
+   *  only by re-parsing `detail`'s prose. `detail` stays: the sentence is what a
+   *  person reads, the columns are what a spreadsheet sorts. */
   const download = () => {
     if (!diff) return;
     const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const rows = [["caught_by", "finding", "coverage_complete"].map(cell).join(",")];
-    const add = (side: string, titles: string[]) => titles.forEach((t) =>
-      rows.push([side, t, String(diff.coverageComplete)].map(cell).join(",")));
+    const head = ["section", "caught_by", "finding", "coverage_complete",
+                  "pass_at", "verdict", "trigger", "doc_chars", "doc_lines",
+                  "escalated", "model", "detail"];
+    const rows = [head.map(cell).join(",")];
+    const row = (values: Record<string, unknown>) =>
+      rows.push(head.map((k) => cell(values[k] ?? "")).join(","));
+
+    const add = (side: string, titles: string[]) => titles.forEach((t) => row({
+      section: "finding", caught_by: side, finding: t,
+      coverage_complete: String(diff.coverageComplete),
+    }));
     add("rules only — would be lost", diff.rulesOnly);
     add("both", diff.both);
     add("villa only", diff.agentOnly);
-    rows.push("");
-    rows.push(["pass_at", "verdict", "trigger", "detail"].map(cell).join(","));
+
     if (passes.length === 0) {
-      // ⚠️ SAID OUT LOUD, NOT LEFT BLANK. An empty section reads as "the trace
-      // was not exported"; this reads as "no pass has run", which is the single
-      // most important thing a cutover reader can learn from this file.
-      rows.push([" ", "no triage pass has been recorded", " ", " "]
-        .map(cell).join(","));
+      // ⚠️ SAID OUT LOUD, NOT LEFT BLANK. An absent section reads as "the
+      // trace was not exported"; this reads as "no pass has run", which is the
+      // single most important thing a cutover reader can learn from this file.
+      row({ section: "pass", detail: "no triage pass has been recorded" });
     }
     for (const p of passes) {
-      rows.push([p.at, p.verdict, p.trigger, p.detail].map(cell).join(","));
+      row({
+        section: "pass", pass_at: p.at, verdict: p.verdict, trigger: p.trigger,
+        doc_chars: p.docChars, doc_lines: p.docLines, escalated: p.escalated,
+        model: p.model, detail: p.detail,
+      });
     }
     const url = URL.createObjectURL(
       new Blob([rows.join("\n") + "\n"], { type: "text/csv;charset=utf-8" }));

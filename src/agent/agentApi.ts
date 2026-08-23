@@ -505,7 +505,26 @@ export async function runAgentNow(): Promise<{ ok: boolean; reason: string }> {
  *  shadow diff renders identically, and the ambiguity four review rounds were
  *  lost to. `/agent-audit` has served these since PH-0 with no consumer, which
  *  is why the distinction was never on a screen. */
-export interface TriagePass { at: string; trigger: string; verdict: string; detail: string; }
+export interface TriagePass {
+  at: string; trigger: string; verdict: string; detail: string;
+  /** ⚠️ THE NUMBERS AS NUMBERS, not re-parsed out of `detail`. They are what a
+   *  spreadsheet sorts and filters on, and `docChars` is the single field the
+   *  cutover decision rests on — a pass handed an empty villa document reports
+   *  "nothing to escalate" exactly as a genuinely quiet one does. Optional
+   *  because rows written before v2.685.0 carry only the rendered sentence. */
+  docChars?: number; docLines?: number; escalated?: number; model?: string;
+}
+
+/** A stored audit field that should be a number, or undefined if it is absent
+ *  or unparseable. ⚠️ `undefined`, NEVER 0 — the audit stringifies on the way
+ *  in, so an older row has no field at all, and a 0 there would render as "this
+ *  pass was handed an empty document", which is the exact false alarm the field
+ *  exists to raise honestly. */
+const numOr = (v: unknown): number | undefined => {
+  const n = Number(v);
+  return v === undefined || v === null || v === "" || !Number.isFinite(n)
+    ? undefined : n;
+};
 
 export async function loadTriagePasses(): Promise<TriagePass[]> {
   const r = await fetch(ingressPath("agent-audit"), { credentials: "same-origin" });
@@ -520,6 +539,10 @@ export async function loadTriagePasses(): Promise<TriagePass[]> {
       trigger: String(x.tool ?? "").slice("pass:".length),
       verdict: String(x.verdict ?? ""),
       detail: String(x.detail ?? ""),
+      docChars: numOr(x.doc_chars),
+      docLines: numOr(x.doc_lines),
+      escalated: numOr(x.escalated),
+      model: x.model === undefined ? undefined : String(x.model),
     }));
 }
 
