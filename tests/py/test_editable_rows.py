@@ -111,8 +111,14 @@ def test_the_fields_are_grouped_so_the_delete_cannot_wrap_away() -> None:
     a second line and took the delete with it, where it read as an action on the
     whole card rather than on that record. `.editable-row-fields` is what keeps
     the button on the first line, and a caller that skips it loses that."""
+    # ⚠️ THE CLASS, NOT THE WHOLE ATTRIBUTE. A caller may add a variant beside
+    # it — `editable-row-fields editable-row-tight` keeps a person's three
+    # fields on one line where the schedule row's five deliberately wrap — and
+    # an exact-string match reported that as a MISSING group, which is the
+    # opposite of what it is.
     offenders = [path for path, source in _callers().items()
-                 if 'className="editable-row-fields"' not in source]
+                 if not re.search(r'className="[^"]*\beditable-row-fields\b',
+                                  source)]
     assert not offenders, (
         f"{offenders} use .editable-row without grouping their fields in "
         f".editable-row-fields; the delete button will wrap on a phone.")

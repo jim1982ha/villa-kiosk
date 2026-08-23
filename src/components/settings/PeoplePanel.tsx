@@ -246,7 +246,7 @@ export default function PeoplePanel() {
       {rows.map((row, i) => (
         <div key={i} className="editable-row-card">
           <div className="editable-row" style={{ marginTop: 8 }}>
-            <div className="editable-row-fields">
+            <div className="editable-row-fields editable-row-tight">
               {/* ⚠️ EVERY FIELD CARRIES A VISIBLE LABEL, and it took a report to
                   get them: three unlabelled controls in a row read as three
                   guesses. ⚠️ AND THERE WERE FOUR UNTIL 2.655.0 — a `Name` box

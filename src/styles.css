@@ -4465,6 +4465,23 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 /* The recipients button sizes to its label and does not stretch — it is the
    answer to a question, not a field. */
 .editable-row-fields > button { flex: 0 1 auto; min-height: var(--touch-min); }
+/* ⚠️ A ROW THAT STAYS ON ONE LINE AT EVERY WIDTH, OPT-IN. `.editable-row-fields`
+   WRAPS by default and that is deliberate for the schedule row: five controls
+   including a time input genuinely need two lines on a phone, and the comment
+   above records the report that produced it.
+
+   A person's row is three fields, and wrapping put the profile and the delete
+   on a second line — reported from a phone. So the variant is asked for by the
+   caller rather than forced on the shared class, and `flex: 1 1 0` makes the
+   three share the width equally instead of each demanding its content.
+
+   ⚠️ THE LABELS SURVIVE, TRUNCATED. They were added because four unlabelled
+   controls read as four guesses; hiding them on the narrowest screen would undo
+   that exactly where a reader has least context. `.people-field > span` already
+   ellipsises. */
+.editable-row-tight { flex-wrap: nowrap; }
+.editable-row-tight > .people-field { flex: 1 1 0; min-width: 0; }
+.editable-row-tight > .people-field > .btn { padding: 0 8px; }
 
 /* A concern's severity, as a short word rather than a colour alone.
    ⚠️ THE WORD IS THE SIGNAL AND THE COLOUR IS THE ENHANCEMENT — a wall tablet
