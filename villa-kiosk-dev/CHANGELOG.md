@@ -1,3 +1,12 @@
+## 2.663.0
+
+### Added — "Check the villa now", so the cutover evidence can be tested today
+`/agent-run-now` has been on the add-on since Phase 2 with nothing in the app
+calling it, so the only way to put evidence in front of the cutover decision was
+to leave the villa running for days — and a gate whose evidence can only
+accumulate is a gate nobody tests. The button is beside the page it fills, and it
+says that it spends a request.
+
 ## 2.662.0
 
 ### Fixed — the cutover evidence could not see the rules it exists to judge
