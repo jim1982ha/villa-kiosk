@@ -1,3 +1,12 @@
+## 2.669.0
+
+### Changed — API usage is its own tab in Advanced Settings, and exports as CSV
+It opened from the narration toggle in Briefings, which is exactly the reading its
+own text spends a paragraph denying: triage, investigations and every chat turn
+spend the same key whether narration is on or off. It now sits beside the settings
+that cause the spend, and the requests in the selected window download as a CSV —
+the rows, not the summary, because reconciling against a bill is line by line.
+
 ## 2.668.0
 
 ### Fixed — Save stayed greyed while you were visibly typing, and caching was unmeasurable
