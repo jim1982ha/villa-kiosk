@@ -1,3 +1,11 @@
+## 2.681.0
+
+### Fixed — a toggle's description overlapped its label, and section spacing still differed per heading
+The v2.680.0 pull compensated for the whole 44px touch target and drove the hint
+into the text above it. The gap under a heading is now stated on the heading's
+successor rather than left to whatever follows, and a row after a hint carries
+no margin, because flex `gap` does not collapse with one.
+
 ## 2.680.0
 
 ### Added — every triage pass is now recorded, so "the agent found nothing" can be told apart from "the agent never ran"
