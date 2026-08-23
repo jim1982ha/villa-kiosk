@@ -1,3 +1,15 @@
+## 2.704.0
+
+### Fixed — the villa removed numbers it had worked out correctly, and kept some it had not
+Ask how many times something came on and the answer arrived as "it came on
+[unsourced figure removed] times": the rule that stops the villa inventing a
+measurement was also being applied to counts, which are worked out from the
+records rather than read off a meter. Meanwhile the same rule accepted a wrong
+figure whenever its digits happened to appear anywhere in the evidence — a count
+of 14 passed because a timestamp read 09:14, and 40 W passed because a reading
+said 340 W. Measurements must still be cited; counts and durations no longer
+have to be, and a citation now has to be the figure itself.
+
 ## 2.703.0
 
 ### Changed — the room lookup added last release is marked as temporary
