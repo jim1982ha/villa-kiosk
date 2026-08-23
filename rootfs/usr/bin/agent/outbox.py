@@ -30,6 +30,7 @@ no timer, no queue and no scheduled release to get wrong.
 
 from __future__ import annotations
 
+import calendar
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -83,6 +84,202 @@ def undelivered(rows: Optional[Sequence[Mapping[str, Any]]] = None
     return [dict(r) for r in source
             if str(r.get("state") or "open") not in concerns_mod.SETTLED
             and not str(r.get("delivered_at") or "").strip()]
+
+
+def awaiting_acknowledgement(rows: Optional[Sequence[Mapping[str, Any]]] = None
+                             ) -> List[Dict[str, Any]]:
+    """Delivered concerns nobody has said "I have seen this" about.
+
+    ⚠️ THE MIRROR OF `undelivered`, AND DELIBERATELY NOT ITS NEGATION. A concern
+    that was sent and acknowledged is finished as far as escalation goes; one
+    that was sent and SETTLED is also finished, but for a different reason, and
+    the sweep needs to tell those apart — a settled one is what `route.escalate`
+    calls a cleared condition and it must be allowed to stand down out loud
+    rather than simply disappearing from the list.
+    """
+    source = list(rows) if rows is not None else concerns_mod.read()
+    return [dict(r) for r in source
+            if str(r.get("delivered_at") or "").strip()
+            and not str(r.get("acknowledged_at") or "").strip()]
+
+
+def _minutes_since(stamp: str, now: Optional[float] = None) -> float:
+    """Minutes between an ISO stamp and now. Negative clocks read as 0.
+
+    ⚠️ NEVER RAISES ON A MALFORMED STAMP — it returns 0, which puts the concern
+    inside the first band and escalates NOTHING. A parse failure must not be
+    able to page the owner at three in the morning.
+    """
+    try:
+        parsed = time.strptime(str(stamp).strip(), "%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, TypeError):
+        return 0.0
+    seconds = (now if now is not None else time.time()) - calendar.timegm(parsed)
+    return max(0.0, seconds / 60.0)
+
+
+async def escalation_sweep(session: Any, *,
+                           config: Optional[Mapping[str, Any]] = None,
+                           now: Optional[float] = None) -> Dispatch:
+    """Re-evaluate what nobody has acknowledged. NEVER RAISES.
+
+    ⚠️ RE-EVALUATES, IT DOES NOT COUNT DOWN, and that distinction is the whole
+    of ADR-008. A fixed 15/45/90-minute ladder is blind to the two facts that
+    decide the answer: whether the condition CLEARED, and whether anybody has
+    picked it up. `route.escalate` asks those first and reaches the bands last;
+    this function's job is to ask it on a clock, not to reimplement it — a timer
+    here would be the ladder coming back through the caller.
+
+    ⚠️ THE CLOCK RUNS FROM DELIVERY, NOT FROM WHEN THE CONCERN WAS OPENED. You
+    cannot acknowledge something you were never sent, so counting from
+    `opened_at` would escalate a concern that was held through quiet hours the
+    moment it finally arrived — punishing the reader for the delay the villa
+    chose. `delivered_at` is the first instant at which silence means anything.
+
+    ⚠️ A STAND-DOWN IS LOGGED, NOT SILENT. "The condition cleared and I stopped"
+    and "nothing was due" are the same empty result and mean opposite things;
+    the first is the branch that earns trust and it has to be visible to have
+    earned anything.
+    """
+    out = Dispatch()
+    pending = awaiting_acknowledgement()
+    out.considered = len(pending)
+    if not pending:
+        return out
+
+    cfg = agent_config.view(config)
+    if not cfg.get("enabled"):
+        out.reason = "the agent is switched off"
+        return out
+
+    occupied = await occupancy_now(session)
+    stood_down = 0
+    for row in pending[:MAX_PER_SWEEP]:
+        try:
+            # ⚠️ SETTLED IS THE CLEARED CONDITION, AND IT IS THE ONE SIGNAL THIS
+            # SWEEP HONESTLY HAS. A `Concern` carries no entity id — by design,
+            # it hashes to `subject_key` — so nothing here can re-probe the
+            # equipment. What it CAN see is that somebody closed, verified or
+            # dismissed the concern since it was sent, which is exactly "this
+            # resolved without an escalation being needed".
+            cleared = str(row.get("state") or "open") in concerns_mod.SETTLED
+            verdict = route_mod.escalate(
+                minutes_open=_minutes_since(str(row.get("delivered_at") or ""),
+                                            now),
+                acknowledged=False,
+                condition_cleared=cleared,
+                severity=str(row.get("severity") or "notice"),
+                facility_reachable=_facility_reachable(config),
+                guests_present=bool(occupied))
+            if not verdict.act:
+                if verdict.step == "stand down":
+                    stood_down += 1
+                    log(f"outbox: concern {row.get('id')} stood down — "
+                        f"{verdict.reason}")
+                continue
+            # ⚠️ ONE STEP IS TAKEN ONCE. Without this the same band fires on
+            # every sweep, five minutes apart, for as long as nobody answers —
+            # which is the alert fatigue this whole path exists to prevent,
+            # delivered by the mechanism meant to prevent it.
+            if str(row.get("escalated_step") or "") == verdict.step:
+                continue
+            sent = await _escalate_one(session, row, verdict,
+                                       config=config, now=now)
+            if sent:
+                out.sent += 1
+                out.delivered_ids.append(str(row.get("id") or ""))
+            else:
+                out.failed += 1
+        except Exception as err:  # noqa: BLE001 - one concern is not the sweep
+            swallow(f"could not escalate concern {row.get('id')}", err)
+            out.failed += 1
+
+    if out.sent or out.failed or stood_down:
+        log(f"outbox escalation: {out.line()}, stood down {stood_down}")
+    return out
+
+
+def _facility_reachable(config: Optional[Mapping[str, Any]]) -> bool:
+    """Has the facility manager anywhere to be reached AT ALL?
+
+    ⚠️ "CONFIGURED", NOT "AWAKE". This is the only sense of reachable the villa
+    can actually check — whether a target exists for the role — and stating that
+    is better than a heuristic that guesses at a person's availability. An empty
+    list is what sends a critical straight to the owner while guests are in
+    residence, which is the branch `route.escalate` was written for.
+    """
+    try:
+        from reports import people as people_mod
+        return bool(people_mod.targets_for_role(config, "ops"))
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not read the facility manager's targets", err)
+        return True
+
+
+async def _escalate_one(session: Any, concern: Mapping[str, Any],
+                        verdict: Any, *, config: Optional[Mapping[str, Any]],
+                        now: Optional[float]) -> bool:
+    """Send one escalation and record which step was taken.
+
+    ⚠️ IT GOES THROUGH `route.plan` LIKE EVERY OTHER DELIVERY. Shadow mode and
+    quiet hours are asked there, and `test_shadow` pins that every unsolicited
+    delivery path consults `shadow.suppressed` — the way to keep that true is to
+    run THROUGH the module that asks rather than around it. An escalation that
+    bypassed it would be the one message a silent villa still sent.
+    """
+    from reports import people as people_mod
+
+    # ⚠️ THE STEP DECIDES THE AUDIENCE, WHICH IS THE WHOLE POINT OF ESCALATING.
+    # "add the owner" and "every configured target" both mean people who were
+    # not on the first message; resending to the same list would be a louder
+    # copy of something already ignored.
+    role = "owner" if verdict.step != "resend to the same target" else (
+        "ops" if str(concern.get("audience")) == "facility" else "owner")
+    targets = people_mod.targets_for_role(config, role)
+    if verdict.step == "every configured target, once":
+        targets = list(dict.fromkeys(
+            list(targets) + list(people_mod.targets_for_role(config, "ops"))))
+    if not targets:
+        return False
+
+    plan = route_mod.plan(concern, targets=targets, push_targets=targets,
+                          occupied=None, quiet_hours=False, config=config)
+    if plan.suppressed or not plan.targets:
+        return False
+    # ⚠️ NOT HELD. `quiet_hours=False` is passed deliberately: an escalation is
+    # by definition a critical nobody has picked up, and `route.escalate` has
+    # already refused every severity below critical. Holding it overnight is the
+    # exact case the whole ladder exists to break.
+    from reports import deliver as deliver_mod
+    results = await deliver_mod.deliver(
+        session, plan.targets, f"Still open: {plan.title}", plan.body)
+    if not any(str(r.get("status")) == "sent" for r in results
+               if isinstance(r, Mapping)):
+        return False
+    _mark_escalated(str(concern.get("id") or ""), verdict.step, now=now)
+    return True
+
+
+def _mark_escalated(concern_id: str, step: str, *,
+                    now: Optional[float] = None) -> bool:
+    """Record which band was taken. ⚠️ AFTER THE SEND, like `_mark_delivered`,
+    and for the identical reason: marking first loses the escalation entirely
+    when the send fails, and at worst marking second escalates twice, which a
+    person notices and can say something about."""
+    if not concern_id:
+        return False
+    try:
+        rows = concerns_mod.read()
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                              time.gmtime(now if now is not None else time.time()))
+        for row in rows:
+            if str(row.get("id")) == concern_id:
+                row["escalated_step"] = str(step)
+                row["escalated_at"] = stamp
+                return concerns_mod._write(rows)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow(f"could not stamp concern {concern_id} as escalated", err)
+    return False
 
 
 def quiet_now(config: Optional[Mapping[str, Any]] = None,

@@ -52,10 +52,12 @@ PKG = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")
 #: are here so the count does not grow silently, not because they are fine.
 EXEMPT: Dict[str, str] = {
     # ── genuinely unreachable, and that is a FINDING (TASK-106, parked) ──
-    "escalate": "state-based escalation for a concern nobody acknowledged. "
-                "The outbox delivers; re-evaluating an unacknowledged one needs "
-                "an acknowledgement to read, and there is no acknowledgement "
-                "path yet. REQ-033 stays unmet for that reason",
+    # ⚠️ `escalate` WAS HERE AND IS NOT ANY MORE (TASK-112, v2.701.0). It was
+    # unreachable for the reason recorded: re-evaluating an unacknowledged
+    # concern needs an acknowledgement to read, and nothing in this system could
+    # acknowledge one. `concerns.acknowledge` is that verb,
+    # `outbox.escalation_sweep` is the caller, and the sweep runs on the triage
+    # clock beside the delivery one.
     "note_delivered": "records a delivered concern so a reply can resolve "
                       "'why?' without naming the subject (REQ-014). The outbox "
                       "now delivers, but does not yet register the thread — "

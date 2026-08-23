@@ -77,6 +77,11 @@ class Concern:
     #: somebody is either spammed or told nothing. `outbox.undelivered` reads
     #: exactly this field.
     delivered_at: str = ""
+    #: When somebody said "I have seen this", and who. ⚠️ NOT A STATE — see
+    #: `acknowledge`. Acknowledging stops escalation; it does not claim the
+    #: problem is fixed, and a concern stays `open` until it actually is.
+    acknowledged_at: str = ""
+    acknowledged_by: str = ""
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -87,6 +92,8 @@ class Concern:
             "opened_at": self.opened_at, "updated_at": self.updated_at,
             "evidence": list(self.evidence), "supersedes": list(self.supersedes),
             "outcome": self.outcome, "delivered_at": self.delivered_at,
+            "acknowledged_at": self.acknowledged_at,
+            "acknowledged_by": self.acknowledged_by,
         }
 
 
@@ -216,6 +223,47 @@ def transition(concern_id: str, state: str, *, outcome: str = "",
             # call would have reported success from the first.
             ok = _write(rows)
             return ok, "" if ok else "the concern store could not be written"
+    return False, f"no concern {concern_id!r}"
+
+
+def acknowledge(concern_id: str, *, by: str,
+                now: Optional[float] = None) -> Tuple[bool, str]:
+    """"I have seen this." Stops escalation. Returns `(ok, reason)`.
+
+    ⚠️ ACKNOWLEDGING IS NOT RESOLVING, AND THAT IS WHY THIS IS NOT A STATE.
+    A person saying they have seen an alert is not saying it is fixed, and
+    modelling it as a transition would force exactly that conflation — the
+    concern would leave `open` and stop being something the villa is still
+    carrying. The state is untouched; two fields are stamped beside it.
+
+    ⚠️ ONE ACKNOWLEDGEMENT CLOSES THE THREAD AND THE PUSH, because there is one
+    record. REQ-034's second clause asks that a concern delivered by two
+    channels not need acknowledging twice; that is satisfied by construction
+    here rather than by keeping two receipts in step — the concern id is the
+    thing both channels carried.
+
+    ⚠️ FIRST ONE WINS. A second acknowledgement is not an error and not an
+    overwrite: escalation has already stopped, and rewriting the name would
+    lose who actually picked it up. Reported as ok, with the reason saying so.
+    """
+    who = str(by or "").strip()
+    if not who:
+        # ⚠️ REFUSED RATHER THAN STAMPED ANONYMOUSLY. "Somebody has it" is the
+        # whole content of an acknowledgement; without a name it says only that
+        # a request arrived, and escalation would stop on that.
+        return False, "an acknowledgement must say who made it"
+    rows = read()
+    for row in rows:
+        if str(row.get("id")) != str(concern_id):
+            continue
+        if str(row.get("acknowledged_at") or ""):
+            return True, (f"already acknowledged by "
+                          f"{row.get('acknowledged_by') or 'somebody'}")
+        row["acknowledged_at"] = _now_iso(now)
+        row["acknowledged_by"] = who
+        row["updated_at"] = _now_iso(now)
+        ok = _write(rows)
+        return ok, "" if ok else "the concern store could not be written"
     return False, f"no concern {concern_id!r}"
 
 

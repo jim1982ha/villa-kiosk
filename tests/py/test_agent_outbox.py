@@ -10,6 +10,7 @@ delivery, what happens to one that is held, and what is written down afterwards.
 from __future__ import annotations
 
 import asyncio
+import time
 import os
 import sys
 from typing import Any, Dict, List, Mapping
@@ -402,3 +403,145 @@ def test_a_concern_does_not_repeat_a_built_in_finding() -> None:
     finally:
         pipeline.set_concerns_source(None)
     assert [r["title"] for r in rows] == ["Only the agent"]
+
+
+# ── acknowledgement, and the escalation it stops (TASK-112) ─────────────────
+# ⚠️ EVERY TEST BELOW GOES THROUGH `escalation_sweep`, NOT THROUGH
+# `route.escalate`. That function was correct, tested rung by rung, and
+# imported by nothing for the whole of its existence — REQ-033 was unmet not
+# because escalation was wrong but because nothing asked it. A suite that
+# exercises the decision function stays green through exactly that, which is
+# `feedback_pin-the-caller` for the second time in two releases.
+
+def _delivered(minutes_ago: float, *, severity: str = "critical") -> str:
+    """A concern sent `minutes_ago` and never acknowledged."""
+    cid = _raise(severity=severity)
+    outbox._mark_delivered(cid, now=time.time() - minutes_ago * 60)
+    return cid
+
+
+def test_an_UNACKNOWLEDGED_concern_escalates_on_the_band(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """The first band is 15 minutes; 20 is past it."""
+    sender = _Sender()
+    _wire(monkeypatch, sender)
+    _delivered(20)
+    out = asyncio.run(outbox.escalation_sweep(None, config=ON))
+    assert out.sent == 1, out.line()
+    assert sender.calls, "nothing was actually sent"
+    assert sender.calls[0]["title"].startswith("Still open:")
+
+
+def test_an_ACKNOWLEDGED_concern_does_not(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ THE WHOLE POINT OF TASK-112. Until `acknowledge` existed there was no
+    way for this to be false, so escalation could only ever run forever — the
+    precise failure alert fatigue names."""
+    sender = _Sender()
+    _wire(monkeypatch, sender)
+    cid = _delivered(200)
+    ok, why = concerns.acknowledge(cid, by="owner")
+    assert ok, why
+    out = asyncio.run(outbox.escalation_sweep(None, config=ON))
+    assert out.sent == 0 and sender.calls == []
+    assert outbox.awaiting_acknowledgement() == []
+
+
+def test_a_CLEARED_condition_stands_down_and_says_so(
+        monkeypatch: pytest.MonkeyPatch, capsys: Any) -> None:
+    """⚠️ RE-EVALUATES, DOES NOT COUNT DOWN. Escalating a problem that fixed
+    itself is how a supervisor loses trust fastest — and a stand-down nobody can
+    see is the same empty result as nothing being due."""
+    sender = _Sender()
+    _wire(monkeypatch, sender)
+    cid = _delivered(200)
+    concerns.transition(cid, "closed", outcome="fixed itself")
+    out = asyncio.run(outbox.escalation_sweep(None, config=ON))
+    assert out.sent == 0 and sender.calls == []
+    assert "stood down" in capsys.readouterr().out
+
+
+def test_one_STEP_is_taken_once_however_many_sweeps_run(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ THE SWEEP RUNS EVERY FEW MINUTES. Without this the same band fires on
+    every one of them until somebody answers, which is the alert fatigue this
+    path exists to prevent, delivered by the mechanism meant to prevent it."""
+    sender = _Sender()
+    _wire(monkeypatch, sender)
+    _delivered(20)
+    first = asyncio.run(outbox.escalation_sweep(None, config=ON))
+    second = asyncio.run(outbox.escalation_sweep(None, config=ON))
+    assert first.sent == 1 and second.sent == 0
+    assert len(sender.calls) == 1
+
+
+def test_acknowledging_is_NOT_resolving() -> None:
+    """A person saying "I have seen this" is not saying it is fixed. If this
+    were a state transition the concern would leave `open` and the villa would
+    stop carrying a problem that is still happening."""
+    cid = _delivered(1)
+    concerns.acknowledge(cid, by="ops")
+    row = [r for r in concerns.read() if r["id"] == cid][0]
+    assert row["state"] == "open"
+    assert row["acknowledged_by"] == "ops"
+
+
+def test_an_acknowledgement_must_say_WHO() -> None:
+    """⚠️ "Somebody has it" IS THE WHOLE CONTENT. Without a name it says only
+    that a request arrived, and escalation would stop on that."""
+    cid = _delivered(1)
+    ok, why = concerns.acknowledge(cid, by="  ")
+    assert not ok and "who" in why
+
+
+def test_the_FIRST_acknowledgement_wins() -> None:
+    """Not an error and not an overwrite — escalation has already stopped, and
+    rewriting the name would lose who actually picked it up."""
+    cid = _delivered(1)
+    concerns.acknowledge(cid, by="ops")
+    ok, why = concerns.acknowledge(cid, by="owner")
+    assert ok and "already acknowledged by ops" in why
+    row = [r for r in concerns.read() if r["id"] == cid][0]
+    assert row["acknowledged_by"] == "ops"
+
+
+def test_a_MALFORMED_delivery_stamp_never_pages_anyone(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ A PARSE FAILURE READS AS ZERO MINUTES, i.e. inside the first band. The
+    other direction — treating an unreadable stamp as "long ago" — wakes the
+    owner at three in the morning because of a formatting bug."""
+    sender = _Sender()
+    _wire(monkeypatch, sender)
+    cid = _raise(severity="critical")
+    rows = concerns.read()
+    for row in rows:
+        if row["id"] == cid:
+            row["delivered_at"] = "not a timestamp"
+    concerns._write(rows)
+    out = asyncio.run(outbox.escalation_sweep(None, config=ON))
+    assert out.sent == 0 and sender.calls == []
+
+
+def test_the_scheduler_RUNS_the_escalation_sweep() -> None:
+    """⚠️ `feedback_pin-the-caller`, and the reason this task exists at all:
+    `route.escalate` was correct and uncalled. A sweep nobody runs is the same
+    defect one layer out."""
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+                            "scheduler.py"), encoding="utf-8").read()
+    code = "\n".join(l for l in src.splitlines()
+                     if not l.strip().startswith("#"))
+    assert "escalation_sweep(" in code, (
+        "nothing runs the escalation sweep, so nothing is ever re-evaluated")
+
+
+def test_the_proxy_EXPOSES_an_acknowledgement_route() -> None:
+    """⚠️ TWO FILES FOR A ROUTE. A handler with no nginx location is answered
+    with index.html at status 200 and surfaces as a JSON parse error blaming the
+    client (2.501.0). An alert that can only be acknowledged by walking to the
+    kiosk escalates while somebody is reading it."""
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
+                            "supervisor-proxy.py"), encoding="utf-8").read()
+    conf = open(os.path.join(REPO_ROOT, "rootfs", "etc", "nginx",
+                             "nginx.conf"), encoding="utf-8").read()
+    assert '"/agent-acknowledge"' in src
+    assert "location = /agent-acknowledge" in conf

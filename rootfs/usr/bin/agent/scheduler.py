@@ -259,4 +259,20 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     dispatch = await outbox_mod.sweep(session, config=config)
     if dispatch.sent or dispatch.held or dispatch.failed:
         outcome = f"{outcome} | outbox: {dispatch.line()}"
+
+    # ⚠️ A SECOND SWEEP, ON THE SAME CLOCK, AND IT IS NOT THE SAME SWEEP
+    # (TASK-112). The first asks "what has never been sent"; this asks "what was
+    # sent and nobody has picked up", which is the question `route.escalate` was
+    # written for and which nothing asked for the whole of its existence —
+    # REQ-033 was unmet not because escalation was wrong but because it had no
+    # caller, exactly as the degradation ladder did.
+    #
+    # ⚠️ RUN AFTER, NEVER MERGED INTO THE FIRST. A concern delivered by the
+    # sweep above is zero minutes old and inside the first band, so ordering
+    # them this way costs nothing; merging them would mean one loop deciding
+    # both "send" and "send again", and the second is the one that must be able
+    # to stand down.
+    escalated = await outbox_mod.escalation_sweep(session, config=config)
+    if escalated.sent or escalated.failed:
+        outcome = f"{outcome} | escalation: {escalated.line()}"
     return outcome

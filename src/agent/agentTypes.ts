@@ -127,4 +127,11 @@ export interface Concern {
    *  ⚠️ SNAKE_CASE ON THE WIRE — the concern store is written by Python and
    *  served verbatim, so this is `delivered_at` as it arrives. */
   delivered_at?: string;
+  /** When somebody said "I have seen this", and who. Absent until they do.
+   *  ⚠️ NOT A STATE — a concern stays `open` after being acknowledged. A person
+   *  saying they have seen an alert is not saying it is fixed, and collapsing
+   *  the two would make the villa stop carrying a problem that is still
+   *  happening. Snake_case for the same reason as `delivered_at` above. */
+  acknowledged_at?: string;
+  acknowledged_by?: string;
 }

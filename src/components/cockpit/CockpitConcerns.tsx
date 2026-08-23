@@ -19,9 +19,9 @@
 // lights" must work reliably rather than probabilistically.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Eye, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 
-import { loadConcerns, sendConcernFeedback } from "@/agent/agentApi";
+import { acknowledgeConcern, loadConcerns, sendConcernFeedback } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import { severityRank, type Concern } from "@/agent/agentTypes";
@@ -66,6 +66,18 @@ export default function CockpitConcerns() {
     void load();
   }, [load]);
 
+  /** ⚠️ A THIRD VERB, NOT A THIRD OPINION. Useful/not-useful judges whether the
+   *  concern was worth raising; this says only that somebody has it, which is
+   *  what stops the escalation ladder. Until TASK-112 nothing in this system
+   *  could say it, so escalation could only ever run forever — the precise
+   *  failure alert fatigue names. */
+  const acknowledge = useCallback(async (id: string) => {
+    setBusy(id);
+    await acknowledgeConcern(id);
+    setBusy(null);
+    void load();
+  }, [load]);
+
   if (rows === null) {
     return (
       <p className="muted body-text">
@@ -105,6 +117,36 @@ export default function CockpitConcerns() {
                 {c.title}
               </span>
             </div>
+            {/* ⚠️ ONLY ON WHAT WAS ACTUALLY SENT. Acknowledging something
+                nobody was told about stops an escalation that was never going
+                to happen, and puts a button on every row for a state most rows
+                are not in. A concern already acknowledged says WHO — the first
+                acknowledgement wins, and hiding that would make a second reader
+                think nobody had picked it up. */}
+            {canJudge && c.delivered_at && (
+              c.acknowledged_at ? (
+                <span className="muted body-text"
+                      title={`Acknowledged ${c.acknowledged_at}`}>
+                  seen by {c.acknowledged_by || "somebody"}
+                </span>
+              ) : (
+                /* ⚠️ ICON-ONLY, LIKE THE TWO BUTTONS BESIDE IT, AND THAT IS A
+                   PHONE DECISION. `.editable-row` is `flex-wrap: nowrap`, so a
+                   fourth control carrying a text label does not move to a
+                   second line — it squeezes the title, which is the only part
+                   of the row a reader needs. The label lives in `aria-label`
+                   and `title`, which is how the thumbs beside it already
+                   explain themselves. */
+                <button
+                  type="button" className="icon-btn" disabled={busy === c.id}
+                  aria-label={`I have seen this: ${c.title}`}
+                  title="I have seen this — stops it escalating"
+                  onClick={() => void acknowledge(c.id)}
+                >
+                  <Eye size={16} aria-hidden />
+                </button>
+              )
+            )}
             {canJudge && (
               <>
                 <button

@@ -1,3 +1,15 @@
+## 2.701.0
+
+### Added — you can now say "I have seen this", and it stops the alert escalating
+A critical finding was meant to be resent, then sent to the owner, then to
+everyone, until somebody picked it up — and nothing in the villa could say that
+anybody had, so the ladder had no way to stop and was never switched on. A
+delivered concern now carries an eye button on the Cockpit that records who has
+it; escalation asks that first. It re-evaluates rather than counting down, so a
+problem that resolved itself while nobody was looking stands down and says so
+instead of waking you. Acknowledging is not the same as fixing: the concern
+stays open until it actually is.
+
 ## 2.700.0
 
 ### Fixed — section headings sat on top of the text below them, in some dialogs and not others

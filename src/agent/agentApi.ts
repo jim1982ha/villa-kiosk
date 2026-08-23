@@ -339,6 +339,28 @@ export async function sendConcernFeedback(
   return r.ok;
 }
 
+/**
+ * "I have seen this." Stops escalation. TASK-112, REQ-033/034.
+ *
+ * ⚠️ ACKNOWLEDGING IS NOT JUDGING AND IT IS NOT RESOLVING. `sendConcernFeedback`
+ * records whether a concern was WORTH raising — three dismissals suppress a
+ * whole subject — and closing one says the problem is dealt with. This says only
+ * that a person has it, which is the one fact the escalation ladder needs.
+ *
+ * ⚠️ THE NAME IS NOT SENT. The server takes it from the session, because "who
+ * picked this up" is the whole content of an acknowledgement and a
+ * client-supplied name would let anyone stop an escalation on someone's behalf.
+ */
+export async function acknowledgeConcern(id: string): Promise<boolean> {
+  const r = await fetch(ingressPath("agent-acknowledge"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  return r.ok;
+}
+
 /** A procedure the agent has proposed and nobody has yet judged. TASK-094. */
 export interface ReviewDraft {
   slug: string;

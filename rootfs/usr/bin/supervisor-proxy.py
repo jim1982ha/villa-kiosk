@@ -2198,6 +2198,52 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
     })
 
 
+async def agent_acknowledge_handler(request: web.Request) -> web.Response:
+    """"I have seen this." Stops escalation. TASK-112, REQ-033/034.
+
+    ⚠️ ACKNOWLEDGING IS NOT JUDGING, AND IT IS NOT RESOLVING. `/agent-feedback`
+    records whether a concern was WORTH raising — three dismissals suppress a
+    whole subject — and closing one says the problem is dealt with. This says
+    only that a person has it, which is the one fact `route.escalate` needs and
+    the one nothing in this system could state until now. It is a lighter act
+    than either neighbour and deliberately has the same gate, because the pair
+    who receive an escalation are the pair who must be able to stop it.
+
+    ⚠️ THE NAME COMES FROM THE SESSION, NEVER FROM THE BODY. "Who picked this
+    up" is the content of an acknowledgement, and a client-supplied name would
+    let anyone stop the villa escalating on somebody else's behalf.
+
+    ⚠️ AND THIS IS THE PHONE PATH, NOT ONLY THE TABLET'S. An alert that can be
+    acknowledged only by walking to the kiosk escalates while somebody is
+    reading it — so this is a plain POST behind the same ingress session the
+    Cockpit uses, which is what a phone browser already has.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in TASK_ACK_ROLES:
+        return _forbidden("Only an owner or facility manager may acknowledge "
+                          "a concern.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "expected an object"}, status=400)
+    concern_id = str(body.get("id") or "").strip()
+    if not concern_id:
+        return web.json_response({"error": "no concern id"}, status=400)
+
+    from agent import concerns as agent_concerns
+    ok, reason = agent_concerns.acknowledge(
+        concern_id, by=str(_role_for(request) or ""))
+    if not ok:
+        return web.json_response({"error": reason}, status=400)
+    # ⚠️ `reason` IS RETURNED ON SUCCESS TOO. A second acknowledgement is not an
+    # error — escalation has already stopped — and it carries the only thing the
+    # caller did not know: who got there first.
+    return web.json_response({"ok": True, "note": reason})
+
+
 async def agent_usage_handler(request: web.Request) -> web.Response:
     """What the API key has been spent on, per request. Owner-only.
 
@@ -3450,6 +3496,7 @@ def main() -> None:
     app.router.add_get("/agent-concerns", agent_concerns_get_handler)
     app.router.add_get("/agent-chats", agent_chats_handler)
     app.router.add_post("/agent-feedback", agent_feedback_handler)
+    app.router.add_post("/agent-acknowledge", agent_acknowledge_handler)
     app.router.add_get("/agent-runs", agent_runs_handler)
     app.router.add_get("/agent-usage", agent_usage_handler)
     app.router.add_get("/agent-review", agent_review_get_handler)
