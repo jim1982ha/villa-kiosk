@@ -86,6 +86,7 @@ ILLUSTRATIVE: Set[str] = {
     # property under test is which of the two survives eviction, and a real
     # device id would make that read as a claim about this villa.
     "light.chatty", "sensor.chatty_signal", "sensor.busy", "sensor.quiet",
+    "sensor.quiet_pump_power",
     "lock.side_gate",
     # `test_agent_mcp.py`. A deliberately fictional id, and the test's whole
     # point is that a tool result carrying ANY raw id is refused — so the id

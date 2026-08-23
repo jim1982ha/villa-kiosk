@@ -269,6 +269,50 @@ def test_every_TABBED_dialog_hands_its_draft_to_the_strip() -> None:
     assert not problems, "\n".join(problems)
 
 
+def test_the_TAB_STRIP_cannot_be_squashed_by_its_own_dialogs_content() -> None:
+    """⚠️ REPORTED TWICE, AND THE FIRST FIX WAS ONE ELEMENT AWAY FROM THE CAUSE.
+
+    `.fm-tabs` declared no flex value, so it defaulted to `flex: 0 1 auto` —
+    shrinkable — while its sibling `.settings-body` scrolls with `flex: 1 1
+    auto` and no `min-height: 0`. A flex item with `overflow: auto` still claims
+    its min-CONTENT height as a minimum, so a long tab pushed the column past
+    the card's fixed height and the browser recovered the difference from the
+    only item allowed to give: the tab strip. A tab with a long body squashed
+    it, a short one did not, and the reader sees three different tab bars.
+
+    Both halves are pinned because either alone leaves the bug reachable: the
+    body's `min-height: 0` stops the pressure existing, and the strip's
+    `flex: 0 0 auto` makes it immune to whatever a future panel invents.
+    """
+    with open(os.path.join(REPO_ROOT, "src", "styles.css"), encoding="utf-8") as h:
+        css = h.read()
+
+    # ⚠️ THE DESKTOP BLOCK, NOT THE FIRST MATCH. `.fm-tabs` appears twice — the
+    # base rule and a phone-tier override that only re-pads it — and the first
+    # occurrence in the file is the override. A pin that reads the wrong block
+    # of a two-block selector reports on a rule nobody was arguing about.
+    blocks = [css[m.start():css.index("}", m.start())]
+              for m in re.finditer(r"\n\.fm-tabs \{", css)]
+    assert blocks, ".fm-tabs is gone from the stylesheet"
+    strip = max(blocks, key=len)
+    assert re.search(r"flex:\s*0\s+0\s+auto", strip), (
+        ".fm-tabs is shrinkable again — a long tab will squash it and every "
+        "tab will look like a different dialog")
+
+    body = css[css.index(".settings-body {"):]
+    body = body[:body.index("}")]
+    assert re.search(r"min-height:\s*0", body), (
+        ".settings-body lost `min-height: 0`, so its content pushes the column "
+        "and the squash comes back through the other half")
+
+    # ⚠️ AND THE PILL'S OWN HEIGHT IS STATED, so it cannot take its size from a
+    # label, an unloaded font or a swapped icon either.
+    tab = css[css.index(".fm-tab {"):]
+    tab = tab[:tab.index("}")]
+    assert re.search(r"height:\s*\d+px", tab), (
+        ".fm-tab no longer states a height")
+
+
 def test_the_family_marker_still_matches_the_stylesheet() -> None:
     """⚠️ VACUOUS-PASS GUARD. If `.settings-modal` is renamed in the CSS, every
     check above starts comparing empty sets and reports health forever."""

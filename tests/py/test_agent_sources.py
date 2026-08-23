@@ -130,3 +130,46 @@ def test_a_broken_journal_does_not_take_the_registry_down() -> None:
         assert build_registry().names
     finally:
         journal_mod.read = original
+
+
+def test_a_QUIET_entity_stays_ADDRESSABLE_after_the_ring_fills(
+        tmp_path: Any, monkeypatch: Any) -> None:
+    """⚠️ THE PH-2 GATE'S DEFECT, END TO END: journal → refs → "can the agent
+    name this device". Reported three times from the villa — "no pool pump
+    circuit shows up in what I can address" — of a circuit drawing 863.7 W.
+
+    `build_refs` mints one handle per entity IN THE JOURNAL, which is right
+    while the journal covers its window and wrong once the ring is full: what
+    survives is then "whatever changed most recently", and a steadily-running
+    pump emits far fewer rows than a chatty signal sensor. The equipment worth
+    asking about is evicted FIRST.
+
+    This drives the real `journal.append` and the real `build_refs` rather than
+    a fixture of either, because the defect lived in the seam between them.
+    """
+    from observe import journal
+
+    monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "j.json"))
+    monkeypatch.setattr(journal, "JOURNAL_MAX_ENTRIES", 20)
+
+    def changed(entity: str, value: str, at: str) -> Dict[str, Any]:
+        return {"event_type": "state_changed", "time_fired": at, "data": {
+            "entity_id": entity,
+            "old_state": {"state": "0", "attributes": {}},
+            "new_state": {"state": value, "attributes": {}}}}
+
+    quiet = "sensor.quiet_pump_power"
+    journal.append([changed(quiet, "863.7", "2026-08-22T09:00:00+00:00")],
+                   now_iso="2026-08-22T09:00:00+00:00")
+    # A chatty neighbour fills the ring many times over.
+    for i in range(120):
+        journal.append([changed("sensor.chatty_signal", str(i),
+                                f"2026-08-22T1{i // 60}:{i % 60:02d}:00+00:00")],
+                       now_iso="2026-08-22T12:00:00+00:00")
+
+    table = sources.build_refs(journal.read()["entries"])
+    addressable = {table.resolve(r) for r in table.known()}
+    assert quiet in addressable, (
+        "the pump was evicted from the journal and is therefore unnameable — "
+        "the agent would answer that no such circuit exists, of equipment the "
+        "villa is metering right now")

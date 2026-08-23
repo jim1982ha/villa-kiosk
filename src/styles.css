@@ -2180,7 +2180,10 @@ input[type="range"]::-moz-range-thumb {
    .info-pop tooltip on a narrow phone) put a horizontal scrollbar on the
    whole Advanced Settings body. Nothing in the body legitimately needs
    horizontal scroll (wide tables card-stack on mobile already). */
-.settings-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
+/* ⚠️ `min-height: 0` IS LOAD-BEARING — see `.fm-tabs`. Without it a flex item
+   that scrolls still claims its content's height as a minimum, so a long tab
+   pushed the column and the browser took the difference out of the tab strip. */
+.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 28px 12px; }
 .settings-body label {
   display: block; color: var(--text-secondary);
   font-size: var(--field-label-size); margin: 14px 0 var(--field-label-gap);
@@ -2229,9 +2232,6 @@ input[type="range"]::-moz-range-thumb {
    selected tab". The rhythm belongs to the stylesheet: one rule, every tab of
    every modal, and no call site can opt half of it. */
 .settings-body > .settings-section-title:first-child { margin-top: 4px; }
-/* ⚠️ AND THE STRIP'S OWN HEIGHT IS STATED rather than inherited from whichever
-   button is inside it, so it cannot breathe with its content either. */
-.fm-tabs { min-height: calc(var(--touch-min) + 8px); }
 /* The collapsible variant (ConfigEditorModal's auto-detected-entities /
    device-telemetry sections) — same label typography, made clickable. Reset
    to a plain full-width row (buttons carry their own background/border/
@@ -3426,9 +3426,37 @@ label.toggle span { user-select: none; line-height: 1.4; }
      OWN icon+label were centred fine internally. */
   display: flex; align-items: center; gap: 4px; padding: 10px 22px; overflow-x: auto;
   scrollbar-width: none; border-bottom: 1px solid var(--hairline);
+  /* One height for every strip in the app, stated rather than inherited from
+     whichever button happens to be inside it. ⚠️ IT WAS BRIEFLY A SECOND
+     `.fm-tabs` RULE ELSEWHERE IN THIS FILE — two blocks for one selector is how
+     the next reader fixes the wrong one. */
+  min-height: calc(var(--touch-min) + 8px);
+  /* ⚠️ `flex: 0 0 auto` OR THE STRIP IS SQUASHED BY ITS OWN DIALOG'S CONTENT,
+     AND THAT IS WHY IT LOOKED DIFFERENT ON EVERY TAB — reported twice, and the
+     first fix (a per-tab margin) addressed a symptom one element away.
+
+     This declared no flex value at all, so it defaulted to `flex: 0 1 auto`:
+     shrinkable. Its sibling `.settings-body` is `flex: 1 1 auto; overflow-y:
+     auto` and had no `min-height: 0`, so its AUTOMATIC MINIMUM SIZE is
+     content-based — a flex item with `overflow: auto` still refuses to go below
+     its min-content height unless told otherwise. The body therefore pushed the
+     column past the card's fixed height, and the browser recovered the
+     difference from the only item allowed to give: this one. A tab with a long
+     body squashed the strip; a short one did not; the reader sees three
+     different tab bars and blames the tab bar.
+
+     Both halves are needed. `min-height: 0` on the body is the half that stops
+     the pressure existing; `flex: 0 0 auto` here is the half that makes the
+     strip immune to any pressure a future panel invents. Stated once, on the
+     shell, so it holds for every tab of every modal in the family. */
+  flex: 0 0 auto;
 }
 .fm-tabs::-webkit-scrollbar { display: none; }
 .fm-tab {
+  /* ⚠️ AN EXPLICIT HEIGHT, so the pill cannot take its size from a label, a
+     font that has not loaded yet, or an icon somebody swaps. One number, every
+     strip in the app. */
+  height: 38px;
   display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
   padding: 8px 13px; border-radius: 10px; border: 1px solid transparent;
   background: transparent; color: var(--text-secondary);
