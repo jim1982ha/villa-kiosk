@@ -1,3 +1,15 @@
+## 2.700.0
+
+### Fixed — section headings sat on top of the text below them, in some dialogs and not others
+`DASHBOARD TITLE` and `VILLA LOCATION` overlapped what followed while `RENDER
+QUALITY & LOOK` and `DEVICE TELEMETRY` looked right — one heading style, two
+results, because the rule spacing a heading from the row under it assumed every
+dialog stacks its contents the same way and half do not. Every dialog now
+derives it from its own layout, and the Briefing dialog's second heading style
+is gone. Supervision's settings are also rewritten out of the code's vocabulary
+("cadence", "shadow period", "turns") and regrouped; "Briefing coverage" moves
+from the Cockpit into Briefings, where its "Last briefing" was showing the first.
+
 ## 2.699.0
 
 ### Fixed — a report whose renderer failed arrived as one sentence apologising
