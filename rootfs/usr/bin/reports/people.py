@@ -17,6 +17,15 @@ go). So one person was configured twice, in two screens, in two vocabularies —
 and the owner reported the second as redundant, correctly: choosing to send a
 brief to somebody already determines whose voice it is written in.
 
+⚠️ A ROW IS A CHAT, SOME DEVICES AND A PROFILE — THERE IS NO `name` (2.655.0).
+It was stored from the first version and read by NOTHING: not by the pipeline,
+not by `role_for_sender`, not by chat. A field that only ever travels from a
+text box to a JSON file and back is not data, it is a place for two operators to
+disagree about spelling — and on the reference villa it arrived as the person's
+Telegram id, because that is all the legacy sender map held, which is what made
+the row read as carrying the chat id twice. The chat's own name is what the
+picker already shows.
+
 ⚠️ THE TWO DIRECTIONS ARE STILL NOT SYMMETRIC, AND THE TABLE MUST NOT PRETEND
 THEY ARE. A Companion-app notify entity can only RECEIVE; it can never send, so
 listing one grants no inbound privilege whatsoever. Only `telegram` on a row is
@@ -94,7 +103,6 @@ def _row(raw: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
                if str(t).strip()] if isinstance(targets, Sequence) \
         and not isinstance(targets, str) else []
     return {
-        "name": str(raw.get("name") or "").strip(),
         "telegram": str(raw.get("telegram") or "").strip(),
         "targets": targets,
         "role": role,
@@ -142,7 +150,7 @@ def people(config: Optional[Mapping[str, Any]] = None) -> List[Dict[str, Any]]:
         channel, _, sender = str(key).partition(":")
         if channel.strip().lower() != INBOUND_CHANNEL or not sender:
             continue
-        got = _row({"name": sender, "telegram": sender, "role": role})
+        got = _row({"telegram": sender, "role": role})
         if got is not None:
             rows.append(got)
     return rows

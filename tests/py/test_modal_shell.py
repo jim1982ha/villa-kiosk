@@ -197,6 +197,78 @@ def test_the_fixed_HEIGHT_belongs_TO_THE_FAMILY_not_to_a_call_site() -> None:
         f"it; a per-dialog opt-in is what let one of them go without.")
 
 
+def test_SAVE_closes_the_dialog_and_only_on_success() -> None:
+    """⚠️ REPORTED: "when I click on Save I don't see the modal close, whereas
+    it should". It does now — and the half that is easy to lose in a later edit
+    is the CONDITION. A dialog that closes on a refused write (a revision
+    conflict, a 403) shows the operator their edit vanishing while the error
+    explaining it is dismissed with the dialog. `false` means failed; anything
+    else, `undefined` included, means done."""
+    footer = _read("src/components/common/ModalFooter.tsx")
+    assert "onClose()" in footer and "ok !== false" in footer, (
+        "ModalFooter's Save no longer closes on success only — either it stopped "
+        "closing, or it closes on a failed write too")
+
+
+def test_a_TAB_SWITCH_asks_before_it_loses_a_draft() -> None:
+    """⚠️ THE ONE GESTURE THAT LOSES AN EDIT WITHOUT LOOKING LIKE IT. The footer's
+    Save is still there, the draft is still in memory, and the operator has gone
+    to look at something else — then closed the dialog.
+
+    ⚠️ PINNED ON `ModalTabs`, NOT ON THE DIALOGS, because that is what makes it
+    universal: every tabbed dialog gets it from the strip, including the ones
+    with no draft today. A per-dialog implementation is the shape this whole
+    file exists to catch.
+
+    ⚠️ AND ESCAPE MEANS STAY. Three answers, three explicit buttons: squeezing
+    them into two puts one on the backdrop where it is taken by accident, and
+    the one that would land there is "discard".
+    """
+    tabs = _read("src/components/common/ModalTabs.tsx")
+    assert "AskDialog" in tabs, (
+        "the tab strip no longer asks about an unsaved draft — a tab switch is "
+        "the one gesture that can lose one silently")
+    for label in ("Save and continue", "Discard and continue", "Stay here"):
+        assert label in tabs, f"the unsaved-changes question lost its `{label}`"
+    # ⚠️ THE SWITCH MUST WAIT FOR THE WRITE. Moving the operator on after a
+    # REFUSED save leaves them believing it landed — the failure this question
+    # exists to prevent, arriving through its own fix.
+    assert "ok !== false" in tabs, (
+        "the tab switch no longer depends on the save succeeding")
+    # ⚠️ READ THE GUARD ITSELF, NOT THE FILE. The first version of this line
+    # asserted `"id === active" in tabs` and a mutation deleting the whole guard
+    # SURVIVED it — because `t.id === active` renders the active tab thirty
+    # lines below and contains that substring. A pin that can be satisfied by an
+    # unrelated line is not a pin.
+    guard = tabs[tabs.index("const choose = "):]
+    guard = guard[:guard.index("\n  };")]
+    assert "commit?.dirty" in guard, (
+        "the tab strip switches without consulting the draft — the question is "
+        "gone however many labels are still in the file")
+    assert "id === active" in guard, (
+        "re-selecting the current tab now raises the question too")
+
+
+def test_every_TABBED_dialog_hands_its_draft_to_the_strip() -> None:
+    """⚠️ THE APPLICABLE SET, DERIVED. A dialog that renders `<ModalTabs` and
+    owns a `commit` must pass it, or its tabs silently lose drafts while its
+    footer protects them — two answers to one question inside one dialog."""
+    problems: List[str] = []
+    for path, source in sorted(_dialogs().items()):
+        if "<ModalTabs" not in source:
+            continue
+        # A dialog with no draft passes nothing, which is correct.
+        if "commit={" not in source:
+            continue
+        strip = source[source.index("<ModalTabs"):]
+        strip = strip[:strip.index("/>")]
+        if "commit=" not in strip:
+            problems.append(
+                f"{path} gives its footer a draft and its tab strip none, so "
+                f"switching tabs loses what Save would have kept")
+    assert not problems, "\n".join(problems)
+
+
 def test_the_family_marker_still_matches_the_stylesheet() -> None:
     """⚠️ VACUOUS-PASS GUARD. If `.settings-modal` is renamed in the CSS, every
     check above starts comparing empty sets and reports health forever."""

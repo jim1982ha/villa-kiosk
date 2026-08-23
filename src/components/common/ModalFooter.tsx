@@ -60,7 +60,11 @@ export interface ModalCommit {
   saving?: boolean;
   /** Shown in place of the note, as an alert. */
   error?: string | null;
-  save: () => void | Promise<unknown>;
+  /** Commit. ⚠️ RESOLVE `false` TO SAY IT FAILED — anything else (including
+   *  `undefined`) is taken as success and CLOSES the dialog. A refused write
+   *  must leave the dialog open with its error, or the operator watches their
+   *  edit disappear and has no idea it did not land. */
+  save: () => void | boolean | Promise<unknown>;
   /** Throw the draft away. ⚠️ OPTIONAL, BUT ITS ABSENCE IS A REAL STATE: a
    *  dialog that cannot discard should not offer Cancel, so it simply keeps
    *  Close and the caller passes no commit at all. */
@@ -84,6 +88,16 @@ export default function ModalFooter({
 }) {
   const dirty = commit?.dirty === true;
   const saving = commit?.saving === true;
+  /** ⚠️ SAVE CLOSES THE DIALOG, which is what a person expects of the button
+   *  that finishes their work — reported as "when I click on Save I don't see
+   *  the modal close, whereas it should". It closes only on SUCCESS: a refused
+   *  write (a revision conflict, a 403) keeps the dialog open so the error in
+   *  this same footer is read rather than dismissed with the thing it explains. */
+  const done = async () => {
+    if (!commit) return;
+    const ok = await commit.save();
+    if (ok !== false) onClose();
+  };
   return (
     <div className="settings-footer">
       {commit?.error
@@ -112,7 +126,7 @@ export default function ModalFooter({
                      : "Nothing has been changed yet")
             : "Everything in this dialog applies as you change it — there is "
               + "nothing waiting to be saved"}
-          onClick={() => { void commit?.save(); }}
+          onClick={() => { void done(); }}
         >
           <SaveIcon size={16} />
           <span>{saving ? "Saving…" : "Save"}</span>

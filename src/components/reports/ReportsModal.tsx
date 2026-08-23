@@ -255,6 +255,11 @@ export default function ReportsModal(
       if (result.conflict) await reload();
     }
     setBusy(false);
+    // ⚠️ THE FOOTER CLOSES ON SUCCESS AND MUST NOT ON FAILURE, so this reports
+    // which happened rather than resolving void. A conflict has just reloaded
+    // somebody else's copy into the dialog; closing it would throw away the
+    // operator's chance to re-apply.
+    return result.ok;
   }, [rev, carryOver, reload]);
 
   /** ⚠️ A SEPARATE WRITE FROM THE CONFIG SAVE, because a credential is not
@@ -331,6 +336,19 @@ export default function ReportsModal(
     setBusy(false);
   }, []);
 
+  /** ⚠️ ONE COMMIT OBJECT FOR THE STRIP AND THE FOOTER. Two would be two
+   *  answers to "is there anything unsaved" — and the strip's question is asked
+   *  precisely when the footer's Save is the thing being walked away from. */
+  const commit = {
+    dirty: pending !== null,
+    saving: busy,
+    save: () => (pending ? save(pending) : true),
+    // ⚠️ THE TAB OWNS THE DRAFT AND REPUBLISHES IT FROM `config` ON EVERY
+    // CHANGE, so clearing it here is what a discard IS: the tab re-seeds from
+    // the server's copy.
+    discard: () => setPending(null),
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -370,6 +388,7 @@ export default function ReportsModal(
           tabs={tabs}
           active={tab}
           onSelect={setTab}
+          commit={commit}
           label="Briefing sections"
         />
 
@@ -445,15 +464,7 @@ export default function ReportsModal(
         <ModalFooter
           note="Briefings are composed by the add-on and delivered by Home Assistant"
           busy={busy}
-          commit={{
-            dirty: pending !== null,
-            saving: busy,
-            save: () => { if (pending) void save(pending); },
-            // ⚠️ THE TAB OWNS THE DRAFT AND REPUBLISHES IT FROM `config` ON
-            // EVERY CHANGE, so clearing it here is what a discard IS: the tab
-            // re-seeds from the server's copy the moment this dialog closes.
-            discard: () => setPending(null),
-          }}
+          commit={commit}
           onClose={onClose}
         />
       </div>

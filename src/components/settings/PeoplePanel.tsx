@@ -56,9 +56,9 @@ const CHANNEL = "telegram";
  *  permanent. Without it the panel would show an empty list on a villa whose
  *  bot is answering people, which reads as "nobody is configured" and is false.
  *  A legacy sender has no delivery target, so the row is inbound-only until the
- *  owner gives it one. */
-function fromLegacy(map: Record<string, string> | undefined,
-                    chats: BotChat[]): Person[] {
+ *  owner gives it one — which is exactly the `(no devices yet)` state Briefings
+ *  now names. */
+function fromLegacy(map: Record<string, string> | undefined): Person[] {
   return Object.entries(map ?? {})
     .filter(([key]) => key.startsWith(`${CHANNEL}:`))
     .map(([key, role]) => ({
@@ -68,8 +68,6 @@ function fromLegacy(map: Record<string, string> | undefined,
       // screen as the same field twice. The bot already knows that chat's
       // name; using it is the difference between a migrated row and a migrated
       // row somebody can recognise. The number remains if the chat is gone.
-      name: chats.find((c) => c.id === key.slice(CHANNEL.length + 1))?.name
-        || key.slice(CHANNEL.length + 1),
       telegram: key.slice(CHANNEL.length + 1),
       targets: [],
       role: (ROLE_ORDER as readonly string[]).includes(role)
@@ -105,7 +103,7 @@ export default function PeoplePanel() {
    *  ⚠️ DERIVED AFTER `chats` IS DECLARED, because the migration reads it to
    *  name the person — see `fromLegacy`. */
   const migrated = stored.length === 0
-    ? fromLegacy(draft.config.allowedSenders as Record<string, string>, chats)
+    ? fromLegacy(draft.config.allowedSenders as Record<string, string>)
     : [];
   const legacy = stored.length === 0 && migrated.length > 0;
   const rows = stored.length ? stored : migrated;
@@ -198,11 +196,12 @@ export default function PeoplePanel() {
       )}
 
       <p className="muted body-text" style={{ marginTop: 14 }}>
-        One row per person. The chat is how they reach the villa; the devices
-        are how it reaches them; the profile decides both what a briefing for
-        them contains and which schedules land there. Anyone not listed is
-        ignored in silence — a stranger who finds the bot learns nothing from
-        it.
+        One row per person. The <strong>chat</strong> is how they reach the
+        villa — it is the only field that lets anyone message it — the{" "}
+        <strong>devices</strong> are how it reaches them, and the{" "}
+        <strong>profile</strong> decides both what a briefing for them contains
+        and which schedules land there. Anyone not listed is ignored in silence:
+        a stranger who finds the bot learns nothing from it.
       </p>
 
       {rows.length === 0 && (
@@ -217,23 +216,15 @@ export default function PeoplePanel() {
           <div className="editable-row" style={{ marginTop: 8 }}>
             <div className="editable-row-fields">
               {/* ⚠️ EVERY FIELD CARRIES A VISIBLE LABEL, and it took a report to
-                  get them. Four unlabelled controls in a row read as four
-                  guesses — and the first one is worse than a guess after the
-                  legacy migration, which names a person after their Telegram
-                  id, so the row opened with a NUMBER beside a chat picker and
-                  was read as the same field twice: "I don't understand this
-                  menu: as I see both the Chat ID fields". `--field-label-size`
-                  and `--field-label-gap` are the app's own rhythm for exactly
-                  this shape. */}
-              <label className="people-field">
-                <span>Name</span>
-                <input
-                  value={row.name}
-                  disabled={saving}
-                  placeholder="Who this is"
-                  onChange={(e) => at(i, { name: e.target.value })}
-                />
-              </label>
+                  get them: three unlabelled controls in a row read as three
+                  guesses. ⚠️ AND THERE WERE FOUR UNTIL 2.655.0 — a `Name` box
+                  that nothing on either side ever read, which the legacy
+                  migration filled with the person's Telegram id, so the row
+                  opened with a NUMBER beside a chat picker and was reported as
+                  the same field twice. Deleting it is what makes the row fit on
+                  one line, which is the other half of that report.
+                  `--field-label-size`/`--field-label-gap` are the app's own
+                  rhythm for this shape. */}
               {/* ⚠️ A NAME WHEN WE KNOW ONE, THE NUMBER WHEN WE DO NOT. In a
                   PRIVATE chat the chat id and the sender id are the same
                   number, so the bot's own chat list is exactly the right menu —
@@ -258,7 +249,7 @@ export default function PeoplePanel() {
                   got wrong (`people.role_for_sender`), which is why the field
                   stays and the labels changed instead. */}
               <label className="people-field">
-                <span>Telegram chat — lets them message the villa</span>
+                <span>Telegram chat</span>
                 {chats.length > 0 ? (
                   <select
                     value={row.telegram}
@@ -286,7 +277,7 @@ export default function PeoplePanel() {
                 )}
               </label>
               <label className="people-field">
-                <span>Devices — where briefings are sent</span>
+                <span>Devices</span>
                 <RecipientButton
                   targets={row.targets ?? []}
                   available={targets}
@@ -316,7 +307,7 @@ export default function PeoplePanel() {
               type="button"
               className="btn danger icon-only"
               disabled={saving}
-              aria-label={row.name ? `Remove ${row.name}` : "Remove this row"}
+              aria-label="Remove this person"
               onClick={() => {
                 setOpen(null);
                 commit(rows.filter((_, n) => n !== i));
@@ -330,14 +321,15 @@ export default function PeoplePanel() {
               targets={row.targets ?? []}
               available={targets}
               onChange={(next) => at(i, { targets: next })}
+              onClose={() => setOpen(null)}
             />
           )}
         </div>
       ))}
 
       <button className="btn" disabled={saving}
-              onClick={() => commit([...rows, { name: "", telegram: "",
-                                                targets: [], role: "owner" }])}
+              onClick={() => commit([...rows, { telegram: "", targets: [],
+                                                role: "owner" }])}
               style={{ marginTop: 10, alignSelf: "flex-start" }}>
         <Plus size={16} aria-hidden /><span>Add someone</span>
       </button>

@@ -54,9 +54,13 @@ const AGENT_WIRE_KEYS = {
 
 export type AgentTrigger = "scheduled" | "event" | "chat";
 
-/** One row of the people table. */
+/** One row of the people table.
+ *
+ *  ⚠️ NO `name`, AND ITS ABSENCE IS THE POINT (2.655.0). The field was stored
+ *  from the first version and read by nothing on either side — a text box whose
+ *  value travelled to a JSON file and back. The chat picker already shows the
+ *  name Telegram itself holds, which is the one nobody has to keep in step. */
 export interface Person {
-  name: string;
   /** Telegram user id, or "" for a delivery-only person. */
   telegram: string;
   /** Notify destinations — Companion app, Telegram entity, anything
@@ -80,7 +84,6 @@ export function peopleOf(config: Partial<AgentConfig>): Person[] {
     const r = raw as unknown as Record<string, unknown>;
     if (!(ROLE_ORDER as readonly string[]).includes(String(r.role))) continue;
     out.push({
-      name: typeof r.name === "string" ? r.name : "",
       telegram: typeof r.telegram === "string" ? r.telegram : "",
       targets: Array.isArray(r.targets)
         ? r.targets.filter((t): t is string => typeof t === "string" && !!t)

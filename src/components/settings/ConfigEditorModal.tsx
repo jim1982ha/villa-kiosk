@@ -239,6 +239,7 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
           active={tab}
           onSelect={setTab}
           label="Settings sections"
+          commit={draft}
         />
 
         <div className="settings-body">

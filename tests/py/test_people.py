@@ -21,9 +21,9 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 from reports import people as people_mod  # noqa: E402
 from reports import pipeline as pipeline_mod  # noqa: E402
 
-OWNER = {"name": "Jm", "telegram": "765979167",
+OWNER = {"telegram": "765979167",
          "targets": ["entity:notify.iphone_16_fab"], "role": "owner"}
-FM = {"name": "Facility", "telegram": "",
+FM = {"telegram": "",
       "targets": ["entity:notify.the_ipad"], "role": "ops"}
 CFG = {"people": [OWNER, FM]}
 
@@ -70,7 +70,7 @@ def test_a_row_with_an_UNKNOWN_ROLE_is_dropped_not_defaulted() -> None:
     """⚠️ The role decides both whether somebody may speak and which voice they
     are written in — one withholds entity ids, the other requires them. A
     default here would be a privilege decision made by a typo."""
-    bad = {"people": [{"name": "x", "telegram": "1", "role": "adminz"}]}
+    bad = {"people": [{"telegram": "1", "role": "adminz"}]}
     assert people_mod.people(bad) == []
     assert people_mod.role_for_sender(bad, channel="telegram",
                                       sender_id="1") == ""
@@ -116,7 +116,7 @@ def test_two_people_of_one_profile_sharing_a_device_get_ONE_copy() -> None:
     delivered twice."""
     shared = {"people": [
         dict(OWNER, targets=["entity:notify.tablet", "entity:notify.iphone"]),
-        {"name": "Second", "telegram": "", "role": "owner",
+        {"telegram": "", "role": "owner",
          "targets": ["entity:notify.tablet"]},
     ]}
     assert people_mod.targets_for_role(shared, "owner") \
@@ -126,7 +126,7 @@ def test_two_people_of_one_profile_sharing_a_device_get_ONE_copy() -> None:
 def test_a_person_with_a_CHAT_and_no_device_makes_no_profile_reachable() -> None:
     """The asymmetry, from the delivery side: `role_for_sender` says they may
     speak and this says there is nowhere to write back to on a schedule."""
-    chat_only = {"people": [{"name": "x", "telegram": "1", "role": "ops",
+    chat_only = {"people": [{"telegram": "1", "role": "ops",
                              "targets": []}]}
     assert people_mod.role_for_sender(chat_only, channel="telegram",
                                       sender_id="1") == "ops"

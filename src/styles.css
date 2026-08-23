@@ -4531,7 +4531,12 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    deliberately rather than by accident. */
 .settings-body label.people-field {
   display: flex; flex-direction: column; gap: var(--field-label-gap);
-  margin: 0; min-width: 0; flex: 1 1 190px;
+  /* ⚠️ A SMALL BASIS SO THREE FIELDS AND THE DELETE SHARE ONE LINE, which is
+     what was asked for ("make sure all this appear on the same line/row"). The
+     row still wraps on a phone, where `.editable-row-fields` is the mechanism
+     and four items on one 390px line would be unreadable — the delete button
+     stays out of the wrap either way, which `test_editable_rows` pins. */
+  margin: 0; min-width: 0; flex: 1 1 120px;
 }
 .people-field > span {
   font-size: var(--field-label-size); color: var(--text-secondary);

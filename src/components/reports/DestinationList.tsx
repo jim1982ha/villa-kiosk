@@ -75,6 +75,7 @@ export function RecipientButton({
   return (
     <button
       className="btn"
+      data-recipient-toggle=""
       aria-expanded={open}
       aria-label={`Recipients: ${summarise(targets, available)}`}
       onClick={onToggle}
@@ -89,11 +90,16 @@ export function RecipientButton({
 }
 
 export default function DestinationList({
-  targets, available, onChange,
+  targets, available, onChange, onClose,
 }: {
   targets: string[];
   available: DiscoveredTarget[];
   onChange: (next: string[]) => void;
+  /** Dismiss. ⚠️ OPTIONAL ONLY SO AN EXISTING CALLER CANNOT BREAK; every caller
+   *  should pass it — a list that stays open when you click away is the one
+   *  behaviour every dropdown on every platform shares, and its absence was
+   *  reported the day this appeared in a second place. */
+  onClose?: () => void;
 }) {
   const offered = available.filter((t) => !t.needsTarget);
 
@@ -127,6 +133,37 @@ export default function DestinationList({
   useEffect(() => {
     box.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, []);
+
+  /** ⚠️ AN OUTSIDE POINTER CLOSES IT, AND `useModalA11y` IS DELIBERATELY NOT
+   *  USED — the same adjudication `SummaryBar` records. That hook is the MODAL
+   *  contract (focus trap, backdrop, `role="dialog"`, back-to-close); this is a
+   *  non-modal popover anchored to a button, covering nothing, and trapping
+   *  focus inside one is a defect rather than a fix.
+   *
+   *  ⚠️ THE BUTTON ITSELF IS EXCLUDED BY THE CALLER, not here: `RecipientButton`
+   *  is a sibling, so a pointerdown on it would close the list here and reopen
+   *  it in the caller's own toggle — a dropdown that cannot be closed by its own
+   *  button. `data-recipient-toggle` is the marker that keeps the two in step.
+   *
+   *  ⚠️ `pointerdown`, NOT `click`: on iOS a tap that lands on a control which
+   *  re-renders can lose its click, and every dismissal in this app already
+   *  uses pointerdown for that reason. */
+  useEffect(() => {
+    if (!onClose) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement;
+      if (box.current?.contains(t)) return;
+      if (t.closest?.("[data-recipient-toggle]")) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
 
   return (
     <div className="reports-recipients" ref={box}>

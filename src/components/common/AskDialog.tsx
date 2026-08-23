@@ -50,6 +50,18 @@ interface Props {
   /** Paints the confirm button as destructive (`.btn.danger`). */
   danger?: boolean;
   /**
+   * An optional THIRD action, between cancel and confirm.
+   *
+   * ⚠️ IT EXISTS FOR THE UNSAVED-CHANGES QUESTION, WHICH IS GENUINELY
+   * THREE-WAY: save, discard, or stay where you are. Squeezing that into two
+   * buttons forces one of the three onto Escape and the backdrop — and whichever
+   * one lands there is taken by accident, which for "discard" means silently
+   * losing an edit. So the third button is explicit and `onCancel` keeps the
+   * meaning it has everywhere else in this app: the harmless one.
+   */
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+  /**
    * Return a string to REJECT: the dialog stays open, the text is kept, and the
    * string is shown under the field. Return nothing to accept and close.
    */
@@ -59,7 +71,7 @@ interface Props {
 
 export default function AskDialog({
   title, message, input, confirmLabel = "OK", cancelLabel = "Cancel",
-  danger = false, onConfirm, onCancel,
+  danger = false, secondaryLabel, onSecondary, onConfirm, onCancel,
 }: Props) {
   const dialogRef = useModalA11y(onCancel);
   const [value, setValue] = useState(input?.initial ?? "");
@@ -126,6 +138,9 @@ export default function AskDialog({
         <div className="panel-footer">
           {cancelLabel !== null && (
             <button className="btn ghost" onClick={onCancel}>{cancelLabel}</button>
+          )}
+          {secondaryLabel && onSecondary && (
+            <button className="btn ghost" onClick={onSecondary}>{secondaryLabel}</button>
           )}
           <button className={`btn ${danger ? "danger" : "primary"}`} onClick={submit}>
             {confirmLabel}
