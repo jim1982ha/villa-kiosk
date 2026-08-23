@@ -51,6 +51,7 @@ import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitConcerns from "./CockpitConcerns";
 import CockpitReview from "./CockpitReview";
 import CockpitProposals from "./CockpitProposals";
+import CockpitMemories from "./CockpitMemories";
 import CockpitQueue from "./CockpitQueue";
 import { useVillaAttention } from "./useVillaAttention";
 import {
@@ -253,6 +254,12 @@ export default function CockpitTab({
       <CockpitQueue />
 
       <CockpitConcerns />
+
+      {/* ⚠️ AFTER the concerns and before the drafts. A concern is the state of
+          the villa now; a memory is what it has come to BELIEVE and will assert
+          into every later check, which is closer in kind to a procedure than to
+          an alert — so it sits beside the review queue rather than above it. */}
+      <CockpitMemories />
 
       {/* ── Procedures the villa wants to keep ─────────────────────
           ⚠️ AFTER the concerns, not before: a concern is the state of the villa

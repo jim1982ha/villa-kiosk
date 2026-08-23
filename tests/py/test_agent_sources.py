@@ -839,3 +839,102 @@ def test_the_trigger_survives_the_WHOLE_chain_not_just_its_ends() -> None:
             f"recorded as manual and the spend is filed as scheduled: {seen!r}")
     finally:
         scheduler.triage_mod.run = original      # type: ignore[assignment]
+
+
+# ── TASK-108 · REQ-005, the profile states its own blindness ────────────────
+def test_the_profile_carries_the_absent_capability_block(
+        tmp_path: Any, monkeypatch: Any) -> None:
+    """⚠️ REQ-005 READ AS UNMET FOR THREE PHASES because this argument was
+    simply omitted, so every document said NOT SURVEYED. That was honest and it
+    was not the requirement: a model that does not know it is blind answers
+    confidently anyway."""
+    from reports import store
+
+    monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "cap.json"))
+    store.write_json(str(tmp_path / "cap.json"),
+                     {"at": 1.0, "sentences": ["No water meter is configured."]})
+    doc = sources.build_document(rows=[])
+    assert "No water meter is configured." in doc
+    assert "NOT SURVEYED" not in doc
+
+
+def test_an_absent_survey_still_says_NOT_SURVEYED(
+        tmp_path: Any, monkeypatch: Any) -> None:
+    """⚠️ `None` AND `[]` MEAN OPPOSITE THINGS. A villa nobody has examined must
+    not read as a villa with full coverage — the over-claim the agent caught and
+    quoted back during PH-1."""
+    monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "none.json"))
+    assert sources.absent_capability_sentences() is None
+    assert "NOT SURVEYED" in sources.build_document(rows=[])
+
+
+def test_a_surveyed_villa_with_no_gaps_is_not_an_unsurveyed_one(
+        tmp_path: Any, monkeypatch: Any) -> None:
+    from reports import store
+
+    monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
+    store.write_json(str(tmp_path / "c.json"), {"at": 1.0, "sentences": []})
+    doc = sources.build_document(rows=[])
+    assert "nothing was found to be unmeasured" in doc
+    assert "NOT SURVEYED" not in doc
+
+
+def test_a_file_with_no_sentences_key_is_NOT_an_empty_survey(
+        tmp_path: Any, monkeypatch: Any) -> None:
+    """A survey that failed to write must not report as 'nothing missing'."""
+    from reports import store
+
+    monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
+    store.write_json(str(tmp_path / "c.json"), {"at": 1.0})
+    assert sources.absent_capability_sentences() is None
+
+
+def test_the_profile_stays_byte_stable_across_two_passes(
+        tmp_path: Any, monkeypatch: Any) -> None:
+    """⚠️ REQ-004 IS THE CONSTRAINT THIS FEATURE COULD MOST EASILY BREAK.
+    Prompt caching matches on an exact prefix, so a block that reshuffles
+    between passes costs real money and nothing looks wrong."""
+    from reports import store
+
+    monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
+    store.write_json(str(tmp_path / "c.json"), {
+        "at": 1.0, "sentences": ["No water meter.", "No per-device metering."]})
+    first = sources.build_document(rows=[]).split("CACHE")[0]
+    second = sources.build_document(rows=[]).split("CACHE")[0]
+    assert first == second
+
+
+def test_the_survey_runs_at_most_once_a_day(tmp_path: Any, monkeypatch: Any) -> None:
+    """⚠️ THE WHOLE REASON THIS WAS LEFT UNWIRED. Discovery is a fan-out across
+    Home Assistant's registries; per triage pass that is ~96 a day for an answer
+    that moves a few times a year."""
+    from reports import store
+
+    monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
+    store.write_json(str(tmp_path / "c.json"), {"at": 1_000_000.0, "sentences": []})
+    ran = asyncio.run(sources.refresh_capabilities(object(), now=1_000_060.0))
+    assert ran is False, "a fresh survey was re-run"
+
+
+def test_an_unreachable_home_assistant_leaves_the_old_answer_alone(
+        tmp_path: Any, monkeypatch: Any) -> None:
+    """⚠️ A MOMENTARY OUTAGE MUST NOT TURN A SURVEYED VILLA INTO AN UNSURVEYED
+    ONE — that swaps a true statement for NOT SURVEYED and changes the cached
+    prefix on a whim."""
+    from reports import discovery as discovery_mod
+    from reports import store
+
+    monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
+    store.write_json(str(tmp_path / "c.json"),
+                     {"at": 1.0, "sentences": ["No water meter."]})
+
+    async def unreachable(session: Any, now_iso: Any = None) -> Any:
+        return {"reachable": False}
+
+    monkeypatch.setattr(discovery_mod, "discover", unreachable)
+    assert asyncio.run(sources.refresh_capabilities(object(), now=9e9)) is False
+    assert sources.absent_capability_sentences() == ["No water meter."]
+
+
+def test_no_session_means_no_survey() -> None:
+    assert asyncio.run(sources.refresh_capabilities(None)) is False

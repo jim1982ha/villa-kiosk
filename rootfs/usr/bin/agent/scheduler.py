@@ -227,6 +227,13 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     # about an empty property, on every pass, for the whole shadow period the
     # PH-3 cutover was supposed to be decided from. `sources.build_document` is
     # the wiring; see its module header.
+    # ⚠️ BEFORE THE DOCUMENT, AND IT USUALLY DOES NOTHING. It re-surveys the
+    # villa's capabilities at most once a day (TASK-108, REQ-005) and returns
+    # immediately on every other pass. It is here rather than inside
+    # `build_document` because this is the only agent path that HAS a session —
+    # the proxy's document preview does not, and must still render.
+    await sources.refresh_capabilities(session)
+
     try:
         document = sources.build_document()
     except Exception as err:  # noqa: BLE001

@@ -1,3 +1,16 @@
+## 2.691.0
+
+### Added — the villa now says what it cannot see, and you can tell it when it is wrong
+Two requirements that read as met and were not. The profile has a block for the
+things this property does not measure — no tariff, no per-device metering — and
+nothing ever filled it, so every check the agent ran said "NOT SURVEYED" instead:
+discovery is a fan-out across Home Assistant and running it 96 times a day was
+the cost that left it unwired. It is now surveyed once a day and cached. And the
+villa forms claims about the property that it reuses in every later check, which
+it has always refused to overwrite once a person corrected one — but nothing
+could correct one, so the protection guarded something unreachable. The Cockpit
+now lists what it believes; your note is added underneath and outranks it.
+
 ## 2.690.0
 
 ### Fixed — dismissing a concern three times now actually silences it, and agent settings are validated

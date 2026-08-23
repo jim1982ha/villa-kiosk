@@ -261,3 +261,64 @@ def test_the_memory_index_REACHES_THE_PROMPT(root) -> None:
     text = playbooks.system_prompt("owner", root=shipped, memory_root=root)
     assert "the supply pump runs twice daily" in text
     assert "competent facility manager" in text, "the shipped half went missing"
+
+
+# ── TASK-110 · REQ-056, a person can actually correct a memory ──────────────
+def test_the_correction_path_is_reachable_from_a_route() -> None:
+    """⚠️ THE ASSERTION THAT WAS FALSE FOR THE WHOLE OF PH-7's DESIGN.
+    `memory_mod.correct` is the ONE path that sets `corrected`, `write()` refuses to
+    overwrite that state and is tested — and nothing called `correct`, so the
+    guard protected a state nothing could enter and REQ-056 described something
+    that could not happen. Found by `test_reachability` (TASK-109) AFTER a
+    row-by-row read of the requirement had ticked it as met.
+
+    This pins the WIRE. `feedback_pin-the-caller`, tenth instance."""
+    proxy = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
+                              "supervisor-proxy.py"), encoding="utf-8").read()
+    assert "agent_memory.correct(" in proxy, (
+        "no handler calls memory_mod.correct, so a person still cannot contradict "
+        "a claim the villa holds")
+    assert 'add_post("/agent-memory"' in proxy, "the route is not registered"
+
+    nginx = open(os.path.join(REPO_ROOT, "rootfs", "etc", "nginx",
+                              "nginx.conf"), encoding="utf-8").read()
+    # ⚠️ TWO FILES FOR A ROUTE. A route with no location block is answered with
+    # index.html at status 200 and surfaces as a JSON parse error blaming the
+    # client (2.501.0).
+    assert "location = /agent-memory" in nginx, (
+        "the route has no nginx location, so it is served index.html at 200")
+
+
+def test_a_correction_appends_and_the_original_claim_survives(
+        tmp_path: Any) -> None:
+    """⚠️ 'WHAT DID IT THINK, AND WHAT DID WE TELL IT' is the record that makes
+    a wrong conclusion traceable rather than merely gone."""
+    root = str(tmp_path)
+    assert memory_mod.write(KEY,
+                            claim="The pool pump runs 14 hours a day.",
+                            source=SOURCE, confidence=0.6, root=root, now=NOW)
+    assert memory_mod.correct(KEY, by="owner",
+                          text="It runs 6 hours; the timer was wrong.",
+                          root=root)
+    stored = memory_mod.read(KEY, root=root)
+    assert stored is not None
+    assert "14 hours a day" in stored.claim, "the original claim was erased"
+    assert stored.state == "corrected"
+    assert any("timer was wrong" in c for c in stored.corrections)
+
+
+def test_correcting_a_memory_that_does_not_exist_is_refused(
+        tmp_path: Any) -> None:
+    assert not memory_mod.correct("deadbeefdeadbeef", by="owner", text="no",
+                              root=str(tmp_path))
+
+
+def test_an_empty_correction_is_refused(tmp_path: Any) -> None:
+    """An empty note would set `corrected` — the state that outranks the agent
+    for ever — while saying nothing."""
+    root = str(tmp_path)
+    assert memory_mod.write(KEY, claim="A claim.", source=SOURCE,
+                            confidence=0.5, root=root, now=NOW)
+    assert not memory_mod.correct(KEY, by="owner", text="   ", root=root)
+    stored = memory_mod.read(KEY, root=root)
+    assert stored is not None and stored.state != "corrected"

@@ -81,11 +81,6 @@ EXEMPT: Dict[str, str] = {
     "plan": "route.py is imported by nothing shipped — this is THE routing "
             "entry point, and its absence is why TASK-063 cannot run. "
             "TASK-106, parked",
-    "correct": "the one path that sets `corrected` on a memory (REQ-056), and "
-               "no route or control reaches it — so a person cannot in fact "
-               "correct a memory, and `write()`'s refusal to overwrite one "
-               "guards a state nothing can enter. Recorded as TASK-110; "
-               "docs/VALIDATION.md marks REQ-056 NOT MET because of this",
     "status": "budget diagnostics for an operator; the Cockpit reads the "
               "narrower `summary()` instead",
 

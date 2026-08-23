@@ -622,6 +622,68 @@ export async function decideEscalation(
   return { ok: d.ok === true, reason: d.reason || "" };
 }
 
+/** One claim the villa holds about this property.
+ *
+ *  ⚠️ A MEMORY IS ASSERTED INTO THE CONTEXT OF EVERY FUTURE RUN, which is why
+ *  contradicting one is gated like approving a playbook rather than like
+ *  dismissing an alert. */
+export interface VillaMemory {
+  subjectKey: string;
+  claim: string;
+  source: string;
+  learnedAt: string;
+  reviewAfter: string;
+  confidence: number;
+  state: string;
+  corrections: string[];
+}
+
+export async function loadMemories(): Promise<VillaMemory[]> {
+  const r = await fetch(ingressPath("agent-memory"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => null)) as { memories?: unknown } | null;
+  const rows = Array.isArray(d?.memories) ? d!.memories : [];
+  return rows
+    .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+    .map((x) => ({
+      subjectKey: String(x.subject_key ?? ""),
+      claim: String(x.claim ?? ""),
+      source: String(x.source ?? ""),
+      learnedAt: String(x.learned_at ?? ""),
+      reviewAfter: String(x.review_after ?? ""),
+      confidence: Number(x.confidence ?? 0),
+      state: String(x.state ?? ""),
+      corrections: Array.isArray(x.corrections)
+        ? x.corrections.map((c) => String(c)) : [],
+    }))
+    .filter((m) => m.subjectKey !== "");
+}
+
+/** Contradict a claim the villa holds. REQ-056.
+ *
+ *  ⚠️ IT SENDS NO IDENTITY. Who corrected this is the session's role, resolved
+ *  server-side — "who told us" is the half that makes a correction outrank the
+ *  agent, and a browser-supplied name is a claim about identity rather than a
+ *  fact about it.
+ *
+ *  ⚠️ AND THE CORRECTION APPENDS. The original claim stays readable beneath it,
+ *  because "what did it think, and what did we tell it" is what makes a wrong
+ *  conclusion traceable rather than merely gone. */
+export async function correctMemory(
+  subjectKey: string, text: string,
+): Promise<{ ok: boolean; reason: string }> {
+  const r = await fetch(ingressPath("agent-memory"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subjectKey, text }),
+  });
+  const d = (await r.json().catch(() => ({}))) as
+    { ok?: boolean; reason?: string };
+  if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
+  return { ok: d.ok === true, reason: d.reason || "" };
+}
+
 export async function loadShadowDiff(): Promise<ShadowDiff | null> {
   const r = await fetch(ingressPath("agent-shadow"), { credentials: "same-origin" });
   if (!r.ok) return null;

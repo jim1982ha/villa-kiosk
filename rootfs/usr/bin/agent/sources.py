@@ -178,10 +178,10 @@ def build_profile_source(rows: Optional[Sequence[Mapping[str, Any]]] = None
                          ) -> Callable[[], Dict[str, Any]]:
     """The villa's structure, as `snapshot.profile` keyword arguments.
 
-    ⚠️ `absent_capabilities` IS LEFT UNSET, WHICH NOW MEANS "NOT SURVEYED"
-    RATHER THAN "NOTHING MISSING". Discovery has not been wired into this path
-    yet, and the profile says so out loud instead of printing a coverage claim
-    nobody earned — the over-claim the agent caught and quoted back.
+    ⚠️ IT NO LONGER DECIDES `absent_capabilities` — `build_document` supplies it
+    from the cached survey (TASK-108). This function was the reason REQ-005 read
+    as unmet for three phases: it omitted the argument, so every document said
+    NOT SURVEYED. That was honest and it was not the requirement.
     """
     def source() -> Dict[str, Any]:
         entries = list(rows) if rows is not None else _journal_rows()
@@ -226,6 +226,92 @@ DOCUMENT_SALIENT_LIMIT: int = 25
 DOCUMENT_WINDOW_HOURS: int = 24
 
 
+#: Where the last capability survey is kept. ⚠️ A FILE, NOT A PROCESS CACHE. The
+#: triage clock and the proxy's document preview are different call paths and,
+#: on a restart, different processes; a cache in memory would make the profile
+#: differ between them, which is precisely the byte-instability REQ-004 forbids.
+CAPABILITIES_FILE: str = "/data/vesta/capabilities.json"
+
+#: How stale a survey may be before it is re-run. ⚠️ A DAY, AND THE UNIT IS THE
+#: POINT. A villa's CAPABILITIES — does it meter per device, is a tariff
+#: configured, does the recorder keep statistics — change when somebody installs
+#: something, not on a cadence. Surveying per triage pass is ~96 fan-outs a day
+#: across Home Assistant's registries for an answer that moves a few times a
+#: year, and that cost is the whole reason this was left unwired.
+CAPABILITY_MAX_AGE_H: int = 24
+
+
+def absent_capability_sentences() -> Optional[List[str]]:
+    """What this villa cannot be asked about, or `None` for NOT SURVEYED.
+
+    ⚠️ `None` AND `[]` MEAN OPPOSITE THINGS AND BOTH ARE CORRECT ANSWERS.
+    `None` is "nobody has catalogued this property's blind spots"; `[]` is
+    "surveyed, and nothing was found unmeasured". `snapshot.profile` prints a
+    different sentence for each, and collapsing them is how a villa nobody has
+    examined comes to read as a villa with full coverage — the exact over-claim
+    the agent caught and quoted back during PH-1.
+
+    ⚠️ SENTENCES, NOT CAPABILITY KEYS. `snapshot.absent_sentences` already
+    turned discovery's own constants into prose in a fixed sorted order; this
+    stores that OUTPUT so the document's bytes do not depend on re-deriving it.
+    """
+    try:
+        from reports import store
+        raw = store.read_json(CAPABILITIES_FILE, {})
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not read the capability survey", err)
+        return None
+    if not isinstance(raw, Mapping):
+        return None
+    found = raw.get("sentences")
+    if not isinstance(found, list):
+        # ⚠️ A FILE WITH NO `sentences` KEY IS NOT AN EMPTY SURVEY. It is a
+        # survey that failed to write, and reporting it as "nothing missing"
+        # would be a coverage claim nobody earned.
+        return None
+    return [str(x) for x in found]
+
+
+async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
+                               max_age_h: Optional[int] = None) -> bool:
+    """Re-survey if the stored answer is stale. Returns whether it ran.
+
+    ⚠️ IT DECIDES WHETHER TO RUN, SO ITS CALLER DOES NOT HAVE TO. `scheduler._pass`
+    calls this every pass and it does something once a day — putting the age
+    test at the call site would put a second copy of `CAPABILITY_MAX_AGE_H`
+    beside the clock, which is how the two come to disagree.
+
+    ⚠️ NEVER RAISES, AND A FAILED SURVEY LEAVES THE OLD ANSWER IN PLACE rather
+    than clearing it. A momentarily unreachable Home Assistant must not turn a
+    surveyed villa into an unsurveyed one — that would swap a true statement for
+    NOT SURVEYED and, worse, change the cached prefix on a whim.
+    """
+    if session is None:
+        return False
+    stamp = time.time() if now is None else now
+    hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
+    try:
+        from reports import store
+        raw = store.read_json(CAPABILITIES_FILE, {})
+        at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
+        if stamp - at < max(1, hours) * 3600.0:
+            return False
+
+        from reports import discovery as discovery_mod
+        found = await discovery_mod.discover(session)
+        if not isinstance(found, Mapping) or not found.get("reachable"):
+            # ⚠️ AN UNREACHABLE HOME ASSISTANT IS NOT A SURVEY. Writing this
+            # would record "no capabilities" as a finding about the villa.
+            return False
+        sentences = snapshot_mod.absent_sentences(found)
+        store.write_json(CAPABILITIES_FILE,
+                         {"at": stamp, "sentences": list(sentences)})
+    except Exception as err:  # noqa: BLE001 - a survey is not worth a failed pass
+        swallow("could not survey the villa's capabilities", err)
+        return False
+    return True
+
+
 def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
                    now: Optional[float] = None,
                    window_hours: Optional[int] = None) -> str:
@@ -237,11 +323,11 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     later gets the wired document by construction rather than by remembering to.
 
     ⚠️ EVERY SOURCE HERE IS LOCAL — the journal, the concern store, the facility
-    record and the device labels are all files this add-on already owns. That is
-    what lets a triage pass stay cheap enough to run four times an hour, and it
-    is why `absent_capabilities` is still unset: discovery is a fan-out of Home
-    Assistant calls, and the profile says NOT SURVEYED out loud rather than
-    printing a coverage claim nobody earned.
+    record, the device labels and the capability survey are all files this add-on
+    already owns. That is what lets a triage pass stay cheap enough to run four
+    times an hour. The survey is the one that would NOT be local if it were
+    taken here: `refresh_capabilities` runs it at most once a day from the
+    scheduler, which has a session, and this reads only the file it left.
 
     ⚠️ AND IT DEGRADES SECTION BY SECTION, not as a whole. A failed concern read
     must not cost the villa its device counts — the previous behaviour, one level
@@ -255,7 +341,12 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     except Exception as err:  # noqa: BLE001
         swallow("could not describe the villa's structure", err)
         facts = {}
-    profile_text = snapshot_mod.profile(**dict(facts))
+    # ⚠️ REQ-005. This argument was omitted for the whole of PH-1 to PH-3, so
+    # every document said NOT SURVEYED — honest, and not what the requirement
+    # asks for: a model that does not know it is blind answers confidently
+    # anyway. `refresh_capabilities` keeps the answer at most a day old.
+    profile_text = snapshot_mod.profile(
+        absent_capabilities=absent_capability_sentences(), **dict(facts))
 
     scored: List[salience_mod.Salience] = []
     try:

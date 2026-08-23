@@ -2225,6 +2225,76 @@ async def agent_usage_handler(request: web.Request) -> web.Response:
     })
 
 
+async def agent_memory_get_handler(request: web.Request) -> web.Response:
+    """What the villa believes about this property. TASK-110, REQ-056.
+
+    ⚠️ THE SAME PAIR THAT MAY JUDGE A CONCERN OR A DRAFT. A memory is a claim
+    the agent asserts into the context of every future run, so contradicting one
+    is closer to approving a playbook than to dismissing an alert.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in TASK_ACK_ROLES:
+        return _forbidden("Only an owner or facility manager may read or "
+                          "correct the villa's memories.")
+    from agent import memory as agent_memory
+    return web.json_response({"memories": [
+        {"subject_key": m.subject_key, "claim": m.claim, "source": m.source,
+         "learned_at": m.learned_at, "review_after": m.review_after,
+         "confidence": m.confidence, "state": m.state,
+         "corrections": list(m.corrections)}
+        for m in agent_memory.all_memories()]})
+
+
+async def agent_memory_correct_handler(request: web.Request) -> web.Response:
+    """A person overriding a claim. TASK-110.
+
+    ⚠️ `memory.correct` WAS THE ONE PATH THAT SETS `corrected` AND NOTHING
+    REACHED IT. `memory.write()` has always refused to overwrite a corrected
+    memory and that is tested — so the guard protected a state nothing could
+    enter, and REQ-056 ("a human correction outranks and is never overwritten")
+    described a thing that could not happen. Found by `test_reachability`
+    (TASK-109), after a row-by-row read of the requirement had ticked it.
+
+    ⚠️ THE CORRECTION APPENDS AND THE ORIGINAL CLAIM SURVIVES. That is
+    `memory.correct`'s rule, not this handler's, and it is why the villa's wrong
+    conclusion stays traceable rather than merely gone.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in TASK_ACK_ROLES:
+        return _forbidden("Only an owner or facility manager may correct a "
+                          "memory.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    subject = str(body.get("subjectKey") or body.get("subject_key") or "")
+    # ⚠️ BOUNDED. A correction is a sentence a person types, and it is asserted
+    # into every future run's context — the same cap the concern feedback route
+    # applies to its reason, for the same reason.
+    text = str(body.get("text") or "")[:500].strip()
+    if not subject or not text:
+        return web.json_response(
+            {"ok": False, "reason": "a subject and a correction are required"},
+            status=400)
+
+    from agent import memory as agent_memory
+    # ⚠️ THE CORRECTOR IS THE SESSION'S ROLE, NEVER A FIELD IN THE BODY. "Who
+    # told us this" is the half that makes a correction outrank the agent, and a
+    # browser-supplied name is a claim about identity rather than a fact about
+    # it.
+    ok = agent_memory.correct(subject, by=str(_role_for(request) or "owner"),
+                              text=text)
+    if not ok:
+        return web.json_response(
+            {"ok": False, "reason": "no memory with that subject"}, status=404)
+    return web.json_response({"ok": True})
+
+
 async def agent_review_get_handler(request: web.Request) -> web.Response:
     """Playbook drafts awaiting a person. TASK-094.
 
@@ -3336,6 +3406,8 @@ def main() -> None:
     app.router.add_post("/agent-confirm", agent_confirm_handler)
     app.router.add_post("/agent-run-now", agent_run_now_handler)
     app.router.add_get("/agent-queue", agent_queue_get_handler)
+    app.router.add_get("/agent-memory", agent_memory_get_handler)
+    app.router.add_post("/agent-memory", agent_memory_correct_handler)
     app.router.add_post("/agent-queue", agent_queue_post_handler)
     app.router.add_get("/device-config", device_config_get_handler)
     app.router.add_get("/fm-data", fm_data_get_handler)
