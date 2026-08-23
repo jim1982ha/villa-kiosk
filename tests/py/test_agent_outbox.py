@@ -383,3 +383,22 @@ def test_the_proxy_registers_the_source_at_boot() -> None:
                      if not l.strip().startswith("#"))
     assert "set_concerns_source(" in code, (
         "nothing registers the concerns source, so no Concern reaches a report")
+
+
+def test_a_concern_does_not_repeat_a_built_in_finding() -> None:
+    """⚠️ THE SECOND DEDUP, AND THE FIRST CUT ONLY HAD ONE. Concerns were
+    deduped against the BLUEPRINT layer and not against the built-in checks — so
+    a metered device the modules had already reported could appear twice in one
+    brief, once as a finding and once as a Concern, in different words, about
+    the same equipment."""
+    from reports import pipeline
+
+    pipeline.set_concerns_source(lambda: [
+        {"title": "Also seen by a check", "severity": "warning",
+         "subject_key": "checked"},
+        {"title": "Only the agent", "severity": "warning", "subject_key": "solo"}])
+    try:
+        rows = pipeline._agent_concerns({"checked"})
+    finally:
+        pipeline.set_concerns_source(None)
+    assert [r["title"] for r in rows] == ["Only the agent"]

@@ -650,7 +650,17 @@ async def run_report(
         noise=noise_summary,
         history=_history_series(cadence),
         currency=str(found.get("currency") or ""),
-        concerns=_agent_concerns(_blueprint_subjects(aggregated)),
+        # ⚠️ DEDUPED AGAINST BOTH LAYERS, NOT JUST THE BLUEPRINTS. The first
+        # cut passed only `_blueprint_subjects`, so a device the built-in checks
+        # had already reported could appear TWICE in one brief — once as a
+        # finding and once as a Concern, in different words, about the same
+        # equipment. That is the duplication both dedup rules exist to stop, and
+        # it would have shown up on the first briefing after a concern was
+        # filed about anything metered.
+        concerns=_agent_concerns(
+            _blueprint_subjects(aggregated)
+            | {str(f.get("subject_key") or "") for f in findings
+               if isinstance(f, Mapping) and f.get("subject_key")}),
     )
     narrator = DeterministicNarrator()
     try:
