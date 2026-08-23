@@ -27,11 +27,30 @@ from typing import Any, Dict, List, Mapping, Sequence
 #: ordinal are not claims about measurement, and stripping them would mangle
 #: "since 2 August" and "the third occurrence" into nonsense. A figure is a
 #: number carrying a UNIT, or a bare number large enough to be a reading.
+#: ⚠️ A READING IS CITED; A COUNT IS DERIVED, AND CONFLATING THEM BROKE BOTH
+#: DIRECTIONS OF THIS RULE. A reading — 340 W, 22.5 °C — is a value the villa
+#: MEASURED, and demanding it appear in an evidence row is exactly right: a
+#: model that read 340 and wrote "roughly 400 W" has invented a measurement.
+#: A COUNT is arithmetic the model performs OVER the evidence ("it came on 7
+#: times" from seven state rows), so the figure is legitimately absent from
+#: every row — and requiring a citation made VESTA strip a number it had worked
+#: out correctly. Measured against a real history answer: "came on 7 times" was
+#: removed while the reader saw "[unsourced figure removed]".
+#:
+#: ⚠️ THE RISK IS NOT THE SAME EITHER, WHICH IS WHY ONE RULE CANNOT SERVE BOTH.
+#: The failure mode for a reading is FABRICATION, which citation catches. The
+#: failure mode for a count is ARITHMETIC, which citation cannot catch at all —
+#: a wrong count of rows the model genuinely holds is still uncited-looking.
+#: That is the tool's job to fix (TASK-113: return the count, so the number IS
+#: evidence), not this checker's.
+READING_UNITS = (r"%|W|kW|kWh|V|A|°C|°F|IDR|EUR|USD|L|L/min|bar")
+DERIVED_UNITS = (r"hours?|hrs?|minutes?|mins?|days?|times?|starts?")
+
 FIGURE = re.compile(
     r"(?<![\w.])"
     r"(?P<value>\d[\d,]*(?:\.\d+)?)"
-    r"\s?(?P<unit>%|W|kW|kWh|V|A|°C|°F|IDR|EUR|USD|L|L/min|bar|hours?|hrs?|"
-    r"minutes?|mins?|days?|times?|starts?)?"
+    rf"\s?(?P<unit>{READING_UNITS})?"
+    rf"(?P<derived>{DERIVED_UNITS})?"
     r"(?![\w])")
 
 #: A figure with no unit is only checked when it is big enough to be a reading.
@@ -79,6 +98,30 @@ def _normalise(value: str) -> str:
     return value.replace(",", "")
 
 
+def _has_figure(haystack: str, value: str) -> bool:
+    """Is `value` a FIGURE in the evidence, rather than a run of digits inside
+    one?
+
+    ⚠️ THE SUBSTRING FORM WAS A HOLE IN BOTH DIRECTIONS. `"14" in "on at 09:14"`
+    is true, so a fabricated count of 14 was accepted as cited by a timestamp;
+    and `"7" in ...` matched any row containing a 7 anywhere. A guard that can
+    be satisfied by coincidence is not a guard — the whole value of this rule is
+    that a figure the villa never measured cannot appear.
+
+    ⚠️ THE BOUNDARY IS NOT `\\b`. `_` is a word character to `\\b`, and a digit
+    run inside `09:14` is bounded by `:` which `\\b` treats as a boundary — so
+    the naive fix does not help. What separates a figure from a fragment is that
+    neither neighbour is a digit, a dot or a colon: `340` in `1340` is a
+    fragment, `14` in `09:14` is a fragment, `340` in `340 W` is a figure.
+    """
+    for match in re.finditer(re.escape(value), haystack):
+        before = haystack[match.start() - 1] if match.start() else ""
+        after = haystack[match.end()] if match.end() < len(haystack) else ""
+        if before not in "0123456789.:" and after not in "0123456789.:":
+            return True
+    return False
+
+
 def enforce(body: str, evidence: Sequence[Mapping[str, Any]]) -> Rendered:
     """Strip every figure that resolves to no evidence row.
 
@@ -97,13 +140,22 @@ def enforce(body: str, evidence: Sequence[Mapping[str, Any]]) -> Rendered:
     def replace(match: "re.Match[str]") -> str:
         value = _normalise(match.group("value"))
         unit = match.group("unit") or ""
+        # ⚠️ A DERIVED FIGURE IS NOT CHECKED AGAINST THE EVIDENCE, because it is
+        # not IN the evidence by construction. See READING_UNITS.
+        if match.group("derived"):
+            return match.group(0)
         if not unit:
             try:
                 if float(value) < BARE_MIN:
                     return match.group(0)
             except ValueError:
                 return match.group(0)
-        if value and value in haystack:
+        # ⚠️ A TOKEN, NOT A SUBSTRING, AND THE SUBSTRING FORM PASSED FABRICATED
+        # NUMBERS. `"14" in haystack` is true of an evidence row reading
+        # "on at 09:14" — so a wrong count of 14 was CITED by a timestamp while
+        # a correct count of 7 was stripped. The check that exists to catch an
+        # invented figure was waving them through on a coincidence of digits.
+        if value and _has_figure(haystack, value):
             return match.group(0)
         removed.append(match.group(0).strip())
         return STRIPPED

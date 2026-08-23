@@ -79,3 +79,46 @@ def test_the_strip_count_travels_with_the_concern() -> None:
     assert out["figures_stripped"] == 1
     assert render.STRIPPED in out["body"]
     assert out["title"] == "t", "the rest of the concern was disturbed"
+
+
+# ── readings vs derived figures (TASK-113's contract check) ─────────────────
+# ⚠️ EXERCISED BEFORE THE ha_mcp PLUMBING, AND IT FAILED IN BOTH DIRECTIONS.
+# The plan says to check this first because it is a contract question rather
+# than an integration one: once history questions are answerable, a COUNT OF
+# TRANSITIONS becomes the common answer shape, and it is arithmetic OVER the
+# evidence rather than a value IN it.
+
+def test_a_DERIVED_count_is_not_stripped() -> None:
+    """⚠️ IT WAS. A count is correct arithmetic over the state rows and the
+    figure appears in none of them, so the citation rule removed it and the
+    reader saw "[unsourced figure removed]" — VESTA refusing to state a number
+    it had worked out correctly.
+
+    ⚠️ THE COUNT MUST EXCEED `BARE_MIN`. Written first with "7 times", this
+    test passed with the exemption REMOVED — 7 is below the bare-number floor,
+    so it survived for a reason that has nothing to do with the rule under
+    test. Mutation is the only thing that catches a test passing for the wrong
+    reason, and it caught this one.
+    """
+    evidence = [{"summary": "on at 09:14; off at 09:40; on at 18:02"}]
+    assert "23 times" in render.enforce("It came on 23 times.", evidence).body
+    assert "36 hours" in render.enforce("It ran for 36 hours.", evidence).body
+
+
+def test_a_READING_still_has_to_be_cited() -> None:
+    """The rule that matters is untouched: a measurement the villa never took
+    may not appear. Relaxing counts must not relax this."""
+    out = render.enforce("Standby draw is 340 W.", [{"summary": "nothing"}])
+    assert "340" not in out.body and out.removed
+
+
+def test_a_FRAGMENT_of_a_reading_is_not_a_citation() -> None:
+    """⚠️ THE HOLE THAT MADE THE GUARD DECORATIVE. The check was
+    `value in haystack` — a raw substring — so "40 W" was accepted as cited by
+    an evidence row reading "340 W", and a fabricated count of 14 was accepted
+    because a row said "on at 09:14". A guard satisfiable by coincidence is not
+    a guard."""
+    evidence = [{"cited": "power reading 340 W at 09:14"}]
+    assert "40 W" not in render.enforce("Draw is 40 W.", evidence).body
+    # And the genuine reading still passes.
+    assert "340 W" in render.enforce("Draw is 340 W.", evidence).body
