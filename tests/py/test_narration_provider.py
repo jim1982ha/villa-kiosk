@@ -163,7 +163,7 @@ def test_no_key_means_the_adapter_is_never_reached(monkeypatch: Any) -> None:
     _Secrets("").install(monkeypatch)
     calls: List[Any] = []
 
-    async def never(*args: Any) -> Optional[str]:
+    async def never(*args: Any, **kwargs: Any) -> Optional[str]:
         calls.append(args)
         return "should not happen"
 
@@ -180,7 +180,7 @@ def _narrator(monkeypatch: Any, adapter: Any) -> PR.ProviderNarrator:
 
 
 def test_an_adapter_that_raises_degrades_and_trips_the_breaker(monkeypatch: Any) -> None:
-    async def boom(*args: Any) -> Optional[str]:
+    async def boom(*args: Any, **kwargs: Any) -> Optional[str]:
         raise ConnectionError("no route to host")
 
     narrator = _narrator(monkeypatch, boom)
@@ -193,7 +193,7 @@ def test_an_adapter_that_hangs_is_abandoned(monkeypatch: Any) -> None:
     """⚠️ A SCHEDULED REPORT IS COMPOSED INSIDE A 60-SECOND TICK. A provider
     that outlasts the timeout has already cost more than the prose is worth,
     and the deterministic body is sitting ready."""
-    async def forever(*args: Any) -> Optional[str]:
+    async def forever(*args: Any, **kwargs: Any) -> Optional[str]:
         await asyncio.sleep(30)
         return "too late"
 
@@ -207,7 +207,7 @@ def test_an_empty_answer_is_a_failure_not_an_empty_report(monkeypatch: Any) -> N
     """⚠️ THE ARM THAT WOULD ACTUALLY DELIVER A BLANK BRIEF. Every other failure
     raises; this one returns successfully with nothing in it, and treating it as
     success would replace a good deterministic body with an empty string."""
-    async def nothing(*args: Any) -> Optional[str]:
+    async def nothing(*args: Any, **kwargs: Any) -> Optional[str]:
         return "   \n  "
 
     narrator = _narrator(monkeypatch, nothing)
@@ -217,7 +217,7 @@ def test_an_empty_answer_is_a_failure_not_an_empty_report(monkeypatch: Any) -> N
 
 
 def test_a_good_answer_is_used_and_clears_the_breaker(monkeypatch: Any) -> None:
-    async def fine(*args: Any) -> Optional[str]:
+    async def fine(*args: Any, **kwargs: Any) -> Optional[str]:
         return "The pump ran longer than usual this week."
 
     narrator = _narrator(monkeypatch, fine)
@@ -237,7 +237,7 @@ def test_a_payload_that_fails_its_own_audit_is_never_sent(monkeypatch: Any) -> N
     called at all."""
     calls: List[Any] = []
 
-    async def never(*args: Any) -> Optional[str]:
+    async def never(*args: Any, **kwargs: Any) -> Optional[str]:
         calls.append(args)
         return "sent anyway"
 
@@ -253,7 +253,7 @@ def test_the_budget_is_spent_before_the_call_not_after(monkeypatch: Any) -> None
     """⚠️ OTHERWISE A PROVIDER THAT ERRORS IS FREE, and the ceiling does not
     bound the case it exists for: a loop that fails and retries forever. The
     request was made; it counts."""
-    async def boom(*args: Any) -> Optional[str]:
+    async def boom(*args: Any, **kwargs: Any) -> Optional[str]:
         raise ConnectionError("nope")
 
     narrator = _narrator(monkeypatch, boom)

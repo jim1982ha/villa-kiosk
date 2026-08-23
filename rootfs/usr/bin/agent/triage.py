@@ -129,12 +129,29 @@ def registry_for(full: Optional[Registry] = None) -> Registry:
 async def run(*, provider: Provider, document: str,
               config: Optional[Mapping[str, Any]] = None,
               registry: Optional[Registry] = None,
-              run_id: str = "") -> TriageResult:
+              run_id: str = "",
+              trigger: str = "scheduled") -> TriageResult:
     """One triage pass. Never raises.
 
     ⚠️ THE DOCUMENT IS THE SYSTEM PREFIX AND THE QUESTION IS THE MESSAGE, which
     is what makes the caching pay: the villa profile is stable for weeks, so
     ~75% of every one of these calls is billed at a tenth.
+
+    ⚠️ `trigger` IS A PARAMETER BECAUSE IT WAS A LITERAL, AND THE LITERAL MADE
+    TWO RECORDS OF ONE EVENT DISAGREE. This function hardcoded
+    `trigger="scheduled"`, and that value does two things downstream: it mints
+    the run id (`f"{trigger}{int(time.time())}"`) and it is what `usage.record`
+    files the spend under. So an owner pressing "Run a check now" got a triage
+    trace correctly reading `manual` beside a usage row reading `scheduled`,
+    with a run id of `scheduled…`, for the same press. Reported from the Usage
+    tab: "they are marked as Scheduled, which is not really the case, right?"
+
+    It is not a cosmetic mislabel. This ledger's whole reason for existing is
+    the attribution the provider's own console cannot give — one key serves the
+    schedule and every person who messages the villa — so filing an owner's
+    manual test as the villa acting on its own is that ledger being wrong about
+    the one question it answers. The default stays `scheduled` so the clock's
+    behaviour is unchanged.
     """
     cfg = agent_config.view(config)
     result = await runtime.investigate(
@@ -149,7 +166,7 @@ async def run(*, provider: Provider, document: str,
         messages=[{"role": "user",
                    "content": "Is anything here worth a closer look?"}],
         config=config, registry=registry_for(registry), tier="triage",
-        trigger="scheduled", run_id=run_id)
+        trigger=trigger, run_id=run_id)
 
     if not result.usable:
         return TriageResult(status=result.status, reason=result.reason,

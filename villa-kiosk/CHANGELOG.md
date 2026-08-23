@@ -1,3 +1,14 @@
+## 2.686.0
+
+### Fixed — a manual run was billed to the schedule, and the schedule switch could disable it
+`triage.run` hardcoded `trigger="scheduled"`, and that value mints the run id
+and is what the usage ledger files the spend under — so pressing "Run a check
+now" produced a trace reading `manual` beside a usage row reading `scheduled`,
+about the same press. The trigger now travels. Sweeping for the same shape found
+a second: a manually generated briefing had its narration billed to the schedule
+too. A manual run is also no longer blocked by the scheduled-trigger switch,
+which governs the clock and not a button an owner pressed.
+
 ## 2.685.0
 
 ### Fixed — the cutover CSV carried the triage passes and no spreadsheet could show them

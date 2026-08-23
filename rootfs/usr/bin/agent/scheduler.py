@@ -46,6 +46,10 @@ from reports.log import log, swallow, warn
 #: nothing at all.
 RETRY_S: float = 300.0
 
+#: The one trigger with no config flag — see `_run_once`. A person with owner
+#: rights pressing a button is the authorisation; there is nothing to look up.
+MANUAL: str = "manual"
+
 #: The floor on how often triage may run, whatever config says. ⚠️ A GUARD
 #: AGAINST A TYPO, not a policy. `triage_minutes: 1` is ninety-six times the
 #: intended spend, and a misplaced digit should not be able to bill a month in
@@ -84,7 +88,7 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     escalated, subjects = 0, ""
     try:
         reason = await _run_once(session, config=config, provider=provider,
-                                 document=doc)
+                                 document=doc, trigger=trigger)
     except Exception:
         # ⚠️ RECORD, THEN RE-RAISE. run_forever swallows and logs; without this
         # the one outcome an operator most needs to see is the one absent from
@@ -107,13 +111,33 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
 
 
 async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
-                    provider: Any = None, document: str = "") -> str:
-    """The guards themselves. Wrapped by run_once, which records the outcome."""
+                    provider: Any = None, document: str = "",
+                    trigger: str = "scheduled") -> str:
+    """The guards themselves. Wrapped by run_once, which records the outcome.
+
+    ⚠️ THE TRIGGER IS ASKED ABOUT ITSELF, NOT ABOUT THE CLOCK. This gate read
+    `trigger_enabled(config, "scheduled")` whatever had actually started the
+    pass, so switching the SCHEDULE off also disabled the owner's own "Run a
+    check now" button — and reported it as `scheduled trigger disabled`, which
+    is a true sentence about a switch the presser did not touch.
+
+    ⚠️ AND `manual` IS NOT A CONFIGURABLE TRIGGER, WHICH IS WHY IT IS EXEMPT
+    RATHER THAN LOOKED UP. `triggers` ships `{scheduled, event, chat}` and has
+    no `manual` key, so `trigger_enabled(config, "manual")` is False by simple
+    absence — routing the button through it would have disabled the one control
+    an owner uses to test any of this, and reported `manual trigger disabled`
+    about a switch that does not exist. Caught before shipping by asking what
+    the config actually contains rather than what the lookup implied.
+
+    What still gates a manual run is the master `enabled` switch above, plus the
+    route itself, which is owner-only because it spends the budget. A person
+    with those rights pressing a button IS the authorisation.
+    """
     cfg = agent_config.view(config)
     if not cfg.get("enabled"):
         return "agent disabled"
-    if not agent_config.trigger_enabled(config, "scheduled"):
-        return "scheduled trigger disabled"
+    if trigger != MANUAL and not agent_config.trigger_enabled(config, trigger):
+        return f"{trigger} trigger disabled"
 
     money = budget_mod.check(config, kind="run")
     if not money.allowed:
@@ -122,8 +146,11 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     if provider is None or not provider.configured():
         return "no model provider configured"
 
+    # ⚠️ THE TRIGGER TRAVELS. `run_once` already records the PASS under it;
+    # without passing it on, the RUN and its spend were filed as "scheduled"
+    # whatever actually started them — see `triage.run`.
     result = await triage_mod.run(provider=provider, document=document,
-                                  config=config)
+                                  config=config, trigger=trigger)
     if result.status != "answered":
         return f"triage {result.status}: {result.reason}"
     if not result.escalations:

@@ -687,3 +687,155 @@ def test_the_pass_fields_survive_the_audit_allow_list() -> None:
         assert field in audit.ROW_FIELDS, (
             f"{field} is passed to record_pass but is not in ROW_FIELDS, so "
             "_clean drops it on the way to disk")
+
+
+def test_a_MANUAL_run_is_not_blocked_by_the_schedule_switch() -> None:
+    """⚠️ TWO WAYS TO BREAK THE ONE BUTTON AN OWNER TESTS WITH, and I wrote the
+    second while fixing the first.
+
+    The gate read `trigger_enabled(config, "scheduled")` whatever started the
+    pass, so turning the SCHEDULE off also killed "Run a check now". Fixing that
+    to `trigger_enabled(config, trigger)` looked right and was worse: `triggers`
+    ships `{scheduled, event, chat}` with NO `manual` key, so the lookup is False
+    by absence and the button would have died reporting `manual trigger
+    disabled` — about a switch that does not exist. Both directions pinned."""
+    from agent import scheduler
+
+    off = {"enabled": True, "triggers": {"scheduled": False}}
+    assert asyncio.run(scheduler._run_once(None, config=off, trigger="manual")) \
+        != "manual trigger disabled"
+    assert asyncio.run(scheduler._run_once(None, config=off, trigger="manual")) \
+        != "scheduled trigger disabled"
+    # The clock still obeys its own switch.
+    assert asyncio.run(scheduler._run_once(None, config=off,
+                                           trigger="scheduled")) \
+        == "scheduled trigger disabled"
+    # And the master switch still gates everything, manual included.
+    assert asyncio.run(scheduler._run_once(
+        None, config={"enabled": False}, trigger="manual")) == "agent disabled"
+
+
+def test_the_trigger_reaches_the_usage_ledger_not_just_the_trace() -> None:
+    """⚠️ ONE EVENT, TWO RECORDS THAT DISAGREED. `triage.run` hardcoded
+    `trigger="scheduled"`, and that value mints the run id and is what
+    `usage.record` files the spend under — so an owner's manual press produced a
+    trace reading `manual` beside a usage row reading `scheduled`, run id
+    `scheduled…`. Reported from the Usage tab. Asserted on what `triage.run`
+    hands to `runtime.investigate`, which is where it enters the ledger."""
+    from agent import triage
+
+    seen: Dict[str, Any] = {}
+
+    async def fake_investigate(**kwargs: Any) -> Any:
+        seen.update(kwargs)
+        class _R:
+            usable, status, reason, text, turns, usage = False, "declined", "x", "", 0, {}
+        return _R()
+
+    original = triage.runtime.investigate
+    triage.runtime.investigate = fake_investigate       # type: ignore[assignment]
+    try:
+        asyncio.run(triage.run(provider=None, document="d", trigger="manual"))
+        assert seen["trigger"] == "manual", seen.get("trigger")
+        asyncio.run(triage.run(provider=None, document="d"))
+        assert seen["trigger"] == "scheduled", "the clock's default changed"
+    finally:
+        triage.runtime.investigate = original           # type: ignore[assignment]
+
+
+def test_a_MANUAL_brief_is_attributed_to_the_person_who_pressed_it(
+        monkeypatch: Any, tmp_path: Any) -> None:
+    """⚠️ THE SAME ROOT CAUSE AS `triage.run`, IN A DIFFERENT SUBSYSTEM, FOUND BY
+    SWEEPING FOR IT. `_anthropic` filed every narration under the literal actor
+    "schedule", justified at the code by "a brief is originated by the villa".
+    Sound reasoning, wrongly scoped: it assumed the scheduler was the only
+    caller, and `reports_run_now_handler` is owner-only — a PERSON pressing a
+    button. So an owner testing a brief had the spend attributed to the villa
+    acting on its own, in the one breakdown ("by who caused it") that this
+    ledger exists to provide and the provider's own console cannot."""
+    from reports import usage as usage_mod
+    from reports.narrate import providers as providers_mod
+
+    path = str(tmp_path / "usage.json")
+    monkeypatch.setattr(usage_mod, "USAGE_PATH", path)
+
+    async def fake_post(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("the adapter should not reach the network here")
+
+    # Drive `_anthropic`'s accounting directly: it is the one line that files
+    # the row, and the actor is the only thing under test.
+    usage_mod.record(source="brief", model="m", actor="owner", counts={},
+                     path=path)
+    usage_mod.record(source="brief", model="m", actor="schedule", counts={},
+                     path=path)
+    actors = {r["actor"] for r in usage_mod.rows(path=path)}
+    assert actors == {"owner", "schedule"}, actors
+
+    import inspect
+    src = inspect.getsource(providers_mod._anthropic)
+    assert 'actor="schedule"' not in src.split("\n#")[0], (
+        "the actor is hardcoded in _anthropic again")
+    assert "actor=actor" in src, "the actor no longer travels into usage.record"
+    assert "actor" in inspect.signature(providers_mod._anthropic).parameters
+
+
+def test_no_agent_entry_point_hardcodes_a_trigger_it_was_given(
+        ) -> None:
+    """⚠️ THE SWEEP ITSELF, PINNED. `triage.run` hardcoded `trigger="scheduled"`
+    while its own caller knew better, and that one literal made two records of
+    one event disagree — the trace said `manual`, the usage ledger said
+    `scheduled`, run id `scheduled…`. Reported from the Usage tab.
+
+    A function that ACCEPTS a trigger must not then pass a literal one on. This
+    reads the source rather than exercising every path, because the defect is
+    visible in the shape and the paths that expose it need a live provider."""
+    import inspect
+    from agent import scheduler, triage
+
+    for mod in (triage, scheduler):
+        src = inspect.getsource(mod)
+        # Strip comments and docstrings — this file's own prose necessarily
+        # quotes the literal it forbids, which is how a source-reading check
+        # here has fired on itself six times before.
+        code = "\n".join(l for l in src.splitlines()
+                         if not l.strip().startswith("#"))
+        code = __import__("re").sub(r'"""[\s\S]*?"""', "", code)
+        assert 'trigger="scheduled"' not in code, (
+            f"{mod.__name__} hardcodes a trigger it was handed; the usage "
+            "ledger and the triage trace will disagree about the same event")
+
+
+def test_the_trigger_survives_the_WHOLE_chain_not_just_its_ends() -> None:
+    """⚠️ THE MIDDLE LINK, WHICH A MUTANT WALKED THROUGH. Two tests already
+    covered this: one asserts `triage.run` forwards the trigger it is given, one
+    asserts no module hardcodes the literal. Deleting `trigger=trigger` from
+    `scheduler._run_once`'s call to `triage.run` passed both — the ends were
+    pinned and the wire between them was not, so the value silently defaulted
+    back to "scheduled" exactly as the original bug did.
+
+    This is `feedback_pin-the-caller` a third time in one session: the defect
+    lives in the wiring, and the wiring is nobody's unit."""
+    from agent import scheduler, triage
+
+    seen: Dict[str, Any] = {}
+
+    class _Provider:
+        def configured(self) -> bool: return True
+
+    async def fake_triage_run(**kwargs: Any) -> Any:
+        seen.update(kwargs)
+        class _R:
+            status, reason, escalations, turns, usage = "answered", "", [], 1, {}
+        return _R()
+
+    original = triage.run
+    scheduler.triage_mod.run = fake_triage_run   # type: ignore[assignment]
+    try:
+        asyncio.run(scheduler._run_once(
+            None, config={"enabled": True, "triggers": {"scheduled": True}},
+            provider=_Provider(), document="d", trigger="manual"))
+        assert seen.get("trigger") == "manual", (
+            "the scheduler did not pass its trigger to triage.run — the pass is "
+            f"recorded as manual and the spend is filed as scheduled: {seen!r}")
+    finally:
+        scheduler.triage_mod.run = original      # type: ignore[assignment]

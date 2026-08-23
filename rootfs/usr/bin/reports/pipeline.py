@@ -399,6 +399,11 @@ async def run_report(
     module_failures: Optional[Dict[str, int]] = None,
     preview: bool = False,
     narration: Optional[Dict[str, Any]] = None,
+    #: ⚠️ WHO CAUSED THIS BRIEF. Defaults to the schedule so the clock's rows
+    #: are byte-identical; the owner-only "run now" handler passes "owner".
+    #: The narration's usage row is filed under it, and that row is the whole
+    #: reason the ledger exists — the provider's own console cannot say WHO.
+    actor: str = "schedule",
 ) -> Dict[str, Any]:
     """Produce and deliver one report. Returns the history entry.
 
@@ -612,8 +617,11 @@ async def run_report(
     narration_why = ""
     provider = providers_mod.shared(narration or {})
     if provider is not None:
+        # ⚠️ THE ACTOR TRAVELS — see `providers._anthropic`. Filed as the
+        # literal "schedule" until 2.686.0, so an owner pressing "run now" had
+        # their narration spend attributed to the villa acting on its own.
         prose, narration_why = await provider.narrate(
-            session, payload_mod.from_context(context))
+            session, payload_mod.from_context(context), actor=actor)
         # ⚠️ A SLOT, NOT THE BODY. The provider now writes the LEAD SENTENCE and
         # the renderer keeps everything else — zones, charts, columns, figures.
         # So the re-render below cannot lose structure however poor the answer

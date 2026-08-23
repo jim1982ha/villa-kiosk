@@ -135,7 +135,14 @@ class Breaker:
 #: ⚠️ RETURNS None RATHER THAN RAISING. An adapter that raises would put the
 #: burden of "must not stop the report" on every future adapter author; here it
 #: is on the two lines below and nowhere else.
-Adapter = Callable[[ClientSession, Mapping[str, Any], str], Any]
+#: ⚠️ `Callable[..., Any]` BECAUSE THE THIRD ARGUMENT IS POSITIONAL AND THE
+#: FOURTH IS KEYWORD-ONLY. The precise form was
+#: `Callable[[ClientSession, Mapping[str, Any], str], Any]`, which cannot
+#: express `actor=` — and widening it to a fourth POSITIONAL parameter would
+#: put two bare strings (`key`, `actor`) next to each other, where swapping
+#: them type-checks and sends the API key to the usage ledger as an actor name.
+#: Looseness here buys a mistake that cannot be made.
+Adapter = Callable[..., Any]
 
 #: ⚠️ NAMED ONCE, BECAUSE THE USAGE LEDGER MUST PRICE THE MODEL THAT WAS
 #: ACTUALLY CALLED. It was a literal inside the request body; a second literal
@@ -145,7 +152,7 @@ NARRATION_MODEL = "claude-sonnet-5"
 
 
 async def _anthropic(session: ClientSession, body: Mapping[str, Any],
-                     key: str) -> Optional[str]:
+                     key: str, *, actor: str = "schedule") -> Optional[str]:
     """The one adapter that ships.
 
     ⚠️ THE HOSTNAME LIVES HERE AND NOWHERE ELSE, and specifically not under
@@ -181,11 +188,17 @@ async def _anthropic(session: ClientSession, body: Mapping[str, Any],
     # the failure is a silent zero in a ledger an owner is reading to find out
     # where their money went.
     #
-    # ⚠️ AND THE ACTOR IS THE SCHEDULE, NOT A PERSON. A brief is originated by
-    # the villa; attributing it to whoever last logged in would put somebody's
-    # name on spend they did not cause.
+    # ⚠️ THE ACTOR TRAVELS, AND IT USED TO BE THE LITERAL "schedule". The note
+    # here read "a brief is originated by the villa; attributing it to whoever
+    # last logged in would put somebody's name on spend they did not cause" —
+    # sound reasoning, wrongly scoped: it assumed the scheduler was the only
+    # caller. `reports_run_now_handler` is owner-only and is a PERSON pressing
+    # a button, so its narration spend was filed against the schedule and
+    # disappeared from the one breakdown this ledger exists for. Same root cause
+    # as `triage.run`'s hardcoded trigger, a different subsystem. The default
+    # keeps the clock's rows byte-identical.
     counted = data.get("usage") if isinstance(data, dict) else None
-    usage.record(source="brief", model=NARRATION_MODEL, actor="schedule",
+    usage.record(source="brief", model=NARRATION_MODEL, actor=actor,
                  counts=counted if isinstance(counted, Mapping) else {})
     blocks = data.get("content") if isinstance(data, dict) else None
     if not isinstance(blocks, list):
@@ -290,7 +303,8 @@ class ProviderNarrator:
         return ""
 
     async def narrate(self, session: ClientSession,
-                      body: Mapping[str, Any]) -> Tuple[Optional[str], str]:
+                      body: Mapping[str, Any],
+                      *, actor: str = "schedule") -> Tuple[Optional[str], str]:
         """(prose, reason). Prose is None whenever anything at all went wrong.
 
         ⚠️ THE PAYLOAD IS AUDITED IMMEDIATELY BEFORE IT LEAVES. `payload.build`
@@ -316,7 +330,8 @@ class ProviderNarrator:
         self.budget.spend()
         try:
             text: Optional[str] = await asyncio.wait_for(
-                adapter(session, body, key), timeout=REQUEST_TIMEOUT_S)
+                adapter(session, body, key, actor=actor),
+                timeout=REQUEST_TIMEOUT_S)
         except Exception as err:  # noqa: BLE001 - a narrator MUST NOT raise
             self.breaker.record_failure()
             # ⚠️ REDACTED, AND THIS IS THE LINE THAT MATTERS. An HTTP client

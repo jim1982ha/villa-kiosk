@@ -3122,6 +3122,12 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
                              if isinstance(state.get("moduleFailures"), dict) else {}),
             narration=(config.get("narration")
                        if isinstance(config.get("narration"), dict) else {}),
+            # ⚠️ A PERSON PRESSED THIS. The narration's usage row was filed
+            # under the literal "schedule" until 2.686.0, so an owner testing a
+            # brief had the spend attributed to the villa acting on its own —
+            # in the one breakdown ("by who caused it") the ledger exists for.
+            # This route is owner-only, so the attribution is known, not guessed.
+            actor="owner",
             preview=preview)
         if not preview:
             reports_pipeline.append_history(entry)
