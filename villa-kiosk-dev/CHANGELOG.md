@@ -1,3 +1,12 @@
+## 2.698.0
+
+### Fixed — one device could be reported twice in the same briefing
+A finding from the add-on's own checks and a finding from the agent about the
+same equipment would both have appeared, in different words, in the same report.
+The de-duplication introduced last release covered your own automations and not
+the built-in checks, so it would have shown up on the first briefing after
+anything metered was investigated. Both layers are now compared.
+
 ## 2.697.0
 
 ### Added — the overnight-hold setting you could not reach, and whether a finding was actually sent
