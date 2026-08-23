@@ -95,6 +95,14 @@ ILLUSTRATIVE: Set[str] = {
     # the honest fix is that a new test file's ids get classified here in the
     # SAME change that writes them, not after the pin catches up.
     "sensor.example_pump_power",
+    # `test_security_validation.py` (TASK-101). ⚠️ INVENTED, and it went red one
+    # release late AGAIN — the note above says in as many words that a new test
+    # file's ids must be classified in the SAME change that writes them, and I
+    # wrote that note and then repeated the sequence. The `example_` prefix is
+    # the convention: none of these is a device anywhere.
+    "lock.example_front_gate", "switch.example_door_1_relay",
+    "switch.example_intercom", "switch.example_thing",
+    "light.example_outdoor_path",
     "lock.side_gate",
     # `test_agent_mcp.py`. A deliberately fictional id, and the test's whole
     # point is that a tool result carrying ANY raw id is refused — so the id
