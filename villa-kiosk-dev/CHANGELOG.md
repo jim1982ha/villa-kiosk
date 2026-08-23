@@ -1,3 +1,12 @@
+## 2.652.0
+
+### Changed — Settings is tabbed, like Briefings and Facility
+Seven collapsible sections stacked on one screen read as clutter. They are now
+four tabs — Villa, Devices, Supervision, System — with two panels each, so no
+tab holds a single control. The tab strip itself was duplicated markup in two
+modals and is now one component, which also gives Briefings the scroll-into-view
+fix only Facility had.
+
 ## 2.651.0
 
 ### Changed — a briefing's voice now follows who it is sent to
