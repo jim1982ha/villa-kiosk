@@ -25,8 +25,9 @@
 // Faults a dozen — and letting the dialog resize around every tab switch was
 // jarring. See that class's own comment in styles.css.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalTabs from "@/components/common/ModalTabs";
 import {
   ClipboardCheck, ClipboardList, ListChecks, Wrench, Wallet, FileText,
   CalendarCog, Gauge,
@@ -139,10 +140,6 @@ export default function FacilityModal({
    *  by the caller, this one is ours and is cleared by us. Merging them would
    *  mean writing to a prop's owner from here to reset it. */
   const [ownFaultId, setOwnFaultId] = useState<string | null>(null);
-  const activeTabRef = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    activeTabRef.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
-  }, [tab]);
   const { entities } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
@@ -260,24 +257,12 @@ export default function FacilityModal({
               keeps it horizontal in practice — the row is already vertically in
               view whenever this dialog is open, and "nearest" then asks for no
               vertical movement at all. */}
-          <div className="fm-tabs" role="tablist" aria-label="Facility sections">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  ref={active ? activeTabRef : undefined}
-                  role="tab"
-                  aria-selected={active}
-                  className={`fm-tab${active ? " active" : ""}`}
-                  onClick={() => setTab(t.id)}
-                >
-                  <Icon size={16} /><span>{t.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          <ModalTabs
+            tabs={TABS}
+            active={tab}
+            onSelect={setTab}
+            label="Facility sections"
+          />
 
           <div className="settings-body">
             {saveError && <div className="fm-banner warn">{saveError}</div>}

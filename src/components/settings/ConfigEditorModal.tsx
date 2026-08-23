@@ -8,7 +8,9 @@
 
 import { useState, type ReactNode } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { ChevronDown, ChevronRight, LogOut, Upload } from "lucide-react";
+import { Boxes, ChevronDown, ChevronRight, Home, LogOut, ShieldCheck,
+         Upload, Wrench } from "lucide-react";
+import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
@@ -19,6 +21,26 @@ import AgentTuningPanel from "./AgentTuningPanel";
 import ChatSendersPanel from "./ChatSendersPanel";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
+
+/** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
+ *  ACCIDENT. This screen was a stack of seven collapsible sections and read as
+ *  clutter; splitting it one-section-per-tab would have traded a long scroll
+ *  for seven tabs that each hold one control, which is worse — the owner said
+ *  so outright. Two panels per tab is what makes each one a SUBJECT ("what
+ *  devices exist", "what the supervisor costs") rather than a container.
+ *
+ *  ⚠️ AND THE NON-OWNER VIEW WAS SIZED TOO. Four of the eight panels are
+ *  owner-only, so a naive grouping leaves a guest with tabs holding one item
+ *  each — the exact failure being avoided. The two open tabs hold two panels
+ *  apiece for every profile. */
+type SettingsTab = "villa" | "devices" | "supervision" | "system";
+
+const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
+  { id: "villa", label: "Villa", icon: Home },
+  { id: "devices", label: "Devices", icon: Boxes },
+  { id: "supervision", label: "Supervision", icon: ShieldCheck, owner: true },
+  { id: "system", label: "System", icon: Wrench, owner: true },
+];
 
 interface Props {
   /** Return to the Settings modal this was opened from. */
@@ -147,6 +169,16 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onBack);
   const { role } = useProfile();
+  // ⚠️ FILTERED BEFORE THE INITIAL VALUE IS CHOSEN, so a non-owner can never
+  // start on a tab that is not in their strip — which would render an empty
+  // body under a tab bar highlighting nothing.
+  const tabs = TABS.filter((t) => role === "owner" || !t.owner);
+  // ⚠️ THE EDIT SHORTCUT OPENS ON "Devices". Arriving from a device panel's
+  // "edit" and landing on Villa would hide the row the operator came for, which
+  // is the same defect the collapse's `defaultOpen` already guards against one
+  // level down.
+  const [tab, setTab] = useState<SettingsTab>(
+    focusEntityId ? "devices" : (tabs[0]?.id ?? "villa"));
   const canUploadModel = role === "owner";
   // Central GLB/room-data upload — Owner only. Lives in this modal's OWN
   // header (icon-only, same header-icon-btn treatment as the day/night
@@ -207,66 +239,88 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           )}
         </div>
 
+        {/* ⚠️ OUTSIDE `.settings-body`, LIKE ITS TWO SIBLINGS. The strip is
+            chrome and the body scrolls; putting the tabs inside would scroll
+            them out of reach on the long tabs, which is the whole reason
+            Briefings and Facility place them here. */}
+        <ModalTabs
+          tabs={tabs}
+          active={tab}
+          onSelect={setTab}
+          label="Settings sections"
+        />
+
         <div className="settings-body">
           {glbUpload.uploadMsg && (
             <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
               {glbUpload.uploadMsg.text}
             </div>
           )}
-          <div className="settings-section-title">Villa location</div>
-          <VillaCoordinates />
-          <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
-            Drives sun position and day/night for this villa.
-          </p>
+          {tab === "villa" && (
+            <>
+              <div className="settings-section-title">Villa location</div>
+              <VillaCoordinates />
+              <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+                Drives sun position and day/night for this villa.
+              </p>
 
-          {/* Defaults open when arriving via a device panel's "edit" shortcut
-              (focusEntityId set) — otherwise that jump would land on a
-              collapsed section with the target row hidden. */}
-          <CollapsibleSection title="Auto-detected entity settings" defaultOpen={!!focusEntityId}>
-            <ConfigEditor initialSearch={focusEntityId} />
-          </CollapsibleSection>
+              <div className="settings-section-title" style={{ marginTop: 18 }}>
+                Bound 3D objects
+              </div>
+              <BindingsTable />
+            </>
+          )}
 
-          <CollapsibleSection title="Grouped devices">
-            <GroupedDevices />
-          </CollapsibleSection>
+          {tab === "devices" && (
+            <>
+              {/* ⚠️ STILL COLLAPSIBLE INSIDE ITS TAB, AND STILL DEFAULTS OPEN
+                  ON THE EDIT SHORTCUT. Tabs solved the CLUTTER of seven
+                  sections stacked together; they do not solve one section whose
+                  list is hundreds of rows long, which is what this collapse was
+                  for. Arriving here from a device panel's "edit" must still
+                  land with the target row visible. */}
+              <CollapsibleSection title="Auto-detected entity settings" defaultOpen={!!focusEntityId}>
+                <ConfigEditor initialSearch={focusEntityId} />
+              </CollapsibleSection>
 
-          <CollapsibleSection title="Bound 3D objects">
-            <BindingsTable />
-          </CollapsibleSection>
+              <CollapsibleSection title="Grouped devices">
+                <GroupedDevices />
+              </CollapsibleSection>
+            </>
+          )}
 
-          {/* Owner only: the endpoint itself 403s other roles (it carries
-              other people's user-agents and error text), so don't render a
-              panel that could only ever show an error for them. */}
-          {/* Owner only: /agent-config's PUT is owner-restricted, and this
-              list is the only thing standing between the villa and anyone who
-              finds the bot. */}
-          {role === "owner" && (
-            <CollapsibleSection title="Who may message the villa">
+          {/* Owner only: /agent-config's PUT is owner-restricted, and the
+              sender list is the only thing standing between the villa and
+              anyone who finds the bot. The tab itself is not rendered for
+              other roles rather than rendered-and-403. */}
+          {tab === "supervision" && role === "owner" && (
+            <>
+              <div className="settings-section-title">Who may message the villa</div>
               <ChatSendersPanel />
-            </CollapsibleSection>
-          )}
 
-          {/* Owner only, same reason: /agent-config's PUT is owner-restricted.
-              ⚠️ SEPARATE FROM THE SENDER LIST ON PURPOSE. That panel answers
-              "who is allowed to speak"; this one answers "what does it cost and
-              how loud is it". Collapsing them into one section would put a
-              cadence field under a heading about access. */}
-          {role === "owner" && (
-            <CollapsibleSection title="Supervision cadence and cost">
+              {/* ⚠️ THE TWO STAY SEPARATE HEADINGS INSIDE ONE TAB. One answers
+                  "who is allowed to speak" and the other "what does it cost
+                  and how loud is it" — related enough to share a tab, distinct
+                  enough that a cadence field must not sit under a heading
+                  about access. */}
+              <div className="settings-section-title" style={{ marginTop: 18 }}>
+                Cadence and cost
+              </div>
               <AgentTuningPanel />
-            </CollapsibleSection>
+            </>
           )}
 
-          {role === "owner" && (
-            <CollapsibleSection title="Device telemetry">
-              <TelemetryPanel />
-            </CollapsibleSection>
-          )}
+          {tab === "system" && role === "owner" && (
+            <>
+              <CollapsibleSection title="Device telemetry">
+                <TelemetryPanel />
+              </CollapsibleSection>
 
-          {role === "owner" && (
-            <CollapsibleSection title="Session">
+              <div className="settings-section-title" style={{ marginTop: 18 }}>
+                Session
+              </div>
               <LogoutAllSection />
-            </CollapsibleSection>
+            </>
           )}
         </div>
 

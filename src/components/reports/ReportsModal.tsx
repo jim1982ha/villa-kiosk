@@ -79,6 +79,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalTabs from "@/components/common/ModalTabs";
 import {
   fetchNarrationSecrets, fetchReportsConfig, fetchReportsDiagnostics,
   fetchReportsHistory, runReportNow, saveNarrationSecret, saveReportsConfig,
@@ -352,22 +353,12 @@ export default function ReportsModal(
           )}
         </div>
 
-        <div className="fm-tabs" role="tablist" aria-label="Briefing sections">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            return (
-              <button
-                key={t.id}
-                role="tab"
-                aria-selected={tab === t.id}
-                className={`fm-tab${tab === t.id ? " active" : ""}`}
-                onClick={() => setTab(t.id)}
-              >
-                <Icon size={16} /><span>{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        <ModalTabs
+          tabs={tabs}
+          active={tab}
+          onSelect={setTab}
+          label="Briefing sections"
+        />
 
         <div className="settings-body">
           {notice && noticeOpen && (
