@@ -1,3 +1,12 @@
+## 2.651.0
+
+### Changed — a briefing's voice now follows who it is sent to
+Choosing a recipient already decided this, so picking it a second time in
+Schedules was a setting that could disagree with itself. One people table now
+answers both "who may message the villa" and "whose voice a briefing is written
+in". A schedule that names an explicit audience still wins, and a villa that
+configured senders before this keeps working untouched.
+
 ## 2.650.0
 
 ### Added — see exactly what the API key has been spent on, and by whom
