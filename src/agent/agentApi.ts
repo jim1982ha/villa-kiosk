@@ -43,12 +43,27 @@ const AGENT_WIRE_KEYS = {
   model_reason: "modelReason",
   model_brief: "modelBrief",
   allowed_senders: "allowedSenders",
+  /** ⚠️ ONE TABLE FOR BOTH DIRECTIONS — see `reports/people.py`. It supersedes
+   *  `allowed_senders`, which is kept and still read when this is empty so an
+   *  existing villa's bot does not go deaf on upgrade. */
+  people: "people",
   actuable_refs: "actuableRefs",
   allowed_services: "allowedServices",
   suppressed_subjects: "suppressedSubjects",
 } as const;
 
 export type AgentTrigger = "scheduled" | "event" | "chat";
+
+/** One row of the people table. */
+export interface Person {
+  name: string;
+  /** Telegram user id, or "" for a delivery-only person. */
+  telegram: string;
+  /** Notify destinations — Companion app, Telegram entity, anything
+   *  `discovery` found. Receive-only, always. */
+  targets: string[];
+  role: Role;
+}
 
 export interface AgentConfig {
   enabled: boolean;
@@ -75,6 +90,12 @@ export interface AgentConfig {
    *  being two names for one person, with `guest` missing — which is what put a
    *  profile that does not exist in the picker. */
   allowedSenders: Record<string, Role>;
+  /** Who the villa knows and how to reach them. ⚠️ `telegram` is the ONLY field
+   *  that grants anything inbound; `targets` are notify destinations, which can
+   *  only receive. A person with a device and no chat is delivery-only, which
+   *  is a normal row — and is why listing one must never be read as identity.
+   *  ⚠️ EMPTY MEANS THE BOT ANSWERS NOBODY. Never seed this. */
+  people: Person[];
   /** ⚠️ EMPTY MEANS THE AGENT MAY ACT ON NOTHING. Never seed this. */
   actuableRefs: string[];
   /** Which SERVICES, as distinct from `actuableRefs`' which DEVICES. Both

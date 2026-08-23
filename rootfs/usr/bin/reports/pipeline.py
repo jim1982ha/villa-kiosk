@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
@@ -895,9 +895,45 @@ def targets_for(config: Dict[str, Any], schedule: Dict[str, Any]) -> List[str]:
     return []
 
 
-def audience_of(schedule: Dict[str, Any]) -> str:
+def audience_of(schedule: Dict[str, Any],
+                agent_config: Optional[Mapping[str, Any]] = None,
+                targets: Optional[Sequence[str]] = None) -> str:
+    """Whose voice this briefing is written in.
+
+    ⚠️ DERIVED FROM WHO IT IS SENT TO, NOT CHOSEN SEPARATELY (2.651.0). A
+    schedule used to carry its own `audience` beside its own delivery target,
+    so one person was configured twice — reported as redundant, correctly:
+    choosing to send somebody a brief already determines whose voice it is in.
+    The people table in the agent config is the single answer.
+
+    ⚠️ AN EXPLICIT `audience` STILL WINS, for existing schedules. Dropping it
+    would silently rewrite what every configured briefing sounds like on
+    upgrade, and the two voices are opposites — one requires the entity id, the
+    other forbids it. A stored choice is a decision somebody made.
+
+    ⚠️ AND THE FALLBACK IS THE OWNER VOICE, WHICH IS THE ONE THAT WITHHOLDS
+    IDENTIFIERS. The UI refuses to save a schedule whose target nobody has a
+    profile for; this is the backend half, for a document written by hand, and
+    it degrades toward saying LESS about the villa rather than more.
+    """
     audience = schedule.get("audience")
-    return audience if audience in ("owner", "facility") else "owner"
+    if audience in ("owner", "facility"):
+        return str(audience)
+    try:
+        from reports import people as people_mod
+        # ⚠️ THE RESOLVED TARGETS, NOT `schedule["targets"]`. An absent key
+        # means "inherit the shared list" (see `targets_for`), so reading the
+        # schedule's own field would derive nothing for exactly the schedules
+        # that never named a destination — the legacy ones this has to keep
+        # working.
+        chosen = targets if targets is not None else schedule.get("targets") or []
+        for target in chosen:
+            found = people_mod.audience_for_target(agent_config, str(target))
+            if found:
+                return found
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not derive a briefing audience", err)
+    return "owner"
 
 
 def warn_if_broadcast(targets: Sequence[str]) -> None:
@@ -991,12 +1027,18 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
             session, now_local.isoformat(timespec="seconds"))
 
         delivered = 0
+        # ⚠️ READ ONCE PER TICK, NOT PER SCHEDULE. Every schedule firing in this
+        # minute resolves its audience against the same table, and re-reading a
+        # JSON file per row would make the answer able to change mid-tick.
+        from reports import people as people_mod
+        agent_cfg = people_mod.read_config()
         for entry in ready:
             targets = targets_for(config, entry)
             warn_if_broadcast(targets)
             modules_cfg = config.get("modules")
             record = await run_report(
-                session, audience_of(entry), str(entry.get("cadence")),
+                session, audience_of(entry, agent_cfg, targets),
+                str(entry.get("cadence")),
                 targets, now_local, found, entry_id=str(entry["key"]),
                 settings=modules_cfg if isinstance(modules_cfg, dict) else {},
                 min_history_days=int(config.get("min_history_days") or 14),

@@ -217,15 +217,18 @@ def sender_role(config: Optional[Mapping[str, Any]], *, channel: str,
     stranger on another platform. Lookup is on the STRING of the id because
     JSON object keys are strings and an int id round-trips as one.
     """
-    cfg = agent_config.view(config)
-    senders = cfg.get("allowed_senders")
-    if not isinstance(senders, Mapping):
+    # ⚠️ DELEGATED TO `people.py` SINCE 2.651.0, AND THE LOOKUP DID NOT MOVE —
+    # only its source did. One table now answers both "may this person talk to
+    # the villa" and "whose voice is a briefing to them written in", because
+    # they were always the same fact about the same person configured twice.
+    # `role_for_sender` reads ONLY the telegram field: a delivery target on the
+    # same row is a place to send to, never an identity to trust, and that is
+    # the one way merging the two tables could have widened the allow-list.
+    from reports import people as people_mod
+    role = people_mod.role_for_sender(config, channel=channel,
+                                      sender_id=sender_id)
+    if not role:
         return ""
-    key = f"{str(channel).strip().lower()}:{str(sender_id).strip()}"
-    role = senders.get(key)
-    if not isinstance(role, str):
-        return ""
-    role = role.strip().lower()
     # ⚠️ AN UNKNOWN ROLE IS NOBODY, NOT A DEFAULT ONE. Defaulting would grant
     # some access to a typo, and this map is the only thing standing between the
     # villa and anyone who finds the bot. `config.errors` refuses such a role on

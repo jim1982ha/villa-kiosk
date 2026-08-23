@@ -78,7 +78,18 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: ⚠️ EMPTY MEANS NOBODY MAY TALK TO THE BOT. A sender not in this map gets
     #: no run and no reply — silence rather than a refusal, because an error
     #: reply confirms the bot is live to whoever is probing it.
+    #:
+    #: ⚠️ SUPERSEDED BY `people` AND DELIBERATELY KEPT. `people.people()` reads
+    #: this when the new table is empty, so a villa that configured senders
+    #: before 2.651.0 does not have its bot go deaf on upgrade — the symptom
+    #: would be "it stopped answering me" with nothing visibly wrong.
     "allowed_senders": {},
+    #: ⚠️ ONE TABLE FOR BOTH DIRECTIONS, AND THEY ARE NOT SYMMETRIC.
+    #: `{name, telegram, targets[], role}`. `telegram` is the only field that
+    #: grants anything INBOUND; `targets` are notify destinations, which can
+    #: only receive. A person with a device and no chat is delivery-only, which
+    #: is a normal row. Empty by the same requirement as `allowed_senders`.
+    "people": [],
     #: ⚠️ WHICH SERVICES, as distinct from `actuable_refs`' WHICH DEVICES —
     #: both allow-lists must pass, so `light.turn_off` on an unlisted lamp and
     #: `lock.unlock` on a listed door are refused for different reasons. Empty
@@ -97,8 +108,9 @@ DEFAULTS: Final[Dict[str, Any]] = {
 #: Keys whose default is EMPTY BY SECURITY REQUIREMENT rather than by taste. A
 #: test asserts each of these is falsy in DEFAULTS, so a helpful seed cannot be
 #: added without the build failing.
-MUST_BE_EMPTY: Final[Tuple[str, ...]] = ("allowed_senders", "actuable_refs",
-                                        "allowed_services", "suppressed_subjects")
+MUST_BE_EMPTY: Final[Tuple[str, ...]] = ("allowed_senders", "people",
+                                        "actuable_refs", "allowed_services",
+                                        "suppressed_subjects")
 
 
 def view(raw: Any) -> Dict[str, Any]:
