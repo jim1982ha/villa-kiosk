@@ -1,3 +1,12 @@
+## 2.664.0
+
+### Fixed — chat was answering every question on the most expensive model, uncached
+28 requests and $1.78 in an afternoon of testing, all of it frontier-model chat.
+Two causes: chat had no tier of its own so it used the investigations model, and
+the Villa Document — ~11,000 tokens — was re-sent at full price on every turn of
+every tool loop. Chat now defaults to the mid tier, the system prompt is cache-
+marked, and each model box shows its default and suggests the alternatives.
+
 ## 2.663.0
 
 ### Added — "Check the villa now", so the cutover evidence can be tested today
