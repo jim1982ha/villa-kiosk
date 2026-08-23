@@ -11,21 +11,35 @@
 // where a Save button goes. The test could notice a missing part; it could not
 // make the parts identical. This can.
 //
-// ⚠️ THE POLICY, IN ONE SENTENCE: a dialog holding unsaved edits ends in
-// [Cancel] [Save]; a dialog holding none ends in [Close]. The label of the exit
-// button is therefore always TRUE — "Cancel" is a promise to discard, and
-// offering it on a dialog whose every control already applied live (Settings'
-// sliders write straight to the scene, the entity table writes through
-// `ConfigContext`) would promise an undo that does not exist. Save is never
-// hidden while a draft exists and never shown while there is nothing to commit,
-// so its position is learnable — the complaint that put it in the footer in the
-// first place.
+// ⚠️ THE POLICY, IN ONE SENTENCE: every dialog in this family ends in the SAME
+// TWO BUTTONS — [Cancel] [Save] — and Save is live only while there is
+// something to commit.
 //
-// ⚠️ AND THE ACTIONS STAY ON ONE ROW; THE NOTE YIELDS. Reported from a phone:
-// Save sat above Close because the explanatory span beside them claimed its
-// full intrinsic width. `.settings-footer`'s own CSS handles that — see its
-// comment — which is another reason this markup belongs in one place.
-
+// ⚠️ THE FIRST VERSION SWAPPED THE LABEL INSTEAD (Close when clean, Cancel when
+// dirty) so that the word was always literally true, and it was reported the
+// day it shipped: "by default i see the Close button and it changes to Cancel /
+// Save when a modification is done: this is very bad… It feels like 2 different
+// configurations are fighting for each other". They are right, and the reason
+// is one this codebase has already paid for once with the Save that lived at
+// the foot of a tab: a control whose POSITION or IDENTITY moves is a control
+// you cannot learn. A footer that rearranges itself in response to typing is
+// the same defect in a smaller space. One fixed pair, one of them greyed, is
+// the version a person can build a habit around.
+//
+// ⚠️ CANCEL IS NEVER DISABLED, WHICH IS THE ONE PLACE THIS DEPARTS FROM THE
+// REQUEST ("the cancel shall appear un-clickable if no modification are
+// registered"). It is also the dialog's ONLY visible way out: these dialogs
+// have no X, and Escape and the backdrop are not discoverable on a wall-mounted
+// tablet — `test_modal_shell` pins exactly that, after a dialog shipped with no
+// exit at all. Disabling both buttons on a clean dialog would strand whoever
+// opened it. Cancel therefore means "close, discarding anything pending", which
+// is true in both states; Save is the button that greys.
+//
+// ⚠️ AND A DIALOG WITH NOTHING TO SAVE STILL SHOWS THE PAIR, with Save greyed
+// permanently and a `title` saying why. Settings' sliders write to the scene as
+// they move and the entity table writes through `ConfigContext`; there is
+// genuinely nothing waiting. Hiding the button there would put a different
+// footer on a third of the family, which is what this component exists to stop.
 import type { ReactNode } from "react";
 import { Save as SaveIcon } from "lucide-react";
 
@@ -86,17 +100,23 @@ export default function ModalFooter({
           // other single-button footer worked around by hand.
           : <span />}
       <div className="modal-footer-actions">
-        <button className={dirty ? "btn ghost" : "btn primary"}
+        <button className="btn ghost"
                 onClick={() => { commit?.discard?.(); onClose(); }}>
-          {dirty ? "Cancel" : "Close"}
+          Cancel
         </button>
-        {dirty && (
-          <button className="btn primary" disabled={busy || saving}
-                  onClick={() => { void commit?.save(); }}>
-            <SaveIcon size={16} />
-            <span>{saving ? "Saving…" : "Save"}</span>
-          </button>
-        )}
+        <button
+          className="btn primary"
+          disabled={busy || saving || !dirty}
+          title={commit
+            ? (dirty ? "Store these changes"
+                     : "Nothing has been changed yet")
+            : "Everything in this dialog applies as you change it — there is "
+              + "nothing waiting to be saved"}
+          onClick={() => { void commit?.save(); }}
+        >
+          <SaveIcon size={16} />
+          <span>{saving ? "Saving…" : "Save"}</span>
+        </button>
       </div>
     </div>
   );

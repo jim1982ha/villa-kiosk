@@ -49,6 +49,7 @@ import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitConcerns from "./CockpitConcerns";
+import CockpitReview from "./CockpitReview";
 import { useVillaAttention } from "./useVillaAttention";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
@@ -236,6 +237,14 @@ export default function CockpitTab({
           not the view, so the leaf component owns its own check: it is not in
           either open path and cannot become a gate on one. */}
       <CockpitConcerns />
+
+      {/* ── Procedures the villa wants to keep ─────────────────────
+          ⚠️ AFTER the concerns, not before: a concern is the state of the villa
+          and a draft is a question about how it is supervised. It renders
+          nothing at all while the queue is empty, which is the normal state.
+          The capability check is inside, for the same reason CockpitConcerns'
+          is — see `test_cockpit_is_gated_nowhere`. */}
+      <CockpitReview />
 
       {/* ── Room / floor / category breakdown ──────────────────── */}
       {/* One selector, one section — category used to be its own

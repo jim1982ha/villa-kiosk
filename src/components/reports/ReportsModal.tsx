@@ -445,10 +445,10 @@ export default function ReportsModal(
         <ModalFooter
           note="Briefings are composed by the add-on and delivered by Home Assistant"
           busy={busy}
-          commit={pending === null ? null : {
-            dirty: true,
+          commit={{
+            dirty: pending !== null,
             saving: busy,
-            save: () => save(pending),
+            save: () => { if (pending) void save(pending); },
             // ⚠️ THE TAB OWNS THE DRAFT AND REPUBLISHES IT FROM `config` ON
             // EVERY CHANGE, so clearing it here is what a discard IS: the tab
             // re-seeds from the server's copy the moment this dialog closes.

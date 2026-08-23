@@ -57,11 +57,19 @@ const CHANNEL = "telegram";
  *  bot is answering people, which reads as "nobody is configured" and is false.
  *  A legacy sender has no delivery target, so the row is inbound-only until the
  *  owner gives it one. */
-function fromLegacy(map: Record<string, string> | undefined): Person[] {
+function fromLegacy(map: Record<string, string> | undefined,
+                    chats: BotChat[]): Person[] {
   return Object.entries(map ?? {})
     .filter(([key]) => key.startsWith(`${CHANNEL}:`))
     .map(([key, role]) => ({
-      name: key.slice(CHANNEL.length + 1),
+      // ⚠️ THE CHAT'S OWN NAME WHEN THE BOT KNOWS IT. `allowed_senders` stored
+      // only a number, so a straight migration produced a person CALLED
+      // "765979167" sitting beside a chat picker showing "Jm" — read from the
+      // screen as the same field twice. The bot already knows that chat's
+      // name; using it is the difference between a migrated row and a migrated
+      // row somebody can recognise. The number remains if the chat is gone.
+      name: chats.find((c) => c.id === key.slice(CHANNEL.length + 1))?.name
+        || key.slice(CHANNEL.length + 1),
       telegram: key.slice(CHANNEL.length + 1),
       targets: [],
       role: (ROLE_ORDER as readonly string[]).includes(role)
@@ -75,13 +83,6 @@ export default function PeoplePanel() {
    *  copy and their own revision is a lost update, which is what put "I changed
    *  it and it did not save" on the screen. See `AgentConfigDraft`. */
   const draft = useAgentConfigDraft();
-  const stored = peopleOf(draft.config);
-  /** Rows synthesised from the legacy sender map, when the table is empty. */
-  const migrated = stored.length === 0
-    ? fromLegacy(draft.config.allowedSenders as Record<string, string>)
-    : [];
-  const legacy = stored.length === 0 && migrated.length > 0;
-  const rows = stored.length ? stored : migrated;
   const saving = draft.saving;
   const [error, setError] = useState<string | null>(null);
   /** The bot's own private chats, so nobody copies a number out of a raw
@@ -98,6 +99,16 @@ export default function PeoplePanel() {
    *  the same rule ScheduleTab follows: two open lists on a phone push
    *  everything else off the screen. */
   const [open, setOpen] = useState<number | null>(null);
+
+  const stored = peopleOf(draft.config);
+  /** Rows synthesised from the legacy sender map, when the table is empty.
+   *  ⚠️ DERIVED AFTER `chats` IS DECLARED, because the migration reads it to
+   *  name the person — see `fromLegacy`. */
+  const migrated = stored.length === 0
+    ? fromLegacy(draft.config.allowedSenders as Record<string, string>, chats)
+    : [];
+  const legacy = stored.length === 0 && migrated.length > 0;
+  const rows = stored.length ? stored : migrated;
 
   useEffect(() => {
     let cancelled = false;
@@ -205,13 +216,24 @@ export default function PeoplePanel() {
         <div key={i} className="editable-row-card">
           <div className="editable-row" style={{ marginTop: 8 }}>
             <div className="editable-row-fields">
-              <input
-                value={row.name}
-                disabled={saving}
-                aria-label="Name"
-                placeholder="Name"
-                onChange={(e) => at(i, { name: e.target.value })}
-              />
+              {/* ⚠️ EVERY FIELD CARRIES A VISIBLE LABEL, and it took a report to
+                  get them. Four unlabelled controls in a row read as four
+                  guesses — and the first one is worse than a guess after the
+                  legacy migration, which names a person after their Telegram
+                  id, so the row opened with a NUMBER beside a chat picker and
+                  was read as the same field twice: "I don't understand this
+                  menu: as I see both the Chat ID fields". `--field-label-size`
+                  and `--field-label-gap` are the app's own rhythm for exactly
+                  this shape. */}
+              <label className="people-field">
+                <span>Name</span>
+                <input
+                  value={row.name}
+                  disabled={saving}
+                  placeholder="Who this is"
+                  onChange={(e) => at(i, { name: e.target.value })}
+                />
+              </label>
               {/* ⚠️ A NAME WHEN WE KNOW ONE, THE NUMBER WHEN WE DO NOT. In a
                   PRIVATE chat the chat id and the sender id are the same
                   number, so the bot's own chat list is exactly the right menu —
@@ -223,50 +245,67 @@ export default function PeoplePanel() {
                   ⚠️ AND "No chat" IS A REAL CHOICE, NOT AN EMPTY ONE. A person
                   with devices and no chat is a normal, delivery-only row, and
                   the option has to say so — a blank first entry reads as "not
-                  filled in yet". */}
-              {chats.length > 0 ? (
-                <select
-                  value={row.telegram}
-                  disabled={saving}
-                  aria-label="Telegram chat"
-                  onChange={(e) => at(i, { telegram: e.target.value })}
-                >
-                  <option value="">No chat — cannot message the villa</option>
-                  {chats.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                  {row.telegram && !chats.some((c) => c.id === row.telegram) && (
-                    <option value={row.telegram}>
-                      {row.telegram} (not a current chat)
-                    </option>
-                  )}
-                </select>
-              ) : (
-                <input
-                  value={row.telegram}
-                  disabled={saving}
-                  aria-label="Telegram user id"
-                  placeholder="Telegram user id (optional)"
-                  inputMode="numeric"
-                  onChange={(e) => at(i, { telegram: e.target.value })}
+                  filled in yet".
+
+                  ⚠️ IT IS NOT THE SAME QUESTION AS THE DEVICES BESIDE IT, and
+                  the labels are what say so. Asked directly — "I was expecting
+                  to see only the dropdown from picture #3, since it covers all
+                  the possibilities of sending to". It does cover all of those:
+                  it is the OUTBOUND half. A chat is the only thing that lets
+                  somebody message the VILLA, and a notify target can only
+                  receive, so listing one may never be read as identity. That
+                  asymmetry is the one thing merging these two tables could have
+                  got wrong (`people.role_for_sender`), which is why the field
+                  stays and the labels changed instead. */}
+              <label className="people-field">
+                <span>Telegram chat — lets them message the villa</span>
+                {chats.length > 0 ? (
+                  <select
+                    value={row.telegram}
+                    disabled={saving}
+                    onChange={(e) => at(i, { telegram: e.target.value })}
+                  >
+                    <option value="">No chat — cannot message the villa</option>
+                    {chats.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                    {row.telegram && !chats.some((c) => c.id === row.telegram) && (
+                      <option value={row.telegram}>
+                        {row.telegram} (not a current chat)
+                      </option>
+                    )}
+                  </select>
+                ) : (
+                  <input
+                    value={row.telegram}
+                    disabled={saving}
+                    placeholder="Telegram user id (optional)"
+                    inputMode="numeric"
+                    onChange={(e) => at(i, { telegram: e.target.value })}
+                  />
+                )}
+              </label>
+              <label className="people-field">
+                <span>Devices — where briefings are sent</span>
+                <RecipientButton
+                  targets={row.targets ?? []}
+                  available={targets}
+                  open={open === i}
+                  onToggle={() => setOpen(open === i ? null : i)}
                 />
-              )}
-              <RecipientButton
-                targets={row.targets ?? []}
-                available={targets}
-                open={open === i}
-                onToggle={() => setOpen(open === i ? null : i)}
-              />
-              <select
-                value={row.role}
-                disabled={saving}
-                aria-label="Profile"
-                onChange={(e) => at(i, { role: e.target.value as Role })}
-              >
-                {ROLE_ORDER.map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                ))}
-              </select>
+              </label>
+              <label className="people-field">
+                <span>Profile</span>
+                <select
+                  value={row.role}
+                  disabled={saving}
+                  onChange={(e) => at(i, { role: e.target.value as Role })}
+                >
+                  {ROLE_ORDER.map((r) => (
+                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                  ))}
+                </select>
+              </label>
             </div>
             {/* ⚠️ `btn danger icon-only`, the app's destructive treatment.
                 Removing somebody's access to the villa is exactly the action

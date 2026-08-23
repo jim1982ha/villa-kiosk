@@ -1,3 +1,12 @@
+## 2.654.0
+
+### Changed — one fixed footer, labelled people rows, and a reachable review queue
+The footer swapped Close for Cancel/Save as you typed, which read as two dialogs
+arguing; it is fixed now, with Save greyed until there is something to store. A
+person's four fields were unlabelled and the migration named people after their
+chat id, so it read as two chat fields. A profile whose person has no device said
+`(missing)`. Playbook drafts can finally be approved or discarded, in the Cockpit.
+
 ## 2.653.0
 
 ### Changed — a briefing is addressed to a PROFILE, and every modal saves the same way

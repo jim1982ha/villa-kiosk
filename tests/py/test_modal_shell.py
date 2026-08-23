@@ -113,9 +113,34 @@ def test_every_settings_modal_offers_a_visible_way_out() -> None:
     # individual dialog still passing, which is exactly the vacuous pass this
     # file keeps guarding against.
     footer = _read("src/components/common/ModalFooter.tsx")
-    assert re.search(r'\{dirty \? "Cancel" : "Close"\}', footer), (
-        "ModalFooter no longer renders an exit button — every dialog in the "
+    exits = [b for b in _primary_buttons_any(footer) if "Cancel" in b]
+    assert exits, (
+        "ModalFooter no longer renders a Cancel button — every dialog in the "
         "family delegates its only visible way out to it")
+    # ⚠️ AND IT MUST NOT BE DISABLABLE. Cancel is the exit: these dialogs have
+    # no X, and Escape and the backdrop are not discoverable on a wall tablet.
+    # A `disabled` on this button strands whoever opened a clean dialog — which
+    # is why the fixed pair greys SAVE and never this one.
+    # ⚠️ `element`, NOT the obvious singular. That word is a real Home Assistant
+    # DOMAIN, so dotting a method off it reads as an entity id to the
+    # hard-rules pin — the same false positive `agentApi` hit one release ago,
+    # and the same one-word fix.
+    for element in exits:
+        assert "disabled" not in element.split(">")[0], (
+            "Cancel is disablable — a clean dialog would have no way out")
+    assert "onClose()" in "".join(exits), "Cancel no longer closes the dialog"
+
+    # ⚠️ AND SAVE IS THE ONE THAT GREYS. The pair is fixed so the footer never
+    # rearranges itself while somebody types — the defect that produced "it
+    # feels like 2 different configurations are fighting for each other" — which
+    # only works if the button that MEANS something is the one whose state
+    # tracks the draft. A Save that is always live on a dialog with nothing to
+    # commit is a button that reports success for doing nothing.
+    saves = [b for b in _primary_buttons_any(footer) if "Save" in b]
+    assert saves, "ModalFooter no longer renders a Save button"
+    for element in saves:
+        assert re.search(r"disabled=\{[^}]*!dirty", element), (
+            "Save is live regardless of whether there is anything to save")
 
     problems: List[str] = []
     for path, source in sorted(_dialogs().items()):
@@ -226,6 +251,19 @@ COMMIT_WORD = re.compile(r"\b(Save|Apply)\b")
 #: is an existing convention read off the markup, not a list of file names that
 #: would go stale.
 RECORD_ROW = 'className="modal-actions'
+
+
+def _primary_buttons_any(source: str) -> List[str]:
+    """Every `<button …>…</button>`, whatever its classes. Walks backwards from
+    each close tag — see BUTTON_OPEN for why a forward regex cannot."""
+    out: List[str] = []
+    at = source.find(BUTTON_CLOSE)
+    while at >= 0:
+        start = source.rfind(BUTTON_OPEN, 0, at)
+        if start >= 0:
+            out.append(source[start:at])
+        at = source.find(BUTTON_CLOSE, at + 1)
+    return out
 
 
 def _primary_buttons(source: str) -> List[str]:

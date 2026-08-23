@@ -313,6 +313,62 @@ export async function sendConcernFeedback(
   return r.ok;
 }
 
+/** A procedure the agent has proposed and nobody has yet judged. TASK-094. */
+export interface ReviewDraft {
+  slug: string;
+  title: string;
+  domain: string;
+  description: string;
+  /** What the draft was derived from — an investigation, never a tool result. */
+  source: string;
+  proposedAt: string;
+  body: string;
+}
+
+/**
+ * Playbook drafts awaiting a person. Owner and facility manager only,
+ * server-side.
+ *
+ * ⚠️ EMPTY IS THE NORMAL STATE AND IS NOT AN ERROR. Most investigations should
+ * propose nothing — `review.MIN_TOOL_CALLS` refuses a lookup, `MAX_PENDING`
+ * stops the queue outgrowing the person reading it — so a surface built on this
+ * must render nothing at all rather than an empty-queue placeholder.
+ */
+export async function loadReviewDrafts(): Promise<ReviewDraft[]> {
+  const r = await fetch(ingressPath("agent-review"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => ({}))) as { drafts?: unknown };
+  const rows = Array.isArray(d.drafts) ? d.drafts : [];
+  return rows.filter((x): x is ReviewDraft =>
+    !!x && typeof x === "object" && typeof (x as ReviewDraft).slug === "string");
+}
+
+/**
+ * Approve or discard one draft.
+ *
+ * ⚠️ THE DECISION IS AN EXPLICIT WORD ON BOTH SIDES, never a boolean. The
+ * handler refuses anything that is not `approve` or `discard`, because
+ * "approve" — the direction with the permanent consequence — is exactly the
+ * value a truthy check falls into on a malformed request.
+ *
+ * ⚠️ AND `body` IS THE REVIEWER'S EDIT, sent WITH the approval rather than as a
+ * separate save. The realistic case is somebody who agrees with most of a draft
+ * and wants one paragraph changed; making that a second mechanism is how they
+ * approve it unchanged instead. Empty means "as proposed".
+ */
+export async function decideReviewDraft(
+  slug: string, decision: "approve" | "discard",
+  extra: { body?: string; reason?: string } = {},
+): Promise<boolean> {
+  const r = await fetch(ingressPath("agent-review"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug, decision, ...extra }),
+  });
+  return r.ok;
+}
+
 /** One provider request, as the ledger recorded it. */
 export interface UsageRow {
   at: number; source: string; model: string; actor: string;

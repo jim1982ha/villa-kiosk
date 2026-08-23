@@ -337,7 +337,7 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
             and the exit button correctly stays "Close" while they are open. */}
         <ModalFooter
           note={`v${__APP_VERSION__}`}
-          commit={draft.dirty ? draft : null}
+          commit={draft}
           onClose={onBack}
         />
       </div>

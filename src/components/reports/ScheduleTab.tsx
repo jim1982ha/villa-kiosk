@@ -28,14 +28,22 @@
 // People panel the thing that decides delivery rather than a screen whose
 // settings a stale per-schedule list silently outranks.
 //
-// ⚠️ A PROFILE NOBODY IS CONFIGURED FOR IS SHOWN, GREYED, AND SUFFIXED
-// `(missing)` — and the SUFFIX is the load-bearing half. The owner has already
-// reported once that a greyed-out control is hard to see on a sunlit wall
-// tablet; colour alone does not carry a state, which is the same rule the
-// nesting in `ChatSendersPanel` was built on. Keeping the option in the list at
-// all (rather than filtering it out) is what makes "there is a Guest profile
-// and nobody is set up for it" readable — a list that silently omits it says
-// nothing.
+// ⚠️ AN UNUSABLE PROFILE IS SHOWN, GREYED, AND SUFFIXED WITH THE REASON — and
+// the SUFFIX is the load-bearing half. The owner has already reported once that
+// a greyed-out control is hard to see on a sunlit wall tablet; colour alone does
+// not carry a state. Keeping the option in the list at all (rather than
+// filtering it out) is what makes "there is a Guest profile and nobody is set up
+// for it" readable — a list that silently omits it says nothing.
+//
+// ⚠️ AND THERE ARE TWO REASONS, WHICH THE FIRST VERSION COLLAPSED INTO ONE WORD.
+// It said `(missing)` on every profile of a villa that HAD a person configured,
+// and the owner reported exactly that: "UI believes that no profiles has been
+// defined, which is not right". The rule was right — their one person had no
+// devices, because the legacy sender migration cannot invent any — and the WORD
+// was wrong: "missing" describes the person, and the person was there. The two
+// states now say `(nobody configured)` and `(no devices yet)`, because one of
+// them means "add a person" and the other means "tick a device on the row you
+// already have", and a reader cannot act on a label that conflates them.
 //
 // ⚠️ AND SUCH A SCHEDULE MUST NOT SAVE, which is the owner's explicit choice
 // over the alternatives (save it and deliver nowhere; save it and fall back to
@@ -229,6 +237,30 @@ export default function ScheduleTab({
   const reachable = ROLE_ORDER.filter(
     (r) => targetsForRole(people ?? [], r).length > 0);
   const known = people !== null;
+  /** Why a profile cannot be chosen — and there are TWO reasons, which the
+   *  first version collapsed into one word.
+   *
+   *  ⚠️ REPORTED FROM THE SCREEN: every profile read `(missing)` on a villa
+   *  that HAD a person configured, and the owner said so — "UI believes that no
+   *  profiles has been defined, which is not right". It was not a bug in the
+   *  reachability rule: their one person had no devices yet, because the legacy
+   *  sender migration cannot invent any. But "missing" describes the person,
+   *  and the person was there. The thing that was missing was a DEVICE, which
+   *  is a different sentence and a different fix — one of them is "add a
+   *  person", the other is "tick a device on the row you already have".
+   *
+   *  ⚠️ A PERSON WITH A CHAT AND NO DEVICE IS STILL NOT REACHABLE, and that
+   *  stays true: a briefing is delivered through a notify target, and a chat is
+   *  the inbound half. The wording changed; the rule did not. */
+  const profileGap = (r: Role): "" | "nobody" | "no-devices" => {
+    if (!known || reachable.includes(r)) return "";
+    return (people ?? []).some((entry) => entry.role === r)
+      ? "no-devices" : "nobody";
+  };
+  const GAP_LABEL: Record<string, string> = {
+    "no-devices": "no devices yet",
+    nobody: "nobody configured",
+  };
 
   // ⚠️ THE DRAFT ITSELF, NOT A DIRTY FLAG. The footer button has to SAVE it, so
   // handing up a boolean would mean keeping a second copy somewhere to save
@@ -308,12 +340,21 @@ export default function ScheduleTab({
         setting commits you to receiving.
       </p>
 
+      {/* ⚠️ THE BANNER NAMES WHICH OF THE TWO STATES IT IS, for the reason the
+          option labels do — "nobody is set up" was shown to an owner who had
+          set somebody up, and it reads as the panel being broken rather than as
+          a row needing one more tick. */}
       {known && reachable.length === 0 && (
         <div className="fm-banner">
-          Nobody is set up to receive a briefing. Advanced Settings →
-          Supervision → People is where a person&rsquo;s devices and profile
-          are configured; until somebody is there, a schedule has nowhere to
-          go.
+          {(people ?? []).length > 0
+            ? "Nobody has a device yet. Advanced Settings → Supervision → "
+              + "People lists the people this villa knows; tick a device on the "
+              + "row for whoever should receive a briefing, and their profile "
+              + "becomes selectable here."
+            : "Nobody is set up to receive a briefing. Advanced Settings → "
+              + "Supervision → People is where a person's devices and profile "
+              + "are configured; until somebody is there, a schedule has "
+              + "nowhere to go."}
         </div>
       )}
 
@@ -423,10 +464,9 @@ export default function ScheduleTab({
                 )}
                 {ROLE_ORDER.map((r) => (
                   <option key={r} value={r}
-                          disabled={known && !reachable.includes(r)
-                                    && r !== s.role}>
+                          disabled={!!profileGap(r) && r !== s.role}>
                     {ROLE_LABELS[r]}
-                    {known && !reachable.includes(r) ? " (missing)" : ""}
+                    {profileGap(r) ? ` (${GAP_LABEL[profileGap(r)]})` : ""}
                   </option>
                 ))}
               </select>
@@ -477,10 +517,14 @@ export default function ScheduleTab({
                   unrelated edit will not commit. It names the profile, since
                   "a profile" is not something anyone can go and fix. */}
               {missing
-                ? `Nobody is set up for the ${ROLE_LABELS[s.role as Role]}
-                   profile, so this schedule cannot be saved. Add that
-                   person under Advanced Settings → Supervision, or choose
-                   another profile.`
+                ? profileGap(s.role as Role) === "no-devices"
+                  ? `${ROLE_LABELS[s.role as Role]} has nobody with a device, so
+                     this schedule cannot be saved. Tick a device on their row
+                     under Advanced Settings → Supervision → People.`
+                  : `Nobody is set up for the ${ROLE_LABELS[s.role as Role]}
+                     profile, so this schedule cannot be saved. Add that person
+                     under Advanced Settings → Supervision, or choose another
+                     profile.`
                 : draft.enabled !== true
                   ? "Nothing is sent — “Send briefings on a schedule” is off."
                   : goesTo.length === 0

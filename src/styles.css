@@ -4518,6 +4518,56 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   tab-size: 2;
 }
 
+/* ── One field of a person's row (PeoplePanel) ──────────────────────────────
+   ⚠️ VISIBLE LABELS, AFTER A REPORT. Four unlabelled controls in one row read
+   as four guesses — and the first two were read as the SAME field twice,
+   because the legacy migration named a person after their Telegram id, so a
+   number sat beside a chat picker. The label rhythm is the app's own
+   (`--field-label-size`, `--field-label-gap`), not a local pair.
+
+   ⚠️ `.settings-body label` sets `display:block` and a 14px top margin for
+   plain form labels, which would put each of these on its own line inside a
+   flex row that is meant to wrap by itself. This is more specific and says so
+   deliberately rather than by accident. */
+.settings-body label.people-field {
+  display: flex; flex-direction: column; gap: var(--field-label-gap);
+  margin: 0; min-width: 0; flex: 1 1 190px;
+}
+.people-field > span {
+  font-size: var(--field-label-size); color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The recipients button is a `.btn`, which is inline-flex and would otherwise
+   shrink to its text inside a column — it has to fill its field like the
+   selects beside it, or the row reads as ragged. */
+.people-field > .btn { width: 100%; justify-content: flex-start; }
+
+/* ── The playbook review queue (TASK-094) ───────────────────────────────────
+   A draft is a title you can open, a short description, where it came from,
+   and two decisions. ⚠️ THE TEXT IS EDITABLE IN PLACE because an edit is part
+   of approving rather than a separate save — see `review.approve`. */
+.cockpit-review-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: none; padding: 0;
+  color: var(--text-primary); font: inherit; font-weight: 600;
+  text-align: left; cursor: pointer;
+  min-height: var(--touch-min);
+}
+.cockpit-review-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cockpit-review-desc { margin: 2px 0 0; font-size: var(--text-xs); }
+/* Monospace and generous, because this is a procedure someone is reading line
+   by line before deciding it becomes permanent. Resizes vertically only — a
+   horizontal drag inside a modal body is how a textarea escapes its card. */
+.cockpit-review-body {
+  width: 100%; margin-top: 10px; min-height: 180px; resize: vertical;
+  font-family: ui-monospace, monospace; font-size: var(--text-xs);
+  line-height: 1.55; tab-size: 2;
+}
+/* ⚠️ Approve sits RIGHT, where every primary action in this app sits, with
+   Discard beside it as the destructive one. They share the footer row's own
+   class so the two never drift apart in gap or touch target. */
+.cockpit-review-actions { justify-content: flex-end; margin-top: 12px; }
+
 /* The action buttons in a modal footer, kept together on the right. ⚠️ A FOOTER
    IS WHERE THIS FAMILY PUTS ITS ACTIONS, and a Save at the foot of the tab
    CONTENT is below the fold on a laptop — so the button that commits the work
