@@ -34,9 +34,9 @@
 // the switches that act on it.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, Play, RefreshCw } from "lucide-react";
 
-import { loadShadowDiff, type ShadowDiff } from "@/agent/agentApi";
+import { loadShadowDiff, runAgentNow, type ShadowDiff } from "@/agent/agentApi";
 
 export default function ShadowDiffPanel() {
   /** ⚠️ THREE STATES, NOT TWO. `undefined` is "not asked yet", `null` is "asked
@@ -45,6 +45,8 @@ export default function ShadowDiffPanel() {
    *  clean period, and this is the page a cutover is decided on. */
   const [diff, setDiff] = useState<ShadowDiff | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  /** What the last forced run said, if one was asked for. */
+  const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -53,6 +55,22 @@ export default function ShadowDiffPanel() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  /** ⚠️ ONE RUN, NOW, SO THE GATE CAN BE TESTED TODAY. Waiting a cadence is the
+   *  honest instruction for judging a real period and a terrible one for
+   *  finding out whether this page works at all — and the last two defects here
+   *  were both invisible until somebody put evidence beside it. It spends real
+   *  budget, which the button says. */
+  const runNow = useCallback(async () => {
+    setBusy(true);
+    setNote(null);
+    const result = await runAgentNow();
+    setNote(result.ok
+      ? "The run finished. Anything it concluded is below."
+      : `The run did not complete: ${result.reason}`);
+    setDiff(await loadShadowDiff());
+    setBusy(false);
+  }, []);
 
   if (diff === undefined) {
     return (
@@ -110,10 +128,13 @@ export default function ShadowDiffPanel() {
 
       {verdict === "waiting" ? (
         <p className="muted body-text">
-          Leave it until at least one briefing has been delivered — check
-          Briefings → History, not the schedule — and the Cockpit is showing
-          concerns. On a daily briefing that is two or three days. An empty page
-          today means the period has not run, not that the villa was quiet.
+          To fill this page <strong>today</strong>: press “Check the villa now”
+          below for the villa&rsquo;s side, and press-and-hold a schedule&rsquo;s
+          delete button in Briefings → Schedule to send one briefing for the
+          automations&rsquo; side. Both write immediately. Otherwise it fills on
+          its own — a briefing a day, and a check every few minutes — and an
+          empty page today means the period has not run, not that the villa was
+          quiet.
         </p>
       ) : (
         <>
@@ -179,9 +200,17 @@ export default function ShadowDiffPanel() {
         </div>
       )}
 
+      {note && <p className="muted body-text">{note}</p>}
+
       <div className="modal-actions" style={{ margin: 0 }}>
         <button className="btn ghost" disabled={busy} onClick={() => void load()}>
           <RefreshCw size={16} aria-hidden /> Re-read
+        </button>
+        {/* ⚠️ IT SPENDS REAL BUDGET AND THE LABEL SAYS SO. A button that costs
+            money must not look like a refresh. */}
+        <button className="btn" disabled={busy} onClick={() => void runNow()}>
+          <Play size={16} aria-hidden />
+          {busy ? "Running…" : "Check the villa now (spends a request)"}
         </button>
       </div>
     </div>

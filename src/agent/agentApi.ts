@@ -458,6 +458,36 @@ export interface ShadowDiff {
  * failed read that rendered as one would be the cutover decision taken on a
  * blank page.
  */
+/**
+ * Start one agent run right now, for real.
+ *
+ * ⚠️ IT EXISTS SO A PERIOD DOES NOT HAVE TO BE WAITED FOR. `/agent-run-now` has
+ * been on the proxy since TASK-034 with NOTHING IN THE SPA CALLING IT — the
+ * third capability in this subsystem to ship without a surface — so the only
+ * way to put evidence in front of `TASK-051` was to leave the villa running for
+ * days. A gate whose evidence can only accumulate is a gate nobody tests.
+ *
+ * ⚠️ NOT A PREVIEW. `{preview: true}` assembles the Villa Document and calls no
+ * provider, which is right for reading what the agent would be given and
+ * useless for producing a concern — and a concern is what the shadow diff
+ * compares. This spends real budget, and the button says so.
+ */
+export async function runAgentNow(): Promise<{ ok: boolean; reason: string }> {
+  const r = await fetch(ingressPath("agent-run-now"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  const d = (await r.json().catch(() => ({}))) as
+    { ok?: boolean; reason?: string; status?: string };
+  if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
+  return {
+    ok: d.ok === true,
+    reason: d.reason || (d.ok === true ? "" : String(d.status || "declined")),
+  };
+}
+
 export async function loadShadowDiff(): Promise<ShadowDiff | null> {
   const r = await fetch(ingressPath("agent-shadow"), { credentials: "same-origin" });
   if (!r.ok) return null;
