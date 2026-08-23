@@ -1,3 +1,12 @@
+## 2.673.0
+
+### Fixed — a one-sided diff read as a verdict against the villa
+With ten findings from the automations and none from the agent, the page said "10
+things your automations caught and the villa did not" — true, and produced just as
+readily by an agent that has never run. Every finding lands in that list when the
+other side is empty, so the count says nothing about the villa. It now names that
+state and says not to decide from it.
+
 ## 2.672.0
 
 ### Fixed — regenerating a briefing changed nothing on the cutover page
