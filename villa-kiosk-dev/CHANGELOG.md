@@ -1,3 +1,12 @@
+## 2.668.0
+
+### Fixed — Save stayed greyed while you were visibly typing, and caching was unmeasurable
+A number field told the dialog about an edit only when focus left it, so a box that
+had plainly changed sat beside a footer claiming nothing had. The clamp still waits
+for the blur — clamping per keystroke is what made the field untypeable — but the
+draft learns immediately. The usage panel also folded cached tokens into one "in"
+figure, so the caching added last release looked identical to its own absence.
+
 ## 2.667.0
 
 ### Changed — every modal ends in the same three icon buttons: Cancel · Save · Close
