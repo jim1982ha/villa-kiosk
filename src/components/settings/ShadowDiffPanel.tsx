@@ -111,9 +111,15 @@ export default function ShadowDiffPanel() {
         + "column below; a check that finds the villa well adds nothing, "
         + "which is not a failure."
       : `The check stopped: ${result.reason}`);
-    setDiff(await loadShadowDiff());
-    setBusy(false);
-  }, []);
+    // ⚠️ BOTH, EXACTLY AS `load` DOES. This refreshed only the diff, so the
+    // press that CREATED a trace row left the trace block still reading "No
+    // pass has been recorded yet" — the instrument reporting the absence of the
+    // very thing the button had just produced. Reported the first time the
+    // button was pressed on the release that added the block.
+    // ⚠️ THE TWO FETCHES MUST NOT DRIFT AGAIN: `load` is the one that knows
+    // what this panel is made of, so call it rather than repeating its body.
+    await load();
+  }, [load]);
 
   if (diff === undefined) {
     return (
