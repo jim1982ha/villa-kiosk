@@ -1,3 +1,12 @@
+## 2.649.0
+
+### Added — shipped domain expertise, and a memory of this villa
+Twenty-five procedures across electrical, water, climate, connectivity, security,
+hospitality and self-audit. Only their one-line descriptions sit in context; a
+body is fetched on demand, which is what keeps the cadence affordable. Beside
+them a learned store: every claim names its investigation, claims expire so a
+stale one stops being asserted, and a human correction is never overwritten.
+
 ## 2.648.0
 
 ### Fixed — an unclassified severity sorted to the bottom of the list
