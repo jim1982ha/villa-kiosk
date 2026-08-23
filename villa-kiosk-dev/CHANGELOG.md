@@ -1,3 +1,12 @@
+## 2.671.0
+
+### Fixed — a person's row wrapped onto two lines on a phone
+Three fields and a delete now share the width equally and stay on one line at any
+screen size, labels included — they were added because unlabelled controls read as
+guesses, and hiding them on the narrowest screen would undo that exactly where a
+reader has least context. Opt-in, so the schedule row's five controls keep wrapping
+as they are meant to.
+
 ## 2.670.0
 
 ### Added — the cutover evidence exports as CSV, and says when its rows are stale
