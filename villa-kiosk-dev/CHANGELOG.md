@@ -1,3 +1,11 @@
+## 2.675.0
+
+### Fixed — the manual check declined every time, for want of a provider
+`run_once` does not build one: it takes whatever the caller has and declines when
+that is nothing. The forever-task passes its own, so the omission was invisible
+there and fatal on the button — four presses, four refusals reading "no model
+provider configured", and an agent column that could never fill. It is passed now.
+
 ## 2.674.0
 
 ### Fixed — "Check the villa now" ran a conversation, which can never raise a concern
