@@ -100,13 +100,36 @@ def profile(*, floors: Sequence[str] = (), areas: Sequence[str] = (),
     """
     lines: List[str] = [PROFILE_HEADING, ""]
 
+    # ⚠️ AN UNKNOWN LAYOUT IS PRINTED, NOT OMITTED, AND OMITTING IT PRODUCED A
+    # CONFIDENTLY WRONG ANSWER ON A REAL VILLA. `build_profile_source` never
+    # supplied `floors`/`areas`, so this block rendered nothing at all and the
+    # document named NO room — and asked "how many lights are on in the gym
+    # room", the agent replied "the villa has no gym room in its device
+    # inventory" and listed six rooms it had reconstructed from entity NAMES.
+    # Two of those six ("dining area", "outdoor entrance") are not areas of that
+    # property at all; the gym is, with a light in it. Silence read as absence,
+    # which is this subsystem's oldest failure wearing a new hat: three kinds of
+    # empty — "no rooms", "rooms I was not told about" and "nobody asked" — and
+    # only the last is true here.
+    #
+    # ⚠️ SAME None-vs-EMPTY RULE AS `absent_capabilities`, for the same reason.
+    # `areas=()` means "nobody has told me the layout"; a villa that genuinely
+    # has no areas configured is a real and different state, and a reader who
+    # cannot tell them apart will answer questions about rooms from whatever
+    # else is in front of them.
     if floors or areas:
         lines.append(
             f"Layout: {_plural(len(floors), 'floor')}, "
             f"{_plural(len(areas), 'area')}.")
         if areas:
             lines.append(f"  Areas: {', '.join(sorted(areas))}.")
-        lines.append("")
+    else:
+        lines.append(
+            "Layout: NOT SURVEYED. The rooms of this property have not been "
+            "read, so this document names none. Do NOT conclude that a room a "
+            "person asks about does not exist — you have not been told what "
+            "exists. Say that you cannot see the layout.")
+    lines.append("")
 
     if devices_by_class:
         lines.append(f"Devices by class: {_counted(devices_by_class)}.")

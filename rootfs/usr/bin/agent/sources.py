@@ -272,6 +272,86 @@ def absent_capability_sentences() -> Optional[List[str]]:
     return [str(x) for x in found]
 
 
+#: Where the villa's rooms are kept between surveys. ⚠️ BESIDE THE CAPABILITIES
+#: AND FOR THE SAME REASON: a property's rooms change when somebody renames one,
+#: not on a cadence, so reading the registry every triage pass is ~96 fan-outs a
+#: day for an answer that moves a few times a year.
+LAYOUT_FILE: str = "/data/vesta/layout.json"
+
+
+def layout() -> Dict[str, Any]:
+    """The villa's floors and areas, or `{}` if nobody has read them.
+
+    ⚠️ `{}` AND A POPULATED ANSWER ARE BOTH REAL, AND `snapshot.profile` PRINTS
+    A DIFFERENT SENTENCE FOR EACH. Empty is "nobody has told me the layout" and
+    must never render as "this property has no rooms" — see the comment at that
+    function, which was written after an agent answered "the villa has no gym
+    room" about a villa with a Gym Room and a light in it.
+    """
+    try:
+        from reports import store
+        raw = store.read_json(LAYOUT_FILE, {})
+        if not isinstance(raw, Mapping):
+            return {}
+        return {"floors": [str(f) for f in (raw.get("floors") or [])],
+                "areas": [str(a) for a in (raw.get("areas") or [])]}
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not read the villa's layout", err)
+        return {}
+
+
+async def refresh_layout(session: Any, *, now: Optional[float] = None,
+                         max_age_h: Optional[int] = None) -> bool:
+    """Re-read the villa's rooms if the stored answer is stale. Returns whether
+    it ran.
+
+    ⚠️ NAMES, NOT A COUNT, AND THAT IS THE OPPOSITE OF `discovery.area_count`'s
+    RULE ON PURPOSE. That function returns a count and says why: area names are
+    room names in somebody's home, and the reports DIAGNOSTICS payload has no
+    reason to carry them. This document is the other case — the agent is asked
+    "how many lights are on in the gym", and an answer needs the word "gym".
+    `contracts.PAYLOAD_ALLOWED_FIELDS` already admits room and equipment names
+    to a provider for exactly this reason, while entity ids stay in the villa.
+
+    ⚠️ NEVER RAISES, AND A FAILED READ LEAVES THE OLD ANSWER IN PLACE rather
+    than clearing it — the same rule as `refresh_capabilities`, and for the same
+    reason: a momentarily unreachable Home Assistant must not turn a villa with
+    seventeen rooms into one whose layout is unknown.
+    """
+    if session is None:
+        return False
+    stamp = time.time() if now is None else now
+    hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
+    try:
+        from reports import store
+        raw = store.read_json(LAYOUT_FILE, {})
+        at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
+        if stamp - at < max(1, hours) * 3600.0:
+            return False
+
+        from reports.hass import HassClient
+        async with HassClient(session) as hass:
+            areas = await hass.command("config/area_registry/list")
+            floors = await hass.command("config/floor_registry/list")
+        names = sorted({str(a.get("name") or "").strip()
+                        for a in (areas if isinstance(areas, list) else [])
+                        if isinstance(a, Mapping) and a.get("name")})
+        levels = sorted({str(f.get("name") or "").strip()
+                         for f in (floors if isinstance(floors, list) else [])
+                         if isinstance(f, Mapping) and f.get("name")})
+        if not names:
+            # ⚠️ AN EMPTY REGISTRY IS NOT A SURVEY. Writing it would record
+            # "this villa has no rooms" as a finding, which is the exact
+            # sentence that started this.
+            return False
+        store.write_json(LAYOUT_FILE,
+                         {"at": stamp, "areas": names, "floors": levels})
+    except Exception as err:  # noqa: BLE001 - a survey is not worth a failed pass
+        swallow("could not read the villa's layout", err)
+        return False
+    return True
+
+
 async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
                                max_age_h: Optional[int] = None) -> bool:
     """Re-survey if the stored answer is stale. Returns whether it ran.
@@ -345,8 +425,17 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     # every document said NOT SURVEYED — honest, and not what the requirement
     # asks for: a model that does not know it is blind answers confidently
     # anyway. `refresh_capabilities` keeps the answer at most a day old.
+    # ⚠️ THE ROOMS, WHICH THIS DOCUMENT DID NOT CARRY UNTIL NOW. `profile()` has
+    # taken `floors`/`areas` since it was written and nothing ever supplied
+    # them, so the whole Layout block rendered nothing and the document named no
+    # room at all — the same shape as the `absent_capabilities` omission three
+    # lines below, found the same way (by reading what the model was actually
+    # given) and with a worse symptom: asked about a room, the agent denied the
+    # room existed. `build_profile_source` cannot supply these because it reads
+    # the JOURNAL, which records entity ids and no area.
     profile_text = snapshot_mod.profile(
-        absent_capabilities=absent_capability_sentences(), **dict(facts))
+        absent_capabilities=absent_capability_sentences(),
+        **dict(layout()), **dict(facts))
 
     scored: List[salience_mod.Salience] = []
     try:

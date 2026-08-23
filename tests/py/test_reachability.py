@@ -187,7 +187,18 @@ def _called(files: Dict[str, str], call: "re.Pattern[str]", node: ast.AST,
             if where == path and i == lineno:
                 continue
             stripped = line.lstrip()
-            if stripped.startswith(("#", "//", "*", "⚠️")):
+            # ⚠️ `#` ONLY — `//` AND `*` WERE C/JS HEURISTICS AND ONE OF THEM
+            # BLINDED THIS CHECK. The corpus was narrowed to Python precisely to
+            # remove false negatives, and these two survived the narrowing: `//`
+            # is now unreachable, and `*` matches `**kwargs` UNPACKING, which is
+            # a call site and not a comment. `sources.build_document` calls
+            # `layout()` as `**dict(layout())`, and this filter skipped the line
+            # and reported the function as having no caller — the checker that
+            # exists to find uncalled functions, inventing one.
+            #
+            # The `⚠️` prefix stays: this repo's continuation lines really do
+            # begin with it, and it cannot begin an expression.
+            if stripped.startswith(("#", "⚠️")):
                 continue
             if re.match(rf"\s*(async )?def {re.escape(name)}\b", line):
                 continue

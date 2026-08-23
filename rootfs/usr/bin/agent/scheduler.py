@@ -233,6 +233,13 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     # `build_document` because this is the only agent path that HAS a session —
     # the proxy's document preview does not, and must still render.
     await sources.refresh_capabilities(session)
+    # ⚠️ THE SAME PLACE, THE SAME CADENCE, AND THE SAME REASON IT IS HERE. The
+    # villa's ROOMS were never read at all — the document named none, so asked
+    # "how many lights are on in the gym room" the agent answered that the villa
+    # has no gym room, about a property whose Home Assistant has a Gym Room area
+    # with a light in it. A room list changes when somebody renames a room, so
+    # this does nothing on all but one pass a day, exactly like the line above.
+    await sources.refresh_layout(session)
 
     try:
         document = sources.build_document()

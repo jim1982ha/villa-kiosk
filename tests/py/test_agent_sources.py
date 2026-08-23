@@ -205,19 +205,30 @@ def test_a_QUIET_entity_stays_ADDRESSABLE_after_the_ring_fills(
 # WITH facts, exactly as every tool test did; nothing asked what the CALLERS
 # build.
 
-def test_the_empty_document_is_480_characters_and_that_is_the_bug() -> None:
-    """⚠️ THE OWNER'S CAPTURE, REPRODUCED EXACTLY. The triage trace read
-    `doc=480c/15L` twice and it was read as a quiet villa. It is the byte-length
-    of `profile()` and `delta()` called with no arguments — which is what both
-    document call sites did. This test holds the number so the reading can never
-    be mistaken for a measurement of the property again."""
+def test_the_empty_document_SAYS_it_knows_nothing() -> None:
+    """⚠️ THE OWNER'S CAPTURE WAS `doc=480c/15L`, AND THE NUMBER IS NO LONGER
+    THE POINT — it moved on purpose. 480 characters was a WELL-FORMED
+    description of an empty property, and holding the figure only ever let a
+    trace be recognised after the fact. What matters is that an unwired document
+    now says, in the text the model reads, that it has been told nothing.
+
+    ⚠️ THE SECOND HALF OF THAT LESSON COST A REAL ANSWER. The layout block was
+    omitted entirely when no rooms were supplied, so a document naming no room
+    was indistinguishable from a property with none — and asked "how many lights
+    are on in the gym room", the agent replied that the villa has no gym room,
+    about a property whose Home Assistant has a Gym Room with a light in it. A
+    silent absence is not an honest one."""
     from observe import snapshot
 
     empty = snapshot.villa_document(profile_text=snapshot.profile(),
                                     delta_text=snapshot.delta())
-    assert len(empty) == 480 and empty.count("\n") + 1 == 15, (
-        "the empty render moved; whatever `doc=` figure a trace now shows for "
-        "an unwired document, it is no longer 480c/15L")
+    assert "Layout: NOT SURVEYED" in empty, (
+        "an unwired document must SAY it has no layout, or its silence reads "
+        "as 'this property has no rooms'")
+    assert "do not conclude" in empty.lower()
+    assert len(empty) > 480, (
+        "the empty render is no longer the 480c/15L of the owner's capture — "
+        "if it is back to that, the layout block has been dropped again")
 
 
 def test_build_document_describes_the_property_not_an_empty_one() -> None:
@@ -855,7 +866,11 @@ def test_the_profile_carries_the_absent_capability_block(
                      {"at": 1.0, "sentences": ["No water meter is configured."]})
     doc = sources.build_document(rows=[])
     assert "No water meter is configured." in doc
-    assert "NOT SURVEYED" not in doc
+    # ⚠️ THE CAPABILITY BLOCK, NAMED. A bare `"NOT SURVEYED" not in doc` meant
+    # "the capabilities were surveyed" and stopped meaning it the moment a
+    # SECOND block learned to say the same words about the layout — two facts
+    # sharing one phrase, which is the ambiguity these tests exist to refuse.
+    assert "Nobody has catalogued this property's blind spots" not in doc
 
 
 def test_an_absent_survey_still_says_NOT_SURVEYED(
@@ -876,7 +891,7 @@ def test_a_surveyed_villa_with_no_gaps_is_not_an_unsurveyed_one(
     store.write_json(str(tmp_path / "c.json"), {"at": 1.0, "sentences": []})
     doc = sources.build_document(rows=[])
     assert "nothing was found to be unmeasured" in doc
-    assert "NOT SURVEYED" not in doc
+    assert "Nobody has catalogued this property's blind spots" not in doc
 
 
 def test_a_file_with_no_sentences_key_is_NOT_an_empty_survey(
@@ -938,3 +953,123 @@ def test_an_unreachable_home_assistant_leaves_the_old_answer_alone(
 
 def test_no_session_means_no_survey() -> None:
     assert asyncio.run(sources.refresh_capabilities(None)) is False
+
+
+# ── the villa's rooms (the "no gym room" answer) ─────────────────────────────
+# ⚠️ REPORTED FROM A REAL TELEGRAM THREAD. "How many lights are on in the gym
+# room?" was answered with "the villa has no gym room in its device inventory",
+# followed by six rooms it claimed to monitor — of which TWO ("dining area",
+# "outdoor entrance") are not areas of that property at all, while the Gym Room
+# is, with a light in it. (⚠️ THE ID IS DELIBERATELY NOT WRITTEN HERE —
+# `test_hard_rules` caught it in the first draft of this comment, which is the
+# fourth time a real entity id has reached tracked source in this repo while
+# explaining why ids must not travel. The room NAME is what the document
+# carries and what this bug is about.) The model had reconstructed a
+# room list from entity NAMES, because the document it was given named no room:
+# `snapshot.profile` has taken `floors`/`areas` since it was written and
+# `build_profile_source` never supplied them, so the whole Layout block rendered
+# nothing. Same shape as the `absent_capabilities` omission and as
+# `route.escalate` — the argument exists, the wiring does not.
+
+def test_the_document_NAMES_the_villas_rooms(tmp_path: Any,
+                                             monkeypatch: Any) -> None:
+    from reports import store
+
+    monkeypatch.setattr(sources, "LAYOUT_FILE", str(tmp_path / "layout.json"))
+    store.write_json(str(tmp_path / "layout.json"),
+                     {"at": 1.0, "floors": ["1F", "2F"],
+                      "areas": ["Gym Room", "Kitchen", "Master Bedroom"]})
+    doc = sources.build_document(rows=[])
+    assert "Gym Room" in doc, (
+        "the document does not name the villa's rooms, so an agent asked about "
+        "one can only answer from entity names")
+    assert "2 floors, 3 areas" in doc
+    # ⚠️ THE LAYOUT LINE, NAMED. Splitting on "Devices by class" was wrong for
+    # the case this very test uses: `rows=[]` means no device counts, so the key
+    # is absent and the split returned the WHOLE document, capability block and
+    # all. A test whose scoping silently degrades to "everything" is measuring
+    # nothing in the case it was written for.
+    assert "Layout: NOT SURVEYED" not in doc
+
+
+def test_an_UNREAD_layout_is_not_a_villa_without_rooms(tmp_path: Any,
+                                                       monkeypatch: Any) -> None:
+    """⚠️ THE ACTUAL DEFECT, AS A PROPERTY. Three kinds of empty again: "this
+    villa has no rooms", "I was not told the rooms" and "the read failed" are
+    the same absence and only the middle one was true. The document must say
+    which, in the text the model reads, or the model answers from whatever else
+    is in front of it — which is exactly what happened."""
+    monkeypatch.setattr(sources, "LAYOUT_FILE", str(tmp_path / "missing.json"))
+    doc = sources.build_document(rows=[])
+    assert "Layout: NOT SURVEYED" in doc
+    assert "do not conclude" in doc.lower()
+
+
+def test_a_failed_read_LEAVES_the_rooms_alone(tmp_path: Any,
+                                              monkeypatch: Any) -> None:
+    """⚠️ SAME RULE AS `refresh_capabilities`. A momentarily unreachable Home
+    Assistant must not turn a villa with seventeen rooms into one whose layout
+    is unknown — that swaps a true statement for NOT SURVEYED and, worse,
+    changes the cached prompt prefix on a whim."""
+    import asyncio
+
+    from reports import store
+
+    path = str(tmp_path / "layout.json")
+    monkeypatch.setattr(sources, "LAYOUT_FILE", path)
+    store.write_json(path, {"at": 1.0, "floors": [], "areas": ["Gym Room"]})
+
+    class _Boom:
+        async def __aenter__(self) -> Any:
+            raise RuntimeError("Home Assistant is restarting")
+
+        async def __aexit__(self, *a: Any) -> bool:
+            return False
+
+    import reports.hass as hass_mod
+    monkeypatch.setattr(hass_mod, "HassClient", lambda s: _Boom())
+    ran = asyncio.run(sources.refresh_layout(object(), now=1e12))
+    assert ran is False
+    assert sources.layout()["areas"] == ["Gym Room"]
+
+
+def test_an_EMPTY_registry_is_not_written_as_an_answer(tmp_path: Any,
+                                                       monkeypatch: Any) -> None:
+    """Writing it would record "this villa has no rooms" as a finding, which is
+    the sentence that started this."""
+    import asyncio
+
+    path = str(tmp_path / "layout.json")
+    monkeypatch.setattr(sources, "LAYOUT_FILE", path)
+
+    class _Empty:
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *a: Any) -> bool:
+            return False
+
+        async def command(self, name: str) -> Any:
+            return []
+
+    import reports.hass as hass_mod
+    monkeypatch.setattr(hass_mod, "HassClient", lambda s: _Empty())
+    assert asyncio.run(sources.refresh_layout(object(), now=1e12)) is False
+    # ⚠️ NO AREAS, WHICH `profile` RENDERS AS NOT SURVEYED. The reader returns
+    # empty lists rather than `{}` and that is fine — `**{"areas": []}` reaches
+    # `profile` as `areas=()`, the same "nobody told me" it prints a sentence
+    # for. What must be true is that nothing was RECORDED.
+    assert not sources.layout().get("areas")
+
+
+def test_the_scheduler_READS_the_layout() -> None:
+    """⚠️ `feedback_pin-the-caller`, THE THIRD TIME IN THREE RELEASES. The
+    degradation ladder, `route.escalate` and now this: a function that is
+    correct, tested, and called by nobody. A layout nothing refreshes is a
+    document that says NOT SURVEYED for ever."""
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+                            "scheduler.py"), encoding="utf-8").read()
+    code = "\n".join(l for l in src.splitlines()
+                     if not l.strip().startswith("#"))
+    assert "refresh_layout(" in code, (
+        "nothing refreshes the villa's layout, so the document names no room")

@@ -1,3 +1,14 @@
+## 2.702.0
+
+### Fixed — asked about a room, the villa said the room did not exist
+"How many lights are on in the gym room?" was answered "the villa has no gym
+room", followed by six rooms it claimed to watch — two of which are not rooms of
+this property. It had never been told the layout: the description the assistant
+reads has had a place for the room list since it was written and nothing filled
+it in, so it named no room and the assistant reconstructed one from device names.
+It now reads the rooms from Home Assistant once a day, and says so plainly when
+it could not, instead of answering as though the property had none.
+
 ## 2.701.0
 
 ### Added — you can now say "I have seen this", and it stops the alert escalating
