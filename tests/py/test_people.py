@@ -248,6 +248,31 @@ def test_the_schedules_PROFILE_KEY_crosses_every_boundary_intact() -> None:
         "the profiles the dialog offers are not the profiles the store accepts")
 
 
+def test_the_PANEL_never_hides_an_inbound_grant_it_has_stored() -> None:
+    """⚠️ AUTHORITY YOU CANNOT SEE IS WORSE THAN A FIELD YOU DO NOT NEED.
+
+    The chat field is hidden while the villa answers nobody — there is nothing
+    for it to grant, and an inert control is what made this row read as one
+    address asked for twice. But a row that ALREADY carries a chat must keep
+    showing it whatever the toggle says: switching "Answer messages" off does
+    not clear the table, so hiding the field would conceal exactly who starts
+    speaking again the moment it goes back on.
+
+    ⚠️ AND IT IS THE `||` THAT CARRIES THAT. The obvious condition is "show it
+    when chat is on"; the safe one is "…or when this row has one".
+    """
+    import re
+
+    panel = os.path.join(REPO_ROOT, "src", "components", "settings",
+                         "PeoplePanel.tsx")
+    with open(panel, encoding="utf-8") as handle:
+        source = handle.read()
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    assert re.search(r"\{\(chat \|\| row\.telegram\) && \(", source), (
+        "the chat field is no longer shown for a row that already has one — "
+        "turning chat off would hide who may speak rather than stopping them")
+
+
 def test_the_profile_vocabulary_is_the_APPS_OWN() -> None:
     """⚠️ `contracts.PROFILE` is what `store.validate_config` refuses a bad
     schedule `role` against, and `supervisor-proxy.AUTH_ROLES` is the authority

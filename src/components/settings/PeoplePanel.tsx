@@ -19,8 +19,34 @@
 // everything and may say nothing. `people.role_for_sender` reads the telegram
 // field alone and is mutation-pinned; a panel that presented the two as one
 // "contact method" would be the one way merging these tables could widen the
-// allow-list. That is why they are separate controls with separate labels and
-// why the copy below says which one is which.
+// allow-list.
+//
+// ⚠️ AND THE MERGE WAS ASKED FOR, TWICE, ON A CORRECT OBSERVATION: the same
+// person's Telegram chat appears in BOTH pickers, so the row reads as one
+// address asked for twice. The observation is right and the conclusion does not
+// follow, for three reasons worth keeping written down because the question
+// will be asked again:
+//
+//   1. THE SETS DIVERGE. `chat.known_chats` is PRIVATE chats only — it excludes
+//      groups because a group's id names the ROOM and the sender id names
+//      whoever typed, so storing one matches nobody and fails silently. The
+//      devices list is Companion apps, televisions, notify services and
+//      Telegram entities INCLUDING groups; the reference villa's own facility
+//      target is a supergroup. One list is people, the other is addresses.
+//   2. DERIVING ONE FROM THE OTHER WOULD MAKE ADDING A DEVICE GRANT THE RIGHT
+//      TO COMMAND THE VILLA. Today a guest can be sent a check-out reminder on
+//      Telegram without gaining a voice; under a merge, that delivery target
+//      would silently authenticate them.
+//   3. IT WOULD PUT THE AUTH PATH ON A LIVE REGISTRY LOOKUP. Identity is a
+//      stored id compared as a string — no network, fails closed. Resolving a
+//      notify entity to a chat id at message time makes the answer depend on an
+//      HA call that can be slow or fail, and "fails closed" then means the bot
+//      goes deaf.
+//
+// So the FIELDS stay and the PRESENTATION changed: devices first (the ordinary
+// case), the chat second and only while the villa answers messages at all, and
+// labelled by what it DOES ("Can message the villa") rather than by what it
+// contains ("Telegram chat"), which is what made it read as a second address.
 //
 // ⚠️ THE TABLE SHIPS EMPTY AND EMPTY MEANS THE BOT ANSWERS NOBODY. That is not
 // an unconfigured state to be helped past: a row with a Telegram id in it is an
@@ -93,6 +119,12 @@ export default function PeoplePanel() {
    *  the tick-list idiom, including the two escapes from "a destination is a
    *  notify service" that this villa needed. */
   const [targets, setTargets] = useState<DiscoveredTarget[]>([]);
+  /** ⚠️ THE CHAT FIELD IS HIDDEN WHILE THE VILLA ANSWERS NOBODY — there is
+   *  nothing for it to grant, and an inert control is the clutter that made
+   *  this row confusing. ⚠️ BUT NEVER HIDDEN WHEN A ROW ALREADY HAS ONE: that
+   *  is authority already granted, and authority you cannot see is worse than a
+   *  field you do not need. Switching chat off must not conceal who could
+   *  speak the moment it goes back on. */
   /** Which row has its destination list open. ⚠️ ONE AT A TIME and by INDEX,
    *  the same rule ScheduleTab follows: two open lists on a phone push
    *  everything else off the screen. */
@@ -180,9 +212,12 @@ export default function PeoplePanel() {
       </label>
       <p className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
         {agentOn
-          ? "Lets the people below start a conversation with the villa. Only a "
-            + "row with a Telegram chat can; a device is a place to send to, "
-            + "never a way in."
+          ? "Lets the people below start a conversation with the villa — each "
+            + "row gains a “Can message the villa” field. It is asked "
+            + "separately from their devices because the two are opposite "
+            + "directions: a device is an address the villa sends to, and only "
+            + "a private Telegram chat identifies who is speaking. Group chats "
+            + "are not offered: a group's id names the room, not the person."
           : "Turn “Supervision is switched on” on, under Cadence and cost "
             + "below, to use this."}
       </p>
@@ -196,12 +231,9 @@ export default function PeoplePanel() {
       )}
 
       <p className="muted body-text" style={{ marginTop: 14 }}>
-        One row per person. The <strong>chat</strong> is how they reach the
-        villa — it is the only field that lets anyone message it — the{" "}
-        <strong>devices</strong> are how it reaches them, and the{" "}
-        <strong>profile</strong> decides both what a briefing for them contains
-        and which schedules land there. Anyone not listed is ignored in silence:
-        a stranger who finds the bot learns nothing from it.
+        One row per person: where the villa reaches them, and what they are to
+        it. The profile decides both what a briefing for them contains and which
+        schedules land there.
       </p>
 
       {rows.length === 0 && (
@@ -225,6 +257,20 @@ export default function PeoplePanel() {
                   one line, which is the other half of that report.
                   `--field-label-size`/`--field-label-gap` are the app's own
                   rhythm for this shape. */}
+              {/* ⚠️ DEVICES COME FIRST, BECAUSE THEY ARE WHAT EVERY ROW
+                  NEEDS. A person who receives briefings and never messages the
+                  villa is the ordinary case; the chat below is the exception,
+                  and leading with the exception is what made the row read as
+                  two addresses for one person. */}
+              <label className="people-field">
+                <span>Devices — briefings are sent here</span>
+                <RecipientButton
+                  targets={row.targets ?? []}
+                  available={targets}
+                  open={open === i}
+                  onToggle={() => setOpen(open === i ? null : i)}
+                />
+              </label>
               {/* ⚠️ A NAME WHEN WE KNOW ONE, THE NUMBER WHEN WE DO NOT. In a
                   PRIVATE chat the chat id and the sender id are the same
                   number, so the bot's own chat list is exactly the right menu —
@@ -248,15 +294,16 @@ export default function PeoplePanel() {
                   asymmetry is the one thing merging these two tables could have
                   got wrong (`people.role_for_sender`), which is why the field
                   stays and the labels changed instead. */}
+              {(chat || row.telegram) && (
               <label className="people-field">
-                <span>Telegram chat</span>
+                <span>Can message the villa</span>
                 {chats.length > 0 ? (
                   <select
                     value={row.telegram}
                     disabled={saving}
                     onChange={(e) => at(i, { telegram: e.target.value })}
                   >
-                    <option value="">No chat — cannot message the villa</option>
+                    <option value="">No — receives only</option>
                     {chats.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
@@ -270,21 +317,13 @@ export default function PeoplePanel() {
                   <input
                     value={row.telegram}
                     disabled={saving}
-                    placeholder="Telegram user id (optional)"
+                    placeholder="Their Telegram user id, or leave empty"
                     inputMode="numeric"
                     onChange={(e) => at(i, { telegram: e.target.value })}
                   />
                 )}
               </label>
-              <label className="people-field">
-                <span>Devices</span>
-                <RecipientButton
-                  targets={row.targets ?? []}
-                  available={targets}
-                  open={open === i}
-                  onToggle={() => setOpen(open === i ? null : i)}
-                />
-              </label>
+              )}
               <label className="people-field">
                 <span>Profile</span>
                 <select

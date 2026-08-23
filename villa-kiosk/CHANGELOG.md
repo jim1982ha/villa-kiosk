@@ -1,3 +1,13 @@
+## 2.656.0
+
+### Changed — a person's row asks the ordinary question first, the rare one only when it applies
+The chat and the devices read as one address asked for twice, which is a fair
+reading — the same person is in both lists. They stay two fields, because a group
+chat can never identify a sender and deriving identity from a delivery address
+would make adding a device grant the right to command the villa. But devices come
+first now, and the chat is labelled by what it does and shown only while the villa
+answers messages (or while a row already carries one).
+
 ## 2.655.1
 
 ### Fixed — a row's delete button sat a line above the controls beside it
