@@ -1,3 +1,12 @@
+## 2.670.0
+
+### Added — the cutover evidence exports as CSV, and says when its rows are stale
+Findings recorded between v2.662.0 and v2.665.0 were stored without a title, so
+re-reading shows the same untitled rows however many times you press it — only a
+new briefing writes titles. The page now says that instead of leaving it to be
+read as a failed fix. The three lists also download as a CSV carrying the column
+that decides: which side caught each finding.
+
 ## 2.669.0
 
 ### Changed — API usage is its own tab in Advanced Settings, and exports as CSV
