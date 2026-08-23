@@ -1,11 +1,11 @@
-## 2.679.0
+## 2.679.1
 
-### Changed — the model rows showed the same value twice, and every panel scrolled further than it needed to
-The selector now carries the full model id and the text box appears only when
-the stored value is not one of them, so nothing is stated twice. Separately, a
-hint paragraph is a sibling of the control it explains, so it inherited the full
-section gap on both sides and floated between two unrelated fields; it now hugs
-its control, stated once for every modal body rather than per panel.
+### Changed — the model rows showed the same value twice, and every panel scrolled too far
+The selector carries the full model id now and the text box appears only when
+the stored value is not one of them. Separately, a hint paragraph is a sibling
+of the control it explains, so it inherited the full section gap on both sides
+and floated between two unrelated fields; it hugs its control now, stated once
+for every modal body rather than per panel.
 
 ## 2.678.0
 
