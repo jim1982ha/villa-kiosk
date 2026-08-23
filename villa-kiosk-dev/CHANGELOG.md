@@ -1,3 +1,14 @@
+## 2.697.0
+
+### Added — the overnight-hold setting you could not reach, and whether a finding was actually sent
+Two gaps left by the last release. The quiet-hours window was stored, typed and
+wired end to end, and nothing in Settings could edit it — so it stayed empty,
+which means "never hold", and the feature looked like it was working because
+nothing was ever held. It is now a switch under Cadence and cost, with the two
+times beside it. Separately, the wall listed what the villa had noticed and gave
+no hint whether anyone had been told — which during an observe-only period reads
+as "everybody knows". Each finding now says whether it was sent.
+
 ## 2.696.0
 
 ### Added — findings now reach your phone and your briefing, not just the wall
