@@ -1,3 +1,16 @@
+## 2.693.0
+
+### Changed — the documented running cost was 3.7x too high, and now recomputes itself
+The reference summary said "~$53/month, computed not estimated" and no
+combination of shipped constants reaches it: measured against the real prompts
+and the real cadence it is about $14 — roughly $3 of checks, $10 of
+investigations, $1 of briefings. The old figure predates the prompts it prices.
+It is corrected in place, saying what it used to claim and why that could not be
+reproduced, and a test now recomputes the whole thing on every run so it cannot
+drift again. Nothing about the software changed; what changed is that the number
+can be checked. Actual spend still cannot be reported — the part that spends
+money has been running for hours, not the month the record asks for.
+
 ## 2.692.0
 
 ### Fixed — text read from the villa now arrives at the model fenced, so it cannot pose as an instruction
