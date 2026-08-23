@@ -1,3 +1,12 @@
+## 2.684.0
+
+### Fixed — the agent had a second, poorer description of the same villa
+`read_villa` built its own document instead of using the shared builder, so the
+model read the full one in its prompt, called the tool, got back 553 characters
+with the ranking and concerns missing, and called it again until the pass gave
+up. Also: table columns now align, the request log pages at 20 with a CSV, and
+a hint inside a field no longer carries the browser's own paragraph margin.
+
 ## 2.683.0
 
 ### Fixed — the agent was reading a description of an empty property, not this villa
