@@ -3510,6 +3510,20 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-stack > * + p.body-text.muted {
   margin-top: calc(var(--hint-gap) - var(--stack-gap));
 }
+/* ⚠️ A TOGGLE NEEDS MORE PULL THAN A MARGIN CAN SEE, and this is why the first
+   fix looked like it had not worked. `label.toggle` is min-height:--touch-min
+   (44px) with its content vertically CENTRED — a phone-parity fix, and correct
+   — so roughly 11px of EMPTY ROW sits below the text inside the label's own
+   box. Margin measures the box, the eye measures the ink, and the two differ by
+   exactly that half-leftover. Verified against the built CSS before changing
+   the number: the general rule was shipping the -10px it claimed, so the gap
+   that remained was optical, not a rule that failed to apply. Do not "fix" this
+   by growing --stack-gap; it would push every other pair apart to close one. */
+.fm-stack > label.toggle + p.body-text.muted,
+.settings-body > label.toggle + p.body-text.muted {
+  margin-top: calc(var(--hint-gap) - var(--stack-gap)
+                   - (var(--touch-min) - var(--text-md)) / 2);
+}
 /* ⚠️ AND THE SAME RULE ONE LEVEL UP, because only 8 of 33 panels use .fm-stack
    — the rest render their fields straight into the modal body. `.settings-body`
    is the container EVERY tab of EVERY modal lands in, so stating it here is

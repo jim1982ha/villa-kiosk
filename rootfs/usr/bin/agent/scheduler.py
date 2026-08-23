@@ -34,6 +34,7 @@ import asyncio
 
 from typing import Any, Callable, Mapping, Optional
 
+from agent import audit
 from agent import budget as budget_mod
 from agent import config as agent_config
 from agent import triage as triage_mod
@@ -62,14 +63,52 @@ def _cadence(config: Optional[Mapping[str, Any]]) -> float:
 
 
 async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
-                   provider: Any = None, document: str = "") -> str:
+                   provider: Any = None, document: str = "",
+                   trigger: str = "scheduled") -> str:
     """One triage pass, with every guard. Returns why it stopped, for the log.
 
     ⚠️ IT RETURNS A REASON RATHER THAN A BOOLEAN. "Nothing happened" has five
     causes here and they need different responses from an operator — switched
     off, shadowed, over budget, no provider, and nothing to escalate all look
     identical from outside, and four of them are fine.
+
+    ⚠️ AND EVERY ONE OF THOSE OUTCOMES IS NOW WRITTEN DOWN, BY CONSTRUCTION.
+    The reason was precise from the day this was written and went only to the
+    add-on log, so a reader deciding the PH-3 cutover saw "the agent found
+    nothing" with no way to tell a quiet pass from a pass that never happened.
+    The guards are in `_run_once`, which has SIX return points; recording at
+    each of them is one edit away from a sixth blind spot forever, so the
+    recording lives HERE, wrapped around it, and a new guard cannot escape it.
     """
+    doc = document or ""
+    escalated, subjects = 0, ""
+    try:
+        reason = await _run_once(session, config=config, provider=provider,
+                                 document=doc)
+    except Exception:
+        # ⚠️ RECORD, THEN RE-RAISE. run_forever swallows and logs; without this
+        # the one outcome an operator most needs to see is the one absent from
+        # the trace.
+        audit.record_pass(reason="raised", trigger=trigger,
+                          doc_chars=len(doc), doc_lines=doc.count("\n") + 1,
+                          escalated=0)
+        raise
+    if reason.startswith("escalated "):
+        head, _, subjects = reason.partition(": ")
+        try:
+            escalated = int(head.split()[1])
+        except (IndexError, ValueError):
+            escalated = 1
+    audit.record_pass(reason=reason, trigger=trigger, doc_chars=len(doc),
+                      doc_lines=doc.count("\n") + 1, escalated=escalated,
+                      subjects=subjects,
+                      model=str(agent_config.view(config).get("model_triage", "")))
+    return reason
+
+
+async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
+                    provider: Any = None, document: str = "") -> str:
+    """The guards themselves. Wrapped by run_once, which records the outcome."""
     cfg = agent_config.view(config)
     if not cfg.get("enabled"):
         return "agent disabled"

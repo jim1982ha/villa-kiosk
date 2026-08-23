@@ -1,3 +1,12 @@
+## 2.680.0
+
+### Added — every triage pass is now recorded, so "the agent found nothing" can be told apart from "the agent never ran"
+The shadow diff rendered both as an empty column, which is the ambiguity four
+review rounds were lost to. Each pass now writes why it stopped and how big a
+villa document it was handed — an empty document also reports "nothing to
+escalate" and looked exactly like success. Shown under the diff; `/agent-audit`
+had served this since PH-0 with no screen reading it.
+
 ## 2.679.1
 
 ### Changed — the model rows showed the same value twice, and every panel scrolled too far

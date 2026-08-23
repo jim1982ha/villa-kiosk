@@ -36,7 +36,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, Loader2, Play, RefreshCw } from "lucide-react";
 
-import { loadShadowDiff, runAgentNow, type ShadowDiff } from "@/agent/agentApi";
+import { loadShadowDiff, loadTriagePasses, runAgentNow, type ShadowDiff, type TriagePass } from "@/agent/agentApi";
 
 export default function ShadowDiffPanel() {
   /** ⚠️ THREE STATES, NOT TWO. `undefined` is "not asked yet", `null` is "asked
@@ -48,9 +48,14 @@ export default function ShadowDiffPanel() {
   /** What the last forced run said, if one was asked for. */
   const [note, setNote] = useState<string | null>(null);
 
+  const [passes, setPasses] = useState<TriagePass[]>([]);
   const load = useCallback(async () => {
     setBusy(true);
-    setDiff(await loadShadowDiff());
+    // ⚠️ BOTH, ALWAYS. The diff alone cannot say whether a pass happened, and
+    // that is the question every round of this review has actually been about.
+    const [d, p] = await Promise.all([loadShadowDiff(), loadTriagePasses()]);
+    setDiff(d);
+    setPasses(p);
     setBusy(false);
   }, []);
 
@@ -298,6 +303,32 @@ export default function ShadowDiffPanel() {
           {busy ? "Checking…" : "Run a check now (spends a request)"}
         </button>
       </div>
+
+      {/* ⚠️ THE TRACE, AND IT IS NOT DECORATION. Everything above answers "what
+          was found"; only this answers "did the agent look, and what was it
+          given". A quiet pass and a pass that never happened render the same
+          empty column above — that ambiguity is what made four rounds of this
+          review inconclusive. `doc=` is here for the same reason: a pass handed
+          an empty villa document also reports nothing to escalate, and looks
+          exactly like success. */}
+      <div className="settings-section-title">Triage passes</div>
+      {passes.length === 0 ? (
+        <p className="muted body-text">
+          No pass has been recorded yet. Until one is, an empty agent column
+          above means "not measured", not "the agent agreed".
+        </p>
+      ) : (
+        <ul className="fm-list">
+          {passes.slice(-8).reverse().map((p, i) => (
+            <li key={`${p.at}-${i}`} className="body-text">
+              <strong>{p.verdict === "escalated" ? "escalated" : "quiet"}</strong>
+              {" · "}{p.trigger}{" · "}
+              <span className="muted">{p.at.replace("T", " ").slice(0, 16)}</span>
+              <div className="muted body-text">{p.detail}</div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

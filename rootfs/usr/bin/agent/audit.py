@@ -122,6 +122,42 @@ def record_run(run_id: str, *, actor: str, trigger: str,
     })
 
 
+def record_pass(*, reason: str, trigger: str, doc_chars: int,
+                doc_lines: int, escalated: int, subjects: str = "",
+                model: str = "", now: Optional[float] = None) -> bool:
+    """One row for EVERY triage pass, including the quiet ones.
+
+    ⚠️ THE QUIET PASSES ARE THE WHOLE POINT. `run_once` already returned a
+    precise reason — "agent disabled", "budget: …", "no model provider
+    configured", "nothing to escalate" — and that string went to the add-on log
+    and nowhere a reader could reach. So the evidence an owner was handed for
+    the PH-3 cutover ("rules found ten, the agent found none") was identical
+    whether the agent had looked and stayed quiet or had never run at all, which
+    is the one distinction the whole decision rests on. Four review rounds were
+    spent on that ambiguity before this row existed.
+
+    ⚠️ `doc_chars`/`doc_lines` ARE NOT PADDING. A pass that legitimately found
+    nothing and a pass handed an empty villa document both report "nothing to
+    escalate", and only the document size separates them — that is the failure
+    this cannot be allowed to hide, because it looks exactly like success.
+    """
+    return _append({
+        "at": _now_iso(now), "run_id": "", "actor": "agent",
+        "tool": f"pass:{trigger}",
+        "verdict": "escalated" if escalated else "quiet",
+        "detail": (f"{reason} | doc={doc_chars}c/{doc_lines}L"
+                   f" | escalated={escalated}"
+                   + (f" | {subjects}" if subjects else "")
+                   + (f" | model={model}" if model else "")),
+    })
+
+
+def passes(limit: int = 50) -> List[Dict[str, Any]]:
+    """The triage passes, newest last. Reads what record_pass wrote."""
+    return [r for r in rows(limit * 4)
+            if str(r.get("tool", "")).startswith("pass:")][-limit:]
+
+
 # ── actions ─────────────────────────────────────────────────────────────────
 def record_intent(run_id: str, *, actor: str, tool: str, args: Any,
                   verdict: str, action_key: str = "",

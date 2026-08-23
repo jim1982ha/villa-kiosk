@@ -2583,7 +2583,10 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
             config=_read_json_store(AGENT_CONFIG_FILE, {}),
             provider=anthropic_sdk.build(
                 api_key=reports_secrets.get("anthropic") or ""),
-            document=document)
+            document=document,
+            # ⚠️ NAMED, so the trace separates a button press from the clock.
+            # "I pressed it and nothing changed" is unanswerable otherwise.
+            trigger="manual")
         return web.json_response({"ok": not reason, "status": "triaged",
                                   "reason": reason})
 

@@ -500,6 +500,29 @@ export async function runAgentNow(): Promise<{ ok: boolean; reason: string }> {
   };
 }
 
+/** The triage passes, newest last. ⚠️ THIS IS THE ROW THAT SEPARATES "the
+ *  agent looked and stayed quiet" FROM "the agent never ran" — the two the
+ *  shadow diff renders identically, and the ambiguity four review rounds were
+ *  lost to. `/agent-audit` has served these since PH-0 with no consumer, which
+ *  is why the distinction was never on a screen. */
+export interface TriagePass { at: string; trigger: string; verdict: string; detail: string; }
+
+export async function loadTriagePasses(): Promise<TriagePass[]> {
+  const r = await fetch(ingressPath("agent-audit"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => null)) as { rows?: unknown } | null;
+  const rows = Array.isArray(d?.rows) ? d!.rows : [];
+  return rows
+    .filter((x): x is Record<string, unknown> =>
+      !!x && typeof x === "object" && String((x as Record<string, unknown>).tool ?? "").startsWith("pass:"))
+    .map((x) => ({
+      at: String(x.at ?? ""),
+      trigger: String(x.tool ?? "").slice("pass:".length),
+      verdict: String(x.verdict ?? ""),
+      detail: String(x.detail ?? ""),
+    }));
+}
+
 export async function loadShadowDiff(): Promise<ShadowDiff | null> {
   const r = await fetch(ingressPath("agent-shadow"), { credentials: "same-origin" });
   if (!r.ok) return null;
