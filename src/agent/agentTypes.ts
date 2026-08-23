@@ -123,4 +123,8 @@ export interface Concern {
   openedAt: string;
   state: ConcernState;
   supersedes: string[];
+  /** When this was sent to somebody, or absent if it never was.
+   *  ⚠️ SNAKE_CASE ON THE WIRE — the concern store is written by Python and
+   *  served verbatim, so this is `delivered_at` as it arrives. */
+  delivered_at?: string;
 }

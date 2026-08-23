@@ -43,7 +43,7 @@ const MIN_TRIAGE_MINUTES = 5;
 type Draft = Pick<AgentConfig,
   "enabled" | "shadow" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
   | "maxTurns" | "maxToolCalls" | "investigateMode"
-  | "maxInvestigationsPerPass" | "modelTriage" | "modelReason" | "modelBrief"
+  | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
   | "modelChat">
   & { triggers: AgentConfig["triggers"] };
 
@@ -51,6 +51,7 @@ const EMPTY: Draft = {
   enabled: false, shadow: true, triageMinutes: 15, monthlyLimit: 4000,
   chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24,
   investigateMode: "auto", maxInvestigationsPerPass: 3,
+  quietHoursStart: "", quietHoursEnd: "",
   modelTriage: "", modelReason: "", modelBrief: "", modelChat: "",
   triggers: { scheduled: true, event: false, chat: false },
 };
@@ -220,6 +221,8 @@ export default function AgentTuningPanel() {
     investigateMode: c.investigateMode === "approve" ? "approve" : "auto",
     maxInvestigationsPerPass: Number(
       c.maxInvestigationsPerPass ?? EMPTY.maxInvestigationsPerPass),
+    quietHoursStart: String(c.quietHoursStart ?? ""),
+    quietHoursEnd: String(c.quietHoursEnd ?? ""),
     modelTriage: String(c.modelTriage ?? ""),
     modelReason: String(c.modelReason ?? ""),
     modelBrief: String(c.modelBrief ?? ""),
@@ -294,6 +297,41 @@ export default function AgentTuningPanel() {
         On by default, because “observe only” above already stops anything being
         sent. Off records what was flagged and spends nothing until you say so.
       </p>
+      {/* ⚠️ A SETTING WITH NO CONTROL IS THE SAME DEFECT AS A CONTROL WITH NO
+          SETTING, AND I SHIPPED ONE. v2.696.0 added the quiet-hours window to
+          the store, the wire map and the TypeScript type, and nothing here
+          could edit it — so it stayed empty, which means "never quiet", and the
+          feature looked like it was working because nothing was ever held. */}
+      <label className="toggle">
+        <input type="checkbox"
+          checked={draft.quietHoursStart !== "" && draft.quietHoursEnd !== ""}
+          onChange={(e) => edit(e.target.checked
+            ? { quietHoursStart: "22:00", quietHoursEnd: "07:00" }
+            : { quietHoursStart: "", quietHoursEnd: "" })} />
+        <span>Hold non-urgent alerts overnight</span>
+      </label>
+      <p className="muted body-text">
+        Anything urgent still arrives immediately, at any hour — that is what
+        makes it urgent. This only holds the rest, and only when nobody is at the
+        property; if someone is there, they are living with it and get told.
+      </p>
+      {draft.quietHoursStart !== "" && draft.quietHoursEnd !== "" && (
+        <div className="editable-row">
+          <div className="editable-row-fields">
+            <label className="fm-field">
+              <span>Quiet from</span>
+              <input type="time" value={draft.quietHoursStart}
+                onChange={(e) => edit({ quietHoursStart: e.target.value })} />
+            </label>
+            <label className="fm-field">
+              <span>Until</span>
+              <input type="time" value={draft.quietHoursEnd}
+                onChange={(e) => edit({ quietHoursEnd: e.target.value })} />
+            </label>
+          </div>
+        </div>
+      )}
+
       <Num
         label="Investigations per check, at most"
         note={"Each one is a full, expensive look at a single thing."

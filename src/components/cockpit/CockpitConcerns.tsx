@@ -90,6 +90,17 @@ export default function CockpitConcerns() {
               <span className={`cockpit-concern-sev cockpit-sev-${c.severity}`}>
                 {String(c.severity)}
               </span>
+              {/* ⚠️ WHETHER ANYONE WAS TOLD IS A DIFFERENT FACT FROM WHETHER IT
+                  MATTERS, and the wall showed only the second. During a shadow
+                  period nothing is sent at all, so a list of concerns with no
+                  indication of that reads as "everyone has been notified". */}
+              {c.delivered_at ? (
+                <span className="muted body-text" title={`Sent ${c.delivered_at}`}>
+                  sent
+                </span>
+              ) : (
+                <span className="muted body-text">not sent yet</span>
+              )}
               <span className="body-text" style={{ flex: "1 1 200px", minWidth: 0 }}>
                 {c.title}
               </span>
