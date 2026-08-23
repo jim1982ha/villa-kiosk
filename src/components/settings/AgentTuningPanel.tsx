@@ -118,15 +118,18 @@ function Num({ label, note, value, min, onChange }: {
   );
 }
 
-/** ⚠️ OUR OWN SUGGESTION CHIPS, NOT `<datalist>`. The native list is drawn by
- *  the browser and cannot be styled: on Android it rendered as unstyled text
- *  ON TOP OF THE KEYBOARD, overlapping the keys — reported from a phone. Chips
- *  are ordinary buttons, so they inherit the app's own treatment, are readable
- *  in both themes, and are a 44px target rather than a native row.
+/** ⚠️ `.segmented` — THE APP'S OWN ONE-OF-N CONTROL, not a third invention.
+ *  This was `<datalist>` first, which the browser draws and refuses to style
+ *  (on Android it painted over the keyboard), and then a local `.model-chips`
+ *  class — which was the same mistake one layer up: writing a control this app
+ *  already has. Theme Modes and Villa lighting are both `.segmented`, so the
+ *  selected state, the touch target, the accent treatment and the three themes
+ *  are all inherited rather than re-derived. Reported as exactly that: "never
+ *  recode anything that has been already used elsewhere".
  *
  *  ⚠️ AND THE FIELD STAYS FREE TEXT. Pinning a picker here would make this app
- *  the thing that must ship for a new model to be usable (ADR-016); the chips
- *  fill the box and can be typed over. */
+ *  the thing that must ship for a new model to be usable (ADR-016); the segment
+ *  fills the box and can be typed over. */
 const MODELS = ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"];
 
 function Text({ label, note, value, placeholder, onChange }: {
@@ -139,12 +142,12 @@ function Text({ label, note, value, placeholder, onChange }: {
       <input value={value} onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         spellCheck={false} autoCapitalize="off" autoCorrect="off" />
-      <div className="model-chips">
+      <div className="segmented" role="group" aria-label={`${label} — suggestions`}>
         {MODELS.map((m) => (
           <button
             key={m}
             type="button"
-            className={`btn ghost${(value || placeholder) === m ? " active" : ""}`}
+            className={(value || placeholder) === m ? "active" : ""}
             onClick={() => onChange(m)}
           >
             {m.replace("claude-", "").replace(/-\d.*$/, "")}
@@ -267,7 +270,9 @@ export default function AgentTuningPanel() {
           the app would make THIS the thing that has to ship for a new model to
           be usable (ADR-016) — but blank fields with no hint are how a villa
           ends up on the most expensive default without choosing it, which is
-          exactly what happened. The datalist suggests; it does not constrain. */}
+          exactly what happened. The segments SUGGEST; they do not constrain —
+          the box stays typeable, so a model this release never heard of is
+          reachable without one. */}
       <p className="muted body-text">
         Blank uses the default shown in each box. Cheaper is usually right —
         the villa spends far more requests on routine checks and chat than on
