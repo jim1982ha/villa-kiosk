@@ -594,3 +594,45 @@ def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
         f"It renders in {rendering}, gated on {[gates.get(h) for h in rendering]}, "
         f"and `ops` holds {sorted(ops_caps)}. The server permits `ops` to complete "
         f"a task; every surface that offers one must let them in.")
+
+
+# ── Settings' baseline must cover every key its controls write ───────────────
+# ⚠️ THE FAILURE THIS PINS IS SILENT AND PARTIAL. SettingsModal applies live and
+# reverts on Cancel by writing a baseline back, so a key a control writes but
+# the baseline does not list is un-revertable: Cancel restores its siblings and
+# leaves that one changed. Nothing errors, tsc cannot see it, and the dialog
+# looks like it worked. Derived from the call sites — never from a copy of the
+# list — because a list checked against itself is the shape of pin that agrees
+# with itself forever while the component moves.
+def test_settings_baseline_covers_every_key_the_controls_write():
+    src = _read("src/components/settings/SettingsModal.tsx")
+
+    written = set(re.findall(r"(?:update|scheduleCommit)\(\{\s*([A-Za-z]+)", src))
+    assert written, "found no update()/scheduleCommit() call sites — regex is stale"
+
+    block = re.search(r"const SETTINGS_KEYS = \[(.*?)\] as const", src, re.S)
+    assert block, "SettingsModal has no SETTINGS_KEYS baseline list"
+    baseline = set(re.findall(r'"([A-Za-z]+)"', block.group(1)))
+
+    missing = written - baseline
+    assert not missing, (
+        f"these keys are written by a control but absent from the baseline, so "
+        f"Cancel cannot revert them: {sorted(missing)}")
+
+    stale = baseline - written
+    assert not stale, (
+        f"the baseline lists keys no control writes any more: {sorted(stale)}")
+
+
+def test_settings_cancel_clears_the_pending_draft_before_reverting():
+    """⚠️ A debounced commit that survives Cancel re-applies what was discarded.
+    The revert writes old values back through update(); if the pending timer is
+    still armed it fires ~500ms later with the NEW ones and silently undoes the
+    undo — a bug that only reproduces if you press Cancel quickly."""
+    src = _read("src/components/settings/SettingsModal.tsx")
+    discard = re.search(r"discard: \(\) => \{(.*?)\n    \},", src, re.S)
+    assert discard, "SettingsModal's commit has no discard()"
+    body = discard.group(1)
+    assert "pending.cancel(" in body, "discard() does not cancel the pending draft"
+    assert body.index("pending.cancel(") < body.index("update("), \
+        "discard() must cancel the debounced commit BEFORE writing the baseline back"

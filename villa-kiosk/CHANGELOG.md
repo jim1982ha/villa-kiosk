@@ -1,3 +1,11 @@
+## 2.682.1
+
+### Added — the two Settings-draft pins from v2.678.0, which were never committed
+They were written and mutation-tested against four deliberate breaks, then left
+in the working tree because `tests/*` is in .gitignore and I read that as the
+whole directory being untracked. Seventy-six files under `tests/py` are tracked;
+ignore rules do not apply to files already tracked.
+
 ## 2.682.0
 
 ### Fixed — pressing "Run a check now" left the trace block saying no pass had been recorded
