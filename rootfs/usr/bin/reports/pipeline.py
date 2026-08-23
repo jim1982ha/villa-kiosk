@@ -36,7 +36,8 @@ from . import (aggregate as aggregate_mod, collect, devices as devices_mod,
                verify as verify_mod)
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
-from .contracts import PAYLOAD_ALLOWED_FIELDS, severity_rank
+from .contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
+                        severity_rank)
 from .analysis import modules as _modules  # noqa: F401  (importing registers them)
 from .hass import HassClient, HassUnavailable
 from .deliver import deliver
@@ -103,6 +104,77 @@ def set_concerns_source(source: Optional[Any]) -> None:
     """
     global _CONCERNS_SOURCE
     _CONCERNS_SOURCE = source
+
+
+#: The degradation ladder, registered the same way and for the same reason.
+#: ⚠️ A HOOK, NOT AN IMPORT — `agent/fallback.py` is the other side of ARCH-003's
+#: one-way street, so the proxy hands it in. Unregistered means the minimal body
+#: below, which is what an embedder without the agent package gets.
+_FALLBACK_COMPOSER: Optional[Any] = None
+
+
+def set_fallback_composer(composer: Optional[Any]) -> None:
+    """Register the degradation ladder. Called once, at boot.
+
+    ⚠️ THE LADDER EXISTED FROM v2.641.0 TO v2.698.0 WITH NOBODY ON IT (TASK-111).
+    `fallback.compose` renders a rung and states which rung it is; REQ-042's
+    acceptance was "each rung asserted separately", which is true and is not the
+    same as any rung ever being USED. RISK-015 is "a component fails silently
+    and the villa looks quiet", and this ladder is its control — so the control
+    was asserted and not installed.
+    """
+    global _FALLBACK_COMPOSER
+    _FALLBACK_COMPOSER = composer
+
+
+def _salient_rows(context: ReportContext) -> List[Dict[str, str]]:
+    """What the observation floor saw, as rung 2 wants it: a label and a reason.
+
+    ⚠️ NO ENTITY IDS, THOUGH `from_salient` WOULD ACCEPT ONE. A briefing prints
+    what a person calls a device and leaves the id in the villa — the same rule
+    `_standing_rows` obeys by dropping `Item.subject` at the crossing rather
+    than filtering it later.
+    """
+    rows: List[Dict[str, str]] = []
+    for source, label_key, reason_key in ((context.findings, "label", "detail"),
+                                          (context.standing, "title", "detail")):
+        for row in source:
+            if not isinstance(row, Mapping):
+                continue
+            label = str(row.get(label_key) or "").strip()
+            if label:
+                rows.append({"label": label,
+                             "reason": str(row.get(reason_key) or "").strip()})
+    return rows
+
+
+def _degrade(context: ReportContext, title: str, err: Exception) -> Tuple[str, str]:
+    """Descend the ladder because the renderer could not compose. Returns
+    (body, rung), and `rung` is "" when no ladder is registered.
+
+    ⚠️ THE CONTEXT IS FULL AND ONLY THE WRITER FAILED, which is exactly what the
+    ladder is for: the concerns, the findings and the standing state were all
+    gathered before this point, and the one-line body this replaced threw every
+    one of them away. A reader got "the report could not be composed" about a
+    period in which eight things were wrong.
+
+    ⚠️ IT NEVER RAISES, because it stands between the villa and silence. The
+    ladder makes the same promise; this arm covers the case where the hook
+    itself is something other than the ladder.
+    """
+    compose = _FALLBACK_COMPOSER
+    if compose is None:
+        return "The report could not be composed. See the add-on log.", ""
+    try:
+        # ⚠️ NO TITLE — the caller delivers one separately, and a header baked
+        # into the body arrives as a duplicate first line on every phone.
+        brief = compose(concerns=list(context.concerns),
+                        salient=_salient_rows(context),
+                        detail=str(err), title="")
+        return str(brief.text), str(brief.rung)
+    except Exception as second:  # noqa: BLE001 - the last thing before silence
+        swallow("the degradation ladder itself failed", second)
+        return "The report could not be composed. See the add-on log.", ""
 
 
 def _agent_concerns(blueprint_subjects: Set[str]) -> List[Dict[str, Any]]:
@@ -663,12 +735,29 @@ async def run_report(
                if isinstance(f, Mapping) and f.get("subject_key")}),
     )
     narrator = DeterministicNarrator()
+    #: Which rung of the degradation ladder produced this brief, "" on the happy
+    #: path. ⚠️ IT REACHES THE HISTORY ENTRY, because a record saying
+    #: `deterministic` about a brief the deterministic renderer failed to write
+    #: is an instrument describing the one case it exists to catch as normal.
+    rung = ""
     try:
         title, body = narrator.render(context)
     except Exception as err:  # noqa: BLE001 - a narrator must never stop a report
-        swallow("narration failed; delivering a minimal report", err)
+        # ⚠️ DESCEND, DO NOT GO QUIET (TASK-111, REQ-042, RISK-015). Everything
+        # this brief could have said was already gathered — concerns, findings,
+        # standing state — and until this call the whole of it was replaced by
+        # one sentence apologising. The ladder states which rung it used in the
+        # text a person reads, so a brief that arrives in plainer words is one
+        # the reader knows to trust differently.
+        swallow("narration failed; descending the degradation ladder", err)
         title = f"{cadence.title()} report — {period}"
-        body = "The report could not be composed. See the add-on log."
+        body, rung = _degrade(context, title, err)
+        if rung:
+            # ⚠️ NO QUOTES ROUND THE RUNG. `test_inert` forbids hand-quoting in
+            # this package — quoting is `text.name_of`'s job — and it does not
+            # care that this is a rung rather than a device name, which is the
+            # right call: the rule holds by shape, not by intent.
+            log(f"delivered a fallback brief at rung {rung}")
 
     # ── narrate again, optionally, through a provider ───────────────────────
     # ⚠️ AN OVERLAY, NOT A BRANCH, AND THAT IS THE WHOLE DESIGN OF PHASE 6. The
@@ -687,9 +776,17 @@ async def run_report(
     # villa's report depend on control flow that runs only when a third party
     # is unreachable, i.e. it puts the case that matters most on the path with
     # the least coverage. See CLAUDE.md's second hard rule.
-    narration_mode = narrator.name
+    #
+    # ⚠️ AND IT IS SKIPPED ENTIRELY ON A FALLBACK RUNG, for two reasons that are
+    # each sufficient. A lead sentence is applied by RE-RENDERING through the
+    # very narrator that just raised, so this block would raise a second time on
+    # a path that has no third fallback — the report would be lost after the
+    # ladder had saved it. And buying prose to introduce a document the villa
+    # could not compose is spending money to make a degradation look polished,
+    # which is the opposite of what every rung says.
+    narration_mode = NARRATION_FALLBACK if rung else narrator.name
     narration_why = ""
-    provider = providers_mod.shared(narration or {})
+    provider = None if rung else providers_mod.shared(narration or {})
     if provider is not None:
         # ⚠️ THE ACTOR TRAVELS — see `providers._anthropic`. Filed as the
         # literal "schedule" until 2.686.0, so an owner pressing "run now" had

@@ -115,6 +115,19 @@ NARRATION_MODE: Final[Tuple[str, ...]] = (
     "provider",        # an LLM wrote it (Phase 6)
 )
 
+#: ⚠️ WHAT A HISTORY ENTRY MAY RECORD, WHICH IS NOT WHAT AN OPERATOR MAY
+#: CONFIGURE. `NARRATION_MODE` is the setting; nobody can ask for a degraded
+#: brief, so `fallback` belongs in the record and would be a meaningless radio
+#: button in the settings tab. Splitting them is what keeps the config
+#: vocabulary honest while the audit trail says what actually happened.
+#:
+#: `fallback` means the deterministic renderer RAISED and `agent.fallback`'s
+#: ladder composed the brief instead (TASK-111). Recording `deterministic` there
+#: would be the field's own docstring — "what actually wrote this one" — lying
+#: about the single case it exists to make visible.
+NARRATION_FALLBACK: Final[str] = "fallback"
+NARRATION_RECORD: Final[Tuple[str, ...]] = NARRATION_MODE + (NARRATION_FALLBACK,)
+
 # Why a module did not run. A module is NEVER silently absent — the report says
 # which analyses it could not perform and why, so a thin deployment produces a
 # short honest report rather than one that looks complete.
@@ -190,6 +203,7 @@ CONTRACT_SETS: Final[Dict[str, Tuple[str, ...]]] = {
     "CADENCE": CADENCE,
     "DELIVERY_STATUS": DELIVERY_STATUS,
     "NARRATION_MODE": NARRATION_MODE,
+    "NARRATION_RECORD": NARRATION_RECORD,
     "SKIP_REASON": SKIP_REASON,
     "PAYLOAD_ALLOWED_FIELDS": PAYLOAD_ALLOWED_FIELDS,
     # ⚠️ ADDED ONE RELEASE LATE, AND THE COMMENT ABOVE PREDICTED IT. `ZONE` and

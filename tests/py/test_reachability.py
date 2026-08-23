@@ -81,15 +81,13 @@ EXEMPT: Dict[str, str] = {
     "status": "budget diagnostics for an operator; the Cockpit reads the "
               "narrower `summary()` instead",
 
-    "compose": "⚠️ THE WHOLE DEGRADATION LADDER IS UNREACHABLE. `fallback.py` "
-               "renders four rungs — Tier 3 down, Tier 2 down, no WAN, nothing "
-               "at all — each stating which rung it is, and NOTHING CALLS IT. "
-               "REQ-042's acceptance is 'each rung asserted separately', which "
-               "is true and is not the same as any of them ever being USED: a "
-               "component that fails silently still makes the villa look quiet "
-               "(RISK-015). Found by TASK-101 after this check was corrected to "
-               "stop counting prose in TSX as a caller. Recorded as TASK-111",
-    "reset": "clears every chat thread. Its own docstring says what it is for — "
+    # ⚠️ `compose` WAS HERE AND IS NOT ANY MORE (TASK-111, v2.699.0). The whole
+    # degradation ladder was unreachable — four rungs, each stating which rung
+    # it is, and nothing calling any of them — which made REQ-042 satisfied by
+    # tests asserting each rung in isolation while RISK-015 had no control at
+    # all. `reports.pipeline` now descends it when the deterministic renderer
+    # raises, registered by the proxy at boot the way the concerns source is.
+    "reset": "clears every chat thread. Its own docstring says what it is for —"
              "tests, and a kill-switch flip — and a kill switch nothing calls "
              "from code is still a kill switch",
 

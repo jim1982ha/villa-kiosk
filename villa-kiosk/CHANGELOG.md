@@ -1,3 +1,14 @@
+## 2.699.0
+
+### Fixed — a report whose renderer failed arrived as one sentence apologising
+Everything the period had gathered — the agent's concerns, the checks' findings,
+every device standing broken right now — was thrown away and replaced with "the
+report could not be composed". The plainer briefing meant to cover exactly this
+had been written months ago and nothing ever called it. It is now used, and it
+says on its face which layer was missing, so a briefing that arrives in simpler
+words is one you know to read differently. It costs nothing: no narration is
+bought for a briefing the villa could not compose in the first place.
+
 ## 2.698.0
 
 ### Fixed — one device could be reported twice in the same briefing

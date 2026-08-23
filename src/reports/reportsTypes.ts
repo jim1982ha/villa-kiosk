@@ -91,9 +91,25 @@ export type Cadence = (typeof CADENCE)[number];
 export const DELIVERY_STATUS = ["pending", "sent", "failed", "skipped"] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUS)[number];
 
-/** Where the prose came from. Recorded so "the tone changed" is answerable. */
+/** What an operator may ASK for. Not what a history entry may record. */
 export const NARRATION_MODE = ["deterministic", "provider"] as const;
 export type NarrationMode = (typeof NARRATION_MODE)[number];
+
+/**
+ * What a history entry may record, which is deliberately wider: nobody can
+ * configure a degraded brief, so `fallback` would be a meaningless radio button
+ * in the settings tab and is a necessary value in the audit trail. It means the
+ * deterministic renderer raised and the degradation ladder composed the brief
+ * instead — recording `deterministic` there would make the one field that
+ * answers "why did last week's brief read differently" lie about the only case
+ * it exists to make visible.
+ */
+// ⚠️ SPELLED OUT, NOT SPREAD FROM NARRATION_MODE. `test_contract_parity` reads
+// the literal members out of this file, so a spread parsed as a one-element set
+// and failed — and a mirror the parity test cannot read is a mirror nothing
+// checks. The duplication is the point: both lists are compared to contracts.py.
+export const NARRATION_RECORD = ["deterministic", "provider", "fallback"] as const;
+export type NarrationRecord = (typeof NARRATION_RECORD)[number];
 
 /**
  * Why a module did not run. A module is NEVER silently absent — a thin
@@ -272,7 +288,9 @@ export interface ReportHistoryEntry {
   at: string;
   audience: Audience;
   cadence: Cadence;
-  narration: NarrationMode;
+  /** ⚠️ `NarrationRecord`, not `NarrationMode` — a brief the ladder composed
+   *  records `fallback`, which is not a mode anyone can select. */
+  narration: NarrationRecord;
   findingCount: number;
   severity: Severity;
   deliveries: DeliveryResult[];

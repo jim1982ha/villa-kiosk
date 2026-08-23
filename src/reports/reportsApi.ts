@@ -19,10 +19,11 @@
 import { ingressPath } from "@/ha/ingress";
 import { ROLE_ORDER, type Role } from "@/auth/roles";
 import {
-  AUDIENCE, CADENCE, DELIVERY_STATUS, NARRATION_MODE, SEVERITY,
+  AUDIENCE, CADENCE, DELIVERY_STATUS, NARRATION_MODE, NARRATION_RECORD,
+  SEVERITY,
   type Audience, type Cadence, type DeliveryResult, type NarrationMode,
-  type ReportHistoryEntry, type ReportSchedule, type ReportsConfig,
-  type Severity,
+  type NarrationRecord, type ReportHistoryEntry, type ReportSchedule,
+  type ReportsConfig, type Severity,
 } from "./reportsTypes";
 
 /** What `/reports-diagnostics` answers. Shaped here rather than in
@@ -488,7 +489,11 @@ function parseEntry(raw: unknown): ReportHistoryEntry {
     at: str(e.at),
     audience: oneOf(e.audience, AUDIENCE) as Audience,
     cadence: oneOf(e.cadence, CADENCE) as Cadence,
-    narration: oneOf(e.narration, NARRATION_MODE) as NarrationMode,
+    // ⚠️ THE RECORD VOCABULARY, WHICH IS WIDER THAN THE CONFIG ONE. Parsed
+    // against NARRATION_MODE, a `fallback` entry fell through `oneOf` to
+    // "deterministic" — the history would then have shown the degraded brief as
+    // one the built-in renderer wrote, which is precisely what it did not do.
+    narration: oneOf(e.narration, NARRATION_RECORD) as NarrationRecord,
     findingCount: num(e.findingCount),
     severity: oneOf(e.severity, SEVERITY) as Severity,
     deliveries: arr(e.deliveries).map(parseDelivery),

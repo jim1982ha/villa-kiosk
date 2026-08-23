@@ -150,6 +150,11 @@ from reports import store as reports_store          # noqa: E402
 # filename audit. Same layering rule applies: the proxy imports from both, and
 # neither imports the proxy.
 from agent import scheduler as agent_scheduler      # noqa: E402
+# ⚠️ AT MODULE SCOPE, NOT INSIDE `on_start`. It is registered on the report
+# pipeline at boot and is the thing that runs when composing has already failed;
+# an import deferred to that moment would be a new failure mode on the one path
+# that exists to have none.
+from agent import fallback as agent_fallback        # noqa: E402
 from observe import cycle as observe_cycle          # noqa: E402
 
 SUPERVISOR = "supervisor"
@@ -3384,6 +3389,16 @@ def main() -> None:
         # briefing and the wall describing one villa from two different sets of
         # findings.
         reports_pipeline.set_concerns_source(_agent_concerns_for_reports)
+        # ⚠️ AND WHERE A BRIEFING GETS ITS DEGRADATION LADDER, inverted here for
+        # exactly the same reason and in the same one process that legally holds
+        # both packages. `agent.fallback` renders four rungs, each STATING which
+        # rung it is, and from v2.641.0 to v2.698.0 nothing called any of them: REQ-042
+        # was satisfied by tests asserting each rung in isolation, which is not
+        # the same as one ever being used. Without this line a report whose
+        # renderer raises is delivered as a single sentence apologising, with
+        # every concern, finding and standing fault of the period thrown away —
+        # RISK-015, a component failing silently and the villa looking quiet.
+        reports_pipeline.set_fallback_composer(agent_fallback.compose)
         a["reports_task"] = asyncio.create_task(
             reports_pipeline.run_forever(a["session"]))
         # ⚠️ The collector is the only thing listening to the villa's own

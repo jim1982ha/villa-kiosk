@@ -51,8 +51,18 @@ class Brief:
 
 
 def _lines(header: str, rung: str) -> List[str]:
-    return [header, "",
-            f"⚠️ This is a fallback: {RUNGS.get(rung, rung)}.", ""]
+    """The rung's own statement, under an OPTIONAL header.
+
+    ⚠️ AN EMPTY `title` MEANS THE CALLER ALREADY HAS ONE. The report pipeline
+    delivers a title and a body as two separate strings — a notification's
+    subject line and its text — so a header baked in here would arrive as a
+    duplicate first line on every phone. What must never be optional is the
+    line below it: the rung is stated whether or not anyone asked for a header.
+    """
+    out = [header, ""] if header else []
+    out.append(f"⚠️ This is a fallback: {RUNGS.get(rung, rung)}.")
+    out.append("")
+    return out
 
 
 def from_concerns(concerns: Sequence[Mapping[str, Any]], *,
@@ -149,5 +159,8 @@ def compose(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
             return from_salient(salient, title=title)
         return nothing(title=title, detail=detail)
     except Exception as err:  # noqa: BLE001 - the last thing before silence
-        return Brief(f"{title}\n\n⚠️ This is a fallback: "
+        # ⚠️ THE SAME OPTIONAL HEADER AS `_lines`, hand-rolled because this arm
+        # may not call anything that could itself be the thing that just failed.
+        head = f"{title}\n\n" if title else ""
+        return Brief(f"{head}⚠️ This is a fallback: "
                      f"{RUNGS['nothing']}.\n\nReason: {err}", "nothing")

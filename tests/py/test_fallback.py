@@ -126,3 +126,162 @@ def test_it_does_not_reimplement_the_deterministic_renderer() -> None:
     assert not any(m.startswith("reports.narrate.deterministic")
                    for m in imported)
     assert len(inspect.getsource(fallback).splitlines()) < 200
+
+
+# ── the ladder is DESCENDED, not merely renderable (TASK-111) ────────────────
+# ⚠️ EVERY TEST BELOW GOES THROUGH `run_report`, NOT THROUGH `compose`. The
+# defect TASK-111 fixes is that this module had no caller from v2.641.0 to
+# v2.698.0 while every rung above was green — a suite that only exercises the
+# helper stays green through exactly that, which is `feedback_pin-the-caller`
+# and is the reason REQ-042 read as met while RISK-015 had no control at all.
+
+
+class _FakeSession:
+    """Enough of a session for `run_report`. Delivery has no targets here."""
+
+    def post(self, *a: Any, **kw: Any) -> Any:
+        raise AssertionError("a fallback brief must not reach the network here")
+
+
+def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
+    """One report whose deterministic renderer raises. Returns the history entry.
+
+    The renderer is broken at the class it is constructed from, so the failure
+    lands exactly where a real one would — after collect, analyse, synthesise
+    and the concerns join, with a fully populated context in hand.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from reports import pipeline
+    from reports.narrate import DeterministicNarrator
+
+    def explode(self: Any, context: Any) -> Any:
+        raise RuntimeError("the renderer fell over")
+
+    original = DeterministicNarrator.render
+    source = context_extras.get("concerns")
+    DeterministicNarrator.render = explode          # type: ignore[assignment]
+    pipeline.set_fallback_composer(fallback.compose)
+    pipeline.set_concerns_source((lambda: source) if source else None)
+    try:
+        return asyncio.run(pipeline.run_report(
+            _FakeSession(), "owner", "daily", [],   # type: ignore[arg-type]
+            datetime(2026, 8, 24, 7, 0, tzinfo=timezone.utc),
+            found={"reachable": True, "preflight": []},
+            entry_id="ladder:2026-08-24"))
+    finally:
+        DeterministicNarrator.render = original     # type: ignore[assignment]
+        pipeline.set_fallback_composer(None)
+        pipeline.set_concerns_source(None)
+
+
+def test_a_brief_whose_renderer_FAILS_still_says_which_rung_wrote_it() -> None:
+    """⚠️ THE WHOLE OF TASK-111 IN ONE ASSERTION. What this replaced was
+    "The report could not be composed. See the add-on log." — one sentence in
+    place of everything the period had gathered, which is RISK-015 exactly: a
+    component fails and the villa looks quiet."""
+    entry = _run_with_a_broken_renderer()
+    assert "This is a fallback" in entry["_body"], entry["_body"]
+
+
+def test_rung_1_is_reached_when_the_agent_HAS_concerns() -> None:
+    """The concerns were joined into the context before the renderer died, and
+    they are what the reader most needs — so they are what arrives."""
+    body = _run_with_a_broken_renderer(concerns=[
+        {"title": "Pool pump stopped", "severity": "critical",
+         "subject_key": "pump"}])["_body"]
+    assert "reasoning layer" in body
+    assert "Pool pump stopped" in body
+
+
+def test_rung_4_is_reached_when_there_is_nothing_to_say() -> None:
+    """⚠️ AND IT IS STILL DELIVERED. Silence reads as a working system with
+    nothing to say; this reads as what it is."""
+    body = _run_with_a_broken_renderer()["_body"]
+    assert "could not be assessed" in body
+    assert "Reflexes, the journal and the kiosk" in body
+
+
+def test_rung_2_carries_the_FLOOR_S_observations_and_no_entity_ids() -> None:
+    """⚠️ THROUGH `_degrade`, THE PIPELINE'S OWN FUNCTION, NOT THROUGH
+    `compose`. Rung 2 needs findings in the context, and forcing an analysis
+    module to produce one from outside would mean building a module — so the
+    chain is pinned in two links instead: `run_report` calls `_degrade` (the
+    tests above), and `_degrade` reaches rung 2 with what the floor saw (this
+    one). Neither link alone is the claim.
+
+    ⚠️ AND NO ENTITY ID TRAVELS, though `from_salient` would happily print one.
+    The label is what a person reads; the id stays in the villa.
+    """
+    from reports import pipeline
+
+    class _Context:
+        concerns: List[Dict[str, Any]] = []
+        findings = [{"label": "Pool pump power", "detail": "3.1 sigma high",
+                     "entity_id": "sensor.pool_pump_power"}]
+        standing = [{"title": "Gate sensor", "detail": "unavailable for 3 days",
+                     "kind": "unavailable"}]
+
+    pipeline.set_fallback_composer(fallback.compose)
+    try:
+        body, rung = pipeline._degrade(_Context(), "T",  # type: ignore[arg-type]
+                                       RuntimeError("x"))
+    finally:
+        pipeline.set_fallback_composer(None)
+    assert rung == "salient"
+    assert "triage layer was unreachable" in body and "unjudged" in body
+    assert "Pool pump power" in body and "Gate sensor" in body
+    assert "sensor.pool_pump_power" not in body
+
+
+def test_the_history_does_NOT_claim_the_deterministic_renderer_wrote_it() -> None:
+    """⚠️ THE FIELD'S OWN DOCSTRING IS "what actually wrote this one". A brief
+    the renderer RAISED on, recorded as `deterministic`, is that instrument
+    describing the single case it exists to make visible as a normal one."""
+    from reports.contracts import NARRATION_FALLBACK, NARRATION_RECORD
+
+    entry = _run_with_a_broken_renderer()
+    assert entry["narration"] == NARRATION_FALLBACK
+    assert NARRATION_FALLBACK in NARRATION_RECORD, (
+        "the record vocabulary must admit what the pipeline stores, or the SPA "
+        "parses it back to 'deterministic' and the lie returns one layer out")
+
+
+def test_a_fallback_body_carries_NO_duplicate_title() -> None:
+    """The pipeline delivers a title and a body as two strings — a notification
+    subject and its text — so a header baked into the body arrives twice."""
+    entry = _run_with_a_broken_renderer()
+    assert not entry["_body"].startswith(entry["_title"])
+
+
+def test_the_proxy_REGISTERS_the_ladder_at_boot() -> None:
+    """⚠️ `feedback_pin-the-caller`, and this exact hook is why the file exists.
+    A ladder registered by nobody is the state TASK-111 found: present, tested,
+    and unreachable."""
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    src = open(os.path.join(root, "rootfs", "usr", "bin",
+                            "supervisor-proxy.py"), encoding="utf-8").read()
+    code = "\n".join(l for l in src.splitlines()
+                     if not l.strip().startswith("#"))
+    assert "set_fallback_composer(" in code, (
+        "nothing registers the degradation ladder, so a report whose renderer "
+        "fails goes out as one sentence apologising")
+
+
+def test_an_UNREGISTERED_ladder_still_delivers_something() -> None:
+    """An embedder without the agent package is a supported state, and it must
+    degrade to the old minimal body rather than to an exception on the one path
+    that has no further fallback."""
+    from reports import pipeline
+
+    class _Context:
+        concerns: List[Dict[str, Any]] = []
+        findings: List[Dict[str, Any]] = []
+        standing: List[Dict[str, Any]] = []
+
+    pipeline.set_fallback_composer(None)
+    body, rung = pipeline._degrade(_Context(), "T", RuntimeError("x"))  # type: ignore[arg-type]
+    assert rung == "" and body
+
