@@ -3510,33 +3510,45 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-stack > * + p.body-text.muted {
   margin-top: calc(var(--hint-gap) - var(--stack-gap));
 }
-/* ⚠️ A TOGGLE NEEDS MORE PULL THAN A MARGIN CAN SEE, and this is why the first
-   fix looked like it had not worked. `label.toggle` is min-height:--touch-min
-   (44px) with its content vertically CENTRED — a phone-parity fix, and correct
-   — so roughly 11px of EMPTY ROW sits below the text inside the label's own
-   box. Margin measures the box, the eye measures the ink, and the two differ by
-   exactly that half-leftover. Verified against the built CSS before changing
-   the number: the general rule was shipping the -10px it claimed, so the gap
-   that remained was optical, not a rule that failed to apply. Do not "fix" this
-   by growing --stack-gap; it would push every other pair apart to close one. */
-.fm-stack > label.toggle + p.body-text.muted,
-.settings-body > label.toggle + p.body-text.muted {
-  margin-top: calc(var(--hint-gap) - var(--stack-gap)
-                   - (var(--touch-min) - var(--text-md)) / 2);
-}
-/* ⚠️ AND THE SAME RULE ONE LEVEL UP, because only 8 of 33 panels use .fm-stack
+/* ⚠️ A TOGGLE'S HINT USES THE ORDINARY RULE, AND THE EXTRA AIR IS ACCEPTED.
+   v2.680.0 pulled it by the label's whole half-leftover — label.toggle is
+   min-height:--touch-min with centred content, so ~11-14px of empty row sits
+   below the ink — and the result OVERLAPPED the label, reported immediately.
+   The arithmetic was not wrong about the leftover; it was wrong to fight ink
+   with a magic number, which is the same mistake the badge-value geometry cost
+   seven releases. The 44px target is a phone-parity requirement and stays; a
+   toggle's hint therefore sits a few px lower than a text field's, which is
+   invisible beside two overlapping lines of text. Do not re-derive this. *//* ⚠️ AND THE SAME RULE ONE LEVEL UP, because only 8 of 33 panels use .fm-stack
    — the rest render their fields straight into the modal body. `.settings-body`
    is the container EVERY tab of EVERY modal lands in, so stating it here is
    what makes "consistent for every menu" true without editing 25 files, each of
    which would then be free to drift again. Verified by grep -L, not by the
    call sites in view: rolling this out by where .fm-stack already appeared is
    the exact mistake /dry-audit exists to catch. */
+/* ⚠️ AND THE FLEX CASE MUST NOT ACCUMULATE. In .fm-stack the 14px comes from
+   `gap`, so any margin on the row after a hint is ADDED to it, not merged —
+   margins do not collapse in a flex container. That is the two-blank-lines
+   between sub-sections, reported from the model list. Pinning it to 0 leaves
+   exactly the gap, and can only ever reduce spacing. */
+.fm-stack > p.body-text.muted + * { margin-top: 0; }
 .settings-body > * + p.body-text.muted { margin-top: var(--hint-gap); }
 .settings-body > p.body-text.muted + * { margin-top: var(--stack-gap); }
 /* A section heading still gets its air ABOVE (that IS the blank line between
    sections) and almost none below — the heading and its first field are one
    thing, not two. */
+/* ⚠️ A SECTION TITLE IS TIGHT TO WHATEVER FOLLOWS IT — and "whatever" is the
+   word that matters. The title's own margin was the only thing set, so the gap
+   under it was decided by the NEXT element instead: a paragraph pulled itself
+   up with the hint rule and looked right, a field took the full stack gap and
+   looked like a blank line. Same heading, two spacings, reported as exactly
+   that ("HOW HARD IT MAY THINK has an empty line after it, WHICH MODELS does
+   not"). Stating it on the title's successor makes the heading and its first
+   row one block regardless of what that row is. */
 .fm-stack > .settings-section-title { margin: 6px 0 0; }
+.fm-stack > .settings-section-title + *,
+.settings-body > .settings-section-title + * {
+  margin-top: calc(var(--hint-gap) - var(--stack-gap));
+}
 
 /* Summary numbers — the glance layer above the detail. */
 .fm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
