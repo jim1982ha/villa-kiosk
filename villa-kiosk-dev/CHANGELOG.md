@@ -1,3 +1,15 @@
+## 2.687.0
+
+### Fixed — the blank line between a checkbox and its description, in one rule this time
+`label.toggle` got its 44px touch target from `min-height` with centred content,
+which manufactures 11px of empty row below the ink — so a hint sitting 4px from
+the box edge read as a blank line. Reported four times and answered four times
+with a different number in a different place: `.reports-pane` carried `-6px`,
+`.settings-body` and `.fm-stack` carried nothing, so one pair rendered three ways
+depending on the panel. The target is now padding, which makes the leftover a
+named value every container subtracts. `.toggle-row` is in the rule too — one
+checkbox is wrapped in one, and it would otherwise have kept the gap.
+
 ## 2.686.0
 
 ### Fixed — a manual run was billed to the schedule, and the schedule switch could disable it
