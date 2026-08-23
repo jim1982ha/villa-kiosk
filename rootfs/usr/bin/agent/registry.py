@@ -30,7 +30,9 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from agent import audit as audit_mod
 from agent import budget as budget_mod
-from agent import contracts, policy as policy_mod, redact
+from agent import contracts
+from agent import policy as policy_mod, redact
+from agent import upstream
 from agent.llm.base import Provider, ToolCall, Turn
 from agent.tools import ALL_TOOLS
 from agent.tools.base import BaseTool, fail
@@ -81,7 +83,8 @@ class Registry:
 
 
 def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
-                   config: Optional[Mapping[str, Any]] = None) -> Registry:
+                   config: Optional[Mapping[str, Any]] = None,
+                   session: Any = None) -> Registry:
     """The deployment's registry, CONNECTED TO THIS VILLA.
 
     ⚠️ ONE construction site, so the MCP server and the in-process loop cannot
@@ -103,7 +106,23 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
         # ⚠️ THE TABLE IS BUILT HERE AND PASSED IN, rather than built inside
         # `build_tools` and lost. It is the run's only ref table: the read tools
         # mint handles into it and `raise_concern` resolves them back out of it.
-        return Registry(sources.build_tools(config=config, refs=refs), refs=refs)
+        built = list(sources.build_tools(config=config, refs=refs))
+        # ⚠️ THE UPSTREAM'S TOOLS JOIN THIS LIST, THEY DO NOT SIT BESIDE IT
+        # (ADR-023). Home Assistant's own MCP server is where HA reads come
+        # from now, and folding its `tools/list` in here is the whole
+        # integration: `policy.may_use_tool` still runs per call on `tool.mode`,
+        # the audit still writes an intent/outcome pair, `redact` and
+        # `truncate` still apply. A second surface would be a second tool path
+        # beside the audited one, and the second is the one nobody tests
+        # (ARCH-012).
+        #
+        # ⚠️ VESTA'S OWN TOOLS ARE NOT REPLACEABLE BY IT AND STAY FIRST.
+        # `read_villa`, `read_salient`, `read_concerns`, `read_coverage`,
+        # `read_ledger` and `read_playbook` serve this add-on's OWN findings —
+        # a briefing, an open concern, the facility record — which no upstream
+        # tool can know about. A question about a report reaches them.
+        built += upstream.tools_for(lambda: session)
+        return Registry(built, refs=refs)
     except Exception as err:  # noqa: BLE001 - a broken source is not a dead
         swallow("could not wire the tools to this villa", err)   # registry
         return Registry([cls() for cls in ALL_TOOLS])

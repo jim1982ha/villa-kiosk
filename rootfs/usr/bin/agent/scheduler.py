@@ -240,6 +240,12 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     # with a light in it. A room list changes when somebody renames a room, so
     # this does nothing on all but one pass a day, exactly like the line above.
     await sources.refresh_layout(session)
+    # ⚠️ AND THE UPSTREAM TOOL CATALOGUE, ON THE SAME CLOCK (ADR-023). Home
+    # Assistant's own MCP server is where HA reads come from; its tool list
+    # changes when somebody updates that add-on, not every pass, so this does
+    # nothing on all but one pass a day exactly like the two lines above.
+    from agent import upstream as upstream_mod
+    await upstream_mod.refresh(session)
 
     try:
         document = sources.build_document()

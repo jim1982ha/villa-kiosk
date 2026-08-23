@@ -1,0 +1,192 @@
+"""Home Assistant's MCP server, through this registry. TASK-113/114, ADR-023.
+
+⚠️ THE GATE UNDER TEST IS NOT A NEW ONE, AND THAT IS THE FINDING. `policy` has
+had a three-valued mode vocabulary since 2.623.0 and already denies an unknown
+mode with "a tool whose mode nobody has classified is a tool nobody has
+reviewed". So an unannotated upstream tool fails closed through machinery that
+was already written and already tested; the work here is classifying correctly
+and proving the classification reaches that gate.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+from typing import Any, Dict, List, Mapping
+
+import pytest
+
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "rootfs", "usr", "bin"))
+
+from agent import contracts, policy as policy_mod, upstream   # noqa: E402
+
+REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+READ_TOOL = {"name": "ha_search", "description": "find entities",
+             "inputSchema": {"type": "object", "properties": {}},
+             "annotations": {"readOnlyHint": True}}
+ACT_TOOL = {"name": "ha_call_service", "description": "call a service",
+            "inputSchema": {"type": "object", "properties": {}},
+            "annotations": {"readOnlyHint": False}}
+BARE_TOOL = {"name": "ha_something_new", "description": "who knows",
+             "inputSchema": {"type": "object", "properties": {}}}
+
+
+@pytest.fixture(autouse=True)
+def _isolated(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(upstream, "CATALOGUE_FILE", str(tmp_path / "u.json"))
+
+
+def _store(tools: List[Dict[str, Any]], url: str = "http://x:9583/s") -> None:
+    from reports import store
+    store.write_json(upstream.CATALOGUE_FILE,
+                     {"at": 1.0, "url": url, "tools": tools})
+
+
+# ── the gate ────────────────────────────────────────────────────────────────
+def test_an_UNANNOTATED_tool_gets_a_mode_the_policy_refuses() -> None:
+    """⚠️ FAIL CLOSED, THROUGH THE EXISTING BRANCH. A future ha_mcp release
+    adding a destructive tool must be unreachable until somebody classifies it —
+    RISK-036 — and the way to get that without a second gate is to return a mode
+    `TOOL_MODE` does not contain, which `may_use_tool` already denies."""
+    assert upstream.mode_of(BARE_TOOL) not in contracts.TOOL_MODE
+    policy = policy_mod.for_run({"act_enabled": True}, tier="reason",
+                                tool_names=["ha_something_new"])
+    verdict = policy_mod.may_use_tool(policy, "ha_something_new",
+                                      upstream.mode_of(BARE_TOOL))
+    assert verdict.verdict == "deny", verdict.reason
+
+
+def test_a_WRITE_tool_is_refused_while_the_villa_is_watch_only() -> None:
+    """The owner's requirement: VESTA may not change an entity state until
+    somebody opens the gate. `act_enabled` ships false."""
+    policy = policy_mod.for_run({"act_enabled": False}, tier="reason",
+                                tool_names=["ha_call_service"])
+    assert policy_mod.may_use_tool(
+        policy, "ha_call_service", upstream.mode_of(ACT_TOOL)).verdict == "deny"
+
+
+def test_the_same_tool_is_allowed_once_the_gate_is_OPEN() -> None:
+    """⚠️ FUTURE-PROOFING IS A REQUIREMENT, NOT A COURTESY. The setting exists so
+    actuation can be turned on later without a second architecture; a gate that
+    could not open would have been a deletion wearing a switch."""
+    policy = policy_mod.for_run({"act_enabled": True}, tier="reason",
+                                tool_names=["ha_call_service"])
+    assert policy_mod.may_use_tool(
+        policy, "ha_call_service", upstream.mode_of(ACT_TOOL)).verdict == "allow"
+
+
+def test_a_READ_tool_is_allowed_in_watch_only() -> None:
+    """Otherwise the integration is pointless: reading is the whole purpose."""
+    policy = policy_mod.for_run({"act_enabled": False}, tier="reason",
+                                tool_names=["ha_search"])
+    assert policy_mod.may_use_tool(
+        policy, "ha_search", upstream.mode_of(READ_TOOL)).verdict == "allow"
+
+
+# ── the catalogue ───────────────────────────────────────────────────────────
+def test_the_upstream_schema_travels_VERBATIM() -> None:
+    """⚠️ PARAPHRASING AN INPUT SCHEMA IS HOW A MODEL IS TOLD THE WRONG ARGUMENT
+    NAMES, and the upstream owns that contract, not us."""
+    schema = {"type": "object", "properties": {"area_filter": {"type": "string"}},
+              "required": ["area_filter"]}
+    _store([{**READ_TOOL, "inputSchema": schema}])
+    tool = upstream.tools_for(lambda: None)[0]
+    assert tool.inputSchema == schema
+    assert tool.name == "ha_search"
+
+
+def test_NO_catalogue_means_no_upstream_tools_not_an_error() -> None:
+    """An install with no ha_mcp is a supported state and the commonest one on a
+    fresh clone. It keeps every tool it had — REQ-067."""
+    assert upstream.tools_for(lambda: None) == []
+    assert upstream.catalogue() == {}
+
+
+def test_an_EMPTY_tool_list_is_never_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Recording it would publish "Home Assistant offers no tools", and the
+    fallback readers would look like a choice rather than a failure."""
+    async def _endpoint(session: Any) -> str:
+        return "http://x:9583/s"
+
+    async def _rpc(*a: Any, **kw: Any) -> Dict[str, Any]:
+        return {"tools": []}
+
+    monkeypatch.setattr(upstream, "endpoint", _endpoint)
+    monkeypatch.setattr(upstream, "rpc", _rpc)
+    assert asyncio.run(upstream.refresh(object(), now=1e12)) is False
+    assert upstream.catalogue() == {}
+
+
+def test_a_FAILED_read_leaves_the_previous_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same rule as the capability survey and the layout: a restarting add-on
+    must not strip the agent of every Home Assistant tool it had."""
+    _store([READ_TOOL])
+
+    async def _endpoint(session: Any) -> str:
+        return ""
+
+    monkeypatch.setattr(upstream, "endpoint", _endpoint)
+    assert asyncio.run(upstream.refresh(object(), now=1e12)) is False
+    assert len(upstream.catalogue()["tools"]) == 1
+
+
+# ── the wire ────────────────────────────────────────────────────────────────
+def test_an_SSE_framed_reply_is_decoded_like_a_json_one() -> None:
+    """⚠️ STREAMABLE HTTP MAY ANSWER EITHER WAY TO THE SAME REQUEST, and handling
+    only JSON is the trap. Both forms carry the same result object."""
+    assert upstream._decode('{"result":{"tools":[]}}')["result"] == {"tools": []}
+    framed = 'event: message\ndata: {"result":{"tools":[1]}}\n\n'
+    assert upstream._decode(framed)["result"] == {"tools": [1]}
+    assert upstream._decode("not json at all") is None
+
+
+def test_structured_content_is_preferred_over_prose() -> None:
+    """⚠️ IT FITS MORE ANSWER INSIDE `truncate`'s 8,000 characters. The text
+    blocks are usually the same answer pretty-printed at greater length, and a
+    wide history is exactly where the cut bites."""
+    out = upstream._flatten({"structuredContent": {"count": 2},
+                             "content": [{"type": "text", "text": "x" * 500}]})
+    assert out == '{"count":2}'
+
+
+def test_the_endpoint_is_the_SECRET_PATH_with_no_suffix() -> None:
+    """⚠️ READ FROM THE ADD-ON'S OWN STARTUP LINE, NOT GUESSED. FastMCP reports
+    `transport 'http' (stateless) on http://0.0.0.0:9583/private_<...>` — the
+    secret path IS the endpoint. A guessed `/mcp` suffix would have 404'd."""
+    import inspect
+    src = inspect.getsource(upstream.endpoint)
+    assert '{secret}' in src and '/mcp"' not in src
+
+
+def test_no_install_specific_slug_is_hardcoded() -> None:
+    """⚠️ THE SLUG CARRIES A REPOSITORY HASH AND DIFFERS PER INSTALL, so a
+    literal would be villa-specific data in shipped source — hard rule #1."""
+    import inspect
+    src = inspect.getsource(upstream)
+    assert upstream.SLUG_SUFFIX == "_ha_mcp"
+    assert "81f33d0f" not in src
+
+
+def test_the_scheduler_REFRESHES_the_catalogue() -> None:
+    """⚠️ `feedback_pin-the-caller`, fourth release running. A catalogue nothing
+    refreshes is a registry with no Home Assistant tools in it, for ever."""
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+                            "scheduler.py"), encoding="utf-8").read()
+    code = "\n".join(l for l in src.splitlines()
+                     if not l.strip().startswith("#"))
+    assert "upstream_mod.refresh(" in code
+
+
+def test_the_registry_FOLDS_THEM_IN_rather_than_beside() -> None:
+    """One registry, two backends, one gate (ARCH-012). A parallel surface is a
+    second tool path beside the audited one."""
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+                            "registry.py"), encoding="utf-8").read()
+    code = "\n".join(l for l in src.splitlines()
+                     if not l.strip().startswith("#"))
+    assert "upstream.tools_for(" in code

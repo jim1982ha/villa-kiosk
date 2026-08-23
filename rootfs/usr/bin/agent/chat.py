@@ -403,7 +403,7 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     # and the asker seeing nothing.
     resolved = await target_for(session, message.chat_id)
     bound = [resolved] if resolved else list(targets)
-    registry = build_registry()
+    registry = build_registry(session=session)
     # ⚠️ THE REPLY TOOL IS BUILT HERE, BOUND TO THIS MESSAGE'S CHAT, AND ADDED
     # TO A COPY OF THE REGISTRY. It is deliberately absent from `ALL_TOOLS`,
     # because an unbound one can reach nobody and would be offered to every

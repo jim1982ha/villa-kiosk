@@ -1,3 +1,15 @@
+## 2.705.0
+
+### Added — the villa now asks Home Assistant's own MCP add-on, and a switch says whether it may touch anything
+Questions about your home are answered through the Home Assistant MCP add-on
+rather than the handful of readers built into this one, so anything that add-on
+can look up, the villa can now be asked — searching by room, by device type and
+by state, which is what the gym question needed. Its tools join the same list,
+behind the same checks and the same record of every call. A new switch in
+Supervision decides whether the villa may operate devices at all; it is off, and
+was off before it was visible — nothing could change a light or a lock, and now
+you can see that it cannot.
+
 ## 2.704.0
 
 ### Fixed — the villa removed numbers it had worked out correctly, and kept some it had not

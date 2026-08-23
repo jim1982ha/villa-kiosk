@@ -41,14 +41,14 @@ const MIN_TRIAGE_MINUTES = 5;
  *  would make this app the thing that has to ship for a new model to be usable,
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
-  "enabled" | "shadow" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
+  "enabled" | "shadow" | "actEnabled" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
   | "maxTurns" | "maxToolCalls" | "investigateMode"
   | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
   | "modelChat">
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
-  enabled: false, shadow: true, triageMinutes: 15, monthlyLimit: 4000,
+  enabled: false, shadow: true, actEnabled: false, triageMinutes: 15, monthlyLimit: 4000,
   chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24,
   investigateMode: "auto", maxInvestigationsPerPass: 3,
   quietHoursStart: "", quietHoursEnd: "",
@@ -208,6 +208,10 @@ export default function AgentTuningPanel() {
     // `shadow` as false would render "delivering" for a villa that is in fact
     // silent — the most misleading possible direction for this flag.
     shadow: c.shadow !== false,
+    // ⚠️ FALSE WHEN ABSENT, matching the backend. Reading a missing
+    // `act_enabled` as true would render "may operate devices" for a villa
+    // that cannot — the most misleading possible direction for this flag.
+    actEnabled: c.actEnabled === true,
     triageMinutes: Number(c.triageMinutes ?? EMPTY.triageMinutes),
     monthlyLimit: Number(c.monthlyLimit ?? EMPTY.monthlyLimit),
     chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
@@ -321,6 +325,25 @@ export default function AgentTuningPanel() {
       <div className="settings-section-title">
         What it may do without asking
       </div>
+      {/* ⚠️ THE GATE ON TOUCHING THE VILLA, AND IT SHIPS CLOSED (ADR-023).
+          Home Assistant's own MCP add-on is where the villa's readings come
+          from, and its tool surface includes calling services, deleting
+          entities and restarting Home Assistant. `act_enabled` is the switch
+          that decides whether any of that is reachable — it has existed and
+          defaulted to false since the agent was written, and nothing in
+          Settings could see it, so an owner had no way to know the promise was
+          being kept. A guarantee nobody can check is not a guarantee. */}
+      <label className="toggle">
+        <input type="checkbox" checked={draft.actEnabled}
+          onChange={(e) => edit({ actEnabled: e.target.checked })} />
+        <span>Let it operate devices, not just watch them</span>
+      </label>
+      <p className="muted body-text">
+        Off, and nothing the villa does can change a switch, a light or a lock —
+        it reads and it tells you. This is separate from everything above: those
+        decide how much it looks and who it tells, this decides whether it may
+        touch anything at all. Leave it off unless you have a reason.
+      </p>
       <label className="toggle">
         <input type="checkbox"
           checked={draft.investigateMode === "auto"}
