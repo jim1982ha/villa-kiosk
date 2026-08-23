@@ -189,12 +189,37 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
                         "so an absence of findings below is not evidence of "
                         "a quiet villa."))
         if coverage.get("at_bound"):
-            lines.append("  The journal is at its size bound, so history older "
-                         "than its oldest entry is unavailable — that is a "
-                         "limit of the recorder, not of the villa.")
+            # ⚠️ NEVER THE WORD "recorder" HERE, AND THAT IS NOT PEDANTRY — IT
+            # SENT SOMEBODY TO THE WRONG SUBSYSTEM (TASK-039, the PH-2 gate).
+            # `recorder` is Home Assistant's OWN component, with its own
+            # retention and purge settings, and this sentence used it for VESTA's
+            # journal ring. Asked why it could not see overnight, the agent
+            # answered — correctly, from this text — "it's a retention setting on
+            # the recorder … someone needs to check the recorder's retention and
+            # purge settings on the Home Assistant host". That is an actionable
+            # instruction to change a system that was working, and the villa's
+            # own 20,000-entry ring would have gone on evicting history either
+            # way. A generated document is read as fact; a borrowed noun in one
+            # is a wrong diagnosis with our name on it.
+            lines.append("  This add-on's own observation journal is full "
+                         f"({coverage.get('bound')} entries), so it has "
+                         "started dropping its oldest rows and history before "
+                         "them is gone. That is VESTA's own storage limit — "
+                         "NOT Home Assistant's recorder, whose retention "
+                         "settings are unrelated and should not be changed on "
+                         "account of this line.")
         lines.append("")
 
-    lines.append("Most unusual right now:")
+    # ⚠️ IT IS AN EXCERPT AND MUST SAY SO (TASK-039). Asked about the pool
+    # pump, the agent answered "there is no pool pump circuit in what I can
+    # see" — of equipment that exists, is metered, and was drawing 863.7 W at
+    # the time. It had read this ranked list as an INVENTORY. Nothing here
+    # claimed to be one, and nothing said it was not: this subsystem's own rule
+    # is that absence must never be silent, and a heading that lists some
+    # devices is silent about every device it omits.
+    lines.append("Most unusual right now (a RANKED EXCERPT, never an inventory "
+                 "— equipment absent from this list still exists, and must be "
+                 "looked up before saying anything about whether it is here):")
     ranked = [s for s in salient if s.score]
     if ranked:
         for item in ranked:

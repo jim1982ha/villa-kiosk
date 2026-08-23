@@ -233,9 +233,66 @@ def test_incomplete_coverage_is_stated_before_anything_is_read() -> None:
     assert text.index("INCOMPLETE") < text.index("Most unusual right now")
 
 
-def test_a_full_journal_says_the_limit_is_the_recorder_not_the_villa() -> None:
-    text = snapshot.delta(coverage={"complete": True, "at_bound": True})
-    assert "limit of the recorder, not of the villa" in text
+def test_a_full_journal_names_OUR_storage_and_never_HAs_recorder() -> None:
+    """⚠️ THIS TEST PINNED THE DEFECT, UNDER A NAME THAT DESCRIBED IT (TASK-039).
+
+    It asserted the document said "a limit of the recorder, not of the villa" —
+    and `recorder` is HOME ASSISTANT'S OWN COMPONENT, with its own retention and
+    purge settings. The 20,000-entry ring is VESTA's. Asked why it could not see
+    overnight, the agent answered exactly what this sentence told it: "it's a
+    retention setting on the recorder … someone needs to check the recorder's
+    retention and purge settings on the Home Assistant host."
+
+    So a person was sent to change a working subsystem, by a document we
+    generate, held in place by a green test. The old assertion was not wrong
+    about the CODE; it was wrong about the world, which is the one kind of
+    defect a unit test cannot notice and a reader can. That is what the phase
+    gates are for.
+
+    What is pinned now is the property rather than the sentence: the reader must
+    be told WHOSE storage ran out, and must not be pointed at HA's.
+    """
+    text = snapshot.delta(coverage={"complete": True, "at_bound": True,
+                                    "bound": 20_000})
+    assert "20000" in text.replace(",", ""), (
+        "the bound is not stated, so 'full' is unfalsifiable to the reader")
+    assert "VESTA" in text or "add-on" in text, (
+        "the document does not say whose storage is full")
+    # ⚠️ THE WORD MAY APPEAR — but only in the clause ruling it OUT, which is
+    # the honest way to head off the very conclusion the agent reached.
+    #
+    # ⚠️ AND THIS ASSERTION WAS TOO LOOSE ON ITS FIRST WRITING: it accepted any
+    # sentence containing "not", so restoring "a limit of the recorder, whose
+    # retention settings … should not be changed" passed it — the exact old
+    # wording, waved through by the word "not" in an unrelated clause. Mutation
+    # testing caught it. The prohibition is now literal in both directions.
+    assert "NOT Home Assistant's recorder" in text, (
+        "the document no longer rules out HA's recorder explicitly, which is "
+        "the conclusion the agent reached on its own from the old wording")
+    for phrase in ("limit of the recorder", "the recorder's retention",
+                   "a retention setting on the recorder"):
+        assert phrase not in text, (
+            f"the document attributes its own full ring to HA's recorder "
+            f"again ({phrase!r})")
+
+
+def test_the_salient_list_says_it_is_an_EXCERPT_not_an_inventory() -> None:
+    """⚠️ THE PH-2 GATE'S FIRST ANSWER WAS "there is no pool pump circuit in
+    what I can see" — about equipment that exists, is metered, and was drawing
+    863.7 W as it said so. The agent had read this ranked list as an INVENTORY.
+
+    Nothing here claimed to be one, and nothing said it was not; this
+    subsystem's own rule is that absence must never be silent, and a heading
+    that names some devices is silent about every device it omits. A reader who
+    concludes "not listed, therefore not present" is not misreading a document
+    that never says otherwise.
+    """
+    text = snapshot.delta(salient=[_salient("sensor.pump", 8.4)],
+                          coverage={"complete": True})
+    assert "EXCERPT" in text, (
+        "the ranked list no longer says it is an excerpt — an agent reading it "
+        "as the villa's inventory will deny that absent equipment exists")
+    assert "inventory" in text
 
 
 def test_a_quiet_cycle_says_so_rather_than_printing_nothing() -> None:

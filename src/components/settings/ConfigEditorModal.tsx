@@ -20,6 +20,9 @@ import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import AgentTuningPanel from "./AgentTuningPanel";
 import PeoplePanel from "./PeoplePanel";
+import ApiKeyPanel from "./ApiKeyPanel";
+import ShadowDiffPanel from "./ShadowDiffPanel";
+import CollapsibleSection from "@/components/common/CollapsibleSection";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 
@@ -303,10 +306,32 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
                   and how loud is it" — related enough to share a tab, distinct
                   enough that a cadence field must not sit under a heading
                   about access. */}
+              {/* ⚠️ THE KEY IS IN THE TAB THAT SPENDS IT (v2.657.0). It was
+                  reachable only through Briefings → "Let an AI service write
+                  the summary" — a toggle that does not govern it: the agent
+                  reads the same secret whether narration is on or off, so
+                  switching SUPERVISION on required enabling an unrelated
+                  feature first. Found by following the setup instructions,
+                  which is the only way a trap like that is found; every screen
+                  was correct on its own. */}
+              <div className="settings-section-title" style={{ marginTop: 18 }}>
+                AI service key
+              </div>
+              <ApiKeyPanel />
+
               <div className="settings-section-title" style={{ marginTop: 18 }}>
                 Cadence and cost
               </div>
               <AgentTuningPanel />
+
+              {/* ⚠️ COLLAPSED, because it is a whole document and this tab is
+                  not where it is read every day — it is read ONCE, when the
+                  cutover decision is taken. `CollapsibleSection`'s remaining
+                  job is exactly this: a block that is not a list and is not
+                  what the reader came for. */}
+              <CollapsibleSection title="Shadow period — the cutover evidence">
+                <ShadowDiffPanel />
+              </CollapsibleSection>
             </>
           )}
 

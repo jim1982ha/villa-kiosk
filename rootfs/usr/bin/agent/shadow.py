@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import config as agent_config
-from reports.log import log
+from reports.log import log, swallow
 
 #: Where shadow-mode concerns are kept, separate from live ones.
 #: ⚠️ A SEPARATE FILE, NOT A FLAG ON THE ROW. A shadow concern that shared the
@@ -183,6 +183,37 @@ def report(result: Diff, *, title: str = "Shadow period") -> str:
     if not result.agent_only:
         lines.append("  - none")
     return "\n".join(lines)
+
+
+def recorded() -> List[Dict[str, Any]]:
+    """Every concern this shadow period stored, as dicts. Never raises.
+
+    ⚠️ THE SAME REDIRECT `record()` USES, AND FOR THE SAME REASON. The shadow
+    store is a different FILE, and the module that owns concerns is the only
+    thing that should know their document's shape — the proxy's first version
+    of the diff route read the file itself and did `stored.get("concerns")`,
+    which `test_store_envelope` flagged as an envelope unwrap. It was not one
+    (the store's document genuinely has that key, and the wire envelope happens
+    to share the word) but the test cannot tell those apart BY NAME, and neither
+    can a reader. Asking `concerns.read()` removes the question: one parser, and
+    a second consumer of the shadow store cannot drift from the first.
+
+    ⚠️ AND IT DOES NOT CHECK `suppressed()`. `record` refuses outside a shadow
+    period because writing then would confuse two paths; READING is how a
+    finished period is judged, which by definition happens after shadow mode
+    has been turned off.
+    """
+    from agent import concerns as concerns_mod
+
+    original = concerns_mod.CONCERNS_FILE
+    try:
+        concerns_mod.CONCERNS_FILE = shadow_path(original)
+        return list(concerns_mod.read())
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not read the shadow concern store", err)
+        return []
+    finally:
+        concerns_mod.CONCERNS_FILE = original
 
 
 def shadow_path(live: str) -> str:

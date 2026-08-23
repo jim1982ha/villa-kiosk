@@ -372,6 +372,47 @@ export async function decideReviewDraft(
   return r.ok;
 }
 
+/** The shadow period's diff: what each layer found, side by side. TASK-051. */
+export interface ShadowDiff {
+  /** The rendered document — what the checkpoint asks a person to READ. */
+  report: string;
+  agentTotal: number;
+  rulesTotal: number;
+  /** ⚠️ FALSE MEANS A SUBJECT MISSING FROM BOTH COLUMNS PROVES NOTHING. */
+  coverageComplete: boolean;
+  /** ⚠️ THE ROW THAT DECIDES THE CUTOVER — what the rules caught and the agent
+   *  did not, i.e. the regressions retiring them would ship. */
+  rulesOnly: string[];
+  both: string[];
+  agentOnly: string[];
+}
+
+/**
+ * Read the shadow diff. Owner-only, server-side.
+ *
+ * ⚠️ `null` MEANS COULD NOT ASK, NOT "NOTHING FOUND". An empty diff on a villa
+ * that has been running a shadow period is a real and meaningful answer; a
+ * failed read that rendered as one would be the cutover decision taken on a
+ * blank page.
+ */
+export async function loadShadowDiff(): Promise<ShadowDiff | null> {
+  const r = await fetch(ingressPath("agent-shadow"), { credentials: "same-origin" });
+  if (!r.ok) return null;
+  const d = (await r.json().catch(() => null)) as ShadowDiff | null;
+  if (!d || typeof d.report !== "string") return null;
+  const strs = (v: unknown) =>
+    (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === "string");
+  return {
+    report: d.report,
+    agentTotal: Number(d.agentTotal) || 0,
+    rulesTotal: Number(d.rulesTotal) || 0,
+    coverageComplete: d.coverageComplete === true,
+    rulesOnly: strs(d.rulesOnly),
+    both: strs(d.both),
+    agentOnly: strs(d.agentOnly),
+  };
+}
+
 /** One provider request, as the ledger recorded it. */
 export interface UsageRow {
   at: number; source: string; model: string; actor: string;

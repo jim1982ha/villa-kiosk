@@ -54,6 +54,29 @@ def _proxy() -> str:
         return handle.read()
 
 
+def _proxy_code() -> str:
+    """The proxy with its COMMENTS BLANKED, line numbers preserved.
+
+    ⚠️ SIXTH TIME IN THIS REPO A TEST HAS MATCHED THE PROSE EXPLAINING THE THING
+    IT CHECKS. A comment saying "the first version did
+    `_read_json_store(…).get(…)` and this test flagged it" is a description of
+    the defect, and a source-reading check that greps raw text cannot tell it
+    from the defect. Every other file that reads source here already strips
+    comments (`test_cockpit_reach._code`, `test_editable_rows._no_comments`,
+    `test_modal_shell`); this one did not, and the note explaining a fix is
+    exactly the kind of line that lands next to the code being fixed.
+
+    Blanked rather than deleted so the reported LINE NUMBERS still point at the
+    real offender — a scanner that renumbers its own findings is a scanner
+    nobody trusts twice.
+    """
+    out = []
+    for line in _proxy().splitlines():
+        stripped = line.lstrip()
+        out.append("" if stripped.startswith("#") else line)
+    return "\n".join(out)
+
+
 def store_keys() -> Dict[str, str]:
     """`{"/reports-config": "config", "/fm-data": "data", …}`, from the proxy.
 
@@ -318,7 +341,7 @@ def test_no_SERVER_side_reader_unwraps_the_wire_envelope() -> None:
     versus `view(_read_json_store(…).get("config"))` differ by six words and
     behave identically until somebody changes a setting.
     """
-    proxy = _proxy()
+    proxy = _proxy_code()
     keys = set(store_keys().values()) | {"config", "data", "history"}
     offenders = []
     for match in re.finditer(r"_read_json_store\([^)]*\)\s*\.get\(\s*[\"']"

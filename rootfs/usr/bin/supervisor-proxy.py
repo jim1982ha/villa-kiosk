@@ -2265,6 +2265,75 @@ async def agent_review_decide_handler(request: web.Request) -> web.Response:
                               "drafts": len(agent_review.pending())})
 
 
+async def agent_shadow_handler(request: web.Request) -> web.Response:
+    """The shadow period's diff: what each layer found, side by side. TASK-051.
+
+    ⚠️ THIS ROUTE IS THE PH-3 GATE'S ONLY SURFACE. `shadow.diff()` and
+    `shadow.report()` shipped in v2.642.0 with NO CALLER — no route, no UI, no
+    command — so the document the checkpoint asks an owner to read could not be
+    produced at all, and the gate blocking PH-4 and PH-5 was unreachable by
+    construction. Same shape as the review queue, found the same way: by asking
+    what actually calls the thing.
+
+    ⚠️ OWNER-ONLY. It is the cutover decision — whether to retire working
+    automations — and it enumerates both layers' findings side by side, which is
+    a description of everything wrong with the property.
+
+    ⚠️ THE RULES' SIDE COMES FROM THE REPORT HISTORY, WHICH IS WHERE THEY
+    ACTUALLY LAND. A shadow period's agent concerns are in their own store (see
+    `shadow_path` — a different FILE, so an unapproved concern cannot be
+    delivered by accident); the blueprint/module layer's findings are the
+    `findings` rows of the briefs already generated. Comparing the two is
+    exactly the question "would retiring the rules have lost anything".
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read the shadow diff.")
+
+    from agent import shadow as agent_shadow
+
+    # ⚠️ ASKED OF THE MODULE THAT OWNS THE STORE, never read from the file here.
+    # The first version did `_read_json_store(...).get("concerns")` and
+    # `test_store_envelope` flagged it as an envelope unwrap — wrongly, as it
+    # happens (that store's document really does have that key), but the check
+    # cannot tell the two apart by name and neither can a reader.
+    mine = [c for c in agent_shadow.recorded() if isinstance(c, dict)]
+
+    stored = _read_json_store(reports_store.REPORTS_HISTORY_FILE,
+                              reports_store.EMPTY_HISTORY)
+    entries = reports_store.history_view(stored).get("entries") or []
+    theirs: List[Dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        for finding in entry.get("findings") or []:
+            if isinstance(finding, dict):
+                theirs.append(finding)
+
+    # ⚠️ COVERAGE IS ASKED, NOT ASSUMED. A subject missing from BOTH columns
+    # proves nothing if neither layer was watching, and the report says so —
+    # but only if it is TOLD, so a failure to read it degrades to "incomplete"
+    # rather than to a confident empty diff.
+    complete = False
+    try:
+        from reports import collect as reports_collect
+        complete = bool(reports_collect.coverage().get("complete"))
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        print(f"[supervisor-proxy] shadow coverage unread: {err}", flush=True)
+
+    result = agent_shadow.diff(mine, theirs, coverage_complete=complete)
+    return web.json_response({
+        "report": agent_shadow.report(result),
+        "agentTotal": result.agent_total,
+        "rulesTotal": result.rules_total,
+        "coverageComplete": result.coverage_complete,
+        "rulesOnly": [r.by_rules for r in result.rules_only],
+        "both": [r.by_agent for r in result.both],
+        "agentOnly": [r.by_agent for r in result.agent_only],
+    }, headers={"Cache-Control": "no-store"})
+
+
 async def agent_chats_handler(request: web.Request) -> web.Response:
     """The bot's private chats, named. Owner-only, because it enumerates who
     can talk to this villa.
@@ -2998,6 +3067,7 @@ def main() -> None:
     app.router.add_get("/agent-review", agent_review_get_handler)
     app.router.add_post("/agent-review", agent_review_decide_handler)
     app.router.add_get("/agent-audit", agent_audit_handler)
+    app.router.add_get("/agent-shadow", agent_shadow_handler)
     app.router.add_post("/agent-run-now", agent_run_now_handler)
     app.router.add_get("/device-config", device_config_get_handler)
     app.router.add_get("/fm-data", fm_data_get_handler)
