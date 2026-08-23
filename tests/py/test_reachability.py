@@ -52,14 +52,14 @@ PKG = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")
 #: are here so the count does not grow silently, not because they are fine.
 EXEMPT: Dict[str, str] = {
     # ── genuinely unreachable, and that is a FINDING (TASK-106, parked) ──
-    "occupancy": "route.py is imported by nothing shipped. REQ-034's occupancy "
-                 "input has no producer — TASK-106, parked by the owner "
-                 "2026-08-23, see docs/BACKLOG.md",
-    "escalate": "route.py is imported by nothing shipped. REQ-033 is NOT MET "
-                "for this reason — TASK-106, parked",
+    "escalate": "state-based escalation for a concern nobody acknowledged. "
+                "The outbox delivers; re-evaluating an unacknowledged one needs "
+                "an acknowledgement to read, and there is no acknowledgement "
+                "path yet. REQ-033 stays unmet for that reason",
     "note_delivered": "records a delivered concern so a reply can resolve "
-                      "'why?' without naming the subject (REQ-014). Nothing "
-                      "delivers a concern yet — TASK-106, parked",
+                      "'why?' without naming the subject (REQ-014). The outbox "
+                      "now delivers, but does not yet register the thread — "
+                      "the remaining half of REQ-014",
 
     # ── deliberately not called, with the reason at the code ──
     "concern_admissible": "bundles suppression with contracts.concern_errors, "
@@ -78,9 +78,6 @@ EXEMPT: Dict[str, str] = {
     "coerce_severity": "the inbound half of the severity vocabulary, mirroring "
                        "`severity_rank`. Kept so the contract is complete in "
                        "both directions",
-    "plan": "route.py is imported by nothing shipped — this is THE routing "
-            "entry point, and its absence is why TASK-063 cannot run. "
-            "TASK-106, parked",
     "status": "budget diagnostics for an operator; the Cockpit reads the "
               "narrower `summary()` instead",
 
@@ -128,8 +125,21 @@ def _shipped() -> Dict[str, str]:
     """
     out = subprocess.run(["git", "ls-files", "rootfs/**/*.py"],
                          capture_output=True, text=True, cwd=REPO_ROOT)
+    # ⚠️ PLUS THE PACKAGE UNDER SCAN, FROM DISK. The scan walks `agent/` on
+    # disk, so a brand-new module is scanned for its public functions while its
+    # own callers — in that same new file — are invisible to a tracked-only
+    # corpus. `outbox.py` was flagged for three functions its own `sweep` calls,
+    # one commit before it existed in git. That is `feedback_stage-before-
+    # gating` a fourth time, in the check written to catch its cousin.
+    #
+    # An untracked file ELSEWHERE still does not count as a caller — that rule
+    # is the point and is unchanged. This only says that the package being
+    # audited is read the same way whether or not it has been committed yet.
+    rels = list(out.stdout.split())
+    rels += [os.path.relpath(os.path.join(PKG, n), REPO_ROOT)
+             for n in os.listdir(PKG) if n.endswith(".py")]
     files: Dict[str, str] = {}
-    for rel in out.stdout.split():
+    for rel in dict.fromkeys(rels):
         path = os.path.join(REPO_ROOT, rel)
         if os.path.exists(path):
             try:

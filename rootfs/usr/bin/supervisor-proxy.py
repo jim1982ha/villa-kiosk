@@ -2225,6 +2225,36 @@ async def agent_usage_handler(request: web.Request) -> web.Response:
     })
 
 
+def _agent_concerns_for_reports() -> List[Dict[str, Any]]:
+    """Open Concerns, shaped for a briefing. Registered on `reports.pipeline`.
+
+    ⚠️ THE AGE IS COMPUTED HERE, NOT IN `reports/`. That package owns one
+    timestamp format and `test_module_conventions` pins that nothing else parses
+    it; `agent.sources` already knows how old a concern is, so the row arrives
+    ready to print.
+
+    ⚠️ SHADOW-AWARE THROUGH `sources.concern_rows`, WHICH IS THE ONE READER. In
+    an observe-only period the concerns live in a separate store, and a briefing
+    reading the live one would print nothing while the shadow store filled —
+    indistinguishable from an agent that found nothing.
+    """
+    try:
+        from agent import concerns as agent_concerns
+        from agent import sources as agent_sources
+
+        rows = agent_sources.concern_rows(
+            _read_json_store(AGENT_CONFIG_FILE, {}))()
+        return [{"title": r.get("title"), "severity": r.get("severity"),
+                 "subject_key": r.get("subject_key"),
+                 "age_days": agent_sources._age_days(
+                     str(r.get("opened_at") or ""))}
+                for r in rows
+                if str(r.get("state") or "open") not in agent_concerns.SETTLED]
+    except Exception as err:  # noqa: BLE001 - a briefing must not fail for this
+        _log(f"could not read concerns for the briefing: {err}")
+        return []
+
+
 async def agent_memory_get_handler(request: web.Request) -> web.Response:
     """What the villa believes about this property. TASK-110, REQ-056.
 
@@ -3345,6 +3375,15 @@ def main() -> None:
         # begin serving, and this loop never returns. Cancelled in on_cleanup so
         # aiohttp's shutdown is not held open by it (see the shutdown_timeout
         # note at run_app).
+        # ⚠️ WHERE A BRIEFING LEARNS WHAT THE AGENT CONCLUDED. `reports/` may not
+        # import `agent/` — the deterministic layer must not depend on the
+        # interpretive one (ARCH-003, pinned by `test_reports_never_imports_agent`)
+        # — so the dependency is inverted here, in the one process that legally
+        # holds both. Without this line a Concern renders on the kiosk and never
+        # in a report, which is the discrepancy the whole subsystem forbids: the
+        # briefing and the wall describing one villa from two different sets of
+        # findings.
+        reports_pipeline.set_concerns_source(_agent_concerns_for_reports)
         a["reports_task"] = asyncio.create_task(
             reports_pipeline.run_forever(a["session"]))
         # ⚠️ The collector is the only thing listening to the villa's own

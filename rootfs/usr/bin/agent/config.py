@@ -70,6 +70,19 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: others ship off so nothing happens; this ships ON so that when the agent
     #: IS switched on, its first period is observed rather than delivered.
     #: Turning it off is the cutover decision, and it should be a decision.
+    #: ⚠️ QUIET HOURS SHIP EMPTY, AND EMPTY MEANS NEVER QUIET RATHER THAN
+    #: ALWAYS. A property that has not configured a window wants its warnings,
+    #: not a silence nobody asked for. "22:00"/"07:00" is the shape; the window
+    #: WRAPS midnight, which is the only case that matters and the one a naive
+    #: comparison gets exactly backwards. ⚠️ A CRITICAL IGNORES IT ENTIRELY —
+    #: `route.MATRIX` decides that, not these keys: if it can wait until
+    #: morning it is a warning.
+    "quiet_hours_start": "",
+    "quiet_hours_end": "",
+    #: The property's timezone, for the window above. ⚠️ EMPTY DEGRADES TO UTC,
+    #: which is wrong by eight hours on the reference villa — so it is read from
+    #: discovery where possible rather than typed.
+    "timezone": "",
     "shadow": True,
 
     # ── cadence ──────────────────────────────────────────────────────────

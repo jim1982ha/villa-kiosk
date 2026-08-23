@@ -70,6 +70,13 @@ class Concern:
     supersedes: List[str] = field(default_factory=list)
     #: Why it left `open`, in a person's words where a person set it.
     outcome: str = ""
+    #: When this was sent to somebody, or "" if it never was.
+    #: ⚠️ ON THE CONCERN, NOT IN A SEPARATE QUEUE. The store is already the
+    #: record of what the villa concluded; a delivery queue beside it is a
+    #: second thing to keep in step, and the first time the two disagree
+    #: somebody is either spammed or told nothing. `outbox.undelivered` reads
+    #: exactly this field.
+    delivered_at: str = ""
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -79,7 +86,7 @@ class Concern:
             "confidence": self.confidence, "state": self.state,
             "opened_at": self.opened_at, "updated_at": self.updated_at,
             "evidence": list(self.evidence), "supersedes": list(self.supersedes),
-            "outcome": self.outcome,
+            "outcome": self.outcome, "delivered_at": self.delivered_at,
         }
 
 

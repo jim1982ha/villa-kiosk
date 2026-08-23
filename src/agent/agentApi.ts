@@ -41,6 +41,9 @@ const AGENT_WIRE_KEYS = {
   max_tool_calls: "maxToolCalls",
   investigate_mode: "investigateMode",
   max_investigations_per_pass: "maxInvestigationsPerPass",
+  quiet_hours_start: "quietHoursStart",
+  quiet_hours_end: "quietHoursEnd",
+  timezone: "timezone",
   model_triage: "modelTriage",
   model_reason: "modelReason",
   model_chat: "modelChat",
@@ -151,6 +154,14 @@ export interface AgentConfig {
   /** How many investigations one pass may start. Bounds the worst case; this
    *  is the tier where cost moves from per-pass to per-finding. */
   maxInvestigationsPerPass: number;
+  /** The quiet window, as `"22:00"`. ⚠️ EMPTY MEANS NEVER QUIET, not always —
+   *  a property that has configured nothing wants its warnings. The window
+   *  WRAPS midnight, which is the only case anyone configures. A critical
+   *  ignores it entirely; that is what the word means. */
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  /** The property's timezone, for the window above. Empty degrades to UTC. */
+  timezone: string;
   modelReason: string;
   /** ⚠️ ITS OWN TIER SINCE 2.664.0. Chat ran on `modelReason` — the frontier
    *  model — for every question typed at the villa. */

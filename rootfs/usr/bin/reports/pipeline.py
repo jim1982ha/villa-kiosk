@@ -20,6 +20,7 @@ yet" sentence rather than implying all is well.
 
 from __future__ import annotations
 
+import time
 import asyncio
 import os
 from datetime import datetime, timedelta, timezone
@@ -77,6 +78,66 @@ def _blueprint_subjects(aggregated: Dict[str, Any]) -> Set[str]:
         if keys:
             subjects |= set(keys)
     return subjects
+
+
+#: Where a briefing gets the agent's findings from. ⚠️ A HOOK, NOT AN IMPORT.
+#: `reports/` may not import `agent/` — the deterministic layer must not depend
+#: on the interpretive one, which is ARCH-003 and is pinned by
+#: `test_reports_never_imports_agent`. The first version of this reached into
+#: `agent.sources` directly and that test caught it, naming the fix: pass a
+#: callback in from the proxy, the same way `Collector.on_event` is wired.
+#:
+#: ⚠️ THE ROWS ARRIVE READY TO PRINT — title, severity, subject_key, age_days —
+#: because computing the age here would mean parsing a timestamp format this
+#: package does not own, which is a second pinned rule (`series.parse_day`).
+#: Whoever supplies the concerns already knows how old they are.
+_CONCERNS_SOURCE: Optional[Any] = None
+
+
+def set_concerns_source(source: Optional[Any]) -> None:
+    """Register where briefings read the agent's findings. Called once, at boot.
+
+    ⚠️ UNSET MEANS NO CONCERNS IN BRIEFINGS, NOT AN ERROR. A deployment running
+    reports with the agent switched off is a supported state and the commonest
+    one on a fresh install.
+    """
+    global _CONCERNS_SOURCE
+    _CONCERNS_SOURCE = source
+
+
+def _agent_concerns(blueprint_subjects: Set[str]) -> List[Dict[str, Any]]:
+    """Open Concerns for this briefing, minus what a blueprint already reported.
+
+    ⚠️ THE BRIEFING AND THE KIOSK MUST NEVER DESCRIBE THE SAME VILLA
+    DIFFERENTLY, and until this existed they did: the agent investigated, filed
+    a Concern, and it rendered on the wall and nowhere else.
+
+    ⚠️ DEDUPLICATED BY SUBJECT, PREFERRING THE BLUEPRINT — the same rule and the
+    same preference `_without_blueprint_subjects` applies one layer up, and for
+    the same reason: while a blueprint covers a device it sees occupancy,
+    schedules and tariffs the agent's evidence does not. Retire that blueprint
+    and the Concern becomes the only report of the device, and appears.
+
+    ⚠️ AND IT NEVER RAISES. A briefing that failed because the agent's store was
+    unreadable would be the interpretive layer taking down the deterministic
+    one — the dependency ARCH-003 exists to forbid.
+    """
+    if _CONCERNS_SOURCE is None:
+        return []
+    try:
+        rows = _CONCERNS_SOURCE()
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not read the agent's concerns for this report", err)
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for row in rows if isinstance(rows, (list, tuple)) else []:
+        if not isinstance(row, Mapping):
+            continue
+        if str(row.get("subject_key") or "") in blueprint_subjects:
+            continue
+        out.append(dict(row))
+    return out
 
 
 def _without_blueprint_subjects(
@@ -589,6 +650,7 @@ async def run_report(
         noise=noise_summary,
         history=_history_series(cadence),
         currency=str(found.get("currency") or ""),
+        concerns=_agent_concerns(_blueprint_subjects(aggregated)),
     )
     narrator = DeterministicNarrator()
     try:

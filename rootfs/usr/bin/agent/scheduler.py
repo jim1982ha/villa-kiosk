@@ -242,5 +242,21 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
 
     provider = anthropic_sdk.build(
         api_key=reports_secrets.get("anthropic") or "")
-    return await run_once(session, config=config, provider=provider,
-                          document=document)
+    outcome = await run_once(session, config=config, provider=provider,
+                             document=document)
+
+    # ⚠️ AFTER THE PASS, EVERY PASS, WHETHER OR NOT IT ESCALATED. The outbox is
+    # what carries a Concern to a phone (TASK-106), and it must run on the clock
+    # rather than only after a pass that produced something: a concern HELD for
+    # quiet hours is released by a later sweep finding the window closed, and
+    # that later sweep only exists if this is unconditional. Holding a concern
+    # and then never looking at it again is "held until morning" meaning
+    # "dropped".
+    #
+    # ⚠️ AND IT NEVER RAISES — `sweep` returns a typed result on every path,
+    # because this is a background clock nobody is watching.
+    from agent import outbox as outbox_mod
+    dispatch = await outbox_mod.sweep(session, config=config)
+    if dispatch.sent or dispatch.held or dispatch.failed:
+        outcome = f"{outcome} | outbox: {dispatch.line()}"
+    return outcome

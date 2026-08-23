@@ -50,6 +50,21 @@ class ReportContext:
     discovery: Dict[str, Any] = field(default_factory=dict)
     #: Analysis output. Empty until Phase 3 introduces modules.
     findings: List[Dict[str, Any]] = field(default_factory=list)
+    #: What the agent concluded this period — open Concerns, worst first.
+    #:
+    #: ⚠️ THE BRIEFING AND THE WALL DESCRIBED THE SAME VILLA FROM TWO DIFFERENT
+    #: SETS OF FINDINGS UNTIL THIS EXISTED. The agent investigated, filed a
+    #: Concern, and it rendered on the kiosk and nowhere else — so an owner
+    #: reading a briefing saw only what the blueprint layer and the built-in
+    #: modules had found, while the tablet showed a different list. That is the
+    #: exact discrepancy this whole subsystem's cardinal rule forbids: the two
+    #: supervision systems must never report differently.
+    #:
+    #: ⚠️ AND IT IS WHY RETIRING A BLUEPRINT FAMILY IS SAFE AT ALL. Sixty of the
+    #: villa's 71 retiring instances have no built-in successor — only an agent
+    #: that reasons about them. Without this field, retiring them removes their
+    #: findings from every report.
+    concerns: List[Dict[str, Any]] = field(default_factory=list)
     #: Modules that did not run, and why. Never silently absent.
     skipped: List[Dict[str, str]] = field(default_factory=list)
     #: Modules that DID run. ⚠️ Without this, "no checks are configured" and

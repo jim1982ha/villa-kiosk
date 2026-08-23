@@ -58,7 +58,7 @@ still prints bare, which is the old behaviour and the only honest fallback.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from ..analysis.registry import BLUEPRINT_GRACE_DAYS
 # ⚠️ ALIASED. This file ALREADY has a `PERIOD_WORD` ({'daily': 'Daily'}) for
@@ -181,6 +181,7 @@ SECTION_TITLE = {
     "preventive": "Maintenance signals",
     "trends": "Trends",
     "standing": "Right now",
+    "agent": "Looked into and worth your attention",
     "health": "Monitoring health",
     "waiting": "Checks waiting on a rule that has never reported",
     "coverage": "Not covered by this report",
@@ -214,6 +215,7 @@ ZONE_TITLE = {
 }
 ZONE_OF_SECTION = {
     "standing": "needs_you",
+    "agent": "needs_you",
     "fixed": "needs_you",
     "preventive_open": "needs_you",
     "critical": "this_period",
@@ -302,14 +304,19 @@ def section_heading(key: str, cadence: str = "") -> str:
 
 
 SECTIONS_FOR = {
-    "owner": ("standing", "critical", "money", "closed", "fixed",
+    # ⚠️ `agent` IS IN BOTH, AND ADDING IT TO `ALL_SECTIONS` ALONE DID NOTHING.
+    # That tuple is the fallback for an UNKNOWN audience; every real briefing
+    # reads one of these two, so a section registered there and not here has a
+    # builder, a title, a zone, a passing `test_sections` — and never renders.
+    # Found by a test that asserted the output rather than the wiring.
+    "owner": ("standing", "agent", "critical", "money", "closed", "fixed",
               "preventive", "trends", "health", "coverage"),
-    "facility": ("standing", "critical", "closed", "fixed", "preventive",
-                 "trends", "health", "coverage"),
+    "facility": ("standing", "agent", "critical", "closed", "fixed",
+                 "preventive", "trends", "health", "coverage"),
 }
 #: An unknown audience gets everything rather than nothing: a missing section is
 #: invisible, and this subsystem's rule is that absence must never be silent.
-ALL_SECTIONS = ("standing", "critical", "money", "closed", "fixed",
+ALL_SECTIONS = ("standing", "agent", "critical", "money", "closed", "fixed",
                 "preventive", "trends", "health", "coverage")
 
 #: ⚠️ EVERY `FINDING_KIND` HAS A SECTION, AND THAT IS AN INVARIANT, NOT A
@@ -516,6 +523,7 @@ class DeterministicNarrator:
         wanted = SECTIONS_FOR.get(context.audience, ALL_SECTIONS)
         builders = {
             "standing": self._standing,
+            "agent": self._agent_findings,
             "critical": self._critical_recap,
             "money": self._money,
             "closed": self._closed,
@@ -564,6 +572,50 @@ class DeterministicNarrator:
 
         return title, "\n".join(lines).strip()
 
+    def _agent_findings(self, context: ReportContext) -> List[str]:
+        """What the agent investigated and judged worth saying. REQ-036.
+
+        ⚠️ THE SAME FINDING MUST NOT APPEAR TWICE UNDER TWO NAMES. During the
+        cutover both layers run, so a Concern about equipment the blueprint
+        layer already reported this period is dropped here — the same rule, and
+        the same preference, that `pipeline._without_blueprint_subjects` applies
+        to the built-in modules. The blueprint wins while it exists because it
+        sees occupancy, schedules and tariffs; when it is retired the Concern is
+        the only report of that device and appears.
+
+        ⚠️ WORST FIRST — AND `severity_rank` MEANS THE OPPOSITE HERE FROM WHAT
+        IT MEANS IN `agent/`. Two functions, one name, inverted conventions:
+        `reports.contracts` counts UP to critical (info 0 … critical 3) and
+        `agent.contracts` counts DOWN (critical 0 … info 3). This file imports
+        the reports one, so worst-first is REVERSED order. A `sorted(key=rank)`
+        written from the agent's habit puts the critical line last, which reads
+        as "nothing much" on a phone. Caught here before it shipped; pinned by
+        `test_sections`.
+
+        ⚠️ AND IT PRINTS THE TITLE, NOT THE BODY. A Concern's body is written for
+        somebody who asked; a briefing line is read on a phone in a list. The
+        body is on the kiosk, one tap away, which is where the evidence is too.
+        """
+        rows = [r for r in (context.concerns or []) if isinstance(r, Mapping)]
+        if not rows:
+            return []
+        lines: List[str] = []
+        for row in sorted(rows, key=lambda r: severity_rank(
+                str(r.get("severity") or "")), reverse=True):
+            title = str(row.get("title") or "").strip()
+            if not title:
+                continue
+            age = row.get("age_days")
+            suffix = ""
+            # ⚠️ AGE ONLY WHEN IT IS NEWS. "Open 0 days" on everything reads as
+            # noise, and `None` means the stamp could not be parsed rather than
+            # "raised today" — printing it as today would date every finding to
+            # this morning the moment a timestamp went malformed.
+            if isinstance(age, (int, float)) and age >= 1:
+                suffix = f" — open {int(age)} day{'s' if int(age) != 1 else ''}"
+            lines.append(f"{BULLET}{title}{suffix}")
+        return ([section_heading("agent")] + lines) if lines else []
+
     def _found_anything(self, context: ReportContext) -> bool:
         """Did this report actually find something to say?
 
@@ -572,6 +624,11 @@ class DeterministicNarrator:
         """
         return bool(self._list(context, "groups")
                     or context.findings
+                    # ⚠️ TAUGHT DELIBERATELY. A section that renders while
+                    # `_found_anything` is false prints its content UNDER a
+                    # sentence saying nothing was assessed — which this file has
+                    # already shipped once, eight problems beneath a green tick.
+                    or context.concerns
                     or self._list(context, "tasks")
                     # ⚠️ A STILL-OPEN JOB IS NEWS. A week whose only content is
                     # a task raised earlier and never done is not an empty week,
@@ -675,6 +732,14 @@ class DeterministicNarrator:
         be the instrument lying, one surface further out than v2.555.0's.
         """
         worst = "info"
+        # ⚠️ THE AGENT'S FINDINGS COUNT TOO. A brief opening with a critical
+        # Concern under a title marked "all clear" is the instrument lying, one
+        # surface further out — the same failure this method was written for.
+        for item in context.concerns or []:
+            if isinstance(item, Mapping):
+                candidate = str(item.get("severity", "info"))
+                if severity_rank(candidate) > severity_rank(worst):
+                    worst = candidate
         for item in context.findings or []:
             if isinstance(item, dict):
                 candidate = str(item.get("severity", "info"))
