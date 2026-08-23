@@ -2417,14 +2417,29 @@ async def agent_shadow_handler(request: web.Request) -> web.Response:
             if isinstance(finding, dict):
                 theirs.append(finding)
 
-    # ⚠️ COVERAGE IS ASKED, NOT ASSUMED. A subject missing from BOTH columns
-    # proves nothing if neither layer was watching, and the report says so —
-    # but only if it is TOLD, so a failure to read it degrades to "incomplete"
-    # rather than to a confident empty diff.
+    # ⚠️ COVERAGE IS ASKED OVER THE PERIOD THE DIFF ACTUALLY DESCRIBES, which
+    # is the window the shadow concerns span — not "now", and not a guess.
+    # `collect.coverage(since_iso)` compares the collector's `online_since`
+    # against that instant and answers whether it was listening throughout.
+    #
+    # ⚠️ THE FIRST VERSION CALLED IT WITH NO ARGUMENT AT ALL and the exception
+    # was swallowed into a log line, so every diff this route has ever served
+    # said COVERAGE INCOMPLETE — and that banner tells the reader a subject
+    # missing from both columns proves nothing. The cutover decision would have
+    # been taken on a document that disclaimed itself. Found in the add-on log
+    # by the owner, one release after it shipped: "shadow coverage unread:
+    # coverage() missing 1 required positional argument".
     complete = False
     try:
         from reports import collect as reports_collect
-        complete = bool(reports_collect.coverage().get("complete"))
+        # The oldest concern is the start of the period being judged; with no
+        # concerns at all there is no period, and "incomplete" is the honest
+        # answer rather than a confident empty diff.
+        stamps = sorted(str(c.get("opened_at") or c.get("at") or "")
+                        for c in mine if isinstance(c, dict))
+        stamps = [t for t in stamps if t]
+        if stamps:
+            complete = bool(reports_collect.coverage(stamps[0]).get("complete"))
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         print(f"[supervisor-proxy] shadow coverage unread: {err}", flush=True)
 

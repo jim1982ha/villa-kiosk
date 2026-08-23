@@ -1,3 +1,12 @@
+## 2.661.0
+
+### Fixed — every shadow diff said its own evidence was incomplete
+The route asked the collector about coverage without telling it which period, and
+the resulting TypeError was swallowed into a log line — so the document that
+decides whether working automations can be retired opened by disclaiming itself,
+on every villa, always. It now asks about the window the diff actually describes.
+Found in the add-on log, one release after it shipped.
+
 ## 2.660.0
 
 ### Fixed — the tab strip was being squashed by its own dialog's content

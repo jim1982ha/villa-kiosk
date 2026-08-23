@@ -192,3 +192,47 @@ def test_a_reply_to_a_HUMAN_is_deliberately_not_suppressed() -> None:
     assert "suppressed" not in source, (
         "the chat path now suppresses answers; an operator running a shadow "
         "period would get silence from a bot they just messaged")
+
+
+def test_the_ROUTE_asks_coverage_with_a_WINDOW_not_with_nothing() -> None:
+    """⚠️ IT SHIPPED CALLING `coverage()` WITH NO ARGUMENT, and the TypeError
+    was swallowed into a log line — so every shadow diff this route ever served
+    said COVERAGE INCOMPLETE, and that banner tells the reader a subject missing
+    from both columns proves nothing. The PH-3 cutover decision would have been
+    taken on a document that disclaimed itself.
+
+    Found by the owner in the add-on log, one release after it shipped:
+    "shadow coverage unread: coverage() missing 1 required positional
+    argument: 'since_iso'". Nothing else could have found it — the handler
+    degrades on purpose, so the failure looked exactly like a villa that had
+    not been listening.
+    """
+    import inspect
+    import os
+    import re
+
+    from reports import collect as collect_mod
+
+    assert len(inspect.signature(collect_mod.coverage).parameters) >= 1, (
+        "collect.coverage takes no argument now; this pin is checking nothing")
+
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    with open(os.path.join(root, "rootfs", "usr", "bin", "supervisor-proxy.py"),
+              encoding="utf-8") as handle:
+        proxy = re.sub(r"#[^\n]*", "", handle.read())
+
+    # ⚠️ THE HANDLER'S OWN BODY, cut at the NEXT `async def` rather than at the
+    # first one — which is its own signature. The first cut sliced the function
+    # off at character 10 and searched an empty string, then reported "the route
+    # no longer asks about coverage at all". A slicing bug that reads as a
+    # finding is worse than no test.
+    start = proxy.index("async def agent_shadow_handler")
+    nxt = proxy.find("\nasync def ", start + 1)
+    handler = proxy[start:nxt if nxt > 0 else len(proxy)]
+    calls = re.findall(r"coverage\(([^)]*)\)", handler)
+    assert calls, "the shadow route no longer asks about coverage at all"
+    for args in calls:
+        assert args.strip(), (
+            "the shadow route calls coverage() with no window — every diff it "
+            "serves will disclaim itself as INCOMPLETE")
