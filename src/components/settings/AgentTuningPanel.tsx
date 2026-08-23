@@ -24,6 +24,7 @@
 // `validate_config` on the proxy is what actually bounds these values, and the
 // PUT is owner-only there. Nothing in this file is a control.
 
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
@@ -52,10 +53,35 @@ const EMPTY: Draft = {
   triggers: { scheduled: true, event: false, chat: false },
 };
 
+/** ⚠️ CLAMPED ON BLUR, NEVER ON KEYSTROKE, AND THE FIRST VERSION DID THE
+ *  LATTER: `onChange={Math.max(min, Number(v) || min)}` re-wrote the box on
+ *  every character, so typing "24" produced `max(5, 2)` = 5 before the 4
+ *  arrived and the field appeared stuck at its minimum. Reported as "I can't
+ *  write a number in this box".
+ *
+ *  ⚠️ AND AN EMPTY BOX IS A STATE, NOT A ZERO. Clearing it to retype gave
+ *  `Number("") || min`, which snapped straight back to the minimum — so the
+ *  field could not even be emptied. It now holds what was typed, including
+ *  nothing, and resolves once the operator leaves.
+ *
+ *  This is the rule `VillaCoordinates` already states one file over: apply on
+ *  blur, because a half-typed number is not a value. */
 function Num({ label, note, value, min, onChange }: {
   label: string; note: string; value: number; min: number;
   onChange: (v: number) => void;
 }) {
+  const [typed, setTyped] = useState<string | null>(null);
+
+  const commit = () => {
+    if (typed === null) return;
+    const parsed = Number(typed);
+    // An unparseable or empty box reverts to the stored value rather than to
+    // the minimum: the operator was editing, not asking for the floor.
+    onChange(typed.trim() === "" || !Number.isFinite(parsed)
+      ? value : Math.max(min, Math.round(parsed)));
+    setTyped(null);
+  };
+
   return (
     <label className="fm-field">
       <span>{label}</span>
@@ -63,8 +89,10 @@ function Num({ label, note, value, min, onChange }: {
         type="number"
         inputMode="numeric"
         min={min}
-        value={value}
-        onChange={(e) => onChange(Math.max(min, Number(e.target.value) || min))}
+        value={typed ?? String(value)}
+        onChange={(e) => setTyped(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
       />
       <p className="muted body-text">{note}</p>
     </label>

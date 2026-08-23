@@ -1,3 +1,11 @@
+## 2.666.0
+
+### Fixed — the number boxes in Supervision could not be typed into
+They clamped on every keystroke, so typing 24 became max(5, 2) = 5 before the 4
+arrived and the field looked stuck at its minimum; clearing it to retype snapped
+back too. They now hold what you type and resolve when you leave the box — the
+same rule the villa coordinates have followed since they hit this first.
+
 ## 2.665.0
 
 ### Fixed — the cutover page listed ten hashes instead of ten findings
