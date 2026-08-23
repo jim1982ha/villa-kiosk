@@ -84,6 +84,18 @@ EXEMPT: Dict[str, str] = {
     "status": "budget diagnostics for an operator; the Cockpit reads the "
               "narrower `summary()` instead",
 
+    "compose": "⚠️ THE WHOLE DEGRADATION LADDER IS UNREACHABLE. `fallback.py` "
+               "renders four rungs — Tier 3 down, Tier 2 down, no WAN, nothing "
+               "at all — each stating which rung it is, and NOTHING CALLS IT. "
+               "REQ-042's acceptance is 'each rung asserted separately', which "
+               "is true and is not the same as any of them ever being USED: a "
+               "component that fails silently still makes the villa look quiet "
+               "(RISK-015). Found by TASK-101 after this check was corrected to "
+               "stop counting prose in TSX as a caller. Recorded as TASK-111",
+    "reset": "clears every chat thread. Its own docstring says what it is for — "
+             "tests, and a kill-switch flip — and a kill switch nothing calls "
+             "from code is still a kill switch",
+
     # ── surfaces whose consumer chose to do the work elsewhere ──
     "passes": "the triage-pass reader. `loadTriagePasses` fetches /agent-audit "
               "and filters `tool.startswith('pass:')` in the browser instead, "
@@ -98,13 +110,23 @@ EXEMPT: Dict[str, str] = {
 
 
 def _shipped() -> Dict[str, str]:
-    """Every tracked file under `rootfs/` and `src/`, by path.
+    """Every tracked **Python** file under `rootfs/`, by path.
 
     ⚠️ TRACKED, NOT ON DISK. A caller that exists only in an untracked scratch
     file is not a caller — the same rule `test_hard_rules` learned the hard way,
     one release late.
+
+    ⚠️ AND PYTHON ONLY, WHICH IS A CORRECTION. This walked `src/` as well, and a
+    TypeScript file cannot call a Python function — so the only thing that
+    scope could ever contribute was a FALSE NEGATIVE, and it contributed a real
+    one: `redact.wrap`, the delimiter half of RISK-001's stated control, had no
+    caller anywhere and was passed by this check because a prose fragment in
+    `SettingsModal.tsx` reads `flex-wrap (not`, and a hyphen is not in the
+    character class the lookbehind excludes. A short, common name plus prose in a
+    language that cannot call it is the whole false-negative class, and
+    narrowing the corpus removes it rather than patching the regex.
     """
-    out = subprocess.run(["git", "ls-files", "rootfs/", "src/"],
+    out = subprocess.run(["git", "ls-files", "rootfs/**/*.py"],
                          capture_output=True, text=True, cwd=REPO_ROOT)
     files: Dict[str, str] = {}
     for rel in out.stdout.split():

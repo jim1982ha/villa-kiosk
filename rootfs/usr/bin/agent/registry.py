@@ -263,7 +263,19 @@ async def invoke(registry: Registry, *, policy: policy_mod.RunPolicy,
                                 "the result could not be shown safely")],
                           allowed=False, verdict="deny")
 
-    return Invocation(scrubbed, allowed=True, verdict=verdict.verdict)
+    # ⚠️ FENCED AFTER THE SCRUB AND THE AUDIT, NOT BEFORE. The audit walks the
+    # finished object looking for what should not be there; adding our own
+    # marker text first would put a string into it that the second opinion has
+    # to be taught to ignore, which is how a second opinion stops being one.
+    #
+    # ⚠️ THIS LINE IS THE OTHER HALF OF RISK-001's CONTROL, and it did not
+    # exist. `redact.wrap` was written for it and never called, so every tool
+    # result reached the transcript scrubbed but undelimited — the model could
+    # not see where the villa's words stopped. Found by TASK-101's adversarial
+    # pass, and only after `test_reachability` was corrected to stop counting a
+    # prose fragment in a TSX comment as a caller.
+    return Invocation(redact.wrap_blocks(scrubbed), allowed=True,
+                      verdict=verdict.verdict)
 
 
 async def _invoke(call: ToolCall, *, registry: Registry,
