@@ -256,6 +256,12 @@ def test_every_BaseTool_subclass_reaches_ALL_TOOLS_or_is_a_stated_exception() ->
                       "could act on nothing while appearing in the registry the "
                       "MCP server filters, where its exclusion should never "
                       "have to be relied upon",
+        "RaiseConcern": "bound to one RUN at construction — this run's ref "
+                        "table, this run's evidence accumulator and this run's "
+                        "frozen policy snapshot. An unbound instance would "
+                        "resolve no handle, cite no evidence and write to no "
+                        "store, so collecting it would teach every scheduled "
+                        "run a verb that always refuses",
         "BaseTool": "the base class itself",
     }
 

@@ -42,13 +42,15 @@ const MIN_TRIAGE_MINUTES = 5;
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
   "enabled" | "shadow" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
-  | "maxTurns" | "maxToolCalls" | "modelTriage" | "modelReason" | "modelBrief"
+  | "maxTurns" | "maxToolCalls" | "investigateMode"
+  | "maxInvestigationsPerPass" | "modelTriage" | "modelReason" | "modelBrief"
   | "modelChat">
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
   enabled: false, shadow: true, triageMinutes: 15, monthlyLimit: 4000,
   chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24,
+  investigateMode: "auto", maxInvestigationsPerPass: 3,
   modelTriage: "", modelReason: "", modelBrief: "", modelChat: "",
   triggers: { scheduled: true, event: false, chat: false },
 };
@@ -210,6 +212,14 @@ export default function AgentTuningPanel() {
     chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
     maxTurns: Number(c.maxTurns ?? EMPTY.maxTurns),
     maxToolCalls: Number(c.maxToolCalls ?? EMPTY.maxToolCalls),
+    // ⚠️ ANYTHING THAT IS NOT `approve` READS AS `auto`, matching the backend's
+    // own default rather than trusting the stored value to be one of the two.
+    // A config written by a newer version survives a downgrade untouched
+    // (`config.view` keeps unknown keys), so this box can be handed a word it
+    // has never heard of.
+    investigateMode: c.investigateMode === "approve" ? "approve" : "auto",
+    maxInvestigationsPerPass: Number(
+      c.maxInvestigationsPerPass ?? EMPTY.maxInvestigationsPerPass),
     modelTriage: String(c.modelTriage ?? ""),
     modelReason: String(c.modelReason ?? ""),
     modelBrief: String(c.modelBrief ?? ""),
@@ -266,6 +276,31 @@ export default function AgentTuningPanel() {
         note="Ring-fenced, so a long conversation cannot starve the checks."
         value={draft.chatMonthlyLimit} min={0}
         onChange={(v) => edit({ chatMonthlyLimit: v })}
+      />
+
+      {/* ⚠️ THESE TWO BELONG HERE AND NOT UNDER "How hard it may think", by the
+          owner's own placement (ADR-021). That section is about ONE
+          investigation's depth; this is about how many investigations a check
+          may start, which is where the bill moves from per-check to
+          per-finding — the same question the two boxes above answer. */}
+      <label className="toggle">
+        <input type="checkbox"
+          checked={draft.investigateMode === "auto"}
+          onChange={(e) => edit({
+            investigateMode: e.target.checked ? "auto" : "approve" })} />
+        <span>Look into what a check flags, without asking first</span>
+      </label>
+      <p className="muted body-text">
+        On by default, because “observe only” above already stops anything being
+        sent. Off records what was flagged and spends nothing until you say so.
+      </p>
+      <Num
+        label="Investigations per check, at most"
+        note={"Each one is a full, expensive look at a single thing."
+              + " Anything over the limit waits for the next check rather"
+              + " than being lost."}
+        value={draft.maxInvestigationsPerPass} min={0}
+        onChange={(v) => edit({ maxInvestigationsPerPass: v })}
       />
 
       <div className="settings-section-title">

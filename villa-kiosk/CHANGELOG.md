@@ -1,3 +1,16 @@
+## 2.688.0
+
+### Added — an escalated subject is now investigated, and the investigation can file a finding
+Triage escalated two real subjects on the reference villa and produced nothing,
+because two links of one chain were specified and assigned to nobody:
+`raise_concern` was in the tool catalogue and the MCP server was told to serve
+it, yet no code built it — so the whole delivery half, lifecycle and dedup and
+severity and routing, was finished functions with no caller — and the scheduler
+formatted triage's escalations into a string and returned. Both exist now, with
+`read_concerns` wired beside them: it had returned nothing since it shipped,
+which only mattered once something could write. Two dials under Cadence and cost
+decide whether a finding is followed automatically, and how many per check.
+
 ## 2.687.0
 
 ### Fixed — the blank line between a checkbox and its description, in one rule this time

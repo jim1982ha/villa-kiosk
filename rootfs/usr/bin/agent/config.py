@@ -44,6 +44,22 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: ⚠️ OFF, AND SEPARATELY. Reading and reasoning are safe; acting is not.
     "act_enabled": False,
     "triggers": {"scheduled": True, "event": False, "chat": False},
+    #: ⚠️ WHAT HAPPENS WHEN TRIAGE ESCALATES (ADR-021, owner decision
+    #: 2026-08-23). "auto" investigates; "approve" records the escalation and
+    #: waits for a person. AUTO IS THE DEFAULT, and it is safe as a default only
+    #: because `shadow` below suppresses delivery — auto-in-shadow is exactly
+    #: PH-3's "run everything, deliver nothing": the concerns accumulate for the
+    #: diff and reach nobody. If shadow is ever turned off while this is auto,
+    #: findings start messaging people, which is the cutover and is meant to be.
+    "investigate_mode": "auto",
+    #: ⚠️ HOW MANY INVESTIGATIONS ONE PASS MAY START. A bound on the worst case
+    #: rather than a judgement about which findings matter: a pass escalating
+    #: six subjects would otherwise be six frontier-model runs, and this is the
+    #: tier where cost moves from per-PASS to per-FINDING. 3 by the owner's
+    #: choice, on the reasoning that a real fault is still a fault fifteen
+    #: minutes later — missing the top three delays it by one cadence, it does
+    #: not lose it.
+    "max_investigations_per_pass": 3,
     #: ⚠️ SHADOW MODE: run everything, deliver NOTHING (ARCH-016). Not a push,
     #: not a brief line, not a kiosk badge. It is how the claim that the agent
     #: outperforms the rules stops being a prediction — the concerns are
@@ -176,8 +192,15 @@ def errors(value: Any) -> List[str]:
                 if not isinstance(on, bool):
                     problems.append(f"triggers.{name} must be true or false")
 
+    mode = value.get("investigate_mode")
+    if mode is not None and mode not in ("auto", "approve"):
+        # ⚠️ REFUSED, NOT DEFAULTED — the same rule `allowed_senders` states
+        # below. Defaulting a typo here would silently pick one of two
+        # behaviours that differ by whether the villa spends money unattended.
+        problems.append("investigate_mode must be 'auto' or 'approve'")
+
     for name in ("triage_minutes", "monthly_limit", "chat_monthly_limit",
-                 "max_turns", "max_tool_calls"):
+                 "max_turns", "max_tool_calls", "max_investigations_per_pass"):
         if name not in value:
             continue
         raw = value[name]

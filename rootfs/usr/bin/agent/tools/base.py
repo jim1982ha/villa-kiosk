@@ -136,9 +136,18 @@ class BaseTool:
     name: str = ""
     description: str = ""
     inputSchema: Dict[str, Any] = {"type": "object", "properties": {}}
-    #: Which tiers may invoke this. ⚠️ Triage cannot act, cannot notify and
-    #: cannot write — enforced by the registry reading this, never by asking the
-    #: model to behave.
+    #: Which tiers a tool is MEANT for. ⚠️ DOCUMENTATION, NOT ENFORCEMENT, AND
+    #: THIS SAID THE OPPOSITE UNTIL /dry-audit CHECKED IT — "enforced by the
+    #: registry reading this" was written when the design was drawn, and nothing
+    #: has ever read `.tiers`: `grep -rn "\.tiers\b"` over the whole tree returns
+    #: no reader. What actually keeps triage from writing is TWO real mechanisms
+    #: below and beside it — `policy.may_use_tool` denies every non-READ `mode`
+    #: to the triage tier, and `triage.registry_for` narrows the tool set to
+    #: `TRIAGE_TOOLS` BY NAME. Both are tested. A reader coming here to add a
+    #: tool must set `mode` correctly; setting `tiers` alone protects nothing.
+    #: It is kept because it states intent at the tool, which is where a reader
+    #: looks first — but a comment claiming a gate that does not exist is worse
+    #: than no comment, and this one invited exactly that mistake.
     tiers: Sequence[str] = ("triage", "reason")
     #: READ or WRITE. The registry refuses a WRITE tool to a read-only run.
     mode: str = "READ"

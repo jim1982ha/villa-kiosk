@@ -29,6 +29,7 @@ from agent import contracts, policy as policy_mod
 from agent.llm.base import Provider
 from agent.registry import Registry, RunResult, build_registry
 from agent.registry import run as run_loop
+from agent.tools import concern as concern_mod
 from reports.log import log, swallow
 
 #: How long a whole investigation may take, wall clock. ⚠️ NOT A TURN LIMIT —
@@ -166,10 +167,44 @@ async def investigate(*, provider: Provider,
                            reason="the agent is switched off (agent.enabled)")
 
     try:
-        reg = registry if registry is not None else build_registry()
-        policy = policy_mod.for_run(
-            config, tier=tier,
-            tool_names=[t["name"] for t in reg.describe()])
+        reg = registry if registry is not None else build_registry(config=config)
+
+        # ⚠️ THE RUN'S EVIDENCE, OWNED HERE BECAUSE TWO THINGS NEED IT AT
+        # DIFFERENT TIMES: the loop appends to it as tools return, and
+        # `raise_concern` reads it mid-run to check the figures the model wrote.
+        # Copying it out of the RunResult afterwards would put the evidence rule
+        # after the last chance to correct anything.
+        evidence: List[Dict[str, Any]] = []
+
+        # ⚠️ THE WRITE TOOL IS FOR THE REASONING TIER AND NOT FOR TRIAGE — two
+        # independent barriers, both cheap. `policy.may_use_tool` denies every
+        # WRITE to the triage tier whatever the registry holds, and triage
+        # additionally never sees the tool: `triage.registry_for` narrows to
+        # `read_villa` by name, and adding this one afterwards would have widened
+        # the tier that runs ninety-six times a day past the one tool it may use.
+        writes = tier != "triage"
+
+        # ⚠️ THE POLICY IS SNAPSHOTTED OVER THE FINAL TOOL SET, INCLUDING THE ONE
+        # NOT BUILT YET. `may_use_tool` denies any name not in `allowed_tools`,
+        # so a tool registered after the snapshot is a tool the gate refuses —
+        # which would have made this whole feature a `not_permitted` block. The
+        # name comes off the class, so the two can never drift.
+        names = [t["name"] for t in reg.describe()]
+        if writes:
+            names.append(concern_mod.RaiseConcern.name)
+        policy = policy_mod.for_run(config, tier=tier, tool_names=names)
+
+        if writes:
+            # ⚠️ EVERY PER-RUN BINDING IS A CONSTRUCTOR ARGUMENT, never assigned
+            # afterwards: this run's refs, this run's evidence, this run's policy
+            # snapshot. The sink is what carries the policy and the config, so
+            # the model can neither choose its store nor outlive a suppression —
+            # see `tools/concern.py:writer`.
+            reg = reg.with_tool(concern_mod.RaiseConcern(
+                refs=getattr(reg, "refs", None),
+                evidence_source=lambda: evidence,
+                sink=concern_mod.writer(policy, config)))
+
         bounded = _Bounded(provider, deadline_s=deadline_s, started=started)
         result: RunResult = await run_loop(
             run_id=ident, provider=bounded, registry=reg, policy=policy,
@@ -177,7 +212,7 @@ async def investigate(*, provider: Provider,
                       or ""),
             system=system, messages=messages, config=config,
             actor=actor, trigger=trigger,
-            kind="chat" if trigger == "chat" else "run")
+            kind="chat" if trigger == "chat" else "run", evidence=evidence)
     except Exception as err:  # noqa: BLE001 - REQ-043: nothing escapes
         swallow(f"investigation {ident} raised", err)
         return AgentResult(run_id=ident, status="failed", trigger=trigger,

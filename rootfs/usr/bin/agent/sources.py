@@ -347,13 +347,51 @@ def _facility_record() -> Optional[Dict[str, Any]]:
             "resolved": summary.get("tickets_resolved", 0)}
 
 
-def build_tools(session: Any = None) -> List[BaseTool]:
+def concern_rows(config: Optional[Mapping[str, Any]] = None
+                 ) -> Callable[[], List[Dict[str, Any]]]:
+    """What is already open — FROM THE STORE THE WRITES ARE GOING TO.
+
+    ⚠️ `read_concerns` HAD NO SOURCE AT ALL AND RETURNED `[]` FOREVER, which
+    only became load-bearing the day something could write one. Its whole job is
+    to stop the agent raising the same thing twice, and `concerns.raise_concern`
+    REFUSES a second concern on an open subject unless it says what it
+    supersedes — so an unwired reader means the model is told to check, sees
+    nothing, writes, and is refused with no way to comply.
+
+    ⚠️ IT FOLLOWS SHADOW MODE, because the writes do. Reading the live store
+    during a shadow period would show the model an empty villa while its own
+    concerns piled up next door, and it would supersede nothing and be refused
+    on every repeat.
+    """
+    def rows() -> List[Dict[str, Any]]:
+        try:
+            from agent import shadow as shadow_mod
+            if shadow_mod.suppressed(config):
+                return list(shadow_mod.recorded())
+            from agent import concerns as concerns_mod
+            return list(concerns_mod.read())
+        except Exception as err:  # noqa: BLE001 - degrade, never fail
+            swallow("could not read the concern store", err)
+            return []
+
+    return rows
+
+
+def build_tools(session: Any = None, *,
+                config: Optional[Mapping[str, Any]] = None,
+                refs: Optional[RefTable] = None) -> List[BaseTool]:
     """Every tool, connected to this villa.
 
     ⚠️ ONE CONSTRUCTION SITE. `build_registry` calls this and the MCP server
     serves whatever it returns, so a tool wired here is wired for both — which
     is the whole point of ARCH-012 and the reason the unwired version was a
     single defect rather than two.
+
+    ⚠️ `raise_concern` IS THE ONE TOOL NOT BUILT HERE, and `agent/tools/concern.py`
+    says why at its own tail: it is bound to one RUN's evidence and policy, not
+    to one villa's data, so `runtime.investigate` builds it. `refs` is accepted
+    rather than built so that the per-run tool can be handed the SAME table these
+    tools mint into.
     """
     from agent.tools import ha as ha_tools
     from agent.tools import ledger as ledger_tools
@@ -362,7 +400,7 @@ def build_tools(session: Any = None) -> List[BaseTool]:
     from agent.tools import read as read_tools
 
     rows = _journal_rows()
-    refs = build_refs(rows)
+    refs = build_refs(rows) if refs is None else refs
     made: List[BaseTool] = [
         # ⚠️ THE SAME BUILDER THE SYSTEM PROMPT USES. A tool that described the
         # villa differently from the document beside it sent the model round the
@@ -374,13 +412,16 @@ def build_tools(session: Any = None) -> List[BaseTool]:
         read_tools.ReadVilla(
             document_source=lambda hours=None: build_document(window_hours=hours)),
         read_tools.ReadSalient(scorer=build_scorer(rows), refs=refs),
+        read_tools.ReadConcerns(store=concern_rows(config)),
     ]
     # ⚠️ THE REST KEEP THEIR CURRENT SOURCES UNTIL EACH HAS ONE. A tool with no
     # source now REFUSES and says so, so an unwired member of this list is
     # loudly missing rather than quietly empty — which is what let the previous
     # gap survive. Adding a source here is the only change needed.
+    _wired = (read_tools.ReadVilla, read_tools.ReadSalient,
+              read_tools.ReadConcerns)
     for cls in read_tools.READ_TOOLS:
-        if cls not in (read_tools.ReadVilla, read_tools.ReadSalient):
+        if cls not in _wired:
             made.append(cls())
     made.extend(cls(refs=refs) for cls in ha_tools.HA_TOOLS)
     made.extend(cls(refs=refs) for cls in log_tools.LOG_TOOLS)

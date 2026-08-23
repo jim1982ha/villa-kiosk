@@ -41,7 +41,14 @@ from reports.log import log, swallow
 class Registry:
     """Every tool this deployment offers, by name. A table, not a branch."""
 
-    def __init__(self, tools: Sequence[BaseTool]) -> None:
+    def __init__(self, tools: Sequence[BaseTool], *, refs: Any = None) -> None:
+        #: ⚠️ THIS RUN'S REF TABLE, CARRIED SO A PER-RUN TOOL CAN JOIN IT.
+        #: `raise_concern` is built by `runtime.investigate` — after this — and
+        #: has to resolve the SAME handles the read tools minted, because `d3`
+        #: means different devices in different runs by design (`refs.py`).
+        #: Building a second table there would have produced a concern about
+        #: whatever device happened to sit at that index instead.
+        self.refs = refs
         self._tools: Dict[str, BaseTool] = {}
         for tool in tools:
             if tool.name in self._tools:
@@ -70,10 +77,11 @@ class Registry:
         including scheduled ones with no conversation at all — so the next
         brief would hold a tool pointing at whoever last sent a message.
         """
-        return Registry(list(self._tools.values()) + [tool])
+        return Registry(list(self._tools.values()) + [tool], refs=self.refs)
 
 
-def build_registry(tools: Optional[Sequence[BaseTool]] = None) -> Registry:
+def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
+                   config: Optional[Mapping[str, Any]] = None) -> Registry:
     """The deployment's registry, CONNECTED TO THIS VILLA.
 
     ⚠️ ONE construction site, so the MCP server and the in-process loop cannot
@@ -91,7 +99,11 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None) -> Registry:
         return Registry(list(tools))
     try:
         from agent import sources
-        return Registry(sources.build_tools())
+        refs = sources.build_refs()
+        # ⚠️ THE TABLE IS BUILT HERE AND PASSED IN, rather than built inside
+        # `build_tools` and lost. It is the run's only ref table: the read tools
+        # mint handles into it and `raise_concern` resolves them back out of it.
+        return Registry(sources.build_tools(config=config, refs=refs), refs=refs)
     except Exception as err:  # noqa: BLE001 - a broken source is not a dead
         swallow("could not wire the tools to this villa", err)   # registry
         return Registry([cls() for cls in ALL_TOOLS])
@@ -117,7 +129,8 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
               messages: Sequence[Mapping[str, Any]],
               config: Optional[Mapping[str, Any]] = None,
               actor: str = "system", trigger: str = "scheduled",
-              kind: str = "run") -> RunResult:
+              kind: str = "run",
+              evidence: Optional[List[Dict[str, Any]]] = None) -> RunResult:
     """One reasoning run: turn, tools, turn, until it stops or a bound binds.
 
     ⚠️ EVERY BOUND IS CHECKED BEFORE THE CALL AND THE RUN DECLINES RATHER THAN
@@ -125,8 +138,17 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
     correct outcomes; collapsing them into a failure would make a working system
     look broken in every count that matters and hide the one case that needs an
     engineer.
+
+    ⚠️ `evidence` IS AN ACCUMULATOR THE CALLER MAY OWN, AND IT IS HOW THE
+    EVIDENCE RULE IS ENFORCED AT ALL (ARCH-006). Every allowed tool call appends
+    a row to it, and `raise_concern` — built per run by `runtime.investigate` —
+    reads it at the moment it is called, so a figure the model writes is checked
+    against what THIS run actually read. Passing the list in rather than copying
+    `result.evidence` out afterwards is the whole point: the check happens mid
+    run, while there is still a turn left to correct it.
     """
-    result = RunResult(run_id=run_id)
+    result = RunResult(run_id=run_id,
+                       evidence=evidence if evidence is not None else [])
     audit_mod.record_run(run_id, actor=actor, trigger=trigger,
                          verdict="started")
     breaker = budget_mod.shared_breaker()
@@ -256,6 +278,7 @@ async def _invoke(call: ToolCall, *, registry: Registry,
             "tool": call.name,
             "args_digest": contracts.args_digest(call.args),
             "summary": _summarise(outcome.blocks),
+            "cited": _citable(outcome.blocks),
         })
     return _tool_result(call, outcome.blocks)
 
@@ -274,11 +297,40 @@ def _tool_result(call: ToolCall, blocks: Any) -> Dict[str, Any]:
     return {"type": "tool_result", "tool_use_id": call.id, "content": blocks}
 
 
+#: How much of a tool result a person sees on the concern it supports.
+SUMMARY_CHARS: int = 200
+
+#: How much of it the EVIDENCE RULE may check a figure against.
+#: ⚠️ TWO NUMBERS BECAUSE THEY ANSWER TWO QUESTIONS, AND COLLAPSING THEM MADE
+#: THE RULE ACCUSE THE MODEL OF INVENTING WHAT IT HAD JUST READ. `render.enforce`
+#: strips any figure absent from the cited text, and until this split the cited
+#: text WAS the 200-character summary — so a run that read a ranking of
+#: twenty-five devices could source a number from the first entry and nothing
+#: after it. The model would be told, correctly formatted and completely wrongly,
+#: that its figure was unsourced. Storage wants brevity (2,000 concerns × N rows
+#: on a villa's disk); the check wants completeness. Each gets what it needs.
+#: It is set to `tools.base.DEFAULT_MAX_RESULT_CHARS` — the cap a tool applies
+#: when it calls `truncate`. ⚠️ NOT EVERY TOOL DOES, so this is a real bound and
+#: not a restatement of one: seven of the tool modules never call `truncate`,
+#: because their results are small by construction. This is what catches the one
+#: that stops being.
+CITED_CHARS: int = 8_000
+
+
 def _summarise(blocks: Any) -> str:
     """One short line per evidence row. ⚠️ Bounded, because evidence is stored
     with a concern and a whole tool result would be stored with it."""
     text = str(blocks)
-    return text[:200] + ("…" if len(text) > 200 else "")
+    return text[:SUMMARY_CHARS] + ("…" if len(text) > SUMMARY_CHARS else "")
+
+
+def _citable(blocks: Any) -> str:
+    """The whole result, for `render.enforce` to check figures against.
+
+    ⚠️ IN MEMORY FOR THE RUN, NOT STORED. `tools/concern.py` drops this key
+    before the evidence reaches the concern store — see its `_stored_evidence`.
+    """
+    return str(blocks)[:CITED_CHARS]
 
 
 def _decline(result: RunResult, reason: str, run_id: str, actor: str) -> RunResult:

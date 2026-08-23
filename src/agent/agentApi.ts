@@ -39,6 +39,8 @@ const AGENT_WIRE_KEYS = {
   chat_monthly_limit: "chatMonthlyLimit",
   max_turns: "maxTurns",
   max_tool_calls: "maxToolCalls",
+  investigate_mode: "investigateMode",
+  max_investigations_per_pass: "maxInvestigationsPerPass",
   model_triage: "modelTriage",
   model_reason: "modelReason",
   model_chat: "modelChat",
@@ -143,6 +145,12 @@ export interface AgentConfig {
   maxTurns: number;
   maxToolCalls: number;
   modelTriage: string;
+  /** What happens when triage escalates (ADR-021). `auto` investigates;
+   *  `approve` records the escalation and waits for a person. */
+  investigateMode: "auto" | "approve";
+  /** How many investigations one pass may start. Bounds the worst case; this
+   *  is the tier where cost moves from per-pass to per-finding. */
+  maxInvestigationsPerPass: number;
   modelReason: string;
   /** ⚠️ ITS OWN TIER SINCE 2.664.0. Chat ran on `modelReason` — the frontier
    *  model — for every question typed at the villa. */

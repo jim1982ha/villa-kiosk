@@ -55,10 +55,20 @@ class Rendered:
 
 
 def _cited(evidence: Sequence[Mapping[str, Any]]) -> str:
-    """Every evidence summary as one searchable blob."""
+    """Every evidence row as one searchable blob.
+
+    ⚠️ `cited` FIRST, `summary` AS THE FALLBACK, AND THE ORDER IS THE FIX FOR A
+    RULE THAT ACCUSED THE MODEL OF INVENTING WHAT IT HAD READ. `summary` is
+    truncated to 200 characters for the person who reads the concern later, so
+    checking figures against it alone stripped everything a tool reported past
+    its first line — see `registry.CITED_CHARS`. A row with no `cited` key is a
+    stored concern being re-checked after the fact, where the summary is all
+    there is; both are read so neither case is wrong.
+    """
     parts: List[str] = []
     for row in evidence:
         if isinstance(row, Mapping):
+            parts.append(str(row.get("cited") or ""))
             parts.append(str(row.get("summary") or ""))
             parts.append(str(row.get("args_digest") or ""))
     return " ".join(parts)

@@ -37,6 +37,7 @@ from typing import Any, Callable, Mapping, Optional
 from agent import audit
 from agent import budget as budget_mod
 from agent import config as agent_config
+from agent import reason as reason_mod
 from agent import triage as triage_mod
 from reports.log import log, swallow, warn
 
@@ -159,8 +160,22 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
         # this log line is the human-readable half of that distinction.
         return "nothing to escalate"
 
+    # ⚠️ THE ESCALATIONS ARE FOLLOWED, NOT FORMATTED. This function used to build
+    # the sentence below and return — so Tier 2 told Tier 3 nothing, ever, and
+    # the two real subjects an owner's pass escalated produced no concern at all.
+    # `reason.follow_up` never raises: it is called from a background clock.
+    follow = await reason_mod.follow_up(
+        result.escalations, provider=provider, document=document,
+        config=config, trigger=trigger)
+
     subjects = ", ".join(e.subject for e in result.escalations[:3])
-    return f"escalated {len(result.escalations)}: {subjects}"
+    # ⚠️ THE CLAUSE GOES BEFORE THE COLON, and `Followup.clause` may not contain
+    # one. `run_once` recovers the escalated COUNT from `head.split()[1]` and the
+    # SUBJECTS from everything after the first ": ", so a clause appended at the
+    # end would be filed as part of the subject list — the audit row lying about
+    # what was escalated, in the record the cutover is read from.
+    return (f"escalated {len(result.escalations)} "
+            f"({follow.clause()}): {subjects}")
 
 
 async def run_forever(session: Any,

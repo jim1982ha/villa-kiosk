@@ -61,6 +61,17 @@ SERVER_NAME: str = "vesta"
 #: is a read-only mirror and the extraction seam does not carry the product.
 #: It is also the ONLY write that cannot touch the villa: it appends a record a
 #: person then reads. Everything else that writes is `ACT` and is not here.
+#:
+#: ⚠️ AND THE TOOL IS NOT IN THE SHIPPED REGISTRY THIS FILTERS, SO THIS SURFACE
+#: CURRENTLY PUBLISHES NO WRITE AT ALL. That is a fact about the tool rather than
+#: a gap in this list: `raise_concern` is built per RUN by `runtime.investigate`,
+#: bound to that run's ref table, evidence accumulator and frozen policy — none
+#: of which an MCP caller has. An unbound instance would resolve no handle, cite
+#: no evidence and write to no store, so exporting one would publish a verb that
+#: always refuses. Serving it means giving a remote caller a run to be part of,
+#: which is a design question and not a line in this tuple. The allow-list stays
+#: as it is: it states the intent, and `test_agent_mcp` proves it admits nothing
+#: else.
 EXPORTED_WRITES: Tuple[str, ...] = ("raise_concern",)
 
 #: ⚠️ AN ALLOW-LIST OF MODES. Not `!= "ACT"` — that is a deny-list wearing an
