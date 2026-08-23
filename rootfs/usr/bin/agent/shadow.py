@@ -108,7 +108,13 @@ def _subjects(rows: Sequence[Mapping[str, Any]], key: str,
             continue
         subject = str(row.get(key) or "")
         if subject:
-            out.setdefault(subject, str(row.get(label) or subject))
+            # ⚠️ NEVER THE KEY AS A LABEL. It used to fall back to the
+            # subject_key, so a finding stored without a title rendered as a
+            # SHA-256 prefix — ten of them on the page a cutover is decided
+            # from. An opaque hash is not a label a person can weigh; saying
+            # the title is missing is at least a fact they can act on.
+            out.setdefault(subject, str(row.get(label) or "")
+                           or f"(untitled finding {subject[:8]})")
     return out
 
 

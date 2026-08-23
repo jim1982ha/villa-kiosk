@@ -272,3 +272,51 @@ def test_a_history_ENTRY_carries_its_findings_not_just_a_count() -> None:
     assert '"detail"' not in entry, (
         "the stored findings carry prose — the history ring is bounded and "
         "this is what makes it expensive")
+
+
+def test_a_row_NEVER_renders_as_its_own_subject_key() -> None:
+    """⚠️ THE CUTOVER PAGE LISTED TEN SHA-256 PREFIXES. `_subjects` fell back to
+    the subject_key when a stored finding had no title, and the blueprint half
+    of the history record was written with `getattr(g, "title")` — a field
+    `Group` does not have, so every one of them was empty.
+
+    `29d2dd0f3a69762c` is not a label a person can weigh, and this is the page
+    the PH-3 decision is taken from. Saying the title is missing is at least a
+    fact somebody can act on.
+    """
+    rows = [{"subject_key": "29d2dd0f3a69762c", "title": ""}]
+    out = shadow.diff([], rows)
+    rendered = out.rules_only[0].by_rules
+    assert "29d2dd0f3a69762c" != rendered, (
+        "a finding with no title renders as its own hash")
+    assert "untitled" in rendered.lower()
+
+
+def test_the_history_record_reads_the_field_a_GROUP_actually_has() -> None:
+    """⚠️ `Group.label`, NOT `Group.title`. The record builder asked for a field
+    the dataclass does not define, and `getattr(…, "title", "")` answers "" for
+    a missing attribute rather than raising — so ten blueprint findings were
+    stored titleless and nothing failed."""
+    import inspect
+    import re
+
+    from reports.aggregate import Group
+    from reports import pipeline as pipeline_mod
+
+    # ⚠️ ANNOTATIONS, NOT `dataclasses.fields` — `Group` is a plain class with
+    # a hand-written __init__, and asking dataclasses about it raises. The
+    # first version of this pin failed on the tool rather than on the code.
+    names = set(getattr(Group, "__annotations__", {}))
+    assert "label" in names and "title" not in names, (
+        "Group's fields changed; this pin is checking the wrong one")
+
+    # ⚠️ COMMENTS STRIPPED. The note explaining this very fix quotes the
+    # offending expression, and without this the pin fires on the prose — the
+    # SEVENTH time a source-reading check in this repo has matched its own
+    # explanation.
+    source = re.sub(r"#[^\n]*", "", inspect.getsource(pipeline_mod.run_report))
+    entry = source[source.index('entry: Dict[str, Any] = {'):]
+    entry = entry[:entry.index("\n    }")]
+    assert not re.search(r'getattr\(g,\s*"title"', entry), (
+        "the record builder reads Group.title again — a field that does not "
+        "exist, so every blueprint finding is stored without one")

@@ -65,8 +65,15 @@ export default function ShadowDiffPanel() {
     setBusy(true);
     setNote(null);
     const result = await runAgentNow();
+    // ⚠️ A RUN IS NOT A CONCERN, AND SAYING SO IS THE HONEST ANSWER. This
+    // asks the villa a question and reads the reply; a CONCERN — which is what
+    // the diff compares — is raised by the triage path when something crosses
+    // the bar. So a finished run legitimately adds nothing here, and the first
+    // wording ("anything it concluded is below") implied otherwise.
     setNote(result.ok
-      ? "The run finished. Anything it concluded is below."
+      ? "The run finished. It only adds to the list below if it found "
+        + "something worth raising as a concern — a run that concludes the "
+        + "villa is fine adds nothing, which is not a failure."
       : `The run did not complete: ${result.reason}`);
     setDiff(await loadShadowDiff());
     setBusy(false);

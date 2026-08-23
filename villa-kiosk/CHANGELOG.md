@@ -1,3 +1,11 @@
+## 2.665.0
+
+### Fixed — the cutover page listed ten hashes instead of ten findings
+A blueprint finding was stored by asking a `Group` for a `title` it does not
+have, and the diff fell back to the subject key when a title was empty — so the
+page a cutover is decided from showed `29d2dd0f3a69762c` ten times. It reads
+`label` now, and a titleless row can never render as its own hash again.
+
 ## 2.664.0
 
 ### Fixed — chat was answering every question on the most expensive model, uncached

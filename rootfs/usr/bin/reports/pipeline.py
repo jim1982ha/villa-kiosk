@@ -735,8 +735,14 @@ async def run_report(
                        "title": str(f.get("label") or ""),
                        "severity": str(f.get("severity") or "")}
                       for f in findings if isinstance(f, dict)]
+                     # ⚠️ `label`, NOT `title` — a Group has no `title` and
+                     # `getattr(g, "title", "")` returned "" for every one of
+                     # them, so `shadow._subjects` fell back to its key and the
+                     # cutover page listed ten SHA-256 prefixes. A reader cannot
+                     # decide anything from `29d2dd0f3a69762c`. Both sides of
+                     # this expression now read the field the dataclass has.
                      + [{"subject_key": key,
-                         "title": str(getattr(g, "title", "") or ""),
+                         "title": str(getattr(g, "label", "") or ""),
                          "severity": str(getattr(g, "severity", "") or "")}
                         for g in grouped
                         for key in sorted(getattr(g, "subject_keys", set)()
