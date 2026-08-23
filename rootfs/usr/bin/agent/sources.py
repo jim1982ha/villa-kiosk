@@ -329,6 +329,20 @@ async def refresh_layout(session: Any, *, now: Optional[float] = None,
         if stamp - at < max(1, hours) * 3600.0:
             return False
 
+        # ⚠️ THESE TWO LINES ARE AN INTERIM TRANSPORT AND TASK-113 REPLACES
+        # THEM. `ha_mcp` serves `ha_list_floors_areas`, which is strictly better
+        # than this: it reads ONE consistent registry snapshot, nests areas
+        # under their floors, and separates areas with no floor from areas whose
+        # floor_id points at a floor that does not exist. This reads the two
+        # registries in two independent calls — the exact race that tool's own
+        # documentation describes avoiding, so a registry edit between these two
+        # awaits can transiently misclassify an area.
+        #
+        # ⚠️ WHAT IS *NOT* INTERIM IS EVERYTHING AROUND THEM. Deciding that the
+        # villa document carries a room list, fetching it on a daily clock,
+        # keeping the old answer when a read fails and refusing to record an
+        # empty registry as an answer are VESTA's job and no upstream tool does
+        # them. The duplication is the two `command()` calls, not the function.
         from reports.hass import HassClient
         async with HassClient(session) as hass:
             areas = await hass.command("config/area_registry/list")

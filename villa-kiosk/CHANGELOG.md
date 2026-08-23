@@ -1,3 +1,12 @@
+## 2.703.0
+
+### Changed — the room lookup added last release is marked as temporary
+It reads Home Assistant's rooms directly, and the Home Assistant MCP add-on
+already does that job better: it reads one consistent snapshot where this reads
+two in sequence, so an edit made between the two can briefly misfile a room.
+Nothing changes for you today — the comment records that this is the interim
+version and names what replaces it, so it cannot quietly become permanent.
+
 ## 2.702.0
 
 ### Fixed — asked about a room, the villa said the room did not exist
