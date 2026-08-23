@@ -1,3 +1,11 @@
+## 2.676.0
+
+### Fixed — the model suggestions drew themselves over the phone's keyboard
+`<datalist>` is painted by the browser and cannot be styled: on Android it landed
+as unstyled text across the keys. The three models are ordinary buttons now — they
+wrap on a narrow screen, keep a real touch target, and read correctly in both
+themes. The field they fill stays free text, so a new model needs no release.
+
 ## 2.675.0
 
 ### Fixed — the manual check declined every time, for want of a provider

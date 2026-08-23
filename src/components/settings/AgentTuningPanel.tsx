@@ -118,6 +118,17 @@ function Num({ label, note, value, min, onChange }: {
   );
 }
 
+/** ⚠️ OUR OWN SUGGESTION CHIPS, NOT `<datalist>`. The native list is drawn by
+ *  the browser and cannot be styled: on Android it rendered as unstyled text
+ *  ON TOP OF THE KEYBOARD, overlapping the keys — reported from a phone. Chips
+ *  are ordinary buttons, so they inherit the app's own treatment, are readable
+ *  in both themes, and are a 44px target rather than a native row.
+ *
+ *  ⚠️ AND THE FIELD STAYS FREE TEXT. Pinning a picker here would make this app
+ *  the thing that must ship for a new model to be usable (ADR-016); the chips
+ *  fill the box and can be typed over. */
+const MODELS = ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"];
+
 function Text({ label, note, value, placeholder, onChange }: {
   label: string; note: string; value: string; placeholder?: string;
   onChange: (v: string) => void;
@@ -126,8 +137,20 @@ function Text({ label, note, value, placeholder, onChange }: {
     <label className="fm-field">
       <span>{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder} list="vesta-models"
+        placeholder={placeholder}
         spellCheck={false} autoCapitalize="off" autoCorrect="off" />
+      <div className="model-chips">
+        {MODELS.map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={`btn ghost${(value || placeholder) === m ? " active" : ""}`}
+            onClick={() => onChange(m)}
+          >
+            {m.replace("claude-", "").replace(/-\d.*$/, "")}
+          </button>
+        ))}
+      </div>
       <p className="muted body-text">{note}</p>
     </label>
   );
@@ -250,11 +273,6 @@ export default function AgentTuningPanel() {
         the villa spends far more requests on routine checks and chat than on
         investigations.
       </p>
-      <datalist id="vesta-models">
-        <option value="claude-haiku-4-5" />
-        <option value="claude-sonnet-5" />
-        <option value="claude-opus-5" />
-      </datalist>
       <Text label="Model — routine checks" value={draft.modelTriage}
         placeholder="claude-haiku-4-5"
         note="Runs every cycle — a small fast model is the intended fit."

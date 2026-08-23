@@ -4598,6 +4598,16 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   tab-size: 2;
 }
 
+/* ── Model suggestion chips (AgentTuningPanel) ──────────────────────────────
+   ⚠️ THEY REPLACED `<datalist>`, which the browser draws itself and refuses to
+   style: on Android it painted unstyled text over the on-screen keyboard.
+   These are ordinary buttons, so they wrap on a narrow screen and keep their
+   touch target — and the field they fill stays free text. */
+.model-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.model-chips > .btn {
+  min-height: 34px; padding: 0 12px; font-size: var(--text-xs);
+}
+
 /* ── One field of a person's row (PeoplePanel) ──────────────────────────────
    ⚠️ VISIBLE LABELS, AFTER A REPORT. Four unlabelled controls in one row read
    as four guesses — and the first two were read as the SAME field twice,
