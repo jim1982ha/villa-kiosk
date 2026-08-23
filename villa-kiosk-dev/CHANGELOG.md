@@ -1,3 +1,13 @@
+## 2.658.0
+
+### Added — the villa can now ask permission, and only a person can give it
+An action that could let somebody in or silence an alarm was already refused at any
+confidence — but the refusal existed only in the agent's own context, so it could
+ask "shall I unlock the gate?" with nowhere for anyone to answer. Those now wait on
+the Cockpit with a countdown, and expire. There is deliberately no tool that confirms
+one: consent arrives through a route with a session and a role, because a confirm
+flow the model can complete is worse than none.
+
 ## 2.657.0
 
 ### Fixed — the villa denied its own pool pump, and sent someone to the wrong subsystem
