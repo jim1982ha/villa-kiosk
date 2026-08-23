@@ -103,6 +103,25 @@ def gate(module: AnalysisModule, context: ModuleContext,
         # never from now: a listener that has been up for an hour has no
         # standing to conclude anything about a rule that fires monthly.
         # `heard_nothing_for_days` is None when the collector cannot say.
+        # ⚠️ A RETIRED BLUEPRINT IS NOT COVERAGE, AND THIS IS THE FIRST
+        # QUESTION. `silent_blueprints` is installed-minus-seen, so a blueprint
+        # somebody DELETED is absent from it exactly as a healthy one is — and
+        # the branch below read that emptiness as "the covering rule is alive",
+        # leaving the built-in check off and telling the reader "your own
+        # automations already cover this" about a rule that was gone. Not for
+        # 45 days: FOREVER, because the grace window below is only reached by a
+        # blueprint that is still installed. Retiring `maintenance_silence`
+        # would have permanently disabled the check meant to replace it.
+        #
+        # ⚠️ AN EMPTY `installed` MEANS "CANNOT SAY", NOT "NONE INSTALLED" —
+        # `collect.state` returns an empty list when the blueprint fetch fell
+        # back, and its own comment says nothing may be concluded from it. So
+        # this reverses a stand-down only on positive evidence that the layer
+        # exists and this rule is not in it.
+        installed = set(context.installed_blueprints)
+        if installed and not any(b in installed for b in covered_by):
+            return (True, "", "")
+
         silent = [b for b in covered_by if b in set(context.silent_blueprints)]
         if not silent:
             # ⚠️ SHORT, BECAUSE IT IS PRINTED IN A NOTIFICATION. This was
@@ -192,6 +211,7 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             # reassurance this release removes. Same shape as the `reachY` the
             # badge tier lost in 2.429.0.
             silent_blueprints=context.silent_blueprints,
+            installed_blueprints=context.installed_blueprints,
             heard_nothing_for_days=context.heard_nothing_for_days,
         )
 

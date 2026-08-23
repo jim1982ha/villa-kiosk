@@ -318,6 +318,8 @@ async def analyse(
         # which parts of it have ever spoken, and that is the difference
         # between "covered" and "covered on paper" — see `registry.gate`.
         silent_blueprints=list(collect.state().get("silent_blueprints") or []),
+        # ⚠️ SO THE GATE CAN TELL "RETIRED" FROM "INSTALLED AND QUIET".
+        installed_blueprints=list(collect.state().get("blueprint_names") or []),
         heard_nothing_for_days=collect.listening_days(),
     )
     # History depth is not yet measured per statistic; the recorder's presence

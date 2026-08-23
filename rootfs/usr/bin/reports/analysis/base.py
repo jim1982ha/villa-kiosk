@@ -127,6 +127,21 @@ class ModuleContext:
     #: blueprint which has never reported is covered in theory only, and the
     #: brief now says which.
     silent_blueprints: Sequence[str] = ()
+    #: Every VESTA blueprint currently INSTALLED on the property, by stem.
+    #:
+    #: ⚠️ "DELETED" AND "INSTALLED BUT NEVER FIRED" ARE DIFFERENT FACTS AND THE
+    #: GATE COULD NOT TELL THEM APART. `silent_blueprints` is installed-minus-
+    #: seen, so a RETIRED blueprint drops out of it — and the gate read an empty
+    #: `silent` list as "the covering rule is alive and well", stood the built-in
+    #: check down, and printed "your own automations already cover this" about a
+    #: rule that no longer existed. Permanently, for as long as any other
+    #: blueprint kept the layer detectable — which the `critical_*` family does
+    #: by design, since it is the one family nobody is retiring.
+    #:
+    #: That is the exact failure the cutover would hit on its first day: retire
+    #: `maintenance_silence` and its replacement stays switched off. Found by
+    #: reading the gate against the retirement plan rather than against a test.
+    installed_blueprints: Sequence[str] = ()
     #: How long the collector has been listening, in days — or None when it
     #: cannot say (never connected, or the buffer has no `online_since`).
     #:
