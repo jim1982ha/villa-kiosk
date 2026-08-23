@@ -36,6 +36,7 @@
 // open with the text intact and the reason under the field.
 
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 
 interface Props {
@@ -61,6 +62,13 @@ interface Props {
    */
   secondaryLabel?: string;
   onSecondary?: () => void;
+  /** ⚠️ ICONS, BECAUSE A ROW OF BARE TEXT PILLS READS AS THREE UNRELATED
+   *  CONTROLS. Every other action row in this app pairs a glyph with its word;
+   *  this dialog was the one that did not, and it was reported from the
+   *  screen. Optional: a one-button `alert()` shape needs none. */
+  confirmIcon?: LucideIcon;
+  secondaryIcon?: LucideIcon;
+  cancelIcon?: LucideIcon;
   /**
    * Return a string to REJECT: the dialog stays open, the text is kept, and the
    * string is shown under the field. Return nothing to accept and close.
@@ -72,6 +80,8 @@ interface Props {
 export default function AskDialog({
   title, message, input, confirmLabel = "OK", cancelLabel = "Cancel",
   danger = false, secondaryLabel, onSecondary, onConfirm, onCancel,
+  confirmIcon: ConfirmIcon, secondaryIcon: SecondaryIcon,
+  cancelIcon: CancelIcon,
 }: Props) {
   const dialogRef = useModalA11y(onCancel);
   const [value, setValue] = useState(input?.initial ?? "");
@@ -137,12 +147,19 @@ export default function AskDialog({
         </div>
         <div className="panel-footer">
           {cancelLabel !== null && (
-            <button className="btn ghost" onClick={onCancel}>{cancelLabel}</button>
+            <button className="btn ghost" onClick={onCancel}>
+              {CancelIcon && <CancelIcon size={16} aria-hidden />}
+              {cancelLabel}
+            </button>
           )}
           {secondaryLabel && onSecondary && (
-            <button className="btn ghost" onClick={onSecondary}>{secondaryLabel}</button>
+            <button className="btn ghost" onClick={onSecondary}>
+              {SecondaryIcon && <SecondaryIcon size={16} aria-hidden />}
+              {secondaryLabel}
+            </button>
           )}
           <button className={`btn ${danger ? "danger" : "primary"}`} onClick={submit}>
+            {ConfirmIcon && <ConfirmIcon size={16} aria-hidden />}
             {confirmLabel}
           </button>
         </div>

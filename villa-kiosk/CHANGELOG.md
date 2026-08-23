@@ -1,3 +1,11 @@
+## 2.667.0
+
+### Changed — every modal ends in the same three icon buttons: Cancel · Save · Close
+Save commits and stays, so you can keep working. Cancel discards and closes in one
+press. Close asks first if anything is unsaved, and closes straight away if not.
+The question they share now carries icons and fits one line per button, and three
+44px squares fit a phone footer where the labelled row used to wrap.
+
 ## 2.666.0
 
 ### Fixed — the number boxes in Supervision could not be typed into

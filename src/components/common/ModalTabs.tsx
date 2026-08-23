@@ -39,7 +39,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import AskDialog from "./AskDialog";
+import UnsavedChanges from "./UnsavedChanges";
 import type { ModalCommit } from "./ModalFooter";
 
 export interface ModalTab<Id extends string> {
@@ -107,32 +107,26 @@ export default function ModalTabs<Id extends string>({
           taken by accident — and the one that would land there is "discard",
           which loses the edit this dialog exists to protect. */}
       {pendingTab !== null && (
-        <AskDialog
-          title="You have unsaved changes"
-          message={"They belong to the tab you are leaving. Saving stores them "
-                   + "and takes you on; discarding throws them away."}
-          confirmLabel="Save and continue"
-          secondaryLabel="Discard and continue"
-          cancelLabel="Stay here"
-          onConfirm={() => {
+        <UnsavedChanges
+          saving={commit?.saving === true}
+          onSave={() => {
             const to = pendingTab;
             setPendingTab(null);
             // ⚠️ THE SWITCH WAITS FOR THE WRITE AND IS ABANDONED IF IT FAILS.
-            // A refused save (a revision conflict, a 403) that still moved the
-            // operator on would leave them looking at another tab believing
-            // their edit had landed — the failure this whole question exists to
-            // prevent, arriving through its own fix.
+            // Moving the operator on after a refused save leaves them believing
+            // it landed — the failure this question exists to prevent, arriving
+            // through its own fix.
             void Promise.resolve(commit?.save()).then((ok) => {
               if (ok !== false && to !== null) onSelect(to);
             });
           }}
-          onSecondary={() => {
+          onDiscard={() => {
             const to = pendingTab;
             setPendingTab(null);
             commit?.discard?.();
             if (to !== null) onSelect(to);
           }}
-          onCancel={() => setPendingTab(null)}
+          onStay={() => setPendingTab(null)}
         />
       )}
     </div>

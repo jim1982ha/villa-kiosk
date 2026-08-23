@@ -527,6 +527,12 @@ button {
 
 /* --- Buttons --- */
 .btn {
+  /* ⚠️ ONE LINE, ALWAYS. A button that wraps is a different height from the
+     ones beside it, which is what made the unsaved-changes dialog read as three
+     unrelated controls ("Discard and / continue" over two lines). Rows that run
+     out of width wrap as ROWS — `.modal-footer-actions` and `.panel-footer` are
+     both flex-wrap — which moves whole buttons rather than breaking one. */
+  white-space: nowrap;
   min-height: var(--touch-min);
   min-width: var(--touch-min);
   padding: 0 18px;
@@ -4663,8 +4669,17 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    drift the `.editable-row` rename already removed once. */
 .modal-footer-actions {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  justify-content: flex-end;
 }
-.modal-footer-actions > button { min-height: var(--touch-min); }
+/* ⚠️ SQUARE AND EQUAL, so the three read as one control group rather than as
+   three buttons that happen to be adjacent. `--touch-min` on BOTH axes is also
+   what makes them honest targets on a phone, where they are the only way out of
+   a dialog — and icon-only is what lets three of them fit a 360px footer beside
+   a version string. */
+.modal-footer-actions > button {
+  min-height: var(--touch-min); min-width: var(--touch-min);
+  width: var(--touch-min); padding: 0; justify-content: center;
+}
 
 /* The plain-language answer to "when does this actually go out", under the row
    it belongs to. ⚠️ IT IS THE FIX FOR A REAL WEEK LOST: "weekly" meant Monday

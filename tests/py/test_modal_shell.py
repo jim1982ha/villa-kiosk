@@ -113,10 +113,16 @@ def test_every_settings_modal_offers_a_visible_way_out() -> None:
     # individual dialog still passing, which is exactly the vacuous pass this
     # file keeps guarding against.
     footer = _read("src/components/common/ModalFooter.tsx")
-    exits = [b for b in _primary_buttons_any(footer) if "Cancel" in b]
-    assert exits, (
-        "ModalFooter no longer renders a Cancel button — every dialog in the "
-        "family delegates its only visible way out to it")
+    # ⚠️ ICON-ONLY SINCE v2.667.0, so the exits are found by their ACCESSIBLE
+    # NAME rather than their text. That is also the property worth pinning: a
+    # button with a glyph and no label is unreadable to a screen reader and
+    # ambiguous to everyone else, and these three differ only in consequence.
+    exits = [b for b in _primary_buttons_any(footer)
+             if re.search(r'aria-label="(Cancel|Close)', b)]
+    assert len(exits) >= 2, (
+        "ModalFooter no longer renders both exits — Cancel discards and closes, "
+        "Close asks first; every dialog in the family delegates its only "
+        "visible way out to them")
     # ⚠️ AND IT MUST NOT BE DISABLABLE. Cancel is the exit: these dialogs have
     # no X, and Escape and the backdrop are not discoverable on a wall tablet.
     # A `disabled` on this button strands whoever opened a clean dialog — which
@@ -127,8 +133,11 @@ def test_every_settings_modal_offers_a_visible_way_out() -> None:
     # and the same one-word fix.
     for element in exits:
         assert "disabled" not in element.split(">")[0], (
-            "Cancel is disablable — a clean dialog would have no way out")
-    assert "onClose()" in "".join(exits), "Cancel no longer closes the dialog"
+            "an exit is disablable — a clean dialog would have no way out")
+        assert "title=" in element, (
+            "an icon-only exit with no tooltip: unreadable to anyone who does "
+            "not already know what the glyph means")
+    assert "onClose()" in footer, "the footer no longer closes the dialog"
 
     # ⚠️ AND SAVE IS THE ONE THAT GREYS. The pair is fixed so the footer never
     # rearranges itself while somebody types — the defect that produced "it
@@ -225,11 +234,29 @@ def test_a_TAB_SWITCH_asks_before_it_loses_a_draft() -> None:
     the one that would land there is "discard".
     """
     tabs = _read("src/components/common/ModalTabs.tsx")
-    assert "AskDialog" in tabs, (
+    assert "UnsavedChanges" in tabs, (
         "the tab strip no longer asks about an unsaved draft — a tab switch is "
         "the one gesture that can lose one silently")
-    for label in ("Save and continue", "Discard and continue", "Stay here"):
-        assert label in tabs, f"the unsaved-changes question lost its `{label}`"
+    # ⚠️ ONE COMPONENT, TWO CALLERS. Switching tab and closing the dialog ask
+    # the same question, and two copies would drift on the answer that matters:
+    # which one the backdrop maps to.
+    question = _read("src/components/common/UnsavedChanges.tsx")
+    for label in ("Save", "Discard", "Stay"):
+        assert f'"{label}"' in question or f">{label}<" in question, (
+            f"the unsaved-changes question lost its `{label}` answer")
+    assert "onCancel={onStay}" in question, (
+        "Escape and the backdrop no longer mean STAY — whichever answer lands "
+        "there is taken by accident, and discard must never be it")
+    footer_src = _read("src/components/common/ModalFooter.tsx")
+    assert "UnsavedChanges" in footer_src, (
+        "closing the dialog no longer asks, so Close discards silently")
+    # ⚠️ RENDERING THE DIALOG IS NOT ASKING. A mutation that made Close call
+    # `onClose()` unconditionally left the component imported, the markup
+    # present and every other assertion green — the dialog was simply
+    # unreachable. Read the handler, not the import.
+    assert re.search(r"const close = \(\)[^;]*dirty[^;]*setAsking", footer_src), (
+        "Close no longer consults the draft — it discards silently, and the "
+        "question below it can never open")
     # ⚠️ THE SWITCH MUST WAIT FOR THE WRITE. Moving the operator on after a
     # REFUSED save leaves them believing it landed — the failure this question
     # exists to prevent, arriving through its own fix.
