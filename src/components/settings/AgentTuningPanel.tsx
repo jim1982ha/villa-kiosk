@@ -130,10 +130,7 @@ export default function AgentTuningPanel() {
           onChange={(e) => edit({ enabled: e.target.checked })} />
         <span>Supervision is switched on</span>
       </label>
-      <p className="muted body-text">
-        Off means nothing runs and nothing is spent — no scheduled checks, no
-        chat replies, no investigations.
-      </p>
+      <p className="muted body-text">Off means nothing runs and nothing is spent.</p>
 
       <label className="toggle">
         <input type="checkbox" checked={draft.shadow}
@@ -141,62 +138,70 @@ export default function AgentTuningPanel() {
         <span>Observe only — record findings, deliver nothing</span>
       </label>
       <p className="muted body-text">
-        On by default, and deliberately: it lets the villa run a full period so
-        you can read what it would have said before it says anything to anyone.
-        It still costs money while on, and the Cockpit still shows what it
-        found. Switching it off is the moment it starts messaging people.
+        On by default. It still costs money and the Cockpit still shows what it
+        found — turning it off is the moment it starts messaging people.
       </p>
 
+      <div className="settings-section-title">
+        How often, and how much
+      </div>
       <Num
         label="Check the villa every (minutes)"
-        note={`The largest single cost. At this setting the villa is checked
-               about ${perDay} times a day; doubling the interval roughly halves
-               that line and changes nothing else. Minimum ${MIN_TRIAGE_MINUTES}.`}
+        note={`The largest single cost — about ${perDay} checks a day. Doubling`
+              + ` it roughly halves the bill. Minimum ${MIN_TRIAGE_MINUTES}.`}
         value={draft.triageMinutes} min={MIN_TRIAGE_MINUTES}
         onChange={(v) => edit({ triageMinutes: v })}
       />
 
       <Num
         label="Requests a month, at most"
-        note="A hard ceiling counted in requests rather than tokens, because a
-              request is something the villa can count for itself. Reaching it
-              stops the agent cleanly and says so, rather than failing."
+        note="A hard ceiling. Reaching it stops the agent cleanly and says so."
         value={draft.monthlyLimit} min={0}
         onChange={(v) => edit({ monthlyLimit: v })}
       />
       <Num
         label="Of those, reserved for chat (0 = work it out)"
-        note="Chat is the one input a person can spend all day. Its own share
-              means a long conversation degrades chat and never starves the
-              supervision that is the actual product."
+        note="Ring-fenced, so a long conversation cannot starve the checks."
         value={draft.chatMonthlyLimit} min={0}
         onChange={(v) => edit({ chatMonthlyLimit: v })}
       />
 
+      <div className="settings-section-title">
+        How hard it may think
+      </div>
       <Num
         label="Steps per investigation, at most"
-        note="How many times the agent may think again before it must answer.
-              Lower is cheaper and blunter."
+        note="How many times it may think again. Lower is cheaper and blunter."
         value={draft.maxTurns} min={1}
         onChange={(v) => edit({ maxTurns: v })}
       />
       <Num
         label="Look-ups per investigation, at most"
-        note="How many times it may consult the villa's data in one go."
+        note="How much of the villa's data it may read in one go."
         value={draft.maxToolCalls} min={1}
         onChange={(v) => edit({ maxToolCalls: v })}
       />
 
+      {/* ⚠️ THREE HEADINGS OVER TEN FIELDS, after the tab was reported as not
+          understandable. The fields were always in order of consequence
+          (`ADR-016` and this file's header) and nothing SAID so, so a reader
+          met ten similar boxes and no shape. The models come last because they
+          are the one group with a sensible blank. */}
+      <div className="settings-section-title">
+        Which models
+      </div>
+      <p className="muted body-text">
+        Free text, not a picker: upgrading is a config change, never a new
+        release. Leave blank for the add-on&rsquo;s own choice.
+      </p>
       <Text label="Model — routine checks" value={draft.modelTriage}
-        note="Runs on every cycle, so this is where model choice shows up on the
-              bill. A small fast model is the intended fit."
+        note="Runs every cycle — a small fast model is the intended fit."
         onChange={(v) => edit({ modelTriage: v })} />
       <Text label="Model — investigations" value={draft.modelReason}
-        note="Runs only when something is worth a closer look, and does the
-              reasoning you are paying for."
+        note="Runs only on something worth a closer look."
         onChange={(v) => edit({ modelReason: v })} />
       <Text label="Model — written briefings" value={draft.modelBrief}
-        note="Used when a briefing is composed."
+        note="Used when a briefing is composed. Blank uses the add-on's default."
         onChange={(v) => edit({ modelBrief: v })} />
 
     </div>

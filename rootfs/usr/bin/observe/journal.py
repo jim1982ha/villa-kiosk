@@ -234,7 +234,7 @@ def append(events: Sequence[Any], *, now_iso: str = "") -> int:
         # full would go quiet exactly when the villa got busy, which is the one
         # time the history matters.
         if len(entries) > JOURNAL_MAX_ENTRIES:
-            entries = entries[-JOURNAL_MAX_ENTRIES:]
+            entries = _trim(entries)
         store.write_json(JOURNAL_FILE, {
             "entries": entries,
             # ⚠️ SET ONCE AND PRESERVED. `online_since` is the start of the
@@ -249,6 +249,56 @@ def append(events: Sequence[Any], *, now_iso: str = "") -> int:
         log(f"journal write failed, {len(rows)} row(s) lost: {err}")
         return 0
     return len(rows)
+
+
+def _trim(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The newest rows, PLUS the last sighting of every entity they omit.
+
+    ⚠️ A PLAIN RING SILENTLY SHRANK THE AGENT'S ADDRESSABLE WORLD, and it was
+    found from a transcript rather than from a test. `agent/sources.build_refs`
+    mints one handle per entity IN THIS JOURNAL — deliberately, because "a
+    device the villa has never reported is a device no tool can say anything
+    about". That reasoning is sound while the journal covers its window and
+    FALSE the moment the ring is full: what survives is then not "everything
+    observed" but "whatever changed most recently", which is a different set.
+
+    And the bias runs the wrong way. A steadily-running pump emits few state
+    changes; a chatty signal-strength sensor emits thousands. So the ring evicts
+    the equipment somebody would ask about FIRST, and the agent answered
+    accordingly: "no pool pump circuit shows up in what I can address" — of a
+    circuit drawing 863.7 W, which the villa had been metering all along. That
+    sentence was TRUE about the journal and false about the villa.
+
+    So the trim keeps a per-entity FLOOR: the newest `JOURNAL_MAX_ENTRIES` rows,
+    and for every entity absent from that window, its most recent row. The
+    addressable set becomes "every entity ever observed" — bounded by the number
+    of entities, which is a property of the property — while HISTORY stays
+    bounded by the ring, which is the thing that was actually at risk of filling
+    a disk.
+
+    ⚠️ RE-SORTED, because a floor row is older than the window it is added to
+    and `since()` compares timestamps on the assumption that entries are
+    chronological. Merging without sorting would make an entity's history end
+    before it began.
+
+    ⚠️ AND THE RESULT CAN EXCEED THE BOUND, deliberately and by at most one row
+    per entity. The alternative — evicting floors to stay exactly at the number
+    — is the original defect with extra steps. The bound is a disk-size
+    guardrail, not an invariant somebody reads.
+    """
+    window = entries[-JOURNAL_MAX_ENTRIES:]
+    seen = {str(row.get("id") or "") for row in window}
+    floors: Dict[str, Dict[str, Any]] = {}
+    for row in entries[:-JOURNAL_MAX_ENTRIES]:
+        entity_id = str(row.get("id") or "")
+        if entity_id and entity_id not in seen:
+            # Later rows overwrite earlier ones, so this keeps the LAST sighting.
+            floors[entity_id] = row
+    if not floors:
+        return window
+    merged = list(floors.values()) + window
+    merged.sort(key=lambda r: str(r.get("at") or ""))
+    return merged
 
 
 def coverage(since_iso: str, *, as_utc: Any = None) -> Dict[str, Any]:

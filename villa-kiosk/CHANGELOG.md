@@ -1,3 +1,13 @@
+## 2.659.0
+
+### Fixed — the journal ring was quietly deleting equipment from the agent's world
+The agent addresses only what the journal has seen, and the journal is a ring that
+fills: your pool pump's rows were evicted, so "no pool pump circuit shows up in what
+I can address" was true of the journal and false of the villa. Worse, the eviction
+is biased — a steadily-running pump emits fewer rows than a chatty sensor, so the
+equipment worth asking about goes first. Every entity now keeps its last sighting.
+Also: shorter copy in Supervision, and the tab strip stops shifting between tabs.
+
 ## 2.658.0
 
 ### Added — the villa can now ask permission, and only a person can give it

@@ -175,14 +175,89 @@ def test_the_ring_bound_holds_and_keeps_the_NEWEST(
         monkeypatch: pytest.MonkeyPatch) -> None:
     """⚠️ THE RISK THE TASK NAMES: disk growth if the bound is wrong. And the
     direction matters — a ring that dropped NEW rows when full would go quiet
-    exactly when the villa got busy."""
+    exactly when the villa got busy.
+
+    ⚠️ MEASURED ON ONE ENTITY'S HISTORY, because that is what the bound is
+    about. The first version wrote 25 DIFFERENT entities and asserted 15 of them
+    had vanished — which is the defect `_trim`'s floor was added to fix, pinned
+    as the requirement. See the test below."""
     monkeypatch.setattr(journal, "JOURNAL_MAX_ENTRIES", 10)
     for i in range(25):
-        journal.append([_changed(f"light.n{i}")],
-                       now_iso="2026-08-22T10:00:00+00:00")
+        journal.append([_changed("light.chatty", new=str(i),
+                                 at=f"2026-08-22T10:00:{i:02d}+00:00")],
+                       now_iso=f"2026-08-22T10:00:{i:02d}+00:00")
     entries = journal.read()["entries"]
-    assert len(entries) == 10
-    assert [r["id"] for r in entries] == [f"light.n{i}" for i in range(15, 25)]
+    assert len(entries) == 10, "one entity's history is not bounded by the ring"
+    assert [r["s"] for r in entries] == [str(i) for i in range(15, 25)], (
+        "the ring dropped the NEWEST rows — it would go quiet exactly when the "
+        "villa got busy")
+
+
+def test_every_entity_EVER_SEEN_keeps_at_least_one_row(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ THE RING SILENTLY SHRANK THE AGENT'S ADDRESSABLE WORLD, and it took a
+    transcript to find. `agent/sources.build_refs` mints one handle per entity
+    in this journal, so an entity evicted by the ring becomes one the agent
+    cannot address at all — it answered "no pool pump circuit shows up in what I
+    can address", of a circuit drawing 863.7 W that the villa had been metering
+    all along. True about the journal, false about the villa.
+
+    The bias runs the wrong way, too: a steadily-running pump emits few state
+    changes and a chatty signal-strength sensor emits thousands, so the ring
+    evicts the equipment somebody would ASK about first.
+    """
+    monkeypatch.setattr(journal, "JOURNAL_MAX_ENTRIES", 5)
+    # One quiet entity, seen once and long ago...
+    journal.append([_changed("sensor.pool_pump_power", new="863.7",
+                             at="2026-08-22T09:00:00+00:00")],
+                   now_iso="2026-08-22T09:00:00+00:00")
+    # ...then a chatty one that fills the ring many times over.
+    for i in range(40):
+        journal.append([_changed("sensor.chatty_signal", new=str(i),
+                                 at=f"2026-08-22T10:00:{i:02d}+00:00")],
+                       now_iso=f"2026-08-22T10:00:{i:02d}+00:00")
+
+    ids = [r["id"] for r in journal.read()["entries"]]
+    assert "sensor.pool_pump_power" in ids, (
+        "the quiet entity was evicted, so the agent can no longer address it — "
+        "which is the defect, not the bound")
+    assert ids.count("sensor.chatty_signal") <= 5, (
+        "the chatty entity's history is unbounded")
+
+
+def test_the_floor_row_keeps_the_journal_CHRONOLOGICAL(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ `since()` COMPARES TIMESTAMPS AS STRINGS and assumes the entries are
+    ordered, so a floor row merged in without sorting would make an entity's
+    history end before it began — and a reader asking for "the last hour" would
+    get rows from before it.
+
+    ⚠️ EVERY ROW IS APPENDED IN ONE CALL, AND THAT IS WHAT MAKES THIS TEST ABLE
+    TO FAIL. Appending one at a time trims incrementally, so the stored list is
+    re-sorted on every write and the floors come back out in order however the
+    merge behaves — a mutation deleting the sort SURVIVED that version. The
+    ordering only breaks when a SINGLE trim sees one entity twice with another
+    between: floors are collected into a dict, and updating a key keeps its
+    FIRST-seen position, so `sensor.quiet`'s LAST row sits where its FIRST one
+    was — before a `light.chatty` row that is older than it.
+    """
+    monkeypatch.setattr(journal, "JOURNAL_MAX_ENTRIES", 3)
+    journal.append([
+        _changed("sensor.quiet", new="1", at="2026-08-22T09:00:00+00:00"),
+        _changed("light.chatty", new="x", at="2026-08-22T09:15:00+00:00"),
+        _changed("sensor.quiet", new="2", at="2026-08-22T09:30:00+00:00"),
+    ] + [
+        _changed("sensor.busy", new=str(i), at=f"2026-08-22T11:00:{i:02d}+00:00")
+        for i in range(6)
+    ], now_iso="2026-08-22T11:00:05+00:00")
+
+    entries = journal.read()["entries"]
+    stamps = [str(r.get("at")) for r in entries]
+    assert stamps == sorted(stamps), (
+        f"the journal is no longer chronological: {stamps}")
+    # And both quiet entities kept their floor, which is the point of the merge.
+    ids = {r["id"] for r in entries}
+    assert {"sensor.quiet", "light.chatty"} <= ids
 
 
 def test_a_write_failure_degrades_and_does_not_raise(
@@ -228,7 +303,12 @@ def test_coverage_says_when_the_RING_is_the_reason_history_stops(
     for i in range(5):
         journal.append([_changed(f"light.n{i}")], now_iso="2026-08-22T10:00:00+00:00")
     cov = journal.coverage("")
-    assert cov["at_bound"] is True and cov["entries"] == 3
+    # ⚠️ `>=`, NOT `==`. Since the per-entity floor was added the stored count
+    # can exceed the bound by up to one row per entity — deliberately, because
+    # evicting floors to hold an exact number is the addressability defect with
+    # extra steps. `at_bound` still means "history older than the window is
+    # gone", which is what a reader needs it to mean.
+    assert cov["at_bound"] is True and cov["entries"] >= 3
 
 
 def test_coverage_accepts_an_injected_normaliser() -> None:

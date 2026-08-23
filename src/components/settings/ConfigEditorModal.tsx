@@ -259,7 +259,7 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
                 Drives sun position and day/night for this villa.
               </p>
 
-              <div className="settings-section-title" style={{ marginTop: 18 }}>
+              <div className="settings-section-title">
                 Bound 3D objects
               </div>
               <BindingsTable />
@@ -279,7 +279,7 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
               <div className="settings-section-title">Auto-detected entity settings</div>
               <ConfigEditor initialSearch={focusEntityId} />
 
-              <div className="settings-section-title" style={{ marginTop: 18 }}>
+              <div className="settings-section-title">
                 Grouped devices
               </div>
               <GroupedDevices />
@@ -314,12 +314,12 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
                   feature first. Found by following the setup instructions,
                   which is the only way a trap like that is found; every screen
                   was correct on its own. */}
-              <div className="settings-section-title" style={{ marginTop: 18 }}>
+              <div className="settings-section-title">
                 AI service key
               </div>
               <ApiKeyPanel />
 
-              <div className="settings-section-title" style={{ marginTop: 18 }}>
+              <div className="settings-section-title">
                 Cadence and cost
               </div>
               <AgentTuningPanel />
@@ -345,7 +345,7 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
               <div className="settings-section-title">Device telemetry</div>
               <TelemetryPanel />
 
-              <div className="settings-section-title" style={{ marginTop: 18 }}>
+              <div className="settings-section-title">
                 Session
               </div>
               <LogoutAllSection />

@@ -2220,6 +2220,18 @@ input[type="range"]::-moz-range-thumb {
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
 .settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
+/* ⚠️ THE FIRST HEADING IN A BODY GETS NO TOP MARGIN, AND THIS IS WHY THE TAB
+   STRIP LOOKED DIFFERENT PER TAB. Nine call sites carried an inline
+   `marginTop: 18` and the first heading of each tab did or did not, depending
+   on which one it was — so switching tabs moved the content up and down under
+   a strip that had not changed at all, and the strip is what a reader blames.
+   Reported as "the style is different in the modal tab bars, based on the
+   selected tab". The rhythm belongs to the stylesheet: one rule, every tab of
+   every modal, and no call site can opt half of it. */
+.settings-body > .settings-section-title:first-child { margin-top: 4px; }
+/* ⚠️ AND THE STRIP'S OWN HEIGHT IS STATED rather than inherited from whichever
+   button is inside it, so it cannot breathe with its content either. */
+.fm-tabs { min-height: calc(var(--touch-min) + 8px); }
 /* The collapsible variant (ConfigEditorModal's auto-detected-entities /
    device-telemetry sections) — same label typography, made clickable. Reset
    to a plain full-width row (buttons carry their own background/border/

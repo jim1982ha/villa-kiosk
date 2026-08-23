@@ -165,7 +165,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
         {/* RBAC: shared branding — administration, not personal taste. */}
         {can("editConfig") && (
           <>
-            <div className="settings-section-title" style={{ marginTop: 0 }}>Dashboard title</div>
+            <div className="settings-section-title">Dashboard title</div>
             <input
               value={siteTitle}
               onChange={(e) => applySiteTitle(e.target.value)}
