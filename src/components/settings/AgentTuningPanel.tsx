@@ -127,33 +127,59 @@ function Num({ label, note, value, min, onChange }: {
  *  are all inherited rather than re-derived. Reported as exactly that: "never
  *  recode anything that has been already used elsewhere".
  *
- *  ⚠️ AND THE FIELD STAYS FREE TEXT. Pinning a picker here would make this app
- *  the thing that must ship for a new model to be usable (ADR-016); the segment
- *  fills the box and can be typed over. */
+ *  ⚠️ THE SEGMENTS CARRY THE FULL MODEL ID, and the free-text box is HIDDEN
+ *  rather than deleted (2026-08-23, owner: "remove the redundant first row and
+ *  directly show the real full name in the toggle"). Correct — the box and the
+ *  segments were showing the same value twice, once abbreviated, and the row
+ *  cost a screenful on a phone.
+ *
+ *  ⚠️ BUT DELETING IT WOULD PIN THE LIST, which is the one thing ADR-016 says
+ *  this app must not do: a model released after this build would need a release
+ *  of the KIOSK to become usable on the villa. So the box is still there and
+ *  still authoritative — it just only APPEARS when it is the only way to see
+ *  the truth: the stored value is not one of the three, or "Other" is picked.
+ *  Any value already stored therefore stays visible and editable, including one
+ *  a future release adds to this list and an older one does not know. */
 const MODELS = ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"];
+const OTHER = "\u2026";  // the escape-hatch segment, not a model id
 
 function Text({ label, note, value, placeholder, onChange }: {
   label: string; note: string; value: string; placeholder?: string;
   onChange: (v: string) => void;
 }) {
+  // What is in force: the typed value, or the default the placeholder names.
+  const effective = value || placeholder || "";
+  const known = MODELS.includes(effective);
+  const [showBox, setShowBox] = useState(!known);
   return (
     <label className="fm-field">
       <span>{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        spellCheck={false} autoCapitalize="off" autoCorrect="off" />
-      <div className="segmented" role="group" aria-label={`${label} — suggestions`}>
+      <div className="segmented segmented-wrap" role="group" aria-label={label}>
         {MODELS.map((m) => (
           <button
             key={m}
             type="button"
-            className={(value || placeholder) === m ? "active" : ""}
-            onClick={() => onChange(m)}
+            className={known && effective === m ? "active" : ""}
+            onClick={() => { setShowBox(false); onChange(m); }}
           >
-            {m.replace("claude-", "").replace(/-\d.*$/, "")}
+            {m}
           </button>
         ))}
+        <button
+          type="button"
+          className={`segmented-other${!known || showBox ? " active" : ""}`}
+          aria-label="Another model — type its id"
+          title="Another model — type its id"
+          onClick={() => setShowBox(true)}
+        >
+          {OTHER}
+        </button>
       </div>
+      {(showBox || !known) && (
+        <input value={value} onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder} autoFocus={showBox && known}
+          spellCheck={false} autoCapitalize="off" autoCorrect="off" />
+      )}
       <p className="muted body-text">{note}</p>
     </label>
   );

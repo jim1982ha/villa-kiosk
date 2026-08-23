@@ -201,6 +201,16 @@
      rest of the app. The value lives here now; the three rules below consume
      it, and a fourth surface should too rather than picking a fourth number. */
   --field-label-gap: 7px;
+  /* ⚠️ THE VERTICAL RHYTHM OF EVERY MODAL BODY, STATED ONCE (2026-08-23).
+     Two gaps, and confusing them is what made these dialogs scroll: --stack-gap
+     separates two SEPARATE things, --hint-gap attaches an explanation to the
+     control it explains. A hint is marked up as a SIBLING of that control, so
+     without the second token it inherited the first on both sides and sat
+     midway between the thing it describes and the next unrelated field —
+     reported as "remove the redundant lines ... to limit the necessity to
+     scroll". Change these two numbers, not a margin at a call site. */
+  --stack-gap: 14px;
+  --hint-gap: 4px;
   --field-label-size: 13px;
 
   /* ---- Light theme (default) ---- */
@@ -2237,7 +2247,7 @@ input[type="range"]::-moz-range-thumb {
 .settings-footer > div { flex: 0 0 auto; }
 
 /* Section headings inside Settings — quiet, uppercase group labels. */
-.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 24px 0 12px; font-weight: 600; }
+.settings-section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); color: var(--text-secondary); margin: 20px 0 6px; font-weight: 600; }
 /* ⚠️ THE FIRST HEADING IN A BODY GETS NO TOP MARGIN, AND THIS IS WHY THE TAB
    STRIP LOOKED DIFFERENT PER TAB. Nine call sites carried an inline
    `marginTop: 18` and the first heading of each tab did or did not, depending
@@ -3488,7 +3498,31 @@ label.toggle span { user-select: none; line-height: 1.4; }
    button. */
 .fm-report-preview-area { min-height: 260px; }
 
-.fm-stack { display: flex; flex-direction: column; gap: 16px; }
+/* ⚠️ ONE RHYTHM FOR EVERY MODAL BODY AND EVERY TAB — see --stack-gap. A panel
+   that sets its own margins re-opens the per-tab drift 2026-08-23 spent a
+   release on. */
+.fm-stack { display: flex; flex-direction: column; gap: var(--stack-gap); }
+/* ⚠️ A HINT BELONGS TO THE CONTROL ABOVE IT, and `gap` cannot say that — it is
+   uniform by definition. So the hint pulls itself back up to --hint-gap. This
+   is the ONE place that relationship is expressed; it applies to every panel
+   because they all mark a hint up the same way (a `.muted.body-text` paragraph
+   directly after its control), which is what makes a single selector enough. */
+.fm-stack > * + p.body-text.muted {
+  margin-top: calc(var(--hint-gap) - var(--stack-gap));
+}
+/* ⚠️ AND THE SAME RULE ONE LEVEL UP, because only 8 of 33 panels use .fm-stack
+   — the rest render their fields straight into the modal body. `.settings-body`
+   is the container EVERY tab of EVERY modal lands in, so stating it here is
+   what makes "consistent for every menu" true without editing 25 files, each of
+   which would then be free to drift again. Verified by grep -L, not by the
+   call sites in view: rolling this out by where .fm-stack already appeared is
+   the exact mistake /dry-audit exists to catch. */
+.settings-body > * + p.body-text.muted { margin-top: var(--hint-gap); }
+.settings-body > p.body-text.muted + * { margin-top: var(--stack-gap); }
+/* A section heading still gets its air ABOVE (that IS the blank line between
+   sections) and almost none below — the heading and its first field are one
+   thing, not two. */
+.fm-stack > .settings-section-title { margin: 6px 0 0; }
 
 /* Summary numbers — the glance layer above the detail. */
 .fm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
@@ -4614,7 +4648,14 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    this stylesheet already defines for Theme Modes and Villa lighting. Only the
    spacing above the group is stated here, because that is the one thing a
    `.fm-field` context adds. */
-.fm-field > .segmented { margin-top: 8px; }
+/* ⚠️ THE MODEL SEGMENTS CARRY A FULL MODEL ID, which is long, so this group
+   WRAPS rather than sharing one row — `.segmented`'s flex: 1 1 0 would squeeze
+   three 17-character ids into a phone's width and truncate all three. The
+   escape-hatch segment stays narrow beside them. */
+.fm-field > .segmented { margin-top: var(--hint-gap); }
+.segmented-wrap { flex-wrap: wrap; }
+.segmented-wrap > button { flex: 1 1 auto; padding: 0 10px; font-size: var(--text-sm); }
+.segmented-wrap > .segmented-other { flex: 0 0 auto; min-width: var(--touch-min); font-size: var(--text-lg); }
 
 /* ── One field of a person's row (PeoplePanel) ──────────────────────────────
    ⚠️ VISIBLE LABELS, AFTER A REPORT. Four unlabelled controls in one row read
