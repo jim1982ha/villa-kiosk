@@ -37,7 +37,31 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const can = (c: Capability) => role != null && hasCapability(role, c);
 
   // Every setting here applies AND persists live now, matching Advanced
-  // Settings — there is nothing left to Cancel/Save, only a single Close.
+  // ⚠️ THIS DIALOG APPLIES LIVE AND STILL HAS A REAL DRAFT — those are not in
+  // conflict, and reading them as one is what left Save permanently greyed
+  // (reported 2026-08-23: a disabled button that can never enable reads as
+  // broken, and it was, just not in the way it looked).
+  //
+  // Live preview is the POINT of these controls: a walk-speed slider that only
+  // took effect on Save would be untunable, so every tick still reaches the
+  // scene. What was missing is the other half — a BASELINE to return to. So:
+  //
+  //   the scene previews on every tick   (unchanged, and load-bearing)
+  //   dirty  = the live config differs from the baseline taken at open
+  //   Save   = keep it, and make THIS the new baseline
+  //   Cancel = write the baseline back, which reverts the scene AND the store
+  //
+  // ⚠️ CANCEL REVERTS BY WRITING, not by withholding a write. Persistence here
+  // is eager by design (see ConfigContext: the localStorage write is deferred
+  // to an effect for cost, not for staging), so there is no un-written state to
+  // drop — undoing means putting the old values back through the same path any
+  // control uses, which is also why the scene follows for free.
+  // ⚠️ THE BASELINE IS EVERY KEY THIS DIALOG WRITES, listed once below. A key
+  // added to a control and not to that list is silently un-revertable: Cancel
+  // would restore its nine siblings and leave that one changed, which is worse
+  // than not offering Cancel. Pinned by tests/py/test_modal_shell.py, which
+  // derives the list from the update()/scheduleCommit() call sites in this file.
+  //
   // A slider/text field still needs a local echo for responsive typing/drag,
   // but committing config on every single tick would mean writing the WHOLE
   // config blob (entityMap included) to localStorage dozens of times a
@@ -55,6 +79,42 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
     pending.draft(SETTINGS_DRAFT_KEY, { ...pending.drafts[SETTINGS_DRAFT_KEY], ...patch });
   const flushPending = () => pending.flush(SETTINGS_DRAFT_KEY);
   const closeModal = () => { flushPending(); onClose(); };
+
+  // ⚠️ DERIVED FROM THE CALL SITES, NOT FROM MEMORY — every key any control in
+  // this file passes to update() or scheduleCommit(). See the note above.
+  const SETTINGS_KEYS = [
+    "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
+    "northOffsetDeg", "render", "showSummaryBar", "siteTitle", "theme",
+    "walkSpeed",
+  ] as const;
+  const slice = (c: AppConfig): Partial<AppConfig> => {
+    const out: Record<string, unknown> = {};
+    for (const k of SETTINGS_KEYS) out[k] = c[k];
+    return out as Partial<AppConfig>;
+  };
+  // Captured once, on open. `useState`'s initialiser — not useRef with a live
+  // read — so a config change while the dialog is open moves `dirty`, which is
+  // the whole point, rather than moving the thing dirty is measured against.
+  const [baseline, setBaseline] = useState<Partial<AppConfig>>(() => slice(config));
+  // Content comparison, never reference: `render` is an object and is rebuilt
+  // by every one of its own controls, so `!==` would report dirty forever.
+  const dirty = JSON.stringify(slice(config)) !== JSON.stringify(baseline)
+    || Object.keys(pending.drafts).length > 0;
+  const commit = {
+    dirty,
+    save: () => { flushPending(); setBaseline(slice({ ...config, ...pending.drafts[SETTINGS_DRAFT_KEY] })); },
+    // ⚠️ Restores through update(), so the scene reverts with the store. The
+    // local echoes are re-seeded too — they are what the sliders render from,
+    // and a reverted config behind a stale echo is the same lie one layer up.
+    discard: () => {
+      pending.cancel(SETTINGS_DRAFT_KEY);
+      update(baseline);
+      setSiteTitle(baseline.siteTitle ?? "");
+      setEyeHeight(baseline.eyeHeight ?? 1.7);
+      setWalkSpeed(baseline.walkSpeed ?? 1);
+      setRender(baseline.render ?? DEFAULT_RENDER);
+    },
+  };
   // Focus trap + Escape + focus restore (see useModalA11y). Declared AFTER
   // closeModal deliberately — it closes over it, and this modal's close path
   // has to flush the debounced settings draft, so Escape must run the same
@@ -452,14 +512,15 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
         </div>{/* end settings-body */}
 
-        {/* ⚠️ NO SAVE HERE, AND THAT IS THE POLICY WORKING RATHER THAN AN
-            OMISSION. Every control above applies and persists as it is touched
-            — the sliders preview on the live scene, which is the whole point of
-            them — so there is no draft to commit and nothing to discard. The
-            shared footer shows Cancel only when a dialog HAS a draft, so this
-            one correctly keeps a plain Close. Adding a Save would promise that
-            nothing had taken effect yet, which is false. */}
+        {/* ⚠️ A FULL FOOTER, INCLUDING CANCEL — see the baseline note at the top of
+            this component. This dialog applies live AND has a draft: Save keeps
+            what you are looking at and rebaselines, Cancel writes the values
+            from when it opened back through update(), which reverts the scene
+            as well as the store. It carried a bare Close until 2026-08-23 on
+            the reasoning that living controls cannot have a draft, which
+            confused "already applied" with "cannot be undone". */}
         <ModalFooter
+          commit={commit}
           leading={can("editConfig") ? (
             <button className="btn ghost" onClick={onOpenConfigEditor}>
               <Sliders size={18} /> Advanced Settings

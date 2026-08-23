@@ -30,6 +30,11 @@ export interface DraftCommit<T> {
   flush: (key: string) => void;
   /** Commit every pending draft right now. */
   flushAll: () => void;
+  /** ⚠️ DROP `key`'s pending draft WITHOUT committing it — the exact opposite
+   *  of flush, and the only safe way to undo. A dialog whose Cancel reverts by
+   *  writing old values back must clear the timer first, or the debounced
+   *  commit fires a moment later and re-applies what was just discarded. */
+  cancel: (key: string) => void;
 }
 
 const DEFAULT_DELAY_MS = 350;
@@ -59,6 +64,16 @@ export function useDraftCommit<T>(
     });
   }, []);
 
+  const cancel = useCallback((key: string) => {
+    clearTimeout(timers.current[key]);
+    delete timers.current[key];
+    setDrafts((prev) => {
+      if (!(key in prev)) return prev;
+      const { [key]: _dropped, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
   const flushAll = useCallback(() => {
     for (const key of Object.keys(timers.current)) flush(key);
   }, [flush]);
@@ -74,5 +89,5 @@ export function useDraftCommit<T>(
   // re-render tearing this row down, etc.).
   useEffect(() => () => flushAll(), [flushAll]);
 
-  return { drafts, draft, flush, flushAll };
+  return { drafts, draft, flush, flushAll, cancel };
 }
