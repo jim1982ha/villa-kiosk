@@ -1,4 +1,4 @@
-// src/components/reports/UsageModal.tsx
+// src/components/settings/UsagePanel.tsx
 // Where the API key's money went, per request, with the actor attached.
 //
 // ⚠️ IT IS NOT SCOPED TO THE NARRATION TOGGLE, AND THAT IS THE WHOLE REASON IT
@@ -37,11 +37,9 @@
 // figures the bar can only approximate.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2, RefreshCw } from "lucide-react";
 
 import { loadUsage, type UsageBucket, type UsageRow, type UsageSummary } from "@/agent/agentApi";
-import { useModalA11y } from "@/hooks/useModalA11y";
-import ModalFooter from "@/components/common/ModalFooter";
 
 /** ⚠️ FOUR DECIMALS, NOT TWO. The question is "where did a few cents go", and
  *  rounding a fifteen-minute triage call to $0.00 would hide the line item that
@@ -116,6 +114,35 @@ function Slices({ rows }: { rows: [string, UsageBucket][] }) {
 }
 
 /** `2026-08-23T14:05` — what `datetime-local` reads and writes. */
+/** The rows on screen, as CSV.
+ *
+ *  ⚠️ THE ROWS, NOT THE SUMMARY. A total is one number anybody can read off the
+ *  page; what an export is for is the thing you cannot do here — sort it, pivot
+ *  it, or reconcile it line by line against the provider's own bill. The
+ *  breakdowns are all derivable from these columns.
+ *
+ *  ⚠️ AND THE WINDOW IS THE ONE THAT WAS ASKED FOR. The file contains exactly
+ *  what the panel is showing, because a download that quietly widens its range
+ *  is a spreadsheet that disagrees with the screen it came from.
+ *
+ *  ⚠️ EVERY FIELD IS QUOTED AND ITS QUOTES DOUBLED. A model id or an actor name
+ *  containing a comma would otherwise shift every later column by one, silently
+ *  — the failure mode of hand-rolled CSV, and the reason this is nine lines
+ *  rather than a join. */
+function toCsv(rows: UsageRow[]): string {
+  const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const header = ["when", "source", "actor", "model", "run_id", "input",
+                  "cache_read", "cache_write", "output", "cost_usd"];
+  const lines = [header.map(cell).join(",")];
+  for (const r of rows) {
+    lines.push([new Date(r.at * 1000).toISOString(), r.source, r.actor,
+                r.model, r.run_id, r.input, r.cache_read, r.cache_write,
+                r.output, r.cost].map(cell).join(","));
+  }
+  // ⚠️ A TRAILING NEWLINE. Some tools drop the last row without one.
+  return lines.join("\n") + "\n";
+}
+
 function toLocalInput(seconds: number): string {
   const d = new Date(seconds * 1000);
   const pad = (v: number) => String(v).padStart(2, "0");
@@ -158,8 +185,7 @@ function Breakdown({ title, rows, note }: {
   );
 }
 
-export default function UsageModal({ onClose }: { onClose: () => void }) {
-  const dialogRef = useModalA11y(onClose);
+export default function UsagePanel() {
   // ⚠️ DEFAULTS TO SEVEN DAYS, NOT TO EVERYTHING. "Since I topped up" is the
   // real question and only the owner knows that moment, so the control is
   // theirs — but an unbounded default would open on a wall of rows and make the
@@ -197,39 +223,59 @@ export default function UsageModal({ onClose }: { onClose: () => void }) {
   const recent = useMemo(
     () => [...rows].sort((a, b) => b.at - a.at), [rows]);
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        ref={dialogRef}
-        className="modal settings-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label="API usage and cost"
-      >
-        <div className="settings-header">
-          <h2 tabIndex={-1} data-autofocus>API usage and cost</h2>
-          <button className="icon-btn header-icon-btn" onClick={() => void refresh()}
-            aria-label="Refresh" title="Re-read the ledger" disabled={busy}>
-            {busy ? <Loader2 size={18} className="spin" /> : <RefreshCw size={18} />}
-          </button>
-        </div>
+  /** ⚠️ A BLOB AND AN OBJECT URL, revoked immediately — the same idiom
+   *  `TelemetryPanel.downloadAll` uses, and for the same reason: this add-on
+   *  must work with no internet, so an export cannot go through a service. */
+  const download = () => {
+    const url = URL.createObjectURL(
+      new Blob([toCsv(recent)], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vesta-usage-${since.replace(/[:T]/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-        <div className="settings-body">
+  if (summary === null && busy) {
+    return (
+      <p className="muted body-text">
+        <Loader2 size={14} className="spin" aria-hidden /> Reading the ledger…
+      </p>
+    );
+  }
+
+  return (
+    <div className="fm-stack">
+
           <p className="muted body-text">
             Every request this add-on has made to the AI provider, whoever
             caused it. This includes scheduled checks and chat replies — they
             spend the same key whether or not the setting above is switched on.
           </p>
 
-          <label className="fm-field">
+          {/* ⚠️ THE EXPORT SITS WITH THE RANGE THAT DEFINES IT, not at the
+              foot of the page: the file is "what this window contains", and a
+              button three sections away from the control that sets the window
+              invites the reader to forget which is which. */}
+          <div className="usage-since">
+            <label className="fm-field" style={{ flex: 1 }}>
             <span>Count from</span>
             <input
               type="datetime-local"
               value={since}
               onChange={(e) => setSince(e.target.value)}
             />
-          </label>
+            </label>
+            <button className="btn ghost" onClick={() => void refresh()}
+                    disabled={busy} title="Re-read the ledger">
+              <RefreshCw size={16} aria-hidden />
+            </button>
+            <button className="btn ghost" onClick={download}
+                    disabled={busy || recent.length === 0}
+                    title="Download these requests as a CSV">
+              <Download size={16} aria-hidden /> CSV
+            </button>
+          </div>
 
           {busy && summary === null && (
             <p className="muted body-text">Reading the ledger…</p>
@@ -332,13 +378,6 @@ export default function UsageModal({ onClose }: { onClose: () => void }) {
               )}
             </>
           )}
-        </div>
-
-        <ModalFooter
-          note="One key serves the schedule, every investigation and every chat"
-          onClose={onClose}
-        />
-      </div>
     </div>
   );
 }

@@ -8,7 +8,8 @@
 
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { Boxes, Home, LogOut, ShieldCheck, Upload, Wrench } from "lucide-react";
+import { Boxes, Home, LogOut, Receipt, ShieldCheck, Upload,
+         Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
 import { AgentConfigProvider, useAgentConfigDraft } from "@/agent/AgentConfigDraft";
@@ -22,6 +23,7 @@ import AgentTuningPanel from "./AgentTuningPanel";
 import PeoplePanel from "./PeoplePanel";
 import ApiKeyPanel from "./ApiKeyPanel";
 import ShadowDiffPanel from "./ShadowDiffPanel";
+import UsagePanel from "./UsagePanel";
 import CollapsibleSection from "@/components/common/CollapsibleSection";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
@@ -37,12 +39,19 @@ import GroupedDevices from "./GroupedDevices";
  *  owner-only, so a naive grouping leaves a guest with tabs holding one item
  *  each — the exact failure being avoided. The two open tabs hold two panels
  *  apiece for every profile. */
-type SettingsTab = "villa" | "devices" | "supervision" | "system";
+type SettingsTab = "villa" | "devices" | "supervision" | "usage" | "system";
 
 const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
   { id: "villa", label: "Villa", icon: Home },
   { id: "devices", label: "Devices", icon: Boxes },
   { id: "supervision", label: "Supervision", icon: ShieldCheck, owner: true },
+  // ⚠️ ITS OWN TAB, NOT AN ICON INSIDE BRIEFINGS (v2.669.0). It opened from the
+  // row that switches narration on, which is exactly the reading the panel's
+  // own header spends a paragraph denying: triage, investigations and every
+  // chat turn spend the same key whether narration is on or off. A surface
+  // reached through an unrelated setting is a surface that describes that
+  // setting, however loudly its text says otherwise.
+  { id: "usage", label: "Usage", icon: Receipt, owner: true },
   { id: "system", label: "System", icon: Wrench, owner: true },
 ];
 
@@ -334,6 +343,8 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
               </CollapsibleSection>
             </>
           )}
+
+          {tab === "usage" && role === "owner" && <UsagePanel />}
 
           {tab === "system" && role === "owner" && (
             <>

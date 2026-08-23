@@ -31,8 +31,7 @@
 // ring and the placeholder colour, all of which were being approximated here.
 
 import { useState } from "react";
-import { KeyRound, Receipt } from "lucide-react";
-import UsageModal from "./UsageModal";
+import { KeyRound } from "lucide-react";
 import type { NarrationMode, ReportsConfig } from "@/reports/reportsTypes";
 
 /** `"anthropic"` → `"Anthropic"`. ⚠️ NO PRODUCT NAMES AND NO TABLE: the list of
@@ -58,7 +57,6 @@ export default function NarrationSection({
   onSaveSecret: (provider: string, value: string) => void;
 }) {
   const [typed, setTyped] = useState("");
-  const [showUsage, setShowUsage] = useState(false);
   const mode: NarrationMode = draft.narration?.mode ?? "deterministic";
   const on = mode === "provider";
 
@@ -98,17 +96,7 @@ export default function NarrationSection({
           />
           <span>Let an AI service write the summary</span>
         </label>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => setShowUsage(true)}
-          aria-label="API usage and cost"
-          title="API usage and cost"
-        >
-          <Receipt size={18} />
-        </button>
       </div>
-      {showUsage && <UsageModal onClose={() => setShowUsage(false)} />}
       <p className="muted body-text">
         Off by default: the add-on writes every brief itself, offline, and that
         is the version you read in Preview. Switching this on rephrases the same
