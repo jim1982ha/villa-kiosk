@@ -55,6 +55,12 @@ ROW_FIELDS: Final[Tuple[str, ...]] = (
     # `detail` keeps carrying the rendered line, because the panel reads it and
     # a reader wants the sentence.
     "doc_chars", "doc_lines", "escalated", "model",
+    # ⚠️ THE ESCALATED SUBJECT, AS ITSELF. It was in `detail` alone, which is
+    # prose — and the approval queue has to hand a subject BACK to the
+    # investigation loop when a person presses approve. Recovering it by
+    # splitting my own sentence is precisely what the `doc_chars` note above
+    # was written about, one release earlier and in this same file.
+    "subject",
 )
 
 #: Rows describing an intent that never got an outcome. Named because the count
@@ -123,13 +129,39 @@ def _append(row: Mapping[str, Any]) -> bool:
 
 # ── runs ────────────────────────────────────────────────────────────────────
 def record_run(run_id: str, *, actor: str, trigger: str,
-               verdict: str = "started", detail: str = "",
+               verdict: str = "started", detail: str = "", subject: str = "",
                now: Optional[float] = None) -> bool:
     """One row for a run's start or end. No action_key — a run is not an action."""
     return _append({
         "at": _now_iso(now), "run_id": str(run_id), "actor": str(actor),
         "tool": f"run:{trigger}", "verdict": str(verdict), "detail": detail,
+        "subject": subject,
     })
+
+
+#: A queued escalation waiting for a person, and what settles one.
+#: ⚠️ SETTLED BY ANY LATER ROW SHARING THE RUN ID, not by a status field on the
+#: queued row. This file's first rule is that a row is never edited — an outcome
+#: is a SECOND row — so a queue derived from "has anything else happened to this
+#: run id" inherits that property for free. A `pending` flag would have to be
+#: rewritten, which is the moment the record stops being evidence.
+AWAITING: Final[str] = "awaiting-approval"
+
+
+def pending_escalations() -> List[Dict[str, Any]]:
+    """Escalations queued for a person and not yet acted on. Newest last.
+
+    ⚠️ DERIVED, NEVER STORED. A second store holding the queue is a second store
+    that disagrees with the audit the first time either is written by hand — and
+    the audit already contains every fact the queue needs. It is also why
+    approving cannot lose an item: approval writes a row with the SAME run id,
+    which is what removes it from here.
+    """
+    rows_all = _read()["rows"]
+    queued = [r for r in rows_all if str(r.get("verdict") or "") == AWAITING]
+    settled = {str(r.get("run_id") or "") for r in rows_all
+               if str(r.get("verdict") or "") not in ("", AWAITING)}
+    return [r for r in queued if str(r.get("run_id") or "") not in settled]
 
 
 def record_pass(*, reason: str, trigger: str, doc_chars: int,

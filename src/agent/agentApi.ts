@@ -554,6 +554,74 @@ export async function loadTriagePasses(): Promise<TriagePass[]> {
     }));
 }
 
+/** One escalation waiting for a person, from `/agent-queue`.
+ *
+ *  ⚠️ THE LIST IS DERIVED FROM THE AUDIT SERVER-SIDE, not held in a store — see
+ *  `audit.pending_escalations`. So an item leaves this list because a row with
+ *  its run id was written, which is the same act that records what happened to
+ *  it; there is no state to get out of step. */
+export interface QueuedEscalation {
+  runId: string;
+  at: string;
+  /** What triage named. ⚠️ A FIELD, not parsed out of `detail` — the subject is
+   *  handed straight back to the investigation loop on approve. */
+  subject: string;
+  /** Triage's own one-line reason for flagging it. */
+  reason: string;
+}
+
+/** The approval queue, plus WHY it may be empty.
+ *
+ *  ⚠️ `mode` TRAVELS WITH IT. "Nothing is waiting" and "nothing waits, because
+ *  this villa investigates automatically" are different sentences, and showing
+ *  only the first is how an owner comes to wonder whether the queue is broken. */
+export interface ApprovalQueue {
+  pending: QueuedEscalation[];
+  mode: "auto" | "approve";
+}
+
+export async function loadApprovalQueue(): Promise<ApprovalQueue | null> {
+  const r = await fetch(ingressPath("agent-queue"), { credentials: "same-origin" });
+  if (!r.ok) return null;
+  const d = (await r.json().catch(() => null)) as
+    { pending?: unknown; mode?: unknown } | null;
+  const rows = Array.isArray(d?.pending) ? d!.pending : [];
+  return {
+    mode: d?.mode === "approve" ? "approve" : "auto",
+    pending: rows
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+      .map((x) => ({
+        runId: String(x.run_id ?? ""),
+        at: String(x.at ?? ""),
+        subject: String(x.subject ?? ""),
+        reason: String(x.detail ?? ""),
+      }))
+      .filter((x) => x.runId !== ""),
+  };
+}
+
+/** Approve or dismiss one queued escalation.
+ *
+ *  ⚠️ IT SENDS A RUN ID AND NOTHING ELSE. The subject is read back server-side
+ *  from the audit row that id names, so a browser cannot ask for an
+ *  investigation of something nobody escalated — there is no field for it.
+ *  Approving spends real budget and runs inline, which is why the route carries
+ *  the same 300s read timeout as `/agent-run-now`. */
+export async function decideEscalation(
+  runId: string, action: "approve" | "dismiss",
+): Promise<{ ok: boolean; reason: string }> {
+  const r = await fetch(ingressPath("agent-queue"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ runId, action }),
+  });
+  const d = (await r.json().catch(() => ({}))) as
+    { ok?: boolean; reason?: string };
+  if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
+  return { ok: d.ok === true, reason: d.reason || "" };
+}
+
 export async function loadShadowDiff(): Promise<ShadowDiff | null> {
   const r = await fetch(ingressPath("agent-shadow"), { credentials: "same-origin" });
   if (!r.ok) return null;

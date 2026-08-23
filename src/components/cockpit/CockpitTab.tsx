@@ -51,6 +51,7 @@ import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitConcerns from "./CockpitConcerns";
 import CockpitReview from "./CockpitReview";
 import CockpitProposals from "./CockpitProposals";
+import CockpitQueue from "./CockpitQueue";
 import { useVillaAttention } from "./useVillaAttention";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
@@ -243,6 +244,13 @@ export default function CockpitTab({
           question about method; this is an action the villa has stopped and
           will not take without an answer, and it expires. */}
       <CockpitProposals />
+
+      {/* ⚠️ SECOND, AND FOR THE SAME REASON THE PROPOSALS ARE FIRST: this is
+          also work the villa has stopped and will not do without an answer. It
+          ranks below a proposal because a proposal is an ACTION on the villa
+          with a countdown, and this is a decision about whether to spend. It
+          renders nothing at all unless the owner chose `approve`. */}
+      <CockpitQueue />
 
       <CockpitConcerns />
 

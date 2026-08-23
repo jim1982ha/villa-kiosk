@@ -142,8 +142,12 @@ def test_one_investigation_per_subject_never_one_per_pass() -> None:
     links = _rows("escalated")
     assert len(links) == 3, links
     assert len({r["run_id"] for r in links}) == 3, "the run ids collided"
-    assert [r["detail"] for r in links] == [
+    # ⚠️ `subject`, NOT `detail`. The subject became a structural audit field
+    # in TASK-105 so the approval queue can hand it back to the loop without
+    # splitting a sentence; `detail` now carries triage's REASON.
+    assert [r["subject"] for r in links] == [
         "Subject 1", "Subject 2", "Subject 3"]
+    assert links[0]["detail"] == "it looks wrong"
 
 
 def test_the_audit_follows_one_subject_from_escalation_to_run() -> None:
@@ -152,7 +156,7 @@ def test_the_audit_follows_one_subject_from_escalation_to_run() -> None:
     _run(dict(ON), provider)
 
     link = _rows("escalated")[0]
-    assert link["detail"] == "Subject 1"
+    assert link["subject"] == "Subject 1"
     followed = [r for r in audit.rows(500)
                 if r.get("run_id") == link["run_id"]]
     assert {str(r.get("verdict")) for r in followed} >= {"escalated", "started"}
@@ -191,7 +195,7 @@ def test_approve_mode_records_the_escalations_and_spends_nothing() -> None:
     assert "2 queued for approval" in outcome
     assert not concerns.read()
     queued = _rows("awaiting-approval")
-    assert [r["detail"] for r in queued] == ["Subject 1", "Subject 2"]
+    assert [r["subject"] for r in queued] == ["Subject 1", "Subject 2"]
     # ⚠️ NOTHING WAS INVESTIGATED, so the fake's script is untouched past triage.
     assert len(provider.calls) == 1
 

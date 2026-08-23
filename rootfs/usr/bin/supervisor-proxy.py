@@ -2590,6 +2590,73 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
         return web.json_response({"ok": not reason, "status": "triaged",
                                   "reason": reason})
 
+async def agent_queue_get_handler(request: web.Request) -> web.Response:
+    """Escalations waiting for a person. Owner-only, like every agent control.
+
+    ⚠️ DERIVED FROM THE AUDIT, NOT FROM A QUEUE STORE. `agent.audit` already
+    holds every fact this needs and is append-only; a second store would be the
+    one that disagrees the first time either is written. See
+    `audit.pending_escalations`.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read the approval queue.")
+    from agent import audit as agent_audit
+    from agent import reason as agent_reason
+    config = _read_json_store(AGENT_CONFIG_FILE, {})
+    return web.json_response({
+        "pending": agent_audit.pending_escalations(),
+        # ⚠️ THE MODE TRAVELS WITH THE QUEUE so the panel can say WHY the list is
+        # empty. "Nothing is waiting" and "nothing waits, because this villa
+        # investigates automatically" are different sentences and the second is
+        # the one that stops an owner wondering whether it is broken.
+        "mode": "auto" if agent_reason.auto(config) else "approve",
+    })
+
+
+async def agent_queue_post_handler(request: web.Request) -> web.Response:
+    """Approve or dismiss one queued escalation. Owner-only — approving spends.
+
+    ⚠️ THE BROWSER SENDS A RUN ID AND NOTHING ELSE. The subject is read back
+    from the audit row that id names, so there is no field in which to ask for
+    an investigation of something nobody escalated.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may approve an investigation.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    run_id = str(body.get("runId") or body.get("run_id") or "")
+    action = str(body.get("action") or "approve").lower()
+    if not run_id:
+        return web.json_response({"ok": False, "reason": "no escalation named"},
+                                 status=400)
+
+    from agent import reason as agent_reason
+    if action == "dismiss":
+        ok, why = agent_reason.dismiss(run_id, reason=str(body.get("reason") or ""))
+        return web.json_response({"ok": ok, "reason": why})
+
+    from agent.llm import anthropic_sdk
+    # ⚠️ THE PROVIDER IS BUILT AND PASSED IN — `run-now` above records the four
+    # button presses and four refusals that came of assuming a callee builds
+    # one. The document is assembled the same way every other agent entry point
+    # assembles it, through `sources.build_document`.
+    ran, why = await agent_reason.approve(
+        run_id,
+        provider=anthropic_sdk.build(api_key=reports_secrets.get("anthropic") or ""),
+        config=_read_json_store(AGENT_CONFIG_FILE, {}),
+        document=await _agent_document_text())
+    return web.json_response({"ok": ran, "reason": why})
+
+
 async def _agent_run(config: Dict[str, Any], document: str) -> Dict[str, Any]:
     """One run through the registry loop. Declines with a reason, never raises."""
     try:
@@ -3242,6 +3309,8 @@ def main() -> None:
     app.router.add_get("/agent-proposals", agent_proposals_handler)
     app.router.add_post("/agent-confirm", agent_confirm_handler)
     app.router.add_post("/agent-run-now", agent_run_now_handler)
+    app.router.add_get("/agent-queue", agent_queue_get_handler)
+    app.router.add_post("/agent-queue", agent_queue_post_handler)
     app.router.add_get("/device-config", device_config_get_handler)
     app.router.add_get("/fm-data", fm_data_get_handler)
     app.router.add_put("/fm-data", fm_data_put_handler)

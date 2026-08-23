@@ -87,6 +87,14 @@ ILLUSTRATIVE: Set[str] = {
     # device id would make that read as a claim about this villa.
     "light.chatty", "sensor.chatty_signal", "sensor.busy", "sensor.quiet",
     "sensor.quiet_pump_power",
+    # `test_tool_raise_concern.py`, `test_agent_escalation_wiring.py` and
+    # `test_agent_approval_queue.py`. ⚠️ INVENTED, and it went red one release
+    # LATE — the files were untracked when they were written, so this pin could
+    # not see them until the commit made them visible. That is exactly what
+    # `feedback_stage-before-gating` records, and the sequence repeated anyway:
+    # the honest fix is that a new test file's ids get classified here in the
+    # SAME change that writes them, not after the pin catches up.
+    "sensor.example_pump_power",
     "lock.side_gate",
     # `test_agent_mcp.py`. A deliberately fictional id, and the test's whole
     # point is that a tool result carrying ANY raw id is refused — so the id

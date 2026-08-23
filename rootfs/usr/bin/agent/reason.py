@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import audit as audit_mod
 from agent import budget as budget_mod
@@ -165,10 +165,15 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
         # went unrecorded because nobody had approved it yet would make the queue
         # and the evidence for it the same missing thing.
         for index, item in enumerate(escalations):
+            # ⚠️ THE SUBJECT IS A FIELD AND THE TRIAGE REASON IS THE PROSE. A
+            # person approving this later hands the SUBJECT back to the loop,
+            # and recovering it by splitting a sentence is what `audit.ROW_FIELDS`
+            # records having been paid for one release earlier.
             audit_mod.record_run(_ident(trigger, index, now),
                                  actor="agent", trigger=trigger,
-                                 verdict="awaiting-approval",
-                                 detail=_subject_of(item))
+                                 verdict=audit_mod.AWAITING,
+                                 subject=_subject_of(item),
+                                 detail=str(getattr(item, "reason", "") or ""))
         out.queued = len(escalations)
         log(f"reason: {out.queued} escalation(s) queued for approval")
         return out
@@ -184,30 +189,118 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
             out.stopped = f"stopped, {money.reason}"
             break
         run_id = _ident(trigger, index, now)
-        # ⚠️ THE LINK ROW, WRITTEN BEFORE THE RUN. It carries the SUBJECT and the
-        # run id, and every row the investigation writes carries that same id —
-        # which is what lets a reader follow one escalated subject from the
-        # triage pass to the concern it produced. Written first, so a run that
-        # crashes still has its intent on the record.
-        audit_mod.record_run(run_id, actor="agent", trigger=trigger,
-                             verdict="escalated", detail=_subject_of(item))
-        try:
-            result = await runtime.investigate(
-                provider=provider,
-                system=[{"type": "text", "text": playbooks.system_prompt("owner")},
-                        {"type": "text", "text": SYSTEM},
-                        {"type": "text", "text": document}],
-                messages=[{"role": "user", "content": _question(item)}],
-                config=config, tier="reason", trigger=trigger, run_id=run_id)
-        except Exception as err:  # noqa: BLE001 - the clock must survive this
-            swallow(f"investigation of {_subject_of(item)!r} raised", err)
-            continue
-        out.started += 1
-        out.run_ids.append(run_id)
-        log(f"reason: {run_id} {result.status} on {_subject_of(item)!r}")
+        if await investigate_subject(item, provider=provider, config=config,
+                                     document=document, trigger=trigger,
+                                     run_id=run_id):
+            out.started += 1
+            out.run_ids.append(run_id)
 
     out.concerns = max(0, _concern_count(config) - before)
     return out
+
+
+async def investigate_subject(item: Any, *, provider: Provider,
+                              config: Optional[Mapping[str, Any]],
+                              document: str, trigger: str,
+                              run_id: str) -> bool:
+    """One subject, investigated. Returns whether the run happened at all.
+
+    ⚠️ EXTRACTED SO APPROVAL IS NOT A SECOND INVESTIGATION PATH. The scheduler's
+    automatic arm and a person pressing approve reach the model through this one
+    function, with the same prompt, the same tier, the same audit rows and the
+    same never-raise contract. Two call sites and one body is the rule
+    `registry.invoke` states one layer down — the second path is the one nobody
+    tests, and here it would be the path that spends money.
+
+    ⚠️ THE LINK ROW IS WRITTEN BEFORE THE RUN. It carries the SUBJECT and the
+    run id, and every row the investigation writes carries that same id — which
+    is what lets a reader follow one escalated subject from the triage pass to
+    the concern it produced. Written first, so a run that crashes still has its
+    intent on the record. For an APPROVED escalation it is also what settles the
+    queued row, because `audit.pending_escalations` treats any later row sharing
+    the run id as settled.
+    """
+    subject = _subject_of(item)
+    audit_mod.record_run(run_id, actor="agent", trigger=trigger,
+                         verdict="escalated", subject=subject,
+                         detail=str(getattr(item, "reason", "") or ""))
+    try:
+        result = await runtime.investigate(
+            provider=provider,
+            system=[{"type": "text", "text": playbooks.system_prompt("owner")},
+                    {"type": "text", "text": SYSTEM},
+                    {"type": "text", "text": document}],
+            messages=[{"role": "user", "content": _question(item)}],
+            config=config, tier="reason", trigger=trigger, run_id=run_id)
+    except Exception as err:  # noqa: BLE001 - the clock must survive this
+        swallow(f"investigation of {subject!r} raised", err)
+        return False
+    log(f"reason: {run_id} {result.status} on {subject!r}")
+    return True
+
+
+@dataclass
+class Queued:
+    """One escalation waiting for a person, as the queue hands it back."""
+
+    subject: str = ""
+    reason: str = ""
+
+
+async def approve(run_id: str, *, provider: Provider,
+                  config: Optional[Mapping[str, Any]] = None,
+                  document: str = "", trigger: str = "approved"
+                  ) -> Tuple[bool, str]:
+    """Run the investigation a person just approved. Returns `(ran, reason)`.
+
+    ⚠️ THE SUBJECT COMES FROM THE QUEUE, NOT FROM THE CALLER. A run id is the
+    only thing the button sends, and the subject is read back from the audit row
+    it names — so a browser cannot ask for an investigation of something nobody
+    escalated, and there is no field in which to try.
+
+    ⚠️ AND THE BUDGET IS ASKED HERE TOO. An approved investigation costs exactly
+    what an automatic one costs; a ceiling that bound the scheduler and not the
+    button would be a ceiling with a way around it.
+    """
+    wanted = str(run_id or "")
+    row = next((r for r in audit_mod.pending_escalations()
+                if str(r.get("run_id") or "") == wanted), None)
+    if row is None:
+        # ⚠️ ONE ANSWER FOR "NEVER EXISTED" AND "ALREADY ACTED ON", because the
+        # queue cannot tell them apart and neither reading changes what the
+        # person should do — press it again and nothing more happens.
+        return False, "that escalation is not waiting for approval any more"
+
+    money = budget_mod.check(config, kind="run")
+    if not money.allowed:
+        return False, money.reason
+
+    item = Queued(subject=str(row.get("subject") or ""),
+                  reason=str(row.get("detail") or ""))
+    ran = await investigate_subject(item, provider=provider, config=config,
+                                    document=document, trigger=trigger,
+                                    run_id=wanted)
+    return (ran, "" if ran else "the investigation could not be started")
+
+
+def dismiss(run_id: str, *, reason: str = "") -> Tuple[bool, str]:
+    """Settle a queued escalation without investigating it.
+
+    ⚠️ A SECOND ROW, NEVER AN EDIT. The queued row stays exactly as written and
+    this one refers to it by run id — the append-only rule `audit.py` opens
+    with, and the reason a dismissed escalation remains visible as something a
+    person decided rather than something that vanished.
+    """
+    wanted = str(run_id or "")
+    row = next((r for r in audit_mod.pending_escalations()
+                if str(r.get("run_id") or "") == wanted), None)
+    if row is None:
+        return False, "that escalation is not waiting for approval any more"
+    ok = audit_mod.record_run(wanted, actor="owner", trigger="approved",
+                              verdict="dismissed",
+                              subject=str(row.get("subject") or ""),
+                              detail=str(reason or "").strip())
+    return ok, "" if ok else "the audit could not be written"
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
