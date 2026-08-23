@@ -132,9 +132,21 @@ export default function ShadowDiffPanel() {
    *  reporting information, and it was. A page that answers one question gets
    *  to say one thing. */
   const ran = diff.agentTotal > 0 || diff.rulesTotal > 0;
+  /** ⚠️ A DIFF WITH AN EMPTY VILLA COLUMN IS NOT A COMPARISON, AND CALLING IT
+   *  ONE WOULD HAVE COST THE OWNER THE DECISION. With `rulesTotal` 10 and
+   *  `agentTotal` 0 the page said "10 things your automations caught and the
+   *  villa did not" — which is arithmetically true and reads as "the agent is
+   *  worse", when the identical output is produced by an agent that has never
+   *  run. Every rule is in `rulesOnly` by construction when the other side is
+   *  empty, so the number carries no information about the agent at all.
+   *
+   *  This is the shape this project keeps paying for: an instrument reporting
+   *  the same value for the two outcomes it exists to separate. */
   const verdict = !ran
     ? "waiting"
-    : diff.rulesOnly.length > 0 ? "blocked" : "clear";
+    : diff.agentTotal === 0
+      ? "one-sided"
+      : diff.rulesOnly.length > 0 ? "blocked" : "clear";
 
   return (
     <div className="fm-stack">
@@ -152,6 +164,9 @@ export default function ShadowDiffPanel() {
         <span>
           {verdict === "waiting"
             ? "Not enough evidence yet — neither layer has recorded anything"
+            : verdict === "one-sided"
+              ? `Not a comparison yet — your automations reported `
+                + `${diff.rulesTotal}, the villa nothing`
             : verdict === "blocked"
               ? `${diff.rulesOnly.length} thing${
                   diff.rulesOnly.length === 1 ? "" : "s"} your automations caught`
@@ -159,6 +174,16 @@ export default function ShadowDiffPanel() {
               : "Nothing your automations caught was missed"}
         </span>
       </div>
+
+      {verdict === "one-sided" && (
+        <div className="fm-banner">
+          Every finding lands in the first list when the other side is empty, so
+          that count says nothing about the villa yet — an agent that has raised
+          no concerns produces exactly this page. Leave supervision running
+          until the Cockpit shows concerns of its own, then compare. Retiring
+          anything on this reading would be deciding from one column.
+        </div>
+      )}
 
       {verdict === "waiting" ? (
         <p className="muted body-text">
