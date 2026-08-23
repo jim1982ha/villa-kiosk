@@ -301,6 +301,20 @@ def write_json(path: str, payload: Any) -> None:
     those are covered by a security suite this subsystem has no business
     destabilising.
     """
+    write_text(path, json.dumps(payload))
+
+
+def write_text(path: str, body: str) -> None:
+    """The same atomic overwrite, for a file that is not JSON.
+
+    ⚠️ THE MECHANISM ABOVE, EXTRACTED — NOT A SECOND ONE. The villa memory
+    store writes markdown rather than JSON, and /dry-audit found it about to
+    hand-roll the same temp-file-then-replace dance a THIRD time (the proxy's
+    `atomic_write`, this module's, and its own). The reasoning in `write_json`
+    about why this subsystem may not import the proxy applies unchanged; what
+    must not multiply is the number of places that get fsync-before-replace
+    subtly wrong.
+    """
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
     handle = tempfile.NamedTemporaryFile(
@@ -308,7 +322,7 @@ def write_json(path: str, payload: Any) -> None:
     temp_name = handle.name
     try:
         with handle:
-            json.dump(payload, handle)
+            handle.write(body)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_name, path)

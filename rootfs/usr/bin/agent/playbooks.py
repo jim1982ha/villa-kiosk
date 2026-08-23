@@ -22,12 +22,28 @@ are different documents for different people.
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional, Sequence, Tuple
+import time
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from agent import content
+from reports import store as store_mod
 from reports.log import swallow
 
 SHIPPED_ROOT: str = "/usr/share/vesta/playbooks"
 LEARNED_ROOT: str = "/data/vesta"
+
+#: Where `note_read` records what was consulted. ⚠️ NOT IN THE PROMPT AND NOT
+#: IN A PLAYBOOK. It is a DATE, and a date above the cache breakpoint ends
+#: caching for every call — the same reason `last_confirmed` is front matter
+#: rather than prose. It lives in a store nobody sends.
+READS_PATH: str = "/data/vesta/playbook-reads.json"
+
+#: How long a playbook may go unread before the quarterly review is told about
+#: it. ⚠️ A PROMPT FOR A DECISION, NEVER A DELETION. The current blueprint pack
+#: has no such signal at all, which is how an installed rule with no instance
+#: sits there for a year; but "unread" can also mean "the villa has no pool",
+#: so this surfaces and a person decides.
+UNUSED_AFTER_DAYS: int = 90
 
 #: Loaded on every run, in this order. ⚠️ A LIST, NOT A DIRECTORY WALK, because
 #: order is part of the prompt and a filesystem's order is not: the constitution
@@ -55,28 +71,34 @@ def _read(path: str) -> str:
         return ""
 
 
-def strip_front_matter(text: str) -> str:
-    """The prose a model should read.
-
-    ⚠️ FRONT MATTER IS NOT SENT. `last_confirmed` is a DATE, and a date above
-    the cache breakpoint ends prompt caching for every call — silently, with the
-    bill as the only symptom. It is metadata for CI and for the quarterly
-    review, not for the model.
-    """
-    if not text.startswith("---"):
-        return text.strip()
-    end = text.find("\n---", 3)
-    return text[end + 4:].strip() if end >= 0 else text.strip()
+#: ⚠️ RE-EXPORTED, NOT REIMPLEMENTED. `content.py` owns the syntax for every
+#: store that speaks it — see its docstring for why the villa memory store
+#: sharing this parser matters. The name stays here because every caller in the
+#: prompt path already reaches for `playbooks.strip_front_matter`.
+strip_front_matter = content.strip_front_matter
 
 
 def system_prompt(audience: str = "owner", *,
-                  root: Optional[str] = None) -> str:
+                  root: Optional[str] = None,
+                  memory_root: Optional[str] = None) -> str:
     """The always-in-context half, assembled in a fixed order.
 
     ⚠️ RETURNS `""` WHEN NOTHING IS INSTALLED RATHER THAN RAISING. A deployment
     whose playbooks are missing must still answer — degraded, with the caller's
     own instructions only — because the alternative is an agent that cannot
     speak because a documentation file is absent.
+
+    ⚠️ THE CATALOGUE IS PART OF IT, AND ONLY THE CATALOGUE. Descriptions are
+    what let the model know a procedure EXISTS; bodies are what it fetches when
+    it judges one relevant. Assembling both here is what keeps "no playbook is
+    loaded eagerly" true at the one place the prompt is built, rather than
+    depending on every caller remembering which half is cheap.
+
+    ⚠️ AND THE LEARNED HALF IS ASSEMBLED HERE TOO, THOUGH IT LIVES IN THE OTHER
+    TREE. §13.5's always-in-context block is shipped constitution PLUS villa
+    memory, and giving each tree its own assembly point is exactly how the
+    shipped half came to be written, gated and loaded by nobody. One function
+    builds the prompt; a caller cannot forget half of it.
     """
     base = os.path.join(root or SHIPPED_ROOT, "_system")
     names = list(SYSTEM_ORDER)
@@ -85,7 +107,46 @@ def system_prompt(audience: str = "owner", *,
         names.append(voice)
     parts = [strip_front_matter(_read(os.path.join(base, f"{n}.md")))
              for n in names]
+    parts.append(catalogue(root))
+    parts.append(_memory_index(memory_root))
     return "\n\n".join(p for p in parts if p)
+
+
+def _memory_index(root: Optional[str]) -> str:
+    """⚠️ IMPORTED INSIDE THE FUNCTION AND DEGRADING TO `""`. A villa with no
+    learned claims — every fresh install, and every test of the shipped half —
+    must build the same prompt minus one block, never fail to build one."""
+    try:
+        from agent import memory as memory_mod
+        return memory_mod.index(root)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not load villa memory", err)
+        return ""
+
+
+def catalogue(root: Optional[str] = None) -> str:
+    """The one-line-per-playbook manifest that sits in context.
+
+    ⚠️ ~35 TOKENS EACH, AND THAT RATIO IS THE WHOLE ECONOMICS. Twenty-five
+    bodies would be ~30k tokens on every one of ~96 triage calls a day; the
+    descriptions are under a thousand and sit above the cache breakpoint, so
+    after the first call of the day they cost a tenth of that.
+
+    ⚠️ SORTED, BECAUSE THE PROMPT PREFIX MUST BE BYTE-STABLE. `os.walk` returns
+    whatever order the filesystem gives, and a manifest that reshuffles between
+    runs is a prefix that changes — which silently ends prompt caching with the
+    bill as the only symptom, exactly as an interpolated date would.
+    """
+    rows = descriptions(root)
+    if not rows:
+        return ""
+    lines = [f"- {r['name']} ({r['domain']}): {r['description']}"
+             for r in sorted(rows, key=lambda r: (r["domain"], r["name"]))]
+    return ("## Procedures available to you\n\n"
+            "Call `read_playbook` with a name below when one is relevant to "
+            "what you are looking at. Do not guess a body from its "
+            "description, and do not read one that is not relevant.\n\n"
+            + "\n".join(lines))
 
 
 def descriptions(root: Optional[str] = None) -> List[Dict[str, str]]:
@@ -115,17 +176,8 @@ def descriptions(root: Optional[str] = None) -> List[Dict[str, str]]:
 
 
 def _front_matter(text: str) -> Dict[str, str]:
-    if not text.startswith("---"):
-        return {}
-    end = text.find("\n---", 3)
-    if end < 0:
-        return {}
-    out: Dict[str, str] = {}
-    for line in text[3:end].splitlines():
-        if ":" in line:
-            key, _, value = line.partition(":")
-            out[key.strip()] = value.strip()
-    return out
+    """See `content.front_matter` — one parser for every store in this format."""
+    return content.front_matter(text)
 
 
 def body(name: str, *, roots: Optional[Sequence[str]] = None) -> str:
@@ -148,3 +200,79 @@ def body(name: str, *, roots: Optional[Sequence[str]] = None) -> str:
             if f"{safe}.md" in files:
                 return strip_front_matter(_read(os.path.join(folder, f"{safe}.md")))
     return ""
+
+
+def note_read(name: str, *, path: Optional[str] = None,
+              now: Optional[float] = None) -> None:
+    """Record that a playbook was CONSULTED. §13.6 rule 4.
+
+    ⚠️ CALLED BY THE TOOL, NOT BY `body()`, AND THE DIFFERENCE IS THE WHOLE
+    POINT. `body()` is also how CI reads a file, how the index is rendered and
+    how a test asserts content — counting those would make every playbook look
+    freshly consulted forever, which is a usage signal that can only ever say
+    "all in use". Only the agent reaching for one is a read.
+
+    ⚠️ NEVER RAISES. A store that cannot be written must not be able to fail an
+    investigation; the cost of losing the signal is a review that is one entry
+    less informed, and the cost of raising is an answer nobody gets.
+    """
+    try:
+        rows = store_mod.read_json(path or READS_PATH, {})
+        rows = dict(rows) if isinstance(rows, Mapping) else {}
+        rows[str(name)] = float(now if now is not None else time.time())
+        store_mod.write_json(path or READS_PATH, rows)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not record a playbook read", err)
+
+
+def unused(*, root: Optional[str] = None, path: Optional[str] = None,
+           days: int = UNUSED_AFTER_DAYS,
+           now: Optional[float] = None) -> List[str]:
+    """Names not consulted within `days`, for the quarterly review.
+
+    ⚠️ NEVER READ AND READ LONG AGO ARE THE SAME ANSWER HERE, deliberately. A
+    playbook that has never been opened is the strongest case for deletion, and
+    treating "absent from the store" as "no data, skip it" would hide exactly
+    the files this signal exists to find — the fifth shape of instrument that
+    lies, and this project has shipped four of them.
+    """
+    try:
+        rows = store_mod.read_json(path or READS_PATH, {})
+        rows = dict(rows) if isinstance(rows, Mapping) else {}
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read playbook reads", err)
+        rows = {}
+    cutoff = (now if now is not None else time.time()) - float(days) * 86400.0
+    out = []
+    for row in descriptions(root):
+        seen = rows.get(row["name"])
+        if not isinstance(seen, (int, float)) or float(seen) < cutoff:
+            out.append(row["name"])
+    return sorted(out)
+
+
+def render_index(root: Optional[str] = None) -> str:
+    """`INDEX.md`'s exact content, derived from the tree.
+
+    ⚠️ GENERATED, LIKE EVERY OTHER MANIFEST IN THIS PROJECT, and the CI gate
+    compares the file on disk against this function rather than eyeballing it.
+    A playbook that exists but is not offered is invisible to the model — it
+    fails as "the agent chose not to use it", which is indistinguishable from
+    working, and is the same silent shape `ALL_TOOLS` is pinned against.
+    """
+    rows = sorted(descriptions(root), key=lambda r: (r["domain"], r["name"]))
+    lines = ["# Playbook index",
+             "",
+             "GENERATED by `agent.playbooks.render_index` — do not hand-edit.",
+             "Add a playbook to its domain directory and regenerate.",
+             ""]
+    domain = ""
+    for row in rows:
+        if row["domain"] != domain:
+            domain = row["domain"]
+            if lines and lines[-1] != "":
+                lines.append("")
+            lines += [f"## {domain}", ""]
+        lines.append(f"- **{row['name']}** — {row['description']}")
+    lines.append("")
+    return "\n".join(lines)

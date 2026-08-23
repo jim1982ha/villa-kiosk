@@ -155,6 +155,7 @@ def build_tools(session: Any = None) -> List[BaseTool]:
     from agent.tools import ha as ha_tools
     from agent.tools import ledger as ledger_tools
     from agent.tools import logs as log_tools
+    from agent.tools import playbook as playbook_tools
     from agent.tools import read as read_tools
 
     rows = _journal_rows()
@@ -173,4 +174,9 @@ def build_tools(session: Any = None) -> List[BaseTool]:
     made.extend(cls(refs=refs) for cls in ha_tools.HA_TOOLS)
     made.extend(cls(refs=refs) for cls in log_tools.LOG_TOOLS)
     made.extend(cls() for cls in ledger_tools.LEDGER_TOOLS)
+    # ⚠️ NO SOURCE ARGUMENT: its source is the filesystem the add-on ships, so
+    # it is the one tool here that answers correctly on a fresh install with no
+    # villa data at all. Every other member of this list is a per-property read
+    # and returns nothing useful until the collector has run.
+    made.extend(cls() for cls in playbook_tools.PLAYBOOK_TOOLS)
     return made

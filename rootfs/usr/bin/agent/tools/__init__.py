@@ -10,8 +10,10 @@ that every BaseTool subclass under this package reaches `ALL_TOOLS`.
 from agent.tools.ha import HA_TOOLS
 from agent.tools.ledger import LEDGER_TOOLS
 from agent.tools.logs import LOG_TOOLS
+from agent.tools.playbook import PLAYBOOK_TOOLS
 from agent.tools.read import READ_TOOLS
 
-ALL_TOOLS = READ_TOOLS + HA_TOOLS + LOG_TOOLS + LEDGER_TOOLS
+ALL_TOOLS = READ_TOOLS + HA_TOOLS + LOG_TOOLS + LEDGER_TOOLS + PLAYBOOK_TOOLS
 
-__all__ = ["ALL_TOOLS", "READ_TOOLS", "HA_TOOLS", "LOG_TOOLS", "LEDGER_TOOLS"]
+__all__ = ["ALL_TOOLS", "READ_TOOLS", "HA_TOOLS", "LOG_TOOLS", "LEDGER_TOOLS",
+           "PLAYBOOK_TOOLS"]

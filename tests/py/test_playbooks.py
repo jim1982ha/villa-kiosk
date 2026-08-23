@@ -48,6 +48,23 @@ SYSTEM_TOKEN_BUDGET = 4_000
 PLAYBOOK_TOKEN_CAP = 1_500
 MAX_SHIPPED_PLAYBOOKS = 25
 
+#: ⚠️ GENERATED, SO IT IS NOT A PLAYBOOK AND MUST BE EXCLUDED FROM EVERY RULE
+#: BELOW. It has no front matter by design — it is the manifest OF the front
+#: matter — and counting it toward the cap would silently cost the set a
+#: procedure.
+INDEX_NAME = "INDEX.md"
+
+#: The domain directories. ⚠️ SEVEN, AND THE PLAN SAYS SIX IN ONE SENTENCE AND
+#: LISTS SEVEN IN ANOTHER. §13.1's tree predates §13.3, which added `security`
+#: after finding it had been omitted structurally — the playbook set had been
+#: derived by mapping the DELETED blueprint families onto replacements, and
+#: security lives in the families that were KEPT, so its detection survived and
+#: its judgement was dropped. The count in the older sentence is the stale half.
+#: Recorded here rather than silently obeyed, because a test that quietly
+#: enforced six would have deleted the correction.
+DOMAINS = ("climate", "connectivity", "electrical", "hospitality", "security",
+           "system", "water")
+
 
 def _files(root: str) -> List[str]:
     out: List[str] = []
@@ -59,6 +76,13 @@ def _files(root: str) -> List[str]:
 def _read(path: str) -> str:
     with open(path, encoding="utf-8") as handle:
         return handle.read()
+
+
+def _domain_files(root: str = SHIPPED) -> List[str]:
+    """The 25 — everything except the always-loaded set and the manifest."""
+    return [p for p in _files(root)
+            if os.sep + "_system" + os.sep not in p
+            and os.path.basename(p) != INDEX_NAME]
 
 
 def _front_matter(text: str) -> Dict[str, str]:
@@ -101,10 +125,47 @@ def test_every_shipped_file_declares_kind_playbook() -> None:
     playbook. They drive different agents, load through different tools and live
     in different trees; a naming convention alone rots."""
     for path in _files(SHIPPED):
+        if os.path.basename(path) == INDEX_NAME:
+            continue
         front = _front_matter(_read(path))
         assert front.get("kind") == "playbook", f"{path} has no `kind: playbook`"
         for required in ("name", "domain", "description", "version"):
             assert front.get(required), f"{path} has no {required}"
+        # ⚠️ THE NAME IS THE HANDLE THE MODEL PASSES TO `read_playbook`, so a
+        # file whose `name` differs from its filename is unreachable — the
+        # catalogue offers one string and the loader resolves the other.
+        assert front["name"] == os.path.basename(path)[:-3], (
+            f"{path} declares name {front['name']!r}, which is not its filename "
+            f"— read_playbook resolves by filename, so this one cannot be read")
+
+
+def test_every_domain_playbook_says_when_to_consult_it() -> None:
+    """⚠️ `description` is what the model sees in context; `consult_when` is the
+    trigger condition. Without it the catalogue says what a procedure IS and
+    never says when it applies, which is the half that decides whether it is
+    ever opened."""
+    for path in _domain_files():
+        front = _front_matter(_read(path))
+        assert front.get("consult_when"), f"{path} has no consult_when"
+
+
+def test_every_playbook_lives_in_the_domain_it_DECLARES() -> None:
+    """⚠️ THE DIRECTORY AND THE FRONT MATTER MUST AGREE. `descriptions()` reads
+    the declared domain and the index groups by it, so a file in one directory
+    declaring another is filed under a heading it is not stored in — findable
+    by neither route."""
+    for path in _domain_files():
+        front = _front_matter(_read(path))
+        assert front.get("domain") == os.path.basename(os.path.dirname(path)), (
+            f"{path} declares domain {front.get('domain')!r} but sits in "
+            f"{os.path.basename(os.path.dirname(path))!r}")
+
+
+def test_no_playbook_drifts_into_an_UNDECIDED_domain() -> None:
+    """§13.8: a seventh category nobody decided on. See `DOMAINS` for why the
+    number is seven and not the six one sentence of the plan still says."""
+    found = {os.path.basename(os.path.dirname(p)) for p in _domain_files()}
+    assert found <= set(DOMAINS), f"undecided domain(s): {found - set(DOMAINS)}"
 
 
 def test_no_SKILL_md_under_the_shipped_tree() -> None:
@@ -168,9 +229,57 @@ def test_no_single_playbook_exceeds_its_cap() -> None:
 def test_the_shipped_set_is_BOUNDED() -> None:
     """⚠️ §13.6: adding one means arguing which one it replaces — the
     discipline the blueprint pack never had, which is how 88 rules became 108
-    instances."""
-    domains = [p for p in _files(SHIPPED) if os.sep + "_system" + os.sep not in p]
-    assert len(domains) <= MAX_SHIPPED_PLAYBOOKS
+    instances.
+
+    ⚠️ AND A LOWER BOUND, WHICH IS NOT SYMMETRY. Every content rule in this file
+    loops over this set, so an empty or truncated tree passes all of them
+    vacuously — the set could go to zero and only this line would notice. It is
+    the same guard `test_the_walk_finds_the_system_files` provides above.
+    """
+    found = _domain_files()
+    assert len(found) <= MAX_SHIPPED_PLAYBOOKS, (
+        f"{len(found)} shipped playbooks against a cap of "
+        f"{MAX_SHIPPED_PLAYBOOKS}; adding one means arguing which it replaces")
+    assert len(found) >= 20, (
+        f"only {len(found)} shipped playbooks — every content check in this "
+        f"file loops over this list and would pass vacuously")
+
+
+def test_the_INDEX_matches_the_DIRECTORY() -> None:
+    """§13.8. ⚠️ A PLAYBOOK THAT EXISTS BUT IS NOT OFFERED IS INVISIBLE, and it
+    fails as "the model chose not to use it" — indistinguishable from working.
+    The manifest is GENERATED, so this compares the file on disk against the
+    function that renders it rather than against a transcription."""
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    path = os.path.join(SHIPPED, INDEX_NAME)
+    assert os.path.isfile(path), "no INDEX.md — regenerate it"
+    assert _read(path) == playbooks.render_index(SHIPPED), (
+        "INDEX.md is stale; regenerate with agent.playbooks.render_index")
+
+
+def test_the_CATALOGUE_carries_every_description_and_NO_body() -> None:
+    """TASK-090's whole economics, asserted rather than intended.
+
+    ⚠️ ~35 TOKENS EACH IN CONTEXT AGAINST ~1,200 FETCHED. If a body ever leaked
+    into the always-loaded half, the triage bill would rise by roughly an order
+    of magnitude with no other symptom — the output would be perfect. That is
+    the same silent-failure shape as an interpolated date ending prompt caching.
+    """
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    text = playbooks.catalogue(SHIPPED)
+    names = [_front_matter(_read(p))["name"] for p in _domain_files()]
+    for name in names:
+        assert name in text, f"{name} is installed but never offered"
+    # Every body carries this heading; none of it may reach the catalogue.
+    assert "## Check, in order" not in text
+    assert len(text) // CHARS_PER_TOKEN <= 60 * len(names), (
+        "the catalogue is far larger than one line per playbook")
 
 
 def test_the_constitution_carries_the_workbooks_best_rule_verbatim() -> None:

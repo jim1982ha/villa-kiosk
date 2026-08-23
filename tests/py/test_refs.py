@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import tempfile
 from typing import Any, Dict, List, Mapping
 
 import pytest
@@ -21,7 +22,11 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from agent import refs as refs_mod  # noqa: E402
-from agent.tools import ALL_TOOLS, ha, ledger, logs, read  # noqa: E402
+from agent.tools import ALL_TOOLS, ha, ledger, logs, playbook, read  # noqa: E402
+
+SHIPPED_PLAYBOOKS = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "rootfs", "usr", "share", "vesta", "playbooks")
 
 
 def _run(coro: Any) -> Any:
@@ -321,6 +326,14 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
                                refs=table),
         logs.ReadLogs(source=lambda h: ["2026 INFO nothing here"], refs=table),
         ledger.ReadLedger(source=lambda: {}),
+        # ⚠️ POINTED AT THE REAL SHIPPED TREE, not a stub. This tool's "source"
+        # is the content the add-on ships, so sweeping it here scans all 25
+        # bodies for ids through a SECOND, independent scanner — `test_playbooks`
+        # has its own regex, and two disagreeing is the only way either is
+        # found to be wrong.
+        playbook.ReadPlaybook(roots=(SHIPPED_PLAYBOOKS,),
+                              reads_path=os.path.join(
+                                  tempfile.mkdtemp(), "reads.json")),
     ]
     assert len(built) == len(ALL_TOOLS), (
         "a tool was added to the registry without being swept here")
@@ -330,5 +343,10 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
             args = {"refs": ["d1"]}
         elif "ref" in tool.inputSchema.get("required", []):
             args = {"ref": "d1"}
+        elif "name" in tool.inputSchema.get("required", []):
+            # ⚠️ A REAL NAME. `{}` would make this tool refuse, and a refusal
+            # leaks nothing — the sweep would pass without reading a byte of
+            # what it exists to scan.
+            args = {"name": "pump-anomaly"}
         leaked = refs_mod.entity_ids_in(_run(tool.call(args)))
         assert leaked == [], f"{tool.name} leaked {leaked}"
