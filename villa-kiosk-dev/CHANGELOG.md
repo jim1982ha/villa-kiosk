@@ -1,3 +1,11 @@
+## 2.655.1
+
+### Fixed — a row's delete button sat a line above the controls beside it
+The shared row is top-aligned, which is right for bare controls and wrong once a
+caller labels its fields: the delete lined up with the LABEL rather than with the
+selects. Fixed on the shared rule, not in the panel that noticed — both callers
+want the delete beside the controls, and it now matches their height too.
+
 ## 2.655.0
 
 ### Changed — Save closes the dialog, a tab switch asks first, and a dead field is gone
