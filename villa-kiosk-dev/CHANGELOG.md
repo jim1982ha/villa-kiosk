@@ -1,3 +1,13 @@
+## 2.660.0
+
+### Fixed — the tab strip was being squashed by its own dialog's content
+It looked different on every tab because it WAS a different height on every tab.
+`.fm-tabs` declared no flex value, so it defaulted to shrinkable, while the body
+beside it scrolls without `min-height: 0` — so a long tab pushed the column past
+the card's fixed height and the browser recovered the difference from the only
+item allowed to give. Both halves are fixed on the shell, so it holds for every
+tab of every modal, and pinned.
+
 ## 2.659.0
 
 ### Fixed — the journal ring was quietly deleting equipment from the agent's world
