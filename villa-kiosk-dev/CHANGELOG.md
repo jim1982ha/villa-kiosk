@@ -1,3 +1,13 @@
+## 2.657.0
+
+### Fixed — the villa denied its own pool pump, and sent someone to the wrong subsystem
+Asked "is the pool pump OK", the agent said no such circuit exists — of equipment
+drawing 863.7 W as it answered; it had read a ranked excerpt as an inventory, which
+nothing said it was not. Asked why it could not see overnight, it sent the owner to
+Home Assistant's recorder settings: our own prose called VESTA's full journal "a
+limit of the recorder", and a test held that wording in place. The shadow diff has a
+surface at last, and the API key moved to the tab that spends it.
+
 ## 2.656.1
 
 ### Changed — a person's row asks the ordinary question first, the rare one only when it applies
