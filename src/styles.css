@@ -156,6 +156,16 @@
   --panel-radius: 18px;
   --panel-padding: 24px;
   --touch-min: 44px;
+  /* ⚠️ THE CHECKBOX, AND THE DEAD SPACE A 44px ROW PUTS AROUND IT. Named
+     because `label.toggle` used `min-height: var(--touch-min)` with
+     `align-items: center`, which manufactures (44 - 22) / 2 = 11px of empty
+     row ABOVE AND BELOW the ink — invisible in isolation and glaring under a
+     hint, which then sits 4px from a box edge 11px below the text and reads as
+     a blank line. Reported four times. The height is the same; the difference
+     is that the padding is a quantity a rule can subtract and a min-height is
+     not. */
+  --toggle-box: 22px;
+  --toggle-pad: calc((var(--touch-min) - var(--toggle-box)) / 2);
 
   /* ── THE ICON CHIP, defined once for both renderers ────────────────────
      A category-coloured rounded square holding a glyph, with a label or a
@@ -2535,8 +2545,14 @@ label.toggle {
      is one of the four added in August 2026 — it was the documented shared
      checkbox row and had no callers before that — so this reaches all of them
      and cannot surprise a screen that predates it. `align-items: center` was
-     already here, so the contents stay centred and only the row grows. */
-  min-height: var(--touch-min);
+     already here, so the contents stay centred and only the row grows.
+
+     ⚠️ EXPRESSED AS PADDING SINCE 2.687.0, NOT min-height. Same 44px target
+     (22px box + 2 x 11px), same centring — but the leftover is now a NAMED
+     value, so the one rule below can subtract it instead of every container
+     guessing at it. `.reports-pane` had guessed -6px; nothing else had guessed
+     at all. */
+  padding-block: var(--toggle-pad);
 }
 label.toggle input[type="checkbox"] {
   appearance: none;
@@ -3531,6 +3547,35 @@ label.toggle span { user-select: none; line-height: 1.4; }
    between sub-sections, reported from the model list. Pinning it to 0 leaves
    exactly the gap, and can only ever reduce spacing. */
 .fm-stack > p.body-text.muted + * { margin-top: 0; }
+/* ⚠️ A HINT UNDER A TOGGLE SITS --hint-gap FROM THE INK, NOT FROM THE BOX, AND
+   THIS IS THE ONE PLACE THAT IS SAID. The generic hint rules pull to the
+   PRECEDING ELEMENT'S BOX; a toggle's box is 11px taller than its ink at the
+   bottom (see --toggle-pad), so those rules land the hint a blank line away.
+   Reported four times across four releases, each answered with a different
+   number in a different place — `.reports-pane` carried -6px, `.settings-body`
+   and `.fm-stack` carried nothing, so the same pair rendered three ways
+   depending on which panel it was in. Every container is named here and every
+   one subtracts the SAME derived quantity, which is what makes "all
+   option/description pairs use one definition" true rather than asserted. */
+/* ⚠️ `.toggle-row` IS IN EVERY LIST BECAUSE ONE TOGGLE IS WRAPPED IN ONE, and
+   checking that rather than assuming it is what stopped this being a partial
+   fix for the fifth time. NarrationSection puts its checkbox inside
+   `div.toggle-row` (so a sibling control cannot land inside the checkbox's own
+   click target), which makes the hint's previous sibling the DIV — `label.toggle
+   + p` does not match it, and that one toggle would have kept the blank line
+   while the other four lost it. The wrapper inherits the row's height, so it
+   inherits the dead space and takes the same correction. */
+.fm-stack > label.toggle + p.body-text.muted,
+.fm-stack > .toggle-row + p.body-text.muted {
+  margin-top: calc(var(--hint-gap) - var(--stack-gap) - var(--toggle-pad));
+}
+.settings-body > label.toggle + p.body-text.muted,
+.settings-body > label.toggle + p.muted,
+.settings-body > .toggle-row + p.body-text.muted,
+.reports-pane > label.toggle + p,
+.reports-pane > .toggle-row + p {
+  margin-top: calc(var(--hint-gap) - var(--toggle-pad));
+}
 .settings-body > * + p.body-text.muted { margin-top: var(--hint-gap); }
 .settings-body > p.body-text.muted + * { margin-top: var(--stack-gap); }
 /* A section heading still gets its air ABOVE (that IS the blank line between
@@ -4413,7 +4458,6 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    spacing rule — the pane's gap — which is what makes the rhythm predictable
    instead of the sum of three opinions. */
 .reports-pane > h3 + p,
-.reports-pane > label.toggle + p { margin-top: -6px; }
 .reports-pane > label.toggle { margin-top: 0; }
 
 .reports-h3 {
