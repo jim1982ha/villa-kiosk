@@ -34,7 +34,7 @@
 // the switches that act on it.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Play, RefreshCw } from "lucide-react";
+import { Download, Loader2, Play, RefreshCw } from "lucide-react";
 
 import { loadShadowDiff, runAgentNow, type ShadowDiff } from "@/agent/agentApi";
 
@@ -55,6 +55,33 @@ export default function ShadowDiffPanel() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  /** The three lists as CSV, one row per finding with the column that decides.
+   *
+   *  ⚠️ THE `caught_by` COLUMN IS THE POINT. A flat list of titles is the page
+   *  again; what a spreadsheet adds is sorting and filtering on WHICH SIDE
+   *  found each one, which is the only question this document exists to answer.
+   *
+   *  ⚠️ AND IT CARRIES THE COVERAGE FLAG ON EVERY ROW. The caveat is a banner
+   *  on screen and would be lost in an export — a file whose rows look
+   *  conclusive when the period was not fully observed is worse than no file. */
+  const download = () => {
+    if (!diff) return;
+    const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = [["caught_by", "finding", "coverage_complete"].map(cell).join(",")];
+    const add = (side: string, titles: string[]) => titles.forEach((t) =>
+      rows.push([side, t, String(diff.coverageComplete)].map(cell).join(",")));
+    add("rules only — would be lost", diff.rulesOnly);
+    add("both", diff.both);
+    add("villa only", diff.agentOnly);
+    const url = URL.createObjectURL(
+      new Blob([rows.join("\n") + "\n"], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vesta-cutover-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   /** ⚠️ ONE RUN, NOW, SO THE GATE CAN BE TESTED TODAY. Waiting a cadence is the
    *  honest instruction for judging a real period and a terrible one for
@@ -145,6 +172,23 @@ export default function ShadowDiffPanel() {
         </p>
       ) : (
         <>
+          {/* ⚠️ A ROW READING "(untitled finding …)" IS STALE DATA, NOT A BUG,
+              and the page says so rather than leaving the reader to conclude
+              the fix did not work. History entries written between v2.662.0 and
+              v2.665.0 stored their blueprint findings without a title; re-read
+              re-reads those same stored rows, so only a NEW brief carries
+              titles. Said here because "I redid it and got the same thing" is
+              the correct observation and the wrong conclusion. */}
+          {diff.rulesOnly.some((t) => t.startsWith("(untitled")) && (
+            <div className="fm-banner">
+              Some rows have no title. They were recorded by an older release
+              that stored findings without one — generate a briefing (Briefings
+              → Schedule, press and hold a row&rsquo;s delete) and they will
+              read properly. Re-read alone cannot fix them: it re-reads the
+              same stored rows.
+            </div>
+          )}
+
           {/* ⚠️ THE THREE LISTS, NAMED BY WHAT THEY MEAN FOR THE DECISION rather
               than by which layer produced them. "Caught by the rules and not by
               the agent" is accurate and makes the reader do the inference; the
@@ -212,6 +256,11 @@ export default function ShadowDiffPanel() {
       <div className="modal-actions" style={{ margin: 0 }}>
         <button className="btn ghost" disabled={busy} onClick={() => void load()}>
           <RefreshCw size={16} aria-hidden /> Re-read
+        </button>
+        <button className="btn ghost" onClick={download}
+                disabled={busy || !ran}
+                title="Download these three lists as a CSV">
+          <Download size={16} aria-hidden /> CSV
         </button>
         {/* ⚠️ IT SPENDS REAL BUDGET AND THE LABEL SAYS SO. A button that costs
             money must not look like a refresh. */}
