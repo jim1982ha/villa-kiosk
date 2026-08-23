@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(
 
 from agent import audit as audit_mod                           # noqa: E402
 from agent import policy as policy_mod                         # noqa: E402
+from agent import proposals as proposals_mod                   # noqa: E402
 from agent.refs import RefTable                                # noqa: E402
 from agent.tools import act as act_mod                         # noqa: E402
 
@@ -30,6 +31,8 @@ DOOR = "switch.probe_door_relay"
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "a.json"))
+    monkeypatch.setattr(proposals_mod, "PROPOSALS_FILE",
+                        str(tmp_path / "p.json"))
 
 
 def _refs() -> RefTable:
@@ -92,6 +95,29 @@ def test_a_low_harm_reversible_action_on_a_listed_device_RUNS() -> None:
     tool, table = _tool(calls=calls)
     out = _run(tool, ref=_ref_of(table, LAMP), service="turn_off")
     assert out[0].get("type") == "text" and calls == [(LAMP, "turn_off")]
+
+
+def test_a_PROPOSAL_REACHES_THE_QUEUE_a_person_answers_from() -> None:
+    """⚠️ BEHAVIOURAL, BECAUSE THE SOURCE-READING PIN WAS NOT ENOUGH. TASK-083's
+    companion test asserts `proposals_mod.propose(` appears in `act.py`, and a
+    mutation that neutered the call while leaving the text (`None and
+    proposals_mod.propose(...)`) SURVIVED it. A grep proves a line exists; only
+    running the tool proves it does anything.
+
+    Until this landed, a high-harm request produced a proposal that existed
+    solely in the model's own context — it could say "shall I unlock the gate?"
+    and there was nowhere for anybody to say yes."""
+    tool, table = _tool()
+    out = _run(tool, ref=_ref_of(table, DOOR), service="turn_on")
+    assert out[0]["json"]["proposed"] is True
+
+    waiting = proposals_mod.pending()
+    assert len(waiting) == 1, "the proposal never reached the queue"
+    assert waiting[0]["entity_id"] == DOOR
+    assert waiting[0]["service"] == "turn_on"
+    # ⚠️ THE AUDIT'S OWN KEY, so the trail reads as one story: intended,
+    # proposed, confirmed by a person, done.
+    assert waiting[0]["action_key"] == out[0]["json"]["action_key"]
 
 
 def test_a_DOOR_RELAY_is_proposed_never_executed() -> None:

@@ -2265,6 +2265,112 @@ async def agent_review_decide_handler(request: web.Request) -> web.Response:
                               "drafts": len(agent_review.pending())})
 
 
+async def agent_proposals_handler(request: web.Request) -> web.Response:
+    """High-harm actions waiting on a person. TASK-083.
+
+    ⚠️ OWNER-ONLY, ON BOTH VERBS. These are the actions that can let somebody
+    in or silence an alarm — the ones `policy` refuses to execute at any
+    confidence, from any trigger. `manageFacility` is the pair that may judge a
+    CONCERN; this is not a judgement, it is the act itself.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may confirm an action.")
+    from agent import proposals as agent_proposals
+    return web.json_response(
+        {"proposals": agent_proposals.pending(),
+         "ttlSeconds": agent_proposals.TTL_SECONDS},
+        headers={"Cache-Control": "no-store"})
+
+
+async def agent_confirm_handler(request: web.Request) -> web.Response:
+    """A PERSON confirming or declining one proposed action.
+
+    ⚠️ THIS ROUTE IS THE CONFIRM FLOW, AND ITS BEING A ROUTE IS THE DESIGN.
+    There is no confirm TOOL — not a restricted one, not an owner-only one —
+    because a flow the model can complete converts a refusal into a two-step
+    execution while still looking like a safeguard. Consent arrives with a
+    session cookie and a role, on a surface the model cannot reach.
+
+    ⚠️ THE SERVICE CALL USES THE STORED PROPOSAL, NEVER THE REQUEST BODY. The
+    body names WHICH proposal and says yes or no; entity, service and params
+    come from what was proposed. Otherwise this endpoint would be a way to call
+    an arbitrary service by quoting a proposal id — the very flow it exists to
+    prevent, rebuilt through its own front door.
+
+    ⚠️ AND THE DECISION IS AN EXPLICIT ENUM. A malformed request must not be
+    able to confirm anything: `confirm` is the direction with the irreversible
+    consequence, and it is exactly the value a truthy check falls into.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    role = _role_for(request)
+    if role != "owner":
+        return _forbidden("Only the owner profile may confirm an action.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "expected an object"}, status=400)
+
+    key = str(body.get("actionKey") or "").strip()
+    decision = str(body.get("decision") or "").strip()
+    if not key:
+        return web.json_response({"error": "no actionKey"}, status=400)
+    if decision not in ("confirm", "decline"):
+        return web.json_response(
+            {"error": "decision must be confirm or decline"}, status=400)
+
+    from agent import audit as agent_audit
+    from agent import proposals as agent_proposals
+
+    # ⚠️ THE ACTOR IS THE SESSION'S ROLE, never a name from the body. A
+    # client-supplied author is not an audit trail.
+    result = agent_proposals.decide(key, confirm=decision == "confirm", by=role)
+    if not result.get("ok"):
+        return web.json_response({"error": result.get("reason") or "refused",
+                                  "state": result.get("state", "")}, status=400)
+    if decision != "confirm":
+        return web.json_response({"ok": True, "state": "declined"})
+
+    proposal = result.get("proposal") or {}
+    entity_id = str(proposal.get("entity_id") or "")
+    service = str(proposal.get("service") or "")
+    domain, _, verb = service.partition(".")
+    if not verb:
+        # A bare verb was proposed (`turn_off`), so the domain is the entity's.
+        domain, verb = entity_id.split(".", 1)[0], service
+    payload: Dict[str, Any] = dict(proposal.get("params") or {})
+    payload["entity_id"] = entity_id
+
+    url = f"http://{SUPERVISOR}/core/api/services/{domain}/{verb}"
+    try:
+        async with request.app["session"].post(
+                url, headers=AUTH, json=payload) as response:
+            ok = response.status in (200, 201)
+            detail = "" if ok else (await response.text())[:200]
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        ok, detail = False, str(err)[:200]
+
+    # ⚠️ THE OUTCOME IS RECORDED AGAINST THE SAME `action_key` THE PROPOSAL WAS
+    # MINTED WITH, so the audit reads as one story: intended, proposed,
+    # confirmed by a person, done or failed.
+    try:
+        agent_audit.record_outcome(
+            str(proposal.get("run_id") or ""), action_key=key,
+            outcome="done" if ok else "failed",
+            detail=(f"confirmed by {role}" if ok else detail))
+    except Exception as err:  # noqa: BLE001
+        print(f"[supervisor-proxy] confirm audit failed: {err}", flush=True)
+
+    if not ok:
+        return web.json_response(
+            {"error": f"the service call failed: {detail}"}, status=502)
+    return web.json_response({"ok": True, "state": "confirmed"})
+
+
 async def agent_shadow_handler(request: web.Request) -> web.Response:
     """The shadow period's diff: what each layer found, side by side. TASK-051.
 
@@ -3068,6 +3174,8 @@ def main() -> None:
     app.router.add_post("/agent-review", agent_review_decide_handler)
     app.router.add_get("/agent-audit", agent_audit_handler)
     app.router.add_get("/agent-shadow", agent_shadow_handler)
+    app.router.add_get("/agent-proposals", agent_proposals_handler)
+    app.router.add_post("/agent-confirm", agent_confirm_handler)
     app.router.add_post("/agent-run-now", agent_run_now_handler)
     app.router.add_get("/device-config", device_config_get_handler)
     app.router.add_get("/fm-data", fm_data_get_handler)

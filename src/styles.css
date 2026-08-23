@@ -4564,6 +4564,25 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    selects beside it, or the row reads as ragged. */
 .people-field > .btn { width: 100%; justify-content: flex-start; }
 
+/* ── A high-harm action waiting on a person (TASK-083) ──────────────────────
+   ⚠️ THE COUNTDOWN SITS WITH THE TITLE, not under the card: a clock read after
+   the button has been pressed is decoration. */
+.cockpit-proposal-head {
+  display: flex; align-items: center; gap: 8px;
+  min-height: var(--touch-min);
+}
+.cockpit-proposal-what {
+  flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere;
+}
+.cockpit-proposal-clock {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs); color: var(--text-secondary);
+}
+/* ⚠️ THE CARD CARRIES THE WARNING HUE, not the danger one. Danger is reserved
+   for what has gone wrong; this is the villa asking permission, and painting a
+   question in alarm colours is how a person learns to dismiss the colour. */
+.cockpit-proposal { border-left: 3px solid var(--status-warning); }
+
 /* ── The playbook review queue (TASK-094) ───────────────────────────────────
    A draft is a title you can open, a short description, where it came from,
    and two decisions. ⚠️ THE TEXT IS EDITABLE IN PLACE because an edit is part

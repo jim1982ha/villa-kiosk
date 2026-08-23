@@ -372,7 +372,70 @@ export async function decideReviewDraft(
   return r.ok;
 }
 
-/** The shadow period's diff: what each layer found, side by side. TASK-051. */
+/** A high-harm action the villa wants a person to authorise. TASK-083. */
+export interface Proposal {
+  /** The audit's own key for this exact action — the identity used to answer. */
+  action_key: string;
+  ref: string;
+  entity_id: string;
+  service: string;
+  harm: string;
+  /** Why policy refused to execute it. */
+  reason: string;
+  /** Why the agent wants it, in its own words. */
+  why: string;
+  /** Epoch seconds. ⚠️ THE COUNTDOWN IS COMPUTED FROM THIS, never from a
+   *  duration the server sent — a tablet that slept for five minutes must show
+   *  the time that is actually left, not the time that was left when it slept. */
+  expires_at: number;
+  proposed_at: number;
+}
+
+/**
+ * High-harm actions waiting on a person. Owner-only, server-side.
+ *
+ * ⚠️ THERE IS NO TOOL THAT DOES THIS, AND THERE MUST NEVER BE. Confirmation
+ * arrives through an HTTP route with a session cookie and a role, on a surface
+ * the model cannot reach — a confirm flow the model can complete converts a
+ * refusal into a two-step execution while still looking like a safeguard.
+ */
+export async function loadProposals(): Promise<Proposal[]> {
+  const r = await fetch(ingressPath("agent-proposals"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => ({}))) as { proposals?: unknown };
+  const rows = Array.isArray(d.proposals) ? d.proposals : [];
+  return rows.filter((p): p is Proposal =>
+    !!p && typeof p === "object"
+    && typeof (p as Proposal).action_key === "string");
+}
+
+/**
+ * A PERSON's answer to one proposal.
+ *
+ * ⚠️ THE DECISION IS AN EXPLICIT WORD, never a boolean. `confirm` is the
+ * direction with the irreversible consequence — a gate that opens, an alarm
+ * that stops — and it is exactly the value a truthy check falls into on a
+ * malformed request. The server refuses anything that is not one of the two.
+ *
+ * ⚠️ AND THE BODY NAMES *WHICH* PROPOSAL, NEVER WHAT TO DO. Entity, service and
+ * parameters come from what was stored, or this endpoint would be a way to call
+ * an arbitrary service by quoting a proposal id.
+ */
+export async function decideProposal(
+  actionKey: string, decision: "confirm" | "decline",
+): Promise<{ ok: boolean; error: string }> {
+  const r = await fetch(ingressPath("agent-confirm"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ actionKey, decision }),
+  });
+  if (r.ok) return { ok: true, error: "" };
+  const d = (await r.json().catch(() => ({}))) as { error?: string };
+  return { ok: false, error: d.error || `HTTP ${r.status}` };
+}
+
+/** The shadow diff: what each layer found, side by side. TASK-051. */
 export interface ShadowDiff {
   /** The rendered document — what the checkpoint asks a person to READ. */
   report: string;

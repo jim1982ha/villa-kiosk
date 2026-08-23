@@ -50,6 +50,7 @@ import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitConcerns from "./CockpitConcerns";
 import CockpitReview from "./CockpitReview";
+import CockpitProposals from "./CockpitProposals";
 import { useVillaAttention } from "./useVillaAttention";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
@@ -236,6 +237,13 @@ export default function CockpitTab({
           without it reach this view. The two feedback buttons are a CONTROL,
           not the view, so the leaf component owns its own check: it is not in
           either open path and cannot become a gate on one. */}
+      {/* ── Waiting on a person ────────────────────────────────────
+          ⚠️ FIRST OF THE THREE AGENT BLOCKS, because it is the only one that
+          is BLOCKING something. A concern is a conclusion and a draft is a
+          question about method; this is an action the villa has stopped and
+          will not take without an answer, and it expires. */}
+      <CockpitProposals />
+
       <CockpitConcerns />
 
       {/* ── Procedures the villa wants to keep ─────────────────────

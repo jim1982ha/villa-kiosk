@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import audit as audit_mod
 from agent import config as agent_config
+from agent import proposals as proposals_mod
 from agent import contracts, policy as policy_mod
 from agent.tools.base import BaseTool, data, fail, text
 from reports.log import log, swallow
@@ -136,9 +137,28 @@ class ActService(BaseTool):
             # ⚠️ A PROPOSAL IS A RESULT, NOT A FAILURE. The model should tell
             # somebody what it would like to do; returning an error would make
             # it read this as a dead end and try something else.
+            #
+            # ⚠️ AND IT IS NOW RECORDED WHERE A PERSON CAN ANSWER IT (TASK-083).
+            # Until this line the proposal existed only in the model's own
+            # context: it could say "shall I unlock the gate?" and there was
+            # nowhere for anybody to say yes — a refusal wearing a question's
+            # clothes. `proposals.propose` puts it on a surface the MODEL CANNOT
+            # REACH; there is deliberately no confirm TOOL, because a confirm
+            # flow the model can complete is worse than none.
+            proposals_mod.propose(
+                action_key=key, ref=ref, entity_id=entity_id, service=service,
+                params=params, harm=verdict.harm_class, reason=verdict.reason,
+                why=why, run_id=self._run_id, actor=self._actor)
             return [data({"proposed": True, "ref": ref, "service": service,
                           "harm": verdict.harm_class, "reason": verdict.reason,
-                          "action_key": key})]
+                          "action_key": key,
+                          # ⚠️ THE MODEL IS TOLD IT MUST ASK, in the tool result
+                          # rather than only in the system prompt, because this
+                          # is the turn where it decides what to say next.
+                          "awaiting": "a person must confirm this on the "
+                                      "Cockpit; it expires in "
+                                      f"{proposals_mod.TTL_SECONDS // 60} "
+                                      "minutes"})]
         if not verdict.allowed:
             return [fail("not_permitted", verdict.reason)]
 
