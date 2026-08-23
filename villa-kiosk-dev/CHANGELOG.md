@@ -1,3 +1,11 @@
+## 2.677.0
+
+### Changed — the model suggestions use the app's own selector, not a third one of their own
+The three model boxes in Supervision drew their suggestions with a local class
+invented here, while Theme Modes and Villa lighting already choose one-of-N with
+`.segmented` — so the selected state, the touch target and the three themes were
+re-derived rather than inherited. They are `.segmented` now and stay typeable.
+
 ## 2.676.0
 
 ### Fixed — the model suggestions drew themselves over the phone's keyboard
