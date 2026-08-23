@@ -2705,11 +2705,18 @@ def _chat_targets(config: Dict[str, Any]) -> List[str]:
 
 
 async def _agent_document_text() -> str:
-    """The Villa Document, or a sentence saying why there isn't one."""
+    """The Villa Document, or a sentence saying why there isn't one.
+
+    ⚠️ THE SAME BUILDER THE SCHEDULER USES, and it must stay that way: this
+    function and `scheduler._pass` each assembled the document themselves, with
+    the same two argument-less calls to `snapshot.profile()`/`snapshot.delta()`,
+    so the manual "run now" button and the clock both served a 480-character
+    document about a property with no devices. Two assemblies is how they were
+    wrong the same way; one builder is why a fix reaches both.
+    """
     try:
-        from observe import snapshot
-        return snapshot.villa_document(profile_text=snapshot.profile(),
-                                       delta_text=snapshot.delta())
+        from agent import sources
+        return sources.build_document()
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         print(f"[supervisor-proxy] villa document failed: {err}", flush=True)
         return f"The villa document could not be assembled: {err}"

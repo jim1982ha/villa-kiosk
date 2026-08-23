@@ -320,7 +320,18 @@ def coverage(since_iso: str, *, as_utc: Any = None) -> Dict[str, Any]:
     online_since = current["online_since"]
     normalise = as_utc if callable(as_utc) else (lambda value: value)
     try:
-        complete = bool(online_since) and online_since <= normalise(since_iso)
+        # ⚠️ AN EMPTY WINDOW MEANS "THE WHOLE JOURNAL", AND THE JOURNAL IS
+        # COMPLETE OVER ITS OWN EXTENT. It used to fall into the comparison
+        # below, where `online_since <= ""` is False for every non-empty stamp
+        # — so `coverage("")`, which TOOL-005's own schema documents as "omit
+        # for the whole journal" and `read_villa` passes, answered INCOMPLETE
+        # permanently. The
+        # Villa Document then printed "part of this window was not observed"
+        # above every delta a listening villa ever produced, which is this
+        # subsystem's own worst failure — an instrument lying about the thing it
+        # exists to measure — in the line that exists to prevent it.
+        complete = (bool(online_since) if not str(since_iso or "").strip()
+                    else bool(online_since) and online_since <= normalise(since_iso))
     except Exception:  # noqa: BLE001 - a malformed window is not fatal
         complete = False
     return {

@@ -31,7 +31,8 @@ redesign is meant to remove, arriving by a new route.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import (Any, Callable, Dict, Iterable, List, Mapping, Optional,
+                    Sequence, Tuple)
 
 from observe import salience as salience_mod
 
@@ -171,12 +172,21 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
           concerns: Sequence[Mapping[str, Any]] = (),
           ledger: Optional[Mapping[str, Any]] = None,
           coverage: Optional[Mapping[str, Any]] = None,
-          unscorable: int = 0) -> str:
+          unscorable: int = 0,
+          label_of: Optional[Callable[[str], str]] = None) -> str:
     """The fresh half. Everything here is allowed — required — to change.
 
     ⚠️ COVERAGE IS NOT OPTIONAL AND GOES NEAR THE TOP. "I was not listening for
     six hours of this window" changes how every line below it should be read,
     and a reader who learns it at the end has already believed the rest.
+
+    ⚠️ `label_of` IS THE INJECTION `_label_of` HAS ALWAYS ASKED FOR, AND IT IS
+    WHAT MAKES THE RANKED EXCERPT SHIPPABLE AT ALL. This document is the biggest
+    unattended payload in the system and this module's own first rule is LABELS,
+    NEVER ENTITY IDS — so until a caller supplies a resolver, every salient row
+    would carry a raw id off the property. The caller passes `sources.labeller`,
+    which is `reports.devices.label_for`, which is the ONE shared answer to
+    "what do we call this device" the kiosk and the brief already agree on.
     """
     lines: List[str] = [DELTA_HEADING, ""]
 
@@ -223,7 +233,7 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
     ranked = [s for s in salient if s.score]
     if ranked:
         for item in ranked:
-            lines.append(f"  {_label_of(item)} — {item.reason}")
+            lines.append(f"  {_label_of(item, label_of)} — {item.reason}")
     else:
         lines.append("  Nothing is behaving unusually for itself.")
     lines.append("")
@@ -233,8 +243,13 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
         # devices" is the honest half of any coverage claim, and the current
         # pipeline's inability to say it is what `covered_but_silent` existed
         # to paper over.
+        # ⚠️ THE VERB AGREES WITH THE COUNT. "1 entity lack enough history" is
+        # the same defect the PH-1 checkpoint found as "1 climate units" — a
+        # shape no assertion sees and every reader does, in a generated document
+        # whose whole authority rests on reading as though somebody wrote it.
         lines.append(f"Could not be assessed: {_plural(unscorable, 'entity', 'entities')} "
-                     "lack enough history to compare against.")
+                     + ("lacks" if unscorable == 1 else "lack")
+                     + " enough history to compare against.")
         lines.append("")
 
     lines.append("Open concerns:")
@@ -247,13 +262,21 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
             # "(open, open 2 days)" in the first generated document. The age
             # phrase already implies the state when the state IS open, so only
             # a state that adds something is printed.
+            #
+            # ⚠️ AND THE FIX FOR THAT SHIPPED WITH THE SAME DEFECT IN ITS OTHER
+            # BRANCH, WHICH NOTHING COULD SEE BECAUSE NO CALLER EVER PASSED A
+            # CONCERN. An `elif state: suffix.append(state)` stood here for the
+            # unknown-age case and re-added the state the line above had just
+            # appended — "(closed, closed)", "(dismissed, dismissed)" — while
+            # a live concern of unknown age read "(open)", the very redundancy
+            # the first branch exists to remove. Two independent facts, each
+            # printed at most once, and neither one's presence conditional on
+            # the other's.
             suffix = []
             if state and state.lower() != "open":
                 suffix.append(state)
             if isinstance(age, (int, float)):
                 suffix.append(f"open {_plural(int(age), 'day')}")
-            elif state:
-                suffix.append(state)
             lines.append(f"  {title}"
                          + (f" ({', '.join(suffix)})" if suffix else ""))
     else:
@@ -268,14 +291,25 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _label_of(item: salience_mod.Salience) -> str:
+def _label_of(item: salience_mod.Salience,
+              label_of: Optional[Callable[[str], str]] = None) -> str:
     """A readable name for a salient entity.
 
-    ⚠️ THE ID IS THE FALLBACK, NOT THE DEFAULT. A `Salience` carries only an
-    entity id today, so this is where a label resolver is injected when one
-    exists; until then an id is better than nothing and the caller is expected
-    to map it. Stated so the shortcut is visible rather than discovered.
+    ⚠️ THE ID IS THE FALLBACK, NOT THE DEFAULT — and from v2.612.0 to v2.683.0
+    it was the only thing this returned, because no caller ever passed a
+    non-empty `salient` list, so the rule at the top of this module was upheld
+    by the document being empty rather than by this function. The
+    resolver arrives from `sources.build_document`; a resolver that raises or
+    answers with nothing leaves the id, because a ranked row nobody can name is
+    still worth more than a row that is not there.
     """
+    if callable(label_of):
+        try:
+            named = str(label_of(item.entity_id) or "").strip()
+        except Exception:  # noqa: BLE001 - a naming failure is not a lost row
+            named = ""
+        if named:
+            return named
     return item.entity_id
 
 

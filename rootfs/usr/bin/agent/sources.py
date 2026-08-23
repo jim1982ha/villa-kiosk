@@ -1,4 +1,4 @@
-"""What the tools actually read. The wiring, in one place.
+"""What the tools and the Villa Document actually read. The wiring, in one place.
 
 ⚠️ THIS FILE EXISTS BECAUSE ITS ABSENCE SHIPPED AND THE VILLA FOUND IT. Every
 tool takes its data source as a constructor argument — deliberately, so that
@@ -8,6 +8,21 @@ returned `[]` forever, `read_logs` returned zero lines forever, and the agent,
 asked about a pool pump on a property journalling 17,845 entries, reported a
 villa with no devices. It reasoned about that correctly; it should never have
 had to.
+
+⚠️ AND THEN THE SAME DEFECT WAS FOUND ONE LEVEL UP, IN THE ONE PLACE IT COST A
+WHOLE PHASE. `snapshot.profile()` and `snapshot.delta()` take every villa fact
+as a keyword argument for the same good reason — and BOTH callers that build the
+triage document, `scheduler._pass` and `supervisor-proxy._agent_document_text`,
+called them **with no arguments at all**. The result is not an error and not an
+empty string: it is a well-formed 480-character document describing a property
+with no devices, no coverage, no ranking and no concerns, and the model read it
+and correctly escalated `monitoring coverage`. Four rounds of the PH-3 cutover
+review were spent reading an agent that had never been shown the villa, and a
+verdict from any of them would have retired working automations on no evidence.
+Reproduced exactly: `len(villa_document(profile(), delta())) == 480`, 15 lines,
+byte-for-byte the owner's capture. `build_document` below is the other half, and
+it is here rather than at either call site because two call sites gathering facts
+independently is what produced two identical broken copies in the first place.
 
 ⚠️ THE INJECTION IS STILL THE RIGHT DESIGN AND IS NOT WHAT FAILED. A tool that
 imported the journal directly would be untestable without one, and `tools/ha.py`
@@ -23,6 +38,9 @@ An empty result from a WIRED source means the villa really has nothing to say.
 
 from __future__ import annotations
 
+import calendar
+import time
+
 from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
                     Set)
 
@@ -34,6 +52,7 @@ from reports.log import swallow
 #: NOT RESTATED HERE. This module decides what to feed it, never what counts as
 #: enough — a second copy of `MIN_SAMPLES` is how the two would drift.
 from observe import salience as salience_mod
+from observe import snapshot as snapshot_mod
 
 
 def _journal_rows() -> List[Dict[str, Any]]:
@@ -45,6 +64,41 @@ def _journal_rows() -> List[Dict[str, Any]]:
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow("could not read the journal", err)
         return []
+
+
+def labeller() -> Callable[[str], str]:
+    """"What do we call this device", for anything the agent puts in front of a
+    person — THE shared rule, never a second one.
+
+    ⚠️ `reports.devices.label_for` IS THAT RULE and it is already what the kiosk
+    and the brief agree on, so the agent joins them rather than growing a third
+    spelling of one pump's name. It reads `/data/device-config.json` — the
+    owner's OWN labels, on disk, no network — and falls back to the prettified
+    slug for anything unmapped, which is exactly the ladder every brief already
+    prints.
+
+    ⚠️ LIVE STATE IS DELIBERATELY NOT FETCHED HERE. `label_for`'s third source is
+    `friendly_name`, which costs a `get_states` over the whole villa on every
+    triage pass — ninety-six a day for a name the owner has usually already set.
+    The empty mapping is passed explicitly so the omission is visible in the call
+    rather than discovered in the output; wiring it is a change to this function
+    alone.
+    """
+    try:
+        from reports import devices as devices_mod
+        entity_map = devices_mod.read_config().get("entityMap") or {}
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not read the device labels", err)
+        entity_map = {}
+
+    def name(entity_id: str) -> str:
+        try:
+            from reports import devices as devices_mod
+            return devices_mod.label_for(str(entity_id), entity_map, {})
+        except Exception:  # noqa: BLE001 - a name is not worth a failed pass
+            return ""
+
+    return name
 
 
 def build_refs(rows: Optional[Sequence[Mapping[str, Any]]] = None) -> RefTable:
@@ -139,9 +193,154 @@ def build_profile_source(rows: Optional[Sequence[Mapping[str, Any]]] = None
             entity_id = str(row.get("id") or "")
             if "." in entity_id:
                 seen.setdefault(entity_id.split(".", 1)[0], set()).add(entity_id)
-        return {"devices_by_class": {k: len(v) for k, v in sorted(seen.items())}}
+        return {"devices_by_class": {_class_name(k): len(v)
+                                     for k, v in sorted(seen.items())}}
 
     return source
+
+
+def _class_name(domain: str) -> str:
+    """A Home Assistant domain as a countable English plural.
+
+    ⚠️ `_counted` EXPECTS THE PLURAL AND MAKES THE SINGULAR ITSELF, which is the
+    contract this has to meet: hand it `binary_sensor` and the profile reads
+    "43 binary_sensor" for a property and "1 binary_senso" for a small one, since
+    `_singular` strips a trailing "r"-less "s" it never had. Underscores are
+    spaced for the same reason every other name in this document is — a raw
+    domain slug is an identifier, and the profile is prose.
+    """
+    return str(domain).replace("_", " ").strip() + "s"
+
+
+#: How much of the ranking reaches the document. ⚠️ A BUDGET, NOT A JUDGEMENT —
+#: the same distinction `read.DEFAULT_SALIENT_LIMIT` states, and deliberately the
+#: same number. This text sits in the system prompt of ~96 calls a day, so an
+#: uncapped ranking is an uncapped bill; the full list stays one `read_salient`
+#: away for any tier that can call it.
+DOCUMENT_SALIENT_LIMIT: int = 25
+
+#: The window the delta's coverage claim is about. ⚠️ IT MUST BE A REAL WINDOW.
+#: `journal.coverage("")` means "the whole journal" and belongs to `read_villa`;
+#: the delta is about a PERIOD, and a coverage line that does not name one is the
+#: sentence every other line below it is supposed to be read against.
+DOCUMENT_WINDOW_HOURS: int = 24
+
+
+def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
+                   now: Optional[float] = None) -> str:
+    """The Villa Document, CONNECTED TO THIS VILLA. Never raises.
+
+    ⚠️ ONE BUILDER, BECAUSE THERE WERE TWO CALL SITES AND THEY WERE IDENTICALLY
+    WRONG. See this module's header: both passed no arguments, so the model was
+    handed 480 characters describing an empty property. A third call site added
+    later gets the wired document by construction rather than by remembering to.
+
+    ⚠️ EVERY SOURCE HERE IS LOCAL — the journal, the concern store, the facility
+    record and the device labels are all files this add-on already owns. That is
+    what lets a triage pass stay cheap enough to run four times an hour, and it
+    is why `absent_capabilities` is still unset: discovery is a fan-out of Home
+    Assistant calls, and the profile says NOT SURVEYED out loud rather than
+    printing a coverage claim nobody earned.
+
+    ⚠️ AND IT DEGRADES SECTION BY SECTION, not as a whole. A failed concern read
+    must not cost the villa its device counts — the previous behaviour, one level
+    up, was that a single exception replaced the entire document with a sentence
+    about itself.
+    """
+    entries = list(rows) if rows is not None else _journal_rows()
+
+    try:
+        facts = build_profile_source(entries)()
+    except Exception as err:  # noqa: BLE001
+        swallow("could not describe the villa's structure", err)
+        facts = {}
+    profile_text = snapshot_mod.profile(**dict(facts))
+
+    scored: List[salience_mod.Salience] = []
+    try:
+        scored = list(build_scorer(entries)())
+    except Exception as err:  # noqa: BLE001
+        swallow("could not rank the villa's novelty", err)
+
+    try:
+        ranked = salience_mod.rank(scored, limit=DOCUMENT_SALIENT_LIMIT)
+        unscorable = len(salience_mod.unscorable(scored))
+    except Exception as err:  # noqa: BLE001
+        swallow("could not rank the villa's novelty", err)
+        ranked, unscorable = [], 0
+
+    delta_text = snapshot_mod.delta(
+        salient=ranked, unscorable=unscorable,
+        concerns=_open_concerns(), ledger=_facility_record(),
+        coverage=_coverage(now=now), label_of=labeller())
+    return snapshot_mod.villa_document(profile_text=profile_text,
+                                       delta_text=delta_text)
+
+
+def _coverage(*, now: Optional[float] = None) -> Dict[str, Any]:
+    """Was the journal listening for the delta's window? Degrades to silence.
+
+    ⚠️ RETURNING `{}` WOULD BE A LIE AND `None` IS THE HONEST ANSWER — but
+    `snapshot.delta` prints no coverage line for `None`, and an ABSENT coverage
+    line reads as "fine". So a failure here reports INCOMPLETE, which is what a
+    journal we cannot ask about is.
+    """
+    from observe import journal
+    try:
+        since_iso = time.strftime(
+            "%Y-%m-%dT%H:%M:%S+00:00",
+            time.gmtime((now if now is not None else time.time())
+                        - DOCUMENT_WINDOW_HOURS * 3600))
+        return dict(journal.coverage(since_iso))
+    except Exception as err:  # noqa: BLE001
+        swallow("could not establish observation coverage", err)
+        return {"complete": False}
+
+
+def _open_concerns() -> List[Dict[str, Any]]:
+    """Live concerns, oldest first, in the shape `snapshot.delta` prints.
+
+    ⚠️ SETTLED ONES ARE EXCLUDED THROUGH `concerns.SETTLED`, never a local list
+    of state names — `open_for` already keys on that tuple and a second copy here
+    is how a state added to one would go on being reported as open by the other.
+    """
+    try:
+        from agent import concerns as concerns_mod
+        rows = [r for r in concerns_mod.read()
+                if str(r.get("state") or "open") not in concerns_mod.SETTLED]
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read the concern store", err)
+        return []
+    return [{"title": r.get("title"), "state": r.get("state"),
+             "age_days": _age_days(str(r.get("opened_at") or ""))}
+            for r in rows]
+
+
+def _age_days(opened_at: str) -> Optional[float]:
+    """⚠️ `None` MEANS "CANNOT SAY", AND `delta` PRINTS NOTHING FOR IT rather
+    than "open 0 days" — which would date every concern to today the moment a
+    stamp failed to parse, and read as a villa whose problems are all new."""
+    try:
+        opened = calendar.timegm(time.strptime(opened_at, "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, (time.time() - opened) / 86400.0)
+
+
+def _facility_record() -> Optional[Dict[str, Any]]:
+    """The FM ledger's counts, or None. ⚠️ COUNTS ONLY — `ledger.summarise`'s
+    own rule is that everything it returns is a number or a boolean, which is
+    what makes it safe to put in an unattended payload at all."""
+    try:
+        from reports import ledger as ledger_mod
+        summary = ledger_mod.summarise(ledger_mod.read())
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read the facility record", err)
+        return None
+    if not summary.get("present"):
+        return None
+    return {"open faults": summary.get("tickets_open", 0),
+            "resolved": summary.get("tickets_resolved", 0)}
 
 
 def build_tools(session: Any = None) -> List[BaseTool]:

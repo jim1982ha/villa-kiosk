@@ -1,3 +1,11 @@
+## 2.683.0
+
+### Fixed — the agent was reading a description of an empty property, not this villa
+Both places that build the triage document called `snapshot.profile()` and
+`snapshot.delta()` with no arguments, so every pass was handed the same 480
+characters describing a house with no devices — the `doc=480c/15L` in the trace.
+`sources.build_document` now wires both to this villa's own observation floor.
+
 ## 2.682.1
 
 ### Added — the two Settings-draft pins from v2.678.0, which were never committed

@@ -175,13 +175,18 @@ async def run_forever(session: Any,
 
 async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     """Assemble what a pass needs, then run it. Never raises."""
+    from agent import sources
     from agent.llm import anthropic_sdk
-    from observe import snapshot
     from reports import secrets as reports_secrets
 
+    # ⚠️ THROUGH `sources`, NEVER BY CALLING `snapshot` DIRECTLY. This line read
+    # `snapshot.villa_document(profile_text=snapshot.profile(), delta_text=
+    # snapshot.delta())` — no arguments, so a well-formed 480-character document
+    # about an empty property, on every pass, for the whole shadow period the
+    # PH-3 cutover was supposed to be decided from. `sources.build_document` is
+    # the wiring; see its module header.
     try:
-        document = snapshot.villa_document(profile_text=snapshot.profile(),
-                                           delta_text=snapshot.delta())
+        document = sources.build_document()
     except Exception as err:  # noqa: BLE001
         warn(f"triage could not assemble the villa document: {err}")
         document = f"The villa document could not be assembled: {err}"
