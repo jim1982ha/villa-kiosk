@@ -127,7 +127,7 @@ export default function ReportTab({
           empty-placeholder <-> full-report swap — without it, generating a
           report (a couple lines -> a full formatted document) jumped this
           tab's content height dramatically. On the desktop/tablet breakpoint
-          .modal-fixed-height absorbs that into a scroll, but below it the
+          the family's fixed height absorbs that into a scroll, but below it the
           whole modal resizes around the user, visibly shifting the header/
           tabs row on screen between "before" and "after" (they never
           actually change style — the whole dialog just grew and re-centred

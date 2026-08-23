@@ -20,7 +20,7 @@
 
 import { ingressPath } from "@/ha/ingress";
 import type { Concern } from "@/agent/agentTypes";
-import type { Role } from "@/auth/roles";
+import { ROLE_ORDER, type Role } from "@/auth/roles";
 
 /** Wire name (what the store stores) → client name (what this app calls it). */
 const AGENT_WIRE_KEYS = {
@@ -63,6 +63,64 @@ export interface Person {
    *  `discovery` found. Receive-only, always. */
   targets: string[];
   role: Role;
+}
+
+/** The people table, narrowed. ⚠️ EVERY READ NARROWS — `fromWire` is a key
+ *  mapping and hands back whatever the store holds, so a hand-edited document,
+ *  an older add-on's shape or a truncated write would otherwise reach the DOM
+ *  as `undefined.trim()`. A row with an unknown profile is DROPPED rather than
+ *  defaulted, exactly as `people._row` drops it on the backend: the profile
+ *  decides both whether somebody may speak and which voice they are written
+ *  in, so a default here would be a privilege decision made by a typo. */
+export function peopleOf(config: Partial<AgentConfig>): Person[] {
+  const rows = Array.isArray(config.people) ? config.people : [];
+  const out: Person[] = [];
+  for (const raw of rows) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as unknown as Record<string, unknown>;
+    if (!(ROLE_ORDER as readonly string[]).includes(String(r.role))) continue;
+    out.push({
+      name: typeof r.name === "string" ? r.name : "",
+      telegram: typeof r.telegram === "string" ? r.telegram : "",
+      targets: Array.isArray(r.targets)
+        ? r.targets.filter((t): t is string => typeof t === "string" && !!t)
+        : [],
+      role: String(r.role) as Role,
+    });
+  }
+  return out;
+}
+
+/** Where a briefing for this profile goes, de-duplicated, in table order.
+ *
+ * ⚠️ A RENDERING CONVENIENCE, AND THE SECOND IMPLEMENTATION OF A RULE WHOSE
+ * AUTHORITY IS `reports/people.py:targets_for_role`. Delivery is decided there,
+ * in the add-on, from the stored document — this exists so the Briefings dialog
+ * can grey a profile nobody is configured for and refuse to save a schedule
+ * naming one. It answers the same question about the same table; if the two
+ * ever disagree the consequence is a dialog that offers or withholds an option
+ * wrongly, never a brief delivered somewhere it should not be.
+ *
+ * ⚠️ A PERSON WITH NO TARGETS DOES NOT MAKE A PROFILE REACHABLE. Somebody whose
+ * row carries only a Telegram chat can talk TO the villa and cannot be sent a
+ * briefing, which is exactly the asymmetry the people table exists to keep
+ * visible.
+ */
+export function targetsForRole(people: Person[], role: string): string[] {
+  const out: string[] = [];
+  // ⚠️ `entry`, NOT the obvious singular of `people`. That word is a real Home
+  // Assistant DOMAIN, so dotting a field off it reads as an entity id to the
+  // hard-rules pin that scans tracked source for villa-specific identifiers —
+  // a false positive, but the whole value of that gate is that it is never
+  // argued with. (Writing the offending token in this comment failed the pin a
+  // second time, which is the same lesson one line further on.)
+  for (const entry of people) {
+    if (entry.role !== role) continue;
+    for (const target of entry.targets ?? []) {
+      if (target && !out.includes(target)) out.push(target);
+    }
+  }
+  return out;
 }
 
 export interface AgentConfig {

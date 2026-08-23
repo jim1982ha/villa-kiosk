@@ -6,11 +6,12 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { Boxes, ChevronDown, ChevronRight, Home, LogOut, ShieldCheck,
-         Upload, Wrench } from "lucide-react";
+import { Boxes, Home, LogOut, ShieldCheck, Upload, Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
+import ModalFooter from "@/components/common/ModalFooter";
+import { AgentConfigProvider, useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
@@ -18,7 +19,7 @@ import { useGlbUpload } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import AgentTuningPanel from "./AgentTuningPanel";
-import ChatSendersPanel from "./ChatSendersPanel";
+import PeoplePanel from "./PeoplePanel";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 
@@ -50,32 +51,6 @@ interface Props {
   focusEntityId?: string;
   /** A GLB/room-data upload changed the model — remount the canvas to load it. */
   onModelChanged: () => void;
-}
-
-/** A section title that doubles as a collapse toggle — for the two sections
- *  in this modal (auto-detected entities, device telemetry) whose lists can
- *  run long enough to dominate the whole screen on open. Collapsed by
- *  default so Advanced Settings opens on something scannable rather than a
- *  wall of rows; `defaultOpen` lets a specific entry point (jumping here to
- *  edit one entity) start expanded instead. */
-function CollapsibleSection({
-  title, defaultOpen = false, children,
-}: { title: string; defaultOpen?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <>
-      <button
-        type="button"
-        className="settings-section-title settings-section-toggle"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        {title}
-      </button>
-      {open && children}
-    </>
-  );
 }
 
 /** Villa coordinates (drive sun tracking). Applies live on blur rather than
@@ -165,7 +140,23 @@ function LogoutAllSection() {
   );
 }
 
-export default function ConfigEditorModal({ onBack, focusEntityId, onModelChanged }: Props) {
+/** ⚠️ THE PROVIDER WRAPS THE DIALOG AND THE BODY IS A CHILD, so the footer and
+ *  the panels read ONE draft. It cannot be inside the Supervision tab: the
+ *  button that commits the draft lives in the footer, outside every tab, and a
+ *  draft owned by a tab would be thrown away by a tab switch. Only the owner
+ *  sees that tab, and only the owner's session may write, so nobody else pays
+ *  for the read. */
+export default function ConfigEditorModal(props: Props) {
+  const { role } = useProfile();
+  return (
+    <AgentConfigProvider enabled={role === "owner"}>
+      <ConfigEditorDialog {...props} />
+    </AgentConfigProvider>
+  );
+}
+
+function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
+  const draft = useAgentConfigDraft();
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onBack);
   const { role } = useProfile();
@@ -273,30 +264,38 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
 
           {tab === "devices" && (
             <>
-              {/* ⚠️ STILL COLLAPSIBLE INSIDE ITS TAB, AND STILL DEFAULTS OPEN
-                  ON THE EDIT SHORTCUT. Tabs solved the CLUTTER of seven
-                  sections stacked together; they do not solve one section whose
-                  list is hundreds of rows long, which is what this collapse was
-                  for. Arriving here from a device panel's "edit" must still
-                  land with the target row visible. */}
-              <CollapsibleSection title="Auto-detected entity settings" defaultOpen={!!focusEntityId}>
-                <ConfigEditor initialSearch={focusEntityId} />
-              </CollapsibleSection>
+              {/* ⚠️ NO COLLAPSE, AND THE HEADINGS STAY. Both sections used to
+                  be behind a toggle, so this tab opened on two words and
+                  nothing else — reported from the screen. Each now shows its
+                  first few rows with a filter above and a "Show all" beneath
+                  (`common/TruncatedList`), which answers "how many devices does
+                  this villa have" by looking rather than by clicking. Arriving
+                  from a device panel's "edit" pre-fills the filter, so the row
+                  that was come for is one of the few on screen. */}
+              <div className="settings-section-title">Auto-detected entity settings</div>
+              <ConfigEditor initialSearch={focusEntityId} />
 
-              <CollapsibleSection title="Grouped devices">
-                <GroupedDevices />
-              </CollapsibleSection>
+              <div className="settings-section-title" style={{ marginTop: 18 }}>
+                Grouped devices
+              </div>
+              <GroupedDevices />
             </>
           )}
 
           {/* Owner only: /agent-config's PUT is owner-restricted, and the
-              sender list is the only thing standing between the villa and
+              people table is the only thing standing between the villa and
               anyone who finds the bot. The tab itself is not rendered for
               other roles rather than rendered-and-403. */}
           {tab === "supervision" && role === "owner" && (
             <>
-              <div className="settings-section-title">Who may message the villa</div>
-              <ChatSendersPanel />
+              {/* ⚠️ "People", NOT "Who may message the villa" (v2.653.0). The
+                  old heading described half of what the table now decides: a
+                  row says who may speak AND where that profile's briefings are
+                  delivered, which is why Briefings no longer asks for a
+                  recipient. A heading naming only the inbound half is how the
+                  outbound half ends up configured somewhere else again. */}
+              <div className="settings-section-title">People</div>
+              <PeoplePanel />
 
               {/* ⚠️ THE TWO STAY SEPARATE HEADINGS INSIDE ONE TAB. One answers
                   "who is allowed to speak" and the other "what does it cost
@@ -312,9 +311,13 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
 
           {tab === "system" && role === "owner" && (
             <>
-              <CollapsibleSection title="Device telemetry">
-                <TelemetryPanel />
-              </CollapsibleSection>
+              {/* ⚠️ THE COLLAPSE MOVED INSIDE. What is long here is the raw
+                  event LOG, not the panel: hiding the whole thing also hid the
+                  Refresh/Copy/Download/Probe buttons, which are the reason
+                  somebody opens this tab. `TelemetryPanel` collapses the log
+                  itself and leaves its own controls in view. */}
+              <div className="settings-section-title">Device telemetry</div>
+              <TelemetryPanel />
 
               <div className="settings-section-title" style={{ marginTop: 18 }}>
                 Session
@@ -324,10 +327,19 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           )}
         </div>
 
-        <div className="settings-footer" style={{ justifyContent: "space-between" }}>
-          <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>v{__APP_VERSION__}</span>
-          <button className="btn primary" onClick={onBack}>Close</button>
-        </div>
+        {/* ⚠️ ONE SAVING POLICY, AND THIS DIALOG IS WHY IT WAS NEEDED. Its
+            Supervision panels used to write on every keystroke and each held
+            its own revision of one document, so the second panel's save was
+            refused and the edit vanished — reported as "values I changed are
+            not saved". Now nothing writes until this button does. The Villa and
+            Devices tabs are unchanged and deliberately so: they apply LIVE to
+            the 3D scene through `ConfigContext`, so there is no draft to commit
+            and the exit button correctly stays "Close" while they are open. */}
+        <ModalFooter
+          note={`v${__APP_VERSION__}`}
+          commit={draft.dirty ? draft : null}
+          onClose={onBack}
+        />
       </div>
     </div>
   );

@@ -18,14 +18,17 @@ question is "does every call site of a shared thing agree", and there is no
 shared thing here to have call sites. This is Part 4's shape: duplication with
 nothing to violate.
 
-⚠️ WHY A TEST AND NOT A COMPONENT. Extracting a shell component is the better
-fix in the abstract and the worse one here: these six dialogs differ in real
-ways (tab strips, footer content, one has a second header, two render sibling
-modals after the shell), so the component would need six props and every one of
-them would be a place to pass the wrong thing. The convention is fine; what was
-missing is anything that NOTICES a violation. A source-reading test is the
-cheapest thing that notices — the same argument `test_hud_surfaces` and
-`test_store_envelope` make.
+⚠️ WHY A TEST AND NOT A COMPONENT — AND WHERE THAT ARGUMENT RAN OUT (v2.653.0).
+Extracting a whole shell component is still the worse fix: these six dialogs
+differ in real ways (tab strips, one has a second header, two render sibling
+modals after the shell), so it would need six props and every one of them would
+be a place to pass the wrong thing. The FOOTER is the part where the argument
+failed. It is the same row in all six, it is where the exit lives, and once a
+saving policy had to hold across them — Cancel exactly when there is a draft to
+discard — a convention could no longer express it: three dialogs had already
+invented three different ideas about where a Save goes. So `common/ModalFooter`
+is a real component and this file now pins that every dialog uses it, which is
+the same job one level up. The rest of the shell stays a convention with a test.
 
 ⚠️ THE APPLICABLE SET IS DERIVED, NOT LISTED — `grep -L`, not `grep -l`, which
 is the sentence /dry-audit opens with. Every file using `.settings-modal` is in
@@ -48,10 +51,22 @@ COMPONENTS = os.path.join(REPO_ROOT, "src", "components")
 #: tablet, which is the trap both August 2026 dialogs had to be checked against.
 FAMILY = "settings-modal"
 
+#: ⚠️ A DIALOG *RENDERS* THE FAMILY CLASS; A FILE MENTIONING IT DOES NOT. The
+#: first version searched for the bare word, so `ModalFooter.tsx` — which
+#: explains in prose which family it belongs to — was collected as a dialog and
+#: failed every assertion for want of a focus trap it has no business having.
+#: Fifth time in this repo a test has matched the sentence describing the thing
+#: it checks.
+RENDERS_FAMILY = re.compile(r'className="[^"]*\b' + FAMILY + r'\b')
+
 #: The parts that make it that. ⚠️ THE FOOTER IS LOAD-BEARING, NOT DECORATION:
-#: it is where Close lives, and `.settings-body` only scrolls correctly because
-#: the header and footer are `flex: 0 0 auto` siblings holding it in place.
-REQUIRED = ("settings-header", "settings-footer")
+#: it is where the exit lives, and `.settings-body` only scrolls correctly
+#: because the header and footer are `flex: 0 0 auto` siblings holding it in
+#: place. ⚠️ THE FOOTER IS NOW A COMPONENT (`common/ModalFooter`), so either
+#: spelling satisfies this — a dialog that renders it gets the whole row,
+#: including the exit button, by construction rather than by convention.
+REQUIRED = ("settings-header",)
+FOOTER = ("<ModalFooter", "settings-footer")
 
 
 def _dialogs() -> Dict[str, str]:
@@ -64,7 +79,7 @@ def _dialogs() -> Dict[str, str]:
             path = os.path.join(base, name)
             with open(path, encoding="utf-8") as handle:
                 source = handle.read()
-            if FAMILY in source:
+            if RENDERS_FAMILY.search(source):
                 found[os.path.relpath(path, REPO_ROOT)] = source
     return found
 
@@ -80,6 +95,10 @@ def test_every_settings_modal_has_the_whole_shell() -> None:
                 problems.append(
                     f"{path} renders a .{FAMILY} without a .{part} — the shell "
                     f"was copied by hand and this part was dropped")
+        if not any(part in source for part in FOOTER):
+            problems.append(
+                f"{path} renders a .{FAMILY} with no footer at all — use "
+                f"<ModalFooter>, which is the whole row and the saving policy")
     assert not problems, "\n".join(problems)
 
 
@@ -89,8 +108,19 @@ def test_every_settings_modal_offers_a_visible_way_out() -> None:
     wall-mounted screen — which is this product's primary device. A footer
     without a Close button is the same defect as no footer, one step later, so
     the presence of the class is not what is checked here."""
+    # ⚠️ THE COMPONENT IS CHECKED FIRST, because every dialog now delegates to
+    # it and a broken exit there would break all six at once — with each
+    # individual dialog still passing, which is exactly the vacuous pass this
+    # file keeps guarding against.
+    footer = _read("src/components/common/ModalFooter.tsx")
+    assert re.search(r'\{dirty \? "Cancel" : "Close"\}', footer), (
+        "ModalFooter no longer renders an exit button — every dialog in the "
+        "family delegates its only visible way out to it")
+
     problems: List[str] = []
     for path, source in sorted(_dialogs().items()):
+        if "<ModalFooter" in source:
+            continue
         tail = source[source.index("settings-footer"):] if "settings-footer" in source else ""
         if not re.search(r">\s*Close\s*<", tail):
             problems.append(
@@ -109,6 +139,37 @@ def test_every_settings_modal_traps_focus() -> None:
             problems.append(f"{path} has no useModalA11y — no focus trap, no "
                             f"Escape, no focus restore")
     assert not problems, "\n".join(problems)
+
+
+def test_the_fixed_HEIGHT_belongs_TO_THE_FAMILY_not_to_a_call_site() -> None:
+    """⚠️ AN OPT-IN CLASS IS A CONVENTION, AND A CONVENTION GETS FORGOTTEN.
+
+    `.modal-fixed-height` was applied by hand and three of six dialogs in this
+    family had it. Advanced Settings did not, so its height tracked whichever
+    tab was open and the card resized around the reader on every switch —
+    reported from the screen, and exactly the failure mode this whole file
+    exists for: the shell is class names, so every dialog can re-state it
+    incompletely.
+
+    So the rule moved onto `.settings-modal`, and this pins BOTH halves: the
+    stylesheet gives the family a height, and no dialog carries a per-call-site
+    one that would let the next dialog opt out again.
+    """
+    with open(os.path.join(REPO_ROOT, "src", "styles.css"), encoding="utf-8") as h:
+        css = h.read()
+    assert re.search(r"\.settings-modal\s*\{[^}]*height:\s*min\(", css), (
+        "the family marker no longer sets a height — a dialog's card will "
+        "shrink and grow with its own content again")
+
+    # ⚠️ THE CLASS ATTRIBUTE, NOT THE WORD. Two of these files explain in prose
+    # why the opt-in class is gone, and a substring search reads that
+    # explanation as the violation — the "a test matches the comment describing
+    # the thing it checks" failure this repo has now hit four times.
+    offenders = [path for path, source in sorted(_dialogs().items())
+                 if re.search(r'className="[^"]*modal-fixed-height', source)]
+    assert not offenders, (
+        f"{offenders} still opt in to a fixed height by class. The family has "
+        f"it; a per-dialog opt-in is what let one of them go without.")
 
 
 def test_the_family_marker_still_matches_the_stylesheet() -> None:

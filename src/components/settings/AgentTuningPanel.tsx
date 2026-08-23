@@ -24,11 +24,10 @@
 // `validate_config` on the proxy is what actually bounds these values, and the
 // PUT is owner-only there. Nothing in this file is a control.
 
-import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
-import { loadAgentConfig, saveAgentConfig,
-         type AgentConfig } from "@/agent/agentApi";
+import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
+import type { AgentConfig } from "@/agent/agentApi";
 
 /** ⚠️ A FLOOR THE BACKEND ALSO ENFORCES (`scheduler.MIN_MINUTES`). Stated here
  *  so the field cannot offer a value the server will silently raise — a control
@@ -86,66 +85,38 @@ function Text({ label, note, value, onChange }: {
 }
 
 export default function AgentTuningPanel() {
-  const [draft, setDraft] = useState<Draft>(EMPTY);
-  const [rev, setRev] = useState<string | null>(null);
-  const [carryOver, setCarryOver] = useState<Record<string, unknown>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  /** ⚠️ DIRTY IS TRACKED SO A SAVE IS EXPLICIT. Every other agent surface saves
-   *  on change, which suits a toggle and suits a list of rows; it does not suit
-   *  a number field, where saving per keystroke would write `1`, `15`, `150` on
-   *  the way to `150` and the middle one is a real cadence the scheduler would
-   *  pick up. */
-  const [dirty, setDirty] = useState(false);
+  /** ⚠️ ONE DRAFT FOR THE WHOLE DOCUMENT, SHARED WITH THE PEOPLE PANEL ABOVE.
+   *  Both edit `/agent-config`, and each holding its own copy and its own
+   *  revision is a lost update: saving one made the other's copy stale, so the
+   *  second save was refused and the operator's edit vanished. That is what
+   *  "settings in Supervision are not saved" was. See `AgentConfigDraft`.
+   *
+   *  ⚠️ AND THE SAVE BUTTON LEFT THIS PANEL. It was at the bottom of the
+   *  panel's own content — below the fold, under ten fields — while the dialog's
+   *  footer sat pinned and empty the whole time. `test_modal_shell` pins that
+   *  the button which commits a form lives in the footer; this panel predated
+   *  Advanced Settings having one. */
+  const ctx = useAgentConfigDraft();
+  const c = ctx.config;
+  const draft: Draft = {
+    enabled: c.enabled === true,
+    // ⚠️ DEFAULTS TRUE WHEN ABSENT, matching the backend. Reading a missing
+    // `shadow` as false would render "delivering" for a villa that is in fact
+    // silent — the most misleading possible direction for this flag.
+    shadow: c.shadow !== false,
+    triageMinutes: Number(c.triageMinutes ?? EMPTY.triageMinutes),
+    monthlyLimit: Number(c.monthlyLimit ?? EMPTY.monthlyLimit),
+    chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
+    maxTurns: Number(c.maxTurns ?? EMPTY.maxTurns),
+    maxToolCalls: Number(c.maxToolCalls ?? EMPTY.maxToolCalls),
+    modelTriage: String(c.modelTriage ?? ""),
+    modelReason: String(c.modelReason ?? ""),
+    modelBrief: String(c.modelBrief ?? ""),
+    triggers: (c.triggers ?? EMPTY.triggers) as AgentConfig["triggers"],
+  };
+  const edit = (patch: Partial<Draft>) => ctx.edit(patch);
 
-  const load = useCallback(async (quiet = false) => {
-    if (!quiet) setLoading(true);
-    const got = await loadAgentConfig();
-    const c = got?.config ?? {};
-    setDraft({
-      enabled: c.enabled === true,
-      // ⚠️ DEFAULTS TRUE WHEN ABSENT, matching the backend. Reading a missing
-      // `shadow` as false would render "delivering" for a villa that is in fact
-      // silent — the most misleading possible direction for this flag.
-      shadow: c.shadow !== false,
-      triageMinutes: Number(c.triageMinutes ?? EMPTY.triageMinutes),
-      monthlyLimit: Number(c.monthlyLimit ?? EMPTY.monthlyLimit),
-      chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
-      maxTurns: Number(c.maxTurns ?? EMPTY.maxTurns),
-      maxToolCalls: Number(c.maxToolCalls ?? EMPTY.maxToolCalls),
-      modelTriage: String(c.modelTriage ?? ""),
-      modelReason: String(c.modelReason ?? ""),
-      modelBrief: String(c.modelBrief ?? ""),
-      triggers: (c.triggers ?? EMPTY.triggers) as AgentConfig["triggers"],
-    });
-    setCarryOver(got?.raw ?? {});
-    setRev(got?.rev ?? null);
-    setDirty(false);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const edit = useCallback((patch: Partial<Draft>) => {
-    setDraft((d) => ({ ...d, ...patch }));
-    setDirty(true);
-  }, []);
-
-  const save = useCallback(async () => {
-    setSaving(true);
-    setError(null);
-    const ok = await saveAgentConfig(draft, carryOver, rev);
-    setSaving(false);
-    if (!ok) {
-      setError("That change was not saved — reloading the stored settings.");
-      void load(true);
-      return;
-    }
-    void load(true);
-  }, [draft, carryOver, rev, load]);
-
-  if (loading) {
+  if (ctx.loading) {
     return <p className="muted body-text"><Loader2 size={14} className="spin" /> Loading…</p>;
   }
 
@@ -228,13 +199,6 @@ export default function AgentTuningPanel() {
         note="Used when a briefing is composed."
         onChange={(v) => edit({ modelBrief: v })} />
 
-      {error && <p className="fm-banner">{error}</p>}
-      <div className="usage-since">
-        <button className="btn" onClick={() => void save()}
-          disabled={!dirty || saving}>
-          {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
-        </button>
-      </div>
     </div>
   );
 }

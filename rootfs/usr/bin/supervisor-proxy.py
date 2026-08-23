@@ -2819,9 +2819,11 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
     normally. It does append to history, because a report that reached someone
     belongs in the record of what reached someone.
 
-    Takes `audience`, `cadence` and `targets` from the body, falling back to
-    stored config, so a test send can go somewhere harmless without editing the
-    real configuration first.
+    Takes `audience`, `cadence`, `targets` and `role` from the body, falling
+    back to stored config, so a test send can go somewhere harmless without
+    editing the real configuration first. `role` is the profile a schedule
+    names, and both the destinations and the voice are resolved from it exactly
+    as the scheduler resolves them.
 
     ⚠️ `{"preview": true}` COMPOSES AND SENDS NOTHING, and returns the rendered
     prose plus every finding in full. That is how an operator reads a report
@@ -2844,12 +2846,22 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
     stored = _read_json_store(reports_store.REPORTS_CONFIG_FILE,
                               reports_store.EMPTY_CONFIG)
     config = reports_store.config_view(stored)
+    # ⚠️ A `role` IN THE BODY IS RESOLVED HERE, BY THE SCHEDULER'S OWN
+    # FUNCTIONS, RATHER THAN IN THE BROWSER. "Send this one now" has to mean the
+    # same brief to the same people the schedule would have sent it to, and the
+    # resolution order (profile → the schedule's stored list → the legacy shared
+    # list) lives in `targets_for`. A SPA that resolved it would be a second
+    # implementation of that order, disagreeing with the scheduler on exactly
+    # the legacy configs it exists to keep working.
+    asked = {k: body.get(k) for k in ("role", "targets")
+             if body.get(k) is not None}
+    agent_cfg = _read_json_store(AGENT_CONFIG_FILE, {})
     targets = body.get("targets")
     if not (isinstance(targets, list) and targets):
-        targets = reports_pipeline.targets_for(config, {})
+        targets = reports_pipeline.targets_for(config, asked, agent_cfg)
     audience = body.get("audience")
     if audience not in ("owner", "facility"):
-        audience = "owner"
+        audience = reports_pipeline.audience_of(asked, agent_cfg)
     cadence = body.get("cadence")
     if cadence not in reports_contracts.CADENCE:
         cadence = "daily"

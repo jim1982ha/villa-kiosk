@@ -6,7 +6,8 @@
 
 import { useMemo, useState } from "react";
 import AskDialog from "@/components/common/AskDialog";
-import { ChevronDown, ChevronRight, Plus, Trash2, X, Sparkles } from "lucide-react";
+import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
+import { ChevronDown, ChevronRight, Plus, Search, Trash2, X, Sparkles } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -25,6 +26,13 @@ export default function GroupedDevices() {
    *  not `alert()`. */
   const [notice, setNotice] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  /** ⚠️ THE SAME FILTER-THEN-TRUNCATE SHAPE THE ENTITY TABLE USES, and it is
+   *  here for the same reason: this section lost its collapse, so it opens
+   *  showing its first few groups rather than a heading. A property with
+   *  thirty grouped devices needs the search box as much as the entity table
+   *  does — matched on the primary id, the members and the friendly labels,
+   *  case-insensitively, because that is what somebody types. */
+  const [search, setSearch] = useState("");
 
   const suggestions = useMemo(
     () => suggestDeviceGroups(config.entityMap, config.deviceGroups, entityDeviceIds),
@@ -71,6 +79,14 @@ export default function GroupedDevices() {
     }));
 
   const deleteGroup = (groupId: string) => update(removeGroup(config, groupId));
+
+  const needle = search.trim().toLowerCase();
+  const matches = useMemo(() => config.deviceGroups.filter((g) => !needle || [
+    g.primaryEntityId, entityLabel(g.primaryEntityId),
+    ...g.memberEntityIds, ...g.memberEntityIds.map(entityLabel),
+  ].some((text) => text.toLowerCase().includes(needle))),
+  [config.deviceGroups, needle, entityLabel]);
+  const shown = useTruncated(matches);
 
   return (
     <div>
@@ -124,7 +140,24 @@ export default function GroupedDevices() {
         <p className="muted body-text mt">No grouped devices yet.</p>
       )}
 
-      {config.deviceGroups.map((group) => (
+      {config.deviceGroups.length > 0 && (
+        <div className="config-search">
+          <Search size={16} />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by entity ID or label…"
+            aria-label="Filter grouped devices"
+          />
+        </div>
+      )}
+
+      {config.deviceGroups.length > 0 && matches.length === 0 && (
+        <p className="muted body-text mt">No groups match “{search}”.</p>
+      )}
+
+      {shown.visible.map((group) => (
         <div key={group.id} style={{ padding: "14px 0", borderTop: "1px solid var(--hairline)" }}>
           <div className="row spread" style={{ gap: 12 }}>
             {/* flex:1 + minWidth:0 + overflowWrap so a long entity_id with no
@@ -176,6 +209,8 @@ export default function GroupedDevices() {
           </div>
         </div>
       ))}
+
+      <ShowAll list={shown} noun="group" />
 
       {/* Suggestions — collapsed by default: this section only shows what's
           already grouped unless you go looking for more. */}

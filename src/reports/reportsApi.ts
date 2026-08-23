@@ -17,6 +17,7 @@
 // browser sends. See auth/permissions.ts's own header.
 
 import { ingressPath } from "@/ha/ingress";
+import { ROLE_ORDER, type Role } from "@/auth/roles";
 import {
   AUDIENCE, CADENCE, DELIVERY_STATUS, NARRATION_MODE, SEVERITY,
   type Audience, type Cadence, type DeliveryResult, type NarrationMode,
@@ -196,7 +197,17 @@ function parseSchedule(raw: unknown): ReportSchedule {
       ? { weekday: Math.min(6, Math.max(0, Math.round(s.weekday))) } : {}),
     ...(typeof s.day === "number"
       ? { day: Math.min(31, Math.max(1, Math.round(s.day))) } : {}),
-    audience: oneOf(s.audience, AUDIENCE) as Audience,
+    // ⚠️ BOTH ONLY WHEN PRESENT, AND `audience` STOPPED BEING UNCONDITIONAL IN
+    // v2.653.0. It used to be `oneOf(s.audience, AUDIENCE)`, which answers
+    // "owner" for a schedule that never stored one — so the first save of a
+    // schedule created under the new profile select would have written a stored
+    // `audience`, and a stored audience OUTRANKS the profile in
+    // `pipeline.audience_of`. The dialog would have pinned the voice to "owner"
+    // behind the operator's back, on the very control that replaced it.
+    ...((ROLE_ORDER as readonly string[]).includes(str(s.role))
+      ? { role: str(s.role) as Role } : {}),
+    ...((AUDIENCE as readonly string[]).includes(str(s.audience))
+      ? { audience: str(s.audience) as Audience } : {}),
     ...(Array.isArray(s.targets) ? { targets: strs(s.targets) } : {}),
   };
 }
@@ -676,7 +687,15 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
  *  "enable it and see what arrives" means finding out that a module is noisy
  *  on somebody's phone. */
 export async function runReportNow(
-  options: { preview: boolean; audience?: Audience; cadence?: Cadence; targets?: string[] },
+  /** ⚠️ `role` IS THE PROFILE, AND THE SERVER RESOLVES IT — see the handler's
+   *  own note. `audience` and `targets` are the legacy pair, forwarded for a
+   *  schedule written before profiles existed and read only where they are
+   *  stored; sending both is what makes "send this one now" match what the
+   *  scheduler would do for EITHER shape. */
+  options: {
+    preview: boolean; audience?: Audience; cadence?: Cadence;
+    targets?: string[]; role?: Role;
+  },
 ): Promise<ReportPreview | null> {
   try {
     const r = await fetch(ingressPath("reports-run-now"), {

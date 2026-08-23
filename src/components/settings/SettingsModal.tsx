@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalFooter from "@/components/common/ModalFooter";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
 } from "lucide-react";
@@ -137,7 +138,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
               that removes real capability. */}
           {can("customizeAppearance") && (
             <div className="settings-header-control">
-              <span className="settings-inline-label">Interface</span>
+              <span className="settings-inline-label">Theme Modes</span>
             <div className="segmented segmented-icons" role="group" aria-label="Interface theme">
               {([
                 { key: "light", label: "Light interface theme", icon: Sun },
@@ -451,18 +452,21 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
         </div>{/* end settings-body */}
 
-        <div className="settings-footer">
-          {/* Advanced Settings opens as a modal over the live villa (no reload). */}
-          {can("editConfig") ? (
+        {/* ⚠️ NO SAVE HERE, AND THAT IS THE POLICY WORKING RATHER THAN AN
+            OMISSION. Every control above applies and persists as it is touched
+            — the sliders preview on the live scene, which is the whole point of
+            them — so there is no draft to commit and nothing to discard. The
+            shared footer shows Cancel only when a dialog HAS a draft, so this
+            one correctly keeps a plain Close. Adding a Save would promise that
+            nothing had taken effect yet, which is false. */}
+        <ModalFooter
+          leading={can("editConfig") ? (
             <button className="btn ghost" onClick={onOpenConfigEditor}>
               <Sliders size={18} /> Advanced Settings
             </button>
-          ) : <span />}
-          {/* Single Close button — everything above already applied + persisted
-              live, so there's nothing to Cancel and nothing left to Save.
-              Matches Advanced Settings' own footer (ConfigEditorModal). */}
-          <button className="btn primary" onClick={closeModal}>Close</button>
-        </div>
+          ) : undefined}
+          onClose={closeModal}
+        />
       </div>
     </div>
   );

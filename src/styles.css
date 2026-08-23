@@ -2125,23 +2125,31 @@ input[type="range"]::-moz-range-thumb {
 /* The Config Editor holds full-width entity/binding cards — give it the most
    room the viewport allows. */
 .config-editor-modal { max-width: 780px; }
-/* Fixed height on desktop/tablet, for a modal whose BODY content varies a lot
-   between views (a tabbed workspace switching from a two-row list to a dozen
-   rows). `.modal` alone only caps height (max-height: 90vh) and otherwise
-   shrinks to content, so switching tabs visibly resized the whole dialog
-   around the user — jarring, and inconsistent with every other modal, which
-   only ever shows one view so this never showed up there. Composes with
-   `.modal`'s existing flex column + `.settings-body`'s own
-   `flex:1 1 auto; overflow-y:auto`: giving the CARD a real height (not just a
-   ceiling) is what makes that flex-basis resolve to a stable size, so the
-   body — not the dialog — is the only thing that scrolls. Mobile is
-   untouched on purpose: `.modal`'s mobile override below already makes every
-   modal a content-height, top-anchored full-screen sheet, and forcing a
-   short view to a tall fixed height there would leave a dead gap under the
-   footer (see that override's own comment). Reusable by any future tabbed
-   modal — not a Facility-only rule. */
+/* Fixed height on desktop/tablet, for EVERY dialog in this family.
+   `.modal` alone only caps height (max-height: 90vh) and otherwise shrinks to
+   content, so a dialog whose body changes — a tab switching from a two-row
+   list to a dozen rows, a section unfolding, a list loading — visibly resized
+   the whole card around the reader. Composes with `.modal`'s existing flex
+   column + `.settings-body`'s own `flex:1 1 auto; overflow-y:auto`: giving the
+   CARD a real height (not just a ceiling) is what makes that flex-basis
+   resolve to a stable size, so the body — not the dialog — is the only thing
+   that scrolls.
+
+   ⚠️ IT WAS AN OPT-IN CLASS (`.modal-fixed-height`) AND THREE OF SIX DIALOGS
+   HAD IT. Advanced Settings did not, so its height tracked whichever tab was
+   open — reported from the screen: "the height is adjusting to the content of
+   what each tab displays: that's very bad UX". That is the shape this family's
+   whole test file exists for — a convention every dialog re-states and every
+   dialog can re-state incompletely — so the rule moves onto the family marker
+   where it cannot be forgotten, rather than being added to a fourth call site.
+   `test_modal_shell` pins that no dialog carries its own height instead.
+
+   Mobile is untouched on purpose: `.modal`'s mobile override below already
+   makes every modal a content-height, top-anchored full-screen sheet, and
+   forcing a short view to a tall fixed height there would leave a dead gap
+   under the footer (see that override's own comment). */
 @media (min-width: 641px) and (min-height: 561px) {
-  .modal-fixed-height { height: min(680px, 90vh); }
+  .settings-modal { height: min(680px, 90vh); }
 }
 /* Header is a row: title left, the icon-only theme selector right. */
 .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 24px 28px 16px; border-bottom: 1px solid var(--hairline); flex: 0 0 auto; }
@@ -4514,11 +4522,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    IS WHERE THIS FAMILY PUTS ITS ACTIONS, and a Save at the foot of the tab
    CONTENT is below the fold on a laptop — so the button that commits the work
    was the one you could not see while Close sat pinned the whole time. Wraps,
-   and both keep their touch target when it does. */
-.reports-footer-actions {
+   and both keep their touch target when it does.
+
+   ⚠️ RENAMED FROM `.reports-footer-actions` IN v2.653.0, because it was never
+   about Briefings: every dialog in this family ends in the same row and the
+   feature-specific name is what stopped the other five from using it. The
+   markup now lives in ONE component (`common/ModalFooter`), which is what makes
+   a single saving policy expressible at all — two names for one thing is the
+   drift the `.editable-row` rename already removed once. */
+.modal-footer-actions {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.reports-footer-actions > button { min-height: var(--touch-min); }
+.modal-footer-actions > button { min-height: var(--touch-min); }
 
 /* The plain-language answer to "when does this actually go out", under the row
    it belongs to. ⚠️ IT IS THE FIX FOR A REAL WEEK LOST: "weekly" meant Monday
@@ -4597,12 +4612,59 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .usage-table { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
 .usage-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 12px;
   align-items: baseline;
   padding: 4px 0;
   border-bottom: 1px solid var(--border-subtle, rgba(128,128,128,0.18));
   font-size: var(--text-sm);
+}
+/* The per-request list has three columns, not four — it carries no share, and
+   a share per request would be a rounding error printed 500 times. */
+.usage-row-3 { grid-template-columns: minmax(0, 1fr) auto auto; }
+/* ⚠️ A HEADER ROW, BECAUSE THREE UNLABELLED NUMBER COLUMNS ARE A GUESS. The
+   first version printed key/requests/cost with nothing saying which was which,
+   and "2  $0.0885" reads as a price of two of something. */
+.usage-head {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+.usage-head > .usage-key, .usage-head > .usage-num { color: var(--text-secondary); }
+
+/* One breakdown: a heading, its sentence, one stacked bar, then the table.
+   ⚠️ THE BAR COMES FIRST AND THE TABLE SECOND, deliberately — the bar answers
+   "what is spending my money" at a glance and cannot be read precisely; the
+   table is exact and cannot be read at a glance. Neither replaces the other. */
+.usage-block { margin-top: 22px; }
+.usage-block-title {
+  margin: 0 0 2px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+/* The stacked bar. Segments are flex-grow shares of one track — see the
+   component's own note on why not percentage widths. */
+.usage-bar {
+  display: flex;
+  gap: 1px;
+  height: 14px;
+  margin-top: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+.usage-bar-seg { display: block; min-width: 2px; }
+.usage-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  margin-top: 8px;
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+}
+.usage-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.usage-swatch {
+  width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
 }
 .usage-key {
   overflow: hidden;
@@ -4612,7 +4674,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 /* Tabular figures so columns of numbers line up rather than shimmering. */
 .usage-num { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
-.usage-total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.usage-total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
 .usage-total strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
 .usage-since { display: flex; align-items: center; gap: 8px; }
 .usage-since > input { flex: 1 1 auto; min-width: 0; }

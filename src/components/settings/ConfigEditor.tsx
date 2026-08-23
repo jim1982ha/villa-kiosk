@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { useConfig } from "@/config/ConfigContext";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { useHA } from "@/ha/HAStateStore";
@@ -169,6 +170,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
 
   const startRemap = useCallback((key: string) => { setRemapKey(key); setRemapNewId(undefined); }, []);
   const cancelRemap = useCallback(() => { setRemapKey(null); setRemapNewId(undefined); }, []);
+  const shown = useTruncated(entries);
 
   return (
     <div>
@@ -237,7 +239,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </tr>
           </thead>
           <tbody>
-            {entries.map(([key, m0]) => (
+            {shown.visible.map(([key, m0]) => (
               <EntityMapRow
                 key={key}
                 entryKey={key}
@@ -260,6 +262,12 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
           </tbody>
         </table>
       )}
+      {/* ⚠️ THE FIRST FEW, NOT A COLLAPSE. This table used to sit behind a
+          collapse toggle, so the Devices tab opened on a heading and nothing
+          else — and the number of entities was invisible until you clicked.
+          `useTruncated` is applied AFTER the filter above, so typing narrows
+          the list and the top of the RESULTS is what shows. */}
+      <ShowAll list={shown} noun="entity" />
 
     </div>
   );

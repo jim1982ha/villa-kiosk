@@ -869,8 +869,24 @@ def append_history(entry: Dict[str, Any]) -> None:
         swallow("could not append to reports history", err)
 
 
-def targets_for(config: Dict[str, Any], schedule: Dict[str, Any]) -> List[str]:
+def targets_for(config: Dict[str, Any], schedule: Dict[str, Any],
+                agent_config: Optional[Mapping[str, Any]] = None) -> List[str]:
     """Where one schedule's report goes.
+
+    ⚠️ THE PROFILE ANSWERS FIRST, AND THAT ORDERING IS THE WHOLE FEATURE. A
+    schedule names a profile (owner / facility manager / guest) and the people
+    table says where that profile is reached; the recipient picker that used to
+    sit on the schedule row is gone, because choosing a person twice in two
+    screens is what the owner reported as redundant. If the schedule's own list
+    still won, an install that configured People would go on delivering to the
+    stale list it can no longer see — "I set it up and nothing changed", which
+    is the failure this whole change exists to remove.
+
+    ⚠️ AND THE TWO LEGACY FALLBACKS SURVIVE UNDERNEATH, IN ORDER. A config
+    written before this — a schedule carrying its own `targets`, or a property
+    still on the shared `notify_targets` list — keeps delivering exactly where
+    it was delivering until somebody configures a person for its profile.
+    Nothing is rewritten on read.
 
     ⚠️ ABSENT MEANS INHERIT; EMPTY MEANS NOWHERE. This is the same distinction
     the whole config layer turns on — `store.py`'s docstring is about it — and
@@ -885,7 +901,15 @@ def targets_for(config: Dict[str, Any], schedule: Dict[str, Any]) -> List[str]:
     is a thing an operator can do, and it must not silently resume delivering
     to everyone on the shared list. `deliver` reports the empty result as a
     configuration state rather than an error, which is what makes it visible.
+
+    ⚠️ THE EMPTY LIST NO LONGER OUTRANKS A CONFIGURED PROFILE, because the
+    control that could express "this one goes nowhere" no longer exists. It
+    still separates the two fallbacks below it, which is where an operator's
+    stored `[]` came from and the only place it can still be read.
     """
+    from_profile = _profile_targets(schedule, agent_config)
+    if from_profile:
+        return from_profile
     own = schedule.get("targets")
     if isinstance(own, list):
         return [str(t) for t in own if isinstance(t, str) and t]
@@ -895,42 +919,57 @@ def targets_for(config: Dict[str, Any], schedule: Dict[str, Any]) -> List[str]:
     return []
 
 
+def _profile_targets(schedule: Mapping[str, Any],
+                     agent_config: Optional[Mapping[str, Any]]) -> List[str]:
+    """The people table's answer for this schedule's profile, or `[]`.
+
+    Separate from `targets_for` so the degrade-on-anything is stated once: a
+    people table that cannot be read must leave a briefing going where it was
+    already going, never send it nowhere.
+    """
+    try:
+        from reports import people as people_mod
+        return people_mod.targets_for_role(agent_config,
+                                           str(schedule.get("role") or ""))
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not resolve a schedule's profile targets", err)
+        return []
+
+
 def audience_of(schedule: Dict[str, Any],
-                agent_config: Optional[Mapping[str, Any]] = None,
-                targets: Optional[Sequence[str]] = None) -> str:
+                agent_config: Optional[Mapping[str, Any]] = None) -> str:
     """Whose voice this briefing is written in.
 
-    ⚠️ DERIVED FROM WHO IT IS SENT TO, NOT CHOSEN SEPARATELY (2.651.0). A
-    schedule used to carry its own `audience` beside its own delivery target,
-    so one person was configured twice — reported as redundant, correctly:
-    choosing to send somebody a brief already determines whose voice it is in.
-    The people table in the agent config is the single answer.
+    ⚠️ DERIVED FROM THE SCHEDULE'S PROFILE, NOT CHOSEN SEPARATELY. A schedule
+    used to carry its own `audience` beside its own delivery target, so one
+    person was configured twice — reported as redundant, correctly: saying a
+    brief is for the Facility Manager already determines both whose voice it is
+    written in and where it goes. `AUDIENCE_OF_ROLE` is the one table.
+
+    ⚠️ IT WAS DERIVED FROM THE TARGET IN 2.651.0 AND THAT WAS THE INVERSE. It
+    answered correctly for a destination somebody had claimed and answered
+    nothing at all for one nobody had, which put "cannot say" on the path every
+    hand-written config takes. A profile is stated on the schedule itself, so
+    the question always has an answer.
 
     ⚠️ AN EXPLICIT `audience` STILL WINS, for existing schedules. Dropping it
     would silently rewrite what every configured briefing sounds like on
     upgrade, and the two voices are opposites — one requires the entity id, the
-    other forbids it. A stored choice is a decision somebody made.
+    other forbids it. A stored choice is a decision somebody made. The dialog
+    drops the stored key when the operator changes the profile, so a deliberate
+    edit is not outvoted by a value from a previous release.
 
     ⚠️ AND THE FALLBACK IS THE OWNER VOICE, WHICH IS THE ONE THAT WITHHOLDS
-    IDENTIFIERS. The UI refuses to save a schedule whose target nobody has a
-    profile for; this is the backend half, for a document written by hand, and
-    it degrades toward saying LESS about the villa rather than more.
+    IDENTIFIERS. It degrades toward saying LESS about the villa rather than
+    more.
     """
     audience = schedule.get("audience")
     if audience in ("owner", "facility"):
         return str(audience)
     try:
         from reports import people as people_mod
-        # ⚠️ THE RESOLVED TARGETS, NOT `schedule["targets"]`. An absent key
-        # means "inherit the shared list" (see `targets_for`), so reading the
-        # schedule's own field would derive nothing for exactly the schedules
-        # that never named a destination — the legacy ones this has to keep
-        # working.
-        chosen = targets if targets is not None else schedule.get("targets") or []
-        for target in chosen:
-            found = people_mod.audience_for_target(agent_config, str(target))
-            if found:
-                return found
+        role = str(schedule.get("role") or "").strip().lower()
+        return people_mod.AUDIENCE_OF_ROLE.get(role, "owner")
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow("could not derive a briefing audience", err)
     return "owner"
@@ -1033,11 +1072,11 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
         from reports import people as people_mod
         agent_cfg = people_mod.read_config()
         for entry in ready:
-            targets = targets_for(config, entry)
+            targets = targets_for(config, entry, agent_cfg)
             warn_if_broadcast(targets)
             modules_cfg = config.get("modules")
             record = await run_report(
-                session, audience_of(entry, agent_cfg, targets),
+                session, audience_of(entry, agent_cfg),
                 str(entry.get("cadence")),
                 targets, now_local, found, entry_id=str(entry["key"]),
                 settings=modules_cfg if isinstance(modules_cfg, dict) else {},

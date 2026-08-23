@@ -50,7 +50,7 @@ import os
 import tempfile
 from typing import Any, Dict, Final, List
 
-from .contracts import CADENCE, CONTRACT_VERSION, NARRATION_MODE
+from .contracts import CADENCE, CONTRACT_VERSION, NARRATION_MODE, PROFILE
 from .log import warn
 
 DATA_DIR: Final[str] = "/data"
@@ -213,6 +213,18 @@ def validate_config(value: Any) -> List[str]:
                                           or isinstance(month_day, bool)
                                           or not 1 <= month_day <= 31):
                 problems.append(f"{where}.day must be an integer 1-31")
+            # ⚠️ THE PROFILE A SCHEDULE IS FOR, AND OPTIONAL BECAUSE EVERY
+            # SCHEDULE WRITTEN BEFORE IT EXISTED HAS NO SUCH KEY. Absent means
+            # the legacy shape — its own `targets` and its own stored
+            # `audience` — which `pipeline.targets_for` still honours. Present
+            # and unrecognised is REFUSED here rather than resolved to nowhere
+            # at delivery time: `targets_for_role` answers `[]` for an unknown
+            # profile, which at 03:00 looks exactly like a villa nobody
+            # configured.
+            role = item.get("role")
+            if role is not None and role not in PROFILE:
+                problems.append(
+                    f"{where}.role must be one of {', '.join(PROFILE)}")
 
     targets = value.get("notify_targets", [])
     if not isinstance(targets, list):

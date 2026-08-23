@@ -20,14 +20,17 @@
 // would have taken the villa's only status view away from a guest. See
 // `cockpit/CockpitModal.tsx`.
 //
-// Fixed height (.modal-fixed-height) on desktop/tablet: this modal switches
-// between views with wildly different content — Spend can be two rows,
+// Fixed height on desktop/tablet, from `.settings-modal` itself: this modal
+// switches between views with wildly different content — Spend can be two rows,
 // Faults a dozen — and letting the dialog resize around every tab switch was
-// jarring. See that class's own comment in styles.css.
+// jarring. It used to opt in through a `.modal-fixed-height` class; three of
+// six dialogs in the family had it and Advanced Settings did not, so the rule
+// now rides the family marker. See its comment in styles.css.
 
 import { useMemo, useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
+import ModalFooter from "@/components/common/ModalFooter";
 import {
   ClipboardCheck, ClipboardList, ListChecks, Wrench, Wallet, FileText,
   CalendarCog, Gauge,
@@ -238,7 +241,7 @@ export default function FacilityModal({
       <div className="modal-backdrop" onClick={onClose}>
         <div
           ref={dialogRef}
-          className="modal settings-modal config-editor-modal modal-fixed-height"
+          className="modal settings-modal config-editor-modal"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -318,12 +321,14 @@ export default function FacilityModal({
             )}
           </div>
 
-          <div className="settings-footer" style={{ justifyContent: "space-between" }}>
-            <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-              Maintenance intervals and the spend cap are set in the Schedule tab
-            </span>
-            <button className="btn primary" onClick={onClose}>Close</button>
-          </div>
+          {/* ⚠️ NO SAVE: every tab here commits ONE RECORD through its own
+              `.modal-actions` row — a fault ticket, a maintenance job — which
+              `test_modal_shell` recognises as the record-scoped exemption. The
+              dialog itself holds no draft, so the shared footer shows Close. */}
+          <ModalFooter
+            note="Maintenance intervals and the spend cap are set in the Schedule tab"
+            onClose={onClose}
+          />
         </div>
       </div>
 

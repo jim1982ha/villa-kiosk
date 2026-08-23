@@ -1,5 +1,14 @@
 """Who the villa knows, and how to reach them. ONE table, two directions.
 
+⚠️ THE DERIVATION IS PROFILE → TARGETS, AND IT SHIPPED THE OTHER WAY ROUND IN
+2.651.0. That release built `audience_for_target()` / `unclaimed()` — target →
+profile — from a misreading of the owner's words, which were "a schedule FOR
+THIS PROFILE". A schedule names a PROFILE; the people table says where that
+profile's briefings go and, from the same row, whose voice they are written in.
+The inverse helpers are gone rather than kept beside the new one: two lookups
+pointing opposite ways over one table is an invitation to reach for the wrong
+one, and the reason this had to be corrected at all.
+
 ⚠️ THIS REPLACES TWO SEPARATE FACTS THAT WERE ALWAYS THE SAME FACT. Until now
 `allowed_senders` mapped a Telegram id to a role (INBOUND: may this person talk
 to the villa) while every briefing schedule carried its own `audience` beside
@@ -50,11 +59,16 @@ from reports import store as store_mod
 #: the way out; the file on disk holds the bare document.
 CONFIG_PATH: str = "/data/vesta/agent-config.json"
 
-#: A SENDER's profile -> the audience whose voice they are answered in.
+#: A PROFILE -> the audience whose voice they are written for.
 #: ⚠️ IMPORTED FROM `agent.playbooks` UNTIL 2.651.0 AND NOW DUPLICATED HERE ON
 #: PURPOSE — the import was upward. It is three entries and both copies are
-#: pinned equal by `test_agent_people`, which is the honest way to hold a fact
-#: two layers need when the dependency may only point one way.
+#: pinned equal by `test_people`, which is the honest way to hold a fact two
+#: layers need when the dependency may only point one way.
+#:
+#: ⚠️ ITS KEYS ARE `contracts.PROFILE`, PINNED, NOT ASSUMED. This dict is what
+#: every reader here asks "is that a real profile" with, so a key missing from
+#: it is a profile that silently answers nothing — and a profile is what a
+#: schedule now names.
 AUDIENCE_OF_ROLE: Dict[str, str] = {"owner": "owner", "ops": "facility",
                                     "guest": "owner"}
 
@@ -155,40 +169,40 @@ def role_for_sender(config: Optional[Mapping[str, Any]], *, channel: str,
     return ""
 
 
-def person_for_target(config: Optional[Mapping[str, Any]],
-                      target: str) -> Optional[Dict[str, Any]]:
-    """Whoever a delivery target belongs to, or `None` if nobody claims it."""
-    wanted = str(target or "").strip()
-    if not wanted:
-        return None
+def targets_for_role(config: Optional[Mapping[str, Any]],
+                     role: str) -> List[str]:
+    """Every destination a briefing for this profile goes to.
+
+    ⚠️ THE ONE DIRECTION THIS TABLE IS READ IN FOR DELIVERY. A schedule names a
+    profile and this answers where it lands; nothing asks the table which
+    profile a destination belongs to, because a destination is an address and
+    an address is not an identity (see `role_for_sender`).
+
+    ⚠️ AN UNKNOWN ROLE ANSWERS NOWHERE RATHER THAN EVERYWHERE. A typo in a
+    hand-edited config must not broadcast a facility work list to the household;
+    the caller reads `[]` as "nobody is configured for this profile" and falls
+    back to whatever the schedule itself stored, which is a decision somebody
+    made rather than one this function invented.
+
+    ⚠️ AND THE EARLY RETURN IS A SHORT-CIRCUIT, NOT THE ENFORCER — mutation
+    testing said so. Deleting it changes no outcome, because `_row` has already
+    dropped every row whose role is not in the table, so an unrecognised profile
+    matches nothing however far this loop runs. The property is real and is
+    pinned at `_row`; a test asserting it HERE proves nothing on its own, which
+    is exactly the shape of instrument this project keeps having to correct.
+
+    ⚠️ AND IT DE-DUPLICATES, IN TABLE ORDER. Two people of the same profile
+    sharing one destination — a household tablet named on both rows — is a
+    normal table and a briefing delivered twice.
+    """
+    wanted = str(role or "").strip().lower()
+    if wanted not in AUDIENCE_OF_ROLE:
+        return []
+    out: List[str] = []
     for person in people(config):
-        if wanted in person["targets"]:
-            return person
-    return None
-
-
-def audience_for_target(config: Optional[Mapping[str, Any]],
-                        target: str) -> str:
-    """How a brief to this destination should be written, or `""`.
-
-    ⚠️ `""` MEANS "NOBODY HAS SAID", AND THE CALLER MUST NOT READ IT AS A
-    DEFAULT. The two voices are deliberately contradictory — one requires the
-    entity id, the other forbids it — so guessing sends a document written for
-    the wrong reader. The UI refuses to save a schedule in this state; the
-    backend degrades to the owner voice, which is the half that withholds
-    identifiers, and that asymmetry is the whole reason a default is unsafe.
-    """
-    person = person_for_target(config, target)
-    return AUDIENCE_OF_ROLE.get(person["role"], "owner") if person else ""
-
-
-def unclaimed(config: Optional[Mapping[str, Any]],
-              targets: Sequence[str]) -> List[str]:
-    """Which of these destinations nobody has been given a profile for.
-
-    The list the schedule editor needs in order to say WHICH target is the
-    problem — "cannot save" without naming the destination is a dead end for
-    whoever has to fix it.
-    """
-    return [t for t in (str(x).strip() for x in targets)
-            if t and person_for_target(config, t) is None]
+        if person["role"] != wanted:
+            continue
+        for target in person["targets"]:
+            if target not in out:
+                out.append(target)
+    return out

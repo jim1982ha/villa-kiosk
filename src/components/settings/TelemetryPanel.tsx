@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
+import CollapsibleSection from "@/components/common/CollapsibleSection";
 import { buildReport, captureError } from "@/utils/diagnostics";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
 import type { TelemetryKind } from "@/utils/telemetry";
@@ -460,37 +461,45 @@ export default function TelemetryPanel() {
         </div>
       )}
 
+      {/* ⚠️ THE LOG IS THE COLLAPSED PART, NOT THE PANEL. Advanced Settings
+          used to hide this whole section behind a toggle, which also hid the
+          Refresh / Copy / Download / Probe row above — the controls somebody
+          opens this tab FOR. What is long is the event list, so that is what
+          collapses, and it starts closed because reading raw telemetry is a
+          deliberate act. */}
       {!!events?.length && (
-        <div className="config-table">
-          {events.slice(0, VISIBLE_ROWS).map((e, i) => (
-            /* Layout lives in styles.css (.telemetry-row), NOT inline: the
-               phone tier has to re-flow this row onto two lines, and a media
-               query cannot override an inline style prop. */
-            <div key={i} className="telemetry-row" title={e.ua}>
-              <span className="telemetry-kind" style={{ color: TONE[e.kind] ?? "var(--text-primary)" }}>
-                {e.kind}
-              </span>
-              <span className="muted telemetry-meta">
-                {/* The build that produced the event. Without it, an event
-                    logged minutes after a release is indistinguishable from
-                    one produced BY that release — the add-on's frontend ships
-                    inside the GHCR image, so a device can lag a push by a long
-                    way. Older events predate the field and just show nothing. */}
-                {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
-              </span>
-              <span className="telemetry-summary">{summarise(e)}</span>
-              <span className="muted telemetry-time">
-                {e.at?.replace("T", " ").replace("+00:00", "Z") ?? ""}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-      {!!events?.length && events.length > VISIBLE_ROWS && (
-        <p className="muted body-text" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
-          Showing the newest {VISIBLE_ROWS} of {events.length} — use <strong>Copy all</strong> or
-          <strong> Download .json</strong> above for the rest.
-        </p>
+        <CollapsibleSection title={`Event log — ${events.length} recorded`}>
+          <div className="config-table">
+            {events.slice(0, VISIBLE_ROWS).map((e, i) => (
+              /* Layout lives in styles.css (.telemetry-row), NOT inline: the
+                 phone tier has to re-flow this row onto two lines, and a media
+                 query cannot override an inline style prop. */
+              <div key={i} className="telemetry-row" title={e.ua}>
+                <span className="telemetry-kind" style={{ color: TONE[e.kind] ?? "var(--text-primary)" }}>
+                  {e.kind}
+                </span>
+                <span className="muted telemetry-meta">
+                  {/* The build that produced the event. Without it, an event
+                      logged minutes after a release is indistinguishable from
+                      one produced BY that release — the add-on's frontend ships
+                      inside the GHCR image, so a device can lag a push by a long
+                      way. Older events predate the field and just show nothing. */}
+                  {shortUA(e.ua)}{e.role ? ` · ${e.role}` : ""}{e.v ? ` · v${e.v}` : ""}
+                </span>
+                <span className="telemetry-summary">{summarise(e)}</span>
+                <span className="muted telemetry-time">
+                  {e.at?.replace("T", " ").replace("+00:00", "Z") ?? ""}
+                </span>
+              </div>
+            ))}
+          </div>
+          {events.length > VISIBLE_ROWS && (
+            <p className="muted body-text" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
+              Showing the newest {VISIBLE_ROWS} of {events.length} — use <strong>Copy</strong> or
+              <strong> Download</strong> above for the rest.
+            </p>
+          )}
+        </CollapsibleSection>
       )}
     </div>
   );

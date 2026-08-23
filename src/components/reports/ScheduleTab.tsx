@@ -13,48 +13,56 @@
 // schedule indistinguishable from an absent one, which is the config
 // resurrection bug CLAUDE.md's hard rule describes.
 //
-// ⚠️ "WRITTEN FOR" IS NOT "SENT TO", AND THE FIRST VERSION OF THIS TAB LET A
-// READER BELIEVE IT WAS. `audience` selects WHAT IS IN the brief — the owner's
-// brief carries a money section the facility one omits, the facility brief is
-// the work list (`SECTIONS_FOR` in `narrate/deterministic.py` is the whole
-// difference). WHERE it goes is the schedule's own `targets`. So picking
-// "facility" does NOT route anything to a facility manager; it changes the
-// prose. The owner asked this outright — "how would the system know where to
-// send the report based on the owner/facility selection?" — which is the
-// question a row of unlabelled selects invites, and the honest answer is that
-// it does not. Both facts are stated in the UI beside the controls.
+// ⚠️ ONE QUESTION ABOUT READERS, NOT TWO (v2.653.0). A schedule row used to
+// carry an AUDIENCE select ("written for") beside a RECIPIENT picker ("sent
+// to"), and the owner reported the pair as redundant: "a schedule for this
+// profile". They are right, and the redundancy was worse than untidy — the two
+// could DISAGREE, so a brief written in the facility voice could be addressed
+// to the owner's phone and nothing anywhere said so.
 //
-// ⚠️ A SCHEDULE OWNS ITS RECIPIENTS. THERE IS NO SEPARATE DESTINATION SECTION,
-// AND REMOVING IT IS THE POINT. v2.546.0 added per-schedule targets as an
-// OPT-IN OVERRIDE beside a global list, on the reasoning that one shared list
-// is the common case and two ways to set one thing needs the relationship
-// stated at the control. The owner rejected that and was right: "the recipient
-// selection must be linked and associated with each schedule profile that the
-// user is adding."
+// A schedule now names a PROFILE and that answers both halves. Advanced
+// Settings → Supervision holds one row per person — name, chat, devices,
+// profile — so where a profile's briefings go is configured once, beside who
+// that person is, and `AUDIENCE_OF_ROLE` derives the voice from the same row.
+// `pipeline.targets_for` resolves the profile FIRST, which is what makes the
+// People panel the thing that decides delivery rather than a screen whose
+// settings a stale per-schedule list silently outranks.
 //
-// The rejected design asked the operator to hold a rule in their head — which
-// list is in force for which row — to answer the only question they ever have
-// about a schedule, which is "who gets this one". A card per schedule carrying
-// when · for whom · to whom answers it by looking. `pipeline.targets_for` has
-// preferred a schedule's own targets since Phase 2, so this is the UI catching
-// up with the data model rather than a new capability.
+// ⚠️ A PROFILE NOBODY IS CONFIGURED FOR IS SHOWN, GREYED, AND SUFFIXED
+// `(missing)` — and the SUFFIX is the load-bearing half. The owner has already
+// reported once that a greyed-out control is hard to see on a sunlit wall
+// tablet; colour alone does not carry a state, which is the same rule the
+// nesting in `ChatSendersPanel` was built on. Keeping the option in the list at
+// all (rather than filtering it out) is what makes "there is a Guest profile
+// and nobody is set up for it" readable — a list that silently omits it says
+// nothing.
 //
-// ⚠️ `notify_targets` STAYS ON THE BACKEND and is NOT shown. It is the fallback
-// for any config written before this, and `targets_for` still reads it when a
-// schedule names nothing — deleting it would silently redirect the briefings of
-// every install that has not opened this dialog since. `adoptSharedTargets`
-// below migrates it into the schedules the first time the tab is opened, so the
-// operator ends up with one place without losing what they configured.
+// ⚠️ AND SUCH A SCHEDULE MUST NOT SAVE, which is the owner's explicit choice
+// over the alternatives (save it and deliver nowhere; save it and fall back to
+// somebody else). It blocks the whole Save, so the row says which schedule and
+// why — a disabled Save with no reason is the failure this dialog has already
+// paid for once, with the button below the fold.
+//
+// ⚠️ NOTHING STORED IS REWRITTEN ON READ. A schedule written before this keeps
+// its own `targets` and its own `audience`, and `pipeline.targets_for` still
+// honours both BELOW the profile — so an install that never opens this tab goes
+// on delivering exactly where it was. Its row shows the profile as "not set"
+// and says so. ⚠️ PICKING A PROFILE THEN CLEARS BOTH: after a deliberate edit
+// the profile is the only answer, because leaving the old list underneath is
+// how a briefing quietly resumes going to a list nobody can see the day the
+// person behind that profile is removed.
 
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { fetchNextRuns, type ReportsDiagnostics } from "@/reports/reportsApi";
+import { loadAgentConfig, peopleOf, targetsForRole,
+         type Person } from "@/agent/agentApi";
+import { ROLE_LABELS, ROLE_ORDER, type Role } from "@/auth/roles";
 import { useLongPress } from "@/hooks/useLongPress";
 import { tapFeedback } from "@/utils/haptics";
 import NarrationSection from "./NarrationSection";
-import DestinationList, { RecipientButton } from "./DestinationList";
 import {
-  AUDIENCE, CADENCE, type Cadence, type ReportSchedule, type ReportsConfig,
+  CADENCE, type Cadence, type ReportSchedule, type ReportsConfig,
 } from "@/reports/reportsTypes";
 
 /** ⚠️ Display defaults only, applied at RENDER and never written back. */
@@ -107,50 +115,20 @@ function parseTime(value: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
-function newSchedule(): ReportSchedule {
+/** A new schedule, for the first profile somebody is actually reachable on.
+ *
+ *  ⚠️ NOT A SEEDED DEFAULT — it is the answer to "which of these can be saved",
+ *  computed from the villa's own people table, and it falls back to leaving the
+ *  profile UNSET rather than naming one nobody is configured for. A row that
+ *  cannot be saved the moment it is added would be the dialog picking a fight
+ *  with the operator over a choice it made itself. */
+function newSchedule(reachable: Role[]): ReportSchedule {
   return {
     id: `s${Date.now().toString(36)}`,
     cadence: "weekly",
     hour: DEFAULT_HOUR,
-    audience: "owner",
     minute: 0,
-    // ⚠️ AN EMPTY LIST, NOT AN ABSENT ONE, AND THE DIFFERENCE IS REAL.
-    // `targets_for` reads absent as "inherit `notify_targets`" and empty as
-    // "nowhere" — so a new schedule with no `targets` key would DISPLAY as
-    // "Nobody" here while the backend quietly delivered it to a legacy shared
-    // list the operator can no longer see. Stating the empty list makes what is
-    // shown and what is stored the same thing.
-    targets: [],
-  };
-}
-
-/** Move a legacy shared destination list onto the schedules that were using it.
- *
- *  ⚠️ INTO THE DRAFT, NEVER STRAIGHT TO DISK. This runs when the tab opens, and
- *  a migration that wrote itself back would be a background write the operator
- *  did not ask for — on a store two devices can hold open at once, with a
- *  revision check that would then fire on the other one. It becomes real when
- *  they press Save, like every other edit here.
- *
- *  ⚠️ AND IT IS A NO-OP UNLESS THERE IS SOMETHING TO MOVE. A schedule that
- *  already names its own targets is untouched, and a config with no shared list
- *  is returned as-is — so opening the tab twice cannot produce two different
- *  drafts, and an operator who deliberately emptied a schedule's destinations
- *  does not get the shared list pushed back into it.
- *
- *  The backend keeps reading `notify_targets` for anyone who never opens this
- *  dialog (`pipeline.targets_for`), which is why clearing it here is safe: the
- *  schedules now carry what it used to supply. */
-export function adoptSharedTargets(config: ReportsConfig): ReportsConfig {
-  const shared = config.notifyTargets ?? [];
-  const schedules = config.schedules ?? [];
-  if (shared.length === 0) return config;
-  if (schedules.every((s) => s.targets !== undefined)) return config;
-  return {
-    ...config,
-    schedules: schedules.map((s) =>
-      s.targets === undefined ? { ...s, targets: [...shared] } : s),
-    notifyTargets: [],
+    ...(reachable.length > 0 ? { role: reachable[0] } : {}),
   };
 }
 
@@ -185,11 +163,14 @@ export default function ScheduleTab({
   onSaveSecret: (provider: string, value: string) => void;
 }) {
   const [draft, setDraft] = useState<ReportsConfig>({});
-  /** Which schedule has its recipient list open, if any. ⚠️ ONE AT A TIME, and
-   *  by INDEX rather than a flag per row: two open lists on a phone push the
-   *  Save button off the screen, and the question "who gets this one" is asked
-   *  about one schedule at a time by definition. */
-  const [openRecipients, setOpenRecipients] = useState<number | null>(null);
+  /** The villa's people, as Advanced Settings stores them.
+   *
+   *  ⚠️ READ HERE RATHER THAN THREADED THROUGH THE MODAL, because this is the
+   *  only tab that asks. ⚠️ AND `null` IS NOT `[]`: until the answer arrives,
+   *  every profile would read as `(missing)` and every schedule as unsavable —
+   *  "could not ask yet" rendered as "nobody is configured", which is the exact
+   *  lie `collector.connected` was added to replace one subsystem over. */
+  const [people, setPeople] = useState<Person[] | null>(null);
   /** When the schedules ON SCREEN would next fire, answered by the server.
    *
    *  ⚠️ DEBOUNCED, because a `time` input fires on every dial turn and this is
@@ -229,24 +210,51 @@ export default function ScheduleTab({
 
   // Re-seed only when the server's copy changes, so typing is never clobbered
   // by a background reload — the same ordering rule `DeviceConfigSync` follows.
-  useEffect(() => { if (config) setDraft(adoptSharedTargets(config)); }, [config]);
+  useEffect(() => { if (config) setDraft(config); }, [config]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadAgentConfig().then((got) => {
+      // ⚠️ AN UNREADABLE STORE LEAVES THIS `null`, NOT EMPTY. A 403 or a
+      // restarting core must not be rendered as "nobody is configured for any
+      // profile", which would grey every option and block every save with a
+      // sentence that is not true.
+      if (!cancelled && got) setPeople(peopleOf(got.config));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  /** Which profiles a briefing can actually reach. ⚠️ EMPTY WHILE THE TABLE IS
+   *  UNREAD, and `known` below is what stops that being read as an answer. */
+  const reachable = ROLE_ORDER.filter(
+    (r) => targetsForRole(people ?? [], r).length > 0);
+  const known = people !== null;
 
   // ⚠️ THE DRAFT ITSELF, NOT A DIRTY FLAG. The footer button has to SAVE it, so
   // handing up a boolean would mean keeping a second copy somewhere to save
   // from — and two copies of an edit is how one of them goes stale.
-  const settled = config ? JSON.stringify(adoptSharedTargets(config)) : null;
+  //
+  // ⚠️ AND AN UNSAVABLE DRAFT IS PUBLISHED AS `null`, which is what disables
+  // Save. A schedule naming a profile nobody is configured for must not be
+  // stored — the owner's explicit choice — and the row itself says which one
+  // and why, because a Save button that is simply dead is the defect this tab
+  // has already shipped once.
+  const blocked = (draft.schedules ?? []).filter(
+    (s) => s.role !== undefined && known && !reachable.includes(s.role));
+  const settled = config ? JSON.stringify(config) : null;
   const current = JSON.stringify(draft);
+  const savable = blocked.length === 0;
   useEffect(() => {
-    onDraft(settled !== null && current !== settled ? JSON.parse(current) : null);
+    onDraft(savable && settled !== null && current !== settled
+      ? JSON.parse(current) : null);
     return () => onDraft(null);
-  }, [current, settled, onDraft]);
+  }, [current, settled, savable, onDraft]);
 
   if (!config) {
     return <p className="muted body-text">Reading the schedule…</p>;
   }
 
   const schedules = draft.schedules ?? [];
-  const available = diagnostics?.notifyTargets ?? [];
   /** ⚠️ THE LIVE ANSWER FOR WHAT IS ON SCREEN, not for what is stored. The
    *  stored answer is the fallback, so a row that has never been edited still
    *  reads correctly before the first probe returns. */
@@ -260,16 +268,24 @@ export default function ScheduleTab({
    *  deleted, which is the same lie in the other direction. */
   const savedById = new Map((config.schedules ?? []).map((s) => [s.id, JSON.stringify(s)]));
   const edited = (s: ReportSchedule) => savedById.get(s.id) !== JSON.stringify(s);
-  // ⚠️ WAS THE SHARED LIST MIGRATED INTO THE ROWS THIS SESSION? `draft` is the
-  // migrated copy and `config` is the server's, so a difference here means the
-  // operator is looking at destinations that are NOT yet stored — and pressing
-  // Close instead of Save would leave the old shape in place, still working.
-  // Saying so beats a silent rewrite either way.
-  const migrated = (config.notifyTargets ?? []).length > 0
-    && (draft.notifyTargets ?? []).length === 0;
   const set = (patch: Partial<ReportsConfig>) => setDraft({ ...draft, ...patch });
   const setAt = (i: number, patch: Partial<ReportSchedule>) =>
     set({ schedules: schedules.map((s, n) => (n === i ? { ...s, ...patch } : s)) });
+  /** Choosing a profile drops what the profile replaced.
+   *
+   *  ⚠️ THE TWO LEGACY KEYS GO TOGETHER AND ONLY ON A DELIBERATE EDIT. A stored
+   *  `audience` OUTRANKS the derived voice and a stored `targets` list is read
+   *  when nobody is configured for the profile — so leaving either behind makes
+   *  the control the operator just used a suggestion. Nothing is stripped on
+   *  READ: a schedule nobody touches keeps both and keeps working. */
+  const setRole = (i: number, role: Role) =>
+    set({
+      schedules: schedules.map((s, n) => {
+        if (n !== i) return s;
+        const { audience: _a, targets: _t, ...rest } = s;
+        return { ...rest, role };
+      }),
+    });
 
   return (
     <div className="reports-pane">
@@ -292,26 +308,27 @@ export default function ScheduleTab({
         setting commits you to receiving.
       </p>
 
-      {migrated && (
+      {known && reachable.length === 0 && (
         <div className="fm-banner">
-          Destinations used to be one shared list for every schedule. They have
-          been copied onto each schedule below — press Save to keep that.
-          Nothing has changed yet, and briefings keep going where they were
-          going until you do.
+          Nobody is set up to receive a briefing. Advanced Settings →
+          Supervision → People is where a person&rsquo;s devices and profile
+          are configured; until somebody is there, a schedule has nowhere to
+          go.
         </div>
       )}
 
       <h3 className="reports-h3">Schedules</h3>
-      {/* ⚠️ ONE SENTENCE. The previous version explained the audience/recipient
-          distinction in four lines above a section the owner had just called
-          cluttered — and the distinction is now visible in the row itself, an
-          audience select beside a recipients button. Prose that repeats what
-          the controls already show is what makes a panel feel heavy. The time
-          is the one thing the controls cannot say, because a browser shows the
-          READER's clock and the schedule fires on the VILLA's. */}
+      {/* ⚠️ TWO SENTENCES, AND THE SECOND EARNS ITS PLACE. Prose that repeats
+          what the controls show is what makes a panel feel heavy — but the
+          profile select is now the only thing on the row that says anything
+          about readers, and where it gets its answer from is in another modal.
+          The time is the other thing the controls cannot say, because a browser
+          shows the READER's clock and the schedule fires on the VILLA's. */}
       <p className="muted body-text">
         One briefing each: how often, at what time in the villa&rsquo;s own
-        clock, what it contains, and who receives it.
+        clock, and which profile it is for. Where a profile&rsquo;s briefings
+        go — and whose voice they are written in — comes from that
+        person&rsquo;s row in Advanced Settings → Supervision.
       </p>
       {schedules.length === 0 && (
         <p className="muted body-text">
@@ -320,16 +337,20 @@ export default function ScheduleTab({
       )}
 
       {schedules.map((s, i) => {
-        const own = s.targets ?? [];
+        /** Where this row's briefing lands, as this dialog can see it. The
+         *  legacy answer (`s.targets`, or the shared list under it) is what a
+         *  schedule with no profile still uses. */
+        const goesTo = s.role !== undefined
+          ? targetsForRole(people ?? [], s.role)
+          : (s.targets ?? draft.notifyTargets ?? []);
+        const missing = s.role !== undefined && known
+          && !reachable.includes(s.role);
         return (
           <div key={s.id || i} className="editable-row-card">
-            {/* ⚠️ ONE LINE: when · for whom · to whom · remove. The recipients
-                are a BUTTON here rather than a list, because "who gets this
-                one" is a one-glance question and the answer is short — the
-                list only appears when it is being changed. Two releases put
-                the destinations on their own row under the schedule and the
-                owner called both cluttered; they were right, and a set of
-                three is not worth a permanent row. */}
+            {/* ⚠️ ONE LINE: when · for whom · remove. "To whom" left this row
+                in v2.653.0 — it is the person's own row in Advanced Settings
+                now, because choosing a profile and choosing a recipient were
+                the same choice made twice. */}
             <div className="editable-row">
               {/* ⚠️ THE FIELDS WRAP; THE DELETE DOES NOT. All five controls used
                   to be siblings in one wrapping row, so on a phone the fourth
@@ -383,20 +404,32 @@ export default function ScheduleTab({
                   ))}
                 </select>
               )}
+              {/* ⚠️ THE PROFILE, AND IT ANSWERS BOTH HALVES — see this file's
+                  header. An option nobody is configured for is DISABLED and
+                  SUFFIXED, never hidden: the suffix is what carries the state
+                  on a sunlit wall tablet, where grey against grey does not.
+
+                  ⚠️ AND A PROFILE THIS SCHEDULE ALREADY NAMES STAYS SELECTABLE
+                  even while missing, because a `<select>` cannot show a value
+                  that is not among its options — dropping it would silently
+                  redraw the row as some other profile's schedule. */}
               <select
-                aria-label="Written for"
-                value={s.audience}
-                onChange={(e) =>
-                  setAt(i, { audience: e.target.value as ReportSchedule["audience"] })}
+                aria-label="For which profile"
+                value={s.role ?? ""}
+                onChange={(e) => setRole(i, e.target.value as Role)}
               >
-                {AUDIENCE.map((a) => <option key={a} value={a}>{a}</option>)}
+                {s.role === undefined && (
+                  <option value="" disabled>not set</option>
+                )}
+                {ROLE_ORDER.map((r) => (
+                  <option key={r} value={r}
+                          disabled={known && !reachable.includes(r)
+                                    && r !== s.role}>
+                    {ROLE_LABELS[r]}
+                    {known && !reachable.includes(r) ? " (missing)" : ""}
+                  </option>
+                ))}
               </select>
-              <RecipientButton
-                targets={own}
-                available={available}
-                open={openRecipients === i}
-                onToggle={() => setOpenRecipients(openRecipients === i ? null : i)}
-              />
               </div>
               <button
                 className="btn danger icon-only"
@@ -414,7 +447,6 @@ export default function ScheduleTab({
                   // sends the briefing AND deletes the schedule — the exact
                   // double-fire `consumeClick` exists for.
                   if (sendHold.consumeClick()) return;
-                  setOpenRecipients(null);
                   set({ schedules: schedules.filter((_, n) => n !== i) });
                 }}
               >
@@ -437,23 +469,40 @@ export default function ScheduleTab({
                 went on reading "Next: Monday 24 Aug, 12:38". A confident wrong
                 date is worse than no date, because nothing about it looks
                 stale. */}
-            <p className="muted body-text reports-next">
-              {draft.enabled !== true
-                ? "Nothing is sent — “Send briefings on a schedule” is off."
-                : own.length === 0
-                  ? "Nobody is selected, so this one would be composed and not sent."
-                  : nextRun[s.id]
-                    ? `Next: ${whenNext(nextRun[s.id])}, villa time.${
-                        edited(s) ? " Not saved yet." : ""}`
-                    : "Working out when this goes out…"}
+            <p className={`body-text reports-next${
+              missing ? " sev-warning" : " muted"}`}>
+              {/* ⚠️ THE UNSAVABLE STATE IS SAID FIRST AND IN FULL, because it
+                  disables the Save button for the WHOLE dialog — an operator
+                  who came to change a time must be able to see why their
+                  unrelated edit will not commit. It names the profile, since
+                  "a profile" is not something anyone can go and fix. */}
+              {missing
+                ? `Nobody is set up for the ${ROLE_LABELS[s.role as Role]}
+                   profile, so this schedule cannot be saved. Add that
+                   person under Advanced Settings → Supervision, or choose
+                   another profile.`
+                : draft.enabled !== true
+                  ? "Nothing is sent — “Send briefings on a schedule” is off."
+                  : goesTo.length === 0
+                    ? "Nowhere to send this one yet, so it would be composed and not sent."
+                    : nextRun[s.id]
+                      ? `Next: ${whenNext(nextRun[s.id])}, villa time.${
+                          edited(s) ? " Not saved yet." : ""}`
+                      : "Working out when this goes out…"}
             </p>
 
-            {openRecipients === i && (
-              <DestinationList
-                targets={own}
-                available={available}
-                onChange={(next) => setAt(i, { targets: next })}
-              />
+            {/* ⚠️ THE LEGACY SHAPE, NAMED RATHER THAN SILENTLY HONOURED. A
+                schedule written before the profile existed still delivers to
+                the list it was given, and nothing on screen would otherwise
+                say so — the operator would read "not set" and conclude it goes
+                nowhere. */}
+            {s.role === undefined && (
+              <p className="muted body-text reports-next">
+                Set up before profiles existed: it goes to
+                {" "}{goesTo.length}{" "}
+                destination{goesTo.length === 1 ? "" : "s"} chosen at the time.
+                Choosing a profile above replaces that.
+              </p>
             )}
           </div>
         );
@@ -461,7 +510,7 @@ export default function ScheduleTab({
 
       <button
         className="btn"
-        onClick={() => set({ schedules: [...schedules, newSchedule()] })}
+        onClick={() => set({ schedules: [...schedules, newSchedule(reachable)] })}
       >
         <Plus size={16} /><span>Add a schedule</span>
       </button>

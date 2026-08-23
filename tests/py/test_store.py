@@ -95,6 +95,36 @@ def test_validate_rejects_a_boolean_hour() -> None:
     assert any("hour" in p for p in problems)
 
 
+def test_validate_accepts_a_schedule_with_a_PROFILE() -> None:
+    assert validate_config({
+        "schedules": [{"id": "a", "cadence": "weekly", "hour": 7,
+                       "role": "ops"}],
+    }) == []
+
+
+def test_validate_accepts_a_schedule_with_NO_profile() -> None:
+    """⚠️ OPTIONAL, BECAUSE EVERY SCHEDULE WRITTEN BEFORE PROFILES EXISTED HAS
+    NO SUCH KEY. Refusing those would make an upgrade refuse to save a document
+    it had itself written."""
+    assert validate_config({
+        "schedules": [{"id": "a", "cadence": "weekly", "hour": 7}],
+    }) == []
+
+
+def test_validate_rejects_an_UNKNOWN_profile() -> None:
+    """⚠️ REFUSED AT THE MOMENT OF THE MISTAKE, not resolved to nowhere at
+    delivery time. `targets_for_role` answers `[]` for an unrecognised profile,
+    which at 03:00 looks exactly like a villa nobody has configured — the
+    subsystem's rule is to refuse when saving and degrade when using."""
+    problems = validate_config({
+        "schedules": [{"id": "a", "cadence": "weekly", "hour": 7,
+                       "role": "facility"}],
+    })
+    assert any("role" in p for p in problems), (
+        "an audience word was accepted as a profile — the two vocabularies are "
+        "different sets and `facility` belongs to the other one")
+
+
 def test_validate_rejects_non_object() -> None:
     assert validate_config(["not", "a", "config"]) == ["config must be an object"]
 

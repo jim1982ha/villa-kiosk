@@ -12,10 +12,20 @@
  * anything can compare it — and would let the array and the union drift from
  * each other, which is the same class of bug one level down.
  *
- * ⚠️ NO IMPORTS, and nothing villa-specific. This is vocabulary only: no
+ * ⚠️ NO VALUE IMPORTS, and nothing villa-specific. This is vocabulary only: no
  * entity_id, no room name, no threshold. Types and constants that describe the
  * SHAPE of a report, never its content.
+ *
+ * ⚠️ THE ONE IMPORT IS A TYPE AND IT IS DELIBERATE. A schedule names a PROFILE
+ * (v2.653.0), and the app has had exactly one list of those since long before
+ * this subsystem existed — `auth/roles.ts`. Re-declaring them here to keep this
+ * file import-free would create a second profile vocabulary for the parity test
+ * to compare against, which is the drift the whole file exists to prevent;
+ * `reports/contracts.py` says the same thing at its own `PROFILE`. It is
+ * `import type`, so nothing is emitted and the mirror stays comparable.
  */
+
+import type { Role } from "@/auth/roles";
 
 /** Bumped when a value's MEANING changes; never for an addition.
  *
@@ -179,11 +189,29 @@ export interface ReportSchedule {
   /** Monthly only: 1–31, clamped to the month's length by the scheduler, so
    *  "the 31st" means the last day in February rather than an error. */
   day?: number;
-  audience: Audience;
-  /** ⚠️ ABSENT MEANS INHERIT THE LEGACY SHARED LIST; EMPTY MEANS NOWHERE.
-   *  `pipeline.targets_for` reads it exactly that way, which is why the tab
-   *  writes `[]` on a new schedule rather than omitting the key — otherwise a
-   *  row displaying "Nobody" would be delivered to a list nobody can see. */
+  /** Which PROFILE this briefing is for — the one thing the dialog asks about
+   *  a schedule's readers, since v2.653.0. The people table in the agent config
+   *  says where that profile is reached and, through `AUDIENCE_OF_ROLE`, whose
+   *  voice it is written in.
+   *
+   *  ⚠️ OPTIONAL BECAUSE EVERY SCHEDULE WRITTEN BEFORE IT EXISTED HAS NO SUCH
+   *  KEY, and those keep delivering through the two fallbacks in
+   *  `pipeline.targets_for`. The value is the app's own profile id
+   *  (`auth/roles.ts`), never an audience word. */
+  role?: Role;
+  /** ⚠️ LEGACY, AND STILL AUTHORITATIVE WHERE IT IS STORED. It was the schedule
+   *  editor's own audience select until v2.653.0 replaced that with the profile
+   *  above; `pipeline.audience_of` still prefers it, because dropping it would
+   *  silently rewrite what every configured briefing sounds like on upgrade.
+   *  The dialog clears it when the operator picks a profile — a deliberate edit
+   *  must not be outvoted by a value from a previous release. */
+  audience?: Audience;
+  /** ⚠️ LEGACY TOO, AND NO LONGER WRITTEN. It was the per-schedule recipient
+   *  picker the profile replaced. `pipeline.targets_for` still reads it BELOW
+   *  the profile, so an install that has not configured anybody keeps
+   *  delivering where it was delivering. Absent means inherit the shared list;
+   *  empty means nowhere — a distinction only these stored documents can still
+   *  express. */
   targets?: string[];
 }
 

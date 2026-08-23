@@ -8,6 +8,7 @@
 
 import { CATEGORY_ORDER, CATEGORY_LABELS, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalFooter from "@/components/common/ModalFooter";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { STATUS_COLOR } from "@/utils/stateColors";
 
@@ -136,10 +137,7 @@ export default function LegendModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </div>
-        <div className="settings-footer">
-          <span />
-          <button className="btn primary" onClick={onClose}>Close</button>
-        </div>
+        <ModalFooter onClose={onClose} />
       </div>
     </div>
   );

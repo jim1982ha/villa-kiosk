@@ -38,9 +38,9 @@
 // from `.modal-backdrop` + `.modal.settings-modal` renders as a centred card on
 // a tablet; one assembled any other way renders as a full-bleed top-anchored
 // sheet, which is the trap both dialogs added in August 2026 had to be verified
-// against on real hardware. `modal-fixed-height` is here for the same reason
-// Facility has it: these tabs have wildly different content lengths and letting
-// the dialog resize around every switch is jarring.
+// against on real hardware. The fixed height that keeps these wildly different
+// tabs from resizing the card comes from `.settings-modal` itself — it was an
+// opt-in class until v2.653.0, which is how Advanced Settings went without it.
 //
 // ⚠️ TWO CAPABILITIES OPEN THIS, AND THE TABS ARE GATED SEPARATELY FROM THE
 // DIALOG (2026-08-22, owner: "the Facility Manager shall have access to it").
@@ -75,11 +75,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle, CalendarClock, CheckCircle2, ClipboardList,
-  FileText, History, Loader2, Save as SaveIcon, ShieldQuestion,
+  FileText, History, Loader2, ShieldQuestion,
   SlidersHorizontal,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
+import ModalFooter from "@/components/common/ModalFooter";
 import {
   fetchNarrationSecrets, fetchReportsConfig, fetchReportsDiagnostics,
   fetchReportsHistory, runReportNow, saveNarrationSecret, saveReportsConfig,
@@ -280,21 +281,25 @@ export default function ReportsModal(
    *  rather than a bare "Sent." — a briefing that reached nobody must not look
    *  the same as one that reached three phones.
    *
-   *  ⚠️ IT USES THE SCHEDULE'S OWN AUDIENCE AND RECIPIENTS, not the global
-   *  defaults, so "send this one now" means the same brief the schedule would
-   *  have sent. A schedule with no recipients is refused before the request,
-   *  because composing and delivering nowhere reads as success. */
+   *  ⚠️ IT SENDS THE SCHEDULE'S PROFILE AND LETS THE ADD-ON RESOLVE IT, so
+   *  "send this one now" means the same brief to the same people the scheduler
+   *  would have chosen. The resolution order — the profile's people, then the
+   *  schedule's own stored list, then the legacy shared one — lives in
+   *  `pipeline.targets_for`, and re-deriving it here would be a second
+   *  implementation that disagrees on exactly the legacy configs it exists to
+   *  keep working. Delivering nowhere is reported from the answer rather than
+   *  guessed at beforehand.
+   *
+   *  ⚠️ THE LEGACY KEYS ARE FORWARDED TOO. A schedule with no profile is the
+   *  shape this replaced, and dropping its stored `targets`/`audience` here
+   *  would make "send it now" deliver somewhere the schedule itself would
+   *  not. */
   const sendNow = useCallback(async (s: ReportSchedule) => {
-    const targets = s.targets ?? [];
-    if (targets.length === 0) {
-      setNotice({ text: "This schedule has no recipients, so there is nobody "
-                        + "to send it to.", bad: true });
-      return;
-    }
     setBusy(true);
     setNotice({ text: "Sending…", bad: false, pending: true });
     const result = await runReportNow({
-      preview: false, audience: s.audience, cadence: s.cadence, targets,
+      preview: false, cadence: s.cadence, role: s.role,
+      audience: s.audience, targets: s.targets,
     });
     const sent = (result?.deliveries ?? []).filter((d) => d.status === "sent");
     const failed = (result?.deliveries ?? []).filter(
@@ -304,7 +309,15 @@ export default function ReportsModal(
       : failed.length
         ? { text: `Sent to ${sent.length}, failed for ${failed.length}: `
                   + failed.map((d) => d.detail || d.target).join("; "), bad: true }
-        : { text: `Sent to ${sent.length} recipient(s).`, bad: false });
+        // ⚠️ "Sent to 0 recipient(s)" WAS THE ANSWER FOR A SCHEDULE WITH
+        // NOWHERE TO GO, and it reads as success. The pre-flight refusal that
+        // used to catch it could only see the schedule's own list; now that
+        // destinations come from the profile, the add-on is the only thing that
+        // knows, so the empty answer is named where it arrives.
+        : sent.length === 0
+          ? { text: "Nobody is set up to receive this profile's briefings, so "
+                    + "nothing was sent.", bad: true }
+          : { text: `Sent to ${sent.length} recipient(s).`, bad: false });
     setHistory(await fetchReportsHistory());
     setBusy(false);
   }, []);
@@ -322,7 +335,7 @@ export default function ReportsModal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
         ref={dialogRef}
-        className="modal settings-modal config-editor-modal modal-fixed-height"
+        className="modal settings-modal config-editor-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -422,48 +435,27 @@ export default function ReportsModal(
           {tab === "history" && <HistoryTab entries={history} />}
         </div>
 
-        {/* ⚠️ THE SHELL WAS COPIED FROM `FacilityModal` AND THE FOOTER WAS NOT.
-            Every dialog in this family — Facility, Settings, Advanced Settings —
-            ends in a `.settings-footer` with a Close button, and this one shipped
-            with no way out except the backdrop or Escape. Neither is discoverable
-            on a wall-mounted tablet, which is the device this is operated from.
-            That is the cost of copying a shell by hand: it carries what the
-            copier noticed. `tests/py/test_modal_shell.py` now derives the parts
-            of the shell from the dialogs that HAVE them and fails on a
-            `.settings-modal` missing one, because there is no component to
-            violate and so nothing else could have caught it. */}
-        <div className="settings-footer" style={{ justifyContent: "space-between" }}>
-          <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-            Briefings are composed by the add-on and delivered by Home Assistant
-          </span>
-          <div className="reports-footer-actions">
-            {/* ⚠️ ALWAYS PRESENT ON THE TAB THAT HAS A FORM, DISABLED WHEN
-                THERE IS NOTHING TO SAVE — not conditionally rendered. A button
-                that appears and vanishes is a button whose position you cannot
-                learn, which is the complaint this fixes in a new costume. The
-                other tabs have no draft: Checks writes on each toggle, and the
-                rest are read-only. */}
-            {tab === "schedule" && (
-              <button
-                className="btn primary"
-                disabled={busy || pending === null}
-                onClick={() => { if (pending) void save(pending); }}
-              >
-                <SaveIcon size={16} />
-                <span>{busy ? "Saving…" : "Save"}</span>
-              </button>
-            )}
-            {/* ⚠️ GHOST WHEN SAVE IS BESIDE IT. Two primary buttons in one
-                footer say "these are equally what you came to do", and one of
-                them discards an edit. */}
-            <button
-              className={`btn ${tab === "schedule" ? "ghost" : "primary"}`}
-              onClick={onClose}
-            >
-              Close
-            </button>
-          </div>
-        </div>
+        {/* ⚠️ ONE FOOTER COMPONENT, ONE SAVING POLICY — `common/ModalFooter`.
+            This dialog is where the policy was worked out: the Save used to sit
+            at the foot of the Schedule tab's own content, below the fold, while
+            Close stayed pinned in the footer. It was then re-stated by hand
+            here, which is how five other dialogs went on ending in five
+            slightly different rows. The exit button says Cancel exactly while
+            there is a draft to discard, and Save appears with it. */}
+        <ModalFooter
+          note="Briefings are composed by the add-on and delivered by Home Assistant"
+          busy={busy}
+          commit={pending === null ? null : {
+            dirty: true,
+            saving: busy,
+            save: () => save(pending),
+            // ⚠️ THE TAB OWNS THE DRAFT AND REPUBLISHES IT FROM `config` ON
+            // EVERY CHANGE, so clearing it here is what a discard IS: the tab
+            // re-seeds from the server's copy the moment this dialog closes.
+            discard: () => setPending(null),
+          }}
+          onClose={onClose}
+        />
       </div>
     </div>
   );

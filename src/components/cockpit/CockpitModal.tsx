@@ -22,6 +22,7 @@
 
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalFooter from "@/components/common/ModalFooter";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
@@ -53,7 +54,7 @@ export default function CockpitModal({
           // `.settings-modal` already carries the 780px width, so this keeps
           // the classes it always had minus a dead `cockpit-modal` that
           // styled nothing (removed from test_css_classes' KNOWN_HOOKS with it).
-          className="modal settings-modal modal-fixed-height"
+          className="modal settings-modal"
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
@@ -72,17 +73,7 @@ export default function CockpitModal({
             />
           </div>
 
-          <div className="settings-footer">
-            {/* .settings-footer is `justify-content: space-between` for the
-                common case of TWO children (a left-side action + the primary
-                button on the right) — every other single-button footer in the
-                app (SettingsModal, LegendModal, FirstRunTips) pairs the button
-                with an empty spacer as its first child so space-between still
-                pushes it to the right; this one was missing that spacer,
-                which is why it rendered on the left instead. */}
-            <span />
-            <button className="btn primary" onClick={onClose}>Close</button>
-          </div>
+          <ModalFooter onClose={onClose} />
         </div>
       </div>
 

@@ -62,6 +62,22 @@ def severity_rank(severity: str) -> int:
 # well read the facility brief.
 AUDIENCE: Final[Tuple[str, ...]] = ("owner", "facility")
 
+# Who a schedule is FOR — the app's own sign-in profiles, which is a different
+# question from the one above and answers both halves of a briefing: the people
+# table says where a profile is reached, `people.AUDIENCE_OF_ROLE` says which
+# AUDIENCE it is written for. Two profiles map to the owner voice, which is
+# exactly why the two vocabularies may not be merged.
+#
+# ⚠️ DELIBERATELY NOT IN `CONTRACT_SETS`, AND THAT IS NOT AN OVERSIGHT. Every
+# other tuple here is mirrored in `src/reports/reportsTypes.ts`; this one's
+# TypeScript twin is `src/auth/roles.ts`'s `ROLE_ORDER`, which has held the
+# app's profiles since long before this subsystem existed. Registering it would
+# demand a SECOND list of profiles in `reportsTypes.ts` for the parity test to
+# compare against — a third copy of a fact, created by the machinery that exists
+# to stop copies drifting. `supervisor-proxy.AUTH_ROLES` is the authority for
+# all of them and `test_people` pins this against it.
+PROFILE: Final[Tuple[str, ...]] = ("guest", "owner", "ops")
+
 # What KIND of claim a finding makes. This is the distinction that keeps the
 # report honest, and DATA_QUALITY is the one that earns its place: a sensor
 # that stopped reporting is a measurement fault, not an equipment fault, and

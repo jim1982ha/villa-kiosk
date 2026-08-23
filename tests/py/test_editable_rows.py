@@ -3,11 +3,11 @@
 ⚠️ PINNED RATHER THAN EXTRACTED, DELIBERATELY. `/dry-audit`'s own rule is to
 converge when copies are genuinely the same THING and to pin when they are the
 same SHAPE with different content. Briefings' schedules and Advanced Settings'
-chat senders are the same shape — a flat list of small records edited in place,
-with an Add button — and different content: a schedule carries a cadence, a
-time, recipients and a press-and-hold send; a sender carries an id and a role. A
-shared component would need a prop for each difference, and every prop is a new
-place to pass the wrong thing.
+people are the same shape — a flat list of small records edited in place, with
+an Add button — and different content: a schedule carries a cadence, a time and
+a press-and-hold send; a person carries a name, a chat, destinations and a
+profile. A shared component would need a prop for each difference, and every
+prop is a new place to pass the wrong thing.
 
 ⚠️ WHAT WENT WRONG WITHOUT IT: the second caller used `.icon-btn` — the app's
 neutral glass chrome — for its delete, so the one destructive control in the row
@@ -69,9 +69,9 @@ def test_the_walk_finds_both_known_callers() -> None:
     found = _callers()
     assert len(found) >= 2, (
         f"only {len(found)} editable-row callers found: {sorted(found)}. "
-        f"Briefings' schedules and the chat-sender panel are both this shape.")
+        f"Briefings' schedules and the people panel are both this shape.")
     assert any("ScheduleTab" in p for p in found)
-    assert any("ChatSendersPanel" in p for p in found)
+    assert any("PeoplePanel" in p for p in found)
 
 
 def test_every_row_delete_is_the_DESTRUCTIVE_treatment() -> None:
