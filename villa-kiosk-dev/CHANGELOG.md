@@ -1,3 +1,12 @@
+## 2.655.0
+
+### Changed — Save closes the dialog, a tab switch asks first, and a dead field is gone
+Save committed and left you on the same dialog; it now closes, and only when the write
+succeeded. Leaving a tab with unsaved changes asks whether to save, discard or stay,
+from the shared tab strip, so every tabbed dialog gets it. A person's `Name` was read
+by nothing and the migration filled it with their chat id — which is what made the row
+look like two chat fields. The device list closes on an outside tap.
+
 ## 2.654.0
 
 ### Changed — one fixed footer, labelled people rows, and a reachable review queue
