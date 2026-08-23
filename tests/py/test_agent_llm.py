@@ -429,3 +429,63 @@ def test_the_flattener_has_exactly_one_implementation() -> None:
         assert 'json.dumps(block.get("json")' not in source, (
             f"{name} re-implements the reduction instead of delegating")
     assert callable(tools_base.flatten_blocks)
+
+
+def test_the_SYSTEM_PROMPT_is_cache_marked_so_a_tool_loop_is_not_paid_for_twice() -> None:
+    """⚠️ THE VILLA DOCUMENT IS RE-SENT ON EVERY TURN, and a tool-using answer
+    is four or five turns. Measured on the reference villa while TESTING: 28
+    requests, 313,736 input tokens, $1.78 — ~11,000 tokens of the same document,
+    re-billed at full price, again and again.
+
+    A cache breakpoint on the last system block covers the whole prefix, so
+    every repeat send becomes a cache READ. This is the single largest cost
+    lever in the subsystem and it is invisible in behaviour, which is why it
+    needs a test rather than a reviewer.
+    """
+    from agent.llm import anthropic_sdk
+
+    out = anthropic_sdk._cached([{"type": "text", "text": "a"},
+                                 {"type": "text", "text": "b"}])
+    assert out[-1].get("cache_control") == {"type": "ephemeral"}, (
+        "the system prompt carries no cache breakpoint — every turn of every "
+        "conversation re-pays for the whole Villa Document")
+    assert "cache_control" not in out[0], (
+        "a breakpoint on every block spends the provider's limited budget on a "
+        "prefix that is already contiguous")
+
+    # ⚠️ AND THE REQUEST MUST ACTUALLY USE IT. Testing `_cached` alone left a
+    # mutation that deleted the call from the request body ALIVE — the helper
+    # stayed correct and nobody called it, which is the defect shape this
+    # project has now paid for four times (the shipped playbooks nothing
+    # loaded, the review queue with no surface, the shadow diff with no
+    # caller, `/agent-run-now` with no button).
+    import inspect
+    import re
+
+    source = re.sub(r"#[^\n]*", "", inspect.getsource(anthropic_sdk))
+    assert re.search(r'"system":\s*_cached\(', source), (
+        "the request builds its system block without the cache breakpoint — "
+        "`_cached` is correct and unreachable")
+
+
+def test_a_callers_OWN_cache_boundary_is_left_alone() -> None:
+    """A caller that has thought about its own boundaries knows more than this
+    function does."""
+    from agent.llm import anthropic_sdk
+
+    mine = {"type": "text", "text": "a", "cache_control": {"type": "persistent"}}
+    assert anthropic_sdk._cached([mine])[-1]["cache_control"] == {"type": "persistent"}
+
+
+def test_CHAT_does_not_default_to_the_frontier_model() -> None:
+    """⚠️ IT DID, AND THE BILL SAID SO: every question typed at the villa was
+    answered by `model_reason`, which defaults to the most expensive model in
+    the table. 100% of one afternoon's testing spend, on opus, for questions a
+    mid-tier model answers."""
+    from agent import config as agent_config
+
+    view = agent_config.view({})
+    assert view.get("model_chat"), "chat has no tier of its own again"
+    assert "opus" not in str(view.get("model_chat")), (
+        "chat defaults to the frontier model — the single most expensive "
+        "default in this add-on, on its most frequent request")

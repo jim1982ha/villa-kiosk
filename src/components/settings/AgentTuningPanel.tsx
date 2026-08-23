@@ -41,13 +41,14 @@ const MIN_TRIAGE_MINUTES = 5;
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
   "enabled" | "shadow" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
-  | "maxTurns" | "maxToolCalls" | "modelTriage" | "modelReason" | "modelBrief">
+  | "maxTurns" | "maxToolCalls" | "modelTriage" | "modelReason" | "modelBrief"
+  | "modelChat">
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
   enabled: false, shadow: true, triageMinutes: 15, monthlyLimit: 4000,
   chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24,
-  modelTriage: "", modelReason: "", modelBrief: "",
+  modelTriage: "", modelReason: "", modelBrief: "", modelChat: "",
   triggers: { scheduled: true, event: false, chat: false },
 };
 
@@ -70,14 +71,15 @@ function Num({ label, note, value, min, onChange }: {
   );
 }
 
-function Text({ label, note, value, onChange }: {
-  label: string; note: string; value: string;
+function Text({ label, note, value, placeholder, onChange }: {
+  label: string; note: string; value: string; placeholder?: string;
   onChange: (v: string) => void;
 }) {
   return (
     <label className="fm-field">
       <span>{label}</span>
       <input value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder} list="vesta-models"
         spellCheck={false} autoCapitalize="off" autoCorrect="off" />
       <p className="muted body-text">{note}</p>
     </label>
@@ -112,6 +114,7 @@ export default function AgentTuningPanel() {
     modelTriage: String(c.modelTriage ?? ""),
     modelReason: String(c.modelReason ?? ""),
     modelBrief: String(c.modelBrief ?? ""),
+    modelChat: String(c.modelChat ?? ""),
     triggers: (c.triggers ?? EMPTY.triggers) as AgentConfig["triggers"],
   };
   const edit = (patch: Partial<Draft>) => ctx.edit(patch);
@@ -190,18 +193,38 @@ export default function AgentTuningPanel() {
       <div className="settings-section-title">
         Which models
       </div>
+      {/* ⚠️ FREE TEXT WITH SUGGESTIONS, not a picker. Pinning a model list in
+          the app would make THIS the thing that has to ship for a new model to
+          be usable (ADR-016) — but blank fields with no hint are how a villa
+          ends up on the most expensive default without choosing it, which is
+          exactly what happened. The datalist suggests; it does not constrain. */}
       <p className="muted body-text">
-        Free text, not a picker: upgrading is a config change, never a new
-        release. Leave blank for the add-on&rsquo;s own choice.
+        Blank uses the default shown in each box. Cheaper is usually right —
+        the villa spends far more requests on routine checks and chat than on
+        investigations.
       </p>
+      <datalist id="vesta-models">
+        <option value="claude-haiku-4-5" />
+        <option value="claude-sonnet-5" />
+        <option value="claude-opus-5" />
+      </datalist>
       <Text label="Model — routine checks" value={draft.modelTriage}
+        placeholder="claude-haiku-4-5"
         note="Runs every cycle — a small fast model is the intended fit."
         onChange={(v) => edit({ modelTriage: v })} />
+      <Text label="Model — answering messages" value={draft.modelChat}
+        placeholder="claude-sonnet-5"
+        note="Every question typed at the villa. This ran on the investigations
+              model until v2.664.0, which is where the bill went."
+        onChange={(v) => edit({ modelChat: v })} />
       <Text label="Model — investigations" value={draft.modelReason}
-        note="Runs only on something worth a closer look."
+        placeholder="claude-opus-5"
+        note="Runs only on something worth a closer look — the one place the
+              frontier model earns its price."
         onChange={(v) => edit({ modelReason: v })} />
       <Text label="Model — written briefings" value={draft.modelBrief}
-        note="Used when a briefing is composed. Blank uses the add-on's default."
+        placeholder="claude-sonnet-5"
+        note="Used when a briefing is composed."
         onChange={(v) => edit({ modelBrief: v })} />
 
     </div>

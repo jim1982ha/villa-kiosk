@@ -72,6 +72,15 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: "will the next model break my villa monitoring?" becomes answerable.
     "model_triage": "claude-haiku-4-5",
     "model_reason": "claude-opus-5",
+    # ⚠️ CHAT HAS ITS OWN TIER, AND IT IS NOT THE FRONTIER MODEL. It ran on
+    # `model_reason` until 2.664.0, so every question typed at the villa was
+    # answered by the most expensive model in the table — measured on the
+    # reference villa at 28 requests and $1.78 in an afternoon of TESTING,
+    # 100% of it opus. Answering "is the pool pump ok" is not the same task as
+    # investigating why it is not: chat re-reads a document and summarises,
+    # which is what the mid-tier is for. `model_reason` stays frontier because
+    # judgement is what it is paid for.
+    "model_chat": "claude-sonnet-5",
     "model_brief": "claude-sonnet-5",
 
     # ── the two that MUST be empty ───────────────────────────────────────

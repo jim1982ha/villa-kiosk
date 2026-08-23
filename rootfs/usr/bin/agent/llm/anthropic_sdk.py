@@ -43,6 +43,32 @@ API_HOST = "https://api.anthropic.com/"
 CLIENT_NAME = "vesta-agent"
 
 
+#: ⚠️ THE SYSTEM BLOCK IS THE VILLA DOCUMENT AND IT IS RE-SENT ON EVERY TURN.
+#: A tool-using answer is four or five requests, each carrying the whole
+#: document again — measured on the reference villa at ~11,000 input tokens a
+#: turn, 28 requests, 313,736 input tokens, $1.78, for a handful of questions
+#: asked while TESTING. Caching it turns every repeat send into a cache READ,
+#: which the provider bills at a fraction of the write.
+#:
+#: ⚠️ MARKED ON THE LAST BLOCK, WHICH CACHES EVERYTHING BEFORE IT. The marker is
+#: a prefix boundary, not a per-block flag, so one on the final element covers
+#: the whole system prompt — and putting one on each block would spend the
+#: provider's four-breakpoint budget on a prefix that is already contiguous.
+#:
+#: ⚠️ AND IT IS ADDITIVE ONLY. A block that already carries `cache_control` is
+#: left exactly as it is: a caller that has thought about its own boundaries
+#: knows more than this function does.
+def _cached(system: List[Any]) -> List[Any]:
+    """The system blocks, with a cache breakpoint on the last one."""
+    if not system:
+        return system
+    out = [dict(b) if isinstance(b, Mapping) else b for b in system]
+    last = out[-1]
+    if isinstance(last, dict) and "cache_control" not in last:
+        last["cache_control"] = {"type": "ephemeral"}
+    return out
+
+
 class AnthropicProvider:
     """One turn per `run`. No loop, no tool execution, no policy."""
 
@@ -110,7 +136,7 @@ class AnthropicProvider:
         request: Dict[str, Any] = {
             "model": str(model),
             "max_tokens": max(1, int(max_tokens)),
-            "system": list(system),
+            "system": _cached(list(system)),
             "messages": [_message_wire(m) for m in messages],
         }
         if tools:

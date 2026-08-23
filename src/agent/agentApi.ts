@@ -41,6 +41,7 @@ const AGENT_WIRE_KEYS = {
   max_tool_calls: "maxToolCalls",
   model_triage: "modelTriage",
   model_reason: "modelReason",
+  model_chat: "modelChat",
   model_brief: "modelBrief",
   allowed_senders: "allowedSenders",
   /** ⚠️ ONE TABLE FOR BOTH DIRECTIONS — see `reports/people.py`. It supersedes
@@ -143,6 +144,9 @@ export interface AgentConfig {
   maxToolCalls: number;
   modelTriage: string;
   modelReason: string;
+  /** ⚠️ ITS OWN TIER SINCE 2.664.0. Chat ran on `modelReason` — the frontier
+   *  model — for every question typed at the villa. */
+  modelChat: string;
   modelBrief: string;
   /** ⚠️ EMPTY MEANS NOBODY MAY TALK TO THE BOT. Never seed this.
    *

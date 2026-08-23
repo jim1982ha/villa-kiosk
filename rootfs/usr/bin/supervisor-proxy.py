@@ -2635,7 +2635,11 @@ def _chat_dispatch(app: Any) -> Any:
             document=await _agent_document_text(),
             provider=anthropic_sdk.build(
                 api_key=reports_secrets.get("anthropic") or ""),
-            model=str(config.get("model_reason") or ""))
+            # ⚠️ THE CHAT TIER, FALLING BACK TO REASON. A villa that set
+            # `model_reason` by hand before `model_chat` existed keeps the
+            # model it chose; a fresh one gets the cheaper default.
+            model=str(config.get("model_chat")
+                      or config.get("model_reason") or ""))
         if outcome:
             print(f"[supervisor-proxy] chat: {outcome}", flush=True)
 
