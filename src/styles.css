@@ -4368,8 +4368,25 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    the neutral `.icon-btn` glass chrome. This rule has always implied it by
    naming `.btn.danger`, and the second caller still used `.icon-btn` and
    shipped the only delete in the app that did not read as destructive. Pinned
-   by `test_editable_rows` so the third caller cannot repeat it. */
-.editable-row > .btn.danger { flex: 0 0 auto; }
+   by `test_editable_rows` so the third caller cannot repeat it.
+
+   ⚠️ IT ALIGNS TO THE BOTTOM, WHICH IS WHERE THE CONTROLS ARE. The row is
+   `align-items: flex-start`, which is right for a row of bare controls (they
+   are all one height) and wrong the moment a caller labels its fields: a
+   `.people-field` is a label STACKED on a control, so the delete lined itself
+   up with the LABEL and sat a line above every select beside it — reported from
+   the screen against the People panel, and visibly inconsistent with the
+   schedule row in the same session.
+
+   Fixed on the SHARED rule rather than in the caller that noticed, because both
+   callers want the same thing: the delete belongs beside the controls, and the
+   bottom edge is the one thing a labelled field and a bare one have in common.
+   `min-height` matches `.editable-row-fields > select` exactly, so the two are
+   the same height as well as the same baseline — without it, alignment is
+   correct and the button is still visibly taller than its neighbours. */
+.editable-row > .btn.danger {
+  flex: 0 0 auto; align-self: flex-end; min-height: var(--touch-min);
+}
 /* ⚠️ DIRECT CHILD, NOT A DESCENDANT. `.editable-row select` would reach
    into any component that later sits inside a schedule row and restyle a
    control it does not own — the CSS form of the applicable-set bug, and the
