@@ -1,3 +1,11 @@
+## 2.682.0
+
+### Fixed — pressing "Run a check now" left the trace block saying no pass had been recorded
+The press refreshed the diff and not the trace, so the row it had just written
+stayed invisible until the panel was re-read — the instrument reporting the
+absence of the thing the button had produced. It now calls the panel's own
+loader, which is the one place that knows both halves have to be fetched.
+
 ## 2.681.0
 
 ### Fixed — a toggle's description overlapped its label, and section spacing still differed per heading
