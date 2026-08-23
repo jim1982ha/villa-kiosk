@@ -15,6 +15,7 @@ import CentralModelInfo from "./CentralModelInfo";
 import { useGlbUpload } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
+import AgentTuningPanel from "./AgentTuningPanel";
 import ChatSendersPanel from "./ChatSendersPanel";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
@@ -242,6 +243,17 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           {role === "owner" && (
             <CollapsibleSection title="Who may message the villa">
               <ChatSendersPanel />
+            </CollapsibleSection>
+          )}
+
+          {/* Owner only, same reason: /agent-config's PUT is owner-restricted.
+              ⚠️ SEPARATE FROM THE SENDER LIST ON PURPOSE. That panel answers
+              "who is allowed to speak"; this one answers "what does it cost and
+              how loud is it". Collapsing them into one section would put a
+              cadence field under a heading about access. */}
+          {role === "owner" && (
+            <CollapsibleSection title="Supervision cadence and cost">
+              <AgentTuningPanel />
             </CollapsibleSection>
           )}
 

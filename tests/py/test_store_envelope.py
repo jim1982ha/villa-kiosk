@@ -481,3 +481,34 @@ def test_the_three_known_stores_are_covered() -> None:
     assert routes.get("/device-config") == "config"
     assert routes.get("/fm-data") == "data"
     assert routes.get("/reports-config") == "config"
+
+
+def test_the_agent_wire_map_covers_every_setting() -> None:
+    """⚠️ A SETTING THE BACKEND HONOURS AND THE SPA CANNOT NAME IS UNREACHABLE,
+    AND IT FAILS SILENTLY IN BOTH DIRECTIONS: `fromWire` drops it on read and
+    `toWire` omits it on write, so the panel renders a default and a save leaves
+    the stored value alone. Nothing 400s and nothing logs.
+
+    `shadow` shipped this way — the single flag that decides whether the agent
+    DELIVERS anything could only be changed by editing JSON on the box.
+
+    ⚠️ DERIVED FROM `config.DEFAULTS`, never from a list here, for the same
+    reason every other cross-artefact pin in this file is: a hand-kept copy of
+    the thing under test agrees with itself forever.
+    """
+    import re
+    import sys
+    sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from agent import config as agent_config
+
+    with open(os.path.join(SRC, "agent", "agentApi.ts"),
+              encoding="utf-8") as handle:
+        src = handle.read()
+    block = src[src.index("AGENT_WIRE_KEYS = {"):]
+    block = block[:block.index("} as const;")]
+    mapped = set(re.findall(r"^\s*([a-z_]+):\s*\"", block, re.M))
+
+    missing = sorted(set(agent_config.DEFAULTS) - mapped)
+    assert not missing, (
+        f"these agent settings exist in the store and the SPA cannot read or "
+        f"write them: {missing}")

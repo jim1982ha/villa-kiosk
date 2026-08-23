@@ -92,8 +92,23 @@ class ReadSalient(BaseTool):
     }
     mode = "READ"
 
-    def __init__(self, scorer: Optional[Any] = None) -> None:
+    def __init__(self, scorer: Optional[Any] = None,
+                 refs: Optional[Any] = None) -> None:
         self._scorer = scorer
+        #: ⚠️ IT HAD NO REF TABLE UNTIL 2.650.0, AND THAT MADE ITS ROWS
+        #: UNATTRIBUTABLE. `salience.Item.as_dict` emits `entity_id`; every
+        #: other tool emits the `ref`/`label` pair instead, so the scrub on the
+        #: way into the transcript removed the only field naming the device and
+        #: the model received a ranking of anonymous rows. It reported this
+        #: itself — "the anomaly ranking came back without device handles, so
+        #: the top rows aren't attributable to a named room or device" — which
+        #: is the tool being honest about a defect in the tool.
+        #:
+        #: ⚠️ THE REGISTRY SWEEP MISSED IT BY BEING VACUOUS: it built this one
+        #: with `scorer=lambda: []`, so there were no rows to leak an id from
+        #: and the assertion passed over nothing. A test that cannot fail is
+        #: how this reached the villa.
+        self._refs = refs
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
         # ⚠️ AN UNWIRED TOOL REFUSES; IT DOES NOT RETURN AN EMPTY LIST. Both
@@ -115,7 +130,7 @@ class ReadSalient(BaseTool):
         limit = _clamp_int(args.get("limit"), DEFAULT_SALIENT_LIMIT,
                            1, MAX_SALIENT_LIMIT)
         ranked = salience_mod.rank(list(scored), limit=limit)
-        rows = [item.as_dict() for item in ranked]
+        rows = [self._as_row(item.as_dict()) for item in ranked]
         blocks: List[Dict[str, Any]] = [data({"salient": rows, "limit": limit})]
         if args.get("include_unscorable"):
             # ⚠️ A FIRST-CLASS RESULT, NOT A LEFTOVER. "I could not assess 40 of
@@ -123,8 +138,30 @@ class ReadSalient(BaseTool):
             # claim, and the pipeline's inability to say it is what
             # `covered_but_silent` was invented to paper over.
             missing = salience_mod.unscorable(list(scored))
-            blocks.append(data({"unscorable": [m.as_dict() for m in missing]}))
+            blocks.append(data({"unscorable":
+                                [self._as_row(m.as_dict()) for m in missing]}))
         return blocks
+
+    def _as_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """One salient row with its id replaced by a handle.
+
+        ⚠️ THE ID IS REMOVED, NOT ACCOMPANIED. Leaving it beside the ref would
+        put a real entity id into the transcript, which is what `refs.py` and
+        the scrub exist to prevent — and the scrub would strip it anyway,
+        leaving a row that looks like it lost a field.
+
+        ⚠️ WITH NO TABLE THE ROW SAYS SO. `unattributable: true` is a fact the
+        model can report, where a silently missing name is one it has to infer
+        from the shape of the gap.
+        """
+        entity_id = str(row.pop("entity_id", ""))
+        if not entity_id:
+            return row
+        if self._refs is None:
+            row["unattributable"] = True
+            return row
+        row.update(self._refs.describe(entity_id))
+        return row
 
 
 class ReadConcerns(BaseTool):

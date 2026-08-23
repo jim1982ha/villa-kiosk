@@ -2167,6 +2167,104 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
     })
 
 
+async def agent_usage_handler(request: web.Request) -> web.Response:
+    """What the API key has been spent on, per request. Owner-only.
+
+    ⚠️ OWNER-ONLY BECAUSE IT IS BOTH A BILL AND A LOG OF OTHER PEOPLE'S
+    ACTIVITY. Every chat turn appears here attributed to whoever sent it, which
+    is the whole point — and is also exactly why a guest's session must not be
+    able to read it. Same reasoning as `/agent-audit`.
+
+    ⚠️ `?since=` IS A UNIX SECOND AND DEFAULTS TO EVERYTHING. The owner's
+    question is "since I topped up", which is a moment only they know, so the
+    window is theirs to choose rather than a period this endpoint imposes.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read API usage.")
+    from reports import usage as reports_usage
+    try:
+        since = float(request.query.get("since") or 0)
+    except (TypeError, ValueError):
+        since = 0.0
+    found = reports_usage.rows(since=since)
+    return web.json_response({
+        "summary": reports_usage.summary(since=since),
+        # ⚠️ NEWEST FIRST AND CAPPED. The rows are the evidence behind the
+        # totals; the totals are computed over the WHOLE window regardless, so
+        # a truncated row list can never change a figure the owner reads.
+        "rows": list(reversed(found))[:500],
+        "truncated": len(found) > 500,
+    })
+
+
+async def agent_review_get_handler(request: web.Request) -> web.Response:
+    """Playbook drafts awaiting a person. TASK-094.
+
+    ⚠️ THE SAME PAIR THAT MAY JUDGE A CONCERN, AND FOR A STRONGER REASON.
+    Approving a draft adds a procedure the agent consults on every future
+    investigation of its class — the one output whose errors compound rather
+    than being read once and closed. A guest may file a fault report; a guest
+    may not teach the villa a method.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in TASK_ACK_ROLES:
+        return _forbidden("Only an owner or facility manager may review "
+                          "proposed playbooks.")
+    from agent import review as agent_review
+    return web.json_response({"drafts": [
+        {"slug": d.slug, "title": d.title, "domain": d.domain,
+         "description": d.description, "source": d.source,
+         "proposedAt": d.proposed_at, "body": d.body}
+        for d in agent_review.pending()]})
+
+
+async def agent_review_decide_handler(request: web.Request) -> web.Response:
+    """Approve or discard one draft.
+
+    ⚠️ THE DECISION IS AN EXPLICIT ENUM, NEVER A DEFAULT. A malformed request
+    must not be able to approve anything — that is the direction with the
+    permanent consequence, and "approve" is exactly the value a truthy check
+    would fall into.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    role = _role_for(request)
+    if role not in TASK_ACK_ROLES:
+        return _forbidden("Only an owner or facility manager may review "
+                          "proposed playbooks.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "expected an object"}, status=400)
+
+    slug = str(body.get("slug") or "").strip()
+    decision = str(body.get("decision") or "").strip()
+    if not slug:
+        return web.json_response({"error": "no slug"}, status=400)
+    if decision not in ("approve", "discard"):
+        return web.json_response(
+            {"error": "decision must be approve or discard"}, status=400)
+
+    from agent import review as agent_review
+    # ⚠️ THE ROLE IS THE ACTOR, NOT A NAME FROM THE BODY. A client-supplied
+    # "approved_by" is a client-supplied audit trail, which is no audit trail.
+    if decision == "approve":
+        ok = agent_review.approve(
+            slug, by=role, edited_body=str(body.get("body") or "")[:20000])
+    else:
+        ok = agent_review.discard(
+            slug, by=role, reason=str(body.get("reason") or "")[:300])
+    if not ok:
+        return web.json_response({"error": "no such draft"}, status=400)
+    return web.json_response({"ok": True,
+                              "drafts": len(agent_review.pending())})
+
+
 async def agent_chats_handler(request: web.Request) -> web.Response:
     """The bot's private chats, named. Owner-only, because it enumerates who
     can talk to this villa.
@@ -2884,6 +2982,9 @@ def main() -> None:
     app.router.add_get("/agent-chats", agent_chats_handler)
     app.router.add_post("/agent-feedback", agent_feedback_handler)
     app.router.add_get("/agent-runs", agent_runs_handler)
+    app.router.add_get("/agent-usage", agent_usage_handler)
+    app.router.add_get("/agent-review", agent_review_get_handler)
+    app.router.add_post("/agent-review", agent_review_decide_handler)
     app.router.add_get("/agent-audit", agent_audit_handler)
     app.router.add_post("/agent-run-now", agent_run_now_handler)
     app.router.add_get("/device-config", device_config_get_handler)

@@ -34,6 +34,7 @@ from agent import contracts, policy as policy_mod, redact
 from agent.llm.base import Provider, ToolCall, Turn
 from agent.tools import ALL_TOOLS
 from agent.tools.base import BaseTool, fail
+from reports import usage as usage_mod
 from reports.log import log, swallow
 
 
@@ -149,6 +150,15 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
                                   tools=registry.describe(), model=model)
         # ⚠️ SPENT HERE — the call happened, whatever came back.
         budget_mod.spend(kind)
+        # ⚠️ AND ACCOUNTED HERE, FOR THE SAME REASON AND WITH THE SAME TIMING.
+        # This is the single provider call site for triage, reasoning and chat
+        # alike (ARCH-012), so one line covers every agent request that can
+        # exist — and it records a DECLINED turn too, because a turn that was
+        # billed and unusable is precisely the spend an owner cannot otherwise
+        # account for.
+        usage_mod.record(source=kind if kind != "run" else trigger or "run",
+                         model=model, counts=turn.usage or {},
+                         actor=actor, run_id=run_id)
         result.turns += 1
         for name, count in (turn.usage or {}).items():
             result.usage[name] = result.usage.get(name, 0) + int(count)

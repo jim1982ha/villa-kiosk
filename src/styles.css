@@ -4581,3 +4581,38 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 .reports-task-text { flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); }
 .reports-task > .btn { flex: 0 0 auto; min-height: var(--touch-min); }
+
+/* ── Agent usage / tuning surfaces ──────────────────────────────────────────
+   ⚠️ A ROW, BECAUSE A <button> MAY NOT LIVE INSIDE A <label>. The narration
+   toggle's icon button opens the usage panel; put it inside the label that
+   wraps the checkbox and it becomes part of that checkbox's click target, so
+   pressing it would also flip the setting. */
+.toggle-row { display: flex; align-items: center; gap: 8px; }
+.toggle-row > label.toggle { flex: 1 1 auto; min-width: 0; }
+
+/* ⚠️ `auto` on the key column and fixed minimums on the numbers: the labels are
+   entity names and timestamps of unpredictable length, and a table that lets
+   them push the figures off the right edge hides the column the reader opened
+   the panel for. */
+.usage-table { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.usage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-subtle, rgba(128,128,128,0.18));
+  font-size: var(--text-sm);
+}
+.usage-key {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+/* Tabular figures so columns of numbers line up rather than shimmering. */
+.usage-num { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.usage-total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.usage-total strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.usage-since { display: flex; align-items: center; gap: 8px; }
+.usage-since > input { flex: 1 1 auto; min-width: 0; }

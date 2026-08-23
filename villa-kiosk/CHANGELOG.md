@@ -1,3 +1,13 @@
+## 2.650.0
+
+### Added — see exactly what the API key has been spent on, and by whom
+An icon beside "Let an AI service write the summary" opens a per-request ledger
+with a date you choose: every call, its cost, and who caused it. It covers
+scheduled checks and chat too — those spend the same key with that setting off,
+which was the blind spot. Cadence, budget, models and observe-only mode are now
+editable in Settings; only the sender list ever was. Also fixed: the anomaly
+ranking arrived with no device names, so its rows named nothing.
+
 ## 2.649.0
 
 ### Added — shipped domain expertise, and a memory of this villa

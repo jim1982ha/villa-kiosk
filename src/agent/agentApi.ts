@@ -26,6 +26,12 @@ import type { Role } from "@/auth/roles";
 const AGENT_WIRE_KEYS = {
   enabled: "enabled",
   act_enabled: "actEnabled",
+  /** ⚠️ ABSENT FROM THIS MAP UNTIL 2.650.0, WHICH MADE THE CUTOVER DECISION
+   *  UNREACHABLE FROM THE UI. The store has always held it and the backend has
+   *  always honoured it; the SPA could neither read nor write it, so "run
+   *  everything, deliver nothing" could only be changed by editing JSON on the
+   *  box. Pinned by `test_the_agent_wire_map_covers_every_setting`. */
+  shadow: "shadow",
   triggers: "triggers",
   triage_minutes: "triageMinutes",
   brief_cadence: "briefCadence",
@@ -47,6 +53,11 @@ export type AgentTrigger = "scheduled" | "event" | "chat";
 export interface AgentConfig {
   enabled: boolean;
   actEnabled: boolean;
+  /** Run everything, deliver nothing. ⚠️ SHIPS TRUE, the opposite of every
+   *  other flag here: the others are off so nothing happens, this is on so
+   *  that when the agent IS switched on its first period is observed rather
+   *  than delivered. Turning it off is the cutover, and it is a decision. */
+  shadow: boolean;
   triggers: Record<AgentTrigger, boolean>;
   triageMinutes: number;
   briefCadence: string;
@@ -221,4 +232,61 @@ export async function sendConcernFeedback(
     body: JSON.stringify({ id, useful, reason }),
   });
   return r.ok;
+}
+
+/** One provider request, as the ledger recorded it. */
+export interface UsageRow {
+  at: number; source: string; model: string; actor: string;
+  run_id: string; input: number; output: number;
+  cache_read: number; cache_write: number; cost: number;
+}
+
+export interface UsageBucket {
+  requests: number; input: number; output: number;
+  cache_read: number; cache_write: number; cost: number;
+}
+
+export interface UsageSummary {
+  since: number;
+  total: UsageBucket;
+  by_actor: Record<string, UsageBucket>;
+  by_source: Record<string, UsageBucket>;
+  by_model: Record<string, UsageBucket>;
+  /** ⚠️ ALWAYS TRUE, AND THE UI MUST SAY SO. The provider's bill is the
+   *  authority: prices change, promotional rates lapse, and a request that
+   *  failed after its tokens were read may still be billed. A figure presented
+   *  as a bill that is a few cents out is worse than one presented as an
+   *  estimate that is a few cents out. */
+  estimated: boolean;
+  /** The earliest row on record, or 0. ⚠️ THIS IS WHAT SEPARATES "nothing was
+   *  spent in that window" FROM "the ledger did not exist yet" — identical in a
+   *  total, opposite in meaning, and on the release that adds this every
+   *  earlier request falls in the second category. */
+  recording_since: number;
+}
+
+/**
+ * What the API key has been spent on. Owner-only, server-side.
+ *
+ * ⚠️ IT COVERS EVERY REQUEST, NOT ONLY NARRATED BRIEFS. The narration toggle
+ * gates who writes a brief's prose; triage, reasoning and every chat turn spend
+ * the same key regardless of it, and a panel that only counted narration would
+ * read zero on a bill that was climbing.
+ */
+export async function loadUsage(
+  since = 0,
+): Promise<{ summary: UsageSummary | null; rows: UsageRow[]; truncated: boolean }> {
+  const q = since > 0 ? `?since=${Math.floor(since)}` : "";
+  const r = await fetch(ingressPath(`agent-usage${q}`), {
+    credentials: "same-origin",
+  });
+  if (!r.ok) return { summary: null, rows: [], truncated: false };
+  const d = (await r.json().catch(() => ({}))) as {
+    summary?: UsageSummary; rows?: UsageRow[]; truncated?: boolean;
+  };
+  return {
+    summary: d.summary ?? null,
+    rows: Array.isArray(d.rows) ? d.rows : [],
+    truncated: d.truncated === true,
+  };
 }

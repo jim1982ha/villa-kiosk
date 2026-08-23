@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from agent import refs as refs_mod  # noqa: E402
 from agent.tools import ALL_TOOLS, ha, ledger, logs, playbook, read  # noqa: E402
+from observe import salience  # noqa: E402
 
 SHIPPED_PLAYBOOKS = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -316,7 +317,15 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
               "attributes": {"friendly_name": "Pool", "temperature": 1}}]
     built = [
         read.ReadVilla(profile_source=lambda: {"floors": ["1F"]}),
-        read.ReadSalient(scorer=lambda: []),
+        # ⚠️ A SCORER THAT RETURNS A REAL ROW. It was `lambda: []`, so this
+        # tool contributed no output to the sweep and the assertion passed over
+        # nothing — which is exactly how `read_salient` shipped emitting a raw
+        # `entity_id` where every other tool emits a handle. A leak test fed an
+        # empty source is a leak test that cannot fail.
+        read.ReadSalient(
+            scorer=lambda: [salience.score_categorical(
+                ["off", "off"], "on", entity_id="sensor.pool_pump_power")],
+            refs=table),
         read.ReadConcerns(store=lambda: [{"id": "c1", "state": "open",
                                           "title": "Pump"}]),
         read.ReadCoverage(discovered=lambda: {}),

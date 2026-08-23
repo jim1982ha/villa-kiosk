@@ -30,7 +30,17 @@ from reports import store as store_mod
 from reports.log import swallow
 
 SHIPPED_ROOT: str = "/usr/share/vesta/playbooks"
-LEARNED_ROOT: str = "/data/vesta"
+
+#: ⚠️ `/data/vesta/local`, NOT `/data/vesta`, AND THE DIFFERENCE IS A PRIVILEGE
+#: BOUNDARY (2.650.0). `body()` resolves a name by walking this root, so the
+#: parent directory would have made every sibling store readable as a playbook:
+#: `/data/vesta/review-queue/` holds drafts NO PERSON HAS APPROVED, and the
+#: review queue's whole guarantee is that an unapproved draft is unreachable by
+#: construction rather than by a filter somebody has to remember. It also put
+#: `/data/vesta/memory/<hash>.md` one guessed name away from being served as a
+#: procedure. Found while writing `review.py` — the module whose docstring
+#: claimed the property this constant was quietly denying.
+LEARNED_ROOT: str = "/data/vesta/local"
 
 #: Where `note_read` records what was consulted. ⚠️ NOT IN THE PROMPT AND NOT
 #: IN A PLAYBOOK. It is a DATE, and a date above the cache breakpoint ends

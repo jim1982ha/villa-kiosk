@@ -40,8 +40,7 @@ import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from aiohttp import ClientSession
-
-from .. import secrets
+from .. import secrets, usage
 from ..contracts import NARRATION_MODE
 from ..log import log, swallow, warn
 from . import payload as payload_mod
@@ -138,6 +137,12 @@ class Breaker:
 #: is on the two lines below and nowhere else.
 Adapter = Callable[[ClientSession, Mapping[str, Any], str], Any]
 
+#: ⚠️ NAMED ONCE, BECAUSE THE USAGE LEDGER MUST PRICE THE MODEL THAT WAS
+#: ACTUALLY CALLED. It was a literal inside the request body; a second literal
+#: in the accounting call would be one edit away from billing a brief at the
+#: wrong rate, which is the class of drift /dry-audit exists for.
+NARRATION_MODEL = "claude-sonnet-5"
+
 
 async def _anthropic(session: ClientSession, body: Mapping[str, Any],
                      key: str) -> Optional[str]:
@@ -149,7 +154,7 @@ async def _anthropic(session: ClientSession, body: Mapping[str, Any],
     the one place nobody would look for it.
     """
     request = {
-        "model": "claude-sonnet-5",
+        "model": NARRATION_MODEL,
         "max_tokens": 1200,
         "messages": [{"role": "user", "content": _prompt(body)}],
     }
@@ -168,6 +173,20 @@ async def _anthropic(session: ClientSession, body: Mapping[str, Any],
             warn(f"narration provider returned {response.status}")
             return None
         data: Any = await response.json()
+    # ⚠️ ACCOUNTED AT THE ADAPTER, WHICH IS THE ONLY PLACE THE COUNTS EXIST.
+    # `narrate` sees a string; the token counters are in this response object
+    # and nowhere else, so recording anywhere further out would mean guessing
+    # them from the prose. A second adapter must do the same — pinned by
+    # `test_agent_usage.test_every_provider_call_site_records_usage`, because
+    # the failure is a silent zero in a ledger an owner is reading to find out
+    # where their money went.
+    #
+    # ⚠️ AND THE ACTOR IS THE SCHEDULE, NOT A PERSON. A brief is originated by
+    # the villa; attributing it to whoever last logged in would put somebody's
+    # name on spend they did not cause.
+    counted = data.get("usage") if isinstance(data, dict) else None
+    usage.record(source="brief", model=NARRATION_MODEL, actor="schedule",
+                 counts=counted if isinstance(counted, Mapping) else {})
     blocks = data.get("content") if isinstance(data, dict) else None
     if not isinstance(blocks, list):
         return None

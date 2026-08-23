@@ -365,19 +365,58 @@ def test_read_villa_returns_a_document_with_a_cache_prefix() -> None:
     assert blocks[1]["json"]["cache_prefix_chars"] > 0
 
 
-def test_read_salient_ranks_and_can_report_the_unscorable() -> None:
+def _salient_fixture():
     from observe import salience as sal
     rows = [{"day": f"2026-08-{i + 1:02d}", "value": v}
             for i, v in enumerate([10, 12, 8, 11, 9, 10, 13, 7])]
-    scored = [sal.score_numeric(rows, 95.0, entity_id="sensor.loud"),
-              sal.score_numeric(rows[:2], 5.0, entity_id="sensor.thin")]
-    tool = read_tools.ReadSalient(scorer=lambda: scored)
+    return [sal.score_numeric(rows, 95.0, entity_id="sensor.loud"),
+            sal.score_numeric(rows[:2], 5.0, entity_id="sensor.thin")]
+
+
+def test_read_salient_ranks_and_can_report_the_unscorable() -> None:
+    """⚠️ ROWS CARRY A HANDLE, NEVER AN ENTITY ID — AND THIS TEST ASSERTED THE
+    OPPOSITE UNTIL 2.650.0, WHICH IS WHY THE DEFECT SHIPPED.
+
+    `salience.Item.as_dict` emits `entity_id`; every other tool emits the
+    `ref`/`label` pair, and the scrub on the way into the transcript removes raw
+    ids. So the rows arrived with their only naming field stripped and the model
+    received a ranking of anonymous rows. The villa's own agent reported it:
+    "the anomaly ranking came back without device handles, so the top rows
+    aren't attributable to a named room or device."
+
+    A contract test that pins the wrong contract is worse than none — it makes
+    the defect look deliberate to everybody who reads it afterwards.
+    """
+    from agent.refs import RefTable
+    table = RefTable()
+    table.ref_for("sensor.loud")
+    table.ref_for("sensor.thin")
+
+    tool = read_tools.ReadSalient(scorer=_salient_fixture, refs=table)
     blocks = _run(tool.call({"limit": 5}))
-    assert blocks[0]["json"]["salient"][0]["entity_id"] == "sensor.loud"
+    top = blocks[0]["json"]["salient"][0]
+    assert "entity_id" not in top, "a raw entity id reached the transcript"
+    assert top["ref"] == table.describe("sensor.loud")["ref"]
+    assert top["label"]
     assert len(blocks) == 1, "unscorable is opt-in"
+
     blocks = _run(tool.call({"include_unscorable": True}))
-    assert blocks[1]["json"]["unscorable"][0]["entity_id"] == "sensor.thin"
-    assert blocks[1]["json"]["unscorable"][0]["reason"]
+    thin = blocks[1]["json"]["unscorable"][0]
+    assert "entity_id" not in thin
+    assert thin["ref"] == table.describe("sensor.thin")["ref"]
+    assert thin["reason"]
+
+
+def test_read_salient_SAYS_SO_when_it_has_no_ref_table() -> None:
+    """⚠️ A MISSING NAME MUST BE A STATED FACT, NOT A MISSING FIELD. Without a
+    table the row is genuinely unattributable, and `unattributable: true` is
+    something the model can report — where a silently absent name is something
+    it has to infer from the shape of the gap, which is exactly what it had to
+    do before this was fixed."""
+    tool = read_tools.ReadSalient(scorer=_salient_fixture)
+    top = _run(tool.call({"limit": 5}))[0]["json"]["salient"][0]
+    assert "entity_id" not in top
+    assert top["unattributable"] is True
 
 
 def test_read_concerns_hides_closed_by_default() -> None:

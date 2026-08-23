@@ -31,7 +31,8 @@
 // ring and the placeholder colour, all of which were being approximated here.
 
 import { useState } from "react";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Receipt } from "lucide-react";
+import UsageModal from "./UsageModal";
 import type { NarrationMode, ReportsConfig } from "@/reports/reportsTypes";
 
 /** `"anthropic"` → `"Anthropic"`. ⚠️ NO PRODUCT NAMES AND NO TABLE: the list of
@@ -57,6 +58,7 @@ export default function NarrationSection({
   onSaveSecret: (provider: string, value: string) => void;
 }) {
   const [typed, setTyped] = useState("");
+  const [showUsage, setShowUsage] = useState(false);
   const mode: NarrationMode = draft.narration?.mode ?? "deterministic";
   const on = mode === "provider";
 
@@ -73,16 +75,40 @@ export default function NarrationSection({
     <>
       <h3 className="reports-h3">How briefings are written</h3>
 
-      <label className="toggle">
-        <input
-          type="checkbox"
-          checked={on}
-          onChange={(e) =>
-            set({ narration: { ...draft.narration,
-                               mode: e.target.checked ? "provider" : "deterministic" } })}
-        />
-        <span>Let an AI service write the summary</span>
-      </label>
+      {/* ⚠️ THE BUTTON SITS ON THIS ROW AND IS NOT SCOPED TO THIS TOGGLE.
+          Spend continues with narration off — triage runs every fifteen
+          minutes and every chat turn reasons — so the panel it opens covers
+          every request against the key. It lives here because this is the only
+          row in the app that mentions the provider at all; the modal's own copy
+          corrects the reading that placement invites.
+
+          ⚠️ IT IS OUTSIDE THE <label>. A <button> inside a label that wraps a
+          checkbox is inside that checkbox's click target, so pressing it would
+          also toggle narration — silently changing a setting the operator did
+          not touch. The row is a flex container instead, with the label taking
+          the free space. */}
+      <div className="toggle-row">
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={on}
+            onChange={(e) =>
+              set({ narration: { ...draft.narration,
+                                 mode: e.target.checked ? "provider" : "deterministic" } })}
+          />
+          <span>Let an AI service write the summary</span>
+        </label>
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => setShowUsage(true)}
+          aria-label="API usage and cost"
+          title="API usage and cost"
+        >
+          <Receipt size={18} />
+        </button>
+      </div>
+      {showUsage && <UsageModal onClose={() => setShowUsage(false)} />}
       <p className="muted body-text">
         Off by default: the add-on writes every brief itself, offline, and that
         is the version you read in Preview. Switching this on rephrases the same

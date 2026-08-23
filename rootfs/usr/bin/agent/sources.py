@@ -162,7 +162,7 @@ def build_tools(session: Any = None) -> List[BaseTool]:
     refs = build_refs(rows)
     made: List[BaseTool] = [
         read_tools.ReadVilla(profile_source=build_profile_source(rows)),
-        read_tools.ReadSalient(scorer=build_scorer(rows)),
+        read_tools.ReadSalient(scorer=build_scorer(rows), refs=refs),
     ]
     # ⚠️ THE REST KEEP THEIR CURRENT SOURCES UNTIL EACH HAS ONE. A tool with no
     # source now REFUSES and says so, so an unwired member of this list is
