@@ -1,3 +1,16 @@
+## 2.694.0
+
+### Changed — the architecture review found one principle broken and one written too loosely
+Nothing in the running system changed. The built code was walked against the 22
+principles it claims to follow: 20 hold. One does not — "no agent may sit on a
+path that must work" says the fallback briefing works with no internet, and the
+code that writes that briefing is never called, so a total outage produces
+silence rather than a plainer message saying so. Recorded as a defect rather
+than quietly rewritten. The second is a wording fix with a real consequence
+behind it: a model the price table has not heard of works immediately and is
+costed at the most expensive rate until a release adds it, which is the safe
+direction and was nowhere written down.
+
 ## 2.693.0
 
 ### Changed — the documented running cost was 3.7x too high, and now recomputes itself
