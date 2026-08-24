@@ -1,3 +1,15 @@
+## 2.711.0
+
+### Fixed — asked about devices, the villa reported a monitoring fault instead
+"How many ceiling fans are on?" came back as a technical issue retrieving the
+data, and the gym question before it could not name the lights it found. The MCP
+add-on identifies devices the way Home Assistant does, and this add-on strips
+those identifiers before its assistant reads anything, because they often carry
+a person's name and a room. Nothing was translating them, so the safety check
+refused each result whole — every question naming a device, since the add-on was
+wired up. Identifiers are now swapped for per-conversation handles: names and
+states come through, the identifier still never travels.
+
 ## 2.710.0
 
 ### Fixed — a good answer in the chat was followed by "I could not answer that"
