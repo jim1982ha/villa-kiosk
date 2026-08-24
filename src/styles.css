@@ -4650,6 +4650,20 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    outrank the finding it labels. `color-mix` keeps each tone at the same
    weight against either theme's ground, so nothing needs a second definition
    in the dark block. */
+/* The key to the colour code. ⚠️ A `dl`, because that is what it is — a term
+   and its definition — and a screen reader announces the pairing for free.
+   ⚠️ AND IT STACKS ON A NARROW SCREEN rather than truncating the sentence: the
+   explanation IS the content here, so a column that squeezes it to an ellipsis
+   defeats the whole point. The chip column is `auto` so the pills stay aligned
+   while the prose wraps. */
+.source-legend { margin-top: 4px; }
+.source-legend-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; }
+.source-legend-row { display: grid; grid-template-columns: 1fr; gap: 2px 10px; align-items: baseline; }
+.source-legend-row > dd { margin: 0; }
+@media (min-width: 520px) {
+  .source-legend-row { grid-template-columns: auto minmax(0, 1fr); }
+}
+
 /* A heading and the chip saying who produced what is under it, on one line.
    ⚠️ `baseline`, NOT `center`: `.settings-section-title` is an uppercase
    eyebrow at --text-xs and the chip is a rounded pill; centring them makes the

@@ -40,10 +40,24 @@ def _declared_tones() -> Set[str]:
 
 
 def _styled_tones() -> Set[str]:
-    """Every `.source-x` rule in the stylesheet, minus the base class."""
-    found = set(re.findall(r"^\.source-([a-z]+)\b", _read(STYLES), re.M))
-    found.discard("chip")
-    return found
+    r"""Every tone rule in the stylesheet — the ones that SET `--source-tone`.
+
+    ⚠️ MATCHED BY WHAT THE RULE DOES, NOT BY ITS NAME, AND THIS TOOK TWO GOES.
+    A bare `^\.source-(\w+)` also catches `.source-chip` and `.source-legend` —
+    the base class and the key's layout, neither a source — and each new one
+    would need its own `discard()`. This pin caught exactly that the day the
+    legend shipped: it reported a source called "legend".
+
+    ⚠️ AND "SETS IT" MUST BE DISTINGUISHED FROM "READS IT". `.source-chip`
+    mentions `--source-tone` too, in `var(--source-tone, …)`, so a rule merely
+    CONTAINING the property still matched and the pin then reported a source
+    called "chip". The declaration is what a tone is, so the pattern requires
+    the property to be DECLARED rather than dereferenced: every read of it is
+    inside `var(` or `color-mix(`, so a `(` immediately before the name is the
+    thing that separates the two, and a lookbehind says exactly that.
+    """
+    return set(re.findall(r"^\.source-([a-z]+)\s*\{[^}]*?(?<!\()--source-tone:",
+                          _read(STYLES), re.M))
 
 
 def test_the_anchors_still_find_something() -> None:

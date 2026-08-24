@@ -29,6 +29,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Pencil, X } from "lucide-react";
+import SourceChip from "@/components/common/SourceChip";
 
 import { correctMemory, loadMemories, type VillaMemory } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
@@ -75,7 +76,13 @@ export default function CockpitMemories() {
 
   return (
     <>
-      <div className="settings-section-title">What the villa believes</div>
+      {/* ⚠️ AGENT-DERIVED, and on this wall that is not obvious: it
+          sits between a list read straight from Home Assistant and a
+          list written by automations. This one is what the agent has come to believe about this villa, in its own words. */}
+      <div className="reports-title-row">
+        <div className="settings-section-title">What the villa believes</div>
+        <SourceChip source="agent" />
+      </div>
       <p className="muted body-text">
         Claims it has formed about this property and uses in every later check.
         Correcting one does not erase it — your note is added underneath and

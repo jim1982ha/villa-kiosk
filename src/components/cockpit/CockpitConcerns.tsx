@@ -95,7 +95,14 @@ export default function CockpitConcerns() {
 
   return (
     <>
-      <div className="settings-section-title">What the villa has noticed</div>
+      {/* ⚠️ THE HEADING NOW CONTAINS THE WORD THE REST OF THE PRODUCT USES.
+          "What the villa has noticed" is good plain language and it was
+          unfindable: the plan, the briefs, the API and the settings all call
+          these CONCERNS, and an owner reading any of those and scanning this
+          screen for the word found nothing. Plain language is right for the
+          explanation, not for the noun somebody is searching for — so the
+          section carries both. */}
+      <div className="settings-section-title">Concerns — what the villa concluded</div>
       <div className="cockpit-attention-list">
         {rows.map((c) => (
           <div className="editable-row" key={c.id}>

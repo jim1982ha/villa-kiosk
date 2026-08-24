@@ -44,11 +44,6 @@ import { isUnavailable } from "@/utils/stateColors";
 import { fetchLogbookEvents } from "@/ha/HALogbookAPI";
 import { fetchEnergyToday, type EnergyToday } from "@/ha/HAEnergyAPI";
 import type { SummaryGroup } from "@/components/panels/SummaryGroupPanel";
-import CockpitConcerns from "./CockpitConcerns";
-import CockpitReview from "./CockpitReview";
-import CockpitProposals from "./CockpitProposals";
-import CockpitMemories from "./CockpitMemories";
-import CockpitQueue from "./CockpitQueue";
 import { useVillaAttention } from "./useVillaAttention";
 import {
   buildCategoryTiles, buildRoomGroups, buildFloorGroups,
@@ -232,35 +227,15 @@ export default function CockpitTab({
           without it reach this view. The two feedback buttons are a CONTROL,
           not the view, so the leaf component owns its own check: it is not in
           either open path and cannot become a gate on one. */}
-      {/* ── Waiting on a person ────────────────────────────────────
-          ⚠️ FIRST OF THE THREE AGENT BLOCKS, because it is the only one that
-          is BLOCKING something. A concern is a conclusion and a draft is a
-          question about method; this is an action the villa has stopped and
-          will not take without an answer, and it expires. */}
-      <CockpitProposals />
-
-      {/* ⚠️ SECOND, AND FOR THE SAME REASON THE PROPOSALS ARE FIRST: this is
-          also work the villa has stopped and will not do without an answer. It
-          ranks below a proposal because a proposal is an ACTION on the villa
-          with a countdown, and this is a decision about whether to spend. It
-          renders nothing at all unless the owner chose `approve`. */}
-      <CockpitQueue />
-
-      <CockpitConcerns />
-
-      {/* ⚠️ AFTER the concerns and before the drafts. A concern is the state of
-          the villa now; a memory is what it has come to BELIEVE and will assert
-          into every later check, which is closer in kind to a procedure than to
-          an alert — so it sits beside the review queue rather than above it. */}
-      <CockpitMemories />
-
-      {/* ── Procedures the villa wants to keep ─────────────────────
-          ⚠️ AFTER the concerns, not before: a concern is the state of the villa
-          and a draft is a question about how it is supervised. It renders
-          nothing at all while the queue is empty, which is the normal state.
-          The capability check is inside, for the same reason CockpitConcerns'
-          is — see `test_cockpit_is_gated_nowhere`. */}
-      <CockpitReview />
+      {/* ⚠️ THE FIVE AGENT BLOCKS MOVED OUT IN 2.724.0 — queue, concerns,
+          proposals, review and memories now live in the Supervision tab. They
+          sat here, between a list read straight from Home Assistant and an
+          energy chart, answering a completely different question from the
+          sections either side of them: this tab is "how is the villa?", and
+          they are "what is the supervision layer doing about it?". The owner
+          asked twice where Concerns were shown; they were fourth of nine
+          sections in a tab about equipment. Nothing was deleted and no
+          component changed — see `SupervisionTab`. */}
 
       {/* ── Room / floor / category breakdown ──────────────────── */}
       {/* One selector, one section — category used to be its own

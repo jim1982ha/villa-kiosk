@@ -33,7 +33,7 @@ import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
 import {
   ClipboardCheck, ClipboardList, ListChecks, Wrench, Wallet, FileText,
-  CalendarCog, Gauge,
+  BrainCircuit, CalendarCog, Gauge,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -45,6 +45,7 @@ import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitTab from "@/components/cockpit/CockpitTab";
+import SupervisionTab from "@/components/cockpit/SupervisionTab";
 import { buildDeviceOptions } from "./DeviceSearchPicker";
 import TodayTab from "./TodayTab";
 import ReadinessTab from "./ReadinessTab";
@@ -55,14 +56,25 @@ import TasksTab from "@/components/reports/TasksTab";
 import ScheduleEditor from "./ScheduleEditor";
 
 export type FacilityTab =
-  | "cockpit" | "today" | "readiness" | "faults" | "tasks" | "spend"
-  | "schedule" | "report";
+  | "cockpit" | "supervision" | "today" | "readiness" | "faults" | "tasks"
+  | "spend" | "schedule" | "report";
 
 const TABS: { id: FacilityTab; label: string; icon: typeof ListChecks }[] = [
   // First, because "how is the villa" precedes "what shall I do about it" —
   // and because the HUD's alert badge lands here, so it is the tab an operator
   // arrives on most often.
   { id: "cockpit", label: "Cockpit", icon: Gauge },
+  // ⚠️ ITS OWN TAB SINCE 2.724.0, AND IT USED TO BE FIVE SECTIONS MID-SCROLL IN
+  // THE ONE ABOVE. Cockpit answers "how is the villa?" — state, read from Home
+  // Assistant and from what automations wrote. This answers "what is the
+  // supervision layer doing about it?" — inference, all of it. The owner asked
+  // twice where Concerns were shown and they were on screen the whole time,
+  // fourth of nine sections in a tab whose subject is equipment.
+  //
+  // ⚠️ SECOND, NOT FIRST. Whether anything is actually wrong outranks what the
+  // villa is reasoning about it, and the HUD's alert badge still lands on
+  // Cockpit.
+  { id: "supervision", label: "Supervision", icon: BrainCircuit },
   { id: "today", label: "Today", icon: ListChecks },
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "faults", label: "Faults", icon: Wrench },
@@ -291,6 +303,12 @@ export default function FacilityModal({
                 }}
               />
             )}
+            {/* ⚠️ NO PROPS, AND THAT IS WHY THE SPLIT WAS SAFE TO MAKE. All
+                five agent blocks fetch their own data and own their own
+                capability checks, so moving them out of `CockpitTab` was a
+                relocation rather than a refactor — nothing was rewired and no
+                component changed. */}
+            {ready && tab === "supervision" && <SupervisionTab />}
             {ready && tab === "today" && <TodayTab onOpenEntity={onOpenEntity} />}
             {ready && tab === "readiness" && (
               <ReadinessTab

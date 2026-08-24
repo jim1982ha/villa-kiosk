@@ -30,6 +30,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, ShieldAlert, X } from "lucide-react";
+import SourceChip from "@/components/common/SourceChip";
 
 import { decideProposal, loadProposals, type Proposal } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
@@ -102,7 +103,13 @@ export default function CockpitProposals() {
 
   return (
     <>
-      <div className="settings-section-title">Waiting for you to confirm</div>
+      {/* ⚠️ AGENT-DERIVED, and on this wall that is not obvious: it
+          sits between a list read straight from Home Assistant and a
+          list written by automations. This one is an action the agent WANTS to take and may not — high-harm is proposed, never executed. */}
+      <div className="reports-title-row">
+        <div className="settings-section-title">Waiting for you to confirm</div>
+        <SourceChip source="agent" />
+      </div>
       <p className="muted body-text">
         The villa will not do any of these on its own, whatever it concludes and
         whoever asked. Each one can let somebody in or stop something

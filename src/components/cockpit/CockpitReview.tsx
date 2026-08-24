@@ -35,6 +35,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import SourceChip from "@/components/common/SourceChip";
 
 import { decideReviewDraft, loadReviewDrafts, type ReviewDraft } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
@@ -104,8 +105,14 @@ export default function CockpitReview() {
 
   return (
     <>
-      <div className="settings-section-title">
+      {/* ⚠️ AGENT-DERIVED, and on this wall that is not obvious: it
+          sits between a list read straight from Home Assistant and a
+          list written by automations. This one is a procedure the agent WROTE and may not use until a person approves it. */}
+      <div className="reports-title-row">
+        <div className="settings-section-title">
         Proposed procedures — {rows.length} waiting
+      </div>
+        <SourceChip source="agent" />
       </div>
       <p className="muted body-text">
         The villa has written these down after investigating something and is

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
+import SourceChip from "@/components/common/SourceChip";
 
 import { completeTask, fetchTasks, type CaretakerTask } from "@/reports/reportsApi";
 
@@ -89,6 +90,19 @@ export default function TasksTab({ canAck }: { canAck: boolean }) {
         <ul className="reports-tasks">
           {tasks.map((task) => (
             <li key={task.uid} className="reports-task">
+              {/* ⚠️ `reflex`, AND THE PROVENANCE HERE SURPRISES PEOPLE — it was
+                  the owner's own question. Nothing on this list was written by
+                  the agent. An AUTOMATION writes the item into a Home Assistant
+                  to-do list; VESTA reads that list back (`ledger.todo_tasks`),
+                  keeps only the entries carrying `TASK_PREFIX` because the same
+                  list is often the household's real shopping list, and renders
+                  what it found. So a task is deterministic blueprint output
+                  round-tripped through HA — the opposite end of the spectrum
+                  from the Concerns two screens away, and until this chip the
+                  two looked equally like "the villa said so".
+                  ⚠️ `ruleId` beside the text is the blueprint's OWN id, which
+                  is the corroboration: an agent-derived row could not have one. */}
+              <SourceChip source="reflex" />
               <span className="reports-task-text">
                 {task.text}
                 {task.ruleId && (
