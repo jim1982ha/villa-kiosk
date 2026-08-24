@@ -221,3 +221,29 @@ def test_the_RUN_LOOP_actually_logs_it() -> None:
     assert "tools=published" in src, (
         "it must measure the list actually SENT — measuring the unfiltered "
         "registry would report a prefix nobody was billed for")
+
+
+# ── which tools a tier actually reaches for ────────────────────────────────
+
+def test_a_run_LOGS_THE_TOOLS_IT_USED_not_just_how_many() -> None:
+    """⚠️ THE PREREQUISITE FOR TRIMMING THE TOOL SET, AND THE REASON IT IS AN
+    INSTRUMENT RATHER THAN A GUESS. The prefix line proved tool schemas are 84%
+    of the investigation tier — 113,393 chars against a playbook at 11% — so
+    publishing fewer of them is the biggest remaining cost lever. WHICH ones to
+    drop is the open question, and this repository has disproved seven perf
+    hypotheses argued from plausibility; `audit.record_intent` already stores
+    every call's name but nothing aggregated them, and the ledger is behind an
+    owner-only endpoint, so the applicable set was unreadable.
+
+    ⚠️ AND IT COUNTS RATHER THAN LISTS. One run reading a tool six times is not
+    evidence for keeping it; six runs each reading it once is.
+    """
+    from agent import runtime as runtime_mod
+    src = inspect.getsource(runtime_mod.investigate)
+    assert "tools used:" in src, "a run does not record which tools it called"
+    assert 'row.get("tool")' in src, (
+        "the names must come from the run's own evidence rows, which is where "
+        "`registry.run` records each allowed call")
+    assert "used[name] = used.get(name, 0) + 1" in src, (
+        "the tools must be COUNTED — a bare list cannot distinguish one run "
+        "calling a tool six times from six runs calling it once")

@@ -313,8 +313,38 @@ async def investigate(*, provider: Provider,
                       f"{len(out.evidence)} tool result(s) were gathered: "
                       f"{out.reason}")
 
+    # ⚠️ WHICH TOOLS, NOT JUST HOW MANY, AND THE COUNT WAS THE ONLY THING
+    # RECORDED. The prefix instrument (2.715.0) measured that TOOL SCHEMAS ARE
+    # 84% of the investigation tier's prefix — 113,393 chars, 32.7k tokens, 44
+    # tools — against a playbook at 11% and the villa document at 4%. Cost is
+    # `prefix x turns` and these runs take 8 turns, so one investigation reads
+    # ~313k cached tokens and five sixths of that is a tool catalogue.
+    #
+    # ⚠️ SO THE OBVIOUS FIX IS TO PUBLISH FEWER TOOLS TO THIS TIER, AND
+    # "obvious" is exactly the word this repository distrusts. Seven perf
+    # hypotheses here have been argued from plausibility and disproved, and
+    # "no investigation needs `ha_eval_template`" is one more until something
+    # measures it. `audit.record_intent` already stores the name of every call,
+    # but nothing aggregates them and the ledger is an owner-only endpoint —
+    # so the applicable set was unreadable from the one place it is decided.
+    #
+    # ⚠️ NAMES, DEDUPLICATED, WITH THE CALL COUNT. A run that reads the same
+    # tool six times says something different about that tool from six runs that
+    # each read it once, and only the second is evidence for keeping it.
+    used: Dict[str, int] = {}
+    for row in out.evidence:
+        name = str(row.get("tool") or "")
+        if name:
+            used[name] = used.get(name, 0) + 1
     log(f"run {ident} {out.status} in {out.seconds:.1f}s "
         f"({out.turns} turn(s), {out.tool_calls} tool call(s))")
+    if used:
+        # ⚠️ ITS OWN LINE, so a grep for `tools used` answers "what does this
+        # tier actually reach for" across every run without matching the
+        # summary above it.
+        ranked = sorted(used.items(), key=lambda kv: (-kv[1], kv[0]))
+        log(f"run {ident} tools used: "
+            + " ".join(f"{n}x{c}" for n, c in ranked))
     return out
 
 
