@@ -857,7 +857,11 @@ def test_the_chat_path_HAS_a_system_prompt() -> None:
     plumbing. Reported from the phone."""
     import inspect
     source = inspect.getsource(chat.handle_event)
-    assert '"text": SYSTEM' in source, "the chat run sends no system prompt"
+    # ⚠️ ON THE EFFECT, NOT THE EXPRESSION — see the same correction in
+    # test_playbooks. `SYSTEM` is now handed to `playbooks.system_blocks` as
+    # the stable half of the cached prefix rather than inlined into a list.
+    assert "instructions=SYSTEM" in source, (
+        "the chat run sends no system prompt")
 
 
 def test_the_prompt_demands_brevity_in_a_checkable_way() -> None:

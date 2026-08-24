@@ -1,3 +1,15 @@
+## 2.714.0
+
+### Fixed — every conversation re-bought the whole reference material it had already paid for
+Each question sends the assistant a fixed briefing — its instructions and the
+list of what it can look up — plus a description of the villa built from recent
+activity. The villa half changes every few minutes, and both halves were being
+remembered as one block, so a change to the second threw away the first: two
+questions ninety seconds apart each paid full price for reference material that
+had not changed. The two are now remembered separately, so asking again shortly
+after costs a fraction of what it did. One morning's chat billed $2.06; roughly
+a third of that was this.
+
 ## 2.713.0
 
 ### Fixed — seven of every eight supervision checks were doing the work and binning it

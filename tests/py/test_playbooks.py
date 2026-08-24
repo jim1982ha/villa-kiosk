@@ -370,14 +370,36 @@ def test_the_system_playbooks_are_ACTUALLY_LOADED_by_a_prompt() -> None:
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
     from agent import chat as chat_mod
+    from agent import playbooks as playbooks_mod
     from agent import triage as triage_mod
 
+    # ⚠️ ASSERTED ON THE EFFECT, NOT ON THE EXPRESSION. This read the source for
+    # the literal `playbooks.system_prompt(` and went red on a refactor that
+    # moved the call one level down into `playbooks.system_blocks` — the
+    # constitution still loaded, the grep did not. A pin that breaks on a
+    # rename teaches the next person to edit the assertion.
     for module, label in ((chat_mod.handle_event, "chat"),
                           (triage_mod.run, "triage")):
         source = inspect.getsource(module)
-        assert "playbooks.system_prompt(" in source, (
-            f"the {label} path imports playbooks but never calls "
-            f"system_prompt, so it runs with no constitution")
+        assert ("playbooks.system_prompt(" in source
+                or "playbooks.system_blocks(" in source), (
+            f"the {label} path imports playbooks but never builds a system "
+            f"prompt from it, so it runs with no constitution")
+
+    # ⚠️ AND THE BUILDER ITSELF MUST EMBED THE CONSTITUTION. Accepting
+    # `system_blocks(` above is only safe because this asserts what it returns;
+    # without it, a builder that forgot the playbook would pass.
+    blocks = playbooks_mod.system_blocks("owner", instructions="I",
+                                         document="D", root=SHIPPED)
+    texts = [b.get("text", "") for b in blocks]
+    constitution = playbooks_mod.system_prompt("owner", root=SHIPPED)
+    # ⚠️ NON-VACUOUS BY ASSERTION. Against a tree with no playbooks
+    # `system_prompt` returns "" and `"" in texts` is trivially true — a
+    # mutation deleting the constitution survived the first version of this.
+    assert constitution.strip(), "the fixture root has no playbooks to find"
+    assert constitution in texts, (
+        "system_blocks does not include the constitution")
+    assert "I" in texts and "D" in texts
 
 
 def test_only_ONE_voice_is_ever_loaded() -> None:

@@ -497,11 +497,9 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
         # ⚠️ THE VOICE FOLLOWS THE ASKER'S ROLE. A facility manager gets the
         # file that WANTS the entity id; an owner gets the one that forbids it.
         # They are deliberately contradictory and only one may load.
-        system=[{"type": "text",
-                 "text": playbooks.system_prompt(
-                     playbooks.AUDIENCE_OF_ROLE.get(role, "owner"))},
-                {"type": "text", "text": SYSTEM},
-                {"type": "text", "text": document}],
+        system=playbooks.system_blocks(
+            playbooks.AUDIENCE_OF_ROLE.get(role, "owner"),
+            instructions=SYSTEM, document=document),
         messages=context_for(message),
         config=config, actor=role, trigger="chat", kind="chat")
 

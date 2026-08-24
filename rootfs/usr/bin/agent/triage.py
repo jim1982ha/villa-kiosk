@@ -160,9 +160,8 @@ async def run(*, provider: Provider, document: str,
         # another machine stage, not prose for a person, so a voice file is
         # ~350 cached tokens of instructions about a document it never writes.
         # `system_prompt("")` selects none — see `VOICE_OF`.
-        system=[{"type": "text", "text": playbooks.system_prompt("")},
-                {"type": "text", "text": SYSTEM},
-                {"type": "text", "text": document}],
+        system=playbooks.system_blocks(
+            "", instructions=SYSTEM, document=document),
         messages=[{"role": "user",
                    "content": "Is anything here worth a closer look?"}],
         config=config, registry=registry_for(registry), tier="triage",

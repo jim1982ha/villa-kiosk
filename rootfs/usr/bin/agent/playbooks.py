@@ -286,3 +286,50 @@ def render_index(root: Optional[str] = None) -> str:
         lines.append(f"- **{row['name']}** — {row['description']}")
     lines.append("")
     return "\n".join(lines)
+
+
+#: ⚠️ THE PREFIX HAS A STABLE HALF AND A VOLATILE HALF, AND UNTIL 2.714.0 THEY
+#: SHARED ONE CACHE BREAKPOINT — SO THE VOLATILE HALF INVALIDATED THE STABLE
+#: ONE ON EVERY CHANGE. `_cached` marks the LAST system block, and the last
+#: block is the villa document, which is rebuilt from the journal. The journal
+#: gains rows every few minutes ("observed 1256 entities, 126 changed"), so the
+#: document differed between two conversations ninety seconds apart and the
+#: whole prefix — every upstream tool schema included — was re-written at 1.25x.
+#: Measured on the reference villa: a single chat request billed $0.2586 to
+#: produce 157 output tokens, and 13 such writes were 38% of one morning's bill.
+#:
+#: ⚠️ SO THE BOUNDARY IS MARKED WHERE THE CONTENT ACTUALLY CHANGES. A cache
+#: breakpoint covers everything BEFORE it, so one after the instructions holds
+#: the tool schemas and both prompts across a document change; the document then
+#: gets its own breakpoint from `_cached` and is the only part re-written.
+#:
+#: ⚠️ AND THE ORDER IS THE CONTRACT: stable first, volatile last. Putting the
+#: document earlier would make every block after it uncacheable, which is the
+#: same bug with the halves swapped.
+def system_blocks(audience: str = "owner", *, instructions: str = "",
+                  document: str = "",
+                  root: Optional[str] = None) -> List[Dict[str, Any]]:
+    """The three system blocks every tier sends, with the cache boundary marked.
+
+    ⚠️ ONE BUILDER FOR THE THREE CALLERS. `chat`, `reason` and `triage` each
+    built this list themselves in the identical shape, so the boundary would
+    have had to be remembered three times — and the one that forgot would
+    silently cost money rather than fail, which is the failure mode this
+    repository keeps paying for.
+    """
+    blocks: List[Dict[str, Any]] = [
+        # ⚠️ `root` IS PASSED THROUGH SO A TEST CAN POINT AT THE SHIPPED TREE.
+        # Without it `system_prompt` returns "" wherever the playbooks are not
+        # installed, and a test asserting "the constitution is in here" passes
+        # vacuously — which is exactly how a mutation deleting this line
+        # survived.
+        {"type": "text", "text": system_prompt(audience, root=root)},
+        # ⚠️ THE BREAKPOINT RIDES THE LAST STABLE BLOCK. `_cached` is additive
+        # and leaves a block that already carries `cache_control` alone, so
+        # this one survives and it adds the second one after the document.
+        {"type": "text", "text": str(instructions),
+         "cache_control": {"type": "ephemeral"}},
+    ]
+    if document:
+        blocks.append({"type": "text", "text": str(document)})
+    return blocks

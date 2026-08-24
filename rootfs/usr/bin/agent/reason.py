@@ -227,9 +227,8 @@ async def investigate_subject(item: Any, *, provider: Provider,
     try:
         result = await runtime.investigate(
             provider=provider,
-            system=[{"type": "text", "text": playbooks.system_prompt("owner")},
-                    {"type": "text", "text": SYSTEM},
-                    {"type": "text", "text": document}],
+            system=playbooks.system_blocks(
+                "owner", instructions=SYSTEM, document=document),
             messages=[{"role": "user", "content": _question(item)}],
             config=config, tier="reason", trigger=trigger, run_id=run_id)
     except Exception as err:  # noqa: BLE001 - the clock must survive this

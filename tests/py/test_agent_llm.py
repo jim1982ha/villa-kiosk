@@ -517,3 +517,55 @@ def test_blocks_that_FLATTEN_to_nothing_still_decline() -> None:
         _Reply([_Block(type="text", text="  \n ")], "end_turn")).declined
     assert anthropic_sdk._turn_of(
         _Reply([_Block(type="thinking")], "end_turn")).declined
+
+
+# ── two cache breakpoints: the stable half must outlive the volatile one ─────
+def test_the_STABLE_half_is_cached_SEPARATELY_from_the_villa_document() -> None:
+    """⚠️ ONE BREAKPOINT MEANT THE DOCUMENT INVALIDATED THE TOOL SCHEMAS. The
+    villa document is rebuilt from the journal, which gains rows every few
+    minutes, so two conversations ninety seconds apart had different documents
+    and the WHOLE prefix — every upstream tool schema included — was re-written
+    at 1.25x. Measured: one chat request billed $0.2586 for 157 output tokens,
+    and 13 such writes were 38% of a morning's spend."""
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))), "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    blocks = anthropic_sdk._cached(
+        playbooks.system_blocks("owner", instructions="I", document="D"))
+    marked = [i for i, b in enumerate(blocks) if b.get("cache_control")]
+    assert len(marked) == 2, (
+        f"expected a stable and a volatile breakpoint, got {marked}")
+    # ⚠️ THE ORDER IS THE CONTRACT: a breakpoint covers everything BEFORE it, so
+    # the stable one must sit before the document or it caches nothing extra.
+    assert blocks[marked[0]]["text"] == "I"
+    assert blocks[marked[1]]["text"] == "D"
+
+
+def test_a_changed_DOCUMENT_leaves_the_stable_prefix_byte_identical() -> None:
+    """The property that makes the split worth anything: the blocks before the
+    volatile one must not move when the villa document changes."""
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__)))), "rootfs", "usr", "bin"))
+    from agent import playbooks
+
+    a = anthropic_sdk._cached(playbooks.system_blocks(
+        "owner", instructions="I", document="MONDAY"))
+    b = anthropic_sdk._cached(playbooks.system_blocks(
+        "owner", instructions="I", document="TUESDAY -- longer, more rows"))
+    assert a[:-1] == b[:-1], (
+        "the document changed and the cached stable prefix moved with it")
+    assert a[-1] != b[-1]
+
+
+def test_cached_is_ADDITIVE_and_never_overwrites_a_callers_breakpoint() -> None:
+    """⚠️ THE WHOLE SPLIT RIDES ON THIS. `system_blocks` marks the stable
+    boundary and `_cached` adds the final one; if it overwrote instead, there
+    would be one breakpoint again and the fix would silently do nothing."""
+    given = [{"type": "text", "text": "s", "cache_control": {"type": "custom"}},
+             {"type": "text", "text": "d"}]
+    out = anthropic_sdk._cached(given)
+    assert out[0]["cache_control"] == {"type": "custom"}
+    assert out[1]["cache_control"] == {"type": "ephemeral"}
