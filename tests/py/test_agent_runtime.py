@@ -197,6 +197,59 @@ def test_an_ACT_tool_is_refused_when_actuation_is_off() -> None:
     assert "disabled" in sent[0]["error"]["message"]
 
 
+# ── what is PUBLISHED, against what is PERMITTED ───────────────────────────
+# ⚠️ These two are different questions and the tests must stay different. The
+# filter below is presentation — it decides what the prefix is BILLED for.
+# `may_use_tool` is the gate. The test above proves the gate still fires on a
+# tool the model named anyway, which is what makes this safe to do at all.
+
+def test_an_ACT_tool_is_NOT_PUBLISHED_while_actuation_is_off() -> None:
+    """⚠️ IT WAS BILLED IN THE PREFIX ON EVERY REQUEST ONLY TO BE REFUSED.
+    41 of the upstream's 78 tools are ACT, and a villa ships with actuation OFF
+    — so the moment an owner takes their MCP add-on out of read-only mode, that
+    whole write surface lands in the cached prefix of every request without
+    anyone connecting the two."""
+    published = {t["name"] for t in _registry().describe(_policy())}
+    assert "act_service" not in published
+    assert {"echo", "boom", "leaky"} <= published
+
+
+def test_the_SAME_ACT_tool_IS_published_once_actuation_is_on() -> None:
+    """⚠️ THE FILTER FOLLOWS THE GATE, IT DOES NOT REPLACE IT. If this were a
+    second rule it could stay shut after the owner opened the switch — a tool
+    the policy permits and the model is never told about, which reads as the
+    model refusing to act."""
+    armed = _policy(act_enabled=True)
+    assert "act_service" in {t["name"] for t in _registry().describe(armed)}
+
+
+def test_triage_is_published_NO_write_surface_at_all() -> None:
+    """Triage denies every non-READ mode whatever the actuation switch says, so
+    none of it belongs in the tier that runs 96 times a day."""
+    triage = policy.for_run({"act_enabled": True}, tier="triage",
+                            tool_names=_registry().names)
+    assert "act_service" not in {t["name"]
+                                 for t in _registry().describe(triage)}
+
+
+def test_describe_WITHOUT_a_policy_still_publishes_everything() -> None:
+    """⚠️ THREE CALLERS BUILD THE POLICY *FROM* THIS LIST — `chat`, `runtime`
+    and the proxy. Filtering by default would narrow `allowed_tools` to what the
+    previous policy allowed: a ratchet losing a tool per construction, and the
+    MCP server would quietly stop publishing its own surface."""
+    assert len(_registry().describe()) == 4
+
+
+def test_the_run_loop_PUBLISHES_THE_FILTERED_LIST() -> None:
+    """⚠️ PIN THE CALLER. A filter nothing calls is the shape of defect this
+    repository has produced thirteen times: `Registry.describe` would be correct
+    and the prefix would be unchanged."""
+    p = FakeProvider([says("nothing to do")])
+    _run(p)
+    assert "act_service" not in {t["name"] for t in p.calls[0]["tools"]}
+    assert "echo" in {t["name"] for t in p.calls[0]["tools"]}
+
+
 def test_a_malformed_tool_call_is_refused_by_the_tool_not_the_loop() -> None:
     p = FakeProvider([asks("echo", {"note": {"nested": "object"}}),
                       says("ok")])

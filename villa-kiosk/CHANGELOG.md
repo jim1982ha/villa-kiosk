@@ -1,3 +1,15 @@
+## 2.716.0
+
+### Changed — the assistant was handed a list of actions it is not allowed to take
+Every question carries a description of everything the assistant can do, and
+that description included the controls for switching things on and off even
+while acting on the villa is turned off — offered on every question, then
+refused every time one was tried. They are now left out of the description
+while the switch is off. Refusing them is unchanged and is still decided in the
+one place it always was, so turning the switch on brings them straight back.
+On this property the Home Assistant connection is already read-only, so the
+saving here is small; it is what stops the list doubling if that is relaxed.
+
 ## 2.715.0
 
 ### Added — the cost of a conversation could be seen but not broken down

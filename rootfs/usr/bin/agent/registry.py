@@ -65,9 +65,53 @@ class Registry:
     def names(self) -> Sequence[str]:
         return tuple(self._tools)
 
-    def describe(self) -> List[Dict[str, Any]]:
-        """The tool list handed to a provider — and published over MCP."""
-        return [t.describe() for t in self._tools.values()]
+    def describe(self, policy: Optional[policy_mod.RunPolicy] = None
+                 ) -> List[Dict[str, Any]]:
+        """The tool list handed to a provider — and published over MCP.
+
+        ⚠️ `policy` FILTERS WHAT IS PUBLISHED AND GATES NOTHING. Every call
+        still goes through `invoke`, which still asks `may_use_tool`, which is
+        still the only gate (ARCH-012). This is presentation: a tool that this
+        run's one gate would refuse on EVERY possible call is a tool whose
+        schema is bought in the cached prefix on every request only to be
+        refused at call time.
+
+        ⚠️ AND THE SIZE OF THE WIN DEPENDS ENTIRELY ON THE UPSTREAM'S OWN
+        SETTING, WHICH IS WHY THIS IS NOT FILED AS A COST FIX. `mode_of`'s
+        measurement is of the ha-mcp SERVER (8.3.0, 78 tools, 41 of them
+        `destructiveHint`); the reference villa runs that add-on with
+        `read_only_mode: true`, so its catalogue is **39 tools** and the write
+        surface never arrives to be filtered. On that villa this removes only
+        whatever `mode_of` returns UNCLASSIFIED — the tools nothing can call
+        under any switch. It becomes the 41-schema saving the moment an owner
+        turns read-only off, which is exactly when the prefix would otherwise
+        double without anyone connecting the two. `prefix.py`'s `tools n=`
+        field is what measures it either way; do not assert a saving from
+        here.
+
+        ⚠️ AND THE PREDICATE IS THE GATE ITSELF, NOT A COPY OF IT. Writing
+        `mode == "ACT" and not act_enabled` here would be a second rule that
+        agrees on the day it is written and diverges on the first change to
+        either — the failure ARCH-012 exists to prevent, and the one
+        `upstream.tools_for` declines to commit for the same reason.
+        `may_use_tool` is a pure function of (policy, name, mode), so asking it
+        is exactly asking "could this run ever call this?".
+
+        ⚠️ OMITTING `policy` PUBLISHES EVERYTHING, and three callers rely on
+        that. `chat` and `runtime` build the policy FROM this list, so filtering
+        it there would narrow `allowed_tools` to the tools the previous policy
+        allowed — a ratchet that loses a tool per construction. The MCP server
+        has its own filter (`mcp_server.exported`) answering a different
+        question: what may a REMOTE caller see, whoever they are.
+        """
+        out: List[Dict[str, Any]] = []
+        for tool in self._tools.values():
+            if policy is not None:
+                mode = str(getattr(tool, "mode", "READ"))
+                if not policy_mod.may_use_tool(policy, tool.name, mode).allowed:
+                    continue
+            out.append(tool.describe())
+        return out
 
     def get(self, name: str) -> Optional[BaseTool]:
         return self._tools.get(str(name))
@@ -230,10 +274,14 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
         # site, so every request in the system ran at that ceiling — including
         # turns whose `thinking` blocks are drawn from the same budget. See
         # `config.CONFIG_DEFAULTS["max_output_tokens"]` for the measurement.
-        # ⚠️ MEASURED AS SENT. `published` is a local so the instrument below
-        # reports the list that was actually billed, never a second call to
-        # `describe()` that could answer differently.
-        published = registry.describe()
+        # ⚠️ FILTERED BY THIS RUN'S POLICY — presentation, not a second gate.
+        # See `Registry.describe`. `_invoke` below still asks `may_use_tool` for
+        # every call, including a name the model invented.
+        #
+        # ⚠️ AND IT IS A LOCAL SO THE INSTRUMENT BELOW MEASURES THE LIST THAT
+        # WAS ACTUALLY BILLED. A second `describe()` call there could answer
+        # differently and would report a prefix nobody paid for.
+        published = registry.describe(policy)
         turn = await provider.run(system=system, messages=convo,
                                   tools=published, model=model,
                                   max_tokens=_output_ceiling(config))
