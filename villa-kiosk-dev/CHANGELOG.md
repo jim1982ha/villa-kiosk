@@ -1,3 +1,14 @@
+## 2.708.0
+
+### Fixed — the Home Assistant MCP add-on was never found, and nothing said so
+The villa looks up the MCP add-on through Home Assistant's Supervisor, because
+its name differs on every installation and cannot be written down in advance.
+This add-on had never asked for permission to make that lookup, so it was
+refused, no Home Assistant tools were ever loaded, and the add-on reported
+itself perfectly healthy the whole time — the log said nothing in either
+direction. It now asks for the permission, and says plainly when it cannot
+reach the MCP add-on and is falling back to its own smaller set of tools.
+
 ## 2.707.0
 
 ### Fixed — supervision has not run at all since v2.643.0
