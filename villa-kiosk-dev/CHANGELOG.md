@@ -1,3 +1,15 @@
+## 2.732.0
+
+### Fixed — a round of readability problems across both workspaces
+The step number and its title sat on visibly different lines, and the speed /
+uses AI / works offline row bunched into the left third instead of using the
+line. The list of what acts on its own was unreadable, with counts landing under
+the prose — it is a proper table now, in both dialogs. Badges repeating a label
+already shown above them are gone. Every field's explanation now appears above
+the box rather than below it, so it is read before you type. Triage no longer
+claims to run every fifteen minutes when your setting says otherwise, and
+approving something now tells you what came of it.
+
 ## 2.731.1
 
 ### Fixed — the step header appeared below the thing it was explaining
