@@ -1,3 +1,25 @@
+## 2.709.0
+
+### Added — tell the villa where the Home Assistant MCP add-on is, in Supervision
+Finding that add-on by itself would need permission to install and stop add-ons,
+which is more than a dashboard should ask for on someone else's Home Assistant
+just to look up one address. So you paste it once instead: open the MCP add-on's
+log and copy the address on the line beginning "Starting MCP server". That
+add-on is what lets the villa answer questions about your home — which rooms
+exist, what is on, what happened last week. Left empty, the villa answers from a
+much smaller set of its own and says so in the log rather than failing quietly.
+
+## 2.709.0
+
+### Fixed — the permission added last release was only half of what the lookup needs
+Finding the Home Assistant MCP add-on needs two grants, not one: access to
+Home Assistant's Supervisor, and a role allowed to list add-ons other than
+itself. The previous release granted the first, which on its own produces
+exactly the same result as granting neither. Both are now asked for, and the
+log names which step failed — a refused listing means this add-on's own
+permissions, an empty listing means the MCP add-on is not installed or not
+running, and those need opposite actions.
+
 ## 2.708.0
 
 ### Fixed — the Home Assistant MCP add-on was never found, and nothing said so

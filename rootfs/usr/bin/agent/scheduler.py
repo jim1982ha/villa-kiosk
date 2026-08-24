@@ -245,7 +245,7 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     # changes when somebody updates that add-on, not every pass, so this does
     # nothing on all but one pass a day exactly like the two lines above.
     from agent import upstream as upstream_mod
-    await upstream_mod.refresh(session)
+    await upstream_mod.refresh(session, config=config)
 
     try:
         document = sources.build_document()

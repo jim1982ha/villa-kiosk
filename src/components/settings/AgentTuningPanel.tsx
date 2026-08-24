@@ -41,14 +41,14 @@ const MIN_TRIAGE_MINUTES = 5;
  *  would make this app the thing that has to ship for a new model to be usable,
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
-  "enabled" | "shadow" | "actEnabled" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
+  "enabled" | "shadow" | "actEnabled" | "mcpUrl" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
   | "maxTurns" | "maxToolCalls" | "investigateMode"
   | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
   | "modelChat">
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
-  enabled: false, shadow: true, actEnabled: false, triageMinutes: 15, monthlyLimit: 4000,
+  enabled: false, shadow: true, actEnabled: false, mcpUrl: "", triageMinutes: 15, monthlyLimit: 4000,
   chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24,
   investigateMode: "auto", maxInvestigationsPerPass: 3,
   quietHoursStart: "", quietHoursEnd: "",
@@ -212,6 +212,7 @@ export default function AgentTuningPanel() {
     // `act_enabled` as true would render "may operate devices" for a villa
     // that cannot — the most misleading possible direction for this flag.
     actEnabled: c.actEnabled === true,
+    mcpUrl: String(c.mcpUrl ?? ""),
     triageMinutes: Number(c.triageMinutes ?? EMPTY.triageMinutes),
     monthlyLimit: Number(c.monthlyLimit ?? EMPTY.monthlyLimit),
     chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
@@ -275,6 +276,32 @@ export default function AgentTuningPanel() {
         does all the same thinking and only holds back the message. To spend
         nothing, switch the watching off above instead.
       </p>
+
+      <div className="settings-section-title">
+        Where it reads Home Assistant from
+      </div>
+      {/* ⚠️ PASTED, NOT DISCOVERED, AND THAT IS A PRIVILEGE DECISION. Finding
+          the add-on automatically needs a Supervisor role that also grants
+          installing and stopping add-ons — too much for a dashboard to ask of
+          somebody installing it from a repository they do not own, for the sake
+          of one hostname. One paste costs the owner nothing and keeps this
+          add-on at the least privilege that works. */}
+      <label className="fm-field">
+        <span>Home Assistant MCP add-on address</span>
+        <input
+          value={draft.mcpUrl}
+          onChange={(e) => edit({ mcpUrl: e.target.value })}
+          placeholder="http://<hostname>:9583/<secret path>"
+          spellCheck={false} autoCapitalize="off" autoCorrect="off"
+        />
+        <p className="muted body-text">
+          Open the Home Assistant MCP add-on, look at its log, and copy the
+          address on the line beginning “Starting MCP server” — it ends in a
+          long random path. That add-on is what lets the villa answer questions
+          about your home; leave this empty and it answers from a much smaller
+          set of its own.
+        </p>
+      </label>
 
       <div className="settings-section-title">
         How often it checks, and what that costs

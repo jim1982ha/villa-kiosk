@@ -26,6 +26,10 @@ import { ROLE_ORDER, type Role } from "@/auth/roles";
 const AGENT_WIRE_KEYS = {
   enabled: "enabled",
   act_enabled: "actEnabled",
+  /** The Home Assistant MCP add-on's address. ⚠️ SNAKE_CASE ON THE WIRE like
+   *  every other key here — a camelCase key is ACCEPTED AND IGNORED by the
+   *  store, so the save returns 200 and the setting silently never applies. */
+  mcp_url: "mcpUrl",
   /** ⚠️ ABSENT FROM THIS MAP UNTIL 2.650.0, WHICH MADE THE CUTOVER DECISION
    *  UNREACHABLE FROM THE UI. The store has always held it and the backend has
    *  always honoured it; the SPA could neither read nor write it, so "run
@@ -135,6 +139,9 @@ export function targetsForRole(people: Person[], role: string): string[] {
 export interface AgentConfig {
   enabled: boolean;
   actEnabled: boolean;
+  /** Where the Home Assistant MCP add-on answers. Empty = not configured, which
+   *  is the default and a supported state: the villa keeps its built-in tools. */
+  mcpUrl: string;
   /** Run everything, deliver nothing. ⚠️ SHIPS TRUE, the opposite of every
    *  other flag here: the others are off so nothing happens, this is on so
    *  that when the agent IS switched on its first period is observed rather

@@ -308,23 +308,57 @@ def test_every_proxy_helper_the_SCHEDULER_calls_actually_runs() -> None:
         "these crash the moment they are called:\n  " + "\n  ".join(sorted(set(offenders))))
 
 
-def test_the_addon_MANIFEST_grants_the_permission_discovery_needs() -> None:
-    """⚠️ THE INTEGRATION WAS ABSENT ON A HEALTHY ADD-ON FOR WANT OF ONE LINE.
-    `endpoint()` lists add-ons through the Supervisor to find ha_mcp — the slug
-    carries an install-specific repository hash and may never be hardcoded — and
-    `config.yaml` granted `homeassistant_api` but not `hassio_api`. So the
-    listing was refused, discovery returned "", the catalogue never loaded, and
-    nothing anywhere said why.
+def test_the_addon_stays_at_the_LEAST_privilege_that_works() -> None:
+    """⚠️ DISCOVERY IS DELIBERATELY NOT AUTOMATIC. Listing other add-ons needs
+    `hassio_role: manager`, which also grants installing, starting and stopping
+    them — an escalation a dashboard cannot justify to somebody installing it
+    from a repository they do not own, asked for solely to look up one hostname.
+    The owner pastes the MCP address instead: one paste, no privilege.
 
-    Python cannot check its own container permissions, so the manifest is what
-    is asserted: the code and the thing that grants it the right to run are in
-    two different files and neither mentions the other."""
+    Both halves are asserted because either alone is the wrong shape: the API
+    grant without the role reads as an oversight, and dropping the role without
+    saying why invites the next reader to "fix" it."""
     import re
     manifest = open(os.path.join(REPO_ROOT, "villa-kiosk", "config.yaml"),
                     encoding="utf-8").read()
-    assert re.search(r"^hassio_api:\s*true", manifest, re.M), (
-        "config.yaml does not grant hassio_api, so agent/upstream.endpoint "
-        "cannot list add-ons and the whole ha_mcp surface is silently absent")
+    assert re.search(r"^hassio_api:\s*true", manifest, re.M)
+    assert not re.search(r"^hassio_role:\s*(manager|admin)", manifest, re.M), (
+        "the manifest asks for a role that can install and stop add-ons; the "
+        "MCP address is a Supervision setting precisely so it need not")
+
+
+def test_a_CONFIGURED_url_is_used_without_asking_the_supervisor() -> None:
+    """The only path that works at the `default` role, so it must not depend on
+    the listing that role cannot make."""
+    import asyncio
+
+    async def _boom(session: Any, url: str) -> Any:
+        raise AssertionError("the Supervisor must not be consulted")
+
+    import agent.upstream as u
+    saved, u._get = u._get, _boom
+    try:
+        got = asyncio.run(u.endpoint(object(),
+                                     {"mcp_url": "http://host:9583/secret/"}))
+    finally:
+        u._get = saved
+    assert got == "http://host:9583/secret", "a trailing slash must be trimmed"
+
+
+def test_NO_url_and_no_privilege_degrades_quietly_but_audibly() -> None:
+    """Empty is the DEFAULT and a supported state — every built-in reader still
+    answers. What must not happen is silence about why."""
+    import asyncio
+
+    async def _refused(session: Any, url: str) -> Any:
+        return None
+
+    import agent.upstream as u
+    saved, u._get = u._get, _refused
+    try:
+        assert asyncio.run(u.endpoint(object(), {"mcp_url": ""})) == ""
+    finally:
+        u._get = saved
 
 
 def test_a_MISSING_upstream_is_reported_rather_than_silent() -> None:

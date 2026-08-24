@@ -78,7 +78,8 @@ async def _get(session: Any, url: str) -> Optional[Dict[str, Any]]:
     return data if isinstance(data, Mapping) else None
 
 
-async def endpoint(session: Any) -> str:
+async def endpoint(session: Any,
+                   config: Optional[Mapping[str, Any]] = None) -> str:
     """The upstream's MCP URL, or "" if the add-on is not installed or running.
 
     ⚠️ THE SECRET PATH *IS* THE ENDPOINT — there is no `/mcp` suffix. Read from
@@ -92,7 +93,27 @@ async def endpoint(session: Any) -> str:
     shape available and it removes the entire class of code that would
     otherwise sit between a question and its answer.
     """
+    # ⚠️ THE CONFIGURED ADDRESS WINS, AND IS THE ONLY PATH THAT WORKS TODAY.
+    # Automatic discovery needs `hassio_role: manager` — which also grants
+    # installing and stopping add-ons — and this dashboard deliberately stays at
+    # `default`. The owner pastes the address once; the listing below is kept
+    # for a deployment that has chosen to grant the role, and costs one refused
+    # request a day when it has not.
+    from agent import config as agent_config
+    configured = str(agent_config.view(config).get("mcp_url") or "").strip()
+    if configured:
+        return configured.rstrip("/")
+
     addons = await _get(session, f"{SUPERVISOR}/addons")
+    if addons is None:
+        # ⚠️ NAMES THE STEP, because "not reachable" covered four different
+        # causes and the first fix addressed the wrong one. A refused LISTING is
+        # a permission problem in this add-on's own manifest; a listing that
+        # works and finds nothing is an ha_mcp that is absent or stopped. They
+        # need opposite actions and read identically without this.
+        log("upstream: the Supervisor refused the add-on listing "
+            "(hassio_api + hassio_role: manager are both required)")
+        return ""
     rows = (addons or {}).get("addons")
     slug = ""
     for row in rows if isinstance(rows, list) else []:
@@ -100,6 +121,8 @@ async def endpoint(session: Any) -> str:
             slug = str(row.get("slug"))
             break
     if not slug:
+        log(f"upstream: no add-on whose slug ends in {SLUG_SUFFIX!r} is "
+            f"installed on this property")
         return ""
     info = await _get(session, f"{SUPERVISOR}/addons/{slug}/info")
     if not info or str(info.get("state")) != "started":
@@ -263,7 +286,8 @@ def _flatten(result: Mapping[str, Any]) -> str:
 
 
 # ── the catalogue ───────────────────────────────────────────────────────────
-async def refresh(session: Any, *, now: Optional[float] = None,
+async def refresh(session: Any, *, config: Optional[Mapping[str, Any]] = None,
+                  now: Optional[float] = None,
                   max_age_h: Optional[int] = None) -> bool:
     """Re-read the upstream tool list if the stored one is stale.
 
@@ -282,7 +306,7 @@ async def refresh(session: Any, *, now: Optional[float] = None,
         if stamp - at < max(1, hours) * 3600.0:
             return False
 
-        url = await endpoint(session)
+        url = await endpoint(session, config)
         if not url:
             # ⚠️ SAY SO. This was a bare `return False` and it was the single
             # most likely failure — the add-on missing, stopped, or the

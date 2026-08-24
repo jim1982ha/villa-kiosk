@@ -43,6 +43,12 @@ DEFAULTS: Final[Dict[str, Any]] = {
     "enabled": False,
     #: ⚠️ OFF, AND SEPARATELY. Reading and reasoning are safe; acting is not.
     "act_enabled": False,
+    #: ⚠️ THE ADDRESS OF THE HOME ASSISTANT MCP ADD-ON, PASTED BY THE OWNER.
+    #: Empty is a supported state and the default: no upstream tools, and every
+    #: built-in reader answers exactly as it did before. It is not discovered
+    #: automatically on purpose — that needs `hassio_role: manager`, which also
+    #: grants installing and stopping add-ons, and this is a dashboard.
+    "mcp_url": "",
     "triggers": {"scheduled": True, "event": False, "chat": False},
     #: ⚠️ WHAT HAPPENS WHEN TRIAGE ESCALATES (ADR-021, owner decision
     #: 2026-08-23). "auto" investigates; "approve" records the escalation and
