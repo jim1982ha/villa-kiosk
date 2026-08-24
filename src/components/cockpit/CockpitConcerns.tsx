@@ -24,6 +24,7 @@ import { Eye, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 import { acknowledgeConcern, loadConcerns, sendConcernFeedback } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
+import SourceChip from "@/components/common/SourceChip";
 import { severityRank, type Concern } from "@/agent/agentTypes";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
@@ -102,6 +103,14 @@ export default function CockpitConcerns() {
               <span className={`cockpit-concern-sev cockpit-sev-${c.severity}`}>
                 {String(c.severity)}
               </span>
+              {/* ⚠️ WHO CONCLUDED THIS, BESIDE HOW BAD IT IS — two independent
+                  facts that were rendered as one. A concern is the output of an
+                  INVESTIGATION: the severity is a model's judgement over
+                  evidence it cited, not a threshold anybody set. The row beside
+                  it in the approval queue looks almost identical and is nothing
+                  of the kind, and until this chip the only way to tell them
+                  apart was to know which list you were reading. */}
+              <SourceChip source="agent" />
               {/* ⚠️ WHETHER ANYONE WAS TOLD IS A DIFFERENT FACT FROM WHETHER IT
                   MATTERS, and the wall showed only the second. During a shadow
                   period nothing is sent at all, so a list of concerns with no

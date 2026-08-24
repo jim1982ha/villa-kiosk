@@ -4629,6 +4629,72 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    list" is the claim this whole change is making. */
 .reports-checks { display: flex; flex-direction: column; gap: 8px; }
 
+/* ── WHO SAID THIS ─────────────────────────────────────────────────────────
+   ⚠️ THE KIOSK SHOWED SIX KINDS OF STATEMENT IN ONE VOICE. A sub-second safety
+   reflex, a statistical check over six weeks of history, a frontier model's
+   judgement, a language model's paraphrase, a Home Assistant reading and a
+   fault a person typed all rendered as the same neutral row — so a reader
+   could not tell which to trust, how fast it reacted, or whether a model was
+   in the path. `components/common/SourceChip.tsx` owns the vocabulary; these
+   own its colour.
+
+   ⚠️ A HUE PER SOURCE, AND DELIBERATELY NOT THE SEVERITY PALETTE.
+   `--status-danger`/`--status-warning` answer "how bad is it"; these answer
+   "who is speaking", and the two are independent — an investigated finding can
+   be quiet and a reflex can be catastrophic. Welding them would make one
+   unreadable the moment the other changed, which is the mistake
+   `.cockpit-concern-sev` records four lines further up in its own note.
+
+   ⚠️ TINTED GROUND, NOT A FILLED PILL. These sit INSIDE rows that already
+   carry a severity colour and their own controls; a saturated chip would
+   outrank the finding it labels. `color-mix` keeps each tone at the same
+   weight against either theme's ground, so nothing needs a second definition
+   in the dark block. */
+/* A heading and the chip saying who produced what is under it, on one line.
+   ⚠️ `baseline`, NOT `center`: `.settings-section-title` is an uppercase
+   eyebrow at --text-xs and the chip is a rounded pill; centring them makes the
+   pill sit visibly low against the cap height. */
+.reports-title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+
+/* The head's right-hand cluster: who produced this check, and what it needs
+   before it can say anything. ⚠️ ONE FLEX CELL rather than two children of
+   `.reports-entry-head`, whose `space-between` would push them to opposite
+   ends of the card and read as two unrelated labels. */
+.reports-entry-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+.source-chip {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--source-tone, var(--text-secondary));
+  background: color-mix(in srgb, var(--source-tone, var(--text-secondary)) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--source-tone, var(--text-secondary)) 34%, transparent);
+}
+/* ⚠️ THE TONES READ FROM THE APP'S OWN TOKENS WHERE ONE ALREADY MEANS THIS.
+   `--accent` is VESTA acting; `--accent-teal` is Home Assistant's own hue in
+   this app; `--status-warning` is the colour the Map legend documents for a
+   physical-safety condition, which is exactly what a reflex is. Only the two
+   with no existing token — a model's prose, and a check — get a literal, and
+   both are stated in BOTH themes rather than inherited. */
+.source-ha      { --source-tone: var(--accent-teal); }
+.source-reflex  { --source-tone: var(--status-warning); }
+.source-check   { --source-tone: #6B5CA5; }
+.source-triage  { --source-tone: var(--text-secondary); }
+.source-agent   { --source-tone: var(--accent); }
+.source-llm     { --source-tone: #A0522D; }
+.source-person  { --source-tone: var(--text-secondary); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .source-check { --source-tone: #A99BE0; }
+  :root:not([data-theme="light"]) .source-llm   { --source-tone: #D89A6A; }
+}
+:root[data-theme="dark"] .source-check { --source-tone: #A99BE0; }
+:root[data-theme="dark"] .source-llm   { --source-tone: #D89A6A; }
+
 .reports-deliveries { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .reports-delivery { display: flex; gap: 8px; font-size: var(--text-xs, 11px); }
 .reports-delivery > span:first-child { flex: 1 1 auto; }

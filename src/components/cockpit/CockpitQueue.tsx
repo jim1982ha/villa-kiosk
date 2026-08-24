@@ -29,6 +29,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search, X } from "lucide-react";
+import SourceChip from "@/components/common/SourceChip";
 
 import {
   decideEscalation, loadApprovalQueue, type ApprovalQueue,
@@ -104,6 +105,14 @@ export default function CockpitQueue() {
         {queue.pending.map((item) => (
           <div className="editable-row" key={item.runId}>
             <div className="editable-row-fields" style={{ alignItems: "flex-start" }}>
+              {/* ⚠️ `triage`, NEVER `agent`, AND THE DIFFERENCE IS THE WHOLE
+                  REASON THIS QUEUE EXISTS. A triage pass ranks; it assigns NO
+                  severity, because severity is what the investigation decides
+                  (ADR-021 corrects the original spec on exactly this point).
+                  These rows sit in a list that looks like Concerns and mean
+                  something far weaker — "worth a closer look" — so the chip
+                  carries "not investigated yet" as its explanation. */}
+              <SourceChip source="triage" />
               <span className="body-text" style={{ flex: "1 1 200px", minWidth: 0 }}>
                 <strong>{item.subject}</strong>
                 {item.reason ? <><br />{item.reason}</> : null}

@@ -7,6 +7,7 @@
 // nothing and records nothing.
 
 import { FileText, Loader2 } from "lucide-react";
+import SourceChip from "@/components/common/SourceChip";
 import type { ReportPreview } from "@/reports/reportsApi";
 import type { NarrationMode } from "@/reports/reportsTypes";
 import PayloadInspector from "./PayloadInspector";
@@ -38,7 +39,20 @@ export default function PreviewTab({
 
       {preview && (
         <>
-          <h3 className="settings-section-title">{preview.title}</h3>
+          {/* ⚠️ WHO WROTE THE WORDS, ON THE ONE SURFACE WHERE IT IS NOT
+              OBVIOUS AND MATTERS MOST. `pipeline.run_report` composes the
+              deterministic body FIRST, always, and a provider can only REPLACE
+              it — so absence, a missing key, an open breaker, a spent budget, a
+              timeout and an unusable answer all end with the add-on's own
+              prose. A reader looking at this text cannot tell which of the two
+              they got, and the difference is exactly "did a model phrase the
+              facts, or produce them". It phrased them: the facts are settled
+              before any provider is asked, which is what `PayloadInspector`
+              below proves rather than asserts. */}
+          <div className="reports-title-row">
+            <h3 className="settings-section-title">{preview.title}</h3>
+            <SourceChip source={narrationMode === "provider" ? "llm" : "check"} />
+          </div>
           {/* ⚠️ PRE, NOT A PARAGRAPH. The renderer emits plain text with
               meaningful line breaks — `deliver.py` sends the intersection of
               what notify platforms accept — and reflowing it here would show

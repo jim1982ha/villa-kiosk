@@ -1,3 +1,15 @@
+## 2.721.0
+
+### Added — you can now see who is telling you something
+The villa reports what it sees, what a fixed calculation worked out, what an AI
+concluded, and what somebody typed in — and all four looked identical. Every
+list of findings now carries a small label saying where it came from, and
+hovering it explains how far to trust that source: a safety automation that has
+already acted, a calculation over your own history, an AI that investigated and
+can show its evidence, a quick pass that has only flagged something for a look,
+or a person's own entry. A briefing's wording is labelled separately from its
+facts, because an AI only ever rewords a report the add-on already worked out.
+
 ## 2.720.0
 
 ### Fixed — the built-in checks were spaced by the browser, not by the app

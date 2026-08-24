@@ -52,6 +52,7 @@
 // first subscribe — through every drop and restart. See `collect._LIVE`.
 
 import { Ban, Check, Info, PlugZap, Radio, RefreshCw } from "lucide-react";
+import SourceChip from "@/components/common/SourceChip";
 import type { ReportPreview, ReportsDiagnostics } from "@/reports/reportsApi";
 import type { ReportsConfig } from "@/reports/reportsTypes";
 
@@ -218,7 +219,18 @@ export default function ModulesTab({
                 />
                 <span>{m.title}</span>
               </label>
-              <span className="muted">needs {m.minDays} days</span>
+              {/* ⚠️ THE CHIP ANSWERS THE QUESTION THE TAB'S OWN COPY RAISES.
+                  This list sits two tabs from a briefing an AI may have
+                  written, and a reader has no way to know these are fixed
+                  arithmetic over their own history rather than more of the
+                  same. They are the SUCCESSOR to the maintenance/ROI rules
+                  being retired, so "always works the same way, and you can
+                  switch it off" is the property that makes that swap
+                  acceptable — and it is worth saying on the row. */}
+              <span className="reports-entry-meta">
+                <SourceChip source="check" />
+                <span className="muted">needs {m.minDays} days</span>
+              </span>
             </div>
             {m.description && (
               <p className="muted body-text">{m.description}</p>
