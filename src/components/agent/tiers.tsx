@@ -229,22 +229,31 @@ export const FAMILIES: Record<string, { role: string; reflex?: true }> = {
     role: "acts in under a second, on this property, with no AI involved",
     reflex: true,
   },
-  // ⚠️ "IN BRIEFINGS" IS LOAD-BEARING, NOT PADDING. The owner read "the
-  // built-in checks" here and asked whether it meant a DIFFERENT set from the
-  // ones in the other dialog — a fair question, because an unqualified term
-  // used in two modals reads as two things. There is only one set: three
-  // deterministic modules (`level_anomaly`, `sensor_health`, `standby_creep`),
-  // owned by neither the blueprints nor the agent, and they live on the
-  // Briefings dialog's first tab. Naming where they are is the fix; inventing a
-  // second term for a second thing that does not exist would not be.
+  // ⚠️ THE ASSISTANT IS THE SUCCESSOR, NOT THE BUILT-IN CHECKS, AND SAYING
+  // OTHERWISE WAS A REAL ERROR OF ARCHITECTURE RATHER THAN OF WORDING. The
+  // owner spotted it: if these families were replaced by the checks in
+  // Briefings, the agent would be depending on the very rule layer it exists to
+  // remove. It is not. `sources.build_document` — the only thing triage ever
+  // reads — is assembled from the observation journal, salience, the open
+  // concerns, the facility ledger and coverage. There is not one reference to a
+  // blueprint or to `analysis/modules/` anywhere in `agent/sources.py` or
+  // `agent/triage.py`. The agent watches raw state and judges it; it never
+  // consumes a rule's output.
   //
-  // ⚠️ AND THE CLAIM IS TRUE, verified rather than asserted:
+  // ⚠️ THE TWO LAYERS MEET ONLY IN THE BRIEF, and that is a report-composition
+  // step rather than a dependency: `pipeline._without_blueprint_subjects` drops
+  // an agent concern when a blueprint reported the same subject, preferring the
+  // blueprint WHILE ONE STILL EXISTS. That is what makes retiring a family safe
+  // — without it, switching one off would remove its findings from every
+  // report before the agent's equivalent was trusted.
+  //
+  // ⚠️ THE UN-SUPPRESSION IS A SIDE EFFECT AND WAS NOT THE SUCCESSION STORY.
   // `analysis/modules/level_anomaly.py` carries
-  // `superseded_by: ("roi_baseline_deviation",)`, so that check STANDS DOWN
-  // while the blueprint exists. Retiring the family is what switches it back
-  // on — which is why `docs/PROGRESS.md` calls maintenance "the only family
-  // with upside".
-  maintenance: { role: "will be replaced by the built-in checks in Briefings" },
-  roi: { role: "will be replaced by the built-in checks in Briefings" },
+  // `superseded_by: ("roi_baseline_deviation",)`, so that deterministic check
+  // stands down while the blueprint exists and switches back on when it goes.
+  // True, and a second-order detail: it explains why `docs/PROGRESS.md` calls
+  // maintenance "the only family with upside", not who takes over the job.
+  maintenance: { role: "superseded — the assistant now spots this itself" },
+  roi: { role: "superseded — the assistant now spots this itself" },
   audit: { role: "proves the alert channel still works" },
 };

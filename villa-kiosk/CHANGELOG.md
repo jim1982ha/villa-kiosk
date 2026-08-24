@@ -1,3 +1,14 @@
+## 2.736.0
+
+### Fixed — the Reflex tab implied the assistant depends on the automations it replaces
+Two retiring families were described as being replaced by the built-in checks,
+which read as though the assistant needed those automations to do its job. It
+does not: it watches the villa's own readings directly and never sees an
+automation's output, so switching one off takes nothing away from what it can
+notice. The screen now says that, and says where the two do meet — a briefing
+prefers an automation's wording while it still reports, so nothing is said twice
+and nothing vanishes on the day you retire one.
+
 ## 2.735.0
 
 ### Fixed — Save never lit up on the assistant's screens, and the field order is now in the markup

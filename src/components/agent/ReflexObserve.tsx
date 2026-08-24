@@ -77,12 +77,25 @@ export function ReflexTab({ diagnostics }: {
           </p>
         )}
       </dl>
+      {/* ⚠️ THIS PARAGRAPH IS WHERE THE OWNER'S QUESTION LANDED: does the
+          assistant depend on these? It does not, and saying so plainly is worth
+          more than any of the rows above. `sources.build_document` — the only
+          thing the assistant ever reads — is the observation journal, salience,
+          its own concerns, the facility ledger and coverage. No blueprint
+          output reaches it. */}
       <p className="muted body-text">
-        These are the only automations that survive the move to an assistant, and
-        they are kept deliberately: a leak has to close a valve in under a
-        second, with no internet and nothing thinking about it first. They act —
-        they no longer file reports, because everything above reads the villa
-        directly.
+        Only the safety ones survive the move to an assistant, and they are kept
+        deliberately: a leak has to close a valve in under a second, with no
+        internet and nothing thinking about it first. The rest are being retired
+        because the assistant already does their job better — and it does not
+        read them to do it. It watches the villa&apos;s own readings directly, so
+        switching an automation off takes nothing away from what it can notice.
+      </p>
+      <p className="muted body-text">
+        The one place the two meet is the briefing: while an automation still
+        reports something, the briefing prefers its wording over the
+        assistant&apos;s for the same piece of equipment, so nothing is said
+        twice and nothing disappears on the day you retire one.
       </p>
     </div>
   );
