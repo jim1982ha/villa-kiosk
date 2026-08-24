@@ -1,3 +1,15 @@
+## 2.718.0
+
+### Fixed — "let it operate devices" did nothing, and the list behind it named no device
+Turning the switch on built no controls at all, so the villa could never have
+acted however it was configured. The list of which devices it may operate was
+worse than missing: it stored the temporary numbers the assistant uses inside a
+single conversation, and those mean a different device every time — the same
+saved line would have authorised a pool pump one hour and a front door the next.
+It now stores real devices, and Settings has a picker to choose them. Anything
+that could let somebody in or silence an alarm is still never done
+automatically; it is offered to you to confirm, as before.
+
 ## 2.717.0
 
 ### Fixed — the scheduled checks were told they could read the house, and could not
