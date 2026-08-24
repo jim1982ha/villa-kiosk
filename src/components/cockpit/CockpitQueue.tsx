@@ -78,7 +78,7 @@ export default function CockpitQueue() {
   if (queue.pending.length === 0) {
     return (
       <>
-        <div className="settings-section-title">Waiting for your approval</div>
+        <div className="settings-section-title">Worth a closer look</div>
         <p className="muted body-text">
           Nothing is waiting. Checks are flagging subjects for approval rather
           than looking into them by themselves — you can change that under
@@ -90,7 +90,13 @@ export default function CockpitQueue() {
 
   return (
     <>
-      <div className="settings-section-title">Waiting for your approval</div>
+      {/* ⚠️ THE HEADING NAMES WHAT THESE ARE, NOT WHAT THEY NEED. "Waiting for
+          your approval" describes the queue's mechanics, and invites the reader
+          to treat the list as a worklist of findings — but a triage escalation
+          is not a finding: it carries NO severity, and its order is not a
+          priority. The chip on each row reads "Flagged for a look"; the heading
+          now agrees with it instead of outranking it. */}
+      <div className="settings-section-title">Worth a closer look</div>
       <p className="muted body-text">
         A check flagged these and stopped. Looking into one costs a full,
         expensive investigation; dismissing settles it without spending.

@@ -146,17 +146,60 @@ def test_the_system_prompt_carries_no_clock_and_no_villa() -> None:
     assert "{" not in triage.SYSTEM
 
 
-def test_the_prompt_tells_it_to_report_being_UNABLE_to_see() -> None:
-    """⚠️ A supervisor that cannot see is more urgent than most of what it
-    would have seen — and an empty escalation list would otherwise be the same
-    answer as a healthy villa."""
-    # ⚠️ WHITESPACE-NORMALISED. The first version searched the raw string and
-    # failed on "was not\nlistening" — a prompt is wrapped prose, so any test
-    # matching a phrase in one must flatten it first or it is testing the line
-    # width.
+def test_the_prompt_REFUSES_the_two_subjects_that_have_their_own_surfaces() -> None:
+    """⚠️ THIS TEST REPLACES ONE THAT PINNED THE OPPOSITE RULE, AND THE OLD ONE
+    WAS RIGHT WHEN IT WAS WRITTEN. It required the prompt to escalate an
+    unlistening observation floor "as a subject in its own right", on the
+    reasoning that "an empty escalation list would otherwise be the same answer
+    as a healthy villa". True then. `collect.coverage()` did not reach the
+    tablet at all.
+
+    It does now — a whole tab, plus a section in every brief — so the escalation
+    channel is no longer what distinguishes a blind supervisor from a quiet
+    villa, and paying a frontier model every thirty minutes to rediscover it
+    produced three of sixteen escalations on the reference villa. Three more
+    were the facility record read back to the person who typed it.
+
+    ⚠️ THE PROPERTY THE OLD TEST PROTECTED IS PINNED BELOW RATHER THAN DROPPED.
+    """
     flat = " ".join(triage.SYSTEM.split())
-    assert "not listening" in flat
-    assert "cannot see is a more urgent problem" in flat
+    assert "NOT subjects" in flat, (
+        "the prompt no longer tells triage what is not a subject")
+    assert "reported directly on the property's screen" in flat
+    assert "Somebody wrote those down" in flat
+    # ⚠️ AND IT MUST NOT OVERCORRECT INTO SILENCE. Reading them as context is
+    # the point; a tier told to ignore the coverage line entirely would judge
+    # equipment against a window it does not know was empty.
+    assert "as context for the equipment" in flat
+
+
+def test_being_UNABLE_to_see_still_reaches_a_person_deterministically() -> None:
+    """⚠️ THE PROPERTY, RE-HOMED. Before removing the escalation rule above I
+    checked its finding survives somewhere permanent — the discipline
+    /dry-audit Part 2 states for retiring any instrument. Two owners, neither
+    of them a model: the brief composes a coverage section every run, and the
+    diagnostics endpoint the Coverage tab reads answers the same question live.
+    A villa whose add-on stopped listening is told so by both, for free.
+
+    Derived from the shipped source rather than asserted, so the day either
+    consumer drops it this fails instead of the signal going quiet."""
+    # ⚠️ THE PATH IS DERIVED HERE RATHER THAN FROM A MODULE CONSTANT, because
+    # this file has none — it inserts the shipped tree straight onto `sys.path`
+    # at import time. Restating the walk is the smaller evil against adding a
+    # constant only one test reads.
+    root = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "rootfs", "usr", "bin")
+    with open(os.path.join(root, "reports", "pipeline.py"), encoding="utf-8") as h:
+        pipeline_src = h.read()
+    with open(os.path.join(root, "supervisor-proxy.py"), encoding="utf-8") as h:
+        proxy_src = h.read()
+    assert "collect.coverage(" in pipeline_src, (
+        "the brief no longer computes coverage — the signal the triage rule "
+        "used to carry now has no owner at all")
+    assert "reports_collect.coverage(" in proxy_src, (
+        "the diagnostics endpoint no longer reports coverage, so the Coverage "
+        "tab cannot answer 'is anything listening?'")
 
 
 # ── cadence ─────────────────────────────────────────────────────────────────

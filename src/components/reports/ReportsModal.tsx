@@ -106,7 +106,14 @@ const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[
   { id: "preview", label: "Preview", icon: FileText, configure: true },
   { id: "coverage", label: "Coverage", icon: ShieldQuestion, configure: true },
   { id: "checks", label: "Checks", icon: SlidersHorizontal, configure: true },
-  { id: "schedule", label: "Schedule", icon: CalendarClock, configure: true },
+  // ⚠️ "Delivery", NOT "Schedule", AND THE COLLISION WAS REAL. Facility has a
+  // tab called Schedule that is the MAINTENANCE schedule — when the pool filter
+  // is serviced — and this one is when a briefing is SENT. Two tabs, one word,
+  // two unrelated meanings, in a product whose whole job is telling a reader
+  // what they are looking at. The tab id stays `schedule` because it is stored
+  // in no document and read by nobody outside this file; only the label a
+  // person reads changes.
+  { id: "schedule", label: "Delivery", icon: CalendarClock, configure: true },
   { id: "tasks", label: "Tasks", icon: ClipboardList },
   { id: "history", label: "History", icon: History },
 ];

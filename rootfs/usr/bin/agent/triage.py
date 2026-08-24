@@ -38,6 +38,27 @@ TRIAGE_TOOLS: Tuple[str, ...] = ("read_villa",)
 #: ⚠️ NO VILLA FACTS, NO ENTITY IDS, NO CLOCK. This string sits above the cache
 #: breakpoint on every one of ~96 daily calls; one interpolated timestamp ends
 #: prompt caching silently and the only symptom is the bill.
+#:
+#: ⚠️ IT USED TO ASK FOR THE TWO SUBJECTS THAT PRODUCED EVERY DUPLICATE ROW IN
+#: THE UI, AND THAT INSTRUCTION PREDATED THE SURFACES THAT ANSWER THEM. It said
+#: an unlistening observation floor should be escalated "as a subject in its own
+#: right" — written before `collect.coverage()` reached the tablet at all. It
+#: now has a whole tab, deterministic and always present, so a frontier model
+#: was being paid every thirty minutes to rediscover a fact already on screen.
+#: Measured on the reference villa across six passes: of sixteen escalations,
+#: THREE were this add-on reporting on itself (`Observation coverage`,
+#: `Monitoring coverage`, `Observation journal (VESTA add…`) and THREE more were
+#: the facility record read back to the person who wrote it (`Facility record`,
+#: `Open facility fault`, `Facility record open fault (1 unresolved, 0
+#: resolved)`). Six of sixteen, none of them equipment.
+#:
+#: ⚠️ AND THE FIX IS IN THE PROMPT RATHER THAN IN `parse()`, DELIBERATELY. A
+#: code-side filter would have to match model-authored subject text by name —
+#: an unanchored substring rule over prose, which is the class of rule CLAUDE.md
+#: records as a recurring false-positive source here, and which would silently
+#: drop a real finding whose subject happened to contain the word "coverage".
+#: Telling the tier what is not a subject also saves the turn, where a filter
+#: would pay for it and discard the answer.
 SYSTEM = """You are the triage pass of a villa supervision system.
 
 You are asked ONE question: is anything in this villa worth a closer, more
@@ -50,11 +71,19 @@ Escalate a subject when a competent facility manager walking the property would
 stop and look at it. Do not escalate because a number exists, because a value is
 unfamiliar, or because you would like more data.
 
-⚠️ AN ABSENCE OF EVIDENCE IS NOT A REASON TO ESCALATE, AND IT IS NOT A REASON TO
-STAY SILENT EITHER. If the document tells you the observation floor was not
-listening, or that nothing has been surveyed, say so as a subject in its own
-right — a supervisor that cannot see is a more urgent problem than most of what
-it would have seen.
+An absence of evidence is not a reason to escalate. Say NOTHING rather than
+escalate a subject you cannot name.
+
+Two things in the document are NOT subjects, however they look:
+
+- This add-on's own state — whether it was listening, what it has surveyed, how
+  complete its journal is. That is reported directly on the property's screen,
+  always and for free, and a person acts on it there.
+- Faults, tasks and notes a person has already recorded. Somebody wrote those
+  down; repeating them back is not a closer look.
+
+Both are worth knowing and neither is worth a frontier model's attention. Read
+them as context for the equipment you are judging, never as the subject.
 
 Answer in this shape and nothing else:
 
