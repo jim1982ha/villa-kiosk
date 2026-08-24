@@ -81,6 +81,13 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.a", "sensor.b", "sensor.moon_phase",
     "fan.ceiling_fan_",  # a PREFIX in a matcher, not an id
     "todo.shopping_list",  # HA's own default list name
+    # The upstream ref-boundary fixtures (v2.711.0). ⚠️ `fan.a` is NOT a fifth
+    # placeholder — it is what `inert` MAKES of `fan.a_first_unit` by turning
+    # the underscores into spaces, and the shortened form still matches the
+    # detector. That is the defect those tests pin, so the manufactured id has
+    # to be classified alongside the real one. The first draft of them used
+    # this villa's actual fan ids, and this pin caught it.
+    "fan.a", "fan.a_first_unit", "fan.b_second_unit", "light.y_main",
     # `test_journal.py`'s ring fixtures and `test_agent_proposals.py`'s. Named
     # for what they DO to the ring — one chatty, one quiet — because the
     # property under test is which of the two survives eviction, and a real

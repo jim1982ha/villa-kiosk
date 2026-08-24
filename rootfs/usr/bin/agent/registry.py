@@ -121,7 +121,12 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
         # `read_ledger` and `read_playbook` serve this add-on's OWN findings —
         # a briefing, an open concern, the facility record — which no upstream
         # tool can know about. A question about a report reaches them.
-        built += upstream.tools_for(lambda: session)
+        # ⚠️ `refs` IS PASSED HERE FOR THE SAME REASON IT IS PASSED ABOVE, and
+        # omitting it took the integration dark for six releases: an upstream
+        # result carries real entity ids, `redact.audit` refuses any payload
+        # holding one, and the model got "the result could not be shown safely"
+        # for every question about a named device.
+        built += upstream.tools_for(lambda: session, refs)
         return Registry(built, refs=refs)
     except Exception as err:  # noqa: BLE001 - a broken source is not a dead
         swallow("could not wire the tools to this villa", err)   # registry

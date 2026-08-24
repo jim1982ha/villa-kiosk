@@ -422,3 +422,56 @@ def test_the_hint_reaches_the_TRUNCATION_NOTE_and_not_just_the_helper() -> None:
     import inspect
     src = inspect.getsource(upstream.UpstreamTool.run)
     assert "_narrowing(" in src, "the tool truncates without its own hint"
+
+
+# ── the ref boundary: an upstream tool did not build its own result ──────────
+def test_an_upstream_result_survives_the_REDACTION_AUDIT() -> None:
+    """⚠️ THE DEFECT THAT TOOK THE WHOLE INTEGRATION DARK (v2.705.0-v2.710.0).
+    `redact.audit` refuses any payload holding an entity id, and an upstream
+    result is full of them — so every question about a named device came back
+    as "the result could not be shown safely" and the model answered from
+    whatever aggregate it still had. Reported as "I'm encountering a technical
+    issue retrieving the fan data"."""
+    import asyncio
+    from agent.redact import audit, scrub
+    from agent.refs import RefTable, entity_ids_in
+
+    raw = ('[{"entity_id":"fan.a_first_unit","state":"off"},'
+           '{"entity_id":"fan.b_second_unit","state":"on"}]')
+    spec = {"name": "ha_get_state", "description": "d",
+            "inputSchema": {"type": "object", "properties": {"entity_id": {}}},
+            "annotations": {"readOnlyHint": True}}
+    refs = RefTable()
+    tool = upstream.UpstreamTool(spec, "http://x", lambda: object(), refs)
+
+    async def _rpc(session, url, method, params):
+        return {"content": [{"type": "text", "text": raw}]}
+
+    original, upstream.rpc = upstream.rpc, _rpc
+    try:
+        blocks = asyncio.run(tool.run({"entity_id": ["fan.a_first_unit"]}))
+    finally:
+        upstream.rpc = original
+
+    assert entity_ids_in(blocks) == [], "an entity id reached the model"
+    assert audit(scrub(blocks)) == [], "the result would be refused"
+    assert refs.resolve("d1") == "fan.a_first_unit", (
+        "the handle does not resolve back, so raise_concern cannot name it")
+
+
+def test_build_registry_PASSES_the_ref_table_to_the_upstream_tools() -> None:
+    """⚠️ PIN THE CALLER. `pseudonymise` was correct and `tools_for` accepted a
+    table; the bug was that `build_registry` did not pass one, and a test of
+    either half alone stays green through it."""
+    import inspect
+    from agent import registry as registry_mod
+    src = inspect.getsource(registry_mod.build_registry)
+    assert "tools_for(lambda: session, refs)" in src, (
+        "the upstream tools get no ref table, so every result naming a device "
+        "is refused by redact.audit")
+
+
+def test_a_tool_built_WITHOUT_a_table_still_answers() -> None:
+    """The default is for tests, not for callers — but it must not raise."""
+    spec = {"name": "t", "description": "d", "inputSchema": {"type": "object"}}
+    assert upstream.UpstreamTool(spec, "http://x", lambda: None)._refs is None

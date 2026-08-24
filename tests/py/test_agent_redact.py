@@ -316,3 +316,31 @@ def test_the_two_halves_agree_about_measurements() -> None:
     for probe in ({"watts": 1}, {"humidity": 0.5}, {"lit": True},
                   {"ref": "d1", "watts": 2}):
         assert redact.audit(redact.scrub(probe)) == [], probe
+
+
+def test_pseudonymise_keeps_the_character_IN_FRONT_of_the_id() -> None:
+    """⚠️ THE PATTERN ANCHORS ON `(?:^|[^\\w.])` AND CAPTURES THE ID IN GROUP 1.
+    Replacing group 0 would eat the quote in front and corrupt the JSON the
+    model reads."""
+    from agent.refs import RefTable, pseudonymise
+    out = pseudonymise('{"entity_id":"light.y_main"}', RefTable())
+    assert out == '{"entity_id":"d1"}', out
+
+
+def test_SCRUB_ALONE_MANUFACTURES_A_SHORTER_ENTITY_ID() -> None:
+    """⚠️ WHY THE ORDER IS PSEUDONYMISE-THEN-SCRUB AND MAY NOT BE SWAPPED.
+    `inert` turns `_` into a space, so `fan.a_first_unit` becomes
+    `fan.a first unit` — still an entity id to the detector, now a
+    SHORTER one. The refusal then names `fan.a`, which is not a device of
+    any villa, and sends the reader hunting for something that never existed.
+    Pinned as the behaviour it HAS, so nobody reorders the two steps."""
+    from agent.redact import inert
+    from agent.refs import entity_ids_in
+    mangled = inert("fan.a_first_unit")
+    assert entity_ids_in(mangled) == ["fan.a"], mangled
+
+
+def test_pseudonymise_leaves_prose_with_no_ids_untouched() -> None:
+    from agent.refs import RefTable, pseudonymise
+    text = "The living room fan is off and the pump ran for 3 hours."
+    assert pseudonymise(text, RefTable()) == text

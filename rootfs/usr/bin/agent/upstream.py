@@ -244,7 +244,8 @@ class UpstreamTool(BaseTool):
     contract, not us.
     """
 
-    def __init__(self, spec: Mapping[str, Any], url: str, session_of: Any) -> None:
+    def __init__(self, spec: Mapping[str, Any], url: str, session_of: Any,
+                 refs: Any = None) -> None:
         self.name = str(spec.get("name") or "")
         self.description = str(spec.get("description") or "")
         schema = spec.get("inputSchema")
@@ -253,6 +254,7 @@ class UpstreamTool(BaseTool):
         self.mode = mode_of(spec)
         self._url = url
         self._session_of = session_of
+        self._refs = refs
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
         session = self._session_of()
@@ -263,8 +265,33 @@ class UpstreamTool(BaseTool):
         if result is None:
             return [fail("unavailable",
                          "the Home Assistant MCP server did not answer")]
+        # ⚠️ PSEUDONYMISED BEFORE TRUNCATION, AND BEFORE `redact` EVER SEES IT.
+        # This tool did not build its result — Home Assistant's MCP server did,
+        # and it speaks in entity ids. Every other tool in this registry calls
+        # `RefTable.describe` and never holds one; this is where that boundary
+        # is crossed for the ones that do.
+        #
+        # ⚠️ IT COST THE WHOLE INTEGRATION. `redact.audit` refuses any payload
+        # containing an entity id, so from v2.705.0 to v2.710.0 EVERY upstream
+        # result naming a device was replaced with "the result could not be
+        # shown safely" — the model then answered from whatever aggregate it
+        # still had, which is why "how many ceiling fans are on" came back as a
+        # monitoring fault. Only id-free results (the floor/area list) got
+        # through, which is exactly why the villa document looked healthy.
+        #
+        # ⚠️ AND THE REFUSAL NAMED AN ID THAT DOES NOT EXIST. `redact.scrub`
+        # runs `inert`, which turns `_` into a space, so
+        # `fan.a_first_unit` became `fan.a first unit` — still an entity id to
+        # the detector, now a SHORTER one. So the refusal was logged against
+        # `fan.a`, which is not a device of any villa, and sent the reader
+        # hunting for something that never existed. Pseudonymising first means
+        # scrub has no id left to mangle.
+        text = _flatten(result)
+        if self._refs is not None:
+            from agent.refs import pseudonymise
+            text = pseudonymise(text, self._refs)
         return [{"type": "text",
-                 "text": truncate(_flatten(result), DEFAULT_MAX_RESULT_CHARS,
+                 "text": truncate(text, DEFAULT_MAX_RESULT_CHARS,
                                   hint=_narrowing(self.inputSchema, args))}]
 
 
@@ -378,7 +405,7 @@ def catalogue() -> Dict[str, Any]:
         return {}
 
 
-def tools_for(session_of: Any) -> List[UpstreamTool]:
+def tools_for(session_of: Any, refs: Any = None) -> List[UpstreamTool]:
     """Every catalogued upstream tool, as registry tools.
 
     ⚠️ IT DOES NOT FILTER BY MODE, AND THAT IS DELIBERATE. `policy.may_use_tool`
@@ -386,13 +413,20 @@ def tools_for(session_of: Any) -> List[UpstreamTool]:
     tool is refused there — one gate, in the place every other tool is already
     checked. Filtering here as well would be a second gate agreeing on the day
     it was written and diverging on the first change to either (ARCH-012).
+
+    ⚠️ `refs` IS THE RUN'S TABLE AND OMITTING IT IS NOT A MINOR LOSS — it is the
+    whole integration going dark, because every result naming a device is then
+    refused by `redact.audit`. It defaults to None so a test can build a tool
+    without one, NOT because a caller may skip it; `build_registry` passes the
+    same table our own tools mint into, which is what lets the model refer to a
+    device the upstream named and `raise_concern` resolve it back.
     """
     stored = catalogue()
     url = stored.get("url") or ""
     if not url:
         return []
-    return [UpstreamTool(spec, url, session_of) for spec in stored["tools"]
-            if str(spec.get("name") or "")]
+    return [UpstreamTool(spec, url, session_of, refs)
+            for spec in stored["tools"] if str(spec.get("name") or "")]
 
 
 def summary() -> Dict[str, Any]:

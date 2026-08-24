@@ -112,6 +112,35 @@ _ENTITY_ID = _re.compile(
     r"(?![A-Za-z0-9_])")
 
 
+def pseudonymise(text: str, table: "RefTable") -> str:
+    """Every entity id in free text, replaced by this run's opaque handle.
+
+    ⚠️ FOR A TOOL THAT DID NOT BUILD ITS OWN RESULT. Our own tools call
+    `RefTable.describe` and never hold an id in the first place, which is the
+    better shape. An UPSTREAM tool returns whatever Home Assistant's MCP server
+    sends, ids included, and something has to translate before `redact.scrub`
+    sees it — see `upstream.UpstreamTool.run`.
+
+    ⚠️ IT USES `_ENTITY_ID`, THE SAME PATTERN THE DETECTOR USES, for the reason
+    already recorded at `redact.audit`: two regexes for one rule is how the
+    weaker one comes to be the only one anybody runs. Substituting with a
+    pattern that matched LESS than the detector would leave exactly the ids the
+    audit then refuses the whole result over.
+
+    ⚠️ THE MATCH KEEPS ITS LEADING CHARACTER. The pattern anchors on
+    `(?:^|[^\\w.])` and captures the id in group 1, so replacing group 0 would
+    eat the quote or space in front of it and corrupt the JSON the model reads.
+    """
+    if table is None:
+        return text
+
+    def swap(match: "_re.Match[str]") -> str:
+        entity_id = match.group(1)
+        return match.group(0).replace(entity_id, table.ref_for(entity_id))
+
+    return _ENTITY_ID.sub(swap, str(text))
+
+
 def entity_ids_in(blob: object) -> List[str]:
     """Every entity id anywhere in a structure. The leak detector.
 
