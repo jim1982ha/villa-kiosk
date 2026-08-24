@@ -1,3 +1,14 @@
+## 2.731.1
+
+### Fixed — the step header appeared below the thing it was explaining
+On the briefing tab it rendered under the compose button instead of above it, so
+the sentence telling you what you were looking at arrived after you had looked.
+It is now the first thing on every tab. The small label beside each step title
+also sat low and moved around depending on the title's length; it is now aligned
+right and centred. The step headers no longer carry a "Home Assistant" label —
+on a finding that answers who said it, but on a step title it described the
+wrong thing.
+
 ## 2.731.0
 
 ### Added — you can now see whether anything was actually done about a concern
