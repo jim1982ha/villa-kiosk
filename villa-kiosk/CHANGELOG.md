@@ -1,3 +1,15 @@
+## 2.733.0
+
+### Fixed — every setting now reads the same way round
+The last change moved the explanation above the box in two places and left every
+other field with it underneath, so the app had both orders at once — the Home
+Assistant address, the API key and the schedule fields all still read
+backwards. Every field in every dialog now reads the same: what it does, then
+its name, then the box, with the name kept next to the box it belongs to.
+Switches follow the same rule — what happens if you flip it, then the switch.
+One of those explanations was also being drawn a size smaller than all the
+others for no reason; it now matches.
+
 ## 2.732.0
 
 ### Fixed — a round of readability problems across both workspaces

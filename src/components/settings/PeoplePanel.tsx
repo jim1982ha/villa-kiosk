@@ -57,6 +57,7 @@
 // resolves identity before a message is read and the proxy refuses a non-owner
 // write to /agent-config. Nothing here is a control.
 
+import ToggleField from "@/components/common/ToggleField";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 
@@ -204,14 +205,17 @@ export default function PeoplePanel() {
           the reason for the silence invisible; disabled with the sentence below
           says which switch to reach for — and it is in this same tab, under
           "Cadence and cost". */}
-      <label className="toggle">
-        <input type="checkbox" checked={chat && agentOn}
-               disabled={saving || !agentOn}
-               onChange={(e) => void flipChat(e.target.checked)} />
-        <span>Answer messages</span>
-      </label>
-      <p className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-        {agentOn
+      {/* ⚠️ THE STYLE OVERRIDE IS DROPPED WITH THE MARKUP. It set
+          `--text-xs` inline on this one note, so this switch's explanation was
+          a size smaller than every other explanation in the app — a distinction
+          that means nothing to a reader and reads as a rendering fault. The
+          shared component uses the app's own body size. */}
+      <ToggleField
+        checked={chat && agentOn}
+        onChange={(on) => void flipChat(on)}
+        disabled={saving || !agentOn}
+        label="Answer messages"
+        note={agentOn
           ? "Lets the people below start a conversation with the villa — each "
             + "row gains a “Can message the villa” field. It is asked "
             + "separately from their devices because the two are opposite "
@@ -220,7 +224,7 @@ export default function PeoplePanel() {
             + "are not offered: a group's id names the room, not the person."
           : "Turn “Supervision is switched on” on, under Cadence and cost "
             + "below, to use this."}
-      </p>
+      />
 
       {legacy && (
         <div className="fm-banner" style={{ marginTop: 12 }}>

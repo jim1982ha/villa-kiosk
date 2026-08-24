@@ -4664,13 +4664,37 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   .source-legend-row { grid-template-columns: auto minmax(0, 1fr); }
 }
 
-/* A field's explanation, which now sits BETWEEN its label and its control.
-   ⚠️ ZERO MARGIN, BECAUSE `.fm-field` IS A FLEX COLUMN WITH ITS OWN GAP. The
-   browser's `p { margin: 1em 0 }` would be ADDED to that gap at both ends and
-   push the control away from the label it belongs to — the same UA-margin trap
-   the built-in checks were spaced by, one component down. The label, the note
-   and the control are one block; `--field-label-gap` is what separates them. */
-.fm-field > .field-note { margin: 0; }
+/* A switch with its explanation above it. ⚠️ Its own flex column so the pair is
+   ONE block in whatever stack holds it — as two loose siblings the container's
+   gap fell between the sentence and the switch it describes, spacing them the
+   same as two unrelated settings. */
+.toggle-field { display: flex; flex-direction: column; gap: var(--hint-gap); }
+.toggle-field > p { margin: 0; }
+
+/* ── A FIELD READS: EXPLANATION, THEN NAME, THEN CONTROL ───────────────────
+   ⚠️ ONE RULE FOR EVERY FIELD IN THE APP, VIA `order` — NOT A MARKUP EDIT AT
+   THIRTY-FIVE CALL SITES. `.fm-field` is already a flex column, so pulling its
+   explanation to the front is a single declaration that reaches every field
+   that exists and every field written afterwards. A first attempt moved the
+   paragraph by hand in the two SHARED field components and left every INLINE
+   `fm-field` untouched — the MCP address, the API key, the schedule fields —
+   so the app had both orders at once. That is `feedback_audit-applicable-set`:
+   roll a rule out by what it APPLIES TO, not by the sites in view.
+
+   ⚠️ AND THE NAME STAYS NEXT TO THE BOX. Explanation first, then the label,
+   then the control, because the label is the field's NAME and a paragraph
+   between a name and its input separates the two things that belong together.
+   `order: -1` on the paragraph alone achieves it: everything else keeps its
+   DOM order at the default 0.
+
+   ⚠️ ZERO MARGIN, BECAUSE THE COLUMN HAS ITS OWN GAP. The UA's
+   `p { margin: 1em 0 }` would be ADDED at both ends and push the control away
+   from its label — the same trap the built-in checks were spaced by. */
+.fm-field > p.body-text.muted,
+.fm-field > .field-note {
+  order: -1;
+  margin: 0;
+}
 
 /* What acts on its own, as a readable table. ⚠️ THREE TRACKS, because the row
    answers three questions — which family, what it is for, how often it has

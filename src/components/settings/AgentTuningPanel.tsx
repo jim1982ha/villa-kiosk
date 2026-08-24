@@ -24,6 +24,7 @@
 // `validate_config` on the proxy is what actually bounds these values, and the
 // PUT is owner-only there. Nothing in this file is a control.
 
+import ToggleField from "@/components/common/ToggleField";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -111,14 +112,6 @@ function Num({ label, note, value, min, onChange }: {
   return (
     <label className="fm-field">
       <span>{label}</span>
-      {/* ⚠️ THE EXPLANATION COMES BEFORE THE CONTROL, NOT AFTER IT. A hint
-          below the box is read after the reader has already typed — which is
-          the wrong order for a field whose note says things like "this is the
-          single biggest thing on the bill" or "cannot be set below 5 minutes".
-          Reported across several fields at once; fixed in the two shared field
-          components rather than per call site, so every number and every text
-          box in every dialog inherits it. */}
-      <p className="muted body-text field-note">{note}</p>
       <input
         type="number"
         inputMode="numeric"
@@ -128,6 +121,10 @@ function Num({ label, note, value, min, onChange }: {
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
       />
+      {/* ⚠️ WRITTEN LAST AND RENDERED FIRST. `.fm-field > p` carries
+          `order: -1`, so every field in the app reads explanation → name →
+          control without any of them reordering their own markup. */}
+      <p className="muted body-text">{note}</p>
     </label>
   );
 }
@@ -168,8 +165,6 @@ function Text({ label, note, value, placeholder, onChange }: {
   return (
     <label className="fm-field">
       <span>{label}</span>
-      {/* Same rule as `Num`: the explanation precedes the control. */}
-      <p className="muted body-text field-note">{note}</p>
       <div className="segmented segmented-wrap" role="group" aria-label={label}>
         {MODELS.map((m) => (
           <button
@@ -196,6 +191,7 @@ function Text({ label, note, value, placeholder, onChange }: {
           placeholder={placeholder} autoFocus={showBox && known}
           spellCheck={false} autoCapitalize="off" autoCorrect="off" />
       )}
+      <p className="muted body-text">{note}</p>
     </label>
   );
 }
@@ -273,27 +269,27 @@ export default function AgentTuningPanel() {
       <div className="settings-section-title">
         What supervision is allowed to do
       </div>
-      <label className="toggle">
-        <input type="checkbox" checked={draft.enabled}
-          onChange={(e) => edit({ enabled: e.target.checked })} />
-        <span>Watch the villa and look for problems</span>
-      </label>
-      <p className="muted body-text">
-        Off means nothing runs and nothing is spent. Home Assistant keeps
+      <ToggleField
+        checked={draft.enabled}
+        onChange={(enabled) => edit({ enabled })}
+        label="Watch the villa and look for problems"
+        note={<>
+Off means nothing runs and nothing is spent. Home Assistant keeps
         working exactly as it does today — this only adds the watching.
-      </p>
+        </>}
+      />
 
-      <label className="toggle">
-        <input type="checkbox" checked={draft.shadow}
-          onChange={(e) => edit({ shadow: e.target.checked })} />
-        <span>Stay silent — write findings down, tell nobody</span>
-      </label>
-      <p className="muted body-text">
-        On to begin with, so you can read a few weeks of what it would have sent
+      <ToggleField
+        checked={draft.shadow}
+        onChange={(shadow) => edit({ shadow })}
+        label="Stay silent — write findings down, tell nobody"
+        note={<>
+On to begin with, so you can read a few weeks of what it would have sent
         before it sends anything. ⚠️ It still costs the same while silent — it
         does all the same thinking and only holds back the message. To spend
         nothing, switch the watching off above instead.
-      </p>
+        </>}
+      />
 
       <div className="settings-section-title">
         Where it reads Home Assistant from
@@ -378,17 +374,17 @@ export default function AgentTuningPanel() {
           defaulted to false since the agent was written, and nothing in
           Settings could see it, so an owner had no way to know the promise was
           being kept. A guarantee nobody can check is not a guarantee. */}
-      <label className="toggle">
-        <input type="checkbox" checked={draft.actEnabled}
-          onChange={(e) => edit({ actEnabled: e.target.checked })} />
-        <span>Let it operate devices, not just watch them</span>
-      </label>
-      <p className="muted body-text">
-        Off, and nothing the villa does can change a switch, a light or a lock —
+      <ToggleField
+        checked={draft.actEnabled}
+        onChange={(actEnabled) => edit({ actEnabled })}
+        label="Let it operate devices, not just watch them"
+        note={<>
+Off, and nothing the villa does can change a switch, a light or a lock —
         it reads and it tells you. This is separate from everything above: those
         decide how much it looks and who it tells, this decides whether it may
         touch anything at all. Leave it off unless you have a reason.
-      </p>
+        </>}
+      />
       {/* ⚠️ THE DEVICE ALLOW-LIST MOVED TO "ACT & TELL" IN 2.729.0. It is
           AND-ed with the switch above, so it belongs beside it in principle —
           but it is only ever CONSULTED at the authority boundary, and putting
@@ -396,19 +392,17 @@ export default function AgentTuningPanel() {
           lets an owner read that permission without assembling it from two
           dialogs. The switch stays here because it is a tuning dial; the list
           is a permission. */}
-      <label className="toggle">
-        <input type="checkbox"
-          checked={draft.investigateMode === "auto"}
-          onChange={(e) => edit({
-            investigateMode: e.target.checked ? "auto" : "approve" })} />
-        <span>Investigate what it notices, without asking you first</span>
-      </label>
-      <p className="muted body-text">
-        A check only spots that something looks wrong; an investigation is the
+      <ToggleField
+        checked={draft.investigateMode === "auto"}
+        onChange={(on) => edit({ investigateMode: on ? "auto" : "approve" })}
+        label="Investigate what it notices, without asking you first"
+        note={<>
+A check only spots that something looks wrong; an investigation is the
         slow, expensive part that works out why. On by default, because “stay
         silent” above already stops anything reaching you. Off, it lists what it
         wanted to look into and spends nothing until you approve each one.
-      </p>
+        </>}
+      />
       {/* ⚠️ A SETTING WITH NO CONTROL IS THE SAME DEFECT AS A CONTROL WITH NO
           SETTING, AND I SHIPPED ONE. v2.696.0 added the quiet-hours window to
           the store, the wire map and the TypeScript type, and nothing here

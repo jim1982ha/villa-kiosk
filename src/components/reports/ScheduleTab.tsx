@@ -60,6 +60,7 @@
 // how a briefing quietly resumes going to a list nobody can see the day the
 // person behind that profile is removed.
 
+import ToggleField from "@/components/common/ToggleField";
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { fetchNextRuns, type ReportsDiagnostics } from "@/reports/reportsApi";
@@ -327,18 +328,15 @@ export default function ScheduleTab({
           rendering: a white square floating above its own text, which is what
           the owner screenshotted. `.fm-check-icon` exists and is for readiness
           status glyphs; the similar name is what made the invention feel safe. */}
-      <label className="toggle">
-        <input
-          type="checkbox"
-          checked={draft.enabled === true}
-          onChange={(e) => set({ enabled: e.target.checked })}
-        />
-        <span>Send briefings on a schedule</span>
-      </label>
-      <p className="muted body-text">
-        Off by default. Read one from the Preview tab first — that is what this
+      <ToggleField
+        checked={draft.enabled === true}
+        onChange={(enabled) => set({ enabled })}
+        label="Send briefings on a schedule"
+        note={<>
+Off by default. Read one from the Preview tab first — that is what this
         setting commits you to receiving.
-      </p>
+        </>}
+      />
 
       {/* ⚠️ THE BANNER NAMES WHICH OF THE TWO STATES IT IS, for the reason the
           option labels do — "nobody is set up" was shown to an owner who had
