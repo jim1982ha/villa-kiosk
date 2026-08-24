@@ -1,3 +1,11 @@
+## 2.718.1
+
+### Fixed — a build check went red on a service name it mistook for a device
+The check that keeps this property's device names out of the public source code
+reads anything shaped `word.word`, and a new test used `light.turn_on` — the
+name of a Home Assistant action, not of a device here. Classified alongside the
+identical entries already listed. No behaviour change.
+
 ## 2.718.0
 
 ### Fixed — "let it operate devices" did nothing, and the list behind it named no device
