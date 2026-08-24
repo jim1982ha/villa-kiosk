@@ -874,3 +874,76 @@ def test_the_prompt_carries_no_clock_and_no_villa() -> None:
     """It sits above the cache breakpoint on every chat turn."""
     import re
     assert not re.search(r"\d{4}-\d{2}-\d{2}|\{[a-z_]+\}", chat.SYSTEM)
+
+
+# ── the reply tool and the decline notice are the same channel ───────────────
+def _recording(sent: List[str]) -> Any:
+    """A ReplyTool subclass that records instead of delivering."""
+
+    class Recording(reply_mod.ReplyTool):
+        async def _send(self, body: str) -> bool:
+            sent.append(body)
+            return True
+
+    return Recording
+
+
+def test_a_reply_ALREADY_SENT_is_not_followed_by_an_apology() -> None:
+    """⚠️ ONE RUN, TWO MESSAGES, THE SECOND ONE WRONG. Measured on the villa:
+    the model answered through the `reply` tool, its next turn had nothing to
+    add, and the decline branch sent "I could not answer that" on top of a
+    correct answer. Telling a reader to distrust what they just read is worse
+    than saying nothing."""
+    from fake_provider import FakeProvider, asks, declines
+
+    sent: List[str] = []
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = _recording(sent)  # type: ignore[misc]
+    try:
+        _handle(_event(), provider=FakeProvider([
+            asks("reply", {"text": "Both gym lights are off."}),
+            declines("the provider returned nothing usable")]))
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+
+    assert sent, "the reply itself never went out"
+    assert "Both gym lights are off." in sent[0]
+    assert not any("could not answer" in m for m in sent), (
+        f"an answer was delivered and then contradicted: {sent}")
+
+
+def test_a_decline_AFTER_a_partial_reply_still_says_it_stopped() -> None:
+    """⚠️ NEITHER BRANCH IS SILENT. Suppressing the notice outright would leave
+    somebody who got a mid-run "working on it" waiting forever — the silence
+    rule this branch was written for, broken by its own fix."""
+    from fake_provider import FakeProvider, asks, declines
+
+    sent: List[str] = []
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = _recording(sent)  # type: ignore[misc]
+    try:
+        _handle(_event(), provider=FakeProvider([
+            asks("reply", {"text": "Looking into the pump now."}),
+            declines("this investigation ran out of time")]))
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+
+    assert len(sent) == 2, f"the decline was swallowed: {sent}"
+    assert "ran out of time" in sent[1], sent[1]
+
+
+def test_an_ANSWERED_run_that_said_nothing_is_still_not_silence() -> None:
+    """⚠️ THE SILENCE RULE DOES NOT CARE WHICH STATUS PRODUCED IT. A model that
+    ends its turn with no prose and never called `reply` leaves the asker
+    staring at a bot that read their message and ignored it."""
+    from fake_provider import FakeProvider, says
+
+    sent: List[str] = []
+    original = reply_mod.ReplyTool
+    reply_mod.ReplyTool = _recording(sent)  # type: ignore[misc]
+    try:
+        _handle(_event(), provider=FakeProvider([says("")]))
+    finally:
+        reply_mod.ReplyTool = original  # type: ignore[misc]
+
+    assert sent, "the run answered with nothing and nobody was told"

@@ -293,6 +293,26 @@ def _turn_of(reply: Any) -> Turn:
     # paid for this once, reporting success and spending budget on an empty
     # string while quietly declining it downstream.
     text = "".join(text_parts)
+    blocks = list(getattr(reply, "content", None) or [])
+    why = str(getattr(reply, "stop_reason", "")) or "no stop_reason"
+
+    # ⚠️ "I HAVE NOTHING MORE TO SAY" IS NOT "I FAILED", AND CONFLATING THEM
+    # APOLOGISED OVER EVERY GOOD ANSWER. A model that answered through the
+    # `reply` tool, got "Sent." back and had nothing to add returns
+    # `stop_reason=end_turn` with a genuinely EMPTY content array — a complete
+    # run. Read as a decline it declined the whole run, and `chat.py` then sent
+    # "I could not answer that" on top of the answer the person had already
+    # received. Measured on the villa: one run, two messages, the second one
+    # wrong.
+    #
+    # ⚠️ EMPTY MEANS NO BLOCKS AT ALL, NOT BLOCKS THAT FLATTEN TO NOTHING. A
+    # whitespace text block and a reply of pure `thinking` are still failures to
+    # answer and still decline — the model tried to speak and produced nothing.
+    # The distinction is whether it spoke at all, and only an empty array says
+    # it deliberately did not.
+    if not text.strip() and not calls and not blocks and why == "end_turn":
+        return Turn(usage=usage, stop_reason=why)
+
     if not text.strip() and not calls:
         # ⚠️ THE STOP REASON IS IN THE MESSAGE, NOT ONLY ON THE TURN. "the
         # provider returned nothing usable" is a true sentence that names none
@@ -308,9 +328,7 @@ def _turn_of(reply: Any) -> Turn:
         # blocks is indistinguishable here from an empty one, and the two need
         # opposite fixes — the first is this function's bug, the second is the
         # provider's answer. `saw=` says which.
-        seen = sorted({str(getattr(b, "type", "?"))
-                       for b in getattr(reply, "content", None) or []})
-        why = str(getattr(reply, "stop_reason", "")) or "no stop_reason"
+        seen = sorted({str(getattr(b, "type", "?")) for b in blocks})
         return Turn(usage=usage, stop_reason=str(getattr(reply, "stop_reason", "")),
                     declined="the provider returned nothing usable "
                              f"(stop_reason={why}, saw={'+'.join(seen) or 'no blocks'})")

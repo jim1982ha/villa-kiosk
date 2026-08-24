@@ -96,20 +96,39 @@ def flatten_blocks(blocks: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def truncate(body: str, limit: int = DEFAULT_MAX_RESULT_CHARS) -> str:
+#: How to narrow, when the caller has nothing more specific to say.
+#:
+#: ⚠️ GENERIC ENGLISH, NOT ARGUMENT NAMES, AND THAT IS THE WEAKNESS. `subject`
+#: and `level` happen to be real arguments (`tools/concern.py`, `tools/logs.py`);
+#: `window` is one of nothing. A model cannot act on advice that names no
+#: parameter it can pass, which is why any caller that KNOWS its own schema
+#: should pass a `hint` instead of accepting this — see `upstream._narrowing`.
+NARROW_HINT: str = "window, subject or level"
+
+
+def truncate(body: str, limit: int = DEFAULT_MAX_RESULT_CHARS,
+             hint: str = NARROW_HINT) -> str:
     """Cut to `limit`, and SAY SO.
 
     ⚠️ THE NOTE IS THE WHOLE VALUE. A silently truncated result is a model
     reasoning confidently about the half it happened to receive, and concluding
     something false with every appearance of rigour. Told it was cut, it can ask
     for the rest — which is why the note names how much is missing.
+
+    ⚠️ AND `hint` NAMES ARGUMENTS THE CALLED TOOL ACTUALLY HAS. The default is
+    generic wording that matches no upstream parameter at all (see
+    `NARROW_HINT`): told to narrow by a name it cannot pass, a model re-asks the
+    same broad question or answers from the half it got. Measured on the villa —
+    a whole-villa `ha_search` was cut, and the model reported it "could not
+    resolve which lights are in the gym" instead of re-asking with the area and
+    domain filters that tool publishes.
     """
     if len(body) <= limit:
         return body
     dropped = len(body) - limit
     return (body[:limit]
             + f"\n[... {dropped} more characters not shown. Narrow the query "
-              f"— window, subject or level — rather than asking for all of it.]")
+              f"— {hint} — rather than asking for all of it.]")
 
 
 class Tool(Protocol):

@@ -378,3 +378,47 @@ def test_a_MISSING_upstream_is_reported_rather_than_silent() -> None:
     guard = after[:after.index("return False")]
     assert "log(" in guard, (
         "the unreachable-upstream path returns without logging:\n" + guard)
+
+
+# ── a truncated result must name arguments the tool actually has ─────────────
+def test_the_narrowing_hint_comes_from_the_UPSTREAM_schema() -> None:
+    """⚠️ "Narrow the query — window, subject or level" is THIS repo's own read
+    tools' vocabulary, and an upstream tool has none of those parameters. Told
+    to narrow by a name it cannot pass, a model re-asks the same broad question
+    or answers from the half it received — measured on the villa, where a
+    whole-villa search was cut and the answer said it "could not resolve which
+    lights are in the gym"."""
+    schema = {"type": "object", "properties": {
+        "query": {"type": "string"}, "area_filter": {"type": "string"},
+        "domain_filter": {"type": "string"}, "state_filter": {"type": "string"}}}
+    hint = upstream._narrowing(schema, {"query": "lights"})
+    assert "area_filter" in hint and "domain_filter" in hint, hint
+    assert "window, subject or level" not in hint
+
+
+def test_an_argument_ALREADY_PASSED_is_not_offered_as_a_way_to_narrow() -> None:
+    """Advice it cannot act on: it would re-send the identical call, which
+    `_Bounded` then stops as a repeat loop."""
+    schema = {"type": "object", "properties": {
+        "query": {"type": "string"}, "area_filter": {"type": "string"}}}
+    assert "area_filter" not in upstream._narrowing(
+        schema, {"query": "x", "area_filter": "Gym"})
+
+
+def test_a_schema_with_nothing_left_falls_back_to_the_generic_wording() -> None:
+    """An empty hint would render "Narrow the query —  — rather than…"."""
+    from agent.tools.base import NARROW_HINT
+    assert upstream._narrowing({"type": "object", "properties": {}}, {}) \
+        == NARROW_HINT
+    assert upstream._narrowing({"type": "object"}, {}) == NARROW_HINT
+
+
+def test_the_hint_reaches_the_TRUNCATION_NOTE_and_not_just_the_helper() -> None:
+    """⚠️ PIN THE CALLER. A helper that returns the right string while nobody
+    passes it is this repo's twice-paid defect."""
+    from agent.tools.base import truncate
+    note = truncate("x" * 40, 10, hint="area_filter, domain_filter")
+    assert "area_filter, domain_filter" in note, note
+    import inspect
+    src = inspect.getsource(upstream.UpstreamTool.run)
+    assert "_narrowing(" in src, "the tool truncates without its own hint"

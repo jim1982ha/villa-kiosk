@@ -473,9 +473,27 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     # error text reaches here through `anthropic_sdk._redacted`, so a client
     # that echoed its request headers has had the key removed before this
     # point; `clean_reply` then flattens and caps it.
-    if result.status == "declined" and result.declined_reason:
-        await replier.call({"text": f"I could not answer that. "
-                                    f"{result.declined_reason}"})
+    #
+    # ⚠️ AND IT MUST NOT CONTRADICT AN ANSWER ALREADY DELIVERED. Every OTHER
+    # decline can fire after a mid-run `reply` too — a deadline, a spent
+    # budget, an open breaker — and "I could not answer that" on top of a
+    # correct answer is worse than saying nothing, because it tells the reader
+    # to distrust what they just read. So the message depends on whether this
+    # run has already spoken, and NEITHER branch is silent: a person who got a
+    # partial answer still needs to know it stopped early.
+    elif result.status == "declined" and result.declined_reason:
+        await replier.call({"text": (
+            f"That is as far as I got. {result.declined_reason}"
+            if replier.sent else
+            f"I could not answer that. {result.declined_reason}")})
+
+    # ⚠️ AN `answered` RUN THAT SAID NOTHING AT ALL IS STILL SILENCE, and the
+    # silence rule does not care which status produced it. A model that ends its
+    # turn with no prose and never called `reply` leaves the asker staring at a
+    # bot that read their message and ignored it.
+    elif not replier.sent:
+        await replier.call({"text": "I could not answer that. The villa "
+                                    "produced no reply."})
     # ⚠️ THE OUTCOME NAMES WHERE IT WENT. `answered` alone cost a round trip:
     # the run succeeded, the reply was delivered, and neither the log nor the
     # asker could say to WHOM — so "it worked" and "you got nothing" were the

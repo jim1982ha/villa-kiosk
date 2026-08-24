@@ -35,7 +35,8 @@ import os
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from agent.tools.base import BaseTool, DEFAULT_MAX_RESULT_CHARS, fail, truncate
+from agent.tools.base import (BaseTool, DEFAULT_MAX_RESULT_CHARS, NARROW_HINT,
+                              fail, truncate)
 from reports.log import log, swallow
 
 SUPERVISOR = "http://supervisor"
@@ -263,7 +264,33 @@ class UpstreamTool(BaseTool):
             return [fail("unavailable",
                          "the Home Assistant MCP server did not answer")]
         return [{"type": "text",
-                 "text": truncate(_flatten(result), DEFAULT_MAX_RESULT_CHARS)}]
+                 "text": truncate(_flatten(result), DEFAULT_MAX_RESULT_CHARS,
+                                  hint=_narrowing(self.inputSchema, args))}]
+
+
+def _narrowing(schema: Mapping[str, Any], args: Mapping[str, Any]) -> str:
+    """The arguments this call did NOT use, as advice for narrowing it.
+
+    ⚠️ DERIVED FROM THE UPSTREAM SCHEMA, NEVER LISTED HERE. Naming
+    `area_filter` and `domain_filter` in our source would be a second copy of a
+    contract the upstream owns and renames without telling us — the same
+    duplication `UpstreamTool` exists to avoid by passing `inputSchema`
+    verbatim. Reading the schema means a tool added upstream tomorrow gets
+    correct advice with no change here.
+
+    ⚠️ AND ARGUMENTS ALREADY SUPPLIED ARE EXCLUDED, because telling a model to
+    narrow by something it just passed is advice it cannot act on — it would
+    re-send the identical call, which `_Bounded` then stops as a loop.
+    """
+    props = schema.get("properties")
+    if not isinstance(props, Mapping):
+        return NARROW_HINT
+    spare = [str(name) for name in props if name not in args]
+    if not spare:
+        return NARROW_HINT
+    # A long list reads as noise; the first few are enough to make the point
+    # that this tool HAS filters, and the schema is in front of the model too.
+    return ", ".join(sorted(spare)[:6])
 
 
 def _flatten(result: Mapping[str, Any]) -> str:

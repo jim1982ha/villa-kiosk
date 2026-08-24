@@ -489,3 +489,31 @@ def test_CHAT_does_not_default_to_the_frontier_model() -> None:
     assert "opus" not in str(view.get("model_chat")), (
         "chat defaults to the frontier model — the single most expensive "
         "default in this add-on, on its most frequent request")
+
+
+def test_an_EMPTY_end_turn_is_a_FINISHED_run_not_a_failure() -> None:
+    """⚠️ "I HAVE NOTHING MORE TO SAY" IS NOT "I FAILED". A model that answered
+    through the `reply` tool, got "Sent." back and had nothing to add returns
+    `end_turn` with an empty content array. Read as a decline it declined the
+    whole run, and chat then apologised on top of a correct answer."""
+    turn = anthropic_sdk._turn_of(_Reply([], stop_reason="end_turn"))
+    assert not turn.declined, turn.declined
+    assert not turn.text and not turn.wants_tools
+
+
+def test_an_empty_reply_that_was_CUT_OFF_still_declines() -> None:
+    """The discrimination is the stop reason, not the emptiness. `max_tokens`
+    with no blocks is an answer that never arrived."""
+    for why in ("max_tokens", "refusal", ""):
+        turn = anthropic_sdk._turn_of(_Reply([], stop_reason=why))
+        assert turn.declined, f"stop_reason={why!r} must still decline"
+
+
+def test_blocks_that_FLATTEN_to_nothing_still_decline() -> None:
+    """⚠️ EMPTY MEANS NO BLOCKS AT ALL. A whitespace text block and a reply of
+    pure `thinking` are failures to answer — the model tried to speak and
+    produced nothing — and only an empty array says it deliberately did not."""
+    assert anthropic_sdk._turn_of(
+        _Reply([_Block(type="text", text="  \n ")], "end_turn")).declined
+    assert anthropic_sdk._turn_of(
+        _Reply([_Block(type="thinking")], "end_turn")).declined
