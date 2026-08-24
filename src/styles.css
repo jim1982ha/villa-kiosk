@@ -4800,28 +4800,34 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    can be compared across tabs at a glance. ⚠️ It wraps rather than scrolls: on a
    phone these stack, and a horizontally scrolling fact row hides the third
    fact, which is the one about working offline. */
-/* ⚠️ A GRID ACROSS THE FULL WIDTH, NOT A FLEX ROW THAT BUNCHES LEFT. As flex
-   these three sat crammed against the left edge with the rest of the line
-   empty, and the columns moved between tabs because each one sized to its own
-   text — so "Uses AI" started in a different place on every step. Equal
-   fractions give them one position and use the space that was already there.
-   ⚠️ AND IT COLLAPSES TO ONE COLUMN ON A PHONE rather than squeezing three:
-   the third fact is "works offline", which is the one worth reading. */
+/* ⚠️ ONE ROW, ALWAYS, WHICH IS WHY THE HEADINGS BECAME ICONS. As a grid of
+   three text columns these wrapped at any realistic width and the third fact
+   dropped to its own line — reported twice. A glyph beside its value is short
+   enough that three fit across a phone, and `flex` with `min-width: 0` lets a
+   long value ellipsize rather than push its neighbours onto a second row.
+   ⚠️ `nowrap` IS THE WHOLE POINT: this is one comparison, and a row that wraps
+   reads as three unrelated statements. */
 .tier-facts {
-  display: grid;
-  /* ⚠️ `auto-fit` WITH A FLOOR, NOT A BREAKPOINT. A fixed 3-up above 520px and
-     1-up below it was a guess at two widths, and the values here are long
-     ("when something is escalated", "No — fixed rules") — at a phone's width
-     three tracks would wrap each to three lines, which is what the flex version
-     already did badly. This fills the whole line at every width and drops to
-     two columns, then one, only when a column would go under 150px. */
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px 18px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
   margin: 2px 0 0;
+  font-size: var(--text-sm);
 }
-.tier-facts > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.tier-facts dt { font-size: var(--text-xs); color: var(--text-muted); }
-.tier-facts dd { margin: 0; font-size: var(--text-sm); color: var(--text-primary); }
+.tier-facts > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.tier-facts > div > dt { display: flex; color: var(--text-muted); flex: 0 0 auto; }
+.tier-facts > div > dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── ROW ACTIONS ──────────────────────────────────────────────────────────
    ⚠️ ONE SHAPE FOR BOTH BUTTONS IN A LIST ROW, AND THERE WERE TWO. The approve

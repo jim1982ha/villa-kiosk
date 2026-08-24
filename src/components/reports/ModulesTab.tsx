@@ -52,7 +52,6 @@
 // first subscribe — through every drop and restart. See `collect._LIVE`.
 
 import { Ban, Check, Info, PlugZap, Radio, RefreshCw } from "lucide-react";
-import SourceChip from "@/components/common/SourceChip";
 import type { ReportPreview, ReportsDiagnostics } from "@/reports/reportsApi";
 import type { ReportsConfig } from "@/reports/reportsTypes";
 
@@ -266,8 +265,13 @@ export default function ModulesTab({
                   being retired, so "always works the same way, and you can
                   switch it off" is the property that makes that swap
                   acceptable — and it is worth saying on the row. */}
+              {/* ⚠️ NO `SourceChip` HERE. Every row in this list sits under a
+                  heading reading "Built-in checks", so a "Built-in check" chip
+                  on each one repeats the section title once per row — the same
+                  redundancy the reflex table had, reported in the same breath.
+                  The chip earns its place where a list MIXES sources; this list
+                  has exactly one. */}
               <span className="reports-entry-meta">
-                <SourceChip source="check" />
                 <span className="muted">needs {m.minDays} days</span>
               </span>
             </div>

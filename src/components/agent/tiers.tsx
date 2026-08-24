@@ -23,6 +23,7 @@
 // them.
 
 import type { ReactNode } from "react";
+import { Gauge, Sparkles, WifiOff } from "lucide-react";
 import SourceChip, { type Source } from "@/components/common/SourceChip";
 
 export interface Tier {
@@ -180,17 +181,30 @@ export function TierIntro({ tier, speed, children }: {
         {tier.source && <SourceChip source={tier.source} className="tier-chip" />}
       </div>
       <p className="muted body-text">{tier.what}</p>
-      {/* ⚠️ THE THREE FACTS THAT DECIDE TRUST, on one line and always in the
-          same order, so they can be compared across tabs at a glance. */}
+      {/* ⚠️ ICONS, NOT WORDS, SO THE THREE ALWAYS SHARE ONE ROW. "Speed",
+          "Uses AI" and "Works offline" are longer than several of the VALUES
+          they head, so at any realistic width the row wrapped and the third
+          fact — the one about working offline — dropped to a line of its own.
+          A glyph plus its value is short enough that three fit at a phone's
+          width, which is the only way this reads as one comparison rather than
+          three separate statements.
+          ⚠️ THE WORDS ARE NOT LOST, THEY MOVE TO `title` AND `aria-label`. An
+          icon on its own is a rebus; a screen reader still hears "Speed", and a
+          pointer still gets it on hover. */}
       <dl className="tier-facts">
-        <div><dt>Speed</dt><dd>{speed || tier.speed}</dd></div>
-        <div>
-          <dt>Uses AI</dt>
-          <dd>{tier.model ? "Yes" : "No — fixed rules"}</dd>
+        <div title="Speed">
+          <dt aria-label="Speed"><Gauge size={14} aria-hidden="true" /></dt>
+          <dd>{speed || tier.speed}</dd>
         </div>
-        <div>
-          <dt>Works offline</dt>
-          <dd>{tier.offline ? "Yes" : "Needs internet"}</dd>
+        <div title="Uses AI">
+          <dt aria-label="Uses AI"><Sparkles size={14} aria-hidden="true" /></dt>
+          <dd>{tier.model ? "Uses AI" : "No AI"}</dd>
+        </div>
+        <div title="Works offline">
+          <dt aria-label="Works offline">
+            <WifiOff size={14} aria-hidden="true" />
+          </dt>
+          <dd>{tier.offline ? "Works offline" : "Needs internet"}</dd>
         </div>
       </dl>
       {children}
@@ -215,7 +229,22 @@ export const FAMILIES: Record<string, { role: string; reflex?: true }> = {
     role: "acts in under a second, on this property, with no AI involved",
     reflex: true,
   },
-  maintenance: { role: "being replaced by the built-in checks" },
-  roi: { role: "being replaced by the built-in checks" },
+  // ⚠️ "IN BRIEFINGS" IS LOAD-BEARING, NOT PADDING. The owner read "the
+  // built-in checks" here and asked whether it meant a DIFFERENT set from the
+  // ones in the other dialog — a fair question, because an unqualified term
+  // used in two modals reads as two things. There is only one set: three
+  // deterministic modules (`level_anomaly`, `sensor_health`, `standby_creep`),
+  // owned by neither the blueprints nor the agent, and they live on the
+  // Briefings dialog's first tab. Naming where they are is the fix; inventing a
+  // second term for a second thing that does not exist would not be.
+  //
+  // ⚠️ AND THE CLAIM IS TRUE, verified rather than asserted:
+  // `analysis/modules/level_anomaly.py` carries
+  // `superseded_by: ("roi_baseline_deviation",)`, so that check STANDS DOWN
+  // while the blueprint exists. Retiring the family is what switches it back
+  // on — which is why `docs/PROGRESS.md` calls maintenance "the only family
+  // with upside".
+  maintenance: { role: "will be replaced by the built-in checks in Briefings" },
+  roi: { role: "will be replaced by the built-in checks in Briefings" },
   audit: { role: "proves the alert channel still works" },
 };
