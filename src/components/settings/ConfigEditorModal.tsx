@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { Boxes, Home, LogOut, Receipt, ShieldCheck, Upload,
+import { Boxes, Home, LogOut, Upload,
          Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -19,12 +19,6 @@ import CentralModelInfo from "./CentralModelInfo";
 import { useGlbUpload } from "./useGlbUpload";
 import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
-import AgentTuningPanel from "./AgentTuningPanel";
-import PeoplePanel from "./PeoplePanel";
-import ApiKeyPanel from "./ApiKeyPanel";
-import ShadowDiffPanel from "./ShadowDiffPanel";
-import UsagePanel from "./UsagePanel";
-import CollapsibleSection from "@/components/common/CollapsibleSection";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
 
@@ -44,14 +38,12 @@ type SettingsTab = "villa" | "devices" | "supervision" | "usage" | "system";
 const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
   { id: "villa", label: "Villa", icon: Home },
   { id: "devices", label: "Devices", icon: Boxes },
-  { id: "supervision", label: "Supervision", icon: ShieldCheck, owner: true },
   // ⚠️ ITS OWN TAB, NOT AN ICON INSIDE BRIEFINGS (v2.669.0). It opened from the
   // row that switches narration on, which is exactly the reading the panel's
   // own header spends a paragraph denying: triage, investigations and every
   // chat turn spend the same key whether narration is on or off. A surface
   // reached through an unrelated setting is a surface that describes that
   // setting, however loudly its text says otherwise.
-  { id: "usage", label: "Usage", icon: Receipt, owner: true },
   { id: "system", label: "System", icon: Wrench, owner: true },
 ];
 
@@ -299,65 +291,15 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
               people table is the only thing standing between the villa and
               anyone who finds the bot. The tab itself is not rendered for
               other roles rather than rendered-and-403. */}
-          {tab === "supervision" && role === "owner" && (
-            <>
-              {/* ⚠️ "People", NOT "Who may message the villa" (v2.653.0). The
-                  old heading described half of what the table now decides: a
-                  row says who may speak AND where that profile's briefings are
-                  delivered, which is why Briefings no longer asks for a
-                  recipient. A heading naming only the inbound half is how the
-                  outbound half ends up configured somewhere else again. */}
-              <div className="settings-section-title">People</div>
-              <PeoplePanel />
-
-              {/* ⚠️ THE TWO STAY SEPARATE HEADINGS INSIDE ONE TAB. One answers
-                  "who is allowed to speak" and the other "what does it cost
-                  and how loud is it" — related enough to share a tab, distinct
-                  enough that a cadence field must not sit under a heading
-                  about access. */}
-              {/* ⚠️ THE KEY IS IN THE TAB THAT SPENDS IT (v2.657.0). It was
-                  reachable only through Briefings → "Let an AI service write
-                  the summary" — a toggle that does not govern it: the agent
-                  reads the same secret whether narration is on or off, so
-                  switching SUPERVISION on required enabling an unrelated
-                  feature first. Found by following the setup instructions,
-                  which is the only way a trap like that is found; every screen
-                  was correct on its own. */}
-              <div className="settings-section-title">
-                Connection to the AI service
-              </div>
-              <ApiKeyPanel />
-
-              {/* ⚠️ NO WRAPPING HEADING HERE ANY MORE. This read "Cadence and
-                  cost" — the panel's own vocabulary, not the owner's — over a
-                  panel that also holds quiet hours, what it may investigate on
-                  its own, and the model choices, none of which are cadence or
-                  cost. Worse, it rendered at the SAME weight as the panel's own
-                  headings, so a container and its contents looked like peers
-                  and the tab read as seven unrelated groups. The panel names
-                  its own sections; a second name for the same thing is what
-                  made this tab confusing to read. */}
-              <AgentTuningPanel />
-
-              {/* ⚠️ COLLAPSED, because it is a whole document and this tab is
-                  not where it is read every day — it is read ONCE, when the
-                  cutover decision is taken. `CollapsibleSection`'s remaining
-                  job is exactly this: a block that is not a list and is not
-                  what the reader came for. */}
-              {/* ⚠️ "SHADOW PERIOD — THE CUTOVER EVIDENCE" WAS THREE INTERNAL
-                  WORDS IN A ROW. "Shadow" is this project's name for observe-
-                  only, "cutover" is a phase of its migration plan, and
-                  "evidence" is what the plan calls the document. None of the
-                  three means anything to the person who owns the villa, and the
-                  panel below is simply the list of what supervision noticed
-                  while it was not allowed to tell anyone. */}
-              <CollapsibleSection title="What it found while staying silent">
-                <ShadowDiffPanel />
-              </CollapsibleSection>
-            </>
-          )}
-
-          {tab === "usage" && role === "owner" && <UsagePanel />}
+          {/* ⚠️ SUPERVISION AND USAGE LEFT THIS DIALOG IN 2.725.0. Everything
+              the agent produces — its concerns, its queue, its tuning, its
+              people and key, its cost and its shadow diff — now lives in one
+              dialog, and nothing it produces lives anywhere else. They were
+              here because they are CONFIGURATION, which is true and was the
+              wrong axis: an owner asking "what is the AI doing on my property"
+              had no reason to open Advanced Settings, and the subsystem was
+              split across three dialogs. This one keeps the villa, the devices
+              and the box. */}
 
           {tab === "system" && role === "owner" && (
             <>

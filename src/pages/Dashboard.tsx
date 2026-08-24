@@ -1069,7 +1069,6 @@ export default function Dashboard() {
              of them read owner-only endpoints — see the table in
              ReportsModal's header. Every one of these is a rendering
              convenience; `supervisor-proxy.py` re-checks all three. */
-          canAck={canManageFacility}
           canConfigure={canEditConfig}
         />
       )}

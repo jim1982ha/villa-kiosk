@@ -1,3 +1,15 @@
+## 2.725.0
+
+### Changed — everything the AI does is now in one place, and nowhere else
+Its conclusions were in the Facility Cockpit, its settings and API key were in
+Advanced Settings, its running cost was in a third tab, and its comparison
+against the old rules in a fourth — one subsystem spread across three dialogs,
+which is why "where are the Concerns" was a fair question. Briefings now holds
+all of it, as tabs: Concerns, Worth a look, Waiting on you, Memory, Tuning,
+Access, Cost and Shadow diff. Nothing the AI produces appears anywhere else. The
+caretaker task list, which comes from your automations rather than the AI, is
+now only in Facility.
+
 ## 2.724.0
 
 ### Changed — the villa's reasoning has its own screen instead of hiding inside the device one
