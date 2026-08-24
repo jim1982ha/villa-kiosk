@@ -1,3 +1,11 @@
+## 2.729.1
+
+### Fixed — the VESTA Agent dialog had no background and grew as you changed tabs
+It was missing the class that makes a dialog a card, so it drew with no ground
+of its own, sat wrong on the page, and stretched vertically whenever a tab
+swapped a short list for a long one — the same resizing already fixed for
+Facility and Settings. One class, all three symptoms.
+
 ## 2.729.0
 
 ### Changed — VESTA Agent now follows the villa's own signal path, step by step
