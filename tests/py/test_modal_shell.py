@@ -636,3 +636,30 @@ def test_settings_cancel_clears_the_pending_draft_before_reverting():
     assert "pending.cancel(" in body, "discard() does not cancel the pending draft"
     assert body.index("pending.cancel(") < body.index("update("), \
         "discard() must cancel the debounced commit BEFORE writing the baseline back"
+
+
+def test_every_dialog_in_the_family_ALSO_CARRIES_THE_BASE_CLASS() -> None:
+    """⚠️ `.settings-modal` STYLES THE INSIDE OF A CARD; `.modal` IS THE CARD.
+
+    Reported from the screen on the day `AgentModal` shipped: no background, sat
+    wrong on the page, and resized vertically as its tabs changed. All three
+    from ONE missing class. `.modal` carries the ground, the width cap, the
+    border, the elevation and — decisively — `display:flex; flex-direction:
+    column`, which is what lets `.settings-modal`'s own height resolve into a
+    stable card instead of the body growing the dialog around the reader.
+
+    ⚠️ AND THE TEST ABOVE COULD NOT CATCH IT. It pins that the FAMILY has a
+    height and that nobody opts in per call site — both true here — because it
+    never asked whether the dialog was in the family's card to begin with. A
+    shell made of class names can be re-stated incompletely in a new way every
+    time, which is this file's whole premise; this is one more part of the
+    shell, pinned like the others.
+    """
+    offenders = [
+        path for path, source in sorted(_dialogs().items())
+        if not re.search(r'className="[^"]*\bmodal\s+settings-modal', source)
+    ]
+    assert not offenders, (
+        f"{offenders} render a `.settings-modal` that is not also a `.modal`, "
+        f"so it has no background, no card and no stable height. Write "
+        f'`className="modal settings-modal …"` as every other dialog does.')

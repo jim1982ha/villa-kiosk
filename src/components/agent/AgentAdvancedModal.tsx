@@ -40,7 +40,18 @@ export default function AgentAdvancedModal({ onBack }: { onBack: () => void }) {
     <div className="modal-backdrop" onClick={onBack}>
       <div
         ref={dialogRef}
-        className="settings-modal"
+        // ⚠️ `modal settings-modal config-editor-modal`, THE FULL TRIPLE, AND
+        // OMITTING `.modal` COST ALL THREE SYMPTOMS THE OWNER REPORTED. `.modal`
+        // carries the background, the width cap, the border, the elevation and
+        // the flex column; `.settings-modal` alone styles the INSIDE of a card
+        // that was never given a card. So the dialog rendered with no ground of
+        // its own, sat wherever the backdrop's centring left it, and — because
+        // `.config-editor-modal` was missing too — resized vertically as its
+        // body changed. That last one is the defect that rule's own comment
+        // describes: `.modal` only CAPS height, so a dialog whose tab switches
+        // from a two-row list to a dozen rows visibly grows around the reader.
+        // Every other dialog in the app already used all three.
+        className="modal settings-modal config-editor-modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
