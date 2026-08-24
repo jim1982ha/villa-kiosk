@@ -1,3 +1,15 @@
+## 2.717.0
+
+### Fixed — the scheduled checks were told they could read the house, and could not
+Questions typed at the villa reach Home Assistant properly; the checks that run
+on their own never did. Their connection to Home Assistant was created at the
+top of each pass and then not handed down, so the assistant was offered the full
+list of things it could look up and every single lookup came back "unavailable"
+— into its own working notes, where nothing logged it and nothing showed it. It
+fell back to the summary it already had and answered anyway, which is why the
+reports read plausibly. The connection now reaches every path, including an
+investigation started by approving one from the tablet.
+
 ## 2.716.0
 
 ### Changed — the assistant was handed a list of actions it is not allowed to take

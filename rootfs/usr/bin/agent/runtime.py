@@ -145,6 +145,7 @@ async def investigate(*, provider: Provider,
                       messages: Sequence[Mapping[str, Any]],
                       config: Optional[Mapping[str, Any]] = None,
                       registry: Optional[Registry] = None,
+                      session: Any = None,
                       tier: str = "reason",
                       trigger: str = "manual",
                       actor: str = "system",
@@ -167,7 +168,21 @@ async def investigate(*, provider: Provider,
                            reason="the agent is switched off (agent.enabled)")
 
     try:
-        reg = registry if registry is not None else build_registry(config=config)
+        # ⚠️ THE SESSION IS FORWARDED, AND OMITTING IT TOOK HOME ASSISTANT AWAY
+        # FROM THE REASONING TIER WITHOUT A WORD. `build_registry` folds the
+        # upstream MCP catalogue in and binds each tool to `lambda: session`, so
+        # a session-less registry PUBLISHES all 39 Home Assistant tools and every
+        # call to one returns `no session to reach the MCP server` — into the
+        # transcript, where no log line ever sees it. The model is told it can
+        # read the villa and then cannot, on every scheduled investigation.
+        #
+        # ⚠️ THE SESSION EXISTED THE WHOLE TIME AND WAS DROPPED ONE FRAME UP:
+        # `scheduler._run_once` takes it and called `triage.run`/
+        # `reason.follow_up` without it. Chat was the only path that passed one,
+        # which is why questions typed at the villa worked and scheduled passes
+        # quietly ran on the built-in readers alone.
+        reg = (registry if registry is not None
+               else build_registry(config=config, session=session))
 
         # ⚠️ THE RUN'S EVIDENCE, OWNED HERE BECAUSE TWO THINGS NEED IT AT
         # DIFFERENT TIMES: the loop appends to it as tools return, and

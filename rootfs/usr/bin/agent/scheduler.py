@@ -151,7 +151,8 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     # without passing it on, the RUN and its spend were filed as "scheduled"
     # whatever actually started them — see `triage.run`.
     result = await triage_mod.run(provider=provider, document=document,
-                                  config=config, trigger=trigger)
+                                  config=config, session=session,
+                                  trigger=trigger)
     if result.status != "answered":
         return f"triage {result.status}: {result.reason}"
     if not result.escalations:
@@ -166,7 +167,7 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     # `reason.follow_up` never raises: it is called from a background clock.
     follow = await reason_mod.follow_up(
         result.escalations, provider=provider, document=document,
-        config=config, trigger=trigger)
+        config=config, session=session, trigger=trigger)
 
     subjects = ", ".join(e.subject for e in result.escalations[:3])
     # ⚠️ THE CLAUSE GOES BEFORE THE COLON, and `Followup.clause` may not contain

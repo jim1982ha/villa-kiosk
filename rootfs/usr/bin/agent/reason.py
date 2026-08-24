@@ -139,6 +139,7 @@ def auto(config: Optional[Mapping[str, Any]] = None) -> bool:
 async def follow_up(escalations: Sequence[Any], *, provider: Provider,
                     document: str = "",
                     config: Optional[Mapping[str, Any]] = None,
+                    session: Any = None,
                     trigger: str = "scheduled",
                     now: Optional[float] = None) -> Followup:
     """Investigate what triage escalated. NEVER RAISES.
@@ -191,7 +192,7 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
         run_id = _ident(trigger, index, now)
         if await investigate_subject(item, provider=provider, config=config,
                                      document=document, trigger=trigger,
-                                     run_id=run_id):
+                                     session=session, run_id=run_id):
             out.started += 1
             out.run_ids.append(run_id)
 
@@ -202,7 +203,7 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
 async def investigate_subject(item: Any, *, provider: Provider,
                               config: Optional[Mapping[str, Any]],
                               document: str, trigger: str,
-                              run_id: str) -> bool:
+                              run_id: str, session: Any = None) -> bool:
     """One subject, investigated. Returns whether the run happened at all.
 
     ⚠️ EXTRACTED SO APPROVAL IS NOT A SECOND INVESTIGATION PATH. The scheduler's
@@ -230,7 +231,8 @@ async def investigate_subject(item: Any, *, provider: Provider,
             system=playbooks.system_blocks(
                 "owner", instructions=SYSTEM, document=document),
             messages=[{"role": "user", "content": _question(item)}],
-            config=config, tier="reason", trigger=trigger, run_id=run_id)
+            config=config, session=session, tier="reason",
+            trigger=trigger, run_id=run_id)
     except Exception as err:  # noqa: BLE001 - the clock must survive this
         swallow(f"investigation of {subject!r} raised", err)
         return False
@@ -246,7 +248,7 @@ class Queued:
     reason: str = ""
 
 
-async def approve(run_id: str, *, provider: Provider,
+async def approve(run_id: str, *, provider: Provider, session: Any = None,
                   config: Optional[Mapping[str, Any]] = None,
                   document: str = "", trigger: str = "approved"
                   ) -> Tuple[bool, str]:
@@ -278,7 +280,7 @@ async def approve(run_id: str, *, provider: Provider,
                   reason=str(row.get("detail") or ""))
     ran = await investigate_subject(item, provider=provider, config=config,
                                     document=document, trigger=trigger,
-                                    run_id=wanted)
+                                    session=session, run_id=wanted)
     return (ran, "" if ran else "the investigation could not be started")
 
 

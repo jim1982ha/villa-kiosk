@@ -114,14 +114,15 @@ def parse(text: str) -> List[Escalation]:
     return out
 
 
-def registry_for(full: Optional[Registry] = None) -> Registry:
+def registry_for(full: Optional[Registry] = None, *,
+                 session: Any = None) -> Registry:
     """The triage tool set: the shipped registry, narrowed to `TRIAGE_TOOLS`.
 
     ⚠️ NARROWED FROM THE REAL ONE, NEVER BUILT SEPARATELY. A second registry is
     a second gate (ARCH-012), and it would be the one nobody tests. This takes
     the same wired tools and hands over a subset.
     """
-    source = full if full is not None else build_registry()
+    source = full if full is not None else build_registry(session=session)
     kept = [t for t in (source.get(n) for n in TRIAGE_TOOLS) if t is not None]
     return Registry(kept)
 
@@ -129,6 +130,7 @@ def registry_for(full: Optional[Registry] = None) -> Registry:
 async def run(*, provider: Provider, document: str,
               config: Optional[Mapping[str, Any]] = None,
               registry: Optional[Registry] = None,
+              session: Any = None,
               run_id: str = "",
               trigger: str = "scheduled") -> TriageResult:
     """One triage pass. Never raises.
@@ -164,7 +166,8 @@ async def run(*, provider: Provider, document: str,
             "", instructions=SYSTEM, document=document),
         messages=[{"role": "user",
                    "content": "Is anything here worth a closer look?"}],
-        config=config, registry=registry_for(registry), tier="triage",
+        config=config, registry=registry_for(registry, session=session),
+        session=session, tier="triage",
         trigger=trigger, run_id=run_id)
 
     if not result.usable:

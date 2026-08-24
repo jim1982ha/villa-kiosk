@@ -16,11 +16,12 @@ gates would agree on the day they were written and diverge on the first change
 to either.
 
 ⚠️ THE EXPORT SET IS AN ALLOW-LIST OVER `contracts.TOOL_MODE`, NOT A DENY-LIST
-OF NAMES (REQ-047). `READ`, plus one named write. So `act_service` — which does
-not exist yet — is off this surface the day it is written, because it will be
-`ACT` and `ACT` is not on the list. A deny-list of names would have needed
-somebody to remember, at exactly the moment they were thinking about actuation
-rather than about MCP.
+OF NAMES (REQ-047). `READ`, plus one named write. So `act_service` — which this
+line predicted before it existed (written 2.623.0; the tool arrived in 2.646.0)
+— is off this surface without anybody touching this file, because it is `ACT`
+and `ACT` is not on the list. A deny-list of names would have needed somebody to
+remember, at exactly the moment they were thinking about actuation rather than
+about MCP. **It worked**: the tool arrived and this list did not change.
 
 ⚠️ AND THE AUTHORITY STAYS VILLA-SIDE (ARCH-011). A relocated agent gains no
 permission it did not have in-process: `policy.py`, the audit ledger and the
@@ -120,7 +121,8 @@ def authorised(header: Optional[str]) -> bool:
 
 
 def _policy_for(config: Optional[Mapping[str, Any]],
-                registry: Optional[Registry] = None) -> policy_mod.RunPolicy:
+                registry: Optional[Registry] = None,
+                session: Any = None) -> policy_mod.RunPolicy:
     """The policy an MCP caller runs under.
 
     ⚠️ IT IS BUILT HERE, FROM CONFIG, AND NEVER FROM THE REQUEST. A caller that
@@ -130,7 +132,7 @@ def _policy_for(config: Optional[Mapping[str, Any]],
     exported here actuates, so granting it would be authority with no use, and
     authority with no use is the kind that survives a refactor unnoticed.
     """
-    names = [t.name for t in exported(registry or build_registry())]
+    names = [t.name for t in exported(registry or build_registry(session=session))]
     # ⚠️ THROUGH `for_run`, NOT BY CONSTRUCTING A RunPolicy HERE. That function
     # is the one place config is read into authority; a second constructor is a
     # second interpretation of the same settings, and it would drift silently
@@ -152,6 +154,7 @@ def _err(request_id: Any, code: int, message: str) -> Dict[str, Any]:
 async def handle(message: Mapping[str, Any], *,
                  registry: Optional[Registry] = None,
                  config: Optional[Mapping[str, Any]] = None,
+                 session: Any = None,
                  actor: str = "mcp",
                  run_id: str = "") -> Optional[Dict[str, Any]]:
     """One JSON-RPC message. Returns the reply, or None for a notification.
@@ -161,7 +164,12 @@ async def handle(message: Mapping[str, Any], *,
     what lets `test_agent_mcp` compare an MCP call against an in-process one in
     the same process and assert on the ledger both wrote.
     """
-    reg = registry if registry is not None else build_registry()
+    # ⚠️ THE SESSION REACHES THE REGISTRY HERE TOO. Without it this surface
+    # published Home Assistant's own tools and answered every call to one with
+    # `no session to reach the MCP server` — an MCP server advertising a
+    # catalogue it cannot serve, which is worse than not advertising it.
+    reg = (registry if registry is not None
+           else build_registry(session=session))
     method = str(message.get("method") or "")
     request_id = message.get("id")
 
@@ -267,7 +275,10 @@ async def http_handler(request: Any) -> Any:
         return web.json_response(_err(None, -32600, "expected an object"),
                                  status=400)
 
-    reply = await handle(body)
+    # ⚠️ THE APP'S SHARED SESSION, like every other handler in the proxy. A
+    # per-request ClientSession opens its own connector and TLS context for one
+    # call and closes them again.
+    reply = await handle(body, session=request.app["session"])
     if reply is None:
         return web.Response(status=202)
     log(f"mcp {body.get('method')!r} answered")

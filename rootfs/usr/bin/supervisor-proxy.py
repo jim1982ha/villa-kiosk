@@ -2733,8 +2733,11 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
 
     # ⚠️ A TRIAGE PASS, NOT A CONVERSATION, WHEN ASKED FOR ONE. The two are
     # different products of the same machinery and only one of them RAISES A
-    # CONCERN: `_agent_run` asks a question and returns prose, while
-    # `scheduler.run_once` is the pass that escalates. The button on the shadow
+    # CONCERN: a conversational run asks a question and returns prose, while
+    # `scheduler.run_once` is the pass that escalates. The prose variant that
+    # used to live here as `_agent_run` was deleted in 2.717.0 — it had been
+    # unreachable since this line was written and was the last session-less
+    # `build_registry()` in the tree. The button on the shadow
     # page is labelled "Check the villa now" and its whole purpose is to put
     # evidence into the cutover diff — so pointing it at the conversation meant
     # it could never do that, and the owner pressed it twice and correctly
@@ -2830,41 +2833,14 @@ async def agent_queue_post_handler(request: web.Request) -> web.Response:
         run_id,
         provider=anthropic_sdk.build(api_key=reports_secrets.get("anthropic") or ""),
         config=_read_json_store(AGENT_CONFIG_FILE, {}),
+        # ⚠️ THE APP'S SESSION, so an APPROVED investigation reaches Home
+        # Assistant's own tools exactly as the automatic arm does. Approval and
+        # the scheduler share one body (`reason.investigate_subject`) precisely
+        # so they cannot differ; handing one of them a session and not the other
+        # would put the difference back one frame up.
+        session=request.app["session"],
         document=await _agent_document_text())
     return web.json_response({"ok": ran, "reason": why})
-
-
-async def _agent_run(config: Dict[str, Any], document: str) -> Dict[str, Any]:
-    """One run through the registry loop. Declines with a reason, never raises."""
-    try:
-        from agent import policy as agent_policy
-        from agent.llm import anthropic_sdk
-        from agent.registry import build_registry, run as run_loop
-
-        provider = anthropic_sdk.build(api_key=reports_secrets.get("anthropic") or "")
-        if provider is None or not provider.configured():
-            return {"ok": False, "status": "declined",
-                    "reason": "no model provider is configured"}
-        registry = build_registry()
-        policy = agent_policy.for_run(
-            config, tier="reason",
-            tool_names=[t["name"] for t in registry.describe()])
-        result = await run_loop(
-            run_id=f"now{int(time.time())}", provider=provider,
-            registry=registry, policy=policy,
-            model=str(config.get("model_reason") or ""),
-            system=[{"type": "text", "text": document}],
-            messages=[{"role": "user",
-                       "content": "Report anything here worth a person's "
-                                  "attention, or say that nothing is."}],
-            config=config, actor="owner", trigger="manual")
-        return {"ok": result.status == "answered", "status": result.status,
-                "reason": result.declined_reason, "text": result.text,
-                "turns": result.turns, "toolCalls": result.tool_calls,
-                "usage": result.usage}
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        print(f"[supervisor-proxy] agent run failed: {err}", flush=True)
-        return {"ok": False, "status": "failed", "reason": str(err)}
 
 
 def _agent_config_now() -> Dict[str, Any]:
