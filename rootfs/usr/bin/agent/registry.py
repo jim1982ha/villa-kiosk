@@ -32,6 +32,7 @@ from agent import audit as audit_mod
 from agent import budget as budget_mod
 from agent import contracts
 from agent import policy as policy_mod, redact
+from agent import prefix as prefix_mod
 from agent import upstream
 from agent.llm.base import Provider, ToolCall, Turn
 from agent.tools import ALL_TOOLS
@@ -206,6 +207,9 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
                          verdict="started")
     breaker = budget_mod.shared_breaker()
     convo: List[Dict[str, Any]] = [dict(m) for m in messages]
+    # ⚠️ PER RUN, NOT PER PROCESS — see `prefix.Once`. Concurrent runs each get
+    # their own, so a chat question does not silence the triage pass beside it.
+    prefix_once = prefix_mod.Once()
 
     while True:
         if breaker.is_open():
@@ -226,8 +230,12 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
         # site, so every request in the system ran at that ceiling — including
         # turns whose `thinking` blocks are drawn from the same budget. See
         # `config.CONFIG_DEFAULTS["max_output_tokens"]` for the measurement.
+        # ⚠️ MEASURED AS SENT. `published` is a local so the instrument below
+        # reports the list that was actually billed, never a second call to
+        # `describe()` that could answer differently.
+        published = registry.describe()
         turn = await provider.run(system=system, messages=convo,
-                                  tools=registry.describe(), model=model,
+                                  tools=published, model=model,
                                   max_tokens=_output_ceiling(config))
         # ⚠️ SPENT HERE — the call happened, whatever came back.
         budget_mod.spend(kind)
@@ -240,6 +248,23 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
         usage_mod.record(source=kind if kind != "run" else trigger or "run",
                          model=model, counts=turn.usage or {},
                          actor=actor, run_id=run_id)
+        # ⚠️ AFTER THE TURN, BECAUSE THE TOKEN COUNT IS THE PROVIDER'S. Measured
+        # before the call there would be characters and no tokens, which is the
+        # half of the measurement that cannot be attributed — and the whole
+        # question is how many TOKENS the villa document costs against the tool
+        # schemas. ⚠️ AND ON THE FIRST TURN ONLY: the prefix is identical on
+        # every turn by construction, so per-turn logging is eight copies of one
+        # fact and buries the run that differs.
+        if prefix_once.take():
+            try:
+                for line in prefix_mod.report(
+                        prefix_mod.measure(system=system, tools=published,
+                                           messages=convo),
+                        model=model, kind=kind if kind != "run" else trigger,
+                        usage=turn.usage):
+                    log(line)
+            except Exception as err:  # noqa: BLE001 - an instrument may not
+                swallow("could not measure the prefix", err)  # break a run
         result.turns += 1
         for name, count in (turn.usage or {}).items():
             result.usage[name] = result.usage.get(name, 0) + int(count)
