@@ -1,3 +1,13 @@
+## 2.728.0
+
+### Added — the add-on log now records which tools an investigation actually used
+Each investigation reads a catalogue of forty-four Home Assistant tools, and
+that catalogue is roughly five sixths of what every step of it costs. Trimming
+it is the largest saving available, but nothing recorded which of those tools
+were ever reached for — only how many calls were made — so any trim would have
+been a guess. Each run now lists the tools it used and how often, so the list
+can be narrowed against evidence instead.
+
 ## 2.727.0
 
 ### Changed — VESTA Agent is its own workspace, and the scheduled report is not in it
