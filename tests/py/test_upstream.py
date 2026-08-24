@@ -306,3 +306,41 @@ def test_every_proxy_helper_the_SCHEDULER_calls_actually_runs() -> None:
                 offenders.append(f"{node.name}() uses {inner.id!r}, never imported")
     assert not offenders, (
         "these crash the moment they are called:\n  " + "\n  ".join(sorted(set(offenders))))
+
+
+def test_the_addon_MANIFEST_grants_the_permission_discovery_needs() -> None:
+    """⚠️ THE INTEGRATION WAS ABSENT ON A HEALTHY ADD-ON FOR WANT OF ONE LINE.
+    `endpoint()` lists add-ons through the Supervisor to find ha_mcp — the slug
+    carries an install-specific repository hash and may never be hardcoded — and
+    `config.yaml` granted `homeassistant_api` but not `hassio_api`. So the
+    listing was refused, discovery returned "", the catalogue never loaded, and
+    nothing anywhere said why.
+
+    Python cannot check its own container permissions, so the manifest is what
+    is asserted: the code and the thing that grants it the right to run are in
+    two different files and neither mentions the other."""
+    import re
+    manifest = open(os.path.join(REPO_ROOT, "villa-kiosk", "config.yaml"),
+                    encoding="utf-8").read()
+    assert re.search(r"^hassio_api:\s*true", manifest, re.M), (
+        "config.yaml does not grant hassio_api, so agent/upstream.endpoint "
+        "cannot list add-ons and the whole ha_mcp surface is silently absent")
+
+
+def test_a_MISSING_upstream_is_reported_rather_than_silent() -> None:
+    """⚠️ THE FAILURE THAT ACTUALLY HAPPENED WAS THE ONE WITHOUT A LOG LINE.
+    Both `refresh` exits returned False bare, so "the add-on is not installed",
+    "it is stopped", "the Supervisor refused us" and "it answered with nothing"
+    were one indistinguishable silence — and the operator's evidence for a
+    working integration was identical to the evidence for a broken one."""
+    import inspect
+    # ⚠️ COMMENTS STRIPPED FIRST. The comment explaining this fix contains the
+    # words `return False`, so slicing the raw source ended the guard before
+    # reaching the log call — a test matching the prose about the code instead
+    # of the code, which is this repo's most repeated test defect.
+    src = "\n".join(l for l in inspect.getsource(upstream.refresh).splitlines()
+                    if not l.strip().startswith("#"))
+    after = src[src.index("url = await endpoint"):]
+    guard = after[:after.index("return False")]
+    assert "log(" in guard, (
+        "the unreachable-upstream path returns without logging:\n" + guard)

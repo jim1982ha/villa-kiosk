@@ -284,10 +284,22 @@ async def refresh(session: Any, *, now: Optional[float] = None,
 
         url = await endpoint(session)
         if not url:
+            # ⚠️ SAY SO. This was a bare `return False` and it was the single
+            # most likely failure — the add-on missing, stopped, or the
+            # Supervisor refusing the listing because `hassio_api` was not
+            # granted — so the one path that needed a line was the one without
+            # one. Measured on the reference villa: the permission WAS missing,
+            # the catalogue never loaded, and the log said nothing at all in
+            # either direction. `feedback_instruments-never-skip`, in code
+            # written the same day citing it.
+            log("upstream: no ha_mcp add-on reachable; "
+                "Home Assistant reads fall back to the built-in tools")
             return False
         result = await rpc(session, url, "tools/list")
         tools = (result or {}).get("tools")
         if not isinstance(tools, list) or not tools:
+            log(f"upstream: {url.split('//')[-1].split('/')[0]} answered with "
+                f"no tools; keeping the previous catalogue")
             # ⚠️ AN EMPTY LIST IS NOT AN ANSWER. Recording it would publish
             # "Home Assistant offers no tools", and the fallback readers would
             # look like a deliberate choice rather than a failure.
