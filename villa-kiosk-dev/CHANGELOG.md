@@ -1,3 +1,13 @@
+## 2.734.0
+
+### Changed — clearer wording for what replaces the retiring automations, and a tidier facts row
+Two families of automation were described as "being replaced by the built-in
+checks", which read as though there were a second set somewhere; there is only
+one, and the text now says where they are. The badge on every row of the
+built-in checks list repeated the heading directly above it and is gone. The
+speed / AI / offline row kept wrapping onto two lines, so its headings are now
+small icons and it always sits on one.
+
 ## 2.733.1
 
 ### Fixed — settings now read explanation, box, then the box's name
