@@ -43,6 +43,7 @@ import { ReflexTab, ObserveTab } from "./ReflexObserve";
 import { TierIntro, TIERS } from "./tiers";
 import ActDeliverySection from "./ActDeliverySection";
 import AgentAdvancedModal from "./AgentAdvancedModal";
+import { loadAgentConfig } from "@/agent/agentApi";
 import { fetchReportsDiagnostics,
          type ReportsDiagnostics } from "@/reports/reportsApi";
 import AgentTuningPanel from "@/components/settings/AgentTuningPanel";
@@ -92,6 +93,17 @@ export default function AgentModal(
   // probe Home Assistant twice for one screen — that endpoint runs a live probe
   // per request, which is exactly why the Cockpit stopped calling it.
   const [diagnostics, setDiagnostics] = useState<ReportsDiagnostics | null>(null);
+  const [cadence, setCadence] = useState<string>("");
+  useEffect(() => {
+    void loadAgentConfig().then((cfg) => {
+      const mins = Number(cfg?.config?.triageMinutes ?? 0);
+      if (Number.isFinite(mins) && mins > 0) {
+        setCadence(mins % 60 === 0 && mins >= 60
+          ? `every ${mins / 60} hour${mins === 60 ? "" : "s"}`
+          : `every ${mins} minutes`);
+      }
+    });
+  }, []);
   useEffect(() => { void fetchReportsDiagnostics().then(setDiagnostics); }, []);
 
   return (
@@ -136,14 +148,16 @@ export default function AgentModal(
           {/* ── Step 2 · the cheap pass that only points ───────────────── */}
           {tab === "triage" && (
             <div className="reports-pane">
-              <TierIntro tier={TIERS.triage} />
+              {/* ⚠️ THE VILLA'S OWN CADENCE, NOT THE HLD'S EXAMPLE. It read
+                  "every 15 minutes" while this property runs 360 — a screen the
+                  settings contradict. */}
+              <TierIntro tier={TIERS.triage} speed={cadence} />
               {/* ⚠️ THE QUEUE IS THIS TIER'S ONLY OUTPUT, and the HLD is
                   emphatic about why it looks weak: triage "cannot act, cannot
                   notify, cannot write. It only escalates" — and it assigns NO
                   severity, because severity is what the investigation decides.
                   A row here is a pointer, not a finding. */}
               <CockpitQueue />
-              <SourceLegend only={["triage"]} />
             </div>
           )}
 
@@ -163,7 +177,6 @@ export default function AgentModal(
                   that stops a device name becoming a permanent claim. */}
               <CockpitMemories />
               <CockpitReview />
-              <SourceLegend only={["agent"]} />
             </div>
           )}
 
@@ -176,11 +189,15 @@ export default function AgentModal(
                   decides who is told, whether a brief already went, or whether
                   an action is permitted. Anything that could let somebody in or
                   silence an alarm is offered here and never executed. */}
+              {/* ⚠️ NO `SourceLegend` ON THESE TABS. The step header already
+                  carries the one chip they would explain, so the key repeated
+                  the same word directly beneath itself — reported as a
+                  redundant badge. The legend earns its place where SEVERAL
+                  sources appear together, not where one does. */}
               <CockpitProposals />
               <AgentConfigProvider enabled>
                 <ActDeliverySection />
               </AgentConfigProvider>
-              <SourceLegend only={["agent"]} />
             </div>
           )}
 
@@ -195,6 +212,17 @@ export default function AgentModal(
                     occasionally and none belong in the daily path — putting
                     them inline would bury the four dials that are actually
                     tuned. */}
+                {/* ⚠️ THE KEY LIVES HERE NOW, AND NOWHERE ELSE. It was under
+                    three tier tabs, each of which shows exactly ONE source —
+                    so the key repeated the chip already in that tab's header,
+                    directly beneath it, which is what the owner reported as a
+                    redundant badge. A legend earns its place where a reader
+                    learns the whole vocabulary at once, not where it restates
+                    a single label. This is that place, and it is the only one:
+                    the six labels are used across BOTH dialogs, so learning
+                    them belongs with the settings rather than with any one
+                    step. */}
+                <SourceLegend />
                 <button className="btn" onClick={() => setAdvanced(true)}>
                   <SlidersHorizontal size={16} aria-hidden="true" />
                   <span>Cost, people and advanced</span>

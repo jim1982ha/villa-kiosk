@@ -111,6 +111,14 @@ function Num({ label, note, value, min, onChange }: {
   return (
     <label className="fm-field">
       <span>{label}</span>
+      {/* ⚠️ THE EXPLANATION COMES BEFORE THE CONTROL, NOT AFTER IT. A hint
+          below the box is read after the reader has already typed — which is
+          the wrong order for a field whose note says things like "this is the
+          single biggest thing on the bill" or "cannot be set below 5 minutes".
+          Reported across several fields at once; fixed in the two shared field
+          components rather than per call site, so every number and every text
+          box in every dialog inherits it. */}
+      <p className="muted body-text field-note">{note}</p>
       <input
         type="number"
         inputMode="numeric"
@@ -120,7 +128,6 @@ function Num({ label, note, value, min, onChange }: {
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
       />
-      <p className="muted body-text">{note}</p>
     </label>
   );
 }
@@ -161,6 +168,8 @@ function Text({ label, note, value, placeholder, onChange }: {
   return (
     <label className="fm-field">
       <span>{label}</span>
+      {/* Same rule as `Num`: the explanation precedes the control. */}
+      <p className="muted body-text field-note">{note}</p>
       <div className="segmented segmented-wrap" role="group" aria-label={label}>
         {MODELS.map((m) => (
           <button
@@ -187,7 +196,6 @@ function Text({ label, note, value, placeholder, onChange }: {
           placeholder={placeholder} autoFocus={showBox && known}
           spellCheck={false} autoCapitalize="off" autoCorrect="off" />
       )}
-      <p className="muted body-text">{note}</p>
     </label>
   );
 }

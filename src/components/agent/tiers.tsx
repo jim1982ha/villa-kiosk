@@ -121,10 +121,16 @@ export const TIERS: Record<string, Tier> = {
   },
   triage: {
     n: 2, name: "Triage",
-    what: "Every fifteen minutes, one cheap question: is anything here worth a "
+    // ⚠️ NO INTERVAL IN THE PROSE. It said "every fifteen minutes", which is
+    // the HLD's example and not this villa's setting — the reference property
+    // runs 360. A screen quoting a number the settings contradict is worse than
+    // one that omits it, so the sentence describes the JOB and `speed` carries
+    // the figure, filled in from config by whoever renders it.
+    what: "One cheap question, on a fixed cadence: is anything here worth a "
         + "person's attention, or a closer look? It cannot act, cannot notify "
         + "and cannot decide how serious something is — it only points.",
-    speed: "every 15 minutes", model: true, offline: false, source: "triage",
+    speed: "on a schedule you set", model: true, offline: false,
+    source: "triage",
   },
   reason: {
     n: 3, name: "Reason",
@@ -152,8 +158,12 @@ export const TIERS: Record<string, Tier> = {
  * repeatedly — and the whole point of the vocabulary is that a reader learns it
  * once.
  */
-export function TierIntro({ tier, children }: {
+export function TierIntro({ tier, speed, children }: {
   tier: Tier;
+  /** ⚠️ THE REAL FIGURE, WHERE THE TAB KNOWS IT. A tier's own `speed` is a
+   *  description; a villa that has configured a cadence can say the number, and
+   *  a number the settings contradict is worse than none. */
+  speed?: string;
   /** Live facts about this tier, if the tab has any. */
   children?: ReactNode;
 }) {
@@ -173,7 +183,7 @@ export function TierIntro({ tier, children }: {
       {/* ⚠️ THE THREE FACTS THAT DECIDE TRUST, on one line and always in the
           same order, so they can be compared across tabs at a glance. */}
       <dl className="tier-facts">
-        <div><dt>Speed</dt><dd>{tier.speed}</dd></div>
+        <div><dt>Speed</dt><dd>{speed || tier.speed}</dd></div>
         <div>
           <dt>Uses AI</dt>
           <dd>{tier.model ? "Yes" : "No — fixed rules"}</dd>

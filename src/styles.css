@@ -4664,6 +4664,41 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   .source-legend-row { grid-template-columns: auto minmax(0, 1fr); }
 }
 
+/* A field's explanation, which now sits BETWEEN its label and its control.
+   ⚠️ ZERO MARGIN, BECAUSE `.fm-field` IS A FLEX COLUMN WITH ITS OWN GAP. The
+   browser's `p { margin: 1em 0 }` would be ADDED to that gap at both ends and
+   push the control away from the label it belongs to — the same UA-margin trap
+   the built-in checks were spaced by, one component down. The label, the note
+   and the control are one block; `--field-label-gap` is what separates them. */
+.fm-field > .field-note { margin: 0; }
+
+/* What acts on its own, as a readable table. ⚠️ THREE TRACKS, because the row
+   answers three questions — which family, what it is for, how often it has
+   spoken — and as a flex line they reflowed into each other. The count is right
+   aligned with tabular figures so the numbers form a column. */
+.reflex-table { display: flex; flex-direction: column; gap: 2px; margin: 0; }
+.reflex-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) max-content;
+  gap: 4px 14px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--text-sm);
+}
+.reflex-row:last-child { border-bottom: 0; }
+.reflex-row > dt { font-weight: 600; }
+.reflex-row > dd { margin: 0; min-width: 0; }
+.reflex-role { color: var(--text-secondary); }
+.reflex-count { font-variant-numeric: tabular-nums; color: var(--text-muted); white-space: nowrap; }
+/* ⚠️ ON A PHONE THE ROLE DROPS TO ITS OWN LINE rather than being squeezed to
+   two words a column wide — the name and the count stay paired, which is the
+   comparison a reader is making. */
+@media (max-width: 520px) {
+  .reflex-row { grid-template-columns: minmax(0, 1fr) max-content; }
+  .reflex-role { grid-column: 1 / -1; }
+}
+
 /* ── WHERE A CONCERN IS IN ITS LIFE ───────────────────────────────────────
    ⚠️ QUIETER THAN THE SEVERITY BESIDE IT, DELIBERATELY. A row already carries
    how bad the thing is and who concluded it; the state is metadata about the
@@ -4701,6 +4736,12 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    tab — `margin-left:auto` gives it one home. */
 .tier-intro-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tier-intro-head > .tier-chip { margin-left: auto; }
+/* ⚠️ AND THE HEADING'S OWN BOX MUST NOT ADD SPACE. `.settings-section-title`
+   carries the section rhythm every other surface relies on; inside this row it
+   made "STEP 2" and "TRIAGE" sit on visibly different lines, because the pill
+   is padding-sized and the heading was margin-sized. Zeroed HERE rather than on
+   the class, so no other section loses its spacing. */
+.tier-intro-head > .settings-section-title { margin: 0; padding: 0; line-height: 1.2; }
 /* The step number. ⚠️ Deliberately quiet: it orders the tabs and is not the
    thing being read — the tier's NAME is. */
 .tier-badge {
@@ -4718,8 +4759,26 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    can be compared across tabs at a glance. ⚠️ It wraps rather than scrolls: on a
    phone these stack, and a horizontally scrolling fact row hides the third
    fact, which is the one about working offline. */
-.tier-facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 2px 0 0; }
-.tier-facts > div { display: flex; flex-direction: column; gap: 1px; }
+/* ⚠️ A GRID ACROSS THE FULL WIDTH, NOT A FLEX ROW THAT BUNCHES LEFT. As flex
+   these three sat crammed against the left edge with the rest of the line
+   empty, and the columns moved between tabs because each one sized to its own
+   text — so "Uses AI" started in a different place on every step. Equal
+   fractions give them one position and use the space that was already there.
+   ⚠️ AND IT COLLAPSES TO ONE COLUMN ON A PHONE rather than squeezing three:
+   the third fact is "works offline", which is the one worth reading. */
+.tier-facts {
+  display: grid;
+  /* ⚠️ `auto-fit` WITH A FLOOR, NOT A BREAKPOINT. A fixed 3-up above 520px and
+     1-up below it was a guess at two widths, and the values here are long
+     ("when something is escalated", "No — fixed rules") — at a phone's width
+     three tracks would wrap each to three lines, which is what the flex version
+     already did badly. This fills the whole line at every width and drops to
+     two columns, then one, only when a column would go under 150px. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 18px;
+  margin: 2px 0 0;
+}
+.tier-facts > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .tier-facts dt { font-size: var(--text-xs); color: var(--text-muted); }
 .tier-facts dd { margin: 0; font-size: var(--text-sm); color: var(--text-primary); }
 

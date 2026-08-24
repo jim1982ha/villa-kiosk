@@ -41,6 +41,7 @@ export default function CockpitQueue() {
   const [queue, setQueue] = useState<ApprovalQueue | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string>("");
+  const [done, setDone] = useState<string>("");
 
   const load = useCallback(async () => {
     setQueue(await loadApprovalQueue());
@@ -52,6 +53,7 @@ export default function CockpitQueue() {
     async (runId: string, action: "approve" | "dismiss") => {
       setBusy(runId);
       setFailed("");
+      setDone("");
       // ⚠️ `finally`, SO THE BUTTON ALWAYS COMES BACK. `decideEscalation` no
       // longer throws, but a spinner that can outlive its request is the defect
       // this pair exists to prevent, and the guarantee belongs at BOTH ends —
@@ -68,6 +70,18 @@ export default function CockpitQueue() {
       // already wrote. Rendering only a spinner that stops would make a
       // budget ceiling look like a broken button.
       if (!out.ok) setFailed(out.reason || "it could not be started");
+      // ⚠️ SUCCESS MUST SAY SOMETHING TOO, AND IT SAID NOTHING. Measured on the
+      // reference villa: approving ran a full investigation in 19.9s, raised a
+      // concern, and the only visible effect here was the row vanishing —
+      // because the RESULT lands on the Reason tab, which is not the tab you
+      // are on when you press this. Reported twice as "nothing happens". A
+      // spinner that resolves into an absence is indistinguishable from one
+      // that failed quietly.
+      else if (action === "approve") {
+        setDone("Investigated. Whatever it concluded is on the Reason tab.");
+      } else {
+        setDone("Dismissed. It will not be looked into.");
+      }
       await load();
     }, [load]);
 
@@ -115,6 +129,10 @@ export default function CockpitQueue() {
           would have rendered as unstyled body text, which reads as part of
           the description rather than as a failure. */}
       {failed ? <p className="body-text sev-warning" role="alert">{failed}</p> : null}
+      {/* ⚠️ `role="status"`, NOT `alert`. A completed investigation is not a
+          problem, and an assertive live region interrupts a screen reader
+          mid-sentence to say so. */}
+      {done ? <p className="body-text" role="status">{done}</p> : null}
       <div className="cockpit-attention-list">
         {queue.pending.map((item) => (
           <div className="editable-row" key={item.runId}>

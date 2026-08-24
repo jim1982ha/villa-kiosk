@@ -160,37 +160,33 @@ export default function ModulesTab({
 
       {/* ── 2. Your automations ─────────────────────────────────────────── */}
       <h3 className="settings-section-title">Your automations</h3>
-      <ul className="reports-list">
+      {/* ⚠️ THE SAME `.reflex-table` THE AGENT'S REFLEX TAB USES. This was the
+          identical list in `.reports-item` flex rows — name, chip, sentence and
+          count on one line — and it wrapped just as badly here. One rule for one
+          shape, so a fix to the readable version lands on both.
+          ⚠️ AND THE PER-ROW CHIP IS GONE for the same reason it went there: it
+          repeated what the row's own sentence already says. */}
+      <dl className="reflex-table">
         {c.blueprintCategories.map((cat) => {
-          const type = `vesta_${cat}_event`;
-          const seen = c.seenTypes[type] ?? 0;
+          const seen = c.seenTypes[`vesta_${cat}_event`] ?? 0;
           const family = FAMILIES[cat];
           return (
-            <li key={cat} className={`reports-item${seen ? "" : " muted"}`}>
-              <span>{cat}</span>
-              {/* ⚠️ WHAT THIS FAMILY IS FOR, NOT JUST HOW OFTEN IT SPOKE. A
-                  count answers "is it wired"; it does not answer the question
-                  an owner deciding whether to keep an automation actually has.
-                  A reflex closes a valve in under a second with no model in the
-                  path and is PERMANENT; the others are doing a job the built-in
-                  checks below now do, and are on their way out. Those are
-                  opposite recommendations rendered, until now, as identical
-                  rows. */}
-              {family?.reflex && <SourceChip source="reflex" />}
-              {family && (
-                <span className="muted body-text">{family.role}</span>
-              )}
-              <span>{seen ? `${seen} received` : "nothing yet"}</span>
-            </li>
+            <div key={cat} className={`reflex-row${seen ? "" : " muted"}`}>
+              <dt>{cat}</dt>
+              <dd className="reflex-role">{family?.role ?? ""}</dd>
+              <dd className="reflex-count">
+                {seen ? `${seen} received` : "nothing yet"}
+              </dd>
+            </div>
           );
         })}
         {c.blueprintCategories.length === 0 && (
-          <li className="reports-item muted">
+          <p className="muted body-text">
             No automations of this kind are installed, so the built-in checks
             run instead.
-          </li>
+          </p>
         )}
-      </ul>
+      </dl>
       {/* ⚠️ A ZERO HERE IS AMBIGUOUS AND MUST SAY SO. Either nothing of that
           kind happened, or those automations do not report at all — and the
           second is what once hid an entire alert tier. Naming them is the whole

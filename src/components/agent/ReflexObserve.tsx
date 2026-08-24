@@ -10,7 +10,6 @@
 // payload and the same helpers to render four numbers each.
 
 import { TierIntro, TIERS, FAMILIES } from "./tiers";
-import SourceChip from "@/components/common/SourceChip";
 import type { ReportsDiagnostics } from "@/reports/reportsApi";
 
 /** ⚠️ ONE FORMATTER, BOTH TABS. A count rendered "1,284" in one place and
@@ -47,26 +46,37 @@ export function ReflexTab({ diagnostics }: {
           the first: a family that has never fired looks identical to one that
           does not exist, and a family being retired looked identical to one
           that is permanent. */}
-      <ul className="reports-list">
+      {/* ⚠️ A GRID, NOT `.reports-list`. Each row carried a name, a chip, a
+          sentence and a count in one flex line, so on a phone every row wrapped
+          differently and the counts landed under the prose instead of in a
+          column — reported as barely readable. Three tracks give the name, the
+          role and the count one position each, and the count is right-aligned
+          with tabular figures so the numbers line up.
+          ⚠️ AND THE PER-ROW "Safety reflex" CHIP IS GONE. The step header
+          already carries it; repeating it on the one row it applies to said the
+          same thing twice in the same glance. What the row needs is what makes
+          it DIFFERENT from its neighbours, which is the sentence. */}
+      <dl className="reflex-table">
         {families.map((cat) => {
           const seen = c?.seenTypes[`vesta_${cat}_event`] ?? 0;
           const fam = FAMILIES[cat];
           return (
-            <li key={cat} className={`reports-item${seen ? "" : " muted"}`}>
-              <span>{cat}</span>
-              {fam?.reflex && <SourceChip source="reflex" />}
-              {fam && <span className="muted body-text">{fam.role}</span>}
-              <span>{seen ? `${num(seen)} so far` : "nothing yet"}</span>
-            </li>
+            <div key={cat} className={`reflex-row${seen ? "" : " muted"}`}>
+              <dt>{cat}</dt>
+              <dd className="reflex-role">{fam?.role ?? ""}</dd>
+              <dd className="reflex-count">
+                {seen ? `${num(seen)} so far` : "nothing yet"}
+              </dd>
+            </div>
           );
         })}
         {families.length === 0 && (
-          <li className="reports-item muted">
+          <p className="muted body-text">
             None are installed. Nothing on this property acts by itself, and the
             checks in Briefings do the watching instead.
-          </li>
+          </p>
         )}
-      </ul>
+      </dl>
       <p className="muted body-text">
         These are the only automations that survive the move to an assistant, and
         they are kept deliberately: a leak has to close a valve in under a
