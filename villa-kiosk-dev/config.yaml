@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev)
-version: "2.708.0"
+version: "2.709.0"
 slug: villa_kiosk_dev
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -31,12 +31,13 @@ ingress_port: 8099
 # talks to Home Assistant token-lessly (no long-lived token needed). See
 # rootfs/usr/bin/supervisor-proxy.py.
 homeassistant_api: true
-# ⚠️ REQUIRED TO FIND THE HOME ASSISTANT MCP ADD-ON, and its absence failed
-# SILENTLY. `agent/upstream.endpoint` lists add-ons through the Supervisor to
-# discover ha_mcp's hostname, ingress port and secret path — the slug carries an
-# install-specific repository hash and may never be hardcoded. Without this
-# permission that call is refused, discovery returns "", and the whole upstream
-# tool surface is simply absent with the add-on reporting healthy.
+# ⚠️ AT THE `default` ROLE DELIBERATELY, WHICH CANNOT LIST OTHER ADD-ONS.
+# Discovering ha_mcp automatically would need `hassio_role: manager`, and that
+# role also grants starting, stopping and INSTALLING add-ons — an escalation
+# this dashboard cannot justify to somebody installing it from a repository
+# they do not own, asked for solely to look up one hostname. The owner supplies
+# the MCP address in Supervision instead: one paste, no privilege. Least
+# privilege was the owner's own call when shown both options.
 hassio_api: true
 panel_icon: mdi:home-city-outline
 panel_title: VESTA dev
