@@ -1,3 +1,13 @@
+## 2.733.1
+
+### Fixed — settings now read explanation, box, then the box's name
+The name of a setting was sitting above its box and the sentence explaining what
+it costs or breaks was underneath, so the part worth reading first arrived last.
+Every field in every dialog now reads the same way: what it does, then the box,
+then the short name as a caption under it. A blank line between a description
+and the switch it describes is also gone — the switch had kept a margin of its
+own that was being added to the spacing.
+
 ## 2.733.0
 
 ### Fixed — every setting now reads the same way round

@@ -4670,6 +4670,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    same as two unrelated settings. */
 .toggle-field { display: flex; flex-direction: column; gap: var(--hint-gap); }
 .toggle-field > p { margin: 0; }
+/* ⚠️ `label.toggle` CARRIES `margin-top: 12px` OF ITS OWN, and wrapping it in
+   this component broke the reset that cancelled it: `.reports-pane >
+   label.toggle` only reaches a DIRECT child, and the switch is now a
+   grandchild. So the 12px came back and was ADDED to this column's gap —
+   reported as a redundant blank line between a description and the switch it
+   describes. The pair is one block; the gap is what separates them. */
+.toggle-field > label.toggle { margin-top: 0; }
 
 /* ── A FIELD READS: EXPLANATION, THEN NAME, THEN CONTROL ───────────────────
    ⚠️ ONE RULE FOR EVERY FIELD IN THE APP, VIA `order` — NOT A MARKUP EDIT AT
@@ -4695,6 +4702,16 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   order: -1;
   margin: 0;
 }
+/* ⚠️ AND THE NAME IS A CAPTION UNDER THE BOX, NOT A HEADING OVER IT. The
+   explanation is what a reader needs BEFORE they touch anything — it says what
+   the setting costs, what it breaks, what the floor is — while the short label
+   only names the box they are already looking at. Putting the name on top and
+   the consequence underneath meant the consequence was read after the typing.
+   So: explanation, control, name. Asked for exactly, with a worked example.
+   ⚠️ `order: 1` ON THE LABEL, NOT A MARKUP MOVE. Same reason the paragraph is
+   ordered rather than relocated: this reaches all thirty-five fields and every
+   one written afterwards, and no call site has to remember. */
+.fm-field > span { order: 1; }
 
 /* What acts on its own, as a readable table. ⚠️ THREE TRACKS, because the row
    answers three questions — which family, what it is for, how often it has
