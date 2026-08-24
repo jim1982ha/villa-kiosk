@@ -47,6 +47,55 @@ export interface Tier {
   source: Source;
 }
 
+/** The briefing pipeline's own steps, in the order it runs them.
+ *
+ *  ⚠️ THE SAME SHAPE AS `TIERS`, AND ON PURPOSE. Two dialogs describing two
+ *  workflows should describe them in one visual language or a reader has to
+ *  learn the screen twice. Every field means exactly what it means above:
+ *  `model` is "is an AI in the path", which for the whole of this pipeline is
+ *  NO — the brief is composed by fixed code and a model only ever rewords the
+ *  finished text.
+ *
+ *  ⚠️ AND `n` RESTARTS AT 1 RATHER THAN CONTINUING THE TIERS. This is not a
+ *  sixth tier of the agent; it is a parallel, deterministic pipeline that
+ *  happens to consume the agent's concerns. Numbering it 5, 6, 7 would claim a
+ *  sequence that does not exist. */
+export const STEPS: Record<string, Tier> = {
+  watched: {
+    n: 1, name: "What is watched",
+    what: "The fixed checks that run over this villa's own history, and the "
+        + "automations you have installed. Each check works the same way every "
+        + "time and can be switched off.",
+    speed: "each briefing", model: false, offline: true, source: "check",
+  },
+  visible: {
+    n: 2, name: "What it can see",
+    what: "Whether this property actually reports the things a check needs. A "
+        + "check with nothing to read says so rather than passing quietly.",
+    speed: "checked live", model: false, offline: false, source: "ha",
+  },
+  brief: {
+    n: 3, name: "The briefing",
+    what: "Everything found, written up in one message. Put together by the "
+        + "add-on itself — an AI only rewords the finished text, and only if "
+        + "you switch that on.",
+    speed: "on the schedule below", model: false, offline: true,
+    source: "check",
+  },
+  sent: {
+    n: 4, name: "Sending it",
+    what: "When a briefing goes out, and to whom. A record of every delivery "
+        + "is kept, including the ones that failed.",
+    speed: "on schedule", model: false, offline: false, source: "check",
+  },
+  work: {
+    n: 5, name: "What it asked for",
+    what: "Jobs raised by your automations and written to a Home Assistant "
+        + "to-do list. Ticking one here records it as done everywhere.",
+    speed: "as raised", model: false, offline: false, source: "reflex",
+  },
+};
+
 export const TIERS: Record<string, Tier> = {
   reflex: {
     n: 0, name: "Reflex",

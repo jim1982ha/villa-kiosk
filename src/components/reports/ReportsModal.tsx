@@ -74,7 +74,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  AlertTriangle, CalendarClock, CheckCircle2, FileText, History,
+  AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, FileText,
   ListChecks, Loader2, ShieldQuestion,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -93,32 +93,45 @@ import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
 import ModulesTab from "./ModulesTab";
+import { TierIntro, STEPS } from "@/components/agent/tiers";
+import TasksTab from "./TasksTab";
 
-type Tab = "preview" | "coverage" | "checks" | "schedule" | "history";
+type Tab = "checks" | "coverage" | "preview" | "schedule" | "tasks";
 
 /** ⚠️ `configure: true` MEANS "THE PROXY WOULD REFUSE THIS TAB TO ANYONE BUT
  *  THE OWNER" — see the endpoint table in this file's header. It is not a
  *  judgement about who ought to see what; changing one of these without
  *  changing the matching handler puts a tab on screen that cannot work. */
+/** ⚠️ THE PIPELINE'S OWN ORDER, THE SAME PRINCIPLE THE AGENT DIALOG FOLLOWS.
+ *  Left to right is what actually happens: what is watched, whether the villa
+ *  can see it, the brief that comes out, where it goes, and the jobs it raised.
+ *  The previous order was the order the tabs were written in — Preview first,
+ *  because composing was the feature being built at the time — which opened a
+ *  reader on the OUTPUT of a pipeline they had not been shown.
+ *
+ *  ⚠️ HISTORY FOLDED INTO DELIVERY. "When it is sent" and "what was sent" are
+ *  one question asked in two tenses, and separating them made a failed delivery
+ *  something you had to go looking for on another tab. */
 const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[] = [
-  { id: "preview", label: "Preview", icon: FileText, configure: true },
-  { id: "coverage", label: "Coverage", icon: ShieldQuestion, configure: true },
-  { id: "checks", label: "Checks", icon: ListChecks, configure: true },
-  // ⚠️ "Delivery", NOT "Schedule": Facility's Schedule is the MAINTENANCE
-  // schedule and this is when a briefing is SENT. Two tabs, one word, two
-  // meanings. The id stays `schedule`; only the label a person reads changed.
-  { id: "schedule", label: "Delivery", icon: CalendarClock, configure: true },
-  { id: "history", label: "History", icon: History },
+  { id: "checks", label: "What is watched", icon: ListChecks, configure: true },
+  { id: "coverage", label: "What it can see", icon: ShieldQuestion, configure: true },
+  { id: "preview", label: "The briefing", icon: FileText, configure: true },
+  { id: "schedule", label: "Sending it", icon: CalendarClock, configure: true },
+  // ⚠️ NOT `configure`-GATED. A caretaker task is the facility manager's work,
+  // and the proxy gates COMPLETING one on `manageFacility` — the capability
+  // that opens this dialog — not on `editConfig`.
+  { id: "tasks", label: "What it asked for", icon: ClipboardList },
 ];
 
 export default function ReportsModal(
-  { onClose, canConfigure }:
-  // ⚠️ `canAck` IS GONE WITH THE TASKS TAB, ITS ONLY CONSUMER. Completing a
-  // caretaker task is Facility Manager work against an automation-written
-  // to-do list — nothing the agent produces — so the tab moved out of this
-  // dialog rather than being duplicated. Facility still has it, gated on
-  // `manageFacility`, which is the capability the proxy actually requires.
-  { onClose: () => void; canConfigure: boolean },
+  { onClose, canAck, canConfigure }:
+  // ⚠️ `canAck` IS BACK, WITH THE TAB. A caretaker task is written by an
+  // AUTOMATION into a Home Assistant to-do list and read back here — so it
+  // belongs in this dialog and NOT in Facility, where it was rendering the same
+  // component against the same endpoint. `canAck` is a rendering convenience;
+  // the proxy checks `TASK_ACK_ROLES` on every completion whatever a browser
+  // sends.
+  { onClose: () => void; canAck: boolean; canConfigure: boolean },
 ) {
   const dialogRef = useModalA11y(onClose);
   const tabs = TABS.filter((t) => canConfigure || !t.configure);
@@ -365,7 +378,7 @@ export default function ReportsModal(
         aria-label="Briefings"
       >
         <div className="settings-header">
-          <h2>Briefings</h2>
+          <h2>Briefings &amp; automations</h2>
           {notice && (
             <button
               type="button"
@@ -438,6 +451,17 @@ export default function ReportsModal(
               lastBriefing={history && history.length > 0 ? history[0].at : ""}
             />
           )}
+          {/* ⚠️ THE SAME `TierIntro` THE AGENT DIALOG USES, reading `STEPS`
+              instead of `TIERS`. Two dialogs describing two workflows in two
+              visual languages makes a reader learn the screen twice; one
+              component means a change to how a step is presented lands in both
+              at once. */}
+          {tab === "checks" && <TierIntro tier={STEPS.watched} />}
+          {tab === "coverage" && <TierIntro tier={STEPS.visible} />}
+          {tab === "preview" && <TierIntro tier={STEPS.brief} />}
+          {tab === "schedule" && <TierIntro tier={STEPS.sent} />}
+          {tab === "tasks" && <TierIntro tier={STEPS.work} />}
+
           {tab === "checks" && (
             <ModulesTab
               diagnostics={diagnostics}
@@ -459,7 +483,12 @@ export default function ReportsModal(
               onSaveSecret={(provider, value) => void saveSecret(provider, value)}
             />
           )}
-          {tab === "history" && <HistoryTab entries={history} />}
+          {tab === "schedule" && <HistoryTab entries={history} />}
+          {/* ⚠️ HISTORY RENDERS UNDER "Sending it", NOT ON ITS OWN TAB. When a
+              brief is sent and what was actually delivered are one question in
+              two tenses; splitting them put a FAILED delivery on a tab nobody
+              opens after configuring the schedule. */}
+          {tab === "tasks" && <TasksTab canAck={canAck} />}
         </div>
 
         {/* ⚠️ ONE FOOTER COMPONENT, ONE SAVING POLICY — `common/ModalFooter`.

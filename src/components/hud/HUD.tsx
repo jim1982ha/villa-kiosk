@@ -27,7 +27,7 @@ import {
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, LogOut, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
+  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, Newspaper,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -129,6 +129,11 @@ interface Props {
    *  `/reports-*` endpoints and the file names — because that is what the
    *  subsystem IS; only the label a person reads is disambiguated. */
   onOpenReports?: () => void;
+  /** ⚠️ A SECOND DOOR, BECAUSE THEY ARE TWO SUBSYSTEMS. `onOpenReports` opens
+   *  the AI's workspace; this opens the deterministic one — the checks, the
+   *  briefing and the jobs your automations raised. Nothing an AI produces is
+   *  behind this one and nothing deterministic is behind the other. */
+  onOpenBriefings?: () => void;
   /** Long-press (or hold Enter/Space) a category filter icon — list every
    *  device in that category, the same group-modal every SummaryBar tile
    *  already opens. A plain tap keeps toggling that category's visibility. */
@@ -150,7 +155,7 @@ export default function HUD({
   viewMode, onToggleViewMode,
   hasOverviewDefault, onApplyOverviewDefault, onSaveOverviewDefault,
   mappedEntityIds, onOpenEntity, onOpenFacility, onOpenFacilityRecord,
-  onOpenReports, onOpenCategory,
+  onOpenReports, onOpenBriefings, onOpenCategory,
 }: Props) {
   const { connection, haConfig } = useHA();
   const { config, update } = useConfig();
@@ -705,6 +710,16 @@ export default function HUD({
                 <Sparkles size={24} />
               </button>
             )}
+            {onOpenBriefings && (
+              <button
+                className="icon-btn"
+                onClick={onOpenBriefings}
+                title="Briefings — the scheduled report, what it checks, and the jobs your automations raised"
+                aria-label="Open briefings"
+              >
+                <Newspaper size={24} />
+              </button>
+            )}
             {/* (The colour-legend button moved into the category row — it
                 explains those very colours. See .hud-cat-help.) */}
             {/* First-person / bird's-eye switch, right after Facility — both
@@ -807,6 +822,16 @@ export default function HUD({
                   >
                     <Sparkles size={18} />
                     <span>VESTA Agent</span>
+                  </button>
+                )}
+                {onOpenBriefings && (
+                  <button
+                    role="menuitem"
+                    className="hud-menu-item"
+                    onClick={() => { setMenuOpen(false); onOpenBriefings(); }}
+                  >
+                    <Newspaper size={18} />
+                    <span>Briefings</span>
                   </button>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus

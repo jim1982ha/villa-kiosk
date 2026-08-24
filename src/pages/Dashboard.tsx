@@ -842,6 +842,7 @@ export default function Dashboard() {
           setFacilityOpen(true);
         } : undefined}
         onOpenReports={canManageFacility ? () => setAgentOpen(true) : undefined}
+        onOpenBriefings={canManageFacility ? () => setReportsOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -1076,9 +1077,10 @@ export default function Dashboard() {
           findings and concerns, deduplicated, with an LLM only rewording the
           result — so it sits with the villa and the devices rather than with
           the agent. */}
-      {reportsOpen && canEditConfig && (
+      {reportsOpen && canManageFacility && (
         <ReportsModal
           onClose={() => setReportsOpen(false)}
+          canAck={canManageFacility}
           /* ⚠️ THREE CAPABILITIES, DELIBERATELY NOT COLLAPSED. Briefings OPENS
              on `manageFacility` (owner + facility manager, 2026-08-22 — it was
              `editConfig`, so the facility manager could not reach the tasks a
@@ -1121,7 +1123,6 @@ export default function Dashboard() {
           it returns to Settings with no GLB reload; edits already applied live. */}
       {configEditorOpen && canOpenSettings && (
         <ConfigEditorModal
-          onOpenBriefings={() => setReportsOpen(true)}
           focusEntityId={configEditorFocus ?? undefined}
           onBack={() => {
             // Just close this one. Settings is still mounted underneath if it

@@ -1,3 +1,14 @@
+## 2.730.0
+
+### Changed — the automations have their own workspace, with its own icon
+A second icon in the header bar opens **Briefings & automations**: everything the
+fixed checks and your own automations produce, with nothing an AI touches. Its
+tabs follow what actually happens rather than the order they were built — what
+is watched, what the villa can see, the briefing, sending it, and the jobs it
+asked for — each with the same header the assistant's screen uses. The caretaker
+task list appeared in both Facility and here; it is now only here, beside the
+automations that raise it, and delivery history joined the schedule.
+
 ## 2.729.1
 
 ### Fixed — the VESTA Agent dialog had no background and grew as you changed tabs
