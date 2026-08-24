@@ -1,3 +1,15 @@
+## 2.710.0
+
+### Fixed — a good answer in the chat was followed by "I could not answer that"
+Ask the villa a question and it replies twice: the answer, then an apology for
+not having one. The answer is sent as soon as it is ready, and the villa then
+has nothing left to add — which it reported in a way that read as a failure, so
+the apology went out on top of a reply that was already correct. It now tells a
+finished answer apart from one that was cut off, and never contradicts what it
+has already sent; a question that genuinely does stop early is told how far it
+got. Searches that return too much to read also now say which of that tool's
+own filters would narrow them.
+
 ## 2.709.0
 
 ### Added — tell the villa where the Home Assistant MCP add-on is, in Supervision
@@ -8,17 +20,6 @@ log and copy the address on the line beginning "Starting MCP server". That
 add-on is what lets the villa answer questions about your home — which rooms
 exist, what is on, what happened last week. Left empty, the villa answers from a
 much smaller set of its own and says so in the log rather than failing quietly.
-
-## 2.709.0
-
-### Fixed — the permission added last release was only half of what the lookup needs
-Finding the Home Assistant MCP add-on needs two grants, not one: access to
-Home Assistant's Supervisor, and a role allowed to list add-ons other than
-itself. The previous release granted the first, which on its own produces
-exactly the same result as granting neither. Both are now asked for, and the
-log names which step failed — a refused listing means this add-on's own
-permissions, an empty listing means the MCP add-on is not installed or not
-running, and those need opposite actions.
 
 ## 2.708.0
 
