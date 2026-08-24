@@ -438,7 +438,11 @@ def test_an_unlisted_sender_gets_no_run_and_no_reply() -> None:
 
 def test_a_replayed_backlog_message_is_refused_before_the_model() -> None:
     got = _handle(_event(date=int(time.time()) - 6 * 3600))
-    assert got == "message too old to answer"
+    assert got.startswith("message too old to answer"), got
+    # ⚠️ AND IT SAYS WHICH RULE AND BY HOW MUCH. The bare string was
+    # indistinguishable from a FRESH message dropped by the dateless backlog
+    # window, which is the bug that made this instrument worth widening.
+    assert "sent 21600s ago" in got and "limit 900s" in got, got
 
 
 def test_no_provider_means_no_run_rather_than_a_crash() -> None:
@@ -452,7 +456,7 @@ def test_the_checks_run_in_the_order_that_costs_least() -> None:
     got = _handle(_event(date=int(time.time()) - 6 * 3600),
                   config={"enabled": True, "triggers": {"chat": True},
                           "allowed_senders": {}})
-    assert got == "message too old to answer"
+    assert got.startswith("message too old to answer"), got
 
 
 def test_the_reply_tool_is_offered_only_on_the_chat_path() -> None:
@@ -947,3 +951,84 @@ def test_an_ANSWERED_run_that_said_nothing_is_still_not_silence() -> None:
         reply_mod.ReplyTool = original  # type: ignore[misc]
 
     assert sent, "the run answered with nothing and nobody was told"
+
+
+# ── the message date: present, correctly named, and the WRONG TYPE ───────────
+def _utc_now() -> "Any":
+    import datetime as dt
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def test_HOME_ASSISTANT_SENDS_A_DATETIME_NOT_AN_EPOCH() -> None:
+    """⚠️ THE DEFECT. `telegram_bot` passes python-telegram-bot's
+    `message.date` through, which is a `datetime` — so `int(str(raw))` raised
+    and EVERY message parsed as dateless from the day this was written. The
+    comment above BACKLOG_GRACE_S guessed the field might be "absent or spelled
+    differently"; it is neither, it is a different TYPE."""
+    now = _utc_now()
+    assert chat._epoch_of(now) == int(now.timestamp())
+    assert chat._epoch_of(str(now)) == int(now.timestamp()), (
+        "the datetime's str() form is exactly what the old parser was fed")
+
+
+def test_every_shape_a_platform_might_send_reads_as_the_same_instant() -> None:
+    now = _utc_now()
+    want = int(now.timestamp())
+    for shape in (now, str(now), int(now.timestamp()), str(int(now.timestamp())),
+                  now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  now.strftime("%Y-%m-%d %H:%M:%S")):
+        assert chat._epoch_of(shape) == want, f"{shape!r} read as a different time"
+
+
+def test_a_naive_datetime_is_UTC_not_the_villa_s_local_time() -> None:
+    """⚠️ Telegram's convention for this field is UTC. Reading it as local time
+    shifts every message by the villa's offset — eight hours at this property,
+    i.e. permanently stale one way and permanently fresh the other."""
+    import datetime as dt
+    naive = "2026-08-24 07:47:00"
+    want = int(dt.datetime(2026, 8, 24, 7, 47, tzinfo=dt.timezone.utc).timestamp())
+    assert chat._epoch_of(naive) == want
+
+
+def test_an_unreadable_date_is_still_UNSTATED_rather_than_now() -> None:
+    """Defaulting a junk date to "fresh" would defeat the backlog guard."""
+    for junk in (None, "", "not a date", True, -1):
+        assert chat._epoch_of(junk) == 0, junk
+
+
+def test_a_FRESH_message_just_after_a_RESTART_is_answered() -> None:
+    """⚠️ THE REPORTED SYMPTOM: restart the add-on, ask a question, get silence.
+    The dateless fallback drops anything arriving inside BACKLOG_GRACE_S, which
+    fires exactly once per restart — on whoever asks first, i.e. the person
+    testing the build they just installed, every single time."""
+    now = _utc_now()
+    message = chat.parse({"event_type": "telegram_text",
+                          "data": {"text": "how many fans are on?",
+                                   "chat_id": 1, "user_id": 2, "date": now}})
+    assert message is not None and message.sent_at > 0
+    assert chat.is_fresh(message, connected_since=now.timestamp() - 5,
+                         now=now.timestamp()), (
+        "a question asked seconds after a restart was dropped as a backlog")
+
+
+def test_a_REPLAYED_BACKLOG_message_is_still_refused() -> None:
+    """The guard must keep doing its job: an hours-old message replayed after a
+    reconnect is answered by nobody."""
+    import datetime as dt
+    now = _utc_now()
+    old = now - dt.timedelta(hours=3)
+    message = chat.parse({"event_type": "telegram_text",
+                          "data": {"text": "is the pump ok?",
+                                   "chat_id": 1, "user_id": 2, "date": old}})
+    assert not chat.is_fresh(message, connected_since=now.timestamp() - 5,
+                             now=now.timestamp())
+
+
+def test_the_refusal_NAMES_WHICH_RULE_fired_and_by_how_much() -> None:
+    """⚠️ "Too old to answer" is true of a message typed three hours ago AND of
+    a fresh one arriving 43 s after a restart, and those need opposite fixes.
+    One line for both is the shape of instrument this repo has paid for."""
+    import inspect
+    src = inspect.getsource(chat.handle_event)
+    assert "no readable date" in src, "the two rules log identically"
+    assert "backlog window" in src and "limit {MAX_MESSAGE_AGE_S}" in src

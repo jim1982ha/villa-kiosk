@@ -33,6 +33,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from reports.log import log
 from reports.narrate.style import inert
 
 #: The HA event this listens for. ⚠️ LOW-VOLUME BY NATURE — a person typing.
@@ -160,6 +161,56 @@ def _now() -> float:
     return time.time()
 
 
+def _epoch_of(raw: Any) -> int:
+    """A message timestamp as Unix seconds, or 0 for "not stated".
+
+    ⚠️ IT WAS `int(str(raw))`, WHICH ACCEPTS ONLY AN EPOCH INTEGER, AND HOME
+    ASSISTANT DOES NOT SEND ONE. `telegram_bot` passes python-telegram-bot's
+    `message.date` through, which is a `datetime`, so `str()` gave
+    `2026-08-24 07:47:00+00:00`, `int()` raised, and EVERY message has been
+    parsed as dateless since this was written. Nothing showed it, because the
+    fallback rule — drop a dateless message only in the first 60 s after
+    connecting — is right almost always: it fires exactly once per restart, on
+    whoever asks first. Which is the person testing a fresh build, every time.
+
+    ⚠️ THE COMMENT ABOVE `BACKLOG_GRACE_S` PREDICTED THE FAILURE AND GUESSED THE
+    CAUSE. It says `date` "may be absent or spelled differently". It is neither:
+    it is present, correctly named, and a different TYPE. Guessing a field's
+    NAME and never questioning its TYPE is how a defensive parse still lands on
+    one branch forever.
+
+    ⚠️ A NAIVE DATETIME IS READ AS UTC, which is Telegram's own convention for
+    this field. Reading it as local time would shift a fresh message by the
+    villa's offset — eight hours here, i.e. permanently stale in one direction
+    and permanently fresh in the other.
+    """
+    if raw is None or isinstance(raw, bool):
+        return 0
+    if isinstance(raw, (int, float)):
+        return int(raw) if raw > 0 else 0
+    stamp = getattr(raw, "timestamp", None)       # a datetime, unstringified
+    if callable(stamp):
+        try:
+            return int(stamp())
+        except (OSError, OverflowError, ValueError):
+            return 0
+    text = str(raw).strip()
+    if not text:
+        return 0
+    try:                                          # an epoch, as a string
+        return int(float(text))
+    except ValueError:
+        pass
+    try:
+        import datetime as _dt
+        parsed = _dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_dt.timezone.utc)
+        return int(parsed.timestamp())
+    except ValueError:
+        return 0
+
+
 def parse(event: Mapping[str, Any]) -> Optional[Message]:
     """One HA event into a `Message`, or None if it is not one of ours.
 
@@ -189,10 +240,14 @@ def parse(event: Mapping[str, Any]) -> Optional[Message]:
     raw_date = data.get("date")
     if raw_date is None:
         raw_date = nested.get("date")
-    try:
-        sent_at = int(str(raw_date))
-    except (TypeError, ValueError):
-        sent_at = 0
+    sent_at = _epoch_of(raw_date)
+    if raw_date is not None and sent_at == 0:
+        # ⚠️ SAID ONCE, WITH THE TYPE AND A CLIPPED VALUE. A date that is
+        # PRESENT and unreadable is the case that cost a whole afternoon, and it
+        # is invisible from "message too old to answer" — the two look
+        # identical from outside and need opposite fixes.
+        log(f"chat: unreadable message date ({type(raw_date).__name__}: "
+            f"{str(raw_date)[:40]!r}) — treating it as unstated")
 
     first = str(data.get("from_first") or "").strip()
     last = str(data.get("from_last") or "").strip()
@@ -369,11 +424,25 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
         return "chat trigger disabled"
 
     from reports import collect
-    if not is_fresh(message, connected_since=collect.connected_seconds()):
+    connected = collect.connected_seconds()
+    if not is_fresh(message, connected_since=connected):
         # ⚠️ COUNTED IN THE LOG, NOT SILENTLY DROPPED. A villa whose clock or
         # whose Telegram platform is wrong would otherwise answer nothing with
         # no explanation anywhere.
-        return "message too old to answer"
+        #
+        # ⚠️ AND IT NAMES WHICH OF THE TWO RULES REFUSED, WITH THE NUMBER. "Too
+        # old to answer" is true of a message typed three hours ago AND of a
+        # fresh one arriving 43 s after a restart, and those need opposite
+        # fixes — the first is the guard working, the second is the guard
+        # eating the question somebody just asked to test the build. One line
+        # for both is the shape of instrument this repo has paid for five times.
+        if message.sent_at > 0:
+            return (f"message too old to answer "
+                    f"(sent {int(_now() - message.sent_at)}s ago, "
+                    f"limit {MAX_MESSAGE_AGE_S}s)")
+        return (f"message too old to answer (no readable date; "
+                f"{int(_now() - connected)}s after connecting, "
+                f"backlog window {BACKLOG_GRACE_S}s)")
 
     from agent import audit as audit_mod
     from agent import policy as policy_mod
