@@ -4664,6 +4664,30 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   .source-legend-row { grid-template-columns: auto minmax(0, 1fr); }
 }
 
+/* ── WHERE A CONCERN IS IN ITS LIFE ───────────────────────────────────────
+   ⚠️ QUIETER THAN THE SEVERITY BESIDE IT, DELIBERATELY. A row already carries
+   how bad the thing is and who concluded it; the state is metadata about the
+   RECORD, not about the villa, and a third saturated pill would compete with
+   the two that describe the problem. Outline treatment, same shape as
+   `.tier-badge`, which is the app's existing quiet-metadata pill.
+
+   ⚠️ ONLY `verified` GETS A COLOUR, because it is the only state that asserts
+   something happened in the world — "the condition stopped after somebody
+   acted". The HLD calls that the one thing the old system could never say.
+   Colouring the others would rank the record over the problem. */
+.lifecycle-chip {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: var(--text-xs);
+  letter-spacing: 0.03em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--text-muted);
+  border: 1px solid var(--hairline);
+}
+.lifecycle-verified { color: var(--status-ok); border-color: color-mix(in srgb, var(--status-ok) 40%, transparent); }
+
 /* ── THE TIER IDENTITY BLOCK ──────────────────────────────────────────────
    One header for five tabs (`agent/tiers.tsx`). ⚠️ Five hand-written ones would
    drift in wording AND in layout inside a release, and the whole point of the

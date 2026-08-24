@@ -25,6 +25,7 @@ import { acknowledgeConcern, loadConcerns, sendConcernFeedback } from "@/agent/a
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import SourceChip from "@/components/common/SourceChip";
+import { LifecycleChip, SettledSummary } from "@/components/agent/ConcernLifecycle";
 import { severityRank, type Concern } from "@/agent/agentTypes";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
@@ -45,10 +46,18 @@ export default function CockpitConcerns() {
   const { role } = useProfile();
   const canJudge = role != null && hasCapability(role, "manageFacility");
   const [rows, setRows] = useState<Concern[] | null>(null);
+  const [settled, setSettled] = useState<Concern[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const found = await loadConcerns();
+    // ⚠️ THE SETTLED ONES ARE KEPT NOW, NOT DISCARDED. They were filtered out
+    // at the door on the reasoning that "closed, verified and dismissed are the
+    // record, not the state of the villa" — true of the LIST, and it threw away
+    // the record entirely. The HLD reads verification, noise measurement and
+    // time-to-clear off exactly those rows, so they are summarised below the
+    // list instead of being dropped.
+    setSettled(found.filter((c) => !LIVE.has(String(c.state ?? "open"))));
     setRows(found.filter((c) => LIVE.has(String(c.state ?? "open")))
       // ⚠️ `severityRank`, NOT A LOCAL MAP. This carried its own copy with an
       // unknown severity defaulting to 9 — LAST, the quietest position — which
@@ -118,6 +127,11 @@ export default function CockpitConcerns() {
                   of the kind, and until this chip the only way to tell them
                   apart was to know which list you were reading. */}
               <SourceChip source="agent" />
+              {/* ⚠️ `open` AND `acted` RENDERED IDENTICALLY UNTIL NOW, which
+                  meant a reader could not tell whether anything had been DONE
+                  about a concern — the single most useful thing to know about
+                  one that is still standing. */}
+              <LifecycleChip state={c.state} />
               {/* ⚠️ WHETHER ANYONE WAS TOLD IS A DIFFERENT FACT FROM WHETHER IT
                   MATTERS, and the wall showed only the second. During a shadow
                   period nothing is sent at all, so a list of concerns with no
@@ -185,6 +199,7 @@ export default function CockpitConcerns() {
           </div>
         ))}
       </div>
+      <SettledSummary concerns={settled} />
     </>
   );
 }

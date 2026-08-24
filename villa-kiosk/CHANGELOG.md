@@ -1,3 +1,15 @@
+## 2.731.0
+
+### Added — you can now see whether anything was actually done about a concern
+A concern has always had a life — raised, acted on, confirmed fixed, closed, or
+judged not worth raising — and the screen showed none of it: the first two
+looked identical and the last three were hidden. Each concern now says where it
+stands, and underneath them a short summary of what came of the settled ones:
+how many were confirmed fixed after somebody acted, how many were judged not
+useful, and — said plainly — anything the villa has stopped raising because you
+dismissed it three times. That last one was previously only discoverable by
+noticing something had gone quiet.
+
 ## 2.730.0
 
 ### Changed — the automations have their own workspace, with its own icon
