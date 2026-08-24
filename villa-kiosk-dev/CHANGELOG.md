@@ -1,3 +1,15 @@
+## 2.713.0
+
+### Fixed — seven of every eight supervision checks were doing the work and binning it
+Each check read the villa correctly, then ran out of room to write its
+conclusion: the limit on how much the assistant may produce in one step also
+covers its own reasoning, and at the old value a step that thought before
+answering used it all up. The whole run was then discarded, including everything
+already read and paid for. That limit is now generous by default and adjustable
+in Supervision, a run that gathered evidence keeps it, and on its last step the
+assistant is told to answer with what it has rather than being cut off — which
+is what produced "I could not answer that. turn cap of 8 reached".
+
 ## 2.712.0
 
 ### Fixed — a question asked just after restarting the add-on got no reply at all
