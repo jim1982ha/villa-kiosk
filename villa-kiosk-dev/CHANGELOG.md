@@ -1,3 +1,15 @@
+## 2.712.0
+
+### Fixed — a question asked just after restarting the add-on got no reply at all
+Telegram holds undelivered messages for about a day, so the villa ignores
+anything that looks like a replayed backlog. Deciding that needs the time the
+message was sent, and Home Assistant supplies it as a date rather than the plain
+number the villa was reading — so every message has been treated as having no
+timestamp at all, leaving only the fallback rule: ignore anything arriving in
+the first minute after connecting. That fires once per restart, on whoever asks
+first, which is always the person who just updated. Dates are now read in every
+form, and the log says which rule refused a message and by how much.
+
 ## 2.711.0
 
 ### Fixed — asked about devices, the villa reported a monitoring fault instead
