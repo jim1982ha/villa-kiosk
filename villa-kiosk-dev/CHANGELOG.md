@@ -1,3 +1,13 @@
+## 2.707.0
+
+### Fixed — supervision has not run at all since v2.643.0
+The clock that drives every check crashed on its first tick and on every tick
+after it, for sixty releases. A helper it calls used a name that was never
+imported, so the loop raised immediately, and because it is a background task
+that catches its own errors the add-on stayed healthy and said nothing. It
+looked exactly like a villa with nothing to report: no checks, no findings, no
+spend. If you were wondering why supervision seemed quiet, this is why.
+
 ## 2.706.0
 
 ### Fixed — the "may operate devices" switch would not have worked when turned on
