@@ -28,6 +28,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
+import ActuableDevicesPanel from "./ActuableDevicesPanel";
 import type { AgentConfig } from "@/agent/agentApi";
 
 /** ⚠️ A FLOOR THE BACKEND ALSO ENFORCES (`scheduler.MIN_MINUTES`). Stated here
@@ -44,7 +45,7 @@ type Draft = Pick<AgentConfig,
   "enabled" | "shadow" | "actEnabled" | "mcpUrl" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
   | "maxTurns" | "maxToolCalls" | "maxOutputTokens" | "investigateMode"
   | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
-  | "modelChat">
+  | "modelChat" | "actuableEntities">
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
@@ -53,6 +54,10 @@ const EMPTY: Draft = {
   investigateMode: "auto", maxInvestigationsPerPass: 3,
   quietHoursStart: "", quietHoursEnd: "",
   modelTriage: "", modelReason: "", modelBrief: "", modelChat: "",
+  // ⚠️ EMPTY, AND `config.MUST_BE_EMPTY` MAKES THAT A REQUIREMENT RATHER THAN
+  // A DEFAULT: a seeded entry here would be an agent acting on a device nobody
+  // authorised, on every villa that has not opened this panel.
+  actuableEntities: [],
   triggers: { scheduled: true, event: false, chat: false },
 };
 
@@ -227,6 +232,11 @@ export default function AgentTuningPanel() {
     investigateMode: c.investigateMode === "approve" ? "approve" : "auto",
     maxInvestigationsPerPass: Number(
       c.maxInvestigationsPerPass ?? EMPTY.maxInvestigationsPerPass),
+    // ⚠️ AN ARRAY OR NOTHING. A stored non-array (a hand-edited document, an
+    // older shape) must read as EMPTY — the direction that authorises nothing —
+    // rather than reaching the panel as a value it would then re-save.
+    actuableEntities: Array.isArray(c.actuableEntities)
+      ? c.actuableEntities.map(String) : [],
     quietHoursStart: String(c.quietHoursStart ?? ""),
     quietHoursEnd: String(c.quietHoursEnd ?? ""),
     modelTriage: String(c.modelTriage ?? ""),
@@ -372,6 +382,21 @@ export default function AgentTuningPanel() {
         decide how much it looks and who it tells, this decides whether it may
         touch anything at all. Leave it off unless you have a reason.
       </p>
+      {/* ⚠️ THE SECOND HALF OF THE SWITCH, AND IT HAD NO CONTROL AT ALL UNTIL
+          2.718.0 — the same defect the quiet-hours note below records, on the
+          setting where it matters most. `may_act` AND-s the toggle above with
+          this list, so the toggle alone authorised nothing and an owner turning
+          it on had no way to find out why nothing happened.
+          ⚠️ SHOWN ONLY WHILE THE SWITCH IS ON, because the list is meaningless
+          without it and a device list under an off switch invites somebody to
+          fill it in believing that is the grant. */}
+      {draft.actEnabled && (
+        <ActuableDevicesPanel
+          value={draft.actuableEntities}
+          onChange={(actuableEntities) => edit({ actuableEntities })}
+          disabled={ctx.saving}
+        />
+      )}
       <label className="toggle">
         <input type="checkbox"
           checked={draft.investigateMode === "auto"}

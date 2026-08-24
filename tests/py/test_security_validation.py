@@ -266,7 +266,7 @@ def test_triage_cannot_be_talked_into_writing_or_acting() -> None:
     {"act_enabled": True, "allowed_services": ["lock.unlock"]},
     {"act_enabled": True, "allowed_services": ["lock.unlock", "*"]},
     {"act_enabled": True, "allowed_services": ["lock.unlock"],
-     "high_harm_domains": [], "actuable_refs": [GATE]},
+     "high_harm_domains": [], "actuable_entities": [GATE]},
 ])
 def test_no_configuration_can_make_a_lock_auto_executable(config: Dict[str, Any]) -> None:
     """⚠️ THE THIRD CASE IS THE ADVERSARIAL ONE: it invents config keys that

@@ -12,11 +12,23 @@ bug: a seed spread underneath stored config RESURRECTED entries the operator had
 deleted, and the report was "stale entities I can't delete". A sparse overlay
 means an absent key reads as its default and a DELETED key stays deleted.
 
-⚠️ `allowed_senders` AND `actuable_refs` SHIP EMPTY, AND A SEEDED DEFAULT IN
-EITHER IS A SECURITY BUG RATHER THAN A CONVENIENCE. An `allowed_senders` with an
-entry is an open bot — anyone who finds it can talk to the villa. An
-`actuable_refs` with an entry is an agent that acts on a device nobody
+⚠️ `allowed_senders` AND `actuable_entities` SHIP EMPTY, AND A SEEDED DEFAULT
+IN EITHER IS A SECURITY BUG RATHER THAN A CONVENIENCE. An `allowed_senders` with
+an entry is an open bot — anyone who finds it can talk to the villa. An
+`actuable_entities` with an entry is an agent that acts on a device nobody
 authorised. Both must be filled in by a person, deliberately, once.
+
+⚠️ AND IT HOLDS ENTITY IDS, WHICH IT DID NOT UNTIL 2.718.0 — IT HELD PER-RUN
+HANDLES, AND THAT MADE IT NOT AN ALLOW-LIST AT ALL. `refs.py` says in its own
+docstring that handles are sequential, meaningless and deliberately unstable:
+`d1` in one run and `d1` in the next are unrelated. So a stored `["d1"]`
+authorised whichever device the model happened to read FIRST — measured: the
+pool pump in one run and the front door in the next, from the same stored line.
+The harm gate still refused the door (a lock is high-harm at any confidence), so
+the exposure was bounded to low-harm devices substituting for one another, which
+is precisely what this list exists to prevent. It was never caught because the
+one test that populated it built the list FROM the run's own table, so it could
+only ever agree with itself.
 
 ⚠️ THE KILL SWITCHES ARE INDEPENDENT AND NEST. `enabled: false` stops
 everything. `act_enabled: false` leaves the agent reading and reasoning but
@@ -151,7 +163,7 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: only receive. A person with a device and no chat is delivery-only, which
     #: is a normal row. Empty by the same requirement as `allowed_senders`.
     "people": [],
-    #: ⚠️ WHICH SERVICES, as distinct from `actuable_refs`' WHICH DEVICES —
+    #: ⚠️ WHICH SERVICES, as distinct from `actuable_entities`' WHICH DEVICES —
     #: both allow-lists must pass, so `light.turn_off` on an unlisted lamp and
     #: `lock.unlock` on a listed door are refused for different reasons. Empty
     #: by the same requirement: a seeded service list authorises a verb nobody
@@ -160,7 +172,10 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: ⚠️ EMPTY MEANS THE AGENT MAY ACT ON NOTHING. Even with `act_enabled`
     #: true, an empty list is a complete stop — the two are AND-ed, so turning
     #: actuation on does not by itself authorise a single device.
-    "actuable_refs": [],
+    #: ⚠️ ENTITY IDS, NOT HANDLES — see the module docstring. The name said
+    #: `refs` and the code compared handles, which made it a slot number rather
+    #: than an allow-list.
+    "actuable_entities": [],
     #: Subjects a person has told us to stop raising. Filled by the feedback
     #: loop's counter, never by the agent's judgement.
     "suppressed_subjects": [],
@@ -170,7 +185,7 @@ DEFAULTS: Final[Dict[str, Any]] = {
 #: test asserts each of these is falsy in DEFAULTS, so a helpful seed cannot be
 #: added without the build failing.
 MUST_BE_EMPTY: Final[Tuple[str, ...]] = ("allowed_senders", "people",
-                                        "actuable_refs", "allowed_services",
+                                        "actuable_entities", "allowed_services",
                                         "suppressed_subjects")
 
 
@@ -263,20 +278,31 @@ def errors(value: Any) -> List[str]:
                         f"allowed_senders[{sender}] role {role!r} is not one "
                         f"of {', '.join(contracts.SENDER_ROLE)}")
 
-    for name in ("actuable_refs", "allowed_services", "suppressed_subjects"):
+    for name in ("actuable_entities", "allowed_services", "suppressed_subjects"):
         if name in value and not isinstance(value[name], list):
             problems.append(f"{name} must be a list")
 
     return problems
 
 
-def may_act(config: Optional[Mapping[str, Any]], ref: str) -> bool:
+def may_act(config: Optional[Mapping[str, Any]], entity_id: str) -> bool:
     """Is this specific device authorised for autonomous action?
 
+    ⚠️ IT TAKES THE ENTITY ID, AND TAKING A HANDLE WAS THE BUG. Handles are
+    per-run and deliberately unstable (`refs.py`), so a stored list of them
+    authorised a position rather than a device. The caller resolves the handle
+    first and passes what it resolved to — which is also the only value that
+    means anything in a file an owner edits once and keeps.
+
     ⚠️ BOTH CONDITIONS, AND-ED. `act_enabled` is the master switch and
-    `actuable_refs` is the list; neither alone is authorisation. Turning
+    `actuable_entities` is the list; neither alone is authorisation. Turning
     actuation on with an empty list authorises nothing, which is the correct
     default for a switch somebody may flip to see what happens.
+
+    ⚠️ COMPARED CASE-INSENSITIVELY AND TRIMMED, because this list is TYPED BY A
+    PERSON now that there is an editor for it. Home Assistant ids are lower-case
+    by construction, so this can only ever forgive a typo — it cannot admit a
+    device that is not named.
 
     ⚠️ THIS IS NOT THE HARM GATE. `policy.may_act` still applies and still
     refuses every high-harm action regardless of what this returns — a device
@@ -285,8 +311,11 @@ def may_act(config: Optional[Mapping[str, Any]], ref: str) -> bool:
     cfg = view(config)
     if not cfg.get("act_enabled"):
         return False
-    allowed = cfg.get("actuable_refs")
-    return isinstance(allowed, list) and str(ref) in [str(r) for r in allowed]
+    allowed = cfg.get("actuable_entities")
+    if not isinstance(allowed, list):
+        return False
+    wanted = str(entity_id or "").strip().lower()
+    return bool(wanted) and wanted in {str(a).strip().lower() for a in allowed}
 
 
 def trigger_enabled(config: Optional[Mapping[str, Any]], name: str) -> bool:

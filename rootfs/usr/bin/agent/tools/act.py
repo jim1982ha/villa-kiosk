@@ -1,6 +1,6 @@
 """`act_service` — the agent touching the villa. TASK-082, the new privilege.
 
-⚠️ IT ACTS ON NOTHING UNTIL AN OWNER NAMES SOMETHING. `actuable_refs` ships
+⚠️ IT ACTS ON NOTHING UNTIL AN OWNER NAMES SOMETHING. `actuable_entities` ships
 EMPTY and `act_enabled` ships false, and the two are AND-ed: turning actuation
 on with an empty list authorises exactly nothing. A helpful default here is an
 actuating agent nobody asked for.
@@ -112,7 +112,12 @@ class ActService(BaseTool):
         # `config.may_act` asks "did an owner name THIS DEVICE"; `policy.may_act`
         # asks "may this run act at all, and is this action safe". Both must
         # pass and neither implies the other.
-        if not agent_config.may_act(self._config, ref):
+        # ⚠️ THE RESOLVED ENTITY ID, NOT THE HANDLE. Handles are per-run and
+        # meaningless across runs by design, so asking with `ref` compared a
+        # stored allow-list against a SLOT NUMBER: `["d1"]` authorised whichever
+        # device this run read first. The refusal still names the handle,
+        # because that is the only identifier the model is allowed to see.
+        if not agent_config.may_act(self._config, entity_id):
             return [fail("not_permitted",
                          f"{ref} is not on this villa's actuable list")]
 

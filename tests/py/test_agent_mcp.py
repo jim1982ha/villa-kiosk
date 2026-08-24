@@ -212,7 +212,7 @@ def test_an_MCP_caller_can_never_be_granted_actuation() -> None:
     unnoticed and becomes reachable.
     """
     policy = mcp_server._policy_for(
-        {"act_enabled": True, "actuable_refs": ["d1"]}, _registry())
+        {"act_enabled": True, "actuable_entities": ["light.x"]}, _registry())
     assert policy.act_enabled is False
 
 

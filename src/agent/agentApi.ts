@@ -58,7 +58,7 @@ const AGENT_WIRE_KEYS = {
    *  `allowed_senders`, which is kept and still read when this is empty so an
    *  existing villa's bot does not go deaf on upgrade. */
   people: "people",
-  actuable_refs: "actuableRefs",
+  actuable_entities: "actuableEntities",
   allowed_services: "allowedServices",
   suppressed_subjects: "suppressedSubjects",
 } as const;
@@ -193,8 +193,12 @@ export interface AgentConfig {
    *  ⚠️ EMPTY MEANS THE BOT ANSWERS NOBODY. Never seed this. */
   people: Person[];
   /** ⚠️ EMPTY MEANS THE AGENT MAY ACT ON NOTHING. Never seed this. */
-  actuableRefs: string[];
-  /** Which SERVICES, as distinct from `actuableRefs`' which DEVICES. Both
+  /** Which DEVICES the agent may act on, as Home Assistant entity ids.
+   *  ⚠️ ENTITY IDS, NOT the opaque per-run handles the model sees. It held
+   *  handles until 2.718.0, and since a handle means a different device in
+   *  every run, a stored list authorised a POSITION rather than a device. */
+  actuableEntities: string[];
+  /** Which SERVICES, as distinct from `actuableEntities`' which DEVICES. Both
    *  allow-lists must pass. ⚠️ Never seed this either. */
   allowedServices: string[];
   suppressedSubjects: string[];

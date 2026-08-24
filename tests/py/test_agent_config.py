@@ -1,7 +1,7 @@
 """The agent's settings and its kill switches. REQ-061.
 
 ⚠️ THE TWO ASSERTIONS THAT MATTER MOST ARE ABOUT EMPTINESS. `allowed_senders`
-with an entry is an open bot; `actuable_refs` with an entry is an agent acting
+with an entry is an open bot; `actuable_entities` with an entry is an agent acting
 on a device nobody authorised. Both must be filled in by a person, once,
 deliberately — so a "helpful" seed has to fail the build.
 """
@@ -58,7 +58,7 @@ def test_defaults_are_applied_at_READ_time_and_never_written() -> None:
 
 def test_an_operator_can_express_an_EMPTY_list() -> None:
     """The exact resurrection bug: emptying a list must stay empty."""
-    assert config.view({"actuable_refs": []})["actuable_refs"] == []
+    assert config.view({"actuable_entities": []})["actuable_entities"] == []
     assert config.view({"suppressed_subjects": []})["suppressed_subjects"] == []
 
 
@@ -66,9 +66,9 @@ def test_the_default_dicts_are_copied_not_shared() -> None:
     """Otherwise one caller's edit leaks into every later read."""
     a = config.view({})
     a["triggers"]["chat"] = True
-    a["actuable_refs"].append("d3")
+    a["actuable_entities"].append("light.x")
     assert config.view({})["triggers"]["chat"] is False
-    assert config.view({})["actuable_refs"] == []
+    assert config.view({})["actuable_entities"] == []
 
 
 # ── triggers merge one level, and only triggers ────────────────────────────
@@ -94,12 +94,12 @@ def test_act_enabled_ALONE_authorises_nothing() -> None:
     """⚠️ AND-ed. Turning actuation on with an empty list is the correct
     behaviour for a switch somebody flipped to see what happens."""
     assert config.may_act({"act_enabled": True}, "d3") is False
-    assert config.may_act({"act_enabled": True, "actuable_refs": ["d3"]}, "d3") is True
-    assert config.may_act({"act_enabled": True, "actuable_refs": ["d3"]}, "d9") is False
+    assert config.may_act({"act_enabled": True, "actuable_entities": ["light.x"]}, "light.x") is True
+    assert config.may_act({"act_enabled": True, "actuable_entities": ["light.x"]}, "lock.foo") is False
 
 
 def test_the_list_ALONE_authorises_nothing_either() -> None:
-    assert config.may_act({"actuable_refs": ["d3"]}, "d3") is False
+    assert config.may_act({"actuable_entities": ["light.x"]}, "light.x") is False
 
 
 def test_enabled_false_stops_every_trigger() -> None:
@@ -150,7 +150,7 @@ def test_negative_and_non_numeric_limits_are_refused() -> None:
 def test_junk_shapes_are_refused_without_raising() -> None:
     assert config.errors("not an object")
     assert config.errors({"allowed_senders": ["not", "a", "map"]})
-    assert config.errors({"actuable_refs": "d3"})
+    assert config.errors({"actuable_entities": "light.x"})
     assert config.errors(None)
 
 
@@ -159,7 +159,7 @@ def test_a_valid_config_has_no_errors() -> None:
         "enabled": True, "act_enabled": False,
         "triggers": {"scheduled": True, "event": False, "chat": True},
         "monthly_limit": 2000, "allowed_senders": {"765979167": "owner"},
-        "actuable_refs": ["d3"], "suppressed_subjects": [],
+        "actuable_entities": ["light.x"], "suppressed_subjects": [],
     }) == []
 
 

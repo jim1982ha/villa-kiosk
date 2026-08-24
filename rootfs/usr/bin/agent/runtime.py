@@ -29,6 +29,8 @@ from agent import contracts, policy as policy_mod
 from agent.llm.base import Provider
 from agent.registry import Registry, RunResult, build_registry
 from agent.registry import run as run_loop
+from agent import sources as sources_mod
+from agent.tools import act as act_mod
 from agent.tools import concern as concern_mod
 from reports.log import log, swallow
 
@@ -207,6 +209,15 @@ async def investigate(*, provider: Provider,
         names = [t["name"] for t in reg.describe()]
         if writes:
             names.append(concern_mod.RaiseConcern.name)
+            # ⚠️ THE NAME GOES IN BEFORE THE SNAPSHOT AND THE TOOL IS BUILT
+            # AFTER IT, for the reason stated above: `may_use_tool` denies any
+            # name not in `allowed_tools`, so the order is what makes the tool
+            # reachable at all. Unconditional here and conditional below —
+            # naming it costs nothing (`may_use_tool` still refuses ACT while
+            # the switch is off, and 2.716.0 stops it being PUBLISHED), whereas
+            # deciding here would need `act_enabled` before the policy that
+            # computes it exists, which is a second copy of that expression.
+            names.append(act_mod.ActService.name)
         policy = policy_mod.for_run(config, tier=tier, tool_names=names)
 
         if writes:
@@ -219,6 +230,34 @@ async def investigate(*, provider: Provider,
                 refs=getattr(reg, "refs", None),
                 evidence_source=lambda: evidence,
                 sink=concern_mod.writer(policy, config)))
+
+        # ⚠️ THE ACTUATOR, AND UNTIL 2.718.0 NOTHING BUILT ONE. `act.build` had
+        # exactly one caller in the tree and it was its own test, so
+        # `act_enabled: true` on a villa with a populated `actuable_refs`
+        # produced no `act_service` tool at all — a switch that did nothing,
+        # with TASK-082 marked COMPLETE. The tool itself was finished and
+        # correct; only this line was missing.
+        #
+        # ⚠️ `policy.act_enabled`, NOT `cfg.get("act_enabled")`. `for_run`
+        # already AND-s the setting with `tier != "triage"`, so asking the
+        # policy is asking the one place config is read into authority — and
+        # re-deriving it here is how the volume tier would eventually be handed
+        # an actuator by someone editing one of the two copies.
+        #
+        # ⚠️ AND IT IS STILL GUARDED THREE MORE TIMES BELOW THIS LINE, none of
+        # which this replaces: `config.may_act` refuses any ref an owner has not
+        # named (`actuable_refs` ships EMPTY, so turning the switch on
+        # authorises nothing by itself), `policy.may_act` refuses every
+        # high-harm action at any confidence and offers it as a proposal
+        # instead, and `allowed_services` refuses any verb nobody listed.
+        if policy.act_enabled:
+            reg = reg.with_tool(act_mod.build(
+                refs=getattr(reg, "refs", None),
+                # ⚠️ None WITHOUT A SESSION, which `ActService` reports as
+                # "no service caller is wired" rather than pretending. See
+                # `sources.service_caller`.
+                caller=sources_mod.service_caller(session),
+                policy=policy, config=config, run_id=ident, actor=actor))
 
         bounded = _Bounded(provider, deadline_s=deadline_s, started=started)
         result: RunResult = await run_loop(

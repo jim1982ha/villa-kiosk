@@ -51,8 +51,12 @@ def _tool(*, armed: bool = True, allowed: Any = None,
     table = _refs()
     config: Dict[str, Any] = {
         "act_enabled": armed,
-        "actuable_refs": [_ref_of(table, LAMP), _ref_of(table, DOOR)]
-        if allowed is None else allowed,
+        # ⚠️ ENTITY IDS, AND BUILDING THIS FROM THE RUN'S OWN TABLE IS WHAT
+        # HID THE BUG UNTIL 2.718.0. A list derived from `table` agrees with
+        # that table by construction, so it could never notice that a handle
+        # means a different device in the next run. See
+        # `test_agent_act_allowlist.py` for the pin that would have.
+        "actuable_entities": [LAMP, DOOR] if allowed is None else allowed,
         "allowed_services": ["light.turn_off", "turn_off", "switch.turn_on"],
     }
     policy = policy_mod.for_run(config, tier="reason",

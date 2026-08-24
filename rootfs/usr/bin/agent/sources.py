@@ -571,6 +571,47 @@ def concern_rows(config: Optional[Mapping[str, Any]] = None
     return rows
 
 
+def service_caller(session: Any) -> Optional[Callable[..., Any]]:
+    """`caller(entity_id, service, params)` for `act_service`, or None.
+
+    ⚠️ IT LIVES HERE BECAUSE THIS MODULE IS "CONNECT A TOOL TO THIS VILLA", and
+    `act_service` is the one tool whose source is a WRITE. Putting it in
+    `tools/act.py` would give that file a Home Assistant client, and its whole
+    contract is that it decides nothing and reaches nothing — it resolves a ref,
+    asks two gates, and calls what it was handed.
+
+    ⚠️ NONE WHEN THERE IS NO SESSION, NEVER A CALLER THAT SILENTLY DOES NOTHING.
+    `ActService` answers a missing caller with `no service caller is wired` — a
+    fault it can say out loud — whereas a no-op closure would report every
+    action as DONE and write `outcome="done"` into the audit ledger for
+    something that never happened. That is the worst available failure: the
+    record of what the villa did would be fiction.
+
+    ⚠️ THE DOMAIN COMES FROM THE ENTITY WHEN THE SERVICE IS A BARE VERB, which
+    is the form everything else here uses: `REVERSIBLE_SERVICES` lists
+    `turn_off`, and `policy.may_act` builds its allow-list key as
+    `f"{domain}.{verb}"` from the entity too. A fully-qualified `light.turn_off`
+    is accepted as well, because a model that has read Home Assistant's own tool
+    schemas has seen that spelling and would otherwise be refused for a reason
+    it could not diagnose.
+    """
+    if session is None:
+        return None
+
+    async def call(entity_id: str, service: str,
+                   params: Optional[Mapping[str, Any]] = None) -> None:
+        from reports.hass import HassClient
+        head, _, tail = str(service).partition(".")
+        domain, verb = ((head, tail) if tail
+                        else (str(entity_id).split(".", 1)[0], head))
+        async with HassClient(session) as hass:
+            await hass.command("call_service", domain=domain, service=verb,
+                               target={"entity_id": entity_id},
+                               service_data=dict(params or {}))
+
+    return call
+
+
 def build_tools(session: Any = None, *,
                 config: Optional[Mapping[str, Any]] = None,
                 refs: Optional[RefTable] = None) -> List[BaseTool]:
