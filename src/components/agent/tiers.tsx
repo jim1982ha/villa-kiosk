@@ -43,8 +43,16 @@ export interface Tier {
   model: boolean;
   /** Whether it still works with no internet. */
   offline: boolean;
-  /** Which provenance chip its output carries. */
-  source: Source;
+  /** Which provenance chip its output carries, if one adds anything.
+   *
+   *  ⚠️ OPTIONAL, AND THE "Home Assistant" CHIP IS DELIBERATELY NOT USED HERE.
+   *  On a finding it answers a real question — who said this. On a STEP HEADER
+   *  it labelled the step's data source, which is a different claim and a
+   *  confusing one: Observe does not report Home Assistant's opinion, it
+   *  records the villa's state and scores it. The chip was saying "this came
+   *  from HA" about a tier whose whole job is what VESTA does with what HA
+   *  reports. Steps that produce nothing to attribute simply carry none. */
+  source?: Source;
 }
 
 /** The briefing pipeline's own steps, in the order it runs them.
@@ -72,7 +80,7 @@ export const STEPS: Record<string, Tier> = {
     n: 2, name: "What it can see",
     what: "Whether this property actually reports the things a check needs. A "
         + "check with nothing to read says so rather than passing quietly.",
-    speed: "checked live", model: false, offline: false, source: "ha",
+    speed: "checked live", model: false, offline: false,
   },
   brief: {
     n: 3, name: "The briefing",
@@ -109,7 +117,7 @@ export const TIERS: Record<string, Tier> = {
     what: "Records every meaningful change in the villa and scores it against "
         + "what that same device normally does. No thresholds to set — each "
         + "reading is judged against its own four weeks of history.",
-    speed: "continuous", model: false, offline: true, source: "ha",
+    speed: "continuous", model: false, offline: true,
   },
   triage: {
     n: 2, name: "Triage",
@@ -154,7 +162,12 @@ export function TierIntro({ tier, children }: {
       <div className="tier-intro-head">
         <span className="tier-badge">Step {tier.n}</span>
         <h3 className="settings-section-title">{tier.name}</h3>
-        <SourceChip source={tier.source} />
+        {/* ⚠️ PUSHED RIGHT AND CENTRED ON ITS ROW. It sat inline after the
+            heading, baseline-aligned — so it hugged a title of unpredictable
+            length and rode visibly low against an uppercase eyebrow, which is a
+            cap-height, not a baseline, relationship. Right-aligned it has a
+            fixed home whatever the heading says. */}
+        {tier.source && <SourceChip source={tier.source} className="tier-chip" />}
       </div>
       <p className="muted body-text">{tier.what}</p>
       {/* ⚠️ THE THREE FACTS THAT DECIDE TRUST, on one line and always in the

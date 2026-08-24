@@ -428,6 +428,22 @@ export default function ReportsModal(
             </div>
           )}
 
+          {/* ⚠️ THE SAME `TierIntro` THE AGENT DIALOG USES, reading `STEPS`
+              instead of `TIERS`. Two dialogs describing two workflows in two
+              visual languages makes a reader learn the screen twice; one
+              component means a change to how a step is presented lands in both
+              at once.
+              ⚠️ AND IT RENDERS BEFORE EVERY TAB BODY, NOT BESIDE THEM. A first
+              version sat where the tabs were declared, which put "Step 3" under
+              the compose button on the briefing tab — the step header explains
+              what the reader is looking at, so arriving after the thing it
+              explains is worse than not being there. */}
+          {tab === "checks" && <TierIntro tier={STEPS.watched} />}
+          {tab === "coverage" && <TierIntro tier={STEPS.visible} />}
+          {tab === "preview" && <TierIntro tier={STEPS.brief} />}
+          {tab === "schedule" && <TierIntro tier={STEPS.sent} />}
+          {tab === "tasks" && <TierIntro tier={STEPS.work} />}
+
           {tab === "preview" && (
             <PreviewTab
               preview={preview}
@@ -451,17 +467,6 @@ export default function ReportsModal(
               lastBriefing={history && history.length > 0 ? history[0].at : ""}
             />
           )}
-          {/* ⚠️ THE SAME `TierIntro` THE AGENT DIALOG USES, reading `STEPS`
-              instead of `TIERS`. Two dialogs describing two workflows in two
-              visual languages makes a reader learn the screen twice; one
-              component means a change to how a step is presented lands in both
-              at once. */}
-          {tab === "checks" && <TierIntro tier={STEPS.watched} />}
-          {tab === "coverage" && <TierIntro tier={STEPS.visible} />}
-          {tab === "preview" && <TierIntro tier={STEPS.brief} />}
-          {tab === "schedule" && <TierIntro tier={STEPS.sent} />}
-          {tab === "tasks" && <TierIntro tier={STEPS.work} />}
-
           {tab === "checks" && (
             <ModulesTab
               diagnostics={diagnostics}

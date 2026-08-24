@@ -4694,7 +4694,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    vocabulary is that a reader learns it once. */
 .tier-intro { display: flex; flex-direction: column; gap: 8px; }
 .tier-intro > * { margin: 0; }
-.tier-intro-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+/* ⚠️ `center`, NOT `baseline`, AND THE CHIP IS PUSHED RIGHT. The heading is an
+   uppercase eyebrow and the chip a rounded pill; aligning their baselines sits
+   the pill visibly low, because what the eye matches there is cap height. And
+   an inline chip hugs a heading of unpredictable length, so it moved on every
+   tab — `margin-left:auto` gives it one home. */
+.tier-intro-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tier-intro-head > .tier-chip { margin-left: auto; }
 /* The step number. ⚠️ Deliberately quiet: it orders the tabs and is not the
    thing being read — the tier's NAME is. */
 .tier-badge {
