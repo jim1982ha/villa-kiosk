@@ -245,3 +245,64 @@ def test_the_tools_our_questions_need_are_READABLE() -> None:
         spec = {"name": name, "description": "", "inputSchema": {},
                 "annotations": {"readOnlyHint": True, "idempotentHint": True}}
         assert upstream.mode_of(spec) == "READ", name
+
+
+def test_every_proxy_helper_the_SCHEDULER_calls_actually_runs() -> None:
+    """⚠️ THE TRIAGE CLOCK CRASHED ON EVERY PASS FROM v2.643.0 TO v2.707.0.
+    `_agent_config_now` referenced `agent_config` as a module-level name while
+    the file only ever imports it INSIDE other functions, so every call raised
+    `NameError` inside `scheduler.run_forever` — for sixty releases.
+
+    ⚠️ NOTHING CAUGHT IT BECAUSE NOTHING LOOKED. The loop is a background task,
+    `run_forever` catches everything so the add-on stayed healthy, and a clock
+    that never ticks is indistinguishable from a villa with nothing to report:
+    no passes, no findings, no spend. Every instrument agreed with every other
+    one, and all of them were describing a subsystem that had never run.
+
+    Import-checking the whole proxy here is not possible (it needs aiohttp and a
+    Supervisor token), so this asserts the narrower property that failed: a
+    name used in a function body is either imported in that body, imported at
+    module scope, or defined in the file.
+    """
+    import ast
+
+    path = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
+    tree = ast.parse(open(path, encoding="utf-8").read())
+
+    module_names = set()
+    for node in tree.body:
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                module_names.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            module_names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    module_names.add(t.id)
+
+    #: The agent/reports packages, which are the ones imported function-locally
+    #: and therefore the ones that can be referenced without being in scope.
+    #: ⚠️ NOT `upstream` — it is a local variable name in this file's websocket
+    #: relay (`to_upstream`, `to_client`), and including it reported three
+    #: false hits. A checker that cries wolf gets muted, which is how the real
+    #: one would have been skipped over.
+    watched = {"agent_config", "agent_concerns", "agent_sources"}
+    offenders = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        local = {a.asname or a.name.split(".")[0]
+                 for n in ast.walk(node)
+                 if isinstance(n, (ast.Import, ast.ImportFrom))
+                 for a in n.names}
+        # Parameters and assignments are local names too, not missing imports.
+        local |= {a.arg for a in node.args.args + node.args.kwonlyargs}
+        local |= {t.id for n in ast.walk(node) if isinstance(n, ast.Assign)
+                  for t in n.targets if isinstance(t, ast.Name)}
+        for inner in ast.walk(node):
+            if (isinstance(inner, ast.Name) and inner.id in watched
+                    and inner.id not in local and inner.id not in module_names):
+                offenders.append(f"{node.name}() uses {inner.id!r}, never imported")
+    assert not offenders, (
+        "these crash the moment they are called:\n  " + "\n  ".join(sorted(set(offenders))))

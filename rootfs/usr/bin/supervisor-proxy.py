@@ -2875,7 +2875,21 @@ def _agent_config_now() -> Dict[str, Any]:
     cycle rather than on the next restart — which is the whole point of a kill
     switch. The first version passed `_agent_config_now()` and froze both at
     boot, in the same commit as a comment explaining why that is wrong.
+    ⚠️ THE IMPORT IS INSIDE THE FUNCTION AND ITS ABSENCE KILLED THE WHOLE
+    TRIAGE CLOCK FROM v2.643.0 TO v2.707.0. `agent_config` is imported locally
+    in three other handlers in this file and was referenced here as though it
+    were a module-level name, so every call raised
+    `NameError: name 'agent_config' is not defined` — inside
+    `scheduler.run_forever`, on EVERY pass, for sixty releases.
+
+    ⚠️ IT WAS INVISIBLE FOR THE REASON THIS PROJECT KEEPS RE-LEARNING: the loop
+    is a background task nobody watches, `run_forever` catches everything so the
+    add-on stayed healthy, and the failure looked exactly like a quiet villa —
+    no passes, no findings, no cost. Every instrument agreed, because none was
+    measuring whether the clock had ticked at all. Found by reading the add-on
+    log for an unrelated reason.
     """
+    from agent import config as agent_config
     return agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {}))
 
 
