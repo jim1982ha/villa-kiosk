@@ -27,6 +27,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import FacilityModal, { type FacilityTab } from "@/components/fm/FacilityModal";
 import ReportsModal from "@/components/reports/ReportsModal";
+import AgentModal from "@/components/agent/AgentModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
@@ -87,6 +88,12 @@ export default function Dashboard() {
    *  beside it would go there too. */
   const [facilityTab, setFacilityTab] = useState<FacilityTab | undefined>(undefined);
   const [reportsOpen, setReportsOpen] = useState(false);
+  // ⚠️ THE ENTRY POINT THE OWNER KNOWS NOW OPENS THE AGENT. "Briefings" in the
+  // menu was the door to the reasoning layer for them, and everything the agent
+  // produces lives behind it. The report PIPELINE — preview, coverage, checks,
+  // delivery, history — is configuration of a deterministic subsystem and is
+  // reached from Advanced Settings, where the villa and the devices are.
+  const [agentOpen, setAgentOpen] = useState(false);
   /** Device the Facility modal should open a blank fault for — set by a
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
    *  consumed it so reopening Facility later doesn't resurrect the form. */
@@ -245,8 +252,8 @@ export default function Dashboard() {
   // whatever's most recently rendered.
   const modalOpenRef = useRef(false);
   useEffect(() => {
-    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen || reportsOpen;
-  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen, reportsOpen]);
+    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen || reportsOpen || agentOpen;
+  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen, reportsOpen, agentOpen]);
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -834,7 +841,7 @@ export default function Dashboard() {
           setFacilityRecord({ kind, id });
           setFacilityOpen(true);
         } : undefined}
-        onOpenReports={canManageFacility ? () => setReportsOpen(true) : undefined}
+        onOpenReports={canManageFacility ? () => setAgentOpen(true) : undefined}
         onOpenCategory={setCategoryGroup}
       />
 
@@ -1057,7 +1064,19 @@ export default function Dashboard() {
         />
       )}
 
-      {reportsOpen && canManageFacility && (
+      {agentOpen && canManageFacility && (
+        <AgentModal
+          onClose={() => setAgentOpen(false)}
+          canConfigure={canEditConfig}
+        />
+      )}
+
+      {/* ⚠️ OPENED FROM ADVANCED SETTINGS, NOT FROM THE MENU. The briefing
+          pipeline is the DETERMINISTIC half — built-in checks, blueprint
+          findings and concerns, deduplicated, with an LLM only rewording the
+          result — so it sits with the villa and the devices rather than with
+          the agent. */}
+      {reportsOpen && canEditConfig && (
         <ReportsModal
           onClose={() => setReportsOpen(false)}
           /* ⚠️ THREE CAPABILITIES, DELIBERATELY NOT COLLAPSED. Briefings OPENS
@@ -1102,6 +1121,7 @@ export default function Dashboard() {
           it returns to Settings with no GLB reload; edits already applied live. */}
       {configEditorOpen && canOpenSettings && (
         <ConfigEditorModal
+          onOpenBriefings={() => setReportsOpen(true)}
           focusEntityId={configEditorFocus ?? undefined}
           onBack={() => {
             // Just close this one. Settings is still mounted underneath if it

@@ -1,3 +1,15 @@
+## 2.727.0
+
+### Changed — VESTA Agent is its own workspace, and the scheduled report is not in it
+The menu entry that used to open Briefings now opens **VESTA Agent** and holds
+only what the AI produces: what it wants to look into, what it concluded, what
+it is waiting on you to allow, what it remembers, plus its tuning, access, cost
+and comparison against the old rules. The scheduled report — preview, coverage,
+built-in checks, delivery and history — is put together by the add-on itself and
+moved to Advanced Settings, where the villa and the devices are. The two
+approval tabs are named for the decision they ask of you rather than for the
+stage they belong to.
+
 ## 2.726.0
 
 ### Fixed — the investigate button span forever and the two buttons beside it did not match

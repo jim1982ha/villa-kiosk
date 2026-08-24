@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { Boxes, Home, LogOut, Upload,
+import { Boxes, FileText, Home, LogOut, Upload,
          Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -33,11 +33,17 @@ import GroupedDevices from "./GroupedDevices";
  *  owner-only, so a naive grouping leaves a guest with tabs holding one item
  *  each — the exact failure being avoided. The two open tabs hold two panels
  *  apiece for every profile. */
-type SettingsTab = "villa" | "devices" | "supervision" | "usage" | "system";
+type SettingsTab = "villa" | "devices" | "briefings" | "system";
 
 const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
   { id: "villa", label: "Villa", icon: Home },
   { id: "devices", label: "Devices", icon: Boxes },
+  // ⚠️ THE BRIEFING PIPELINE LANDED HERE IN 2.727.0, out of the dialog the
+  // owner opens to see what the AI is doing. A brief is composed by the
+  // DETERMINISTIC half — built-in checks, blueprint findings and concerns,
+  // deduplicated by subject — and a model only ever rewords it, so it belongs
+  // with the villa and the devices rather than with the reasoning layer.
+  { id: "briefings", label: "Briefings", icon: FileText, owner: true },
   // ⚠️ ITS OWN TAB, NOT AN ICON INSIDE BRIEFINGS (v2.669.0). It opened from the
   // row that switches narration on, which is exactly the reading the panel's
   // own header spends a paragraph denying: triage, investigations and every
@@ -50,6 +56,12 @@ const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
 interface Props {
   /** Return to the Settings modal this was opened from. */
   onBack: () => void;
+  /** ⚠️ OPENS THE BRIEFING PIPELINE, WHICH IS A SEPARATE DIALOG RATHER THAN A
+   *  TAB HERE. Those five tabs carry a real data layer — config, revision,
+   *  diagnostics, history, preview, plus save/compose/send — and inlining it
+   *  would put a second revision-handling cycle inside a dialog that already
+   *  has one. A door is the honest cost; a second lost-update bug is not. */
+  onOpenBriefings: () => void;
   /** When opened from a device panel's edit shortcut, pre-filter the entity
    *  table to this entity_id so its row is right there. */
   focusEntityId?: string;
@@ -159,7 +171,7 @@ export default function ConfigEditorModal(props: Props) {
   );
 }
 
-function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
+function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged, onOpenBriefings }: Props) {
   const draft = useAgentConfigDraft();
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onBack);
@@ -291,6 +303,21 @@ function ConfigEditorDialog({ onBack, focusEntityId, onModelChanged }: Props) {
               people table is the only thing standing between the villa and
               anyone who finds the bot. The tab itself is not rendered for
               other roles rather than rendered-and-403. */}
+          {tab === "briefings" && role === "owner" && (
+            <>
+              <p className="muted body-text">
+                The scheduled report: what it checks, whether it can see enough
+                to check it, when it is sent and what was delivered. It is put
+                together by the add-on itself — the AI only rewrites the wording,
+                and only if you switch that on.
+              </p>
+              <button className="btn" onClick={onOpenBriefings}>
+                <FileText size={16} aria-hidden="true" />
+                <span>Open briefings</span>
+              </button>
+            </>
+          )}
+
           {/* ⚠️ SUPERVISION AND USAGE LEFT THIS DIALOG IN 2.725.0. Everything
               the agent produces — its concerns, its queue, its tuning, its
               people and key, its cost and its shadow diff — now lives in one

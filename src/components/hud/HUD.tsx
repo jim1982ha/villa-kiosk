@@ -23,10 +23,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  Sparkles,
   // MapIcon, not Map: the bare name shadows the global Map constructor,
   // which this file also uses.
   Settings, LogOut, Map as MapIcon, PersonStanding,
-  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList, Newspaper,
+  Minus, Plus, CircleHelp, TriangleAlert, ClipboardList,
 } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
@@ -688,14 +689,20 @@ export default function HUD({
                 opened at all on a 1324px laptop. Facility and the view switch
                 have carried both copies from the start; this is the same rule,
                 joined late. */}
+            {/* ⚠️ THIS DOOR CHANGED WHAT IT OPENS IN 2.727.0, so its icon and
+                its words changed with it. It used to lead to the briefing
+                pipeline and now leads to the whole reasoning layer — concerns,
+                approvals, memory, tuning, cost. An entry point whose label
+                still described the old destination is how an owner ends up
+                asking where Concerns are, which is exactly what happened. */}
             {onOpenReports && (
               <button
                 className="icon-btn"
                 onClick={onOpenReports}
-                title="Briefings — the villa's periodic brief, and when it is sent"
-                aria-label="Open the briefings workspace"
+                title="VESTA Agent — what the villa has concluded, what it is waiting on you for, and what it costs"
+                aria-label="Open VESTA Agent"
               >
-                <Newspaper size={24} />
+                <Sparkles size={24} />
               </button>
             )}
             {/* (The colour-legend button moved into the category row — it
@@ -798,8 +805,8 @@ export default function HUD({
                     className="hud-menu-item"
                     onClick={() => { setMenuOpen(false); onOpenReports(); }}
                   >
-                    <Newspaper size={18} />
-                    <span>Briefings</span>
+                    <Sparkles size={18} />
+                    <span>VESTA Agent</span>
                   </button>
                 )}
                 {/* Same control as the (hidden-on-mobile) inline Minus/Plus

@@ -74,9 +74,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  AlertTriangle, BookMarked, Brain, CalendarClock, CheckCircle2,
-  FileText, GitCompare, HandHelping, History, KeyRound, ListChecks, Loader2,
-  Receipt, Search, ShieldQuestion, SlidersHorizontal,
+  AlertTriangle, CalendarClock, CheckCircle2, FileText, History,
+  ListChecks, Loader2, ShieldQuestion,
 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
@@ -92,59 +91,22 @@ import type {
 import PreviewTab from "./PreviewTab";
 import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
-import CockpitConcerns from "@/components/cockpit/CockpitConcerns";
-import CockpitMemories from "@/components/cockpit/CockpitMemories";
-import CockpitProposals from "@/components/cockpit/CockpitProposals";
-import CockpitQueue from "@/components/cockpit/CockpitQueue";
-import CockpitReview from "@/components/cockpit/CockpitReview";
-import SourceLegend from "@/components/common/SourceLegend";
-import AgentTuningPanel from "@/components/settings/AgentTuningPanel";
-import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
-import PeoplePanel from "@/components/settings/PeoplePanel";
-import ShadowDiffPanel from "@/components/settings/ShadowDiffPanel";
-import UsagePanel from "@/components/settings/UsagePanel";
-import { AgentConfigProvider } from "@/agent/AgentConfigDraft";
 import HistoryTab from "./HistoryTab";
 import ModulesTab from "./ModulesTab";
 
-type Tab =
-  // Agent-produced, and this dialog now holds nothing else by design.
-  | "concerns" | "queue" | "waiting" | "memory"
-  | "tuning" | "access" | "usage" | "shadow"
-  // ⚠️ THE REPORT PIPELINE, PENDING RELOCATION — see the TABS comment.
-  | "preview" | "coverage" | "checks" | "schedule" | "history";
+type Tab = "preview" | "coverage" | "checks" | "schedule" | "history";
 
 /** ⚠️ `configure: true` MEANS "THE PROXY WOULD REFUSE THIS TAB TO ANYONE BUT
  *  THE OWNER" — see the endpoint table in this file's header. It is not a
  *  judgement about who ought to see what; changing one of these without
  *  changing the matching handler puts a tab on screen that cannot work. */
 const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[] = [
-  // ── What the agent CONCLUDED ────────────────────────────────────────────
-  // ⚠️ FIRST, BECAUSE IT IS THE PRODUCT. Everything else in this dialog exists
-  // to produce, explain, fund or configure a concern.
-  { id: "concerns", label: "Concerns", icon: Brain },
-  // Stage BEFORE a concern: triage flagged it, nothing has examined it, and it
-  // carries no severity (ADR-021). Second so the two stages read in order.
-  { id: "queue", label: "Worth a look", icon: Search, configure: true },
-  // Blocked on a person: an action the villa stopped, and a procedure it wrote.
-  { id: "waiting", label: "Waiting on you", icon: HandHelping, configure: true },
-  // What it has come to believe and will assert into every later check.
-  { id: "memory", label: "Memory", icon: BookMarked, configure: true },
-  // ── How it is set up, and what it costs ─────────────────────────────────
-  { id: "tuning", label: "Tuning", icon: SlidersHorizontal, configure: true },
-  { id: "access", label: "Access", icon: KeyRound, configure: true },
-  { id: "usage", label: "Cost", icon: Receipt, configure: true },
-  { id: "shadow", label: "Shadow diff", icon: GitCompare, configure: true },
-  // ── The report the concerns are delivered in ────────────────────────────
-  // ⚠️ THESE FOUR ARE NOT AGENT-PRODUCED AND ARE MARKED FOR RELOCATION. A
-  // brief is composed by the DETERMINISTIC pipeline — built-in checks, blueprint
-  // findings and concerns, deduplicated by subject — and an LLM only ever
-  // rewords it. By the rule this dialog now follows they belong with the report
-  // pipeline, not here; they stay only until that destination exists, and the
-  // group heading says so rather than letting them look native.
   { id: "preview", label: "Preview", icon: FileText, configure: true },
   { id: "coverage", label: "Coverage", icon: ShieldQuestion, configure: true },
   { id: "checks", label: "Checks", icon: ListChecks, configure: true },
+  // ⚠️ "Delivery", NOT "Schedule": Facility's Schedule is the MAINTENANCE
+  // schedule and this is when a briefing is SENT. Two tabs, one word, two
+  // meanings. The id stays `schedule`; only the label a person reads changed.
   { id: "schedule", label: "Delivery", icon: CalendarClock, configure: true },
   { id: "history", label: "History", icon: History },
 ];
@@ -497,57 +459,6 @@ export default function ReportsModal(
               onSaveSecret={(provider, value) => void saveSecret(provider, value)}
             />
           )}
-          {/* ── Agent-produced ────────────────────────────────────────────
-              ⚠️ THESE EIGHT MOVED HERE IN 2.725.0 FROM TWO OTHER DIALOGS, and
-              the rule is absolute: everything the agent produces lives in this
-              dialog and nothing the agent produces lives anywhere else. The
-              queue, concerns, proposals, review and memories came from the
-              Facility Cockpit; the tuning, access, cost and shadow panels came
-              from Advanced Settings, where an owner looking for "what is the AI
-              doing" had no reason to look. Splitting one subsystem across three
-              dialogs is what made it unfindable — the owner asked twice where
-              Concerns were shown. */}
-          {tab === "concerns" && (
-            <div className="reports-pane">
-              <CockpitConcerns />
-              <SourceLegend only={["agent"]} />
-            </div>
-          )}
-          {tab === "queue" && (
-            <div className="reports-pane">
-              <CockpitQueue />
-              <SourceLegend only={["triage"]} />
-            </div>
-          )}
-          {/* ⚠️ TWO BLOCKS, ONE TAB, BECAUSE THEY ARE ONE QUESTION: something
-              is stopped until a person answers. A proposal is an action on the
-              villa with a countdown; a review is a procedure it wrote. Separate
-              tabs would have made an empty dialog look like two broken ones. */}
-          {tab === "waiting" && (
-            <div className="reports-pane">
-              <CockpitProposals />
-              <CockpitReview />
-              <SourceLegend only={["agent"]} />
-            </div>
-          )}
-          {tab === "memory" && (
-            <div className="reports-pane"><CockpitMemories /></div>
-          )}
-          {/* ⚠️ THE THREE CONFIG TABS SHARE ONE DRAFT PROVIDER. `AgentConfigDraft`
-              exists because two panels each loading, versioning and PUTting the
-              same document is a lost update — the store refuses a write whose
-              `rev` is stale, so saving one panel silently discarded the other's
-              edit. Three panels now, same document, still one draft. */}
-          {(tab === "tuning" || tab === "access") && (
-            <AgentConfigProvider enabled>
-              <div className="reports-pane">
-                {tab === "tuning" && <AgentTuningPanel />}
-                {tab === "access" && <><PeoplePanel /><ApiKeyPanel /></>}
-              </div>
-            </AgentConfigProvider>
-          )}
-          {tab === "usage" && <div className="reports-pane"><UsagePanel /></div>}
-          {tab === "shadow" && <div className="reports-pane"><ShadowDiffPanel /></div>}
           {tab === "history" && <HistoryTab entries={history} />}
         </div>
 
