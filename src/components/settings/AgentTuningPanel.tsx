@@ -42,14 +42,14 @@ const MIN_TRIAGE_MINUTES = 5;
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
   "enabled" | "shadow" | "actEnabled" | "mcpUrl" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
-  | "maxTurns" | "maxToolCalls" | "investigateMode"
+  | "maxTurns" | "maxToolCalls" | "maxOutputTokens" | "investigateMode"
   | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
   | "modelChat">
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
   enabled: false, shadow: true, actEnabled: false, mcpUrl: "", triageMinutes: 15, monthlyLimit: 4000,
-  chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24,
+  chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24, maxOutputTokens: 8192,
   investigateMode: "auto", maxInvestigationsPerPass: 3,
   quietHoursStart: "", quietHoursEnd: "",
   modelTriage: "", modelReason: "", modelBrief: "", modelChat: "",
@@ -218,6 +218,7 @@ export default function AgentTuningPanel() {
     chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
     maxTurns: Number(c.maxTurns ?? EMPTY.maxTurns),
     maxToolCalls: Number(c.maxToolCalls ?? EMPTY.maxToolCalls),
+    maxOutputTokens: Number(c.maxOutputTokens ?? EMPTY.maxOutputTokens),
     // ⚠️ ANYTHING THAT IS NOT `approve` READS AS `auto`, matching the backend's
     // own default rather than trusting the stored value to be one of the two.
     // A config written by a newer version survives a downgrade untouched
@@ -446,6 +447,19 @@ export default function AgentTuningPanel() {
               + " into one problem."}
         value={draft.maxToolCalls} min={1}
         onChange={(v) => edit({ maxToolCalls: v })}
+      />
+      {/* ⚠️ A CEILING, NOT A SPEND, AND THE NOTE SAYS SO — otherwise this reads
+          as a cost dial and gets turned DOWN, which is the setting that was
+          silently killing 7 of every 8 supervision passes. */}
+      <Num
+        label="Room to think and answer, per step (tokens)"
+        note={"How much the assistant may write in one step, including its"
+              + " own reasoning. This is a limit, not a cost: you pay for what"
+              + " it actually writes. Set too low, a step runs out mid-thought"
+              + " and everything it read is thrown away. Raise it if answers"
+              + " stop arriving; 8192 suits most villas."}
+        value={draft.maxOutputTokens} min={1024}
+        onChange={(v) => edit({ maxOutputTokens: v })}
       />
 
       {/* ⚠️ THREE HEADINGS OVER TEN FIELDS, after the tab was reported as not

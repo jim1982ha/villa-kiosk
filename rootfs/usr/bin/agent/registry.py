@@ -133,6 +133,35 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
         return Registry([cls() for cls in ALL_TOOLS])
 
 
+#: What the model is told on the turn before its last. ⚠️ IT NAMES THE ACTION,
+#: NOT THE LIMIT. "You have 1 turn left" is a fact about our plumbing that a
+#: model can only guess how to act on; "answer now with what you have" is the
+#: behaviour actually wanted. It also says partial-and-labelled beats silence,
+#: because the failure this replaces was a run that read the right things for
+#: seven turns and then said nothing at all.
+LAST_TURN_NOTICE: str = (
+    "SYSTEM: This is your final turn — no further tool calls will run. "
+    "Answer now using what you already have. If it is incomplete, say so and "
+    "say what is missing; a partial answer that names its gap is far more "
+    "useful than no answer.")
+
+
+def _output_ceiling(config: Optional[Mapping[str, Any]]) -> int:
+    """How many output tokens one turn may produce, from config.
+
+    ⚠️ READ PER RUN, NOT CACHED, so raising it takes effect on the next pass
+    rather than on the next restart — this is the dial somebody reaches for
+    while watching a villa fail, and a restart to apply it is a restart that
+    loses the state they were watching.
+    """
+    from agent import config as agent_config
+    raw = agent_config.view(config).get("max_output_tokens")
+    try:
+        return max(1024, int(raw))
+    except (TypeError, ValueError):
+        return 8192
+
+
 @dataclass
 class RunResult:
     """CTR-007. What a whole run produced."""
@@ -192,8 +221,14 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
         if not money.allowed:
             return _decline(result, money.reason, run_id, actor)
 
+        # ⚠️ `max_tokens` IS PASSED, AND NOT PASSING IT WAS A REAL OUTAGE. The
+        # adapter's signature defaults it to 2048 and this was the only call
+        # site, so every request in the system ran at that ceiling — including
+        # turns whose `thinking` blocks are drawn from the same budget. See
+        # `config.CONFIG_DEFAULTS["max_output_tokens"]` for the measurement.
         turn = await provider.run(system=system, messages=convo,
-                                  tools=registry.describe(), model=model)
+                                  tools=registry.describe(), model=model,
+                                  max_tokens=_output_ceiling(config))
         # ⚠️ SPENT HERE — the call happened, whatever came back.
         budget_mod.spend(kind)
         # ⚠️ AND ACCOUNTED HERE, FOR THE SAME REASON AND WITH THE SAME TIMING.
@@ -223,10 +258,25 @@ async def run(*, run_id: str, provider: Provider, registry: Registry,
 
         convo.append({"role": "assistant", "content": _assistant_content(turn)})
         results: List[Dict[str, Any]] = []
+        # ⚠️ THE MODEL IS TOLD WHEN IT IS ON ITS LAST TURN, BECAUSE OTHERWISE IT
+        # FINDS OUT BY BEING CUT OFF. A run that hits the cap mid-investigation
+        # answers nobody and bins every tool result it gathered — reported from
+        # the villa as "I could not answer that. turn cap of 8 reached", after
+        # the model had spent seven turns reading exactly the right things.
+        # Raising the cap would only move where that happens; the fix is that it
+        # knows to conclude.
+        #
+        # ⚠️ APPENDED TO THE TOOL RESULTS, NOT TO THE SYSTEM PROMPT. The cache
+        # breakpoint sits on the last system block (see `_cached`), so adding a
+        # block there on the final turn would re-write the whole cached prefix —
+        # the villa document included — for every run that goes the distance.
+        # This rides content that is new and uncached anyway, so it is free.
         for call in turn.tool_calls:
             results.append(await _invoke(call, registry=registry, policy=policy,
                                          run_id=run_id, actor=actor,
                                          result=result))
+        if policy.max_turns - result.turns <= 1:
+            results.append({"type": "text", "text": LAST_TURN_NOTICE})
         convo.append({"role": "user", "content": results})
 
 

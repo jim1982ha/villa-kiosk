@@ -8,6 +8,7 @@ the allow-list, a hallucinated tool, and a repeat loop. None needs an API key.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 from typing import Any, Dict, List, Mapping
@@ -261,3 +262,117 @@ def test_the_real_registry_is_built_from_ONE_place() -> None:
     from agent.tools import ALL_TOOLS
     assert set(live.names) == {cls().name for cls in ALL_TOOLS}
     assert len(live.describe()) == len(ALL_TOOLS)
+
+
+# ── the output ceiling, the salvage, and the last-turn notice ────────────────
+def test_the_OUTPUT_CEILING_is_passed_on_every_request() -> None:
+    """⚠️ PIN THE CALLER. `max_tokens` is a DEFAULT ARGUMENT on the adapter and
+    `registry.run` is its only call site, so not passing it ran the whole system
+    at 2048 — including turns whose `thinking` is drawn from the same budget.
+    Measured before the fix: 7 of 8 supervision passes declined with
+    `stop_reason=max_tokens, saw=thinking`, binning 33 billed tool calls."""
+    import inspect
+    from agent import registry as registry_mod
+    src = inspect.getsource(registry_mod.run)
+    assert "max_tokens=_output_ceiling(config)" in src, (
+        "the provider is called without an output ceiling; it will use 2048")
+
+
+def test_the_ceiling_comes_from_config_and_has_a_floor() -> None:
+    from agent import registry as registry_mod
+    assert registry_mod._output_ceiling({"max_output_tokens": 16384}) == 16384
+    # ⚠️ A FLOOR, because a ceiling below the thinking budget makes every turn
+    # fail in exactly the way this fixed — and 0 is a plausible typo.
+    assert registry_mod._output_ceiling({"max_output_tokens": 10}) >= 1024
+    assert registry_mod._output_ceiling({"max_output_tokens": "junk"}) >= 1024
+    assert registry_mod._output_ceiling(None) >= 1024
+
+
+def test_a_DECLINE_that_gathered_evidence_is_PARTIAL_not_a_total_loss() -> None:
+    """⚠️ THE WORK WAS DONE; ONLY THE LAST SENTENCE WAS MISSING. Seven passes
+    declined on their FINAL turn and threw away every tool result gathered
+    before it. Only a bound-stop was rescued before; a provider decline was not."""
+    import asyncio
+    from agent import runtime
+    from fake_provider import FakeProvider, asks, declines
+
+    result = asyncio.run(runtime.investigate(
+        provider=FakeProvider([asks("read_villa"), declines("overran")]),
+        system=[], messages=[{"role": "user", "content": "hi"}],
+        config={"enabled": True}, tier="reason"))
+
+    assert result.evidence, "the tool result was discarded"
+    assert result.status == "partial", result.status
+    assert result.usable, "evidence already paid for was thrown away"
+    assert "overran" in result.reason, (
+        f"the reason was lost, so nobody can act on it: {result.reason}")
+
+
+def test_a_decline_with_NO_evidence_stays_declined() -> None:
+    """Nothing to salvage is not a partial success."""
+    import asyncio
+    from agent import runtime
+    from fake_provider import FakeProvider, declines
+
+    result = asyncio.run(runtime.investigate(
+        provider=FakeProvider([declines("no credit")]),
+        system=[], messages=[{"role": "user", "content": "hi"}],
+        config={"enabled": True}, tier="reason"))
+    assert result.status == "declined" and not result.usable
+
+
+def test_the_model_is_TOLD_when_it_is_on_its_last_turn() -> None:
+    """⚠️ OTHERWISE IT FINDS OUT BY BEING CUT OFF. Reported from the villa:
+    "I could not answer that. turn cap of 8 reached" — after seven turns of
+    reading exactly the right things."""
+    from agent import registry as registry_mod
+    notice = registry_mod.LAST_TURN_NOTICE.lower()
+    assert "final turn" in notice and "answer now" in notice
+    # ⚠️ IT NAMES THE ACTION, NOT THE LIMIT — a bare turn count is a fact about
+    # our plumbing that a model can only guess how to act on.
+    assert "partial" in notice, "it does not say a partial answer is wanted"
+
+
+def test_the_notice_ACTUALLY_REACHES_the_model_on_its_last_turn() -> None:
+    """⚠️ BEHAVIOURAL, NOT A SOURCE GREP. The first version of this test read
+    the source for the append line — and stayed GREEN when that line was put
+    behind `if False:`, because the string was still there to find. A pin that
+    survives the mutation it exists to catch is measuring nothing.
+
+    ⚠️ AND IT CHECKS WHERE THE NOTICE LANDS. The cache breakpoint sits on the
+    last SYSTEM block, so putting it there would re-write the whole cached
+    prefix — the villa document included — on every run that goes the distance.
+    It must ride the tool results, which are new and uncached anyway.
+    """
+    import asyncio
+    from agent import policy as policy_mod, registry as registry_mod
+    from fake_provider import FakeProvider, asks
+
+    # ⚠️ THREE TURNS, NOT TWO, SO THERE IS A MIDDLE ONE. At max_turns=2 every
+    # turn is either the first or the last, and "fires on the last turn" is
+    # indistinguishable from "fires on every turn" — a mutation to `if True:`
+    # survived the two-turn version of this test.
+    name = _registry().names[0]
+    provider = FakeProvider([asks(name, call_id="a"),
+                             asks(name, {"x": 1}, call_id="b"),
+                             asks(name, {"x": 2}, call_id="c")])
+    policy = policy_mod.for_run({"max_turns": 3}, tier="reason",
+                                tool_names=_registry().names)
+    asyncio.run(registry_mod.run(
+        run_id="r", provider=provider, registry=_registry(), policy=policy,
+        model="m", system=[{"type": "text", "text": "sys"}],
+        messages=[{"role": "user", "content": "hi"}]))
+
+    final = provider.calls[-1]
+    flat = json.dumps(final["messages"], ensure_ascii=False)
+    assert registry_mod.LAST_TURN_NOTICE in flat, (
+        "the model was never told it was on its last turn")
+    assert registry_mod.LAST_TURN_NOTICE not in json.dumps(final["system"], ensure_ascii=False), (
+        "the notice is in the SYSTEM prompt, which invalidates the cached "
+        "prefix — the villa document included — on every long run")
+
+    for n, call in enumerate(provider.calls[:-1], start=1):
+        assert registry_mod.LAST_TURN_NOTICE not in json.dumps(
+            call["messages"], ensure_ascii=False), (
+            f"the notice fired on turn {n} of 3; the model wraps up early and "
+            "the turn budget is wasted")

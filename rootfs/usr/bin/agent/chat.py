@@ -522,7 +522,11 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     # model answer MID-RUN — say something now, keep working — and removing it
     # in favour of this line would take that away. The two are the same channel
     # reached two ways, not a duplicate.
-    if result.status == "answered" and result.text and not replier.sent:
+    # ⚠️ ON HAVING TEXT, NOT ON THE STATUS BEING `answered`. A `partial` run
+    # carries a real answer built from the evidence it did gather, and testing
+    # the status dropped it on the floor — the shape of bug that appears the
+    # moment another layer starts producing a status this one had not heard of.
+    if result.text and not replier.sent:
         await replier.call({"text": result.text})
 
     # ⚠️ A DECLINE MUST NOT BE SILENCE — SOMEBODY IS WAITING FOR AN ANSWER.
@@ -550,7 +554,12 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     # to distrust what they just read. So the message depends on whether this
     # run has already spoken, and NEITHER branch is silent: a person who got a
     # partial answer still needs to know it stopped early.
-    elif result.status == "declined" and result.declined_reason:
+    #
+    # ⚠️ ON HAVING A REASON, NOT ON THE STATUS, FOR THE SAME REASON AS ABOVE. A
+    # run rescued to `partial` because it gathered evidence but never composed
+    # an answer still owes the asker an explanation, and a status test sent
+    # them the generic "produced no reply" instead of the one useful sentence.
+    elif result.declined_reason:
         await replier.call({"text": (
             f"That is as far as I got. {result.declined_reason}"
             if replier.sent else

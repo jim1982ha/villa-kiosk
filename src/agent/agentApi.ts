@@ -43,6 +43,7 @@ const AGENT_WIRE_KEYS = {
   chat_monthly_limit: "chatMonthlyLimit",
   max_turns: "maxTurns",
   max_tool_calls: "maxToolCalls",
+  max_output_tokens: "maxOutputTokens",
   investigate_mode: "investigateMode",
   max_investigations_per_pass: "maxInvestigationsPerPass",
   quiet_hours_start: "quietHoursStart",
@@ -154,6 +155,10 @@ export interface AgentConfig {
   chatMonthlyLimit: number;
   maxTurns: number;
   maxToolCalls: number;
+  /** Output tokens ONE turn may produce. A ceiling, not a spend —
+   *  `thinking` is drawn from it, so too low kills the turn AND discards
+   *  every tool result gathered before it. */
+  maxOutputTokens: number;
   modelTriage: string;
   /** What happens when triage escalates (ADR-021). `auto` investigates;
    *  `approve` records the escalation and waits for a person. */

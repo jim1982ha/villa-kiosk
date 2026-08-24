@@ -311,11 +311,21 @@ def test_the_right_token_is_accepted_and_a_wrong_one_is_not() -> None:
 
 def test_the_token_lives_in_secrets_not_in_the_config_store() -> None:
     """⚠️ `/agent-config` is readable by any authorised session. A token there
-    would be handed to every browser that loads the tab."""
+    would be handed to every browser that loads the tab.
+
+    ⚠️ IT ASKS ABOUT KEYS, NOT ABOUT A SUBSTRING. This was
+    `"token" not in json.dumps(DEFAULTS).lower()`, which went red on
+    `max_output_tokens` — a token CEILING, not a credential. That is this
+    repo's recurring unanchored-substring bug (`door` inside `outdoor`) inside
+    the test that guards a credential, where a false positive trains the next
+    person to reach for the assertion rather than the code.
+    """
     from agent import config as agent_config
-    flat = json.dumps(agent_config.DEFAULTS)
-    assert mcp_server.TOKEN_NAME not in flat
-    assert "token" not in flat.lower()
+    assert mcp_server.TOKEN_NAME not in agent_config.DEFAULTS
+    secretish = [key for key in agent_config.DEFAULTS
+                 if key.split("_")[-1] in ("token", "key", "secret",
+                                           "password", "credential")]
+    assert not secretish, f"a credential-shaped key is in the config: {secretish}"
 
 
 # ── protocol shape ──────────────────────────────────────────────────────────

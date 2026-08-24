@@ -101,6 +101,23 @@ DEFAULTS: Final[Dict[str, Any]] = {
     "max_turns": 8,
     "max_tool_calls": 24,
 
+    #: How many output tokens ONE turn may produce. ⚠️ A CEILING, NOT A SPEND —
+    #: billing is for tokens actually generated, so raising this costs nothing
+    #: until a turn genuinely needs the room. That asymmetry is the whole
+    #: argument: too low throws away the turn AND everything paid for before it.
+    #:
+    #: ⚠️ IT WAS 2048, AS A DEFAULT ARGUMENT NO CALLER EVER PASSED, AND IT WAS
+    #: KILLING 7 OF EVERY 8 SUPERVISION PASSES. `thinking` blocks are drawn from
+    #: this same budget, so a turn that reasoned before answering spent the lot
+    #: on thinking and emitted no text and no tool call — `stop_reason=max_tokens,
+    #: saw=thinking`. The adapter correctly called that unusable and the run was
+    #: declined, discarding every tool result already gathered. Measured on the
+    #: reference villa: 554 s of wall clock, 36 billed turns and 33 tool calls
+    #: across seven passes, all producing nothing. The one pass that succeeded
+    #: took two turns — the failure rate rose with the amount of thinking, which
+    #: is the signature of an output ceiling rather than of a bad prompt.
+    "max_output_tokens": 8_192,
+
     # ── models, per tier ─────────────────────────────────────────────────
     #: ⚠️ PINNED IN CONFIG, NEVER IN CODE (ADR-016). Upgrading a model is then a
     #: config change plus an eval run, not a deploy — which is the whole reason
@@ -219,7 +236,8 @@ def errors(value: Any) -> List[str]:
         problems.append("investigate_mode must be 'auto' or 'approve'")
 
     for name in ("triage_minutes", "monthly_limit", "chat_monthly_limit",
-                 "max_turns", "max_tool_calls", "max_investigations_per_pass"):
+                 "max_turns", "max_tool_calls", "max_investigations_per_pass",
+                 "max_output_tokens"):
         if name not in value:
             continue
         raw = value[name]

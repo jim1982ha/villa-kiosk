@@ -236,6 +236,26 @@ async def investigate(*, provider: Provider,
     elif bounded.stopped_by:
         out.reason = f"stopped by the {bounded.stopped_by} bound: {out.reason}"
 
+    # ⚠️ AND EVIDENCE ALREADY PAID FOR IS NEVER THROWN AWAY, WHATEVER DECLINED
+    # THE RUN. The branch above rescued only a run stopped by one of THIS
+    # module's bounds; every other decline — a provider that overran its output
+    # ceiling, a spent budget, an open breaker — discarded the lot. Measured on
+    # the reference villa before `max_output_tokens` was passed at all: seven
+    # supervision passes declined on the FINAL turn, taking 33 already-billed
+    # tool results with them, because the model spent that turn's tokens
+    # thinking and emitted nothing. The work was done; only the last sentence
+    # was missing, which is exactly what the degradation ladder composes.
+    #
+    # ⚠️ THE AUDIT ROW STILL SAYS `declined`, DELIBERATELY. It records what the
+    # PROVIDER did; this field records whether the result is usable. Rewriting
+    # the audit here would make "how often does the provider fail" unanswerable
+    # from the record.
+    elif out.status == "declined" and out.evidence:
+        out.status = "partial"
+        out.reason = (f"the answer was not composed, but "
+                      f"{len(out.evidence)} tool result(s) were gathered: "
+                      f"{out.reason}")
+
     log(f"run {ident} {out.status} in {out.seconds:.1f}s "
         f"({out.turns} turn(s), {out.tool_calls} tool call(s))")
     return out
