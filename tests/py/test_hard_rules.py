@@ -134,7 +134,8 @@ ILLUSTRATIVE: Set[str] = {
     # was run. The commit is what made them visible. A new module therefore
     # passes this rule right up until it is committed, which is the one moment
     # nobody re-runs the suite — see the note in `_tracked_source`.
-    "climate.lounge", "climate.x", "light.a", "light.b", "light.c", "light.hall",
+    "climate.lounge", "climate.x", "light.a", "light.b", "light.c",
+    "light.quiet", "light.hall",
     "light.n", "lock.c", "switch.a", "switch.new", "lock.front", "lock.a",
     "sensor.pump", "sensor.seeded", "sensor.flat", "sensor.spike",
     "sensor.drift", "sensor.new", "sensor.x", "sensor.q", "sensor.weak",

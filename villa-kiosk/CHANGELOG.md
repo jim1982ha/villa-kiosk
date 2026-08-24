@@ -1,13 +1,11 @@
-## 2.739.0
+## 2.739.1
 
-### Added — an hourly diagnostic line about the observation record, off by default
+### Fixed — a placeholder entity id shipped past the hard-rules gate, for the second time
 
-2.738.0 stopped every restart re-recording the whole villa; whether that is enough depends on the
-property's own steady change rate, which takes days of samples to see and which nobody is watching for.
-Switch on **Log observation diagnostics hourly** in the add-on's Configuration page and it prints two
-lines an hour: how full the rolling record is, how many days it covers, how fast it is filling, which
-devices produce the most entries, and how many baselines a restart had to restore. Every field reads `?`
-rather than `0` when it cannot be measured, because a two-day-old log is read by someone who cannot
-re-run it. Named heartbeat rather than telemetry: this add-on already has a `/telemetry` ring of browser
-diagnostics, and reusing that noun for a different subsystem is a mistake this code has made before.
+`tests/py/test_heartbeat.py` reached the repository carrying `light.quiet`, which nothing had
+classified. The gate that exists to stop this was run and was green: it builds its file list from
+TRACKED source, so a brand-new file is invisible to it until the commit that adds it — and the commit
+is the one moment nobody re-runs the suite. Classified now, and the ship procedure has been changed
+rather than the lesson merely re-noted: staging new files moved ahead of verifying, because the old
+step order guaranteed the blind spot for any release adding a file.
 
