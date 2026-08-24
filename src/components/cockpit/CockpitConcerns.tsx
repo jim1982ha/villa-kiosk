@@ -21,7 +21,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Eye, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 
-import { acknowledgeConcern, loadConcerns, sendConcernFeedback } from "@/agent/agentApi";
+import { acknowledgeConcern, loadAgentConfig, loadConcerns,
+         sendConcernFeedback } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import SourceChip from "@/components/common/SourceChip";
@@ -47,9 +48,20 @@ export default function CockpitConcerns() {
   const canJudge = role != null && hasCapability(role, "manageFacility");
   const [rows, setRows] = useState<Concern[] | null>(null);
   const [settled, setSettled] = useState<Concern[]>([]);
+  const [shadow, setShadow] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    // ⚠️ THE SHADOW FLAG IS READ WITH THE CONCERNS, because an empty list means
+    // two completely different things depending on it. During a shadow period
+    // `concerns.raise_concern` writes to a SEPARATE store — `sources.concern_rows`
+    // is shadow-aware and says so at its own docstring — and this endpoint
+    // serves the LIVE one. So the wall showed nothing while the shadow store
+    // filled, which is exactly the failure the proxy already documents for
+    // briefings: "indistinguishable from an agent that found nothing". The
+    // owner hit it, having just been told an investigation had concluded.
+    const cfg = await loadAgentConfig().catch(() => null);
+    setShadow(cfg?.config?.shadow !== false);
     const found = await loadConcerns();
     // ⚠️ THE SETTLED ONES ARE KEPT NOW, NOT DISCARDED. They were filtered out
     // at the door on the reasoning that "closed, verified and dismissed are the
@@ -100,7 +112,31 @@ export default function CockpitConcerns() {
   // An empty concern list means nobody has raised anything — which is not the
   // same as the villa being well, and the health headline above already speaks
   // to that from data the kiosk measured itself.
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    // ⚠️ SILENCE IS ONLY HONEST WHEN IT MEANS "NOTHING WAS RAISED". While
+    // "stay silent" is on, findings are written to a SEPARATE store that this
+    // surface does not read — so an empty list here can equally mean the
+    // assistant has been concluding things for weeks and none of them reached
+    // this screen. The owner met exactly that: told an investigation had
+    // finished, then shown an empty tab. Saying which of the two it is costs
+    // one sentence and is the difference between a quiet villa and a broken
+    // one.
+    if (!shadow) return null;
+    return (
+      <>
+        <div className="settings-section-title">
+          Concerns — what the villa concluded
+        </div>
+        <p className="muted body-text">
+          Nothing is shown here while “stay silent” is switched on: findings are
+          being written down separately so you can review a period before
+          anything is sent. Turn it off under Settings to see them here as they
+          are raised — the comparison against the old rules is under Cost,
+          people and advanced.
+        </p>
+      </>
+    );
+  }
 
   return (
     <>

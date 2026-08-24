@@ -78,7 +78,14 @@ export default function CockpitQueue() {
       // spinner that resolves into an absence is indistinguishable from one
       // that failed quietly.
       else if (action === "approve") {
-        setDone("Investigated. Whatever it concluded is on the Reason tab.");
+        // ⚠️ IT MUST NOT PROMISE A FINDING, BECAUSE AN INVESTIGATION IS ALLOWED
+        // TO CONCLUDE NOTHING — and on the reference villa one did: eleven tool
+        // calls, five history reads, and no `raise_concern` in its own tool
+        // list. The previous wording sent the owner to a tab that was correctly
+        // empty and read as a broken feature. "Looked into" is what actually
+        // happened; anything stronger is a claim this button cannot verify.
+        setDone("Looked into. If it concluded anything it is under Reason — an "
+              + "investigation can also finish having found nothing.");
       } else {
         setDone("Dismissed. It will not be looked into.");
       }
