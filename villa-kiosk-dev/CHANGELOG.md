@@ -1,3 +1,15 @@
+## 2.724.0
+
+### Changed — the villa's reasoning has its own screen instead of hiding inside the device one
+Everything the supervision layer does — what it flagged, what it concluded, what
+it wants permission for, what it has learned — sat as five sections partway down
+the Cockpit, between a list read straight from Home Assistant and an energy
+chart. The owner asked twice where "Concerns" were shown; they were on screen the
+whole time, fourth of nine sections in a tab about equipment. There is now a
+Supervision tab holding all of it in the order it happens, the Concerns section
+says the word "Concerns", the caretaker task list shows that it comes from your
+automations rather than from the AI, and a key at the foot explains every label.
+
 ## 2.723.0
 
 ### Changed — the automations list now says what each one is for
