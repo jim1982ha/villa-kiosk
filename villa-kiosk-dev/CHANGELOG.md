@@ -1,3 +1,14 @@
+## 2.737.0
+
+### Fixed — the Reason tab looked broken when it was only being kept quiet
+While "stay silent" is on, findings are written to a separate record that this
+screen does not read, so it showed nothing whether the assistant had concluded
+a great deal or nothing at all. It now says which. Separately, approving
+something for a closer look claimed its conclusion would be waiting under
+Reason; an investigation is allowed to finish having found nothing, and one of
+yours did exactly that after eleven checks. The message now says what happened
+rather than promising a result.
+
 ## 2.736.0
 
 ### Fixed — the Reflex tab implied the assistant depends on the automations it replaces
