@@ -1,3 +1,14 @@
+## 2.706.0
+
+### Fixed — the "may operate devices" switch would not have worked when turned on
+Tested against the running Home Assistant MCP server rather than assumed: of its
+78 tools, the 41 that change something — calling a service, restarting, removing
+an entity — describe themselves as destructive without also saying "not
+read-only". VESTA was only reading the second field, so it filed all 41 as
+unrecognised. They were correctly refused while the switch is off, but would have
+stayed refused after switching it on. They are now recognised as what they are,
+and a tool that describes itself as neither is still withheld.
+
 ## 2.705.0
 
 ### Added — the villa now asks Home Assistant's own MCP add-on, and a switch says whether it may touch anything
