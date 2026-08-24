@@ -192,8 +192,23 @@ def mode_of(tool: Mapping[str, Any]) -> str:
         return "UNCLASSIFIED"
     if ann.get("readOnlyHint") is True:
         return "READ"
-    if ann.get("readOnlyHint") is False:
+    # ⚠️ `destructiveHint` COUNTS, AND LEAVING IT OUT BROKE THE OWNER'S SWITCH.
+    # Measured against the live server (ha-mcp 8.3.0, 78 tools): 41 of them —
+    # `ha_call_service`, `ha_restart`, `ha_remove_entity`,
+    # `ha_config_set_automation`, `ha_manage_backup` and the rest of the write
+    # surface — declare `destructiveHint: True` and OMIT `readOnlyHint`
+    # entirely. Reading only `readOnlyHint` classified all 41 as UNCLASSIFIED,
+    # which denies them — the right OUTCOME while the gate is shut, and the
+    # wrong REASON, because an unclassified tool stays denied even after an
+    # owner turns actuation ON. The switch exists precisely so this capability
+    # can be opened later; a classification that ignores the field 41 of 45
+    # write tools actually use would have made it a switch that does nothing.
+    if ann.get("readOnlyHint") is False or ann.get("destructiveHint") is True:
         return "ACT"
+    # ⚠️ AND A TOOL THAT SAYS NEITHER IS STILL WITHHELD. Zero of the 78 are
+    # silent today, so this branch is unreachable against the current upstream —
+    # which is exactly why it must stay: it is the control for the release that
+    # adds one (RISK-036), not for the release in front of us.
     return "UNCLASSIFIED"
 
 

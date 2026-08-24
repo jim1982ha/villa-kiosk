@@ -190,3 +190,58 @@ def test_the_registry_FOLDS_THEM_IN_rather_than_beside() -> None:
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith("#"))
     assert "upstream.tools_for(" in code
+
+
+# ── classification against the REAL upstream (ha-mcp 8.3.0, 78 tools) ────────
+# ⚠️ THESE SHAPES ARE COPIED FROM A LIVE `tools/list`, NOT INVENTED. The first
+# classifier read only `readOnlyHint` and the live server does not set it on the
+# write surface at all: 41 of 78 tools declare `destructiveHint: True` and omit
+# it. They were therefore UNCLASSIFIED — denied, which is the right outcome
+# while the gate is shut and the WRONG REASON, because an unclassified tool
+# stays denied after an owner opens it. A fixture invented from the MCP spec
+# would have agreed with the code and shipped a switch that did nothing.
+
+DESTRUCTIVE_NO_READONLY = {
+    "name": "ha_call_service", "description": "call a service",
+    "inputSchema": {"type": "object", "properties": {}},
+    "annotations": {"title": "Call Service", "destructiveHint": True,
+                    "idempotentHint": False, "openWorldHint": True}}
+SILENT = {"name": "ha_future_tool", "description": "?",
+          "inputSchema": {"type": "object", "properties": {}},
+          "annotations": {"title": "Future", "openWorldHint": True}}
+
+
+def test_destructiveHint_alone_is_ACT_not_unclassified() -> None:
+    """⚠️ 41 OF THE LIVE SERVER'S 78 TOOLS ARE THIS SHAPE. Classifying them as
+    unclassified denies them for a reason the owner's switch cannot override."""
+    assert upstream.mode_of(DESTRUCTIVE_NO_READONLY) == "ACT"
+
+    shut = policy_mod.for_run({"act_enabled": False}, tier="reason",
+                              tool_names=["ha_call_service"])
+    assert policy_mod.may_use_tool(shut, "ha_call_service", "ACT").verdict == "deny"
+    # ⚠️ AND THE SWITCH ACTUALLY WORKS, which is what the old classification
+    # silently broke.
+    open_ = policy_mod.for_run({"act_enabled": True}, tier="reason",
+                               tool_names=["ha_call_service"])
+    assert policy_mod.may_use_tool(open_, "ha_call_service", "ACT").verdict == "allow"
+
+
+def test_a_tool_that_declares_NOTHING_is_still_withheld() -> None:
+    """⚠️ UNREACHABLE AGAINST TODAY'S UPSTREAM — zero of the 78 are silent — and
+    that is exactly why it stays. It is the control for the release that adds
+    one (RISK-036), not for the release in front of us."""
+    assert upstream.mode_of(SILENT) not in contracts.TOOL_MODE
+    open_ = policy_mod.for_run({"act_enabled": True}, tier="reason",
+                               tool_names=["ha_future_tool"])
+    assert policy_mod.may_use_tool(
+        open_, "ha_future_tool", upstream.mode_of(SILENT)).verdict == "deny"
+
+
+def test_the_tools_our_questions_need_are_READABLE() -> None:
+    """Verified against the live server: every one of these is readOnlyHint
+    true, so watch-only does not block the thing the integration is for."""
+    for name in ("ha_search", "ha_get_history", "ha_get_state",
+                 "ha_list_floors_areas", "ha_get_automation_traces"):
+        spec = {"name": name, "description": "", "inputSchema": {},
+                "annotations": {"readOnlyHint": True, "idempotentHint": True}}
+        assert upstream.mode_of(spec) == "READ", name
