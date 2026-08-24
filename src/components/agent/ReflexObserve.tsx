@@ -141,13 +141,22 @@ export function ObserveTab({ diagnostics }: {
           <dd>{ago(c?.connectedSince ?? "") || "—"}</dd>
         </div>
       </dl>
+      {/* ⚠️ "FOUR WEEKS OF HISTORY" WAS A CLAIM THIS SCREEN CANNOT KEEP, and it
+          was mine. Four weeks is the scoring window's DESIGN figure; what the
+          villa actually holds is whatever fits in the rolling record, which at
+          the reference property's change rate is about two days. Stating the
+          design figure as though it were the depth on hand is the shape of
+          error dry-audit Part 3 exists for — a sentence read as authority that
+          quietly stopped being true. Say the rule, and let the count above say
+          the depth. */}
       <p className="muted body-text">
         Every material change is written to a rolling record on the property, and
-        each reading is scored against that device's own recent history rather
+        each reading is scored against that device's own recorded history rather
         than against a number somebody typed in. That is what lets the villa
-        watch roughly 1,250 things without anyone tuning a threshold — and why a
+        watch everything it can see without anyone tuning a threshold — and why a
         device behaving oddly <em>for itself</em> is noticed even when its value
-        looks ordinary.
+        looks ordinary. How far back it can look is bounded by the record above:
+        once that is full, the oldest changes are dropped to make room.
       </p>
 
       {c?.silentTypes && c.silentTypes.length > 0 && (

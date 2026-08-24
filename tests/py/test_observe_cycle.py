@@ -232,3 +232,96 @@ def test_no_new_s6_service_was_added() -> None:
         pytest.skip("no s6 tree in this checkout")
     assert not any("observe" in name for name in os.listdir(services)), (
         "the observation cycle must run in the existing loop, not as a service")
+
+
+# ── a restart is not a cold start ───────────────────────────────────────────
+
+def test_a_RESTART_rejournals_only_what_actually_moved(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ THE DEFECT THAT FILLED THE RING, AND THE REASON THE OWNER SAW A
+    "journal full" CONCERN. `_LAST` is process memory and the journal is on
+    disk; nothing joined them, so every restart saw `previous = {}`, called all
+    1,256 entities new and wrote the whole villa in one cycle — ~12 cycles, i.e.
+    three hours of history, evicted to re-record states already held. Eleven
+    restarts in one afternoon of dev releases cost over a day of the window.
+    """
+    fake = _FakeHass([_state("light.a", "on"), _state("light.b", "off"),
+                      _state("light.c", "on")])
+    monkeypatch.setattr(cycle, "HassClient", lambda _s: fake)
+    first = _run(cycle.run_once(None, now_iso="2026-08-22T10:00:00+00:00"))  # type: ignore[arg-type]
+    assert first["changed"] == 3 and first["seeded"] == 0, "cold start sweeps"
+
+    # The process restarts: memory is gone, the journal is not.
+    cycle._LAST.clear()
+    fake.states = [_state("light.a", "off"), _state("light.b", "off"),
+                   _state("light.c", "on")]
+    after = _run(cycle.run_once(None, now_iso="2026-08-22T10:15:00+00:00"))  # type: ignore[arg-type]
+    assert after["seeded"] == 3, "the baseline must come back from the journal"
+    assert after["changed"] == 1 and after["journalled"] == 1, (
+        "only light.a moved while the process was down; the other two were "
+        "already on record and re-recording them is what evicted the history")
+
+
+def test_the_COLD_start_sweep_is_preserved(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ THE OTHER HALF, AND IT IS NOT SYMMETRIC WITH THE ONE ABOVE. On a
+    genuinely empty journal the sweep is correct — one baseline row per entity
+    is what makes cycle two's diff mean anything. The fix must be able to tell
+    the two apart, and it does so by what the journal HOLDS rather than by a
+    flag somebody has to set."""
+    monkeypatch.setattr(cycle, "HassClient",
+                        lambda _s: _FakeHass([_state("light.a", "on"),
+                                              _state("light.b", "off")]))
+    counts = _run(cycle.run_once(None, now_iso="2026-08-22T10:00:00+00:00"))  # type: ignore[arg-type]
+    assert counts["seeded"] == 0 and counts["changed"] == 2
+
+
+def test_a_SEEDED_baseline_does_not_fabricate_an_attribute_change(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ THE SAME DEFECT AT A TENTH OF THE SIZE, and the reason `attributes`
+    seeds as None rather than `{}`. A journal row carries `a` only when a
+    material attribute CHANGED, so there is no full attribute set to seed with
+    — and comparing an empty dict against a real one re-journals every climate
+    unit, cover and battery device on every restart."""
+    fake = _FakeHass([_state("climate.x", "cool", temperature=21)])
+    monkeypatch.setattr(cycle, "HassClient", lambda _s: fake)
+    _run(cycle.run_once(None, now_iso="2026-08-22T10:00:00+00:00"))  # type: ignore[arg-type]
+
+    cycle._LAST.clear()
+    counts = _run(cycle.run_once(None, now_iso="2026-08-22T10:15:00+00:00"))  # type: ignore[arg-type]
+    assert counts["seeded"] == 1
+    assert counts["changed"] == 0, (
+        "nothing moved, but the seeded baseline knows no attributes — an "
+        "unknown compared as {} reports a change that did not happen")
+
+
+def test_an_entity_REMOVED_before_the_restart_is_not_seeded(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """Its last row is a removal, it is already recorded as gone, and seeding
+    it would make the next cycle emit a SECOND removal for an entity that left
+    the villa weeks ago."""
+    fake = _FakeHass([_state("light.a", "on"), _state("light.b", "on")])
+    monkeypatch.setattr(cycle, "HassClient", lambda _s: fake)
+    _run(cycle.run_once(None, now_iso="2026-08-22T10:00:00+00:00"))  # type: ignore[arg-type]
+    fake.states = [_state("light.a", "on")]          # light.b disappears
+    _run(cycle.run_once(None, now_iso="2026-08-22T10:15:00+00:00"))  # type: ignore[arg-type]
+
+    cycle._LAST.clear()
+    counts = _run(cycle.run_once(None, now_iso="2026-08-22T10:30:00+00:00"))  # type: ignore[arg-type]
+    assert counts["seeded"] == 1, "the removed entity must not come back"
+    assert counts["changed"] == 0
+
+
+def test_last_states_takes_the_NEWEST_row_per_entity() -> None:
+    """The seed is only as good as this: an older row winning would restore a
+    stale baseline and re-journal the entity on the next cycle."""
+    journal.append([{"event_type": "state_changed", "time_fired": "t1",
+                     "data": {"entity_id": "light.a", "old_state": None,
+                              "new_state": {"state": "on", "attributes": {}}}},
+                    {"event_type": "state_changed", "time_fired": "t2",
+                     "data": {"entity_id": "light.a",
+                              "old_state": {"state": "on", "attributes": {}},
+                              "new_state": {"state": "off",
+                                            "attributes": {}}}}],
+                   now_iso="t2")
+    assert journal.last_states() == {"light.a": "off"}

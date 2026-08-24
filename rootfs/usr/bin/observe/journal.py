@@ -347,6 +347,54 @@ def coverage(since_iso: str, *, as_utc: Any = None) -> Dict[str, Any]:
     }
 
 
+def last_states() -> Dict[str, str]:
+    """Each entity's most recently journalled STATE — the restart baseline.
+
+    ⚠️ THIS EXISTS BECAUSE THE BASELINE WAS PROCESS MEMORY WHILE THE RECORD WAS
+    ON DISK, AND NOTHING JOINED THEM. `cycle._LAST` starts empty, so the first
+    cycle after every restart saw `previous = {}`, called every entity new and
+    journalled the whole villa — 1,256 rows in one cycle at the reference
+    property, against ~105 for an ordinary one. That is ~12 cycles, i.e. THREE
+    HOURS of history, evicted per restart to re-record states the journal
+    already held. Eleven restarts in one afternoon of dev releases cost more
+    than a day of the window, and the ring reported itself full.
+
+    `diff_states`' own docstring called the sweep "correct and not noise" — true
+    on a COLD start, where the journal really has no record of any of them, and
+    false on every restart after it. The distinction is exactly this function's
+    return value being empty or not, so the cold-start sweep is preserved by
+    construction rather than by a flag.
+
+    ⚠️ STATE ONLY, AND THE CALLER MUST TREAT ATTRIBUTES AS UNKNOWN. A row
+    carries `a` only when a material attribute CHANGED, so the newest row's `a`
+    is a delta and never the entity's current attribute set. Reconstructing one
+    from it would seed a baseline that is wrong in a way nothing can detect —
+    and comparing a partial dict against a full one re-journals every climate
+    unit and every cover on every restart, which is this defect again at a
+    tenth of the size.
+
+    ⚠️ AN ENTITY WHOSE LAST ROW IS A REMOVAL IS OMITTED. Its `s` is None, it is
+    already recorded as gone, and seeding it would make the next cycle emit a
+    second removal event for an entity that left the villa weeks ago.
+    """
+    out: Dict[str, str] = {}
+    for row in read()["entries"]:
+        if not isinstance(row, dict):
+            continue
+        entity_id = str(row.get("id") or "")
+        if not entity_id:
+            continue
+        value = row.get("s")
+        # Entries are chronological, so a later row overwrites an earlier one
+        # and the last write per id wins. A removal DELETES rather than skips:
+        # the entity was present earlier in the window and is gone now.
+        if value is None:
+            out.pop(entity_id, None)
+        else:
+            out[entity_id] = str(value)
+    return out
+
+
 def since(iso: str) -> List[Dict[str, Any]]:
     """Rows at or after `iso`, oldest first.
 

@@ -101,16 +101,32 @@ def diff_states(previous: Mapping[str, Mapping[str, Any]],
     `new_state=None` as material — so the removal is recorded rather than
     silently ceasing to appear.
 
-    ⚠️ ON THE FIRST CYCLE `previous` IS EMPTY AND EVERY ENTITY LOOKS NEW. That
-    is correct and it is not noise: the journal genuinely has no record of any
-    of them, and one baseline row per entity is what makes the second cycle's
-    diff meaningful. It costs one full sweep, once, per process start.
+    ⚠️ ON A COLD START `previous` IS EMPTY AND EVERY ENTITY LOOKS NEW. That is
+    correct and it is not noise: the journal genuinely has no record of any of
+    them, and one baseline row per entity is what makes the second cycle's diff
+    meaningful. It costs one full sweep, ONCE — on the first start, not on every
+    restart. `run_once` seeds `previous` from the journal precisely so a restart
+    is not mistaken for a cold start; see `journal.last_states`.
+
+    ⚠️ A SEEDED BASELINE CARRIES `attributes: None`, MEANING "NOT KNOWN", AND IS
+    COMPARED ON STATE ALONE. A journal row records an attribute only when it
+    CHANGED, so there is no honest full attribute set to seed with — and `None`
+    is distinguishable from every value `_index` produces, which always builds a
+    dict. Treating unknown as `{}` instead would report a change on every entity
+    that has a material attribute at all. The cost is stated rather than hidden:
+    an attribute that moved WHILE THE PROCESS WAS DOWN, with no accompanying
+    state change, is missed once. That is a single missed setpoint against 1,256
+    fabricated rows, and the journal's own rule is that a row must mean
+    something changed.
     """
     events: List[Dict[str, Any]] = []
     for entity_id, after in current.items():
         before = previous.get(entity_id)
-        if before is None or before.get("state") != after.get("state") \
-                or before.get("attributes") != after.get("attributes"):
+        if before is None:
+            events.append(_as_event(entity_id, before, after, now_iso))
+        elif before.get("state") != after.get("state") or (
+                before.get("attributes") is not None
+                and before.get("attributes") != after.get("attributes")):
             events.append(_as_event(entity_id, before, after, now_iso))
     for entity_id, before in previous.items():
         if entity_id not in current:
@@ -148,6 +164,17 @@ def _index(states: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return out
 
 
+def _seed_from_journal() -> Dict[str, Dict[str, Any]]:
+    """The last-known state of every entity the journal has ever recorded.
+
+    Shaped like `_index`'s output so `diff_states` needs no second code path,
+    with `attributes: None` marking the half that cannot be reconstructed — see
+    that function's note on why unknown may not be spelled `{}`.
+    """
+    return {entity_id: {"state": value, "attributes": None}
+            for entity_id, value in journal.last_states().items()}
+
+
 async def run_once(session: ClientSession, *, now_iso: str = "") -> Dict[str, Any]:
     """One cycle. Returns the counts the log line prints.
 
@@ -157,14 +184,23 @@ async def run_once(session: ClientSession, *, now_iso: str = "") -> Dict[str, An
     would be the second.
     """
     counts: Dict[str, Any] = {"entities": 0, "changed": 0, "journalled": 0,
-                              "salient": 0, "unscorable": 0}
+                              "salient": 0, "unscorable": 0, "seeded": 0}
     async with HassClient(session) as hass:
         raw = await hass.command("get_states")
     states = raw if isinstance(raw, list) else []
     current = _index(states)
     counts["entities"] = len(current)
 
-    previous = _LAST.get("states") or {}
+    # ⚠️ THE BASELINE SURVIVES A RESTART BY BEING RE-READ FROM THE JOURNAL, not
+    # by being persisted separately. The journal already IS the record of what
+    # each entity was last seen doing, so a second on-disk copy would be a
+    # second thing to keep in step — and the two disagreeing is precisely the
+    # class of defect this subsystem keeps paying for. Cold start seeds nothing
+    # and the full sweep happens as designed.
+    previous = _LAST.get("states")
+    if previous is None:
+        previous = _seed_from_journal()
+        counts["seeded"] = len(previous)
     events = diff_states(previous, current, now_iso)
     counts["changed"] = len(events)
     counts["journalled"] = journal.append(events, now_iso=now_iso)
@@ -193,9 +229,18 @@ async def run_forever(session: ClientSession,
         minutes = cadence_minutes(settings)
         try:
             counts = await run_once(session)
+            # ⚠️ THE SEED COUNT IS ON THE LINE BECAUSE ITS ABSENCE IS WHAT MADE
+            # THE DEFECT INVISIBLE. `observed 1256 entities, 1256 changed` reads
+            # as a villa in which everything moved at once; it was a restart
+            # re-recording states the journal already held, and nothing on the
+            # line separated the two. It prints only on the cycle that seeded,
+            # so a steady villa's log is unchanged.
+            seeded = counts.get("seeded") or 0
             log(f"observed {counts['entities']} entities, "
                 f"{counts['changed']} changed, "
-                f"{counts['journalled']} journalled")
+                f"{counts['journalled']} journalled"
+                + (f" (baseline restored for {seeded} from the journal)"
+                   if seeded else ""))
         except asyncio.CancelledError:
             log("observation cycle stopped")
             raise
