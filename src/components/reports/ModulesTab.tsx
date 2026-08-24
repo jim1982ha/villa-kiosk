@@ -62,6 +62,36 @@ function when(iso: string): string {
   return Number.isNaN(at.getTime()) ? iso : at.toLocaleString();
 }
 
+/** What each shipped blueprint family is FOR, and whether it survives.
+ *
+ *  ⚠️ DERIVED FROM THE CUTOVER ORDER IN `docs/PROGRESS.md`, NOT FROM TASTE.
+ *  `maintenance_*` retires first (two of its rules suppress the very checks
+ *  that replace them), then `roi_*` starting with `roi_baseline_deviation`
+ *  (zero instances, suppressing `level_anomaly` for nothing), then `audit_*`
+ *  EXCEPT `audit_notification_path`, which has no successor of any kind and is
+ *  the weekly proof the alert channel still works. `critical_*` was never on
+ *  that list: ADR-019 keeps ~6 as reflexes, because "a leak must close a valve
+ *  in under a second with no WAN and no model in the path. That is physics,
+ *  not conservatism."
+ *
+ *  ⚠️ SO THIS TABLE IS ALREADY CORRECT ON THE DAY THE CUTOVER FINISHES. The
+ *  rows for retiring families simply stop appearing — nothing here has to be
+ *  edited, which is the property the whole redesign was asked to have.
+ *
+ *  ⚠️ AND AN UNKNOWN CATEGORY RENDERS PLAINLY RATHER THAN AS AN ERROR. Anyone
+ *  can fire a `vesta_<something>_event` from their own automation — that is the
+ *  documented extension point, stated at the bottom of this very tab — so a
+ *  category we have no opinion about is the SUPPORTED case, not a fault. */
+const FAMILIES: Record<string, { role: string; reflex?: true }> = {
+  critical: {
+    role: "acts in under a second, on this property, with no AI involved",
+    reflex: true,
+  },
+  maintenance: { role: "being replaced by the built-in checks below" },
+  roi: { role: "being replaced by the built-in checks below" },
+  audit: { role: "proves the alert channel still works" },
+};
+
 export default function ModulesTab({
   diagnostics, config, preview, busy, onSave, onRefresh,
 }: {
@@ -134,9 +164,22 @@ export default function ModulesTab({
         {c.blueprintCategories.map((cat) => {
           const type = `vesta_${cat}_event`;
           const seen = c.seenTypes[type] ?? 0;
+          const family = FAMILIES[cat];
           return (
             <li key={cat} className={`reports-item${seen ? "" : " muted"}`}>
               <span>{cat}</span>
+              {/* ⚠️ WHAT THIS FAMILY IS FOR, NOT JUST HOW OFTEN IT SPOKE. A
+                  count answers "is it wired"; it does not answer the question
+                  an owner deciding whether to keep an automation actually has.
+                  A reflex closes a valve in under a second with no model in the
+                  path and is PERMANENT; the others are doing a job the built-in
+                  checks below now do, and are on their way out. Those are
+                  opposite recommendations rendered, until now, as identical
+                  rows. */}
+              {family?.reflex && <SourceChip source="reflex" />}
+              {family && (
+                <span className="muted body-text">{family.role}</span>
+              )}
               <span>{seen ? `${seen} received` : "nothing yet"}</span>
             </li>
           );

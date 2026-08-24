@@ -1,3 +1,14 @@
+## 2.723.0
+
+### Changed — the automations list now says what each one is for
+It showed a category name and how many times it had spoken, which answers "is it
+wired" and not "should I keep it". The safety automations are marked as such —
+they act in under a second, on the property, with no AI involved, and they stay
+— while the families whose job the built-in checks now do are labelled as being
+replaced. Those are opposite recommendations that had been rendered as identical
+rows. An automation of your own that VESTA has no opinion about is listed
+plainly, as before.
+
 ## 2.722.0
 
 ### Fixed — the villa kept flagging its own paperwork, and two tabs shared one name
