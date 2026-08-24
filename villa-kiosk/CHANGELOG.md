@@ -1,3 +1,15 @@
+## 2.729.0
+
+### Changed — VESTA Agent now follows the villa's own signal path, step by step
+Its tabs were grouped by the kind of thing they showed — lists, then settings —
+which put the cheapest step beside the most expensive and gave no sense that one
+feeds the next. They are now the five steps the design is built from, in order:
+**Reflex** (what acts by itself in under a second), **Observe** (what is being
+recorded), **Triage** (the cheap pass that only points), **Reason** (the only
+step that judges) and **Act & Tell** (who is told, and what the villa may do).
+Each says how fast it is, whether AI is involved and whether it works with no
+internet. Cost, people and the provider key sit behind one further door.
+
 ## 2.728.0
 
 ### Added — the add-on log now records which tools an investigation actually used

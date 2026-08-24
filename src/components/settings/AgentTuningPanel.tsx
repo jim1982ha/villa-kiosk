@@ -28,7 +28,6 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
-import ActuableDevicesPanel from "./ActuableDevicesPanel";
 import type { AgentConfig } from "@/agent/agentApi";
 
 /** ⚠️ A FLOOR THE BACKEND ALSO ENFORCES (`scheduler.MIN_MINUTES`). Stated here
@@ -382,21 +381,13 @@ export default function AgentTuningPanel() {
         decide how much it looks and who it tells, this decides whether it may
         touch anything at all. Leave it off unless you have a reason.
       </p>
-      {/* ⚠️ THE SECOND HALF OF THE SWITCH, AND IT HAD NO CONTROL AT ALL UNTIL
-          2.718.0 — the same defect the quiet-hours note below records, on the
-          setting where it matters most. `may_act` AND-s the toggle above with
-          this list, so the toggle alone authorised nothing and an owner turning
-          it on had no way to find out why nothing happened.
-          ⚠️ SHOWN ONLY WHILE THE SWITCH IS ON, because the list is meaningless
-          without it and a device list under an off switch invites somebody to
-          fill it in believing that is the grant. */}
-      {draft.actEnabled && (
-        <ActuableDevicesPanel
-          value={draft.actuableEntities}
-          onChange={(actuableEntities) => edit({ actuableEntities })}
-          disabled={ctx.saving}
-        />
-      )}
+      {/* ⚠️ THE DEVICE ALLOW-LIST MOVED TO "ACT & TELL" IN 2.729.0. It is
+          AND-ed with the switch above, so it belongs beside it in principle —
+          but it is only ever CONSULTED at the authority boundary, and putting
+          the whole of "what the villa is permitted to do" on one tab is what
+          lets an owner read that permission without assembling it from two
+          dialogs. The switch stays here because it is a tuning dial; the list
+          is a permission. */}
       <label className="toggle">
         <input type="checkbox"
           checked={draft.investigateMode === "auto"}
@@ -415,40 +406,10 @@ export default function AgentTuningPanel() {
           the store, the wire map and the TypeScript type, and nothing here
           could edit it — so it stayed empty, which means "never quiet", and the
           feature looked like it was working because nothing was ever held. */}
-      <div className="settings-section-title">
-        When it may interrupt you
-      </div>
-      <label className="toggle">
-        <input type="checkbox"
-          checked={draft.quietHoursStart !== "" && draft.quietHoursEnd !== ""}
-          onChange={(e) => edit(e.target.checked
-            ? { quietHoursStart: "22:00", quietHoursEnd: "07:00" }
-            : { quietHoursStart: "", quietHoursEnd: "" })} />
-        <span>Do not wake anyone for something that can wait</span>
-      </label>
-      <p className="muted body-text">
-        Anything urgent still arrives immediately, at any hour — that is what
-        makes it urgent. This holds back only the rest, until the morning, and
-        only while the property is empty: if someone is staying there they are
-        living with the problem, so they are told.
-      </p>
-      {draft.quietHoursStart !== "" && draft.quietHoursEnd !== "" && (
-        <div className="editable-row">
-          <div className="editable-row-fields">
-            <label className="fm-field">
-              <span>Quiet from</span>
-              <input type="time" value={draft.quietHoursStart}
-                onChange={(e) => edit({ quietHoursStart: e.target.value })} />
-            </label>
-            <label className="fm-field">
-              <span>Until</span>
-              <input type="time" value={draft.quietHoursEnd}
-                onChange={(e) => edit({ quietHoursEnd: e.target.value })} />
-            </label>
-          </div>
-        </div>
-      )}
-
+      {/* ⚠️ QUIET HOURS MOVED TO "ACT & TELL" IN 2.729.0, for the same reason
+          as the allow-list above: the window is consulted by the delivery tier
+          and by nothing else, and "who may interrupt me, and when" reads as one
+          question rather than two settings in different places. */}
       <div className="settings-section-title">
         How deeply it looks into one problem
       </div>

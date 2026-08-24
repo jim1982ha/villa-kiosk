@@ -1,0 +1,74 @@
+// src/components/agent/AgentAdvancedModal.tsx
+//
+// The agent's occasional settings, one door back from the daily ones.
+//
+// ⚠️ THE SAME SHAPE SETTINGS USES FOR ADVANCED SETTINGS, and deliberately so.
+// Cost, who may talk to the villa, the provider key and the comparison against
+// the old rules are each opened rarely and none belong in the path somebody
+// walks to change a cadence. Inlining them buried the four dials that are
+// actually tuned, which is the reading problem the whole reorganisation is
+// about.
+
+import { GitCompare, KeyRound, Receipt, Users } from "lucide-react";
+
+import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalTabs from "@/components/common/ModalTabs";
+import ModalFooter from "@/components/common/ModalFooter";
+import { AgentConfigProvider } from "@/agent/AgentConfigDraft";
+import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
+import PeoplePanel from "@/components/settings/PeoplePanel";
+import ShadowDiffPanel from "@/components/settings/ShadowDiffPanel";
+import UsagePanel from "@/components/settings/UsagePanel";
+import { useState } from "react";
+
+type Tab = "cost" | "people" | "key" | "shadow";
+
+const TABS: { id: Tab; label: string; icon: typeof Receipt }[] = [
+  // ⚠️ COST FIRST. It is the one an owner opens unprompted, and the HLD prices
+  // the whole design — the volume tier is the largest line and the reason the
+  // cadence dial exists at all.
+  { id: "cost", label: "Cost", icon: Receipt },
+  { id: "people", label: "Who may talk to it", icon: Users },
+  { id: "key", label: "Provider key", icon: KeyRound },
+  { id: "shadow", label: "Old rules vs AI", icon: GitCompare },
+];
+
+export default function AgentAdvancedModal({ onBack }: { onBack: () => void }) {
+  const dialogRef = useModalA11y(onBack);
+  const [tab, setTab] = useState<Tab>("cost");
+  return (
+    <div className="modal-backdrop" onClick={onBack}>
+      <div
+        ref={dialogRef}
+        className="settings-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Advanced assistant settings"
+      >
+        <div className="settings-header"><h2>Cost, people and advanced</h2></div>
+        <ModalTabs tabs={TABS} active={tab} onSelect={setTab}
+                   label="Advanced assistant sections" />
+        <div className="settings-body">
+          {tab === "cost" && <div className="reports-pane"><UsagePanel /></div>}
+          {/* ⚠️ ONE DRAFT PROVIDER AROUND THE TWO THAT WRITE CONFIG. Two panels
+              each loading, versioning and PUTting one document is a lost
+              update — the store refuses a write whose revision is stale, so
+              saving one silently discarded the other's edit. */}
+          {(tab === "people" || tab === "key") && (
+            <AgentConfigProvider enabled>
+              <div className="reports-pane">
+                {tab === "people" && <PeoplePanel />}
+                {tab === "key" && <ApiKeyPanel />}
+              </div>
+            </AgentConfigProvider>
+          )}
+          {tab === "shadow" && (
+            <div className="reports-pane"><ShadowDiffPanel /></div>
+          )}
+        </div>
+        <ModalFooter onClose={onBack} />
+      </div>
+    </div>
+  );
+}

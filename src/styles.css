@@ -4664,6 +4664,35 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   .source-legend-row { grid-template-columns: auto minmax(0, 1fr); }
 }
 
+/* ── THE TIER IDENTITY BLOCK ──────────────────────────────────────────────
+   One header for five tabs (`agent/tiers.tsx`). ⚠️ Five hand-written ones would
+   drift in wording AND in layout inside a release, and the whole point of the
+   vocabulary is that a reader learns it once. */
+.tier-intro { display: flex; flex-direction: column; gap: 8px; }
+.tier-intro > * { margin: 0; }
+.tier-intro-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+/* The step number. ⚠️ Deliberately quiet: it orders the tabs and is not the
+   thing being read — the tier's NAME is. */
+.tier-badge {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+/* Speed / uses AI / works offline — always three, always in this order, so they
+   can be compared across tabs at a glance. ⚠️ It wraps rather than scrolls: on a
+   phone these stack, and a horizontally scrolling fact row hides the third
+   fact, which is the one about working offline. */
+.tier-facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 2px 0 0; }
+.tier-facts > div { display: flex; flex-direction: column; gap: 1px; }
+.tier-facts dt { font-size: var(--text-xs); color: var(--text-muted); }
+.tier-facts dd { margin: 0; font-size: var(--text-sm); color: var(--text-primary); }
+
 /* ── ROW ACTIONS ──────────────────────────────────────────────────────────
    ⚠️ ONE SHAPE FOR BOTH BUTTONS IN A LIST ROW, AND THERE WERE TWO. The approve
    control was `.icon-btn` (48px, `--radius-squircle`) and the dismiss beside it

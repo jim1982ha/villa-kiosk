@@ -24,10 +24,9 @@
 // is the villa concluding about my property" is not a privileged question, and
 // a dialog-level gate would make it one.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  BookMarked, GitCompare, HandHelping, KeyRound, Receipt, Search,
-  SlidersHorizontal, Sparkles,
+  Activity, Brain, Search, Send, SlidersHorizontal, Sparkles, Zap,
 } from "lucide-react";
 
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -40,41 +39,41 @@ import CockpitMemories from "@/components/cockpit/CockpitMemories";
 import CockpitProposals from "@/components/cockpit/CockpitProposals";
 import CockpitQueue from "@/components/cockpit/CockpitQueue";
 import CockpitReview from "@/components/cockpit/CockpitReview";
+import { ReflexTab, ObserveTab } from "./ReflexObserve";
+import { TierIntro, TIERS } from "./tiers";
+import ActDeliverySection from "./ActDeliverySection";
+import AgentAdvancedModal from "./AgentAdvancedModal";
+import { fetchReportsDiagnostics,
+         type ReportsDiagnostics } from "@/reports/reportsApi";
 import AgentTuningPanel from "@/components/settings/AgentTuningPanel";
-import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
-import PeoplePanel from "@/components/settings/PeoplePanel";
-import ShadowDiffPanel from "@/components/settings/ShadowDiffPanel";
-import UsagePanel from "@/components/settings/UsagePanel";
 
-type Tab =
-  | "concerns" | "look" | "act" | "memory"
-  | "tuning" | "access" | "usage" | "shadow";
+type Tab = "reflex" | "observe" | "triage" | "reason" | "act" | "settings";
 
-/** ⚠️ THE FIRST THREE ARE NAMED BY THE DECISION THEY NEED, NOT BY THEIR STAGE,
- *  AND THE OWNER'S QUESTION IS WHY. They asked what the difference was between
- *  "Concerns" and "Waiting on you" — a fair question, because BOTH earlier
- *  names described the pipeline rather than the reader's job, and two of the
- *  three tabs wanted a decision without saying so.
+/** ⚠️ THE SIX TABS ARE THE HLD'S FIVE TIERS, IN ITS ORDER, PLUS SETTINGS.
+ *  §4 orders them by how fast each must answer and how much judgement it is
+ *  trusted with — "speed decreases and judgement increases as you go up;
+ *  determinism returns at the top, because deciding who to wake at 3am is not a
+ *  judgement a model should make". Left to right is therefore the villa's own
+ *  signal path: something happens, it is recorded, something cheap asks whether
+ *  it matters, something expensive works out why, something deterministic
+ *  decides who is told.
  *
- *  Concerns is the only one where nothing is blocked: it is a conclusion, and
- *  reading it is the whole interaction. The other two each block something
- *  different, so each says what it is asking for:
+ *  ⚠️ AND THE ORDER IS THE ARGUMENT, NOT DECORATION. The previous arrangement
+ *  grouped by UI kind — lists, then settings — which put the cheapest tier
+ *  beside the most expensive and gave a reader no way to see that one feeds the
+ *  next. The owner's question about Concerns versus approvals was that missing
+ *  sequence showing through.
  *
- *    Approve a look   — spend a run investigating something triage flagged
- *    Approve an action— let the villa DO something, or adopt a procedure
- *
- *  ⚠️ AND THE ORDER IS STILL THE PIPELINE. A look precedes a concern precedes
- *  an action, so a reader scanning left to right meets the stages in the order
- *  they happen even though the names no longer announce them. */
+ *  ⚠️ THE FIRST TWO ARE NOT OWNER-GATED. Reflex and Observe describe what the
+ *  property does with no AI in the path at all, and a facility manager has more
+ *  reason to read them than the owner does. */
 const TABS: { id: Tab; label: string; icon: typeof Sparkles; owner?: true }[] = [
-  { id: "look", label: "Approve a look", icon: Search, owner: true },
-  { id: "concerns", label: "Concerns", icon: Sparkles },
-  { id: "act", label: "Approve an action", icon: HandHelping, owner: true },
-  { id: "memory", label: "Memory", icon: BookMarked, owner: true },
-  { id: "tuning", label: "Tuning", icon: SlidersHorizontal, owner: true },
-  { id: "access", label: "Access", icon: KeyRound, owner: true },
-  { id: "usage", label: "Cost", icon: Receipt, owner: true },
-  { id: "shadow", label: "Shadow diff", icon: GitCompare, owner: true },
+  { id: "reflex", label: "Reflex", icon: Zap },
+  { id: "observe", label: "Observe", icon: Activity },
+  { id: "triage", label: "Triage", icon: Search, owner: true },
+  { id: "reason", label: "Reason", icon: Brain },
+  { id: "act", label: "Act & Tell", icon: Send, owner: true },
+  { id: "settings", label: "Settings", icon: SlidersHorizontal, owner: true },
 ];
 
 export default function AgentModal(
@@ -86,7 +85,14 @@ export default function AgentModal(
   // ⚠️ THE FIRST VISIBLE TAB, NEVER A LITERAL. Hard-coding one that a facility
   // manager cannot see opens them on an empty body with nothing selected —
   // the defect `ReportsModal` records having shipped.
-  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "concerns");
+  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "reflex");
+  const [advanced, setAdvanced] = useState(false);
+  // ⚠️ ONE FETCH FOR THE WHOLE DIALOG, ON OPEN. Reflex and Observe both read
+  // the same diagnostics document, and two components each fetching it would
+  // probe Home Assistant twice for one screen — that endpoint runs a live probe
+  // per request, which is exactly why the Cockpit stopped calling it.
+  const [diagnostics, setDiagnostics] = useState<ReportsDiagnostics | null>(null);
+  useEffect(() => { void fetchReportsDiagnostics().then(setDiagnostics); }, []);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -110,50 +116,89 @@ export default function AgentModal(
         />
 
         <div className="settings-body">
-          {tab === "look" && (
+          {/* ── Step 0 · what acts by itself ───────────────────────────── */}
+          {tab === "reflex" && <ReflexTab diagnostics={diagnostics} />}
+
+          {/* ── Step 1 · what is being recorded ────────────────────────── */}
+          {tab === "observe" && <ObserveTab diagnostics={diagnostics} />}
+
+          {/* ── Step 2 · the cheap pass that only points ───────────────── */}
+          {tab === "triage" && (
             <div className="reports-pane">
+              <TierIntro tier={TIERS.triage} />
+              {/* ⚠️ THE QUEUE IS THIS TIER'S ONLY OUTPUT, and the HLD is
+                  emphatic about why it looks weak: triage "cannot act, cannot
+                  notify, cannot write. It only escalates" — and it assigns NO
+                  severity, because severity is what the investigation decides.
+                  A row here is a pointer, not a finding. */}
               <CockpitQueue />
               <SourceLegend only={["triage"]} />
             </div>
           )}
-          {tab === "concerns" && (
+
+          {/* ── Step 3 · the only tier that judges ─────────────────────── */}
+          {tab === "reason" && (
             <div className="reports-pane">
+              <TierIntro tier={TIERS.reason} />
+              {/* Concerns first: the HLD calls a Concern "the single currency
+                  of everything downstream", and this tier is the only thing
+                  that mints one. */}
               <CockpitConcerns />
-              <SourceLegend only={["agent"]} />
-            </div>
-          )}
-          {/* ⚠️ TWO BLOCKS, ONE TAB, BECAUSE THEY ARE ONE DECISION: something is
-              stopped until a person answers. A proposal is an action on the
-              villa with a countdown; a review is a procedure it wrote. Separate
-              tabs would show an empty dialog as two broken ones. */}
-          {tab === "act" && (
-            <div className="reports-pane">
-              <CockpitProposals />
+              {/* ⚠️ MEMORY AND DRAFTS BELONG TO THIS TIER, NOT TO SETTINGS.
+                  Both are things the agent WORKED OUT — a learned claim about
+                  the property, and a procedure it wrote — so they are outputs
+                  of reasoning, filed with it. Memory is written only on the
+                  reasoning path, never from a tool result, which is the rule
+                  that stops a device name becoming a permanent claim. */}
+              <CockpitMemories />
               <CockpitReview />
               <SourceLegend only={["agent"]} />
             </div>
           )}
-          {tab === "memory" && (
-            <div className="reports-pane"><CockpitMemories /></div>
+
+          {/* ── Step 4 · who is told, and what may be done ─────────────── */}
+          {tab === "act" && (
+            <div className="reports-pane">
+              <TierIntro tier={TIERS.act} />
+              {/* ⚠️ THIS IS THE AUTHORITY BOUNDARY — §4.1 calls it "the most
+                  important one". The model decides what matters; it never
+                  decides who is told, whether a brief already went, or whether
+                  an action is permitted. Anything that could let somebody in or
+                  silence an alarm is offered here and never executed. */}
+              <CockpitProposals />
+              <AgentConfigProvider enabled>
+                <ActDeliverySection />
+              </AgentConfigProvider>
+              <SourceLegend only={["agent"]} />
+            </div>
           )}
-          {/* ⚠️ THE CONFIG TABS SHARE ONE DRAFT PROVIDER. Two panels each
-              loading, versioning and PUTting the same document is a lost
-              update — the store refuses a write whose `rev` is stale, so saving
-              one silently discarded the other's edit. */}
-          {(tab === "tuning" || tab === "access") && (
+
+          {/* ── Settings ───────────────────────────────────────────────── */}
+          {tab === "settings" && (
             <AgentConfigProvider enabled>
               <div className="reports-pane">
-                {tab === "tuning" && <AgentTuningPanel />}
-                {tab === "access" && <><PeoplePanel /><ApiKeyPanel /></>}
+                <AgentTuningPanel />
+                {/* ⚠️ THE REST BEHIND ONE DOOR, THE SAME SHAPE SETTINGS USES
+                    FOR ADVANCED SETTINGS. Cost, people, the API key and the
+                    shadow comparison are all things an owner opens
+                    occasionally and none belong in the daily path — putting
+                    them inline would bury the four dials that are actually
+                    tuned. */}
+                <button className="btn" onClick={() => setAdvanced(true)}>
+                  <SlidersHorizontal size={16} aria-hidden="true" />
+                  <span>Cost, people and advanced</span>
+                </button>
               </div>
             </AgentConfigProvider>
           )}
-          {tab === "usage" && <div className="reports-pane"><UsagePanel /></div>}
-          {tab === "shadow" && <div className="reports-pane"><ShadowDiffPanel /></div>}
         </div>
 
         <ModalFooter onClose={onClose} />
       </div>
+      {/* ⚠️ RENDERED AS A SIBLING, NOT NESTED, so its own backdrop covers this
+          dialog rather than being clipped inside it — the same arrangement
+          Settings uses for Advanced Settings. */}
+      {advanced && <AgentAdvancedModal onBack={() => setAdvanced(false)} />}
     </div>
   );
 }
