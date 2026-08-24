@@ -1,3 +1,26 @@
+## 2.716.0
+
+### Changed — the assistant was handed a list of actions it is not allowed to take
+Every question carries a description of everything the assistant can do, and
+that description included the controls for switching things on and off even
+while acting on the villa is turned off — offered on every question, then
+refused every time one was tried. They are now left out of the description
+while the switch is off. Refusing them is unchanged and is still decided in the
+one place it always was, so turning the switch on brings them straight back.
+On this property the Home Assistant connection is already read-only, so the
+saving here is small; it is what stops the list doubling if that is relaxed.
+
+## 2.715.0
+
+### Added — the cost of a conversation could be seen but not broken down
+Each question carries a fixed block of reference material, and it was measured
+at seven to ten times the size of the one the scheduled checks use — with an
+unexplained 35% jump between two conversations ninety seconds apart. That block
+is what every question is charged for, on every step it takes, so it is the
+whole cost of the feature and nobody could say what was in it. The add-on log
+now reports its size split by part — instructions, villa description, and the
+list of things the assistant can look up — with the largest entries named.
+
 ## 2.714.0
 
 ### Fixed — every conversation re-bought the whole reference material it had already paid for
