@@ -1,3 +1,15 @@
+## 2.722.0
+
+### Fixed — the villa kept flagging its own paperwork, and two tabs shared one name
+Six of the last sixteen things flagged for a closer look were not equipment at
+all: three were the add-on reporting that it had not been listening, which the
+Coverage tab already says for free, and three were faults somebody had typed in
+themselves being read back to them. Both are still read as background, neither
+is flagged as a finding. Separately, "Schedule" meant the maintenance schedule
+in Facility and the briefing send time in Briefings — the second is now called
+Delivery — and the approval list is titled "Worth a closer look", which is what
+it holds: things nothing has examined yet.
+
 ## 2.721.0
 
 ### Added — you can now see who is telling you something
