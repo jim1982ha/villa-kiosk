@@ -659,12 +659,29 @@ export async function loadApprovalQueue(): Promise<ApprovalQueue | null> {
 export async function decideEscalation(
   runId: string, action: "approve" | "dismiss",
 ): Promise<{ ok: boolean; reason: string }> {
-  const r = await fetch(ingressPath("agent-queue"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ runId, action }),
-  });
+  // ⚠️ A REJECTED `fetch` USED TO SPIN THE BUTTON FOREVER. Approving runs a
+  // FULL investigation server-side — measured on the reference villa at 60-150
+  // seconds — and the request is held open for all of it. So this is the one
+  // call in the app most likely to be cut off by a proxy timeout, a tablet
+  // sleeping, or Wi-Fi dropping mid-think; and an uncaught rejection propagated
+  // out of the caller before it could clear its busy flag. The owner reported
+  // exactly that: "I see a turning icon but nothing happens after this."
+  let r: Response;
+  try {
+    r = await fetch(ingressPath("agent-queue"), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runId, action }),
+    });
+  } catch {
+    // ⚠️ AND THE INVESTIGATION MAY WELL BE RUNNING. Losing the reply is not
+    // losing the work, so this must not read as "it did not happen" — the
+    // queue is re-read on the next open and the row will be gone if it did.
+    return { ok: false,
+             reason: "the connection dropped before it answered — it may still "
+                   + "be running; reopen this in a minute to see" };
+  }
   const d = (await r.json().catch(() => ({}))) as
     { ok?: boolean; reason?: string };
   if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };

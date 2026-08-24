@@ -4664,6 +4664,35 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   .source-legend-row { grid-template-columns: auto minmax(0, 1fr); }
 }
 
+/* ── ROW ACTIONS ──────────────────────────────────────────────────────────
+   ⚠️ ONE SHAPE FOR BOTH BUTTONS IN A LIST ROW, AND THERE WERE TWO. The approve
+   control was `.icon-btn` (48px, `--radius-squircle`) and the dismiss beside it
+   `.btn.icon-only` (44px, the button radius) — different SIZE and different
+   CORNER, touching, in the same row. Reported from a screenshot.
+
+   ⚠️ CIRCULAR HERE, AND THAT DOES NOT CONTRADICT `.icon-btn`'S SQUIRCLE NOTE.
+   That rule is about HUD CHROME — Settings, compass, anchor, the (i) — which
+   must match the squircle groups behind them. These are actions attached to one
+   ROW of a list inside a dialog; there is no squircle group for them to agree
+   with, and a circle is what separates "act on this row" from "open a panel".
+
+   ⚠️ AND THE SIZE IS `--touch-min`, not 48. The row is dense and repeats; 44px
+   is the floor Apple and Material both state, and the app's own token for it. */
+.row-action {
+  flex: 0 0 auto;
+  width: var(--touch-min); height: var(--touch-min); min-width: var(--touch-min);
+  padding: 0;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-input);
+  border: 1px solid var(--hairline);
+  color: var(--text-primary);
+}
+.row-action:hover:not(:disabled) { border-color: var(--hairline-strong); }
+.row-action:disabled { opacity: 0.55; }
+/* The destructive one keeps the app's danger treatment, still circular. */
+.row-action.danger { color: var(--status-danger); }
+
 /* A heading and the chip saying who produced what is under it, on one line.
    ⚠️ `baseline`, NOT `center`: `.settings-section-title` is an uppercase
    eyebrow at --text-xs and the chip is a rounded pill; centring them makes the

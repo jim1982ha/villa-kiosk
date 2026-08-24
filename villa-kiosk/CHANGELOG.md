@@ -1,3 +1,15 @@
+## 2.726.0
+
+### Fixed — the investigate button span forever and the two buttons beside it did not match
+Approving something for a closer look runs a full investigation on the property,
+which takes a minute or two, and the request is held open for all of it. If that
+connection dropped — a tablet sleeping, Wi-Fi going — nothing caught it and the
+spinner turned indefinitely with no message. It now always comes back and says
+what happened, including that the investigation may still be running. The two
+round buttons on each row were different sizes with different corners; they are
+one shape now, and every icon in these lists has a tooltip saying what it does
+and, for the slow one, how long it takes.
+
 ## 2.725.0
 
 ### Changed — everything the AI does is now in one place, and nowhere else

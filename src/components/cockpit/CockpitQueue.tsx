@@ -52,14 +52,22 @@ export default function CockpitQueue() {
     async (runId: string, action: "approve" | "dismiss") => {
       setBusy(runId);
       setFailed("");
-      const out = await decideEscalation(runId, action);
+      // ⚠️ `finally`, SO THE BUTTON ALWAYS COMES BACK. `decideEscalation` no
+      // longer throws, but a spinner that can outlive its request is the defect
+      // this pair exists to prevent, and the guarantee belongs at BOTH ends —
+      // this component must not depend on a helper never rejecting.
+      let out: { ok: boolean; reason: string };
+      try {
+        out = await decideEscalation(runId, action);
+      } finally {
+        setBusy(null);
+      }
       // ⚠️ THE REASON IS SHOWN, NOT SWALLOWED. "Nothing happened" has several
       // causes here — a spent budget, no provider, an item somebody else
       // already acted on — and every one of them is a sentence the server
       // already wrote. Rendering only a spinner that stops would make a
       // budget ceiling look like a broken button.
       if (!out.ok) setFailed(out.reason || "it could not be started");
-      setBusy(null);
       await load();
     }, [load]);
 
@@ -130,15 +138,24 @@ export default function CockpitQueue() {
                 children out, exactly as `CockpitConcerns` relies on two rows
                 above. `.icon-btn` and `.btn` carry the 44px touch target;
                 inventing a container would have lost it on a phone. */}
-            <button type="button" className="icon-btn"
+            {/* ⚠️ EVERY ICON BUTTON CARRIES A `title` AS WELL AS AN
+                `aria-label`. The label serves a screen reader and gives a
+                sighted user nothing — two unlabelled circles beside a sentence
+                is a guess, and the owner asked for tooltips by name. The title
+                also states the DURATION, because approving runs a full
+                investigation (60-150s measured) and a spinner with no stated
+                cost reads as a hang after about five seconds. */}
+            <button type="button" className="row-action"
               disabled={busy !== null}
+              title="Investigate this now — takes a minute or two, and costs a run"
               aria-label={`Look into this now: ${item.subject}`}
               onClick={() => void decide(item.runId, "approve")}>
               {busy === item.runId
                 ? <Loader2 size={16} className="spin" aria-hidden />
                 : <Search size={16} aria-hidden />}
             </button>
-            <button type="button" className="btn ghost icon-only"
+            <button type="button" className="row-action"
+              title="Dismiss — do not investigate this"
               disabled={busy !== null}
               aria-label={`Dismiss without looking: ${item.subject}`}
               onClick={() => void decide(item.runId, "dismiss")}>

@@ -131,20 +131,23 @@ export default function CockpitMemories() {
             </div>
             {canCorrect && (editing === m.subjectKey ? (
               <>
-                <button type="button" className="icon-btn" disabled={busy}
+                <button type="button" className="row-action" disabled={busy}
+                  title="Save this correction"
                   aria-label="Save this correction"
                   onClick={() => void submit(m.subjectKey)}>
                   {busy ? <Loader2 size={16} className="spin" aria-hidden />
                         : <Check size={16} aria-hidden />}
                 </button>
-                <button type="button" className="btn ghost icon-only"
-                  disabled={busy} aria-label="Cancel"
+                <button type="button" className="row-action"
+                  disabled={busy} title="Discard this correction"
+                  aria-label="Cancel"
                   onClick={() => { setEditing(null); setText(""); }}>
                   <X size={16} aria-hidden />
                 </button>
               </>
             ) : (
-              <button type="button" className="icon-btn"
+              <button type="button" className="row-action"
+                title="Tell the villa this is wrong"
                 aria-label={`Correct this: ${m.claim.slice(0, 60)}`}
                 onClick={() => { setEditing(m.subjectKey); setText(""); }}>
                 <Pencil size={16} aria-hidden />

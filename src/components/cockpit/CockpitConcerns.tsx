@@ -154,7 +154,7 @@ export default function CockpitConcerns() {
                    and `title`, which is how the thumbs beside it already
                    explain themselves. */
                 <button
-                  type="button" className="icon-btn" disabled={busy === c.id}
+                  type="button" className="row-action" disabled={busy === c.id}
                   aria-label={`I have seen this: ${c.title}`}
                   title="I have seen this — stops it escalating"
                   onClick={() => void acknowledge(c.id)}
@@ -166,14 +166,14 @@ export default function CockpitConcerns() {
             {canJudge && (
               <>
                 <button
-                  type="button" className="icon-btn" disabled={busy === c.id}
+                  type="button" className="row-action" disabled={busy === c.id}
                   aria-label={`Useful: ${c.title}`}
                   onClick={() => void judge(c.id, true)}
                 >
                   <ThumbsUp size={16} aria-hidden />
                 </button>
                 <button
-                  type="button" className="btn danger icon-only"
+                  type="button" className="row-action danger"
                   disabled={busy === c.id}
                   aria-label={`Not useful: ${c.title}`}
                   onClick={() => void judge(c.id, false)}
