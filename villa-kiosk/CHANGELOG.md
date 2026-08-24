@@ -1,3 +1,15 @@
+## 2.720.0
+
+### Fixed — the built-in checks were spaced by the browser, not by the app
+Each check sat in a tall card with a wide empty band above and below its
+description, and the list read as a stack of separate sections rather than one
+list. The app's spacing rules only reach text placed directly in a panel, and a
+check's description sits inside its own card — so none of them applied and the
+browser's own default decided it. The card now sets its own spacing, and the gap
+between checks matches the gap between tasks, so the two lists read as the same
+kind of thing. The delivery history and the payload panel share that card and
+were spaced by the same accident; both are corrected with it.
+
 ## 2.719.0
 
 ### Changed — an audit pass over the week's work, and five of the seven findings were mine

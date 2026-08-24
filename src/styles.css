@@ -4574,15 +4574,60 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 /* Counts line up in a column, so they get tabular figures. */
 .reports-facts dd { margin: 2px 0 0; font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
 
+/* ⚠️ IT OWNS ITS OWN RHYTHM, AND NOT OWNING IT WAS THE BUG — THE FIFTH TIME
+   THIS EXACT DEFECT HAS SHIPPED HERE. Every vertical-rhythm rule in this file
+   reaches a paragraph that is a DIRECT CHILD of its container
+   (`.reports-pane > label.toggle + p`, `.fm-stack > * + p.body-text.muted`,
+   `.settings-body > * + p.body-text.muted`). A built-in check's description is
+   a child of THIS box, so not one of them applied and the spacing was decided
+   by the browser's own `p { margin: 1em 0 }` — ~15px at --text-md, and a block
+   container's padding does not let a child's margin collapse through it, so it
+   landed as 25px above the sentence and 25px below. That is the whole gap the
+   owner's screenshot shows.
+
+   ⚠️ MEASURED, NOT GUESSED, AND THE MEASUREMENT IS THE POINT. BACKLOG.md §4
+   records three consecutive spacing rounds fixed by changing a number that was
+   reachable by reading this stylesheet, each wrong because the winning rule was
+   not IN the stylesheet. A fourth padding value here would have been the same
+   mistake; making the container a flex column with an explicit gap moves the
+   decision back into a rule somebody can read.
+
+   ⚠️ AND IT DELIBERATELY MATCHES `.reports-task` (the Tasks tab) RATHER THAN
+   COPYING IT. Same padding, radius, ground and severity rail — one visual
+   language — but a task is a one-line instruction with a single tick, while a
+   check is a standing configuration with a precondition and three status
+   states, so it stacks where a task is a row. The shared thing is the rhythm,
+   not the layout. */
 .reports-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   padding: 10px 12px;
   border-radius: var(--radius-md, 8px);
   background: var(--bg-input);
   border-left: 3px solid var(--hairline);
 }
+/* The UA margin, removed at the container that now spaces these itself. Every
+   child is covered, not just `p`, so a future `<ul>` or `<dl>` inherits the
+   rhythm instead of reopening this. */
+.reports-entry > * { margin: 0; }
 .reports-entry.sev-warning { border-left-color: var(--status-warning); }
 .reports-entry.sev-critical { border-left-color: var(--status-danger); }
 .reports-entry-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: var(--text-sm); }
+/* The title row and the sentence explaining it are ONE block — the same
+   relationship `.reports-pane` already states between a heading and its
+   description, and the reason the gap above is 4px rather than the 8px between
+   two cards. A check's own parts must read as tighter than the space to the
+   next check, or the list reads as twice as many items as it has. */
+.reports-entry > .reports-entry-head + .body-text { margin-top: 2px; }
+
+/* ⚠️ THE SAME 8px THE TASKS TAB USES, AND FOR THE SAME REASON. `.reports-pane`
+   spaces everything it holds at 12px — the distance between SECTIONS — so
+   checks rendered as its direct children read as a stack of separate blocks
+   rather than one list. Declared against `.reports-tasks`' value rather than a
+   fresh number, because "a check list and a task list are the same kind of
+   list" is the claim this whole change is making. */
+.reports-checks { display: flex; flex-direction: column; gap: 8px; }
 
 .reports-deliveries { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .reports-delivery { display: flex; gap: 8px; font-size: var(--text-xs, 11px); }

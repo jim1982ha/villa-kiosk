@@ -182,6 +182,14 @@ export default function ModulesTab({
         </p>
       )}
 
+      {/* ⚠️ THEIR OWN LIST, SO THE GAP BETWEEN CHECKS IS THE GAP BETWEEN TASKS.
+          These were direct children of `.reports-pane`, which spaces everything
+          it holds — headings, banners, paragraphs — at 12px, so the distance
+          between two checks was the distance between two SECTIONS. Tasks sit at
+          8px (`.reports-tasks`) and read as one list; a wrapper is what lets
+          these say the same thing without changing the pane for every other
+          surface that uses it. */}
+      <div className="reports-checks">
       {diagnostics.modules.map((m) => {
         const on = isOn(m.name);
         const missing = m.requires.filter((r) => !diagnostics.capabilities.includes(r));
@@ -250,6 +258,7 @@ export default function ModulesTab({
           </div>
         );
       })}
+      </div>
 
       {!preview && (
         <p className="muted body-text">
