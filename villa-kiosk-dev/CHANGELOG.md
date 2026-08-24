@@ -1,13 +1,13 @@
-## 2.738.0
+## 2.739.0
 
-### Fixed — every restart re-recorded the whole villa, filling the observation journal and evicting real history
+### Added — an hourly diagnostic line about the observation record, off by default
 
-The agent reported its monitoring journal full and dropping its oldest data, and it was right. The
-observation cycle keeps its comparison baseline in process memory while the journal lives on disk, and
-nothing joined the two — so the first cycle after every restart saw no baseline, called all 1,256
-entities new and wrote the whole villa in one go: ~12 ordinary cycles, three hours of history, evicted
-per restart to re-record states already held. Eleven restarts in one afternoon of dev releases cost over
-a day of the window. The baseline now comes back from the journal, so a restart re-journals only what
-moved while the process was down and a cold start still sweeps as designed; seeded attributes are marked
-unknown rather than empty, or every climate unit and cover would re-journal on each restart.
+2.738.0 stopped every restart re-recording the whole villa; whether that is enough depends on the
+property's own steady change rate, which takes days of samples to see and which nobody is watching for.
+Switch on **Log observation diagnostics hourly** in the add-on's Configuration page and it prints two
+lines an hour: how full the rolling record is, how many days it covers, how fast it is filling, which
+devices produce the most entries, and how many baselines a restart had to restore. Every field reads `?`
+rather than `0` when it cannot be measured, because a two-day-old log is read by someone who cannot
+re-run it. Named heartbeat rather than telemetry: this add-on already has a `/telemetry` ring of browser
+diagnostics, and reusing that noun for a different subsystem is a mistake this code has made before.
 

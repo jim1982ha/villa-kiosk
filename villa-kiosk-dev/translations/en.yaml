@@ -76,6 +76,18 @@ configuration:
       results), shown in the app under Advanced Settings. Raise it while
       chasing an intermittent problem on someone else's device. The history is
       a fixed-size ring, so the only cost is a slightly larger file.
+  heartbeat_log:
+    name: Log observation diagnostics hourly
+    description: >-
+      OFF (default). Turn ON to print two diagnostic lines an hour into this
+      add-on's log: how full the villa's rolling observation record is, how
+      many days it covers, how fast it is filling, and which devices produce
+      the most entries. Useful when the assistant reports it cannot see far
+      enough back, because the answer takes days of samples to see. Nothing
+      leaves the property and nothing is stored — the lines are printed and
+      gone. This is NOT the same as "Diagnostic events to keep" above, which
+      is browser history shown inside the app. Turn it off again once the
+      question is answered.
   pin_lockout_minutes:
     name: Lockout after wrong passcodes (minutes)
     description: >-

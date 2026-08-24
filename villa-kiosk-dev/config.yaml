@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (dev)
-version: "2.738.0"
+version: "2.739.0"
 slug: villa_kiosk_dev
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -128,6 +128,21 @@ startup: application
 # pin_lockout_minutes (default 5). How long a device that has entered five
 #   wrong passcodes must wait. The lockout is per source address, so raising
 #   it punishes a guesser rather than locking the household out.
+#
+# heartbeat_log (default off). Prints two diagnostic lines an hour into this
+#   add-on's log describing the observation journal: how full the rolling
+#   record is, how many days it spans, the villa's own change rate, and which
+#   entities are producing the most rows. It answers a question that takes
+#   DAYS to collect — whether the record holds enough history for the
+#   assistant to reason over — which is why it is a log line to be read later
+#   rather than a screen to be watched. Nothing leaves the property and
+#   nothing is stored: it is printed and gone.
+#
+#   ⚠️ NOT the same thing as telemetry_max_events above. That is a stored ring
+#   of BROWSER diagnostics shown in the app; this is a printed line about the
+#   ADD-ON's own observation record. Two different subsystems, deliberately
+#   two different words — this file has already paid once for reusing a noun
+#   that belonged to something else.
 options:
   guest_pin: ""
   owner_pin: ""
@@ -138,6 +153,7 @@ options:
   session_days: 30
   telemetry_max_events: 500
   pin_lockout_minutes: 5
+  heartbeat_log: false
 schema:
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
@@ -148,3 +164,4 @@ schema:
   session_days: int(1,365)?
   telemetry_max_events: int(50,5000)?
   pin_lockout_minutes: int(1,1440)?
+  heartbeat_log: bool?
