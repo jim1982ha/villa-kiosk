@@ -4484,16 +4484,6 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   border-color: var(--status-warning); color: var(--status-warning);
 }
 
-/* Cockpit's briefing-coverage block — what the ADD-ON knows, on the screen
-   that shows the same villa. Plain stacked sentences rather than a card: it is
-   a caveat on the other sections, not a section competing with them. */
-.cockpit-coverage { display: flex; flex-direction: column; gap: 4px; }
-.cockpit-coverage > p { margin: 0; }
-/* ⚠️ THE STATUS COLOUR, NEVER A LITERAL — `--status-warning` is what the Map
-   colours legend documents for "lost contact with a device", and a collector
-   that is not listening is the same claim about the add-on itself. */
-.cockpit-coverage-warn { color: var(--status-warning); }
-
 /* ⚠️ 12px, NOT `--stack-gap`, AND THAT IS DELIBERATE — this pane is denser than
    a settings body. What matters is that the number is declared ONCE, as the
    token every rhythm rule reads, so the gap and the corrections that cancel it

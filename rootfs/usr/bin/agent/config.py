@@ -18,6 +18,11 @@ an entry is an open bot — anyone who finds it can talk to the villa. An
 `actuable_entities` with an entry is an agent that acts on a device nobody
 authorised. Both must be filled in by a person, deliberately, once.
 
+⚠️ THOSE TWO ARE THE WORST CASES, NOT THE WHOLE LIST — `MUST_BE_EMPTY` has FIVE
+entries and a test asserts each is falsy here. Read the declaration, not this
+sentence: CLAUDE.md carried exactly this gap about `SHARED_CONFIG_KEYS` (four
+named, five declared) and v2.486.0 is what it cost to find.
+
 ⚠️ AND IT HOLDS ENTITY IDS, WHICH IT DID NOT UNTIL 2.718.0 — IT HELD PER-RUN
 HANDLES, AND THAT MADE IT NOT AN ALLOW-LIST AT ALL. `refs.py` says in its own
 docstring that handles are sequential, meaningless and deliberately unstable:
@@ -48,7 +53,7 @@ from agent import contracts
 #: UNDER a stored config at read time. Adding a key here changes what an
 #: unconfigured villa does, and changes nothing about one already configured.
 DEFAULTS: Final[Dict[str, Any]] = {
-    # ── the three kill switches ──────────────────────────────────────────
+    # ── the kill switches, and the address they gate ─────────────────────
     #: ⚠️ OFF ON A FRESH INSTALL. An add-on that begins reasoning about a villa
     #: the moment it is installed, before anybody has set a budget or a
     #: recipient, is an add-on that spends money nobody agreed to.
@@ -60,6 +65,12 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: built-in reader answers exactly as it did before. It is not discovered
     #: automatically on purpose — that needs `hassio_role: manager`, which also
     #: grants installing and stopping add-ons, and this is a dashboard.
+    #:
+    #: ⚠️ NOT A KILL SWITCH, AND THIS BLOCK'S HEADING SAID "the three" UNTIL IT
+    #: WAS INSERTED HERE (2.709.0). The three are `enabled`, `act_enabled` and a
+    #: trigger flag — see the module docstring. A count in a heading stops being
+    #: true the moment anything is added under it, which is why the heading now
+    #: names the shape instead of counting it.
     "mcp_url": "",
     "triggers": {"scheduled": True, "event": False, "chat": False},
     #: ⚠️ WHAT HAPPENS WHEN TRIAGE ESCALATES (ADR-021, owner decision

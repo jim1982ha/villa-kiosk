@@ -173,10 +173,13 @@ async def investigate(*, provider: Provider,
         # ⚠️ THE SESSION IS FORWARDED, AND OMITTING IT TOOK HOME ASSISTANT AWAY
         # FROM THE REASONING TIER WITHOUT A WORD. `build_registry` folds the
         # upstream MCP catalogue in and binds each tool to `lambda: session`, so
-        # a session-less registry PUBLISHES all 39 Home Assistant tools and every
+        # a session-less registry PUBLISHES every Home Assistant tool and every
         # call to one returns `no session to reach the MCP server` — into the
         # transcript, where no log line ever sees it. The model is told it can
         # read the villa and then cannot, on every scheduled investigation.
+        # (The reference villa catalogues 39; a property that has not put its
+        # MCP add-on in read-only mode sees 78. The count is per-site and the
+        # defect was not.)
         #
         # ⚠️ THE SESSION EXISTED THE WHOLE TIME AND WAS DROPPED ONE FRAME UP:
         # `scheduler._run_once` takes it and called `triage.run`/
@@ -233,7 +236,7 @@ async def investigate(*, provider: Provider,
 
         # ⚠️ THE ACTUATOR, AND UNTIL 2.718.0 NOTHING BUILT ONE. `act.build` had
         # exactly one caller in the tree and it was its own test, so
-        # `act_enabled: true` on a villa with a populated `actuable_refs`
+        # `act_enabled: true` on a villa with a populated `actuable_entities`
         # produced no `act_service` tool at all — a switch that did nothing,
         # with TASK-082 marked COMPLETE. The tool itself was finished and
         # correct; only this line was missing.
@@ -246,7 +249,7 @@ async def investigate(*, provider: Provider,
         #
         # ⚠️ AND IT IS STILL GUARDED THREE MORE TIMES BELOW THIS LINE, none of
         # which this replaces: `config.may_act` refuses any ref an owner has not
-        # named (`actuable_refs` ships EMPTY, so turning the switch on
+        # named (`actuable_entities` ships EMPTY, so turning the switch on
         # authorises nothing by itself), `policy.may_act` refuses every
         # high-harm action at any confidence and offers it as a proposal
         # instead, and `allowed_services` refuses any verb nobody listed.

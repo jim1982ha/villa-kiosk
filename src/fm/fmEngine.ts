@@ -179,7 +179,16 @@ export function isTicketResolved(t: Pick<FmTicket, "status">): boolean {
 }
 
 /** Not resolved — which INCLUDES `in_progress`. The report shows those two
- *  separately; their SUM is this predicate, which is what the brief lists. */
+ *  separately; their SUM is this predicate, which is what the brief lists.
+ *
+ *  ⚠️ /dry-audit's unused-export probe FLAGS THIS ON EVERY RUN and it is a
+ *  false positive of the probe's SCOPE, not dead code: the only consumer is
+ *  `tests/consistency/kiosk_view.ts`, and the probe scans `src/` alone. That
+ *  consumer is the shipped-TypeScript half of the kiosk/briefing parity pin
+ *  (`tests/py/test_consistency_parity.py`), so deleting this to quiet the
+ *  probe would break the test that exists to stop the tablet and the briefing
+ *  describing the same villa differently. Verdict recorded here so the next
+ *  run reads it instead of re-deriving it. */
 export function isTicketOpen(t: Pick<FmTicket, "status">): boolean {
   return !isTicketResolved(t);
 }

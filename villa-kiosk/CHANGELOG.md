@@ -1,3 +1,14 @@
+## 2.719.0
+
+### Changed — an audit pass over the week's work, and five of the seven findings were mine
+Nothing user-visible. A full DRY audit found styling for a panel that moved to
+the Briefing dialog three weeks ago and was never removed, four comments
+describing code that had since changed underneath them — including two naming a
+setting renamed in the release that wrote them — and one new check that was
+already covered by an existing one. Each is now either corrected or, where a
+routine check keeps flagging something deliberate, annotated at the code so the
+next pass reads the answer instead of re-deciding it.
+
 ## 2.718.1
 
 ### Fixed — a build check went red on a service name it mistook for a device

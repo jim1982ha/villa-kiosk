@@ -191,16 +191,26 @@ def test_the_caller_sends_the_service_HA_would_recognise() -> None:
 
 # ── the wire name matches on both sides ────────────────────────────────────
 
-def test_the_SPA_speaks_the_same_key_as_the_store() -> None:
-    """⚠️ Python one side, TypeScript the other, a string literal in each and
-    nothing between them — the store-envelope defect, which this repo has now
-    paid for at two levels. A key the SPA sends under the old name is ACCEPTED
-    AND IGNORED by `validate_config`, so the editor would save happily and
-    authorise nothing."""
+def test_the_SPA_no_longer_maps_the_OLD_key() -> None:
+    """⚠️ THE HALF THE DERIVED PIN CANNOT SEE, AND ONLY THAT HALF.
+
+    "the SPA names every key the store defines" is already owned by
+    `test_store_envelope.test_the_agent_wire_map_covers_every_setting`, which
+    DERIVES the expected set from `config.DEFAULTS` — so it covers this key the
+    day it was added and would cover the next one too. This file asserted the
+    same thing by hand for one release, which is the hand-kept copy that
+    "agrees with itself forever" that pin exists to replace; /dry-audit found it.
+
+    What that pin cannot catch is a STALE entry: it checks
+    `DEFAULTS - mapped`, so a wire map holding BOTH `actuable_entities` and the
+    dead `actuable_refs` passes. A stale name is not inert here — the store
+    keeps unknown keys so a newer add-on's settings survive a downgrade, so the
+    SPA would save a key `validate_config` accepts and the agent never reads,
+    and the editor would report success while authorising nothing.
+    """
     path = os.path.join(REPO_ROOT, "src", "agent", "agentApi.ts")
     with open(path, encoding="utf-8") as handle:
         source = handle.read()
-    assert "actuable_entities:" in source, (
-        "the SPA's wire map does not name the stored key")
     assert "actuable_refs" not in source, (
-        "the SPA still maps the OLD key, which the store will ignore in silence")
+        "the SPA still maps the OLD key, which the store will accept and the "
+        "agent will never read")
