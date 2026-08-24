@@ -654,11 +654,17 @@ async def rest_handler(request: web.Request) -> web.StreamResponse:
 
 
 def _read_options() -> dict:
-    try:
-        with open("/data/options.json") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+    """The add-on's configured options.
+
+    ⚠️ ONE READER, IN `reports/store.py`, BECAUSE THERE ARE NOW TWO CALLERS.
+    The observation heartbeat needs the same file and cannot import this module
+    (the reports layering rule forbids it), so the shared answer lives in the
+    package this one already imports. Kept as a thin alias rather than replaced
+    at ~20 call sites — the security suite pins this function's behaviour and
+    those pins should keep testing the name they were written against.
+    """
+    raw = reports_store.read_json(reports_store.OPTIONS_FILE, {})
+    return raw if isinstance(raw, dict) else {}
 
 
 async def _cleanup_stale_options(session: ClientSession) -> None:

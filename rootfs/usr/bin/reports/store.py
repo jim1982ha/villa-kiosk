@@ -280,6 +280,34 @@ def trim_history(entries: List[Any]) -> List[Any]:
     return entries[-REPORTS_HISTORY_MAX_ENTRIES:]
 
 
+#: The Supervisor writes the add-on's configured options here, revalidated and
+#: rewritten whenever an operator saves the Configuration page.
+OPTIONS_FILE: Final[str] = f"{DATA_DIR}/options.json"
+
+
+def addon_option(key: str, default: Any = None) -> Any:
+    """One value from the add-on's Configuration page, or `default`.
+
+    ⚠️ THE PROXY HAS `_read_options` AND THIS IS DELIBERATELY NOT A SECOND
+    IMPLEMENTATION OF IT — it is the same one, moved to the side both callers
+    can reach. `reports/__init__.py`'s layering rule forbids anything here from
+    importing the proxy (a reports bug must never reach the kiosk's auth path),
+    so the shared home has to be this package, which the proxy already imports.
+    `_read_options` now delegates here; see `write_json`'s note on why the
+    atomic-write helper has NOT been converged the same way.
+
+    ⚠️ RE-READ ON EVERY CALL, never cached. An operator toggling an option
+    expects it to take effect without restarting the add-on — every other
+    tunable in this file behaves that way, and a cached one would be the odd
+    setting that silently needs a restart nobody documents. The file is a few
+    hundred bytes and the callers here are hourly.
+    """
+    raw = read_json(OPTIONS_FILE, {})
+    if not isinstance(raw, dict) or key not in raw:
+        return default
+    return raw[key]
+
+
 def read_json(path: str, empty: Dict[str, Any]) -> Any:
     """Parse a store, degrading to `empty` for absent/corrupt/wrong-typed."""
     try:

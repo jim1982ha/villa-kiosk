@@ -31,10 +31,12 @@ whole redesign exists to remove.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from aiohttp import ClientSession
 
+from observe import heartbeat as heartbeat_mod
 from observe import journal, salience as salience_mod
 from reports import store
 from reports.hass import HassClient, HassUnavailable
@@ -54,6 +56,16 @@ CADENCE_DEFAULT_MINUTES = 15
 CADENCE_MIN_MINUTES = 1
 
 _LAST: Dict[str, Any] = {}
+
+#: What the hourly heartbeat reports about this process's own passes.
+#:
+#: ⚠️ SEPARATE FROM `_LAST` BECAUSE IT OUTLIVES A DIFFERENT THING. `_LAST` is a
+#: baseline that a restart correctly loses; these are counters that describe the
+#: run, and `restarts` in particular counts the seeds this process performed —
+#: which is 1 for a healthy start and more only if something is re-seeding
+#: mid-life, a fault the field would otherwise hide.
+_STATS: Dict[str, Any] = {"cycles": 0, "rows": 0, "restarts": 0, "seeded": 0,
+                          "started": None}
 
 
 def cadence_minutes(config: Optional[Mapping[str, Any]] = None) -> float:
@@ -201,10 +213,21 @@ async def run_once(session: ClientSession, *, now_iso: str = "") -> Dict[str, An
     if previous is None:
         previous = _seed_from_journal()
         counts["seeded"] = len(previous)
+        _STATS["restarts"] = int(_STATS.get("restarts") or 0) + 1
+        _STATS["seeded"] = len(previous)
     events = diff_states(previous, current, now_iso)
     counts["changed"] = len(events)
     counts["journalled"] = journal.append(events, now_iso=now_iso)
     _LAST["states"] = current
+
+    # ⚠️ COUNTED HERE RATHER THAN IN `run_forever`, so a caller that drives
+    # `run_once` directly is measured too. The counters are what the heartbeat
+    # divides to report a mean, and a mean over an undercounted denominator is
+    # the shape of instrument that reads plausible and is wrong.
+    _STATS["cycles"] = int(_STATS.get("cycles") or 0) + 1
+    _STATS["rows"] = int(_STATS.get("rows") or 0) + int(counts["journalled"])
+    if _STATS.get("started") is None:
+        _STATS["started"] = time.monotonic()
     return counts
 
 
@@ -241,6 +264,23 @@ async def run_forever(session: ClientSession,
                 f"{counts['journalled']} journalled"
                 + (f" (baseline restored for {seeded} from the journal)"
                    if seeded else ""))
+            # ⚠️ NO FIFTH TASK. The heartbeat rides this loop's wake-ups rather
+            # than owning a timer, so a dedicated task is not another thing to
+            # start, cancel and reason about in the proxy's cleanup list for a
+            # line that fires 24 times a day.
+            #
+            # ⚠️ SO IT IS "HOURLY, BUT NEVER MORE OFTEN THAN THE OBSERVATION
+            # CADENCE". At the default 15 minutes that is hourly to within a
+            # cycle; a villa that sets a cadence ABOVE an hour gets one
+            # heartbeat per cycle instead, which is the honest behaviour — the
+            # heartbeat describes cycles, so it cannot meaningfully report more
+            # often than they happen.
+            # It swallows: a diagnostic must never take down the tier it
+            # describes.
+            try:
+                heartbeat_mod.maybe_log(_STATS)
+            except Exception as err:  # noqa: BLE001 - degrade, never fail
+                swallow("heartbeat", err)
         except asyncio.CancelledError:
             log("observation cycle stopped")
             raise
