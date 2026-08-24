@@ -1,3 +1,15 @@
+## 2.735.0
+
+### Fixed — Save never lit up on the assistant's screens, and the field order is now in the markup
+Changing anything on Act & Tell or Settings left the Save button greyed, which
+looks exactly like having changed nothing: the dialog was handing its Save
+button no draft to commit, and each tab was editing a private copy that nothing
+else could see. Both dialogs now share one draft, so Save works and switching
+tabs keeps what you typed. Separately, the field ordering that was meant to put
+the explanation above each box and its name below is now written that way
+directly, rather than relying on a styling rule that was not taking effect on
+your device.
+
 ## 2.734.0
 
 ### Changed — clearer wording for what replaces the retiring automations, and a tidier facts row

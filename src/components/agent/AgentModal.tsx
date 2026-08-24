@@ -33,7 +33,8 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
 import SourceLegend from "@/components/common/SourceLegend";
-import { AgentConfigProvider } from "@/agent/AgentConfigDraft";
+import { AgentConfigProvider,
+         useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import CockpitConcerns from "@/components/cockpit/CockpitConcerns";
 import CockpitMemories from "@/components/cockpit/CockpitMemories";
 import CockpitProposals from "@/components/cockpit/CockpitProposals";
@@ -77,10 +78,30 @@ const TABS: { id: Tab; label: string; icon: typeof Sparkles; owner?: true }[] = 
   { id: "settings", label: "Settings", icon: SlidersHorizontal, owner: true },
 ];
 
-export default function AgentModal(
+/** ⚠️ THE PROVIDER WRAPS THE WHOLE DIALOG, AND WRAPPING IT PER TAB IS WHY SAVE
+ *  DID NOTHING. `AgentConfigDraft`'s own docstring says it: "the provider wraps
+ *  the whole dialog rather than the one tab that edits — a draft must survive a
+ *  tab switch, and the button that commits it lives outside every tab." I put
+ *  it inside two tabs instead, which broke the feature twice over: the footer
+ *  sat OUTSIDE every provider so it had no draft to commit, and the two tabs
+ *  each created their OWN draft, so an edit on one was invisible to the other
+ *  and to anything that might have read it. Reported as changing a setting and
+ *  never seeing Save light up. */
+export default function AgentModal(props: {
+  onClose: () => void; canConfigure: boolean;
+}) {
+  return (
+    <AgentConfigProvider enabled={props.canConfigure}>
+      <AgentDialog {...props} />
+    </AgentConfigProvider>
+  );
+}
+
+function AgentDialog(
   { onClose, canConfigure }:
   { onClose: () => void; canConfigure: boolean },
 ) {
+  const draft = useAgentConfigDraft();
   const dialogRef = useModalA11y(onClose);
   const tabs = TABS.filter((t) => canConfigure || !t.owner);
   // ⚠️ THE FIRST VISIBLE TAB, NEVER A LITERAL. Hard-coding one that a facility
@@ -131,10 +152,14 @@ export default function AgentModal(
           <h2>VESTA Agent</h2>
         </div>
 
+        {/* ⚠️ THE STRIP GETS THE DRAFT TOO, NOT JUST THE FOOTER — an existing
+            pin caught this half. Switching tabs with unsaved edits must warn,
+            and a strip that cannot see the draft silently drops them. */}
         <ModalTabs
           tabs={tabs}
           active={tab}
           onSelect={setTab}
+          commit={draft}
           label="VESTA Agent sections"
         />
 
@@ -195,16 +220,13 @@ export default function AgentModal(
                   redundant badge. The legend earns its place where SEVERAL
                   sources appear together, not where one does. */}
               <CockpitProposals />
-              <AgentConfigProvider enabled>
-                <ActDeliverySection />
-              </AgentConfigProvider>
+              <ActDeliverySection />
             </div>
           )}
 
           {/* ── Settings ───────────────────────────────────────────────── */}
           {tab === "settings" && (
-            <AgentConfigProvider enabled>
-              <div className="reports-pane">
+            <div className="reports-pane">
                 <AgentTuningPanel />
                 {/* ⚠️ THE REST BEHIND ONE DOOR, THE SAME SHAPE SETTINGS USES
                     FOR ADVANCED SETTINGS. Cost, people, the API key and the
@@ -227,12 +249,14 @@ export default function AgentModal(
                   <SlidersHorizontal size={16} aria-hidden="true" />
                   <span>Cost, people and advanced</span>
                 </button>
-              </div>
-            </AgentConfigProvider>
+            </div>
           )}
         </div>
 
-        <ModalFooter onClose={onClose} />
+        {/* ⚠️ `commit={draft}` IS WHAT MAKES SAVE EXIST. Without it the button
+            is rendered permanently inert — `ModalFooter` greys Save when it has
+            no draft, which looks identical to "nothing has changed". */}
+        <ModalFooter commit={draft} onClose={onClose} />
       </div>
       {/* ⚠️ RENDERED AS A SIBLING, NOT NESTED, so its own backdrop covers this
           dialog rather than being clipped inside it — the same arrangement

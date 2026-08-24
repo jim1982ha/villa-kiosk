@@ -14,7 +14,8 @@ import { GitCompare, KeyRound, Receipt, Users } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
-import { AgentConfigProvider } from "@/agent/AgentConfigDraft";
+import { AgentConfigProvider,
+         useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
 import PeoplePanel from "@/components/settings/PeoplePanel";
 import ShadowDiffPanel from "@/components/settings/ShadowDiffPanel";
@@ -33,7 +34,19 @@ const TABS: { id: Tab; label: string; icon: typeof Receipt }[] = [
   { id: "shadow", label: "Old rules vs AI", icon: GitCompare },
 ];
 
+/** ⚠️ SAME SHAPE AS `AgentModal`, AND IT HAD THE SAME DEFECT. The provider must
+ *  wrap the DIALOG, or the footer has no draft to commit and each tab edits a
+ *  private one. */
 export default function AgentAdvancedModal({ onBack }: { onBack: () => void }) {
+  return (
+    <AgentConfigProvider enabled>
+      <AdvancedDialog onBack={onBack} />
+    </AgentConfigProvider>
+  );
+}
+
+function AdvancedDialog({ onBack }: { onBack: () => void }) {
+  const draft = useAgentConfigDraft();
   const dialogRef = useModalA11y(onBack);
   const [tab, setTab] = useState<Tab>("cost");
   return (
@@ -59,7 +72,8 @@ export default function AgentAdvancedModal({ onBack }: { onBack: () => void }) {
       >
         <div className="settings-header"><h2>Cost, people and advanced</h2></div>
         <ModalTabs tabs={TABS} active={tab} onSelect={setTab}
-                   label="Advanced assistant sections" />
+                   commit={draft}
+          label="Advanced assistant sections" />
         <div className="settings-body">
           {tab === "cost" && <div className="reports-pane"><UsagePanel /></div>}
           {/* ⚠️ ONE DRAFT PROVIDER AROUND THE TWO THAT WRITE CONFIG. Two panels
@@ -67,18 +81,16 @@ export default function AgentAdvancedModal({ onBack }: { onBack: () => void }) {
               update — the store refuses a write whose revision is stale, so
               saving one silently discarded the other's edit. */}
           {(tab === "people" || tab === "key") && (
-            <AgentConfigProvider enabled>
-              <div className="reports-pane">
-                {tab === "people" && <PeoplePanel />}
-                {tab === "key" && <ApiKeyPanel />}
-              </div>
-            </AgentConfigProvider>
+            <div className="reports-pane">
+              {tab === "people" && <PeoplePanel />}
+              {tab === "key" && <ApiKeyPanel />}
+            </div>
           )}
           {tab === "shadow" && (
             <div className="reports-pane"><ShadowDiffPanel /></div>
           )}
         </div>
-        <ModalFooter onClose={onBack} />
+        <ModalFooter commit={draft} onClose={onBack} />
       </div>
     </div>
   );

@@ -111,7 +111,14 @@ function Num({ label, note, value, min, onChange }: {
 
   return (
     <label className="fm-field">
-      <span>{label}</span>
+      {/* ⚠️ THE DOM IS IN THE FINAL ORDER TOO, NOT ONLY THE CSS. `.fm-field`
+          carries `order` rules that produce exactly this sequence, and they are
+          provably in the shipped bundle — yet the owner reported the old order
+          on the shipped build twice. Rather than argue with a cascade I cannot
+          observe on their device, the markup now says the same thing the
+          stylesheet does. The two agree, so `order` is a no-op here and remains
+          only to cover the fields still written the other way round. */}
+      <p className="muted body-text">{note}</p>
       <input
         type="number"
         inputMode="numeric"
@@ -121,10 +128,7 @@ function Num({ label, note, value, min, onChange }: {
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
       />
-      {/* ⚠️ WRITTEN LAST AND RENDERED FIRST. `.fm-field > p` carries
-          `order: -1`, so every field in the app reads explanation → name →
-          control without any of them reordering their own markup. */}
-      <p className="muted body-text">{note}</p>
+      <span>{label}</span>
     </label>
   );
 }
@@ -164,7 +168,8 @@ function Text({ label, note, value, placeholder, onChange }: {
   const [showBox, setShowBox] = useState(!known);
   return (
     <label className="fm-field">
-      <span>{label}</span>
+      {/* Same order as `Num`: explanation, control, then the field's name. */}
+      <p className="muted body-text">{note}</p>
       <div className="segmented segmented-wrap" role="group" aria-label={label}>
         {MODELS.map((m) => (
           <button
@@ -191,7 +196,7 @@ function Text({ label, note, value, placeholder, onChange }: {
           placeholder={placeholder} autoFocus={showBox && known}
           spellCheck={false} autoCapitalize="off" autoCorrect="off" />
       )}
-      <p className="muted body-text">{note}</p>
+      <span>{label}</span>
     </label>
   );
 }
@@ -301,13 +306,6 @@ On to begin with, so you can read a few weeks of what it would have sent
           of one hostname. One paste costs the owner nothing and keeps this
           add-on at the least privilege that works. */}
       <label className="fm-field">
-        <span>Home Assistant MCP add-on address</span>
-        <input
-          value={draft.mcpUrl}
-          onChange={(e) => edit({ mcpUrl: e.target.value })}
-          placeholder="http://<hostname>:9583/<secret path>"
-          spellCheck={false} autoCapitalize="off" autoCorrect="off"
-        />
         <p className="muted body-text">
           Open the Home Assistant MCP add-on, look at its log, and copy the
           address on the line beginning “Starting MCP server” — it ends in a
@@ -315,6 +313,13 @@ On to begin with, so you can read a few weeks of what it would have sent
           about your home; leave this empty and it answers from a much smaller
           set of its own.
         </p>
+        <input
+          value={draft.mcpUrl}
+          onChange={(e) => edit({ mcpUrl: e.target.value })}
+          placeholder="http://<hostname>:9583/<secret path>"
+          spellCheck={false} autoCapitalize="off" autoCorrect="off"
+        />
+        <span>Home Assistant MCP add-on address</span>
       </label>
 
       <div className="settings-section-title">

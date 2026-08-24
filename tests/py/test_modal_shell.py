@@ -663,3 +663,44 @@ def test_every_dialog_in_the_family_ALSO_CARRIES_THE_BASE_CLASS() -> None:
         f"{offenders} render a `.settings-modal` that is not also a `.modal`, "
         f"so it has no background, no card and no stable height. Write "
         f'`className="modal settings-modal …"` as every other dialog does.')
+
+
+def test_a_dialog_that_holds_a_DRAFT_can_actually_COMMIT_it() -> None:
+    r"""⚠️ SAVE WAS RENDERED PERMANENTLY INERT, AND IT LOOKED LIKE "NOTHING HAS
+    CHANGED". `ModalFooter` greys Save when it is given no `commit`, which is
+    indistinguishable from a clean draft — so a dialog that forgot the prop
+    showed a dead button and no error anywhere. Reported as changing a setting
+    and never seeing Save light up.
+
+    ⚠️ AND THE PROVIDER MUST WRAP THE DIALOG, NOT A TAB. `AgentConfigDraft`'s own
+    docstring states it — "the provider wraps the whole dialog rather than the
+    one tab that edits, because a draft must survive a tab switch and the button
+    that commits it lives outside every tab" — and it was violated in two
+    dialogs at once. Nesting it inside tabs breaks the feature twice: the footer
+    sits outside every provider, and each tab creates its own draft so an edit in
+    one is invisible to the other.
+
+    Both halves are pinned because either alone still ships a dead button.
+    """
+    offenders_commit = []
+    offenders_nested = []
+    for path, source in sorted(_dialogs().items()):
+        if "AgentConfigProvider" not in source:
+            continue
+        if not re.search(r"commit=\{", source):
+            offenders_commit.append(path)
+        # ⚠️ THE PROVIDER OPENING A TAB'S BODY IS THE TELL. A dialog-level one
+        # sits at the component's root, before the backdrop; a per-tab one
+        # appears after a `tab === "…" &&` guard.
+        if re.search(r'tab === "[a-z]+"[^\n]*&&\s*\n?\s*<AgentConfigProvider',
+                     source):
+            offenders_nested.append(path)
+
+    assert not offenders_commit, (
+        f"{offenders_commit} hold an agent config draft and pass no `commit` to "
+        f"ModalFooter, so their Save button is greyed for ever and reads as "
+        f"'nothing has changed'.")
+    assert not offenders_nested, (
+        f"{offenders_nested} wrap AgentConfigProvider inside a tab. It must wrap "
+        f"the DIALOG: the footer that commits lives outside every tab, and a "
+        f"per-tab provider gives each tab its own draft.")
