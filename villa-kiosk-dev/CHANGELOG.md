@@ -1,13 +1,13 @@
-## 2.740.0
+## 2.741.0
 
-### Changed — the agent can now own detection outright, and the villa remembers 14 days instead of 3
+### Added — a switch for "let the assistant decide, not your automations", on Act & Tell
 
-A blueprint retired but left installed suppressed its built-in replacement permanently:
-`silent_blueprints` is installed-minus-ever-seen and that flag never decays, so such a rule is neither
-absent nor silent and no waiting period released it. The new `agent_owns_analysis` setting (off by
-default) makes a rule's mere presence stop deciding anything. The duplicate protection this looks like
-it removes is untouched — findings are still deduplicated per device against what a blueprint reported
-this period, so a rule that is speaking still wins on its own equipment. Separately the observation
-journal now holds 105,000 entries rather than 20,000: measured at 7,322 rows/day the old bound was
-2.84 days, and every salience baseline is built from that ring, so slow drift became the new normal.
+2.740.0 added the setting and no control wrote it, so it could only be changed by editing the stored
+document — an invisible flag that silently changes which checks run, which is what gets forgotten and
+then misdiagnosed weeks later. It is now a switch on Act & Tell beside quiet hours and the actuable
+devices, the same authority question one level up: those say what the villa may DO, this says who
+decides what is worth SAYING. The setting also moved from the reports config into the agent config
+where that tab already has a draft, since splitting one dialog across two stored documents for one
+checkbox was the wrong seam. Its explanation says plainly that nothing is doubled up: a finding about
+a device one of your automations reported is still dropped in favour of yours, per device.
 
