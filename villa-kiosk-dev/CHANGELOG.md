@@ -1,3 +1,16 @@
+## 2.755.0
+
+### Changed — one switch now decides which layer watches the villa
+Supervision on: the assistant supersedes your automations and every built-in
+check runs. Off: your automations do the job. That replaces a six-outcome gate
+weighing whether a blueprint was installed, whether it had ever fired, how long
+the collector had listened, a 45-day grace window and an override flag — one
+branch of which could never be reached, so a switched-off automation kept its
+replacement switched off permanently while the briefing promised the check would
+run "after 45 days". Gone with it: `agent_owns_analysis` and its toggle,
+`covered_but_silent`, and the per-device dedupe. A villa deliberately running
+both layers on one device now hears about it twice, which is true.
+
 ## 2.754.0
 
 ### Changed — five agent components were named after a page that never rendered them
