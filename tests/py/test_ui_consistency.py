@@ -251,7 +251,7 @@ def test_the_master_switch_is_in_the_header_and_NOT_duplicated() -> None:
     modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
     panel = _read(os.path.join(SRC, "components", "settings",
                                "AgentTuningPanel.tsx"))
-    assert 'draft.edit({ enabled: e.target.checked })' in modal, (
+    assert "draft.edit({ enabled: on })" in modal, (
         "the header has no master switch")
     assert "settings-header-control" in modal, (
         "not in the header slot SettingsModal already uses")
@@ -295,3 +295,165 @@ def test_the_briefing_tab_states_precedence_CONTEXTUALLY() -> None:
     assert tab.count("{agentOws" if False else "{agentOwns") >= 2, (
         "only one sentence was made contextual — the precedence is stated in "
         "more than one place")
+
+
+def test_switching_supervision_off_dims_ONLY_the_tiers_that_stop() -> None:
+    """⚠️ THREE OF SIX, AND THE OTHER THREE MUST STAY LIVE. `scheduler`,
+    `runtime` and `outbox` each refuse on `enabled`, so Triage, Reason and Act
+    really do go inert. REFLEX does not — those are Home Assistant blueprints
+    that fire with no add-on and no model. OBSERVE does not either:
+    `observe/cycle.py` contains no `enabled` check, so the journal keeps
+    recording and costs nothing. SETTINGS must stay editable or supervision
+    could never be configured before being switched on.
+
+    Dimming a tier that is still working is the lie this subsystem keeps paying
+    for — an owner reading a greyed Observe tab concludes the villa recorded
+    nothing while it was off. It recorded everything.
+    """
+    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    block = modal[modal.index("INERT_WHEN_OFF"):]
+    listed = set(re.findall(r'"(\w+)"', block[:block.index("]")]))
+    assert listed == {"triage", "reason", "act"}, (
+        f"wrong tiers dimmed: {sorted(listed)}")
+
+    # and the claim is checked against the backend, not against this list
+    root = os.path.dirname(SRC)
+    bins = os.path.join(root, "rootfs", "usr", "bin")
+    for mod, stops in (("agent/scheduler.py", True), ("agent/runtime.py", True),
+                       ("agent/outbox.py", True), ("observe/cycle.py", False)):
+        src = _read(os.path.join(bins, *mod.split("/")))
+        gates = 'cfg.get("enabled")' in src or 'get("enabled")' in src
+        assert gates is stops, (
+            f"{mod} " + ("no longer refuses on `enabled`, so a tier is dimmed "
+                         "while still running" if stops else
+                         "now refuses on `enabled`, so a live tier should be "
+                         "dimmed and is not"))
+
+
+def test_the_header_switch_is_not_a_bare_checkbox() -> None:
+    """Reported from the screen: a checkbox with a word beside it read as a form
+    field dropped into a title bar. The app already has a header-control idiom."""
+    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    head = modal[modal.index("settings-header-control"):][:1200]
+    assert "segmented-icons" in head, "not the app's header-control idiom"
+    assert 'type="checkbox"' not in head, "still a raw checkbox"
+    assert "aria-label" in head and "title=" in head, (
+        "icon-only with no accessible name — the meaning has nowhere to live")
+
+
+def _tsx_sources():
+    for root, _dirs, files in os.walk(SRC):
+        for name in files:
+            if name.endswith((".tsx", ".ts")):
+                path = os.path.join(root, name)
+                yield path, _read(path)
+
+
+def test_every_status_banner_variant_a_component_asks_for_is_DECLARED() -> None:
+    """⚠️ `cockpit-health-unknown` SHIPPED AND WAS NEVER A CLASS. ShadowDiffPanel
+    built its headline class as `cockpit-health-${verdict === ... : "unknown"}`,
+    and nothing in styles.css declared it — so the two states that used it
+    rendered with no background and no colour, on the page they were the
+    headline OF. tsc cannot see inside a template literal and review reads the
+    ternary as obviously fine.
+
+    The generic form is checked, not the one class: a variant assembled from a
+    ternary is exactly the shape that escapes both the compiler and the eye.
+    """
+    css = _read(os.path.join(SRC, "styles.css"))
+    for base in ("cockpit-health", "fm-banner", "sev"):
+        declared = set(re.findall(rf"\.{base}-([a-z0-9-]+)", css))
+        for path, src in _tsx_sources():
+            for expr in re.findall(rf"{base}-\$\{{([^}}]*)\}}", src):
+                for variant in re.findall(r'"([a-z0-9-]+)"', expr):
+                    assert variant in declared, (
+                        f"{os.path.relpath(path, SRC)} renders "
+                        f"`{base}-{variant}` and styles.css declares no such "
+                        f"class, so that element is painted as nothing")
+
+
+def test_a_pass_that_never_RAN_is_not_reported_as_a_quiet_one() -> None:
+    """⚠️ THREE OUTCOMES, AND THE STORE HOLDS TWO. `audit.record_pass` writes
+    `verdict = "escalated" if escalated else "quiet"`, so "agent disabled", "no
+    model provider configured" and "budget: …" — passes in which the assistant
+    did not look at all — were all labelled **quiet** on the panel, with the
+    real reason buried mid-string in `detail`.
+
+    One value for the two outcomes an instrument exists to separate is this
+    project's most repeated defect, and it was inside the panel built to resolve
+    it. So the panel must derive the outcome from the REASON and must not render
+    the stored verdict.
+    """
+    panel = _read(os.path.join(SRC, "components", "settings",
+                               "ShadowDiffPanel.tsx"))
+    assert "export function outcomeOf" in panel, "no derived outcome"
+    body = panel[panel.index("export function outcomeOf"):]
+    body = body[:body.index("\n}")]
+    assert "verdict" not in body, (
+        "the outcome is read off the stored two-valued verdict, which cannot "
+        "express `blocked`")
+    for word in ('"raised"', '"quiet"', '"blocked"'):
+        assert word in body, f"outcomeOf cannot return {word}"
+    assert not re.search(r"\bpass\.verdict\b|\bp\.verdict\b", panel), (
+        "the panel still renders the stored verdict somewhere, so a pass that "
+        "never ran reads as a quiet one")
+
+
+def test_the_handover_page_does_not_frame_a_decision_already_taken() -> None:
+    """⚠️ THE OWNER'S STANDING DIRECTION IS A FULL SWAP TO THE ASSISTANT: "never
+    consider the option to restore the monitoring via the blueprint when it's
+    not the end plan." A page headed "Old rules vs AI" and sectioned "would be
+    lost if you retired the automations" argues a decision that is closed, and
+    the same numbers then read as a scoreboard the assistant is losing 24–1
+    rather than as progress through a migration. Reported as "no clear insight
+    can be derived from it".
+    """
+    modal = _read(os.path.join(SRC, "components", "agent",
+                               "AgentAdvancedModal.tsx"))
+    panel = _read(os.path.join(SRC, "components", "settings",
+                               "ShadowDiffPanel.tsx"))
+    # ⚠️ BLOCK COMMENTS STRIPPED BY REGEX, NOT BY LINE PREFIX. A JSX comment's
+    # continuation lines start with an ordinary word, so a line filter leaves
+    # most of every block in — and the words this test forbids are exactly the
+    # ones the header comments RECORD, which dry-audit Part 2 says must stay.
+    body = re.sub(r"/\*.*?\*/", "", modal + panel, flags=re.S)
+    visible = "\n".join(l for l in body.splitlines()
+                         if not l.lstrip().startswith("//"))
+    for phrase in ("Old rules vs AI", "would be lost", "Would be lost",
+                   "retired the automations", "regression"):
+        assert phrase not in visible, (
+            f"{phrase!r} still frames this as a decision about whether to "
+            "retire working automations")
+
+
+def test_the_findings_lists_are_GROUPED_so_one_check_is_one_row() -> None:
+    """⚠️ `shadow.diff` KEYS ON `subject_key` — one row per piece of EQUIPMENT —
+    while a finding's TITLE names the check that fired. Four devices failing
+    one check produced four rows all reading the same check name, and a reader
+    cannot tell that from a broken list. It was 24 rows of it.
+    """
+    panel = _read(os.path.join(SRC, "components", "settings",
+                               "ShadowDiffPanel.tsx"))
+    assert "export function groupTitles" in panel
+    # the lists render through the grouped component, not by mapping raw titles
+    assert not re.search(r"diff\.(rulesOnly|both|agentOnly)\.map\(", panel), (
+        "a list still maps the raw per-subject titles, so identical check "
+        "names render as duplicate rows")
+    for key in ("rulesOnly", "both", "agentOnly"):
+        assert f"titles={{diff.{key}}}" in panel, (
+            f"{key} is not rendered through the grouped list")
+
+
+def test_an_absent_document_size_is_not_read_as_an_empty_document() -> None:
+    """⚠️ `undefined` IS NOT 0 HERE, AND 0 IS THE LOUDEST ALARM ON THE PAGE.
+    Audit rows written before v2.685.0 carry no `doc_chars` at all; treating
+    that as "the assistant was handed nothing to read" would accuse a pass that
+    was probably fine, which is the same class of error the field exists to
+    report honestly."""
+    panel = _read(os.path.join(SRC, "components", "settings",
+                               "ShadowDiffPanel.tsx"))
+    assert "docChars === undefined" in panel, (
+        "the panel does not distinguish an absent size from a zero one")
+    assert "docChars === 0" in panel, "nothing detects the empty-document fault"
+    assert not re.search(r"!\s*\w+\.docChars|docChars\s*\|\|", panel), (
+        "a falsy test collapses `undefined` and 0, which are opposite claims")

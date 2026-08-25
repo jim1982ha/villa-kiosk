@@ -26,7 +26,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  Activity, Brain, Search, Send, SlidersHorizontal, Sparkles, Zap,
+  Activity, Brain, Search, Send, SlidersHorizontal, Sparkles, Zap, Eye, EyeOff,
 } from "lucide-react";
 
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -78,6 +78,22 @@ const TABS: { id: Tab; label: string; icon: typeof Sparkles; owner?: true }[] = 
   { id: "settings", label: "Settings", icon: SlidersHorizontal, owner: true },
 ];
 
+/** The tiers that genuinely stop when supervision is switched off.
+ *
+ *  ⚠️ THREE OF SIX, NOT ALL OF THEM, AND THE DIFFERENCE IS CHECKED IN THE CODE
+ *  RATHER THAN ASSUMED. `scheduler`, `runtime` and `outbox` each refuse on
+ *  `enabled`, so Triage, Reason and Act really do go inert. REFLEX does not:
+ *  those are Home Assistant blueprints that fire with no add-on and no model,
+ *  which is the entire reason Tier 0 exists. OBSERVE does not either —
+ *  `observe/cycle.py` contains no `enabled` check at all, so the journal keeps
+ *  recording, and it costs nothing because no model is involved.
+ *
+ *  ⚠️ GREYING THE OTHER TWO WOULD BE A LIE OF EXACTLY THE KIND THIS SUBSYSTEM
+ *  KEEPS PAYING FOR: a working tier presented as stopped, so an owner reading
+ *  a dimmed Observe tab concludes their villa recorded nothing during the
+ *  period it was off. It recorded everything. */
+const INERT_WHEN_OFF: ReadonlySet<Tab> = new Set(["triage", "reason", "act"]);
+
 /** ⚠️ THE PROVIDER WRAPS THE WHOLE DIALOG, AND WRAPPING IT PER TAB IS WHY SAVE
  *  DID NOTHING. `AgentConfigDraft`'s own docstring says it: "the provider wraps
  *  the whole dialog rather than the one tab that edits — a draft must survive a
@@ -108,6 +124,11 @@ function AgentDialog(
   // manager cannot see opens them on an empty body with nothing selected —
   // the defect `ReportsModal` records having shipped.
   const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "reflex");
+  // ⚠️ THE DRAFT, NOT THE SAVED CONFIG, so the panes dim the moment the header
+  // switch is flipped rather than only after Save — which is what makes the
+  // switch feel like it did something.
+  const offAndInert = draft.config.enabled !== true && INERT_WHEN_OFF.has(tab);
+
   const [advanced, setAdvanced] = useState(false);
   // ⚠️ ONE FETCH FOR THE WHOLE DIALOG, ON OPEN. Reflex and Observe both read
   // the same diagnostics document, and two components each fetching it would
@@ -164,20 +185,34 @@ function AgentDialog(
             Nothing reaches a provider with this off. */}
         <div className="settings-header">
           <h2>VESTA Agent</h2>
+          {/* ⚠️ THE SAME `segmented segmented-icons` GROUP SETTINGS USES FOR
+              THEME, not a checkbox. A bare checkbox with a word beside it read
+              as a form field dropped into a title bar; this is the app's
+              existing header-control idiom and needs no new CSS. Icon-only, so
+              the meaning rides `title`/`aria-label` — which is what the theme
+              buttons do too. */}
           <div className="settings-header-control">
-            <span className="settings-inline-label">Supervision</span>
-            <label className="toggle" title={
-              draft.config.enabled
-                ? "On — the villa watches, reasons and may spend"
-                : "Off — nothing runs and nothing is spent"}>
-              <input
-                type="checkbox"
-                checked={draft.config.enabled === true}
-                disabled={draft.saving}
-                onChange={(e) => draft.edit({ enabled: e.target.checked })}
-              />
-              <span>{draft.config.enabled ? "On" : "Off"}</span>
-            </label>
+            <div className="segmented segmented-icons" role="group"
+                 aria-label="Supervision">
+              {([
+                { on: true, icon: Eye,
+                  label: "Supervision on — the villa watches, reasons and may spend" },
+                { on: false, icon: EyeOff,
+                  label: "Supervision off — nothing is asked of a model and nothing is spent" },
+              ] as const).map(({ on, icon: Icon, label }) => (
+                <button
+                  key={String(on)}
+                  className={draft.config.enabled === on ? "active" : ""}
+                  disabled={draft.saving}
+                  onClick={() => draft.edit({ enabled: on })}
+                  aria-pressed={draft.config.enabled === on}
+                  title={label}
+                  aria-label={label}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -192,7 +227,21 @@ function AgentDialog(
           label="VESTA Agent sections"
         />
 
-        <div className="settings-body">
+        {/* ⚠️ INERT, NOT HIDDEN. A reader with supervision off still needs to
+            see what these tiers WOULD do — that is how they decide whether to
+            switch it on — so the panes stay legible and only their controls
+            stop responding. `inert` also takes them out of the tab order, so a
+            keyboard user is not walked through a pane that cannot answer. */}
+        <div className={"settings-body"
+                        + (offAndInert ? " pane-inert" : "")}
+             {...(offAndInert ? { inert: "" as unknown as boolean } : {})}>
+          {offAndInert && (
+            <div className="fm-banner warn">
+              Supervision is off, so this step is not running. Reflex and
+              Observe are unaffected — the villa still acts on the urgent
+              things and still records what changes.
+            </div>
+          )}
           {/* ── Step 0 · what acts by itself ───────────────────────────── */}
           {tab === "reflex" && <ReflexTab diagnostics={diagnostics} />}
 

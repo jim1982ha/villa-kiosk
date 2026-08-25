@@ -31,7 +31,11 @@ const TABS: { id: Tab; label: string; icon: typeof Receipt }[] = [
   { id: "cost", label: "Cost", icon: Receipt },
   { id: "people", label: "Who may talk to it", icon: Users },
   { id: "key", label: "Provider key", icon: KeyRound },
-  { id: "shadow", label: "Old rules vs AI", icon: GitCompare },
+  // ⚠️ "HANDOVER", NOT "OLD RULES VS AI". A versus frames a decision the owner
+  // has already taken — the direction is a full swap to the assistant — and the
+  // same numbers read as a scoreboard the assistant is losing rather than as
+  // progress through a migration. See ShadowDiffPanel's header.
+  { id: "shadow", label: "Handover", icon: GitCompare },
 ];
 
 /** ⚠️ SAME SHAPE AS `AgentModal`, AND IT HAD THE SAME DEFECT. The provider must

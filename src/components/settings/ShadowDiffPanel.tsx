@@ -1,54 +1,141 @@
 // src/components/settings/ShadowDiffPanel.tsx
 //
-// What the shadow period found, beside what the rules found. TASK-050/051.
+// How far the handover has got: is the assistant looking, and how much of what
+// the old automations report has it reproduced on its own? TASK-050/051.
 //
-// ⚠️ THIS IS THE PH-3 GATE'S ONLY SURFACE, AND UNTIL NOW THE GATE HAD NONE.
-// `shadow.diff()` and `shadow.report()` shipped in v2.642.0 with no caller —
-// no route, no UI, no command — so the document `TASK-051` asks an owner to
-// read could not be produced at all. The checkpoint blocks PH-4 and PH-5, which
-// is two whole phases waiting on a page nothing rendered. Same shape as the
-// review queue, found the same way: by asking what actually calls the thing.
+// ⚠️ REBUILT BECAUSE IT ANSWERED A QUESTION THE OWNER HAD ALREADY CLOSED. Every
+// earlier version of this page was a DECISION SURFACE for "should you retire
+// the automations" — the section order was an argument, the flattering column
+// was last on purpose, and the headline read "24 things your automations caught
+// and the villa did not". That decision has been taken: the direction is a full
+// swap to the assistant and the blueprints are being retired. So a page arguing
+// the case reads as noise at best and as "the assistant is losing 24–1" at
+// worst, which is the opposite of what the same numbers mean during a handover.
+// Reported as: "information looks very technical and no clear insight can be
+// derived from it".
 //
-// ⚠️ IT RENDERS THE DIFF'S STRUCTURE, AND THE FIRST VERSION SHOWED `report()`'s
-// TEXT VERBATIM. The reasoning then was that the document's section order is an
-// argument — what the agent MISSED first, its wins last — and that re-laying it
-// out would be a second opinion. The order is still an argument and is still
-// obeyed here; what was wrong was showing a monospace document with three zeros
-// in it and calling that a decision surface. Reported: "very poorly reporting
-// information, not understandable for a user".
+// The question now is PROGRESS, and it has three parts, in the order a person
+// asks them: is it looking → does it have anything to look AT → how much of the
+// old coverage has it matched. Nothing on this page asks the reader to decide
+// whether to keep a rule.
 //
-// ⚠️ THE SECTIONS ARE NAMED BY WHAT THEY MEAN FOR THE DECISION, not by which
-// layer produced them. "Caught by the rules and not by the agent" is accurate
-// and makes the reader do the inference; "would be lost if you retired the
-// automations" is the same set and is the question they came with.
+// ⚠️ THE LISTS ARE GROUPED BY TITLE WITH A COUNT, AND THAT IS A FIX, NOT A
+// STYLE. `shadow.diff` keys rows on `subject_key` — one row per piece of
+// EQUIPMENT — while a finding's title names the CHECK that fired. So four pumps
+// failing the same check produced four rows all reading "Pump power factor",
+// and the page rendered what looked like the same line four times. A reader
+// cannot tell that from a bug in the list, and it was 24 rows of it.
 //
-// ⚠️ AND THE PAGE SAYS ONE THING AT A TIME. It used to stack a bold `0`, a
-// sentence about regressions, a coverage caveat and a "nothing recorded yet"
-// banner — four claims about one emptiness, two of them contradicting each
-// other. The verdict line is now the headline, the caveat appears only beside
-// real evidence, and the empty state explains what to wait for instead.
+// ⚠️ AND A SLUG IS NOT A TITLE. A row shaped `family---instance_name` sat in
+// that list between two English sentences — a rule id that reached the title
+// field, verbatim, where a check name belongs.
+// `pretty()` is the display-side repair; it is generic (no id, no name, no
+// villa in it) and deliberately conservative: it only touches a string that is
+// ENTIRELY id-shaped, so a real title containing an underscore is left alone.
+//
+// ⚠️ A PASS THAT NEVER RAN USED TO RENDER AS A QUIET ONE. `audit.record_pass`
+// stores `verdict = escalated ? "escalated" : "quiet"`, so "agent disabled",
+// "no model provider configured" and "budget: …" — three passes in which the
+// assistant did not look at all — all arrived here labelled **quiet**, with the
+// real reason buried mid-string in `detail`. That is this subsystem's own
+// recurring defect (one value for the two outcomes an instrument exists to
+// separate) inside the very panel built to resolve it. There are THREE
+// outcomes here — raised, looked-and-quiet, could-not-look — and `outcomeOf`
+// derives the third from the reason rather than from the stored verdict.
+//
+// ⚠️ THE TECHNICAL FIELDS ARE SHOWN WHEN THEY CARRY A FAULT AND NOT OTHERWISE.
+// `doc=5246c/51L | escalated=0 | model=claude-haiku-4-5` on every row is the
+// same string thirty times, and the one thing in it that ever changes a reading
+// — a document of zero characters, i.e. the assistant handed nothing to read —
+// was invisible inside it. That case is now a headline. The numbers all survive
+// in the CSV, which is where a spreadsheet reader wants them.
 //
 // ⚠️ AND IT IS DELIBERATELY NOT IN THE COCKPIT. The Cockpit is open to every
-// profile and shows the state of the VILLA; this is a decision about how the
-// villa is SUPERVISED, it is owner-only on the server, and it belongs beside
-// the switches that act on it.
+// profile and shows the state of the VILLA; this is the state of the villa's
+// SUPERVISION, it is owner-only on the server, and it belongs beside the
+// switches that act on it.
 
-import { useCallback, useEffect, useState } from "react";
-import { Download, Loader2, Play, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, Download, Eye, Loader2, Play, RefreshCw } from "lucide-react";
 
+import { Pager, usePaged } from "@/components/common/Paged";
 import { loadShadowDiff, loadTriagePasses, runAgentNow, type ShadowDiff, type TriagePass } from "@/agent/agentApi";
+
+/** Titles that are entirely id-shaped, rendered as a person would write them.
+ *
+ *  ⚠️ CONSERVATIVE ON PURPOSE. The test is anchored at both ends and admits
+ *  only lowercase words joined by `_`/`-`, so a real check name — which has
+ *  spaces and capitals — passes through untouched. A prettifier
+ *  that reached into real prose would corrupt the titles that are already fine
+ *  in order to repair the few that are not. */
+export function pretty(title: string): string {
+  if (!/^[a-z0-9]+(?:[-_]{1,3}[a-z0-9]+)+$/.test(title)) return title;
+  return title
+    // `---` is the naming convention's family/instance separator, not a dash.
+    .replace(/[-_]{2,}/g, " · ")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** `["Pump power factor", "Pump power factor", …]` → `[{label, n}]`, commonest
+ *  first. ⚠️ THE COUNT IS THE INFORMATION: "Pump power factor ×4" says four
+ *  pieces of equipment, which four identical lines did not. */
+export function groupTitles(titles: string[]): Array<{ label: string; n: number }> {
+  const seen = new Map<string, number>();
+  for (const t of titles) {
+    const label = pretty(t);
+    seen.set(label, (seen.get(label) ?? 0) + 1);
+  }
+  return [...seen.entries()]
+    .map(([label, n]) => ({ label, n }))
+    .sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+}
+
+/** What a pass actually did. ⚠️ THREE, NOT THE TWO THE STORE HOLDS — see the
+ *  header. `blocked` is every reason that is not one of the two the triage path
+ *  produces when it ran, which is why it is derived by exclusion: a new guard
+ *  added to `scheduler._run_once` returns a new reason string and lands here as
+ *  "could not run" without anybody remembering to update this file. */
+export type PassOutcome = "raised" | "quiet" | "blocked";
+
+export function outcomeOf(reason: string): PassOutcome {
+  if (reason.startsWith("escalated ")) return "raised";
+  if (reason === "nothing to escalate") return "quiet";
+  return "blocked";
+}
+
+/** The human half of `detail`: `audit.record_pass` joins the reason and the
+ *  numbers with " | ", and everything after the first separator is the numbers. */
+const reasonOf = (p: TriagePass) => (p.detail || "").split(" | ")[0].trim();
+
+/** `escalated 2 (investigated 2): A, B` → `A, B`. */
+const subjectsOf = (reason: string) => {
+  const i = reason.indexOf(": ");
+  return i < 0 ? "" : reason.slice(i + 2).trim();
+};
+
+/** "3 minutes ago" from an ISO stamp. ⚠️ RELATIVE, because the question is
+ *  always "is this still happening" and the reader is standing at a wall. */
+function ago(iso: string): string {
+  const then = Date.parse(iso || "");
+  if (!Number.isFinite(then)) return "";
+  const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  return hrs < 48 ? `${hrs} h ago` : `${Math.round(hrs / 24)} days ago`;
+}
 
 export default function ShadowDiffPanel() {
   /** ⚠️ THREE STATES, NOT TWO. `undefined` is "not asked yet", `null` is "asked
    *  and could not read it", and a value is an answer — which may legitimately
    *  be an empty diff. Collapsing the middle one renders a failed read as a
-   *  clean period, and this is the page a cutover is decided on. */
+   *  clean period. */
   const [diff, setDiff] = useState<ShadowDiff | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  /** What the last forced run said, if one was asked for. */
   const [note, setNote] = useState<string | null>(null);
-
   const [passes, setPasses] = useState<TriagePass[]>([]);
+
   const load = useCallback(async () => {
     setBusy(true);
     // ⚠️ BOTH, ALWAYS. The diff alone cannot say whether a pass happened, and
@@ -61,46 +148,41 @@ export default function ShadowDiffPanel() {
 
   useEffect(() => { void load(); }, [load]);
 
+  /** Newest first, with the outcome already decided once. */
+  const recent = useMemo(() => [...passes].reverse().map((p) => {
+    const reason = reasonOf(p);
+    return { pass: p, reason, outcome: outcomeOf(reason) };
+  }), [passes]);
+  const paged = usePaged(recent);
+
+  const last = recent[0];
+  /** Passes in the last 24 h — the honest measure of "is it running", where a
+   *  total since install would keep reading healthy long after it stopped. */
+  const dayPasses = useMemo(() => {
+    const since = Date.now() - 86_400_000;
+    return recent.filter((r) => (Date.parse(r.pass.at || "") || 0) >= since).length;
+  }, [recent]);
+  /** ⚠️ `undefined` IS NOT ZERO HERE. Rows written before v2.685.0 carry no
+   *  `docChars` at all, and treating that as an empty document would raise the
+   *  loudest alarm on this page about a pass that was probably fine. */
+  const blind = last !== undefined && last.pass.docChars === 0;
+
   /** The three lists as CSV, one row per finding with the column that decides.
    *
-   *  ⚠️ THE `caught_by` COLUMN IS THE POINT. A flat list of titles is the page
-   *  again; what a spreadsheet adds is sorting and filtering on WHICH SIDE
-   *  found each one, which is the only question this document exists to answer.
+   *  ⚠️ THE `caught_by` COLUMN IS THE POINT — a spreadsheet adds sorting and
+   *  filtering on WHICH SIDE found each one, and it carries the coverage flag on
+   *  every row because a banner is lost in an export.
    *
-   *  ⚠️ AND IT CARRIES THE COVERAGE FLAG ON EVERY ROW. The caveat is a banner
-   *  on screen and would be lost in an export — a file whose rows look
-   *  conclusive when the period was not fully observed is worse than no file.
+   *  ⚠️ ONE FLAT TABLE WITH A `section` COLUMN. Two sections each with their own
+   *  header is not two tables to a spreadsheet: every pass row landed under the
+   *  FINDINGS headers, so `pass_at` sat under "caught_by" and `detail` in a
+   *  column with no header at all. Reported as "can you include the triage
+   *  passes in the CSV" — of a file that already contained them.
    *
-   *  ⚠️ THE TRIAGE PASSES ARE IN THE FILE TOO (2.684.0), AND WITHOUT THEM THIS
-   *  EXPORT WAS THE PH-3 AMBIGUITY IN A NEW CONTAINER. The findings say what
-   *  was caught; only the trace says whether the agent could SEE anything when
-   *  it looked, and `doc=` is the field that separates "looked and agreed" from
-   *  "was handed an empty villa document" — the failure that reads exactly like
-   *  success and cost four review rounds. That field lived on screen only, so
-   *  the artefact somebody sends for a cutover verdict was precisely the one
-   *  that could not support one. A reader with the file alone can now answer it.
-   *
-   *  ⚠️ ONE FLAT TABLE WITH A `section` COLUMN — AND THIS COMMENT USED TO
-   *  ARGUE THE OPPOSITE, WRONGLY. It said two sections each with their own
-   *  header beat "padding both to a union of columns", because a union "makes
-   *  every row half empty and hides which section a row belongs to". The first
-   *  half is true and does not matter; the second is exactly backwards — a
-   *  `section` column is PRECISELY what says which section a row belongs to.
-   *
-   *  What the argument missed is how a CSV is actually opened. A mid-file header
-   *  row is not a header to a spreadsheet: every pass row landed under the
-   *  FINDINGS headers, so `pass_at` sat under "caught_by", `verdict` under
-   *  "finding", and `detail` in a fourth column with no header at all. Reported
-   *  as "can you include the triage passes in the CSV" — of a file that already
-   *  contained them. That is this subsystem's own recurring failure (data that
-   *  is present and unreadable is indistinguishable from data that is absent)
-   *  landing in the very artefact built to resolve it.
-   *
-   *  ⚠️ AND THE PASS NUMBERS GET THEIR OWN COLUMNS. `doc_chars` is what the
-   *  cutover rests on — a pass handed an empty villa document reports "nothing
-   *  to escalate" exactly as a genuinely quiet one does — and it was reachable
-   *  only by re-parsing `detail`'s prose. `detail` stays: the sentence is what a
-   *  person reads, the columns are what a spreadsheet sorts. */
+   *  ⚠️ AND THE ROWS ARE UNGROUPED, UNLIKE THE PAGE. Grouping is a reading aid;
+   *  a spreadsheet groups by itself and cannot ungroup, so the file keeps one
+   *  row per subject. It is the same relationship as `detail` beside the numeric
+   *  columns: one rendering for a person, one for a tool, from one source. */
   const download = () => {
     if (!diff) return;
     const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -112,22 +194,24 @@ export default function ShadowDiffPanel() {
       rows.push(head.map((k) => cell(values[k] ?? "")).join(","));
 
     const add = (side: string, titles: string[]) => titles.forEach((t) => row({
-      section: "finding", caught_by: side, finding: t,
+      section: "finding", caught_by: side, finding: pretty(t),
       coverage_complete: String(diff.coverageComplete),
     }));
-    add("rules only — would be lost", diff.rulesOnly);
+    add("automations only — not matched yet", diff.rulesOnly);
     add("both", diff.both);
-    add("villa only", diff.agentOnly);
+    add("assistant only", diff.agentOnly);
 
     if (passes.length === 0) {
-      // ⚠️ SAID OUT LOUD, NOT LEFT BLANK. An absent section reads as "the
-      // trace was not exported"; this reads as "no pass has run", which is the
-      // single most important thing a cutover reader can learn from this file.
+      // ⚠️ SAID OUT LOUD, NOT LEFT BLANK. An absent section reads as "the trace
+      // was not exported"; this reads as "no pass has run".
       row({ section: "pass", detail: "no triage pass has been recorded" });
     }
     for (const p of passes) {
       row({
-        section: "pass", pass_at: p.at, verdict: p.verdict, trigger: p.trigger,
+        section: "pass", pass_at: p.at,
+        // ⚠️ THE DERIVED OUTCOME, NOT THE STORED VERDICT — see the header. The
+        // file said "quiet" for a pass that never ran, same as the page did.
+        verdict: outcomeOf(reasonOf(p)), trigger: p.trigger,
         doc_chars: p.docChars, doc_lines: p.docLines, escalated: p.escalated,
         model: p.model, detail: p.detail,
       });
@@ -136,49 +220,39 @@ export default function ShadowDiffPanel() {
       new Blob([rows.join("\n") + "\n"], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `vesta-cutover-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `vesta-handover-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  /** ⚠️ ONE RUN, NOW, SO THE GATE CAN BE TESTED TODAY. Waiting a cadence is the
-   *  honest instruction for judging a real period and a terrible one for
-   *  finding out whether this page works at all — and the last two defects here
-   *  were both invisible until somebody put evidence beside it. It spends real
-   *  budget, which the button says. */
+  /** ⚠️ ONE RUN, NOW, SO THE PAGE CAN BE TESTED TODAY. Waiting a cadence is the
+   *  honest instruction for judging a real period and a terrible one for finding
+   *  out whether any of this works. It spends real budget, which the button
+   *  says. */
   const runNow = useCallback(async () => {
     setBusy(true);
     setNote(null);
     const result = await runAgentNow();
-    // ⚠️ A RUN IS NOT A CONCERN, AND SAYING SO IS THE HONEST ANSWER. This
-    // asks the villa a question and reads the reply; a CONCERN — which is what
-    // the diff compares — is raised by the triage path when something crosses
-    // the bar. So a finished run legitimately adds nothing here, and the first
-    // wording ("anything it concluded is below") implied otherwise.
-    // ⚠️ THE REASON IS SHOWN VERBATIM, because `run_once` returns WHY it
-    // stopped and the five causes need different responses: switched off,
-    // shadowed, over budget, no provider, and nothing to escalate look
-    // identical from outside and four of them are fine.
+    // ⚠️ THE REASON IS SHOWN VERBATIM, because `run_once` returns WHY it stopped
+    // and the five causes need different responses: switched off, shadowed, over
+    // budget, no provider, and nothing to escalate look identical from outside
+    // and four of them are fine.
     setNote(result.ok
-      ? "The check ran. Anything it judged worth raising is in the villa's "
-        + "column below; a check that finds the villa well adds nothing, "
-        + "which is not a failure."
+      ? "The check ran — its result is the first row under “Recent checks”. "
+        + "A check that finds the villa well raises nothing, which is not a "
+        + "failure."
       : `The check stopped: ${result.reason}`);
-    // ⚠️ BOTH, EXACTLY AS `load` DOES. This refreshed only the diff, so the
-    // press that CREATED a trace row left the trace block still reading "No
-    // pass has been recorded yet" — the instrument reporting the absence of the
-    // very thing the button had just produced. Reported the first time the
-    // button was pressed on the release that added the block.
-    // ⚠️ THE TWO FETCHES MUST NOT DRIFT AGAIN: `load` is the one that knows
-    // what this panel is made of, so call it rather than repeating its body.
+    // ⚠️ CALL `load`, DO NOT REPEAT ITS BODY. This refreshed only the diff once,
+    // so the press that CREATED a trace row left the trace still reading "no
+    // pass has been recorded".
     await load();
   }, [load]);
 
   if (diff === undefined) {
     return (
       <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Reading the shadow
-        period…
+        <Loader2 size={14} className="spin" aria-hidden /> Reading the
+        handover…
       </p>
     );
   }
@@ -186,215 +260,259 @@ export default function ShadowDiffPanel() {
   if (diff === null) {
     return (
       <p className="body-text sev-warning" role="alert">
-        The shadow diff could not be read. That is not the same as an empty
-        one — nothing here should be taken as evidence either way.
+        This could not be read. That is not the same as an empty one — nothing
+        here should be taken as evidence either way.
       </p>
     );
   }
 
-  /** ⚠️ THREE STATES, AND THE FIRST VERSION RENDERED ALL THREE AT ONCE. It
-   *  showed a bold `0`, a sentence about regressions, a coverage banner and a
-   *  "nothing recorded yet" banner stacked together — four claims about the
-   *  same emptiness, two of which contradicted each other ("nothing was
-   *  found" beside "you cannot conclude anything"). Reported as poorly
-   *  reporting information, and it was. A page that answers one question gets
-   *  to say one thing. */
-  const ran = diff.agentTotal > 0 || diff.rulesTotal > 0;
-  /** ⚠️ A DIFF WITH AN EMPTY VILLA COLUMN IS NOT A COMPARISON, AND CALLING IT
-   *  ONE WOULD HAVE COST THE OWNER THE DECISION. With `rulesTotal` 10 and
-   *  `agentTotal` 0 the page said "10 things your automations caught and the
-   *  villa did not" — which is arithmetically true and reads as "the agent is
-   *  worse", when the identical output is produced by an agent that has never
-   *  run. Every rule is in `rulesOnly` by construction when the other side is
-   *  empty, so the number carries no information about the agent at all.
-   *
-   *  This is the shape this project keeps paying for: an instrument reporting
-   *  the same value for the two outcomes it exists to separate. */
-  const verdict = !ran
-    ? "waiting"
-    : diff.agentTotal === 0
-      ? "one-sided"
-      : diff.rulesOnly.length > 0 ? "blocked" : "clear";
+  const matched = diff.both.length;
+  const unmatched = diff.rulesOnly.length;
+  const covered = matched + unmatched;
+  const pct = covered > 0 ? Math.round((100 * matched) / covered) : 0;
+
+  /** ⚠️ THE HEADLINE IS THE ONE THING A READER ACTS ON, so it is ordered by
+   *  what BLOCKS what. A coverage percentage computed while the assistant was
+   *  never given the villa's notes to read is a number about nothing, so the
+   *  two "it could not look" states come first and say so instead. */
+  const verdict: "never" | "blocked" | "blind" | "progress" =
+    last === undefined ? "never"
+      : last.outcome === "blocked" ? "blocked"
+        : blind ? "blind"
+          : "progress";
+  const bad = verdict !== "progress";
 
   return (
     <div className="fm-stack">
       <p className="muted body-text">
-        While “Observe only” is on the villa runs everything and delivers
-        nothing. This compares what it concluded against what your existing
-        automations concluded, over the same period.
+        The assistant is taking over the watching that your Home Assistant
+        automations used to do. This page is the state of that handover.
       </p>
 
-      {/* ⚠️ THE HEADLINE IS THE DECISION, NOT A NUMBER. "0" answered a question
-          nobody asked; what a reader needs is whether they can act on this
-          page yet, and if so which way it points. */}
       <div className={`cockpit-health cockpit-health-${
-        verdict === "blocked" ? "warn" : verdict === "clear" ? "ok" : "unknown"}`}>
+        bad ? "warn" : pct === 100 ? "ok" : "info"}`}>
+        {bad ? <AlertTriangle size={18} aria-hidden />
+             : pct === 100 ? <CheckCircle2 size={18} aria-hidden />
+                           : <Eye size={18} aria-hidden />}
         <span>
-          {verdict === "waiting"
-            ? "Not enough evidence yet — neither layer has recorded anything"
-            : verdict === "one-sided"
-              ? `Not a comparison yet — your automations reported `
-                + `${diff.rulesTotal}, the villa nothing`
+          {verdict === "never"
+            ? "The assistant has not run a check yet"
             : verdict === "blocked"
-              ? `${diff.rulesOnly.length} thing${
-                  diff.rulesOnly.length === 1 ? "" : "s"} your automations caught`
-                + " and the villa did not"
-              : "Nothing your automations caught was missed"}
+              ? `The assistant could not run its last check — ${last!.reason}`
+              : verdict === "blind"
+                ? "The assistant ran, but was handed nothing to read"
+                : covered === 0
+                  ? "The assistant is watching. Nothing has been reported by "
+                    + "either side yet"
+                  : `The assistant reached ${matched} of the ${covered} things `
+                    + "your automations reported"}
         </span>
       </div>
 
-      {verdict === "one-sided" && (
-        <div className="fm-banner">
-          Every finding lands in the first list when the other side is empty, so
-          that count says nothing about the villa yet — an agent that has raised
-          no concerns produces exactly this page. Leave supervision running
-          until the Cockpit shows concerns of its own, then compare. Retiring
-          anything on this reading would be deciding from one column.
-        </div>
-      )}
-
-      {verdict === "waiting" ? (
+      {/* ⚠️ ONE SENTENCE PER STATE, AND ONLY THE STATE'S OWN. The page used to
+          stack a bold zero, a regression warning, a coverage caveat and an
+          empty-state banner — four claims about one emptiness, two of them
+          contradicting each other. */}
+      {verdict === "never" && (
         <p className="muted body-text">
-          To fill this page <strong>today</strong>: press “Check the villa now”
-          below for the villa&rsquo;s side, and press-and-hold a schedule&rsquo;s
-          delete button in Briefings → Schedule to send one briefing for the
-          automations&rsquo; side. Both write immediately. Otherwise it fills on
-          its own — a briefing a day, and a check every few minutes — and an
-          empty page today means the period has not run, not that the villa was
-          quiet.
+          Press “Check the villa now” below to run one immediately, or leave it —
+          it checks on its own every few hours. Nothing on this page means
+          anything until it has looked at least once.
         </p>
-      ) : (
-        <>
-          {/* ⚠️ A ROW READING "(untitled finding …)" IS STALE DATA, NOT A BUG,
-              and the page says so rather than leaving the reader to conclude
-              the fix did not work. History entries written between v2.662.0 and
-              v2.665.0 stored their blueprint findings without a title; re-read
-              re-reads those same stored rows, so only a NEW brief carries
-              titles. Said here because "I redid it and got the same thing" is
-              the correct observation and the wrong conclusion. */}
-          {diff.rulesOnly.some((t) => t.startsWith("(untitled")) && (
-            <div className="fm-banner">
-              Some rows have no title. They were recorded by an older release
-              that stored findings without one — generate a briefing (Briefings
-              → Schedule, press and hold a row&rsquo;s delete) and they will
-              read properly. Re-read alone cannot fix them: it re-reads the
-              same stored rows.
-            </div>
-          )}
-
-          {/* ⚠️ THE THREE LISTS, NAMED BY WHAT THEY MEAN FOR THE DECISION rather
-              than by which layer produced them. "Caught by the rules and not by
-              the agent" is accurate and makes the reader do the inference; the
-              reader wants to know what retiring a rule would cost. */}
-          <div className="usage-block">
-            <h4 className="usage-block-title">
-              Would be lost if you retired the automations ({diff.rulesOnly.length})
-            </h4>
-            <p className="muted body-text">
-              The villa did not reach these on its own. Each one is a reason to
-              keep the rule that did.
-            </p>
-            {diff.rulesOnly.length === 0
-              ? <p className="muted body-text">Nothing — no regression to ship.</p>
-              : <ul className="body-text">
-                  {diff.rulesOnly.map((t) => <li key={t}>{t}</li>)}
-                </ul>}
-          </div>
-
-          <div className="usage-block">
-            <h4 className="usage-block-title">
-              Both found ({diff.both.length})
-            </h4>
-            <p className="muted body-text">
-              Covered either way — these are the rules a cutover is safe for.
-            </p>
-            {diff.both.length > 0 && (
-              <ul className="body-text">
-                {diff.both.map((t) => <li key={t}>{t}</li>)}
-              </ul>
-            )}
-          </div>
-
-          <div className="usage-block">
-            <h4 className="usage-block-title">
-              Only the villa found ({diff.agentOnly.length})
-            </h4>
-            <p className="muted body-text">
-              No rule covers these. They are what the agent adds, and they are
-              deliberately listed last: this page exists to decide whether to
-              retire working automations, and one that opens with the agent's
-              wins is written to be agreed with.
-            </p>
-            {diff.agentOnly.length > 0 && (
-              <ul className="body-text">
-                {diff.agentOnly.map((t) => <li key={t}>{t}</li>)}
-              </ul>
-            )}
-          </div>
-        </>
+      )}
+      {verdict === "blocked" && (
+        <p className="muted body-text">
+          Nothing is being missed while this lasts: your automations are still
+          running and still reporting. Fix the reason above and the assistant
+          picks up where it left off.
+        </p>
+      )}
+      {verdict === "blind" && (
+        <p className="muted body-text">
+          It looked and found nothing to raise — but it was given an empty set
+          of villa notes, so “nothing to raise” proves nothing. This is a fault
+          in the recording, not a quiet villa. Check that Observe is listening.
+        </p>
       )}
 
-      {/* ⚠️ THE COVERAGE CAVEAT IS SHOWN ONLY WHEN IT CHANGES THE READING —
-          beside evidence, never beside an empty page where it was one of two
-          banners saying the same nothing. */}
-      {ran && !diff.coverageComplete && (
-        <div className="fm-banner">
-          Part of this period was not observed, so something missing from all
-          three lists proves nothing.
+      {/* Three facts, all about the same question: is it looking, how often,
+          and did it have anything to look at. */}
+      <dl className="reports-facts">
+        <div>
+          <dt>Last checked</dt>
+          <dd>{last ? (ago(last.pass.at) || "—") : "never"}</dd>
         </div>
-      )}
-
-      {note && <p className="muted body-text">{note}</p>}
+        <div>
+          <dt>Checks in 24 h</dt>
+          <dd>{dayPasses}</dd>
+        </div>
+        <div>
+          <dt>Villa notes read</dt>
+          {/* ⚠️ `?` FOR "CANNOT SAY", NEVER 0. Rows from before v2.685.0 carry
+              no size at all, and a zero there is the loudest alarm on the page. */}
+          <dd>{last?.pass.docChars === undefined
+            ? "?" : `${last.pass.docChars.toLocaleString()} char`}</dd>
+        </div>
+      </dl>
 
       <div className="modal-actions" style={{ margin: 0 }}>
         <button className="btn ghost" disabled={busy} onClick={() => void load()}>
           <RefreshCw size={16} aria-hidden /> Re-read
         </button>
-        {/* ⚠️ NOT GATED ON `ran` ANY MORE, AND THAT GATE WAS BACKWARDS ONCE THE
-            TRACE WENT INTO THE FILE. `ran` is false exactly when NEITHER side
-            has found anything — which is the state a freshly-wired agent is in,
-            and the state in which "did it actually look?" is the only question
-            worth asking. The export was disabled precisely when it carried the
-            most information. It is now available whenever there is either a
-            finding or a pass to report. */}
-        <button className="btn ghost" onClick={download}
-                disabled={busy || (!ran && passes.length === 0)}
-                title="Download the three lists and the triage trace as a CSV">
-          <Download size={16} aria-hidden /> CSV
-        </button>
         {/* ⚠️ IT SPENDS REAL BUDGET AND THE LABEL SAYS SO. A button that costs
             money must not look like a refresh. */}
         <button className="btn" disabled={busy} onClick={() => void runNow()}>
           <Play size={16} aria-hidden />
-          {busy ? "Checking…" : "Run a check now (spends a request)"}
+          {busy ? "Checking…" : "Check the villa now (spends a request)"}
         </button>
       </div>
+      {note && <p className="muted body-text">{note}</p>}
+
+      {covered > 0 && (
+        <div className="usage-block">
+          <h4 className="usage-block-title">How much it has taken over</h4>
+          <div className="fm-cap-bar" role="img"
+               aria-label={`${matched} of ${covered} matched`}>
+            <span style={{ width: `${pct}%` }} />
+          </div>
+          <p className="muted body-text">
+            {matched} of {covered} matched. The rest are still covered by the
+            automation that reported them, so nothing is going unnoticed today —
+            they are what the assistant has not reproduced yet.
+          </p>
+          {/* ⚠️ THE CAVEAT APPEARS BESIDE EVIDENCE AND NOWHERE ELSE. On an empty
+              page it was one of two banners saying the same nothing. */}
+          {!diff.coverageComplete && (
+            <div className="fm-banner">
+              Part of this period was not observed, so something missing from
+              both columns proves nothing.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ⚠️ A ROW READING "(untitled finding …)" IS STALE DATA, NOT A BUG, and
+          the page says so rather than leaving the reader to conclude the fix did
+          not work. Entries written between v2.662.0 and v2.665.0 stored their
+          blueprint findings without a title, and re-read re-reads those same
+          rows — only a NEW briefing carries titles. */}
+      {diff.rulesOnly.some((t) => t.startsWith("(untitled")) && (
+        <div className="fm-banner">
+          Some rows have no title. They were recorded by an older release that
+          stored findings without one — generate a briefing and they will read
+          properly. Re-read alone cannot fix them.
+        </div>
+      )}
+
+      <TitleList
+        title="Not matched yet"
+        blurb="Your automations reported these and the assistant did not reach
+               them on its own. This is the remaining work of the handover."
+        empty="Nothing — the assistant reached everything the automations did."
+        titles={diff.rulesOnly}
+      />
+      <TitleList
+        title="Found only by the assistant"
+        blurb="No automation covers these. This is what the assistant adds."
+        empty="Nothing yet."
+        titles={diff.agentOnly}
+      />
+      <TitleList
+        title="Found by both"
+        blurb="Reported either way."
+        empty="Nothing yet."
+        titles={diff.both}
+      />
 
       {/* ⚠️ THE TRACE, AND IT IS NOT DECORATION. Everything above answers "what
-          was found"; only this answers "did the agent look, and what was it
-          given". A quiet pass and a pass that never happened render the same
-          empty column above — that ambiguity is what made four rounds of this
-          review inconclusive. `doc=` is here for the same reason: a pass handed
-          an empty villa document also reports nothing to escalate, and looks
-          exactly like success. */}
-      <div className="settings-section-title">Triage passes</div>
-      {passes.length === 0 ? (
-        <p className="muted body-text">
-          No pass has been recorded yet. Until one is, an empty agent column
-          above means "not measured", not "the agent agreed".
-        </p>
-      ) : (
-        <ul className="fm-list">
-          {passes.slice(-8).reverse().map((p, i) => (
-            <li key={`${p.at}-${i}`} className="body-text">
-              <strong>{p.verdict === "escalated" ? "escalated" : "quiet"}</strong>
-              {" · "}{p.trigger}{" · "}
-              <span className="muted">{p.at.replace("T", " ").slice(0, 16)}</span>
-              <div className="muted body-text">{p.detail}</div>
-            </li>
-          ))}
-        </ul>
-      )}
+          was found"; only this answers "did it look, and what happened". A quiet
+          pass and a pass that never happened render the same empty column above,
+          and that ambiguity is what made four rounds of this review
+          inconclusive. */}
+      <div className="usage-block">
+        <h4 className="usage-block-title">Recent checks</h4>
+        {recent.length === 0 ? (
+          <p className="muted body-text">
+            None recorded. Until one is, an empty list above means “not
+            measured”, not “the assistant agreed”.
+          </p>
+        ) : (
+          <>
+            <Pager paged={paged} unit="check">
+              <button className="btn ghost" onClick={download} disabled={busy}
+                      title="Download the findings and the full trace as a CSV">
+                <Download size={16} aria-hidden /> CSV
+              </button>
+            </Pager>
+            <ul className="fm-list">
+              {paged.page.map(({ pass, reason, outcome }, i) => {
+                const who = subjectsOf(reason);
+                return (
+                  <li key={`${pass.at}-${i}`} className="body-text">
+                    <span className="muted">
+                      {pass.at.replace("T", " ").slice(0, 16)}
+                    </span>{" · "}
+                    {/* ⚠️ PLAIN LANGUAGE, AND THE NUMBERS ONLY WHERE THEY CHANGE
+                        A READING. `doc=5246c/51L | escalated=0 | model=…` on
+                        thirty rows is the same string thirty times; the one part
+                        of it that ever matters is a headline now, and all of it
+                        is still in the CSV. */}
+                    {outcome === "raised" ? (
+                      <>
+                        <strong>Raised {pass.escalated ?? ""}</strong>
+                        {who ? <> — {who}</> : null}
+                      </>
+                    ) : outcome === "quiet" ? (
+                      <>Looked, nothing to raise</>
+                    ) : (
+                      <>
+                        <strong className="sev-warning">Could not run</strong>
+                        {" — "}{reason}
+                      </>
+                    )}
+                    {/* ⚠️ NOT ON A BLOCKED ROW. A pass that never reached the
+                        model has no document by construction, so the badge
+                        would fire on every "could not run" row and say a second
+                        thing about a row that has already explained itself.
+                        The fault it reports is a pass that RAN on nothing. */}
+                    {outcome !== "blocked" && pass.docChars === 0 && (
+                      <span className="sev-warning"> · nothing to read</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One grouped list. ⚠️ A COMPONENT RATHER THAN THREE COPIES: the three lists
+ *  differ only in their words, and the previous version wrote the heading
+ *  arithmetic, the empty state and the `.map` out three times — three places
+ *  for a change to reach two of. */
+function TitleList({ title, blurb, empty, titles }: {
+  title: string; blurb: string; empty: string; titles: string[];
+}) {
+  const rows = useMemo(() => groupTitles(titles), [titles]);
+  return (
+    <div className="usage-block">
+      <h4 className="usage-block-title">{title} ({titles.length})</h4>
+      <p className="muted body-text">{blurb}</p>
+      {rows.length === 0
+        ? <p className="muted body-text">{empty}</p>
+        : <ul className="body-text">
+            {rows.map(({ label, n }) => (
+              <li key={label}>
+                {label}
+                {/* ⚠️ THE COUNT IS WHAT THE FOUR IDENTICAL LINES WERE SAYING —
+                    four pieces of equipment, one check. */}
+                {n > 1 && <span className="muted"> ×{n}</span>}
+              </li>
+            ))}
+          </ul>}
     </div>
   );
 }

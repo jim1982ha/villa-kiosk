@@ -4216,6 +4216,12 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .cockpit-health-ok { background: color-mix(in srgb, var(--status-on) 14%, transparent); color: var(--status-on); }
 .cockpit-health-warn { background: color-mix(in srgb, var(--status-warning) 16%, transparent); color: var(--status-warning); }
 .cockpit-health-danger { background: color-mix(in srgb, var(--status-danger) 16%, transparent); color: var(--status-danger); }
+/* ⚠️ "IN PROGRESS", WHICH IS NEITHER OK NOR A WARNING. A handover that is part
+   done must not be painted green (it is not finished) or amber (nothing is
+   wrong). ShadowDiffPanel previously asked for `cockpit-health-unknown`, which
+   was never declared anywhere — so that headline rendered with no background at
+   all, on the page it was the headline OF. */
+.cockpit-health-info { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .cockpit-attention-row {
@@ -5489,3 +5495,11 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-sm); font-weight: 400; line-height: 1.45;
   text-align: start; white-space: normal;
 }
+
+/* ── a tier that is switched off ────────────────────────────────────────────
+   ⚠️ DIMMED AND UNRESPONSIVE, NEVER HIDDEN. Somebody deciding whether to turn
+   supervision ON needs to read what these steps would do; hiding them makes the
+   dialog answer a different question. `inert` (the attribute, set in the JSX)
+   does the real work — it blocks pointer AND keyboard AND removes the subtree
+   from the tab order — so this rule only has to say what that looks like. */
+.pane-inert > *:not(.fm-banner) { opacity: 0.45; filter: saturate(0.6); }
