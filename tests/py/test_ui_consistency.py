@@ -200,3 +200,44 @@ def test_a_step_header_is_ONE_line_with_the_rest_behind_the_hint() -> None:
     assert "more?" in src and "InfoHint" in src, (
         "TierIntro offers no hint, so shortening `what` would delete detail "
         "rather than move it")
+
+
+# ── CSS custom properties that do not exist ─────────────────────────────────
+
+#: Properties set from JavaScript at runtime, so the stylesheet legitimately
+#: never declares them. ⚠️ DERIVED, NOT LISTED: the test greps the app for a
+#: `setProperty` or a style-object key, so adding a runtime property needs no
+#: edit here and REMOVING its writer makes the test fail — which is the case
+#: that would otherwise go silent.
+def _set_from_js(name: str) -> bool:
+    for root, _d, names in os.walk(SRC):
+        for n in names:
+            if n.endswith((".ts", ".tsx")):
+                src = _read(os.path.join(root, n))
+                if f'"{name}"' in src or f"'{name}'" in src:
+                    return True
+    return False
+
+
+def test_no_stylesheet_rule_reads_a_property_that_is_never_declared() -> None:
+    """⚠️ AN UNDECLARED `var()` WITH NO FALLBACK IS AN INVALID VALUE, so the
+    whole declaration is dropped — silently, and invisibly to tsc and to review.
+    It is the CSS twin of a missing class, which this project already pins.
+
+    ⚠️ AND IT HAS BEEN FOUND BEFORE AND NOT PINNED, WHICH IS WHY IT RECURRED.
+    styles.css carries a comment reading "--text-muted / --border were never
+    defined in either theme" — written while fixing ONE call site, the
+    sparkline. Eight other uses of --text-muted survived it, plus four of
+    --status-ok, and the (i) bubble added six more and shipped with no
+    background at all: white text over the row beneath it, reported from a
+    phone as unreadable. Rolling a fix out by call site instead of by what it
+    applies to is `feedback_audit-applicable-set`; this is the test that ends it.
+    """
+    css = re.sub(r"/\*.*?\*/", "", _read(os.path.join(SRC, "styles.css")), flags=re.S)
+    declared = set(re.findall(r"(--[a-zA-Z0-9-]+)\s*:", css))
+    bad = sorted({m.group(1)
+                  for m in re.finditer(r"var\(\s*(--[a-zA-Z0-9-]+)\s*\)", css)
+                  if m.group(1) not in declared and not _set_from_js(m.group(1))})
+    assert not bad, (
+        "these custom properties are read with no fallback and never declared, "
+        "so every rule using them is dropped: " + ", ".join(bad))

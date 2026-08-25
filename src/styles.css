@@ -2204,7 +2204,7 @@ input[type="range"]::-moz-range-thumb {
    reading like the same duplicated control — see SettingsModal's note. The
    label is the fix; changing one glyph was tried first and was not enough. */
 .settings-header-control { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.settings-inline-label { font-size: var(--text-2xs); color: var(--text-muted); white-space: nowrap; }
+.settings-inline-label { font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; }
 /* Two sliders (or coordinate fields) side by side; stacks on narrow screens. */
 .slider-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: start; }
 .slider-pair > div { min-width: 0; }
@@ -3782,7 +3782,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
   background: var(--text-dim);
 }
 .fm-timeline-dot.in_progress { background: var(--status-warning); }
-.fm-timeline-dot.resolved { background: var(--status-ok); }
+.fm-timeline-dot.resolved { background: var(--status-on); }
 .fm-timeline-head { font-weight: 600; }
 .fm-timeline-note {
   color: var(--text-secondary); font-size: var(--text-xs); margin-top: 2px;
@@ -3811,7 +3811,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .guest-report { width: min(480px, 100%); }
 .guest-report-done {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 28px 24px; text-align: center; color: var(--status-ok);
+  padding: 28px 24px; text-align: center; color: var(--status-on);
 }
 .guest-report-done h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
 .guest-report-done p { max-width: 300px; }
@@ -4550,7 +4550,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   line-height: 1.4;
 }
 .reports-item > span:first-of-type { flex: 1 1 auto; }
-.reports-item.muted { color: var(--text-muted); }
+.reports-item.muted { color: var(--text-secondary); }
 /* ⚠️ SEVERITY IS A TONE, NOT A ROW TYPE. These were welded to `.reports-item`,
    so the moment a finding was rendered as a CARD instead of a line its severity
    silently stopped colouring — the same fact needing a second declaration
@@ -4570,7 +4570,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   border-radius: var(--radius-md, 8px);
   background: var(--bg-input);
 }
-.reports-facts dt { font-size: var(--text-xs, 11px); color: var(--text-muted); }
+.reports-facts dt { font-size: var(--text-xs, 11px); color: var(--text-secondary); }
 /* Counts line up in a column, so they get tabular figures. */
 .reports-facts dd { margin: 2px 0 0; font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
 
@@ -4731,7 +4731,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .reflex-row > dt { font-weight: 600; }
 .reflex-row > dd { margin: 0; min-width: 0; }
 .reflex-role { color: var(--text-secondary); }
-.reflex-count { font-variant-numeric: tabular-nums; color: var(--text-muted); white-space: nowrap; }
+.reflex-count { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
 /* ⚠️ ON A PHONE THE ROLE DROPS TO ITS OWN LINE rather than being squeezed to
    two words a column wide — the name and the count stay paired, which is the
    comparison a reader is making. */
@@ -4759,10 +4759,10 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   padding: 1px 8px;
   border-radius: 999px;
   white-space: nowrap;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   border: 1px solid var(--hairline);
 }
-.lifecycle-verified { color: var(--status-ok); border-color: color-mix(in srgb, var(--status-ok) 40%, transparent); }
+.lifecycle-verified { color: var(--status-on); border-color: color-mix(in srgb, var(--status-on) 40%, transparent); }
 
 /* ── THE TIER IDENTITY BLOCK ──────────────────────────────────────────────
    One header for five tabs (`agent/tiers.tsx`). ⚠️ Five hand-written ones would
@@ -4790,7 +4790,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   border: 1px solid var(--hairline);
   border-radius: 999px;
   padding: 1px 8px;
@@ -4820,7 +4820,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   gap: 5px;
   min-width: 0;
 }
-.tier-facts > div > dt { display: flex; color: var(--text-muted); flex: 0 0 auto; }
+.tier-facts > div > dt { display: flex; color: var(--text-secondary); flex: 0 0 auto; }
 .tier-facts > div > dd {
   margin: 0;
   min-width: 0;
@@ -4907,7 +4907,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .reports-delivery { display: flex; gap: 8px; font-size: var(--text-xs, 11px); }
 .reports-delivery > span:first-child { flex: 1 1 auto; }
 .reports-delivery.status-failed { color: var(--status-danger); }
-.reports-delivery.status-skipped { color: var(--text-muted); }
+.reports-delivery.status-skipped { color: var(--text-secondary); }
 
 /* ⚠️ WRAPS ON A PHONE. FIVE controls in a row — cadence, time, audience,
    recipients, remove — is comfortable on a tablet and overflows a 360px
@@ -5455,7 +5455,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .info-hint-btn {
   display: inline-flex; align-items: center; justify-content: center;
   position: relative; margin-inline-start: 4px; padding: 0;
-  border: 0; background: none; color: var(--text-muted); cursor: pointer;
+  border: 0; background: none; color: var(--text-dim); cursor: pointer;
   line-height: 0; border-radius: 50%;
 }
 .info-hint-btn::after {
@@ -5463,7 +5463,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   width: var(--touch-min); height: var(--touch-min);
   transform: translate(-50%, -50%);
 }
-.info-hint-btn:hover, .info-hint-btn[aria-expanded="true"] { color: var(--text); }
+.info-hint-btn:hover, .info-hint-btn[aria-expanded="true"] { color: var(--text-primary); }
 .info-hint-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ⚠️ `fixed`, AND IN A PORTAL ON <body> — see InfoHint's header. As an
@@ -5472,12 +5472,20 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    the dialog edge and the footer. z-index cannot beat a clip.
    ⚠️ NO WIDTH OR OFFSET HERE — the component measures the paragraph it belongs
    to and sets top/left/width inline, because those depend on where the reader
-   is, which CSS cannot see. This rule carries only appearance. */
+   is, which CSS cannot see. This rule carries only appearance.
+   ⚠️ EVERY TOKEN BELOW IS ONE THIS STYLESHEET ACTUALLY DECLARES, WHICH THE
+   FIRST VERSION'S WERE NOT. It used --surface-3, --shadow-2, --border,
+   --radius-sm, --text and --text-muted; not one exists. `var()` with no
+   fallback and no declaration is an INVALID value, so `background` simply did
+   not apply and the bubble rendered with NO BACKGROUND at all — text over text,
+   reported from a phone as unreadable. Same failure shape as a missing class:
+   silent, and invisible to tsc and to review. Copied from `.fm-banner`, which
+   is the nearest existing raised surface, rather than invented again. */
 .info-hint-bubble {
   position: fixed; z-index: 1200;
-  padding: 8px 10px; border-radius: var(--radius-sm);
-  background: var(--surface-3); color: var(--text);
-  border: 1px solid var(--border); box-shadow: var(--shadow-2);
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--bg-card); color: var(--text-primary);
+  border: 1px solid var(--hairline); box-shadow: var(--shadow);
   font-size: var(--text-sm); font-weight: 400; line-height: 1.45;
   text-align: start; white-space: normal;
 }

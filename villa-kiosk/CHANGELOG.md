@@ -1,13 +1,13 @@
-## 2.746.0
+## 2.747.0
 
-### Fixed — alerts were essays with a hole in them, and occupancy has never been readable
+### Fixed — the (i) bubble had no background, and twelve other rules were dropped the same way
 
-A delivered warning ran to four paragraphs and carried "(unsourced figure removed)" mid-sentence. The
-concern tool asked for "what is wrong, what it rests on, and what a person should do" with no length
-given, so it got an investigation narrated in full; it now asks for at most three short sentences and
-says the evidence rows already hold the rest. The number check treated a sigma as a measured reading,
-which no evidence row can contain because the model derives it — the same mistake this file already
-recorded making with counts, so sigma joins the derived list. Separately the delivery sweep read
-occupancy through a function that does not exist, so every sweep raised and swallowed it: nothing was
-wrongly held, but nothing could be held back for an empty house either. Step headers are now one line.
+The bubble named six colour and radius tokens that this stylesheet has never declared, and a `var()`
+with no fallback and no declaration is an invalid value — so `background` simply did not apply and the
+text rendered straight over the row beneath it, unreadable on a phone. It now uses the same tokens as
+the existing banner surface. The scan for it found the same fault in twelve other places: eight rules
+reading `--text-muted` and four reading `--status-ok`, neither of which exists, both silently
+colourless. This had already been found once and fixed at a single call site, with a comment recording
+it — so a test now refuses any rule that reads a property nothing declares, deriving the runtime-set
+exceptions from the app rather than from a list, so removing a writer fails too.
 
