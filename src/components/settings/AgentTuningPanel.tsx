@@ -312,17 +312,11 @@ export default function AgentTuningPanel() {
       <div className="settings-section-title">
         What supervision is allowed to do
       </div>
-      <ToggleField
-        checked={draft.enabled}
-        onChange={(enabled) => edit({ enabled })}
-        label="Watch the villa and look for problems"
-        note="Off, nothing runs and nothing is spent."
-        more={<>
-          Home Assistant keeps working exactly as it does today — this only adds
-          the watching on top. Turning it off is the one setting that stops all
-          spending; the others only change how much.
-        </>}
-      />
+      {/* ⚠️ THE MASTER SWITCH MOVED TO THE DIALOG HEADER (v2.749.0) AND IS
+          NOT DUPLICATED HERE. It is the one control that answers "am I
+          spending anything", so it belongs where it is visible from every tab
+          rather than as the first row of the fifth one. Two controls over one
+          stored key in one dialog is a lost update. */}
 
       {/* ⚠️ TWO CHECKBOXES BECAME ONE CHOICE BECAUSE THE 2x2 HAD A DEAD CELL,
           AND THE REFERENCE VILLA SPENT ITS WHOLE SHADOW PERIOD IN IT. `shadow`

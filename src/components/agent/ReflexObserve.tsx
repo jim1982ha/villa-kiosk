@@ -63,7 +63,10 @@ export function ReflexTab({ diagnostics }: {
           return (
             <div key={cat} className={`reflex-row${seen ? "" : " muted"}`}>
               <dt>{cat}</dt>
-              <dd className="reflex-role">{fam?.role ?? ""}</dd>
+              {/* ⚠️ NEVER BLANK. An unlisted family rendered an empty cell, which
+                  reads as "this family does nothing" rather than "nobody has
+                  described it" — `control` and `vesta` both showed that way. */}
+              <dd className="reflex-role">{fam?.role ?? "not yet described"}</dd>
               <dd className="reflex-count">
                 {seen ? `${num(seen)} so far` : "nothing yet"}
               </dd>

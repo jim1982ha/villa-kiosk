@@ -264,4 +264,18 @@ export const FAMILIES: Record<string, { role: string; reflex?: true }> = {
   maintenance: { role: "superseded — the assistant now spots this itself" },
   roi: { role: "superseded — the assistant now spots this itself" },
   audit: { role: "proves the alert channel still works" },
+  // ⚠️ THESE TWO WERE MISSING AND RENDERED AS A BLANK ROLE COLUMN, which reads
+  // as "this family does nothing" rather than "nobody has described it". Same
+  // shape as the severity rule in `standing.SEVERITY_OF_KIND`: an unlisted kind
+  // must not arrive as the quietest thing in the report.
+  //
+  // ⚠️ BOTH LEGITIMATELY SHOW "nothing yet", AND FOR DIFFERENT REASONS.
+  // `control` is the ACTUATING family — 0 of its 8 blueprints carry a rule_id
+  // or emit any vesta event, because they operate devices rather than report on
+  // them. `vesta` is `vesta_task_actions`, which TRIGGERS ON
+  // vesta_maintenance/audit/roi events and emits none of its own; the collector
+  // subscribed to `vesta_vesta_event` only because it derives the event name
+  // from the blueprint's filename prefix. Neither count will ever move.
+  control: { role: "operates devices; never reports, so it has no count here" },
+  vesta: { role: "handles the to-do actions in a brief; emits nothing itself" },
 };

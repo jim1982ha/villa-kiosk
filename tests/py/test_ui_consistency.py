@@ -241,3 +241,57 @@ def test_no_stylesheet_rule_reads_a_property_that_is_never_declared() -> None:
     assert not bad, (
         "these custom properties are read with no fallback and never declared, "
         "so every rule using them is dropped: " + ", ".join(bad))
+
+
+def test_the_master_switch_is_in_the_header_and_NOT_duplicated() -> None:
+    """⚠️ ONE CONTROL PER STORED KEY. `enabled` is the only setting that zeroes
+    all spending — `agent_config.trigger_enabled` reads "`enabled` gates all of
+    them" — so it belongs where it is visible from every tab. Two controls over
+    one key in one dialog is the lost update ActDeliverySection warns about."""
+    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    panel = _read(os.path.join(SRC, "components", "settings",
+                               "AgentTuningPanel.tsx"))
+    assert 'draft.edit({ enabled: e.target.checked })' in modal, (
+        "the header has no master switch")
+    assert "settings-header-control" in modal, (
+        "not in the header slot SettingsModal already uses")
+    assert "checked={draft.enabled}" not in panel, (
+        "the Settings tab still renders a second control over `enabled`")
+
+
+def test_the_advanced_opener_is_in_the_footer_so_every_tab_reaches_it() -> None:
+    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    i = modal.index("<ModalFooter")
+    assert "Cost, people and advanced" in modal[i:i + 900], (
+        "the advanced opener is not in the footer, so it is reachable from one "
+        "tab only")
+
+
+def test_every_blueprint_family_the_villa_reports_has_a_described_ROLE() -> None:
+    """⚠️ A BLANK CELL READS AS "THIS FAMILY DOES NOTHING". `control` and `vesta`
+    were absent from FAMILIES and rendered an empty role beside a real count.
+    Same shape as an unlisted severity defaulting to the quietest value."""
+    tiers = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    block = tiers[tiers.index("export const FAMILIES"):]
+    block = block[:block.index("\n};")]
+    named = set(re.findall(r"^  (\w+):", block, re.M))
+    assert {"critical", "maintenance", "roi", "audit", "control", "vesta"} <= named, (
+        f"families missing a role: {sorted({'critical','maintenance','roi',
+        'audit','control','vesta'} - named)}")
+    reflex = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    assert 'fam?.role ?? ""' not in reflex, (
+        "an unlisted family still renders a blank role rather than saying so")
+
+
+def test_the_briefing_tab_states_precedence_CONTEXTUALLY() -> None:
+    """⚠️ THE TAB ASSERTED A FIXED HIERARCHY THAT `agent_owns_analysis` INVERTS.
+    Its section order calls automations "the primary detection layer, which
+    WINS" and the checks "the fallback", and the lead paragraph said the checks
+    run "when they do not". With the agent owning detection the checks ALWAYS
+    run and a rule wins only on a device it actually reported."""
+    tab = _read(os.path.join(SRC, "components", "reports", "ModulesTab.tsx"))
+    assert "agentOwns" in tab, "the tab cannot tell which layer is in charge"
+    assert "loadAgentConfig" in tab, "it invents its own source for that fact"
+    assert tab.count("{agentOws" if False else "{agentOwns") >= 2, (
+        "only one sentence was made contextual — the precedence is stated in "
+        "more than one place")

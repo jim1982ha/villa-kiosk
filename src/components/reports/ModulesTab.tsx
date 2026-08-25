@@ -51,7 +51,9 @@
 // timestamp written once and never cleared, so it read `true` forever after the
 // first subscribe — through every drop and restart. See `collect._LIVE`.
 
+import { useEffect, useState } from "react";
 import { Ban, Check, Info, PlugZap, Radio, RefreshCw } from "lucide-react";
+import { loadAgentConfig } from "@/agent/agentApi";
 import InfoHint from "@/components/common/InfoHint";
 import type { ReportPreview, ReportsDiagnostics } from "@/reports/reportsApi";
 import type { ReportsConfig } from "@/reports/reportsTypes";
@@ -112,6 +114,17 @@ export default function ModulesTab({
    *  why the button came with it from the old Diagnostics tab. */
   onRefresh: () => void;
 }) {
+  // ⚠️ FROM THE AGENT CONFIG, WHICH THIS DIALOG ALREADY READS ELSEWHERE
+  // (`ScheduleTab` does the same for people and targets) — not a new store and
+  // not a prop threaded through the modal for one boolean.
+  const [agentOwns, setAgentOwns] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void loadAgentConfig()
+      .then((got) => { if (alive) setAgentOwns(got?.config?.agentOwnsAnalysis === true); })
+      .catch(() => { /* a missing agent config just means "not cut over" */ });
+    return () => { alive = false; };
+  }, []);
   if (!diagnostics || !config) {
     return <p className="muted body-text">Reading the check list…</p>;
   }
@@ -128,10 +141,25 @@ export default function ModulesTab({
 
   return (
     <div className="reports-pane">
+      {/* ⚠️ THE PRECEDENCE THIS TAB DESCRIBES IS NOT FIXED, AND THE PAGE USED TO
+          STATE ONE OF THE TWO AS THOUGH IT WERE. Its own header orders the
+          sections "Your automations — the primary detection layer, which WINS"
+          above "Built-in checks — the fallback", and the paragraph said the
+          checks run "when they do not". Both are true only while the blueprint
+          layer is in charge. With `agent_owns_analysis` on, the stand-down is
+          not consulted at all: the checks ALWAYS run, and a rule only wins on a
+          device it actually reported this period, per device, through the
+          subject dedup. Leaving the fixed sentence there tells an owner who has
+          just cut over the opposite of what their villa now does. */}
       <p className="muted body-text">
-        What this property is watched by, and what a brief can therefore be
-        built from. Your own automations do the detecting; the checks further
-        down are what the add-on runs by itself when they do not.
+        {agentOwns
+          ? "What this property is watched by, and what a brief can be built "
+            + "from. The checks below always run; one of your automations only "
+            + "takes precedence on a device it has actually reported."
+          : "What this property is watched by, and what a brief can therefore "
+            + "be built from. Your own automations do the detecting; the checks "
+            + "further down are what the add-on runs by itself when they do "
+            + "not."}
       </p>
 
       {/* ── 1. Is anything listening? ───────────────────────────────────── */}
@@ -182,8 +210,11 @@ export default function ModulesTab({
         })}
         {c.blueprintCategories.length === 0 && (
           <p className="muted body-text">
-            No automations of this kind are installed, so the built-in checks
-            run instead.
+            {agentOwns
+              ? "No automations of this kind are installed. That changes "
+                + "nothing here — the checks below run either way."
+              : "No automations of this kind are installed, so the built-in "
+                + "checks run instead."}
           </p>
         )}
       </dl>

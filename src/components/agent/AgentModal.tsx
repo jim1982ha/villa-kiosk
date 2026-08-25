@@ -148,8 +148,37 @@ function AgentDialog(
         aria-modal="true"
         aria-label="VESTA Agent"
       >
+        {/* ⚠️ THE MASTER SWITCH IS IN THE HEADER BECAUSE IT IS THE ONE CONTROL
+            THAT ANSWERS "AM I SPENDING ANYTHING". It was the first row of the
+            Settings tab, which put the whole dialog's on/off behind five tabs
+            of scrolling — and it is the answer a reader wants from any of them.
+            Same slot and same classes as SettingsModal's theme control.
+            ⚠️ IT IS THE SAME STORED SETTING, MOVED, NOT A SECOND ONE. Two
+            controls over one key in one dialog is the lost update
+            `ActDeliverySection`'s header warns about; it no longer appears on
+            the Settings tab at all.
+            ⚠️ AND `enabled` REALLY IS TOTAL, WHICH IS WHY IT CAN BE LABELLED
+            THAT WAY. `agent_config.trigger_enabled` reads "`enabled` gates all
+            of them" and returns False for every entry point before anything is
+            asked; the scheduler, runtime and outbox each check it again.
+            Nothing reaches a provider with this off. */}
         <div className="settings-header">
           <h2>VESTA Agent</h2>
+          <div className="settings-header-control">
+            <span className="settings-inline-label">Supervision</span>
+            <label className="toggle" title={
+              draft.config.enabled
+                ? "On — the villa watches, reasons and may spend"
+                : "Off — nothing runs and nothing is spent"}>
+              <input
+                type="checkbox"
+                checked={draft.config.enabled === true}
+                disabled={draft.saving}
+                onChange={(e) => draft.edit({ enabled: e.target.checked })}
+              />
+              <span>{draft.config.enabled ? "On" : "Off"}</span>
+            </label>
+          </div>
         </div>
 
         {/* ⚠️ THE STRIP GETS THE DRAFT TOO, NOT JUST THE FOOTER — an existing
@@ -245,10 +274,6 @@ function AgentDialog(
                     them belongs with the settings rather than with any one
                     step. */}
                 <SourceLegend />
-                <button className="btn" onClick={() => setAdvanced(true)}>
-                  <SlidersHorizontal size={16} aria-hidden="true" />
-                  <span>Cost, people and advanced</span>
-                </button>
             </div>
           )}
         </div>
@@ -256,7 +281,22 @@ function AgentDialog(
         {/* ⚠️ `commit={draft}` IS WHAT MAKES SAVE EXIST. Without it the button
             is rendered permanently inert — `ModalFooter` greys Save when it has
             no draft, which looks identical to "nothing has changed". */}
-        <ModalFooter commit={draft} onClose={onClose} />
+        {/* ⚠️ THE ADVANCED OPENER IS IN THE FOOTER, SO IT IS REACHABLE FROM
+            EVERY TAB. It used to sit at the bottom of the Settings pane, which
+            put cost, people and the provider key behind two navigations from
+            anywhere else in this dialog — and made them invisible from the five
+            tabs a reader actually spends time on. `leading` is the slot
+            SettingsModal already uses for its own Advanced opener, and that
+            prop's docstring says why it stays left rather than joining the
+            action group. */}
+        <ModalFooter
+          commit={draft}
+          leading={
+            <button className="btn ghost" onClick={() => setAdvanced(true)}>
+              <SlidersHorizontal size={16} aria-hidden="true" />
+              <span>Cost, people and advanced</span>
+            </button>
+          } onClose={onClose} />
       </div>
       {/* ⚠️ RENDERED AS A SIBLING, NOT NESTED, so its own backdrop covers this
           dialog rather than being clipped inside it — the same arrangement
