@@ -1,13 +1,14 @@
-## 2.748.0
+## 2.749.0
 
-### Fixed — every add-on restart fired a full supervision pass, ignoring the cadence
+### Changed — a master switch in the header, advanced in the footer, and a precedence stated as fixed
 
-The triage loop ran a pass before its first sleep and nothing recorded when the last one had run, so a
-restart reset the clock to zero. On a day of add-on updates that turned a 360-minute cadence into ten
-passes in twelve hours; four of them escalated into eleven frontier-model investigations, and the
-exported ledger for that window is $4.21 against roughly $0.85 the cadence actually promises. The last
-pass is now written to disk and a restart waits out whatever is left of the period. A villa that has
-never run one still goes immediately, so a fresh install proves itself without waiting six hours, and a
-clock that jumps backwards — an NTP correction after a power cut, which is exactly when a villa
-restarts — is clamped rather than silencing supervision for days.
+The one setting that stops all spending was the first row of the fifth tab; it is now a switch in the
+dialog header, visible from every tab and no longer duplicated below. "Cost, people and advanced" moved
+into the footer for the same reason — it was reachable from one tab out of six. Two blueprint families,
+control and vesta, rendered a blank role beside a real count, which reads as "this does nothing" rather
+than "nobody described it"; both are now named, and an unlisted one says so. Both legitimately show no
+events — the control family operates devices and never reports, and the vesta entry only listens.
+Finally the briefings tab asserted that your automations are the primary layer and the checks a
+fallback, which is the opposite of what happens once the assistant owns detection; it now says
+whichever is true.
 
