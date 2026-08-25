@@ -233,3 +233,39 @@ def test_a_subject_with_no_device_behind_it_stays_a_topic() -> None:
     assert items[1].entity_id == "switch.pool_pump", "an exact label missed"
     assert items[2].entity_id == "switch.pool_pump", (
         "a label inside a longer phrase missed — which is how a model writes")
+
+
+def test_the_ha_tools_copy_states_the_REAL_tool_count() -> None:
+    """⚠️ A NUMBER IN PROSE THAT NOBODY CHECKS DRIFTS, AND THIS ONE ALREADY DID.
+    The same tooltip shipped "about five times cheaper", which is the PREFIX
+    ratio (5.3x) and not the cost one (~2x — uncached input and output do not
+    shrink with the tool list). It read as an order of magnitude to anyone
+    deciding whether to switch it on.
+
+    The count is the checkable half: the copy promises the assistant keeps "its
+    own 10" tools, and `REASON_TOOLS` is what it actually keeps. A list that
+    grows to twelve without the sentence moving is the drift this catches.
+    """
+    panel = os.path.join(ROOT, "src", "components", "settings",
+                         "AgentTuningPanel.tsx")
+    with open(panel, "r", encoding="utf-8") as handle:
+        src = handle.read()
+    block = src[src.index('checked={draft.haTools}'):]
+    block = block[:block.index("      />")]
+    assert f"its own {len(registry.REASON_TOOLS)}" in block, (
+        f"the tooltip does not say the real tool count "
+        f"({len(registry.REASON_TOOLS)}); a number in prose that nobody checks "
+        "drifts from the list it describes")
+    # ⚠️ AND THE COST CLAIM MAY NOT OVERSTATE ITSELF AGAIN. The error was not
+    # the NUMBER — "five times more sent" is true and is in this copy on
+    # purpose. It was attaching that ratio to the PRICE. So the pin targets the
+    # false pairing, not the digit: a first version forbidding "five times"
+    # anywhere in the sentence went red on the correct use of it, which is a
+    # pin measuring the wrong thing one word away from the right one.
+    flat = " ".join(block.split()).lower()
+    for wrong in ("five times cheaper", "five times less expensive",
+                  "five times the price", "a fifth of the cost"):
+        assert wrong not in flat, (
+            f"the copy says {wrong!r}: five times is what is SENT, about twice "
+            "is what is PAID — uncached input and output do not shrink with the "
+            "tool list")

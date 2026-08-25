@@ -569,19 +569,35 @@ export default function AgentTuningPanel() {
           THE SAME PRODUCT. Cost is `prefix x turns`: the box above sets the
           turns, this sets the prefix, and on the reference villa it set 84% of
           it — 44 tool schemas at 43,700 tokens, re-read on every turn, against
-          the ten the agent's own trace says it ever calls. */}
+          the ten the agent's own trace says it ever calls.
+          ⚠️ "FIVE TIMES CHEAPER" WAS WRONG AND SHIPPED (fixed 2.758.0). The
+          prefix is 5.3x smaller; the INVESTIGATION is about 2x cheaper, because
+          uncached input and output do not shrink with it. Derivation, so the
+          next rewording does not restate the wrong one: at 8 turns, cache read
+          is turns x prefix x $0.30/M, and the fresh input (~41k tok) and output
+          (~4k tok) are unchanged either way — $0.50 on, $0.24 off. Five times
+          is what is SENT; twice is what is PAID.
+          ⚠️ AND THE COPY LEADS WITH WHAT THE FEATURE DOES, NOT WITH ITS PRICE.
+          Reported as "very bad ... not clear what this feature does": it opened
+          on instruction sheets and tokens and never said, in the reader's
+          terms, what the assistant can do differently when this is on. */}
       <ToggleField
         checked={draft.haTools}
         onChange={(haTools) => edit({ haTools })}
-        label="Let investigations use Home Assistant's own query tools"
-        note="Off is about five times cheaper. Answering you is unaffected either way."
+        label="Let it look things up in Home Assistant directly"
+        note="Off, it investigates using what this add-on already records. On, it can also ask Home Assistant."
         more={<>
-          On, the villa hands its investigator every tool your Home Assistant
-          MCP add-on offers. That is a much larger instruction sheet, sent again
-          on every step of every investigation, and it is where most of the cost
-          of this feature was going. Off, it keeps its own ten tools — the ones
-          its records show it actually uses. Turn this on only if
-          investigations are missing something you can see in Home Assistant.
+          <strong>Either way</strong> it can read each device&rsquo;s recorded
+          history, its own earlier findings, your maintenance record and the
+          villa&rsquo;s notes — which is everything its own trace shows it uses.
+          {" "}<strong>On adds</strong> the ability to search Home Assistant for
+          a device by name, read an integration&rsquo;s details or check system
+          health, the way you would yourself. Worth turning on if you find
+          investigations missing something you can see in Home Assistant.
+          {" "}<strong>It costs</strong> about twice as much per investigation:
+          each step carries a description of all 44 Home Assistant tools instead
+          of its own 10, which is roughly five times more sent every time.
+          Chatting with the assistant always has the full set, either way.
         </>}
       />
       {/* ⚠️ A CEILING, NOT A SPEND, AND THE NOTE SAYS SO — otherwise this reads

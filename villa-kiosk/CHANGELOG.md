@@ -1,3 +1,15 @@
+## 2.758.0
+
+### Fixed — the Home Assistant tools switch never said what it does, and its number was wrong
+The description opened on instruction sheets and tokens and never told you, in
+your own terms, what the assistant can do differently when it is on. It now leads
+with that: either way it reads each device's recorded history, its own earlier
+findings and your maintenance record; on adds searching Home Assistant for a
+device by name, reading an integration's details or checking system health. And
+"about five times cheaper" was wrong — five times is what is SENT each step, but
+an investigation is about twice as cheap, because the conversation and the
+answer do not shrink with the tool list.
+
 ## 2.757.0
 
 ### Changed — the last "open" architecture gap was measured and was never real
