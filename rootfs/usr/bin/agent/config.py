@@ -118,7 +118,12 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: choice, on the reasoning that a real fault is still a fault fifteen
     #: minutes later — missing the top three delays it by one cadence, it does
     #: not lose it.
-    "max_investigations_per_pass": 3,
+    # ⚠️ 3 -> 2 (2.752.0). It BOUND AT 3 ON EVERY ESCALATING PASS of the
+    # observed period, so it was not a ceiling, it was the multiplier: three
+    # frontier-model investigations per pass at ~$0.37 each. The subject that
+    # does not fit is not lost — it is escalated again next pass if it still
+    # looks worth a closer look, which is the honest test of whether it was.
+    "max_investigations_per_pass": 2,
     #: ⚠️ SHADOW MODE: run everything, deliver NOTHING (ARCH-016). Not a push,
     #: not a brief line, not a kiosk badge. It is how the claim that the agent
     #: outperforms the rules stops being a prediction — the concerns are
@@ -151,7 +156,14 @@ DEFAULTS: Final[Dict[str, Any]] = {
     # ── cost ─────────────────────────────────────────────────────────────
     "monthly_limit": 4_000,
     "chat_monthly_limit": 0,          # 0 = derive the share, see budget.py
-    "max_turns": 8,
+    # ⚠️ 8 -> 4 (2.752.0), BECAUSE 8 WAS NEVER A CEILING EITHER — all eleven
+    # investigations of the observed period used exactly 8 of 8, which means
+    # the cap and not the task decided when to stop. The runs that have since
+    # completed at 4 turns answered in 20-21 s with 7 tool calls, and the tier
+    # is instructed that a partial-and-labelled answer beats silence
+    # (`registry.LAST_TURN_NOTE`), so a genuinely deep case degrades rather
+    # than vanishing. Cost is `prefix x turns`; this is the second factor.
+    "max_turns": 4,
     "max_tool_calls": 24,
 
     #: How many output tokens ONE turn may produce. ⚠️ A CEILING, NOT A SPEND —
@@ -175,6 +187,15 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: ⚠️ PINNED IN CONFIG, NEVER IN CODE (ADR-016). Upgrading a model is then a
     #: config change plus an eval run, not a deploy — which is the whole reason
     #: "will the next model break my villa monitoring?" becomes answerable.
+    # ⚠️ OFF, AND IT IS THE LARGEST SINGLE COST DIAL IN THIS FILE. True folds
+    # Home Assistant's whole MCP catalogue into the INVESTIGATION tier's tool
+    # list — 44 schemas against 10, a 52,108-token prefix against ~9,700, on
+    # every turn. See `registry.REASON_TOOLS`. Chat is unaffected either way:
+    # a person asking an arbitrary question keeps the full set.
+    # ⚠️ 0.0 IS OFF. See `budget.DAILY_USD_KEY` for why a redistributable
+    # add-on may not ship a number tuned against one property's spend.
+    "daily_usd_limit": 0.0,
+    "ha_tools": False,
     "model_triage": "claude-haiku-4-5",
     "model_reason": "claude-opus-5",
     # ⚠️ CHAT HAS ITS OWN TIER, AND IT IS NOT THE FRONTIER MODEL. It ran on
@@ -293,7 +314,7 @@ def errors(value: Any) -> List[str]:
 
     for name in ("triage_minutes", "monthly_limit", "chat_monthly_limit",
                  "max_turns", "max_tool_calls", "max_investigations_per_pass",
-                 "max_output_tokens"):
+                 "max_output_tokens", "daily_usd_limit"):
         if name not in value:
             continue
         raw = value[name]
@@ -301,6 +322,13 @@ def errors(value: Any) -> List[str]:
             problems.append(f"{name} must be a number")
         elif raw < 0:
             problems.append(f"{name} may not be negative")
+
+    # ⚠️ BOOLEANS ARE CHECKED SEPARATELY FROM THE NUMERIC LOOP ABOVE, which
+    # refuses a bool explicitly (`isinstance(raw, bool)`) precisely so a flag
+    # cannot arrive as 0/1 and be read as a ceiling.
+    for flag in ("ha_tools",):
+        if flag in value and not isinstance(value[flag], bool):
+            problems.append(f"{flag} must be true or false")
 
     senders = value.get("allowed_senders")
     if senders is not None:

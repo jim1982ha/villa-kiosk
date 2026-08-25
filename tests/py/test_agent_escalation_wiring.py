@@ -137,7 +137,10 @@ def test_one_investigation_per_subject_never_one_per_pass() -> None:
     pick which of the three it was about."""
     provider = _Provider([says(_escalating(3))]
                          + [says("nothing found")] * 3)
-    _run(dict(ON), provider)
+    # ⚠️ THE CAP IS NAMED, NOT INHERITED — this test is about ONE RUN PER
+    # SUBJECT, and the shipped per-pass cap (2 since 2.752.0) would clip the
+    # third subject for an unrelated reason and leave the property untested.
+    _run({**ON, "max_investigations_per_pass": 3}, provider)
 
     links = _rows("escalated")
     assert len(links) == 3, links
@@ -221,7 +224,13 @@ def test_the_budget_is_asked_before_every_investigation_not_once_per_pass() -> N
     must never be STARTED. Asked once, all three start and merely decline.
     """
     provider = _Provider([says(_escalating(3))] + [says("nothing")] * 3)
-    outcome = _run({**ON, "monthly_limit": 3}, provider)
+    # ⚠️ THE CAP IS NAMED HERE, NOT INHERITED. This test is about the BUDGET
+    # binding per investigation; with the shipped cap (2 since 2.752.0) the
+    # pass stops for a different reason and the property goes unmeasured while
+    # the test still passes on the word "stopped". Deriving from the default
+    # would be the same trap one level down.
+    outcome = _run({**ON, "monthly_limit": 3,
+                    "max_investigations_per_pass": 3}, provider)
 
     assert len(_rows("escalated")) == 2, (
         "an investigation was started with the budget already spent; the "

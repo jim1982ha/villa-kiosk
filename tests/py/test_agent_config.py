@@ -52,7 +52,11 @@ def test_defaults_are_applied_at_READ_time_and_never_written() -> None:
     deleted."""
     stored: Dict[str, Any] = {"enabled": True}
     seen = config.view(stored)
-    assert seen["enabled"] is True and seen["max_turns"] == 8
+    # ⚠️ DERIVED FROM THE SHIPPED DEFAULT, NEVER RESTATED. This held a literal
+    # 8 and went red when 2.752.0 cut the turn cap to 4 — a test that has to be
+    # edited to follow an intended change is measuring the edit, not the code.
+    assert seen["enabled"] is True
+    assert seen["max_turns"] == config.DEFAULTS["max_turns"]
     assert stored == {"enabled": True}, "view() must not mutate the stored doc"
 
 

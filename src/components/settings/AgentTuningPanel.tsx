@@ -44,6 +44,7 @@ const MIN_TRIAGE_MINUTES = 5;
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
   "enabled" | "shadow" | "actEnabled" | "mcpUrl" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
+  | "dailyUsdLimit" | "haTools"
   | "maxTurns" | "maxToolCalls" | "maxOutputTokens" | "investigateMode"
   | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
   | "modelChat" | "actuableEntities">
@@ -51,8 +52,9 @@ type Draft = Pick<AgentConfig,
 
 const EMPTY: Draft = {
   enabled: false, shadow: true, actEnabled: false, mcpUrl: "", triageMinutes: 15, monthlyLimit: 4000,
-  chatMonthlyLimit: 0, maxTurns: 8, maxToolCalls: 24, maxOutputTokens: 8192,
-  investigateMode: "auto", maxInvestigationsPerPass: 3,
+  haTools: false,
+  chatMonthlyLimit: 0, dailyUsdLimit: 0, maxTurns: 4, maxToolCalls: 24, maxOutputTokens: 8192,
+  investigateMode: "auto", maxInvestigationsPerPass: 2,
   quietHoursStart: "", quietHoursEnd: "",
   modelTriage: "", modelReason: "", modelBrief: "", modelChat: "",
   // ⚠️ EMPTY, AND `config.MUST_BE_EMPTY` MAKES THAT A REQUIREMENT RATHER THAN
@@ -267,6 +269,8 @@ export default function AgentTuningPanel() {
     triageMinutes: Number(c.triageMinutes ?? EMPTY.triageMinutes),
     monthlyLimit: Number(c.monthlyLimit ?? EMPTY.monthlyLimit),
     chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
+    dailyUsdLimit: Number(c.dailyUsdLimit ?? EMPTY.dailyUsdLimit),
+    haTools: Boolean(c.haTools ?? EMPTY.haTools),
     maxTurns: Number(c.maxTurns ?? EMPTY.maxTurns),
     maxToolCalls: Number(c.maxToolCalls ?? EMPTY.maxToolCalls),
     maxOutputTokens: Number(c.maxOutputTokens ?? EMPTY.maxOutputTokens),
@@ -410,6 +414,25 @@ export default function AgentTuningPanel() {
         onChange={(v) => edit({ triageMinutes: v })}
       />
 
+      {/* ⚠️ MONEY FIRST, BECAUSE IT IS THE ONE AN OWNER CAN PRICE. The two
+          boxes below count REQUESTS, and on the reference villa one triage pass
+          cost $0.010 against $0.37 for one investigation — a 37x spread inside
+          the unit — so "4,000 requests" is a ceiling nobody can translate into
+          a bill. This is the same question asked in the unit on the invoice. */}
+      <Num
+        label="Never spend more than … dollars a day"
+        note="0 means no daily limit. Reached, the villa stops asking the AI until midnight."
+        more={<>
+          The other two boxes count requests, which are not all the same price:
+          a quick look costs a fraction of a cent and a full investigation costs
+          a few tens of cents. This one is in dollars, so it is the setting that
+          decides your bill. It covers everything — the villa&rsquo;s own checks
+          and your conversations alike — because a ceiling with an exemption in
+          it is not a ceiling.
+        </>}
+        value={draft.dailyUsdLimit} min={0}
+        onChange={(v) => edit({ dailyUsdLimit: v })}
+      />
       <Num
         label="Never use more than … AI requests a month"
         note="A hard ceiling. Reached, the villa stops asking the AI and says so."
@@ -528,6 +551,25 @@ export default function AgentTuningPanel() {
                 + "of Normal, and more likely to reach the real cause. Worth "
                 + "it if investigations keep ending without a conclusion." },
         ]}
+      />
+      {/* ⚠️ THIS SITS UNDER "how thorough" BECAUSE IT IS THE OTHER FACTOR OF
+          THE SAME PRODUCT. Cost is `prefix x turns`: the box above sets the
+          turns, this sets the prefix, and on the reference villa it set 84% of
+          it — 44 tool schemas at 43,700 tokens, re-read on every turn, against
+          the ten the agent's own trace says it ever calls. */}
+      <ToggleField
+        checked={draft.haTools}
+        onChange={(haTools) => edit({ haTools })}
+        label="Let investigations use Home Assistant's own query tools"
+        note="Off is about five times cheaper. Answering you is unaffected either way."
+        more={<>
+          On, the villa hands its investigator every tool your Home Assistant
+          MCP add-on offers. That is a much larger instruction sheet, sent again
+          on every step of every investigation, and it is where most of the cost
+          of this feature was going. Off, it keeps its own ten tools — the ones
+          its records show it actually uses. Turn this on only if
+          investigations are missing something you can see in Home Assistant.
+        </>}
       />
       {/* ⚠️ A CEILING, NOT A SPEND, AND THE NOTE SAYS SO — otherwise this reads
           as a cost dial and gets turned DOWN, which is the setting that was

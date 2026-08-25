@@ -26,7 +26,7 @@ one request whatever came back.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import audit as audit_mod
 from agent import budget as budget_mod
@@ -176,6 +176,63 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
     except Exception as err:  # noqa: BLE001 - a broken source is not a dead
         swallow("could not wire the tools to this villa", err)   # registry
         return Registry([cls() for cls in ALL_TOOLS])
+
+
+#: ⚠️ THE AUTONOMOUS TIERS DO NOT GET THE UPSTREAM CATALOGUE, AND THAT IS THE
+#: SINGLE LARGEST COST DECISION IN THIS SUBSYSTEM (2.752.0). `build_registry`
+#: folds Home Assistant's own MCP tools in beside VESTA's (ADR-023), which is
+#: right for CHAT — a person asks an arbitrary question and is watching the
+#: answer — and was catastrophic for the scheduled tiers, because cost here is
+#: `prefix x turns` and a tool schema is prefix on every turn.
+#:
+#: MEASURED on the reference villa by `agent/prefix.py`, not estimated:
+#:   investigation prefix   52,108 tok/turn
+#:     tools               43,700 tok   84%   n=44
+#:     playbook             5,600 tok   11%
+#:     document             2,100 tok    4%
+#:     instructions           635 tok    1%
+#: Six upstream tools are 39% of the tool payload on their own
+#: (`ha_get_integration` 10,277c, `ha_config_get_dashboard` 7,934c, `ha_search`
+#: 7,692c, `ha_get_system_health` 6,971c, `ha_eval_template` 6,287c,
+#: `ha_get_overview` 5,309c) and the villa was paying for all 44 on all 8 turns
+#: of every investigation.
+#:
+#: ⚠️ THE LIST IS WHAT THE AGENT ACTUALLY CALLS, READ OFF ITS OWN TRACE, not
+#: what seemed useful. Every `run ... tools used:` line in the add-on log over
+#: the observed period names only these — plus `ha_search`, the ONE upstream
+#: tool it ever reached for, whose results the redaction audit then REFUSED
+#: ("tool result refused by the redaction audit: entity id(s) present"). So the
+#: model called it four times in one run and was handed nothing each time: it
+#: was pure cost in both directions, and dropping it removes no capability that
+#: was ever delivered.
+#:
+#: ⚠️ `raise_concern` AND `act_service` ARE NOT HERE because they are not in
+#: this registry — `runtime.investigate` adds them per run with `with_tool`,
+#: carrying that run's policy and evidence. Listing them would be a second
+#: opinion about a set this file does not own.
+REASON_TOOLS: Tuple[str, ...] = (
+    "read_villa", "read_state", "read_history", "read_salient",
+    "read_coverage", "read_concerns", "read_playbook", "read_ledger",
+    "read_automation_trace", "read_logs",
+)
+
+
+def narrowed(full: Registry, names: Sequence[str]) -> Registry:
+    """`full`, reduced to `names`, keeping the run's ref table.
+
+    ⚠️ ONE NARROWING FOR BOTH TIERS. `triage.registry_for` had this body inline
+    and the reason tier had nothing, so adding a second copy here would be the
+    duplication this repository keeps paying for — and `refs` is the part a
+    hand-rolled copy drops: a narrowed registry that loses the ref table mints
+    handles nothing can resolve, and `raise_concern` then refuses every subject
+    as "not a device handle from this run".
+
+    ⚠️ A NAME THAT IS NOT WIRED IS SKIPPED, NOT AN ERROR. `read_logs` is
+    published only where a log source exists (`sources._warn_unwired`), so a
+    villa without one must narrow to nine tools rather than crash.
+    """
+    kept = [t for t in (full.get(n) for n in names) if t is not None]
+    return Registry(kept, refs=getattr(full, "refs", None))
 
 
 #: What the model is told on the turn before its last. ⚠️ IT NAMES THE ACTION,

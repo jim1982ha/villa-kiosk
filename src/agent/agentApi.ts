@@ -41,8 +41,18 @@ const AGENT_WIRE_KEYS = {
   triage_minutes: "triageMinutes",
   brief_cadence: "briefCadence",
   monthly_limit: "monthlyLimit",
+  /** ⚠️ MONEY PER DAY, BESIDE A COUNT PER MONTH. `monthly_limit` counts
+   *  REQUESTS, and on the reference villa one triage pass cost $0.010 against
+   *  $0.37 for one investigation — a 37x spread inside one unit — so a request
+   *  ceiling is a setting nobody can price. 0 means no ceiling. */
+  daily_usd_limit: "dailyUsdLimit",
   chat_monthly_limit: "chatMonthlyLimit",
   max_turns: "maxTurns",
+  /** ⚠️ THE BIGGEST COST DIAL THERE IS — it decides whether the investigation
+   *  tier carries Home Assistant's whole MCP catalogue (44 tool schemas,
+   *  43,700 tokens, 84% of the prefix, on every turn) or only the ten VESTA
+   *  tools its own trace says it calls. Chat keeps the full set regardless. */
+  ha_tools: "haTools",
   max_tool_calls: "maxToolCalls",
   max_output_tokens: "maxOutputTokens",
   investigate_mode: "investigateMode",
@@ -156,8 +166,15 @@ export interface AgentConfig {
   triageMinutes: number;
   briefCadence: string;
   monthlyLimit: number;
+  /** A hard stop in the unit on the invoice, on the owner's own clock.
+   *  0 = off, which is the shipped default: a number tuned against one
+   *  property's spend would silently stop supervision on another. */
+  dailyUsdLimit: number;
   chatMonthlyLimit: number;
   maxTurns: number;
+  /** Give the investigator Home Assistant's own query tools. Off: a ~5x
+   *  cheaper prefix. On: it can reach HA's generic surface and pay for it. */
+  haTools: boolean;
   maxToolCalls: number;
   /** Output tokens ONE turn may produce. A ceiling, not a spend —
    *  `thinking` is drawn from it, so too low kills the turn AND discards

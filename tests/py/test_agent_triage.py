@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(
     "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import policy as policy_mod, triage               # noqa: E402
+from agent import policy as policy_mod, registry as reg_mod, triage  # noqa: E402
 from agent.registry import Registry                          # noqa: E402
 from agent.tools.base import BaseTool, text                   # noqa: E402
 from fake_provider import FakeProvider, asks, declines, says  # noqa: E402
@@ -130,10 +130,30 @@ def test_the_tool_set_is_narrowed_by_NAME_not_by_mode() -> None:
 
 def test_the_narrowed_registry_comes_FROM_the_real_one() -> None:
     """⚠️ ARCH-012: a second registry is a second gate, and it would be the one
-    nobody tests. The narrowing must select, never construct."""
+    nobody tests. The narrowing must select, never construct.
+
+    ⚠️ THE SELECTION MOVED INTO `registry.narrowed` IN 2.752.0, when the reason
+    tier needed the same thing and a second copy would have been the very
+    duplication this test guards. So the pin follows it: triage must DELEGATE,
+    and the shared helper must SELECT from what it is given.
+    """
     import inspect
-    source = inspect.getsource(triage.registry_for)
-    assert "source.get(n)" in source
+    caller = inspect.getsource(triage.registry_for)
+    assert "narrowed(" in caller, "triage no longer uses the shared narrowing"
+    # ⚠️ CODE LINES ONLY. The first version of this check matched the word
+    # `Registry(` inside the comment EXPLAINING why the construction was
+    # removed — a pin failing on the prose that records its own finding.
+    code = "\n".join(l for l in caller.split('"""')[-1].splitlines()
+                     if not l.lstrip().startswith("#"))
+    assert "Registry(" not in code, (
+        "triage constructs a registry again instead of selecting from one")
+    shared = inspect.getsource(reg_mod.narrowed)
+    assert "full.get(n)" in shared, (
+        "the shared narrowing constructs tools instead of selecting them")
+    # ⚠️ AND IT MUST CARRY THE REF TABLE. A narrowed registry that drops `refs`
+    # mints handles nothing can resolve, and `raise_concern` then refuses every
+    # subject as "not a device handle from this run".
+    assert "refs=" in shared, "the narrowing drops the run's ref table"
 
 
 # ── the prompt is cacheable ─────────────────────────────────────────────────

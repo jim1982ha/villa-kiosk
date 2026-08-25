@@ -22,13 +22,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import config as agent_config
 from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
-from agent.registry import Registry, build_registry
+from agent.registry import Registry, build_registry, narrowed
 from reports.log import log
 
 #: The only tool triage may see. ⚠️ A NAME, not a mode: `read_state` is READ too
@@ -105,6 +105,22 @@ _LINE = re.compile(r"^\s*ESCALATE\s*:\s*(?P<subject>[^—\-:]{1,120}?)\s*"
 class Escalation:
     subject: str
     reason: str
+    #: ⚠️ THE DEVICE THIS IS ABOUT, SERVER-SIDE ONLY, AND IT IS WHAT MAKES THE
+    #: HANDOVER MEASURABLE (2.752.0). `raise_concern` computes
+    #: `subject_key = sha256(entity_id)[:16]` from a `ref`, and falls back to
+    #: `sha256("topic:" + text)` when the model gives free text instead — a key
+    #: the rules side, which ALWAYS hashes an entity id, can never produce. So
+    #: a concern raised about a named device sat in "found only by the
+    #: assistant" forever even when an automation had reported the same
+    #: equipment, and `both` was 0 by construction rather than by coverage.
+    #:
+    #: ⚠️ A REF CANNOT TRAVEL AND AN ENTITY ID CAN. Handles are per RUN by
+    #: design (`refs.py`: `d3` means different devices in different runs), so
+    #: triage's `d1` is meaningless to the investigation; the id is carried
+    #: between them in OUR memory and re-minted as a fresh handle on arrival.
+    #: It is never sent to a model — `reason.investigate_subject` seeds it into
+    #: the new run's table and the model only ever sees the new handle.
+    entity_id: str = ""
 
 
 @dataclass
@@ -143,6 +159,50 @@ def parse(text: str) -> List[Escalation]:
     return out
 
 
+def _identify(items: Sequence[Escalation], refs: Any) -> None:
+    """Attach the entity id behind each escalated subject, where there is one.
+
+    ⚠️ MATCHED ON THE LABEL THE MODEL WAS GIVEN, because that is the only thing
+    it could have written. Triage sees handles and labels, never ids, so the
+    subject string it emits is a label (or a phrase containing one) and this is
+    the join back. `roomKey`-style normalisation — case and whitespace — for the
+    same reason every other name comparison in this project uses it.
+
+    ⚠️ NO MATCH IS A NORMAL OUTCOME, NOT A FAILURE. "Coverage incomplete" and
+    "the monitoring journal" are real subjects with no device behind them; they
+    keep the topic key, which is correct for them. This exists so that the ones
+    that ARE a device stop being filed as topics.
+    """
+    if refs is None:
+        return
+    known = {}
+    for ref in getattr(refs, "known", lambda: ())():
+        label = " ".join(str(refs.label(ref) or "").split()).lower()
+        entity = refs.resolve(ref)
+        if label and entity:
+            known.setdefault(label, entity)
+    for item in items:
+        subject = " ".join(str(item.subject or "").split()).lower()
+        if not subject:
+            continue
+        # ⚠️ CONTAINMENT ONLY, AND THE EXACT-MATCH FAST PATH BESIDE IT WAS
+        # DELETED RATHER THAN KEPT (2.752.0). A model writes "the pool pump
+        # circuit" for a device labelled "Pool pump", so containment is the
+        # rule that has to work; and `label in subject` is TRUE whenever they
+        # are equal, so a preceding dict lookup could never change an answer.
+        # Mutation testing proved it: replacing the fast path with `None` left
+        # every assertion green, which is the definition of a line that is not
+        # doing anything. Longest label first, so a specific one beats a
+        # substring of it.
+        hit = None
+        for label in sorted(known, key=len, reverse=True):
+            if label in subject:
+                hit = known[label]
+                break
+        if hit:
+            item.entity_id = hit
+
+
 def registry_for(full: Optional[Registry] = None, *,
                  session: Any = None) -> Registry:
     """The triage tool set: the shipped registry, narrowed to `TRIAGE_TOOLS`.
@@ -152,8 +212,12 @@ def registry_for(full: Optional[Registry] = None, *,
     the same wired tools and hands over a subset.
     """
     source = full if full is not None else build_registry(session=session)
-    kept = [t for t in (source.get(n) for n in TRIAGE_TOOLS) if t is not None]
-    return Registry(kept)
+    # ⚠️ THE SHARED NARROWING, AND IT FIXES A REAL DROP: this used to build
+    # `Registry(kept)` with no `refs`, so triage's tools minted handles into a
+    # table nothing downstream could resolve. It never showed because triage
+    # sees one tool and raises no concerns — but it is the same defect
+    # `narrowed`'s docstring describes, and it was here.
+    return narrowed(source, TRIAGE_TOOLS)
 
 
 async def run(*, provider: Provider, document: str,
@@ -185,6 +249,7 @@ async def run(*, provider: Provider, document: str,
     behaviour is unchanged.
     """
     cfg = agent_config.view(config)
+    reg = registry_for(registry, session=session)
     result = await runtime.investigate(
         provider=provider,
         # ⚠️ THE CONSTITUTION, AND NO VOICE. Triage emits `ESCALATE:` lines for
@@ -195,7 +260,7 @@ async def run(*, provider: Provider, document: str,
             "", instructions=SYSTEM, document=document),
         messages=[{"role": "user",
                    "content": "Is anything here worth a closer look?"}],
-        config=config, registry=registry_for(registry, session=session),
+        config=config, registry=reg,
         session=session, tier="triage",
         trigger=trigger, run_id=run_id)
 
@@ -204,7 +269,18 @@ async def run(*, provider: Provider, document: str,
                             turns=result.turns, usage=result.usage)
 
     found = parse(result.text)
-    log(f"triage: {len(found)} escalation(s) from {result.turns} turn(s)")
+    # ⚠️ IDENTIFIED HERE, WHERE THE TABLE THAT CAN ANSWER STILL EXISTS. `reg`
+    # is this pass's registry and `reg.refs` its handle table; once `run`
+    # returns, the mapping from the label the model wrote back to an entity id
+    # is gone. Doing it in the caller would mean rebuilding a table whose
+    # handles no longer mean what they meant.
+    _identify(found, getattr(reg, "refs", None))
+    named = sum(1 for e in found if e.entity_id)
+    log(f"triage: {len(found)} escalation(s) from {result.turns} turn(s)"
+        # ⚠️ COUNTED, BECAUSE "identified 0 of 3" AND "identified 3 of 3" ARE
+        # THE TWO OUTCOMES THAT DECIDE WHETHER THE HANDOVER PAGE CAN EVER SHOW
+        # A MATCH, and they are otherwise indistinguishable from outside.
+        + (f", {named}/{len(found)} identified" if found else ""))
     return TriageResult(status="answered", escalations=found,
                         turns=result.turns, usage=result.usage)
 

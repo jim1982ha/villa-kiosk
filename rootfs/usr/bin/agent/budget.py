@@ -37,6 +37,7 @@ from typing import Any, Dict, Final, Mapping, Optional, Tuple
 
 from agent import config as agent_config
 from reports import store
+from reports import usage as usage_mod
 from reports.log import log, swallow
 
 BUDGET_FILE: Final[str] = f"{store.DATA_DIR}/vesta/budget.json"
@@ -160,6 +161,64 @@ def chat_limit_of(config: Optional[Mapping[str, Any]]) -> int:
     return max(1, int(limit_of(config) * DEFAULT_CHAT_SHARE))
 
 
+#: The ceiling an owner can actually reason about. ⚠️ MONEY PER DAY, BESIDE A
+#: COUNT PER MONTH, AND THE TWO ARE NOT THE SAME CONTROL (2.752.0).
+#: `monthly_limit` counts REQUESTS, which nobody can price: on the reference
+#: villa one triage pass cost $0.010 and one investigation $0.37 — a 37x spread
+#: inside one unit — so "4,000 requests" is a sentence with no dollar value and
+#: an owner asking "why is this $8 a day" could not translate their own setting
+#: into an answer. This is the control that makes the bill predictable whatever
+#: else changes: a hard stop, in the unit on the invoice, on the clock an owner
+#: thinks in.
+#:
+#: ⚠️ 0.0 MEANS OFF, AND OFF IS THE SHIPPED DEFAULT. This is a redistributable
+#: add-on; a number chosen against THIS villa's rate would silently stop
+#: supervision on a property with different equipment, which is the hard rule
+#: this repo exists under. An owner who wants the guarantee sets it.
+DAILY_USD_KEY: Final[str] = "daily_usd_limit"
+
+
+def daily_limit_of(config: Optional[Mapping[str, Any]] = None) -> float:
+    """The owner's daily ceiling in USD, or 0.0 for "no ceiling"."""
+    raw = agent_config.view(config).get(DAILY_USD_KEY, 0.0)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return value if value > 0 else 0.0
+
+
+def _day_start(now: Optional[float] = None) -> float:
+    """Epoch seconds at the most recent LOCAL midnight.
+
+    ⚠️ LOCAL, NOT UTC, because "today" is the owner's day — a villa at UTC+8
+    told its allowance resets at 08:00 has been given a fact about our servers.
+    `time.localtime` reads the container's TZ, which the add-on sets from Home
+    Assistant's own timezone.
+    """
+    stamp = time.time() if now is None else float(now)
+    parts = time.localtime(stamp)
+    return stamp - (parts.tm_hour * 3600 + parts.tm_min * 60 + parts.tm_sec)
+
+
+def spent_today(now: Optional[float] = None) -> float:
+    """Provider spend since local midnight, in USD.
+
+    ⚠️ READ FROM THE USAGE LEDGER, NOT COUNTED HERE. `reports.usage` already
+    records every request with the provider's own token counts priced through
+    one table; a second tally in this module would be a second number for one
+    fact, and the first day they disagreed the owner would have no way to tell
+    which was the bill. Never raises — `usage.rows` degrades to [].
+    """
+    total = 0.0
+    for row in usage_mod.rows(since=_day_start(now)):
+        try:
+            total += float(row.get("cost") or 0.0)
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
 def check(config: Optional[Mapping[str, Any]] = None, *,
           kind: str = "run", now: Optional[float] = None) -> Verdict:
     """May another request be made? Reads only; never increments.
@@ -177,6 +236,22 @@ def check(config: Optional[Mapping[str, Any]] = None, *,
         return Verdict(False,
                        f"the monthly ceiling of {limit} requests is spent "
                        f"({used} used). It resets on the 1st.", used, limit)
+
+    # ⚠️ THE DAILY CEILING BINDS BEFORE THE CHAT SUB-CEILING AND AFTER THE
+    # MONTHLY ONE, and the order is the meaning: the monthly count is the
+    # provider-contract ceiling, this is the owner's money, and the chat
+    # allowance is a courtesy inside both. A daily stop applies to chat too —
+    # unlike the chat sub-ceiling, which deliberately spares supervision —
+    # because this one exists to bound the INVOICE and an exemption in it is a
+    # ceiling with a way around it.
+    daily = daily_limit_of(config)
+    if daily > 0:
+        today = spent_today(now)
+        if today >= daily:
+            return Verdict(False,
+                           f"today's spending ceiling of ${daily:,.2f} is "
+                           f"reached (${today:,.2f} so far). It resets at "
+                           f"midnight.", used, limit)
 
     if kind == "chat":
         chat_limit = chat_limit_of(config)

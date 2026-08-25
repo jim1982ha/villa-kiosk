@@ -22,12 +22,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import config as agent_config
 from agent import contracts, policy as policy_mod
 from agent.llm.base import Provider
-from agent.registry import Registry, RunResult, build_registry
+from agent.registry import Registry, RunResult, build_registry, narrowed
 from agent.registry import run as run_loop
 from agent import sources as sources_mod
 from agent.tools import act as act_mod
@@ -142,11 +142,44 @@ class _Bounded:
         return await self._inner.run(**kwargs)
 
 
+def _seeded(messages: Sequence[Mapping[str, Any]],
+            seed: Optional[Tuple[str, str]],
+            refs: Any) -> Sequence[Mapping[str, Any]]:
+    """`messages`, with the subject's freshly-minted handle named up front.
+
+    ⚠️ UNCHANGED WHEN THERE IS NOTHING TO SEED, byte for byte, so every path
+    that does not pass a seed sends exactly what it sent before — including
+    chat, which must not acquire a sentence about a device nobody named.
+    """
+    if not seed or refs is None or not messages:
+        return messages
+    entity_id, label = str(seed[0] or ""), str(seed[1] or "")
+    if not entity_id:
+        return messages
+    ref = refs.ref_for(entity_id, label)
+    if not ref:
+        return messages
+    note = (f"The device this is about is {ref}"
+            + (f" ({label})" if label else "")
+            + ". Use that handle when you record a concern about it.")
+    out = [dict(m) for m in messages]
+    out[0]["content"] = f"{note}\n\n{out[0].get('content', '')}"
+    return out
+
+
 async def investigate(*, provider: Provider,
                       system: Sequence[Mapping[str, Any]],
                       messages: Sequence[Mapping[str, Any]],
                       config: Optional[Mapping[str, Any]] = None,
                       registry: Optional[Registry] = None,
+                      #: Which tools this TIER may see, by name, or None for
+                      #: every tool the deployment offers. See the narrowing
+                      #: below and `registry.REASON_TOOLS`.
+                      tool_names: Optional[Sequence[str]] = None,
+                      #: `(entity_id, label)` this run is ABOUT, minted into
+                      #: the run's handle table before the first turn. See the
+                      #: seeding block below.
+                      seed: Optional[Tuple[str, str]] = None,
                       session: Any = None,
                       tier: str = "reason",
                       trigger: str = "manual",
@@ -188,6 +221,37 @@ async def investigate(*, provider: Provider,
         # quietly ran on the built-in readers alone.
         reg = (registry if registry is not None
                else build_registry(config=config, session=session))
+        # ⚠️ NARROWED HERE, AFTER BUILDING, SO THERE IS STILL ONE CONSTRUCTION
+        # SITE (2.752.0). A tier says which tools it wants by NAME and this
+        # applies it; the alternative — each tier building its own narrowed
+        # registry — is the second construction site ARCH-012 forbids, and it
+        # would also lose the run's ref table on the way through.
+        #
+        # THE MEASUREMENT: with the full set the investigation prefix was
+        # 52,108 tok/turn of which 43,700 (84%) were 44 tool schemas, re-read on
+        # every turn of every investigation. `registry.REASON_TOOLS` carries the
+        # numbers and the reason the list is what it is.
+        if tool_names is not None:
+            reg = narrowed(reg, tool_names)
+
+        # ⚠️ THE SUBJECT'S HANDLE IS MINTED BEFORE THE FIRST TURN, AND THAT IS
+        # WHAT MAKES A CONCERN MATCHABLE (2.752.0). `raise_concern` keys on
+        # `sha256(entity_id)` when given a `ref` and on `sha256("topic:"+text)`
+        # otherwise — and the rules side always hashes an entity id, so a
+        # free-text subject produced a key nothing else could ever produce.
+        # Every concern the reference villa had raised was topic-keyed, so the
+        # handover page's "both" column was 0 by construction rather than by
+        # coverage, and no amount of the agent getting better could move it.
+        #
+        # ⚠️ IT IS MINTED HERE AND NOT BY THE CALLER because this function owns
+        # the run's ref table, and a handle minted against any other table is a
+        # handle `raise_concern` refuses as "not from this run".
+        #
+        # ⚠️ AND IT IS PREPENDED TO THE FIRST USER MESSAGE, not sent as a second
+        # one: two consecutive user messages are not a valid conversation, and
+        # the caller cannot write the sentence itself because the handle does
+        # not exist until the line above has run.
+        messages = _seeded(messages, seed, getattr(reg, "refs", None))
 
         # ⚠️ THE RUN'S EVIDENCE, OWNED HERE BECAUSE TWO THINGS NEED IT AT
         # DIFFERENT TIMES: the loop appends to it as tools return, and

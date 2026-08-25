@@ -41,12 +41,13 @@ from agent import config as agent_config
 from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
+from agent.registry import REASON_TOOLS
 from reports.log import log, swallow
 
 #: How many investigations one pass may start when config says nothing.
 #: ⚠️ MIRRORS `config.DEFAULTS`, and `test_agent_reason` pins that it does. A
 #: second number here is the drift this repo has paid for at every layer.
-DEFAULT_CAP: int = 3
+DEFAULT_CAP: int = 2
 
 #: ⚠️ NO VILLA FACTS, NO ENTITY IDS, NO CLOCK — the same rule as `triage.SYSTEM`
 #: and for the same reason: this sits above the cache breakpoint.
@@ -231,6 +232,18 @@ async def investigate_subject(item: Any, *, provider: Provider,
             system=playbooks.system_blocks(
                 "owner", instructions=SYSTEM, document=document),
             messages=[{"role": "user", "content": _question(item)}],
+            # ⚠️ NARROWED, AND THIS IS THE COST FIX (2.752.0). Passing no
+            # registry made `runtime.investigate` build the FULL one — VESTA's
+            # tools plus Home Assistant's entire MCP catalogue, 44 schemas and
+            # 43,700 tokens, 84% of a 52,108-token prefix, re-read on all eight
+            # turns of every investigation. See `registry.REASON_TOOLS` for the
+            # measurement and for why the list is what the agent's own trace
+            # says it calls rather than what looked useful.
+            tool_names=tool_names_for(config),
+            # ⚠️ THE ID TRAVELS, THE HANDLE DOES NOT — see `triage.Escalation`
+            # and `runtime._seeded`. Empty for a subject with no device behind
+            # it ("coverage incomplete"), which correctly keeps a topic key.
+            seed=(_entity_of(item), subject),
             config=config, session=session, tier="reason",
             trigger=trigger, run_id=run_id)
     except Exception as err:  # noqa: BLE001 - the clock must survive this
@@ -238,6 +251,30 @@ async def investigate_subject(item: Any, *, provider: Provider,
         return False
     log(f"reason: {run_id} {result.status} on {subject!r}")
     return True
+
+
+def tool_names_for(config: Optional[Mapping[str, Any]] = None
+                   ) -> Optional[Tuple[str, ...]]:
+    """Which tools the investigation tier may see, or None for "all of them".
+
+    ⚠️ NAMES, NOT A REGISTRY, AND THAT IS WHY. `runtime.investigate` is the ONE
+    place that builds a registry (it owns the run's refs, its evidence and its
+    per-run write tools); a second `build_registry` here would be a second
+    construction site, and the first thing it broke was a test — the wiring
+    suite patches `triage.build_registry` and `runtime.build_registry` BY NAME
+    because a module that imports the symbol gets its own binding, and this
+    file quietly became a third. That comment was already in the test, above
+    the two lines it patches.
+
+    ⚠️ `ha_tools: true` PUTS THE UPSTREAM CATALOGUE BACK, for an owner who
+    wants the investigator to reach Home Assistant's own query surface and will
+    pay ~5x the prefix for it. Off by default because the agent's own trace
+    reached for exactly ONE upstream tool over the observed period and the
+    redaction audit refused its result every time.
+    """
+    if bool(agent_config.view(config).get("ha_tools")):
+        return None
+    return REASON_TOOLS
 
 
 @dataclass
@@ -313,6 +350,17 @@ def _ident(trigger: str, index: int, now: Optional[float] = None) -> str:
     one unreadable run."""
     stamp = int(time.time() if now is None else now)
     return f"{trigger}{stamp}-e{index + 1}"
+
+
+def _entity_of(item: Any) -> str:
+    """The entity id behind an escalated subject, or "" when there is none.
+
+    ⚠️ `getattr`, LIKE `_subject_of` BESIDE IT, because three shapes arrive
+    here — a `triage.Escalation`, a `Queued` from the approval path, and the
+    audit row an approval is rebuilt from — and only the first has ever carried
+    this. A missing attribute is "no device", which is a real answer.
+    """
+    return str(getattr(item, "entity_id", "") or "")
 
 
 def _subject_of(item: Any) -> str:
