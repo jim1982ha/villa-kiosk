@@ -1,13 +1,13 @@
-## 2.745.0
+## 2.746.0
 
-### Fixed — the (i) bubble was clipped by the dialog, and coverage is now readable on the heartbeat
+### Fixed — alerts were essays with a hole in them, and occupancy has never been readable
 
-The hint opened inside a pane that scrolls, within a dialog that hides its overflow, so a bubble near
-the bottom showed two lines and a cut edge — and it anchored to the icon, which sits at the end of a
-sentence, so a wide block started at the right margin and hung off. It now renders outside the dialog
-entirely and takes its left edge and width from the paragraph it belongs to, flipping above when there
-is no room below. No z-index beats a clip; the element has to leave the clipping ancestor. Separately
-the hourly heartbeat now prints whether the agent believes it was watching, and the listening-since
-stamp behind that verdict — so yesterday's false coverage warning can be confirmed fixed by reading a
-line rather than tracing code. An empty stamp prints as ?, because that is the defect, not a blank.
+A delivered warning ran to four paragraphs and carried "(unsourced figure removed)" mid-sentence. The
+concern tool asked for "what is wrong, what it rests on, and what a person should do" with no length
+given, so it got an investigation narrated in full; it now asks for at most three short sentences and
+says the evidence rows already hold the rest. The number check treated a sigma as a measured reading,
+which no evidence row can contain because the model derives it — the same mistake this file already
+recorded making with counts, so sigma joins the derived list. Separately the delivery sweep read
+occupancy through a function that does not exist, so every sweep raised and swallowed it: nothing was
+wrongly held, but nothing could be held back for an empty house either. Step headers are now one line.
 
