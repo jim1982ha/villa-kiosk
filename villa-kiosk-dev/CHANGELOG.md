@@ -1,3 +1,15 @@
+## 2.757.0
+
+### Changed — the last "open" architecture gap was measured and was never real
+"Two report generators over overlapping facts" had been carried forward for
+months as the final divergence item, and I proposed a redesign of the report
+composer on the strength of it before measuring. There is one renderer: it holds
+114 f-strings, 44 bullets and 60 headings and dispatches every section from a
+table, while the synthesis layer has 15 f-strings and no rendering vocabulary. Its
+three input shapes exist because a blueprint incident, a statistical finding and
+an investigated concern are three different kinds of fact — collapsing them would
+delete fields four sections render. A test now checks that boundary.
+
 ## 2.756.0
 
 ### Changed — four settings became two, and the cutover page is gone
