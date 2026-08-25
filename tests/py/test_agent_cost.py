@@ -110,7 +110,7 @@ def test_the_narrowing_actually_SELECTS() -> None:
 def test_both_factors_of_prefix_times_turns_are_bounded() -> None:
     """⚠️ THE CAP THAT BINDS EVERY TIME IS A MULTIPLIER, NOT A CEILING. 8/8 on
     all eleven investigations; 3 of 3 investigations on every escalating pass."""
-    assert agent_config.DEFAULTS["max_turns"] <= 4, (
+    assert agent_config.depth_of({})["turns"] <= 4, (
         "the turn cap is back above the measured level")
     assert agent_config.DEFAULTS["max_investigations_per_pass"] <= 2
     # ⚠️ ONE NUMBER, TWO HOMES — `reason.DEFAULT_CAP` is the fallback when the

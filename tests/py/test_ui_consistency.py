@@ -370,8 +370,7 @@ def test_a_pass_that_never_RAN_is_not_reported_as_a_quiet_one() -> None:
     it. So the panel must derive the outcome from the REASON and must not render
     the stored verdict.
     """
-    panel = _read(os.path.join(SRC, "components", "settings",
-                               "ShadowDiffPanel.tsx"))
+    panel = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
     assert "export function outcomeOf" in panel, "no derived outcome"
     body = panel[panel.index("export function outcomeOf"):]
     body = body[:body.index("\n}")]
@@ -385,61 +384,17 @@ def test_a_pass_that_never_RAN_is_not_reported_as_a_quiet_one() -> None:
         "never ran reads as a quiet one")
 
 
-def test_the_handover_page_does_not_frame_a_decision_already_taken() -> None:
-    """⚠️ THE OWNER'S STANDING DIRECTION IS A FULL SWAP TO THE ASSISTANT: "never
-    consider the option to restore the monitoring via the blueprint when it's
-    not the end plan." A page headed "Old rules vs AI" and sectioned "would be
-    lost if you retired the automations" argues a decision that is closed, and
-    the same numbers then read as a scoreboard the assistant is losing 24–1
-    rather than as progress through a migration. Reported as "no clear insight
-    can be derived from it".
-    """
-    modal = _read(os.path.join(SRC, "components", "agent",
-                               "AgentAdvancedModal.tsx"))
-    panel = _read(os.path.join(SRC, "components", "settings",
-                               "ShadowDiffPanel.tsx"))
-    # ⚠️ BLOCK COMMENTS STRIPPED BY REGEX, NOT BY LINE PREFIX. A JSX comment's
-    # continuation lines start with an ordinary word, so a line filter leaves
-    # most of every block in — and the words this test forbids are exactly the
-    # ones the header comments RECORD, which dry-audit Part 2 says must stay.
-    body = re.sub(r"/\*.*?\*/", "", modal + panel, flags=re.S)
-    visible = "\n".join(l for l in body.splitlines()
-                         if not l.lstrip().startswith("//"))
-    for phrase in ("Old rules vs AI", "would be lost", "Would be lost",
-                   "retired the automations", "regression"):
-        assert phrase not in visible, (
-            f"{phrase!r} still frames this as a decision about whether to "
-            "retire working automations")
-
-
-def test_the_findings_lists_are_GROUPED_so_one_check_is_one_row() -> None:
-    """⚠️ `shadow.diff` KEYS ON `subject_key` — one row per piece of EQUIPMENT —
-    while a finding's TITLE names the check that fired. Four devices failing
-    one check produced four rows all reading the same check name, and a reader
-    cannot tell that from a broken list. It was 24 rows of it.
-    """
-    panel = _read(os.path.join(SRC, "components", "settings",
-                               "ShadowDiffPanel.tsx"))
-    assert "export function groupTitles" in panel
-    # the lists render through the grouped component, not by mapping raw titles
-    assert not re.search(r"diff\.(rulesOnly|both|agentOnly)\.map\(", panel), (
-        "a list still maps the raw per-subject titles, so identical check "
-        "names render as duplicate rows")
-    for key in ("rulesOnly", "both", "agentOnly"):
-        assert f"titles={{diff.{key}}}" in panel, (
-            f"{key} is not rendered through the grouped list")
-
-
 def test_an_absent_document_size_is_not_read_as_an_empty_document() -> None:
     """⚠️ `undefined` IS NOT 0 HERE, AND 0 IS THE LOUDEST ALARM ON THE PAGE.
     Audit rows written before v2.685.0 carry no `doc_chars` at all; treating
     that as "the assistant was handed nothing to read" would accuse a pass that
     was probably fine, which is the same class of error the field exists to
     report honestly."""
-    panel = _read(os.path.join(SRC, "components", "settings",
-                               "ShadowDiffPanel.tsx"))
-    assert "docChars === undefined" in panel, (
-        "the panel does not distinguish an absent size from a zero one")
+    panel = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    # ⚠️ THE FACTS ROW THAT PRINTED "? or N char" WENT WITH THE HANDOVER PAGE,
+    # but the property it guarded did not: a row whose size is UNKNOWN must not
+    # be accused of having run on nothing. `=== 0` is what keeps that true —
+    # `undefined === 0` is false — and a falsy test would collapse the two.
     assert "docChars === 0" in panel, "nothing detects the empty-document fault"
     assert not re.search(r"!\s*\w+\.docChars|docChars\s*\|\|", panel), (
         "a falsy test collapses `undefined` and 0, which are opposite claims")
@@ -547,11 +502,12 @@ def test_recent_checks_has_ONE_implementation() -> None:
     exists to stop."""
     shared = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
     assert "outcomeOf" in shared and "import" in shared
-    panel = _read(os.path.join(SRC, "components", "settings",
-                               "ShadowDiffPanel.tsx"))
-    assert "<RecentChecks" in panel, "the Handover tab kept its own copy"
-    assert panel.count("Looked, nothing to raise") == 0, (
-        "the row rendering is written twice")
+    # ⚠️ THE SECOND CALL SITE WAS THE HANDOVER TAB, DELETED IN 2.756.0. What is
+    # still worth pinning is that the row rendering exists ONCE — a copy would
+    # be a second answer to "what does `nothing to escalate` mean", which is
+    # what `test_pass_reason_contract.py` exists to keep singular.
+    hits = [p for p, src in _tsx_sources() if "Looked, nothing to raise" in src]
+    assert len(hits) == 1, f"the row rendering is written {len(hits)} times"
 
 
 def test_the_source_legend_lives_in_ADVANCED_and_only_there() -> None:

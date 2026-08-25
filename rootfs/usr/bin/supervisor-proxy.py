@@ -2554,94 +2554,6 @@ async def agent_confirm_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "state": "confirmed"})
 
 
-async def agent_shadow_handler(request: web.Request) -> web.Response:
-    """The shadow period's diff: what each layer found, side by side. TASK-051.
-
-    ⚠️ THIS ROUTE IS THE PH-3 GATE'S ONLY SURFACE. `shadow.diff()` and
-    `shadow.report()` shipped in v2.642.0 with NO CALLER — no route, no UI, no
-    command — so the document the checkpoint asks an owner to read could not be
-    produced at all, and the gate blocking PH-4 and PH-5 was unreachable by
-    construction. Same shape as the review queue, found the same way: by asking
-    what actually calls the thing.
-
-    ⚠️ OWNER-ONLY. It is the cutover decision — whether to retire working
-    automations — and it enumerates both layers' findings side by side, which is
-    a description of everything wrong with the property.
-
-    ⚠️ THE RULES' SIDE COMES FROM THE REPORT HISTORY, WHICH IS WHERE THEY
-    ACTUALLY LAND. A shadow period's agent concerns are in their own store (see
-    `shadow_path` — a different FILE, so an unapproved concern cannot be
-    delivered by accident); the blueprint/module layer's findings are the
-    `findings` rows of the briefs already generated. Comparing the two is
-    exactly the question "would retiring the rules have lost anything".
-    """
-    if not _authorized(request):
-        return _unauthorized()
-    if _role_for(request) != "owner":
-        return _forbidden("Only the owner profile may read the shadow diff.")
-
-    from agent import shadow as agent_shadow
-
-    # ⚠️ ASKED OF THE MODULE THAT OWNS THE STORE, never read from the file here.
-    # The first version did `_read_json_store(...).get("concerns")` and
-    # `test_store_envelope` flagged it as an envelope unwrap — wrongly, as it
-    # happens (that store's document really does have that key), but the check
-    # cannot tell the two apart by name and neither can a reader.
-    mine = [c for c in agent_shadow.recorded() if isinstance(c, dict)]
-
-    stored = _read_json_store(reports_store.REPORTS_HISTORY_FILE,
-                              reports_store.EMPTY_HISTORY)
-    entries = reports_store.history_view(stored).get("entries") or []
-    theirs: List[Dict[str, Any]] = []
-    # ⚠️ NEWEST FIRST. The history ring appends, so iterating it in file order
-    # shows the diff its OLDEST description of a finding — and `_subjects` keeps
-    # the first it sees. A brief regenerated after a fix therefore changed
-    # nothing on screen: the stale row was still winning the join.
-    for entry in reversed(list(entries)):
-        if not isinstance(entry, dict):
-            continue
-        for finding in entry.get("findings") or []:
-            if isinstance(finding, dict):
-                theirs.append(finding)
-
-    # ⚠️ COVERAGE IS ASKED OVER THE PERIOD THE DIFF ACTUALLY DESCRIBES, which
-    # is the window the shadow concerns span — not "now", and not a guess.
-    # `collect.coverage(since_iso)` compares the collector's `online_since`
-    # against that instant and answers whether it was listening throughout.
-    #
-    # ⚠️ THE FIRST VERSION CALLED IT WITH NO ARGUMENT AT ALL and the exception
-    # was swallowed into a log line, so every diff this route has ever served
-    # said COVERAGE INCOMPLETE — and that banner tells the reader a subject
-    # missing from both columns proves nothing. The cutover decision would have
-    # been taken on a document that disclaimed itself. Found in the add-on log
-    # by the owner, one release after it shipped: "shadow coverage unread:
-    # coverage() missing 1 required positional argument".
-    complete = False
-    try:
-        from reports import collect as reports_collect
-        # The oldest concern is the start of the period being judged; with no
-        # concerns at all there is no period, and "incomplete" is the honest
-        # answer rather than a confident empty diff.
-        stamps = sorted(str(c.get("opened_at") or c.get("at") or "")
-                        for c in mine if isinstance(c, dict))
-        stamps = [t for t in stamps if t]
-        if stamps:
-            complete = bool(reports_collect.coverage(stamps[0]).get("complete"))
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        print(f"[supervisor-proxy] shadow coverage unread: {err}", flush=True)
-
-    result = agent_shadow.diff(mine, theirs, coverage_complete=complete)
-    return web.json_response({
-        "report": agent_shadow.report(result),
-        "agentTotal": result.agent_total,
-        "rulesTotal": result.rules_total,
-        "coverageComplete": result.coverage_complete,
-        "rulesOnly": [r.by_rules for r in result.rules_only],
-        "both": [r.by_agent for r in result.both],
-        "agentOnly": [r.by_agent for r in result.agent_only],
-    }, headers={"Cache-Control": "no-store"})
-
-
 async def agent_chats_handler(request: web.Request) -> web.Response:
     """The bot's private chats, named. Owner-only, because it enumerates who
     can talk to this villa.
@@ -3498,7 +3410,6 @@ def main() -> None:
     app.router.add_get("/agent-review", agent_review_get_handler)
     app.router.add_post("/agent-review", agent_review_decide_handler)
     app.router.add_get("/agent-audit", agent_audit_handler)
-    app.router.add_get("/agent-shadow", agent_shadow_handler)
     app.router.add_get("/agent-proposals", agent_proposals_handler)
     app.router.add_post("/agent-confirm", agent_confirm_handler)
     app.router.add_post("/agent-run-now", agent_run_now_handler)

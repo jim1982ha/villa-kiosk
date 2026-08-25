@@ -9,7 +9,7 @@
 // actually tuned, which is the reading problem the whole reorganisation is
 // about.
 
-import { GitCompare, KeyRound, Receipt, Users } from "lucide-react";
+import { KeyRound, Receipt, Users } from "lucide-react";
 
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
@@ -18,12 +18,11 @@ import { AgentConfigProvider,
          useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
 import PeoplePanel from "@/components/settings/PeoplePanel";
-import ShadowDiffPanel from "@/components/settings/ShadowDiffPanel";
 import SourceLegend from "@/components/common/SourceLegend";
 import UsagePanel from "@/components/settings/UsagePanel";
 import { useState } from "react";
 
-type Tab = "cost" | "people" | "key" | "shadow";
+type Tab = "cost" | "people" | "key";
 
 const TABS: { id: Tab; label: string; icon: typeof Receipt }[] = [
   // ⚠️ COST FIRST. It is the one an owner opens unprompted, and the HLD prices
@@ -32,11 +31,14 @@ const TABS: { id: Tab; label: string; icon: typeof Receipt }[] = [
   { id: "cost", label: "Cost", icon: Receipt },
   { id: "people", label: "Who may talk to it", icon: Users },
   { id: "key", label: "Provider key", icon: KeyRound },
-  // ⚠️ "HANDOVER", NOT "OLD RULES VS AI". A versus frames a decision the owner
-  // has already taken — the direction is a full swap to the assistant — and the
-  // same numbers read as a scoreboard the assistant is losing rather than as
-  // progress through a migration. See ShadowDiffPanel's header.
-  { id: "shadow", label: "Handover", icon: GitCompare },
+  // ⚠️ THE "HANDOVER" TAB WAS DELETED IN 2.756.0, AND ITS QUESTION IS WHY. It
+  // compared what the assistant concluded against what the villa's automations
+  // concluded over the same period, so an owner could decide whether retiring
+  // them was safe. That decision is taken and the automations are retired — one
+  // side of the comparison is permanently silent, so the page could only ever
+  // print "N things your automations caught and the villa did not" about a
+  // period in which nothing was listening on that side. Its live half, the
+  // triage trace, moved to the Triage tab where it belongs.
 ];
 
 /** ⚠️ SAME SHAPE AS `AgentModal`, AND IT HAD THE SAME DEFECT. The provider must
@@ -100,9 +102,6 @@ function AdvancedDialog({ onBack }: { onBack: () => void }) {
               {tab === "people" && <PeoplePanel />}
               {tab === "key" && <ApiKeyPanel />}
             </div>
-          )}
-          {tab === "shadow" && (
-            <div className="reports-pane"><ShadowDiffPanel /></div>
           )}
         </div>
         <ModalFooter commit={draft} onClose={onBack} />

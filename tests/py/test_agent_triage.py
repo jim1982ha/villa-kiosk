@@ -217,9 +217,17 @@ def test_being_UNABLE_to_see_still_reaches_a_person_deterministically() -> None:
     assert "collect.coverage(" in pipeline_src, (
         "the brief no longer computes coverage — the signal the triage rule "
         "used to carry now has no owner at all")
-    assert "reports_collect.coverage(" in proxy_src, (
-        "the diagnostics endpoint no longer reports coverage, so the Coverage "
-        "tab cannot answer 'is anything listening?'")
+    # ⚠️ THIS ASSERTION WAS VACUOUS AND SAID SO OUT LOUD (fixed 2.756.0). It
+    # claimed the DIAGNOSTICS endpoint reports coverage; it never did. The only
+    # `reports_collect.coverage(` in the proxy lived inside the shadow-diff
+    # route — a page about the cutover comparison, nothing to do with the
+    # Coverage tab — so deleting that route in 2.756.0 turned this red and
+    # exposed a pin that had been satisfied by an unrelated call site since the
+    # day it was written. The tab's live answer has always come from the
+    # collector's own state, not from `coverage()`.
+    assert "reports_collect.state()" in proxy_src, (
+        "the diagnostics endpoint no longer publishes the collector state, so "
+        "the Coverage tab cannot answer 'is anything listening?'")
 
 
 # ── cadence ─────────────────────────────────────────────────────────────────

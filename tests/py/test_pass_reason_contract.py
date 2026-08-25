@@ -8,7 +8,7 @@ back:
   1. `scheduler.run_once` (Python), to recover the escalated COUNT and the
      SUBJECTS for the audit row.
   2. `audit.record_pass` (Python), which JOINS it to the numbers with " | ".
-  3. `ShadowDiffPanel.outcomeOf`/`reasonOf` (TypeScript), which splits on that
+  3. `RecentChecks.outcomeOf`/`reasonOf` (TypeScript), which splits on that
      separator and classifies the pass as raised / quiet / could-not-run.
 
 Nothing connects them but string literals in two languages. Reword
@@ -35,7 +35,9 @@ import re
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 BIN = os.path.join(ROOT, "rootfs", "usr", "bin")
-PANEL = os.path.join(ROOT, "src", "components", "settings", "ShadowDiffPanel.tsx")
+# ⚠️ MOVED IN 2.756.0 with the helpers themselves, when ShadowDiffPanel was
+# deleted. The contract is unchanged; only its home is.
+PANEL = os.path.join(ROOT, "src", "components", "agent", "RecentChecks.tsx")
 
 
 def _read(path: str) -> str:

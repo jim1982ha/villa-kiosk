@@ -132,9 +132,15 @@ def cap_of(config: Optional[Mapping[str, Any]] = None) -> int:
 
 
 def auto(config: Optional[Mapping[str, Any]] = None) -> bool:
-    """Does an escalation get investigated, or wait for a person? ADR-021."""
-    return str(agent_config.view(config).get("investigate_mode")
-               or "auto").strip().lower() == "auto"
+    """Does an escalation get investigated, or wait for a person? ADR-021.
+
+    ⚠️ ONE KEY SINCE 2.756.0 — `mode`, not `investigate_mode` beside `shadow`.
+    ⚠️ AND "observe" INVESTIGATES. That is the whole point of the mode: run
+    everything, deliver nothing. `shadow.suppressed` is what holds the delivery
+    back; refusing to investigate here would make an observe period a record of
+    nothing having been looked at.
+    """
+    return str(agent_config.view(config).get("mode")) in ("live", "observe")
 
 
 async def follow_up(escalations: Sequence[Any], *, provider: Provider,

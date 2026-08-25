@@ -47,12 +47,18 @@ def test_shadow_is_the_SHIPPED_DEFAULT() -> None:
     """⚠️ THE OPPOSITE OF EVERY OTHER SWITCH HERE. The others ship off so
     nothing happens; this ships ON so that when the agent IS switched on, its
     first period is observed rather than delivered."""
-    assert agent_config.DEFAULTS["shadow"] is True
+    assert agent_config.DEFAULTS["mode"] == "observe"
     assert shadow.suppressed({}) is True
 
 
 def test_turning_it_off_is_a_deliberate_act() -> None:
-    assert shadow.suppressed({"shadow": False}) is False
+    assert shadow.suppressed({"mode": "live"}) is False
+    # ⚠️ AND A PRE-2.756.0 DOCUMENT STILL MEANS WHAT IT MEANT. Every villa has
+    # `shadow` on disk; a rename with no migration would have put each of them
+    # back to "observe" — supervision silently silenced on a property running
+    # live, which is the direction nobody checks.
+    assert shadow.suppressed({"shadow": False,
+                              "investigate_mode": "auto"}) is False
 
 
 def test_the_switch_is_read_per_call_not_cached() -> None:
@@ -88,51 +94,6 @@ def test_recording_OUTSIDE_shadow_mode_is_refused() -> None:
 
 
 # ── the diff ────────────────────────────────────────────────────────────────
-def test_the_diff_buckets_by_SUBJECT_not_by_title() -> None:
-    """⚠️ Both layers already compute `subject_key` the same way — the agent's
-    delegates to the reports one — so they recognise the same equipment without
-    either holding an identifier. Keying on titles would compare prose and find
-    nothing in common."""
-    out = shadow.diff(AGENT, RULES)
-    assert [r.by_agent for r in out.both] == ["Pool pump short-cycling"]
-    assert [r.by_agent for r in out.agent_only] == ["Gate motor losing calibration"]
-    assert [r.by_rules for r in out.rules_only] == ["critical_binary_trip: front door"]
-
-
-def test_the_report_LEADS_with_what_the_agent_MISSED() -> None:
-    """⚠️ THE ORDERING IS AN ARGUMENT. "The agent found things the rules could
-    not" is the flattering half and the one confirmation bias reaches for; the
-    question that decides a cutover is what the rules caught and the agent did
-    not, because those are the regressions it would ship."""
-    text = shadow.report(shadow.diff(AGENT, RULES))
-    missed = text.index("NOT by the agent")
-    found = text.index("NOT by the rules")
-    assert missed < found, "the report opens with the agent's wins"
-    assert "regressions a cutover would ship" in text
-
-
-def test_an_empty_bucket_says_NONE_rather_than_vanishing() -> None:
-    """A missing section reads as an unanswered question; "none" is a result."""
-    text = shadow.report(shadow.diff(AGENT, []))
-    assert "NOT by the agent (0)" in text
-    assert text.count("- none") >= 2
-
-
-def test_INCOMPLETE_coverage_is_stated_before_any_count() -> None:
-    """⚠️ A shadow period during which the collector was not listening compares
-    two silences, and a diff read without knowing that is worse than no diff."""
-    text = shadow.report(shadow.diff(AGENT, RULES, coverage_complete=False))
-    assert text.index("COVERAGE WAS INCOMPLETE") < text.index("The rules found")
-    assert "proves nothing" in text
-
-
-def test_the_totals_count_SUBJECTS_not_rows() -> None:
-    """Two concerns about one pump are one subject; counting rows would let a
-    chatty layer look more thorough than a precise one."""
-    noisy = AGENT + [{"subject_key": PUMP, "title": "pump again"}]
-    assert shadow.diff(noisy, RULES).agent_total == 2
-
-
 def test_the_shadow_path_is_COMPUTED_not_string_replaced() -> None:
     """⚠️ The first version replaced a known filename, which silently did
     NOTHING when the base name differed — so a shadow concern landed in the
@@ -194,50 +155,6 @@ def test_a_reply_to_a_HUMAN_is_deliberately_not_suppressed() -> None:
         "period would get silence from a bot they just messaged")
 
 
-def test_the_ROUTE_asks_coverage_with_a_WINDOW_not_with_nothing() -> None:
-    """⚠️ IT SHIPPED CALLING `coverage()` WITH NO ARGUMENT, and the TypeError
-    was swallowed into a log line — so every shadow diff this route ever served
-    said COVERAGE INCOMPLETE, and that banner tells the reader a subject missing
-    from both columns proves nothing. The PH-3 cutover decision would have been
-    taken on a document that disclaimed itself.
-
-    Found by the owner in the add-on log, one release after it shipped:
-    "shadow coverage unread: coverage() missing 1 required positional
-    argument: 'since_iso'". Nothing else could have found it — the handler
-    degrades on purpose, so the failure looked exactly like a villa that had
-    not been listening.
-    """
-    import inspect
-    import os
-    import re
-
-    from reports import collect as collect_mod
-
-    assert len(inspect.signature(collect_mod.coverage).parameters) >= 1, (
-        "collect.coverage takes no argument now; this pin is checking nothing")
-
-    root = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))))
-    with open(os.path.join(root, "rootfs", "usr", "bin", "supervisor-proxy.py"),
-              encoding="utf-8") as handle:
-        proxy = re.sub(r"#[^\n]*", "", handle.read())
-
-    # ⚠️ THE HANDLER'S OWN BODY, cut at the NEXT `async def` rather than at the
-    # first one — which is its own signature. The first cut sliced the function
-    # off at character 10 and searched an empty string, then reported "the route
-    # no longer asks about coverage at all". A slicing bug that reads as a
-    # finding is worse than no test.
-    start = proxy.index("async def agent_shadow_handler")
-    nxt = proxy.find("\nasync def ", start + 1)
-    handler = proxy[start:nxt if nxt > 0 else len(proxy)]
-    calls = re.findall(r"coverage\(([^)]*)\)", handler)
-    assert calls, "the shadow route no longer asks about coverage at all"
-    for args in calls:
-        assert args.strip(), (
-            "the shadow route calls coverage() with no window — every diff it "
-            "serves will disclaim itself as INCOMPLETE")
-
-
 def test_a_history_ENTRY_carries_its_findings_not_just_a_count() -> None:
     """⚠️ THE SHADOW DIFF'S RULES COLUMN READS THIS KEY, and it did not exist.
 
@@ -274,24 +191,6 @@ def test_a_history_ENTRY_carries_its_findings_not_just_a_count() -> None:
         "this is what makes it expensive")
 
 
-def test_a_row_NEVER_renders_as_its_own_subject_key() -> None:
-    """⚠️ THE CUTOVER PAGE LISTED TEN SHA-256 PREFIXES. `_subjects` fell back to
-    the subject_key when a stored finding had no title, and the blueprint half
-    of the history record was written with `getattr(g, "title")` — a field
-    `Group` does not have, so every one of them was empty.
-
-    `29d2dd0f3a69762c` is not a label a person can weigh, and this is the page
-    the PH-3 decision is taken from. Saying the title is missing is at least a
-    fact somebody can act on.
-    """
-    rows = [{"subject_key": "29d2dd0f3a69762c", "title": ""}]
-    out = shadow.diff([], rows)
-    rendered = out.rules_only[0].by_rules
-    assert "29d2dd0f3a69762c" != rendered, (
-        "a finding with no title renders as its own hash")
-    assert "untitled" in rendered.lower()
-
-
 def test_the_history_record_reads_the_field_a_GROUP_actually_has() -> None:
     """⚠️ `Group.label`, NOT `Group.title`. The record builder asked for a field
     the dataclass does not define, and `getattr(…, "title", "")` answers "" for
@@ -322,89 +221,3 @@ def test_the_history_record_reads_the_field_a_GROUP_actually_has() -> None:
         "exist, so every blueprint finding is stored without one")
 
 
-def test_a_GROUP_reaches_the_diff_with_a_READABLE_title() -> None:
-    """⚠️ THE WHOLE PATH, BECAUSE EACH HALF PASSED ITS OWN TEST WHILE THE PAIR
-    PRODUCED HASHES. v2.662.0 taught the history record to carry findings and
-    v2.665.0 corrected the field it read; neither proved that a real `Group`
-    ends up as a sentence a person can weigh, which is the only property the
-    owner ever sees.
-
-    Drives the record builder's own expression against a real Group and feeds
-    the result to `diff`, so a rename of `Group.label`, a change to the stored
-    shape, or a regression in the fallback all fail here rather than on a
-    villa.
-    """
-    from reports.aggregate import Group, Item
-
-    # ⚠️ A REAL `Item` THROUGH THE REAL CONSTRUCTOR. `Group.__init__` takes the
-    # first item and copies its fields; building one by keyword would be a
-    # fixture of my own shape rather than the object the pipeline makes.
-    group = Group(Item(category="maintenance", blueprint="maintenance_pump",
-                       rule_id="pump_short_cycle", bucket="house_pump",
-                       label="Pump short-cycling 'House Pump Power'",
-                       severity="warning", entities=["sensor.probe_power"],
-                       detail="", when="", basis="", task_text="", data={}))
-
-    # The expression `run_report` stores, applied to one group.
-    # ⚠️ THE SAME DEFENSIVE READ THE PIPELINE USES. `subject_keys` is a
-    # PROPERTY here and calling it raised "'set' object is not callable" — my
-    # test was wrong about the object while the shipped expression, which
-    # checks `callable` first, was right.
-    keys = getattr(group, "subject_keys", set())
-    keys = keys() if callable(keys) else keys
-    stored = [{"subject_key": key,
-               "title": str(getattr(group, "label", "") or ""),
-               "severity": str(getattr(group, "severity", "") or "")}
-              for key in sorted(keys or {"k1"})]
-    assert stored, "the group yielded no subject keys to store"
-
-    rendered = shadow.diff([], stored).rules_only
-    assert rendered, "the stored finding did not reach the diff"
-    for row in rendered:
-        assert row.by_rules == "Pump short-cycling 'House Pump Power'", (
-            f"the cutover page would show {row.by_rules!r} — a reader cannot "
-            f"decide anything from that")
-
-
-def test_a_TITLED_row_beats_an_untitled_one_for_the_same_subject() -> None:
-    """⚠️ THE OWNER REGENERATED A BRIEFING, PRESSED RE-READ, AND GOT THE SAME
-    TEN HASHES. The fix was in the store and the shadow was in the JOIN:
-    `_subjects` kept the FIRST row it saw for a subject, and the handler fed it
-    history oldest-first, so a titleless row recorded by an older release
-    permanently outranked the same finding re-recorded with a title.
-
-    Two halves, and this pins the one that survives whatever order arrives:
-    a real label upgrades a placeholder for the same subject.
-    """
-    stale = {"subject_key": "29d2dd0f3a69762c", "title": ""}
-    fresh = {"subject_key": "29d2dd0f3a69762c",
-             "title": "Pump short-cycling 'House Pump Power'"}
-    for rows in ([stale, fresh], [fresh, stale]):
-        rendered = shadow.diff([], rows).rules_only
-        assert len(rendered) == 1, "one subject must not render twice"
-        assert rendered[0].by_rules == fresh["title"], (
-            f"the placeholder won for order {rows}")
-
-
-def test_the_ROUTE_reads_history_NEWEST_first() -> None:
-    """⚠️ THE OTHER HALF, AND IT HAS ITS OWN PIN BECAUSE A MUTATION OF IT
-    SURVIVED. The upgrade rule above makes the join order-independent for a
-    placeholder; it cannot help when BOTH labels are real and the older one is
-    simply out of date. The ring appends, so the newest description of a
-    finding is last in the file and must be seen first.
-    """
-    import os
-    import re
-
-    root = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))))
-    with open(os.path.join(root, "rootfs", "usr", "bin", "supervisor-proxy.py"),
-              encoding="utf-8") as handle:
-        proxy = re.sub(r"#[^\n]*", "", handle.read())
-    start = proxy.index("async def agent_shadow_handler")
-    nxt = proxy.find("\nasync def ", start + 1)
-    handler = proxy[start:nxt if nxt > 0 else len(proxy)]
-    assert re.search(r"for entry in reversed\(", handler), (
-        "the shadow route walks history oldest-first, so the diff shows its "
-        "oldest description of every finding and a regenerated brief changes "
-        "nothing on screen")

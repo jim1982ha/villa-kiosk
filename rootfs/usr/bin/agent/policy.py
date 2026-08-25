@@ -181,13 +181,20 @@ def for_run(config: Optional[Mapping[str, Any]],
         str(k) for k in (cfg.get("suppressed_subjects") or ())
         if isinstance(k, str)) | _earned_suppressions()
     tools = frozenset(str(n) for n in tool_names)
+    depth = agent_config.depth_of(config)
     return RunPolicy(
         act_enabled=act,
         allowed_tools=tools,
         allowed_services=allowed,
         suppressed_subjects=suppressed,
-        max_turns=_positive(cfg.get("max_turns"), 8),
-        max_tool_calls=_positive(cfg.get("max_tool_calls"), 24),
+        # ⚠️ DERIVED FROM ONE KEY SINCE 2.756.0. These were two free integers
+        # in the store, which let a villa hold a pair that cannot happen — 24
+        # tool calls across 4 turns is a cap that never binds — and gave the
+        # owner two dials for one decision the UI only ever offered as three
+        # presets. `config.DEPTH` is the table and `config.depth_of` migrates an
+        # older file that still carries `max_turns`.
+        max_turns=_positive(depth["turns"], 8),
+        max_tool_calls=_positive(depth["tool_calls"], 24),
         tier=str(tier),
     )
 

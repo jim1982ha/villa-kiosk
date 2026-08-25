@@ -48,11 +48,6 @@ BUDGET_FILE: Final[str] = f"{store.DATA_DIR}/vesta/budget.json"
 #: a villa on a 30-minute cadence wants half of it.
 DEFAULT_MONTHLY_LIMIT: Final[int] = 4_000
 
-#: Chat's slice of the same ceiling. Deliberately a fraction rather than a
-#: separate budget: two independent ceilings can both be under while the bill is
-#: over, which is the arithmetic that makes a budget stop meaning anything.
-DEFAULT_CHAT_SHARE: Final[float] = 0.25
-
 #: Same shape and same numbers as `providers.Breaker`, for the same reason: a
 #: provider that is down stays down for minutes, and retrying every cycle is how
 #: a rate limit becomes a ban.
@@ -151,30 +146,33 @@ def limit_of(config: Optional[Mapping[str, Any]]) -> int:
     return value if value > 0 else DEFAULT_MONTHLY_LIMIT
 
 
-def chat_limit_of(config: Optional[Mapping[str, Any]]) -> int:
-    cfg = agent_config.view(config)
-    explicit = cfg.get("chat_monthly_limit")
-    if explicit is not None:
-        value = _int(explicit)
-        if value > 0:
-            return min(value, limit_of(config))
-    return max(1, int(limit_of(config) * DEFAULT_CHAT_SHARE))
-
+# ⚠️ `chat_limit_of` AND `chat_monthly_limit` WERE DELETED IN 2.756.0, and the
+# reasoning they carried is kept because it was sound for the ceiling that
+# existed then: "chat degrades; supervision does not — the product is the
+# supervision, and the conversation is the interface to it."
+#
+# What changed is that a THIRD ceiling arrived (`daily_usd_limit`, ADR-025) and
+# it is the one an owner can actually price. Three ceilings for one budget is
+# three numbers to reason about and two that cannot be translated into a bill:
+# on the reference villa a triage pass cost $0.010 against $0.37 for one
+# investigation, so "N requests" spans 37x inside a single unit. The sub-share
+# was also the least load-bearing — it defaulted to 0, meaning "work it out",
+# and no owner had ever set one.
+#
+# TWO REMAIN AND THEY ANSWER DIFFERENT QUESTIONS: `monthly_limit` bounds the
+# PROVIDER CONTRACT and is genuinely counted in requests; `daily_usd_limit`
+# bounds the INVOICE and covers chat too, because a ceiling with an exemption
+# in it is not a ceiling.
 
 #: The ceiling an owner can actually reason about. ⚠️ MONEY PER DAY, BESIDE A
-#: COUNT PER MONTH, AND THE TWO ARE NOT THE SAME CONTROL (2.752.0).
-#: `monthly_limit` counts REQUESTS, which nobody can price: on the reference
-#: villa one triage pass cost $0.010 and one investigation $0.37 — a 37x spread
-#: inside one unit — so "4,000 requests" is a sentence with no dollar value and
-#: an owner asking "why is this $8 a day" could not translate their own setting
-#: into an answer. This is the control that makes the bill predictable whatever
-#: else changes: a hard stop, in the unit on the invoice, on the clock an owner
-#: thinks in.
+#: COUNT PER MONTH, AND THE TWO ARE NOT THE SAME CONTROL. `monthly_limit` counts
+#: REQUESTS, which nobody can price: on the reference villa one triage pass cost
+#: $0.010 and one investigation $0.37 — a 37x spread inside one unit. This is
+#: the control that makes the bill predictable whatever else changes.
 #:
 #: ⚠️ 0.0 MEANS OFF, AND OFF IS THE SHIPPED DEFAULT. This is a redistributable
 #: add-on; a number chosen against THIS villa's rate would silently stop
-#: supervision on a property with different equipment, which is the hard rule
-#: this repo exists under. An owner who wants the guarantee sets it.
+#: supervision on a property with different equipment.
 DAILY_USD_KEY: Final[str] = "daily_usd_limit"
 
 
@@ -253,19 +251,6 @@ def check(config: Optional[Mapping[str, Any]] = None, *,
                            f"reached (${today:,.2f} so far). It resets at "
                            f"midnight.", used, limit)
 
-    if kind == "chat":
-        chat_limit = chat_limit_of(config)
-        chat_used = state["chat_used"]
-        if chat_used >= chat_limit:
-            # ⚠️ CHAT DEGRADES; SUPERVISION DOES NOT. This is the whole point of
-            # the sub-ceiling: the product is the supervision, and the
-            # conversation is the interface to it.
-            return Verdict(False,
-                           f"today's conversation allowance is spent "
-                           f"({chat_used} of {chat_limit} this month). "
-                           f"Supervision is unaffected — ask me again after "
-                           f"the 1st.", chat_used, chat_limit)
-
     return Verdict(True, "within budget", used, limit)
 
 
@@ -290,13 +275,15 @@ def status(config: Optional[Mapping[str, Any]] = None,
            now: Optional[float] = None) -> Dict[str, Any]:
     """What the Cockpit and the brief show. Read-only."""
     state = _rolled(now)
-    limit, chat_limit = limit_of(config), chat_limit_of(config)
+    limit = limit_of(config)
     return {
         "month": state["month"],
         "used": state["used"], "limit": limit,
         "remaining": max(0, limit - state["used"]),
-        "chat_used": state["chat_used"], "chat_limit": chat_limit,
-        "chat_remaining": max(0, chat_limit - state["chat_used"]),
+        # ⚠️ `chat_used` SURVIVES AS A FIGURE, WITHOUT A CEILING OVER IT. "How
+        # much of this month went on conversation" is still worth showing; what
+        # went is the separate limit that nobody set.
+        "chat_used": state["chat_used"],
     }
 
 

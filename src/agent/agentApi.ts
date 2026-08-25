@@ -35,7 +35,10 @@ const AGENT_WIRE_KEYS = {
    *  always honoured it; the SPA could neither read nor write it, so "run
    *  everything, deliver nothing" could only be changed by editing JSON on the
    *  box. Pinned by `test_the_agent_wire_map_covers_every_setting`. */
-  shadow: "shadow",
+  /** ⚠️ ONE KEY FOR WHAT WAS `shadow` + `investigate_mode` (2.756.0): two
+   *  stored values for one three-position choice this UI had already merged
+   *  into a single control. "observe" | "ask" | "live". */
+  mode: "mode",
   triggers: "triggers",
   triage_minutes: "triageMinutes",
   brief_cadence: "briefCadence",
@@ -45,16 +48,16 @@ const AGENT_WIRE_KEYS = {
    *  $0.37 for one investigation — a 37x spread inside one unit — so a request
    *  ceiling is a setting nobody can price. 0 means no ceiling. */
   daily_usd_limit: "dailyUsdLimit",
-  chat_monthly_limit: "chatMonthlyLimit",
-  max_turns: "maxTurns",
+  /** ⚠️ ONE KEY FOR WHAT WAS `max_turns` + `max_tool_calls`. Not independent
+   *  dials — one answer to "how deep", which the UI only ever offered as three
+   *  presets. "brief" | "normal" | "thorough". */
+  depth: "depth",
   /** ⚠️ THE BIGGEST COST DIAL THERE IS — it decides whether the investigation
    *  tier carries Home Assistant's whole MCP catalogue (44 tool schemas,
    *  43,700 tokens, 84% of the prefix, on every turn) or only the ten VESTA
    *  tools its own trace says it calls. Chat keeps the full set regardless. */
   ha_tools: "haTools",
-  max_tool_calls: "maxToolCalls",
   max_output_tokens: "maxOutputTokens",
-  investigate_mode: "investigateMode",
   max_investigations_per_pass: "maxInvestigationsPerPass",
   quiet_hours_start: "quietHoursStart",
   quiet_hours_end: "quietHoursEnd",
@@ -157,7 +160,7 @@ export interface AgentConfig {
    *  other flag here: the others are off so nothing happens, this is on so
    *  that when the agent IS switched on its first period is observed rather
    *  than delivered. Turning it off is the cutover, and it is a decision. */
-  shadow: boolean;
+  mode: "observe" | "ask" | "live";
   triggers: Record<AgentTrigger, boolean>;
   triageMinutes: number;
   briefCadence: string;
@@ -166,20 +169,15 @@ export interface AgentConfig {
    *  0 = off, which is the shipped default: a number tuned against one
    *  property's spend would silently stop supervision on another. */
   dailyUsdLimit: number;
-  chatMonthlyLimit: number;
-  maxTurns: number;
+  depth: "brief" | "normal" | "thorough";
   /** Give the investigator Home Assistant's own query tools. Off: a ~5x
    *  cheaper prefix. On: it can reach HA's generic surface and pay for it. */
   haTools: boolean;
-  maxToolCalls: number;
   /** Output tokens ONE turn may produce. A ceiling, not a spend —
    *  `thinking` is drawn from it, so too low kills the turn AND discards
    *  every tool result gathered before it. */
   maxOutputTokens: number;
   modelTriage: string;
-  /** What happens when triage escalates (ADR-021). `auto` investigates;
-   *  `approve` records the escalation and waits for a person. */
-  investigateMode: "auto" | "approve";
   /** How many investigations one pass may start. Bounds the worst case; this
    *  is the tier where cost moves from per-pass to per-finding. */
   maxInvestigationsPerPass: number;
@@ -513,67 +511,6 @@ export async function decideProposal(
   return { ok: false, error: d.error || `HTTP ${r.status}` };
 }
 
-/** The shadow diff: what each layer found, side by side. TASK-051. */
-export interface ShadowDiff {
-  /** The rendered document — what the checkpoint asks a person to READ. */
-  report: string;
-  agentTotal: number;
-  rulesTotal: number;
-  /** ⚠️ FALSE MEANS A SUBJECT MISSING FROM BOTH COLUMNS PROVES NOTHING. */
-  coverageComplete: boolean;
-  /** ⚠️ THE ROW THAT DECIDES THE CUTOVER — what the rules caught and the agent
-   *  did not, i.e. the regressions retiring them would ship. */
-  rulesOnly: string[];
-  both: string[];
-  agentOnly: string[];
-}
-
-/**
- * Read the shadow diff. Owner-only, server-side.
- *
- * ⚠️ `null` MEANS COULD NOT ASK, NOT "NOTHING FOUND". An empty diff on a villa
- * that has been running a shadow period is a real and meaningful answer; a
- * failed read that rendered as one would be the cutover decision taken on a
- * blank page.
- */
-/**
- * Start one agent run right now, for real.
- *
- * ⚠️ IT EXISTS SO A PERIOD DOES NOT HAVE TO BE WAITED FOR. `/agent-run-now` has
- * been on the proxy since TASK-034 with NOTHING IN THE SPA CALLING IT — the
- * third capability in this subsystem to ship without a surface — so the only
- * way to put evidence in front of `TASK-051` was to leave the villa running for
- * days. A gate whose evidence can only accumulate is a gate nobody tests.
- *
- * ⚠️ NOT A PREVIEW AND NOT A CONVERSATION. `{preview: true}` assembles the
- * Villa Document and calls no provider; a bare run holds one conversation and
- * returns prose. Neither raises a CONCERN, which is the only thing the shadow
- * diff compares. `{triage: true}` runs the pass the scheduler runs, with every
- * guard it applies — enabled, the scheduled trigger, the budget, shadow mode —
- * and returns WHY it stopped rather than a boolean, because "nothing happened"
- * has five causes here and four of them are fine. This spends real budget.
- */
-export async function runAgentNow(): Promise<{ ok: boolean; reason: string }> {
-  const r = await fetch(ingressPath("agent-run-now"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    // ⚠️ `triage`, NOT A BARE RUN. A bare run holds a conversation and returns
-    // prose; only the triage pass RAISES A CONCERN, which is the one thing the
-    // shadow diff compares. Pointing this at the conversation meant the button
-    // could never fill the column it exists to fill — pressed twice, reported
-    // twice as changing nothing, and both reports were right.
-    body: JSON.stringify({ triage: true }),
-  });
-  const d = (await r.json().catch(() => ({}))) as
-    { ok?: boolean; reason?: string; status?: string };
-  if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
-  return {
-    ok: d.ok === true,
-    reason: d.reason || (d.ok === true ? "" : String(d.status || "declined")),
-  };
-}
-
 /** The triage passes, newest last. ⚠️ THIS IS THE ROW THAT SEPARATES "the
  *  agent looked and stayed quiet" FROM "the agent never ran" — the two the
  *  shadow diff renders identically, and the ambiguity four review rounds were
@@ -767,25 +704,6 @@ export async function correctMemory(
   return { ok: d.ok === true, reason: d.reason || "" };
 }
 
-export async function loadShadowDiff(): Promise<ShadowDiff | null> {
-  const r = await fetch(ingressPath("agent-shadow"), { credentials: "same-origin" });
-  if (!r.ok) return null;
-  const d = (await r.json().catch(() => null)) as ShadowDiff | null;
-  if (!d || typeof d.report !== "string") return null;
-  const strs = (v: unknown) =>
-    (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === "string");
-  return {
-    report: d.report,
-    agentTotal: Number(d.agentTotal) || 0,
-    rulesTotal: Number(d.rulesTotal) || 0,
-    coverageComplete: d.coverageComplete === true,
-    rulesOnly: strs(d.rulesOnly),
-    both: strs(d.both),
-    agentOnly: strs(d.agentOnly),
-  };
-}
-
-/** One provider request, as the ledger recorded it. */
 export interface UsageRow {
   at: number; source: string; model: string; actor: string;
   run_id: string; input: number; output: number;

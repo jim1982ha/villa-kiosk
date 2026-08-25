@@ -43,18 +43,18 @@ const MIN_TRIAGE_MINUTES = 5;
  *  would make this app the thing that has to ship for a new model to be usable,
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
-  "enabled" | "shadow" | "actEnabled" | "mcpUrl" | "triageMinutes" | "monthlyLimit" | "chatMonthlyLimit"
+  "enabled" | "mode" | "actEnabled" | "mcpUrl" | "triageMinutes" | "monthlyLimit"
   | "dailyUsdLimit" | "haTools"
-  | "maxTurns" | "maxToolCalls" | "maxOutputTokens" | "investigateMode"
+  | "depth" | "maxOutputTokens"
   | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
   | "modelChat" | "actuableEntities">
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
-  enabled: false, shadow: true, actEnabled: false, mcpUrl: "", triageMinutes: 15, monthlyLimit: 4000,
+  enabled: false, mode: "observe", actEnabled: false, mcpUrl: "", triageMinutes: 15, monthlyLimit: 4000,
   haTools: false,
-  chatMonthlyLimit: 0, dailyUsdLimit: 0, maxTurns: 4, maxToolCalls: 24, maxOutputTokens: 8192,
-  investigateMode: "auto", maxInvestigationsPerPass: 2,
+  dailyUsdLimit: 0, depth: "brief", maxOutputTokens: 8192,
+  maxInvestigationsPerPass: 2,
   quietHoursStart: "", quietHoursEnd: "",
   modelTriage: "", modelReason: "", modelBrief: "", modelChat: "",
   // ⚠️ EMPTY, AND `config.MUST_BE_EMPTY` MAKES THAT A REQUIREMENT RATHER THAN
@@ -264,10 +264,12 @@ export default function AgentTuningPanel() {
   const c = ctx.config;
   const draft: Draft = {
     enabled: c.enabled === true,
-    // ⚠️ DEFAULTS TRUE WHEN ABSENT, matching the backend. Reading a missing
-    // `shadow` as false would render "delivering" for a villa that is in fact
-    // silent — the most misleading possible direction for this flag.
-    shadow: c.shadow !== false,
+    // ⚠️ "observe" WHEN ABSENT OR UNRECOGNISED, matching the backend. Reading
+    // an unknown value as "live" would render "delivering" for a villa that is
+    // in fact silent — the most misleading possible direction. A config written
+    // by a NEWER version survives a downgrade untouched (`config.view` keeps
+    // unknown keys), so this can be handed a word it has never heard of.
+    mode: (c.mode === "live" || c.mode === "ask") ? c.mode : "observe",
     // ⚠️ FALSE WHEN ABSENT, matching the backend. Reading a missing
     // `act_enabled` as true would render "may operate devices" for a villa
     // that cannot — the most misleading possible direction for this flag.
@@ -275,18 +277,11 @@ export default function AgentTuningPanel() {
     mcpUrl: String(c.mcpUrl ?? ""),
     triageMinutes: Number(c.triageMinutes ?? EMPTY.triageMinutes),
     monthlyLimit: Number(c.monthlyLimit ?? EMPTY.monthlyLimit),
-    chatMonthlyLimit: Number(c.chatMonthlyLimit ?? EMPTY.chatMonthlyLimit),
     dailyUsdLimit: Number(c.dailyUsdLimit ?? EMPTY.dailyUsdLimit),
     haTools: Boolean(c.haTools ?? EMPTY.haTools),
-    maxTurns: Number(c.maxTurns ?? EMPTY.maxTurns),
-    maxToolCalls: Number(c.maxToolCalls ?? EMPTY.maxToolCalls),
     maxOutputTokens: Number(c.maxOutputTokens ?? EMPTY.maxOutputTokens),
-    // ⚠️ ANYTHING THAT IS NOT `approve` READS AS `auto`, matching the backend's
-    // own default rather than trusting the stored value to be one of the two.
-    // A config written by a newer version survives a downgrade untouched
-    // (`config.view` keeps unknown keys), so this box can be handed a word it
-    // has never heard of.
-    investigateMode: c.investigateMode === "approve" ? "approve" : "auto",
+    // ⚠️ SAME RULE AS `mode`: an unrecognised depth reads as the cheapest one.
+    depth: (c.depth === "normal" || c.depth === "thorough") ? c.depth : "brief",
     maxInvestigationsPerPass: Number(
       c.maxInvestigationsPerPass ?? EMPTY.maxInvestigationsPerPass),
     // ⚠️ AN ARRAY OR NOTHING. A stored non-array (a hand-edited document, an
@@ -330,8 +325,14 @@ export default function AgentTuningPanel() {
           stored key in one dialog is a lost update. */}
 
       {/* ⚠️ TWO CHECKBOXES BECAME ONE CHOICE BECAUSE THE 2x2 HAD A DEAD CELL,
-          AND THE REFERENCE VILLA SPENT ITS WHOLE SHADOW PERIOD IN IT. `shadow`
-          and `investigate_mode` are independent booleans, so "stay silent" +
+          AND THE REFERENCE VILLA SPENT ITS WHOLE SHADOW PERIOD IN IT.
+          ⚠️ THE MERGE MOVED INTO THE STORE IN 2.756.0 and this control now
+          writes ONE key, `mode`. Until then it wrote both, so the dead cell was
+          unreachable through this dialog and perfectly reachable by anything
+          else that wrote the document. The history below is why the control
+          exists; `test_agent_mode_merge.py` is what now makes the cell
+          impossible rather than merely unclicked.
+          `shadow` and `investigate_mode` WERE independent booleans, so "stay silent" +
           "ask before investigating" was reachable — and in that combination
           triage escalates, `reason.follow_up` returns early recording each
           escalation as AWAITING, no Concern is ever produced, and the shadow
@@ -355,12 +356,15 @@ export default function AgentTuningPanel() {
           first</strong> is the safe place to start once you want findings to
           reach you. Whichever you pick, urgent things ignore quiet hours.
         </>}
-        value={draft.shadow ? "observe"
-               : draft.investigateMode === "auto" ? "live" : "ask"}
-        onChange={(mode) => edit(
-          mode === "observe" ? { shadow: true, investigateMode: "auto" }
-          : mode === "ask" ? { shadow: false, investigateMode: "approve" }
-          : { shadow: false, investigateMode: "auto" })}
+        value={draft.mode}
+        // ⚠️ ONE KEY WRITTEN, NOT TWO (2.756.0). This used to write `shadow`
+        // AND `investigateMode` from one control — the merge lived in the UI
+        // while the store still held two values that could disagree, with
+        // nothing able to say which the villa was actually in.
+        // ⚠️ AND A JSX COMMENT CANNOT SIT BETWEEN ATTRIBUTES; this is the third
+        // time in one session. `{/* */}` is an EXPRESSION and only belongs
+        // where a child goes.
+        onChange={(mode) => edit({ mode })}
         options={[
           { id: "observe", text: "Observe only",
             hint: "It watches, looks into what it notices and writes findings "
@@ -451,16 +455,14 @@ export default function AgentTuningPanel() {
         value={draft.monthlyLimit} min={0}
         onChange={(v) => edit({ monthlyLimit: v })}
       />
-      <Num
-        label="Of those, keep … aside for answering you"
-        note="Leave at 0 and it works out a sensible share on its own."
-        more={<>
-          This reserves part of the ceiling above for answering you, so a long
-          conversation cannot use up the requests the villa's own checks need.
-        </>}
-        value={draft.chatMonthlyLimit} min={0}
-        onChange={(v) => edit({ chatMonthlyLimit: v })}
-      />
+      {/* ⚠️ "Of those, keep … aside for answering you" WAS DELETED IN
+          2.756.0. It reserved part of the request ceiling for chat so a long
+          conversation could not eat the checks' allowance — sound, and the
+          least load-bearing of three ceilings for one budget: it defaulted to
+          0 ("work it out"), no owner had set one, and it was counted in
+          requests, a unit that spans 37x in price. Two remain and they answer
+          different questions — the monthly count bounds the provider contract,
+          the daily dollar figure bounds the invoice. */}
 
       {/* ⚠️ STILL ABOVE "how deeply", BY THE OWNER'S OWN PLACEMENT (ADR-021):
           that section is about ONE investigation's depth, and this is about how
@@ -541,12 +543,8 @@ export default function AgentTuningPanel() {
           check has spotted that something looks wrong. Raise this if
           investigations keep ending without reaching a conclusion.
         </>}
-        value={draft.maxTurns <= 5 ? "brief"
-               : draft.maxTurns >= 11 ? "thorough" : "normal"}
-        onChange={(depth) => edit(
-          depth === "brief" ? { maxTurns: 4, maxToolCalls: 12 }
-          : depth === "thorough" ? { maxTurns: 12, maxToolCalls: 36 }
-          : { maxTurns: 8, maxToolCalls: 24 })}
+        value={draft.depth}
+        onChange={(depth) => edit({ depth })}
         // ⚠️ THE GUIDANCE CHANGED WITH THE MEASUREMENT (2.752.0), not with
         // taste. "Normal suits most villas" was written before anyone had
         // measured a real investigation: every one of them used all eight

@@ -308,16 +308,26 @@ def test_a_malformed_concern_reads_as_malformed_not_as_suppressed() -> None:
 
 
 def test_budget_caps_deny_at_the_boundary_not_past_it() -> None:
-    snap = policy.for_run({"max_turns": 3, "max_tool_calls": 5},
+    # ⚠️ THE DEPTH TABLE, NOT TWO LOOSE INTEGERS (2.756.0). "brief" IS 4 turns
+    # and 12 tool calls; the boundary this test is about is `>=` versus `>`, and
+    # it holds at whatever the chosen depth is.
+    snap = policy.for_run({"depth": "brief"},
                           tool_names=TOOLS)
-    assert policy.within_budget(snap, turns=2, tool_calls=4).allowed
-    assert not policy.within_budget(snap, turns=3, tool_calls=0).allowed
-    assert not policy.within_budget(snap, turns=0, tool_calls=5).allowed
+    # ⚠️ DERIVED FROM THE POLICY, NOT RESTATED. The numbers used to be typed in
+    # here beside the config that set them; with the depth table owning them, a
+    # literal would pin this test to one preset and go red on a retune of
+    # something it is not about. The boundary is `>=`, at whatever the cap is.
+    assert policy.within_budget(snap, turns=snap.max_turns - 1,
+                                tool_calls=snap.max_tool_calls - 1).allowed
+    assert not policy.within_budget(snap, turns=snap.max_turns,
+                                    tool_calls=0).allowed
+    assert not policy.within_budget(snap, turns=0,
+                                    tool_calls=snap.max_tool_calls).allowed
 
 
 def test_a_junk_budget_falls_back_to_the_default_not_to_zero_or_infinity() -> None:
     for junk in (None, 0, -5, "banana", 1.5e400):
-        snap = policy.for_run({"max_turns": junk}, tool_names=TOOLS)
+        snap = policy.for_run({"depth": junk}, tool_names=TOOLS)
         assert snap.max_turns > 0
 
 

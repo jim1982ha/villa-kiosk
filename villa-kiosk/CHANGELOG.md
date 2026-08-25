@@ -1,3 +1,15 @@
+## 2.756.0
+
+### Changed — four settings became two, and the cutover page is gone
+`shadow` + `investigate_mode` were two stored values for one three-position
+choice, and "stay silent AND ask first" was reachable — the state this villa
+spent its whole observation period in, producing an empty column that read as a
+verdict on the assistant. It was a verdict on the settings. Now one `mode`.
+`max_turns` + `max_tool_calls` became one `depth`, since two free integers could
+hold a pair that cannot happen. Older settings migrate on read. The chat
+sub-ceiling is gone — three ceilings for one budget, only one of them priceable.
+The Handover tab and its diff are deleted: that cutover is decided.
+
 ## 2.755.0
 
 ### Changed — one switch now decides which layer watches the villa

@@ -56,7 +56,7 @@ def test_defaults_are_applied_at_READ_time_and_never_written() -> None:
     # 8 and went red when 2.752.0 cut the turn cap to 4 — a test that has to be
     # edited to follow an intended change is measuring the edit, not the code.
     assert seen["enabled"] is True
-    assert seen["max_turns"] == config.DEFAULTS["max_turns"]
+    assert seen["depth"] == config.DEFAULTS["depth"]
     assert stored == {"enabled": True}, "view() must not mutate the stored doc"
 
 
@@ -148,7 +148,7 @@ def test_a_non_boolean_kill_switch_is_refused() -> None:
 def test_negative_and_non_numeric_limits_are_refused() -> None:
     assert config.errors({"monthly_limit": -1})
     assert config.errors({"triage_minutes": "fifteen"})
-    assert config.errors({"max_turns": True}), "a bool is not a number"
+    assert config.errors({"depth": "deep"}), "an unknown depth is refused"
 
 
 def test_junk_shapes_are_refused_without_raising() -> None:

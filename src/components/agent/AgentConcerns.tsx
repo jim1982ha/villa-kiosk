@@ -62,7 +62,10 @@ export default function AgentConcerns() {
     // briefings: "indistinguishable from an agent that found nothing". The
     // owner hit it, having just been told an investigation had concluded.
     const cfg = await loadAgentConfig().catch(() => null);
-    setShadow(cfg?.config?.shadow !== false);
+    // ⚠️ `mode`, ONE KEY SINCE 2.756.0 — and anything unrecognised reads as
+    // "observe", the direction that says "you are being told nothing" rather
+    // than implying delivery on a villa that is in fact silent.
+    setShadow(cfg?.config?.mode !== "live" && cfg?.config?.mode !== "ask");
     const found = await loadConcerns();
     // ⚠️ THE SETTLED ONES ARE KEPT NOW, NOT DISCARDED. They were filtered out
     // at the door on the reasoning that "closed, verified and dismissed are the

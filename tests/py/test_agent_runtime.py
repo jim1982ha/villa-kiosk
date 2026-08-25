@@ -7,6 +7,8 @@ the allow-list, a hallucinated tool, and a repeat loop. None needs an API key.
 
 from __future__ import annotations
 
+import dataclasses
+
 import asyncio
 import json
 import os
@@ -85,10 +87,17 @@ def _registry() -> reg.Registry:
     return reg.build_registry([_Echo(), _Boom(), _Leaky(), _Act()])
 
 
-def _policy(**cfg: Any) -> policy.RunPolicy:
-    base: Dict[str, Any] = {"max_turns": 6, "max_tool_calls": 10}
-    base.update(cfg)
-    return policy.for_run(base, tool_names=_registry().names)
+def _policy(*, max_turns: int = 6, max_tool_calls: int = 10,
+            **cfg: Any) -> policy.RunPolicy:
+    """⚠️ THE CAPS ARE SET ON THE POLICY, NOT THROUGH THE CONFIG (2.756.0).
+    `max_turns`/`max_tool_calls` stopped being stored keys — the store holds one
+    `depth` and `config.DEPTH` maps it to a pair — so passing 6 through
+    `for_run` would silently produce 4 and these tests would exercise a cap they
+    did not choose. What they are about is the CAP MECHANISM, so they name the
+    numbers directly and never touch the depth table."""
+    base = policy.for_run(dict(cfg), tool_names=_registry().names)
+    return dataclasses.replace(base, max_turns=max_turns,
+                               max_tool_calls=max_tool_calls)
 
 
 def _run(provider: Any, *, pol: Any = None, cfg: Any = None,
@@ -163,7 +172,7 @@ def test_the_turn_cap_stops_a_repeat_loop() -> None:
     """⚠️ The monthly ceiling cannot catch a single run that loops, because it
     is one run."""
     p = FakeProvider([asks("echo") for _ in range(50)])
-    out = _run(p, pol=policy.for_run({"max_turns": 3},
+    out = _run(p, pol=_policy(max_turns=3,
                                      tool_names=_registry().names))
     assert out.status == "declined" and "turn cap" in out.declined_reason
     assert out.turns == 3

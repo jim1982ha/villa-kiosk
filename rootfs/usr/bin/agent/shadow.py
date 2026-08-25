@@ -59,148 +59,35 @@ def suppressed(config: Optional[Mapping[str, Any]] = None) -> bool:
     operator reaches for when something is going wrong, and a switch that needs
     a restart is a switch that does not help then.
     """
-    return bool(agent_config.view(config).get("shadow"))
+    # ⚠️ ONE KEY SINCE 2.756.0. This read `shadow`, a boolean beside
+    # `investigate_mode`'s enum — two stored values for one three-position
+    # choice the UI had already merged. `config.view` migrates an older file, so
+    # a villa that never rewrites its config keeps meaning what it meant.
+    return str(agent_config.view(config).get("mode")) == "observe"
 
 
-@dataclass
-class DiffRow:
-    subject: str
-    by_agent: str = ""
-    by_rules: str = ""
-
-    @property
-    def where(self) -> str:
-        if self.by_agent and self.by_rules:
-            return "both"
-        return "agent only" if self.by_agent else "rules only"
-
-
-@dataclass
-class Diff:
-    """The cutover evidence. TASK-050."""
-
-    rows: List[DiffRow] = field(default_factory=list)
-    agent_total: int = 0
-    rules_total: int = 0
-    #: ⚠️ WHETHER THE PERIOD IS WORTH READING AT ALL. A shadow period during
-    #: which the collector was not listening compares two silences.
-    coverage_complete: bool = True
-
-    @property
-    def both(self) -> List[DiffRow]:
-        return [r for r in self.rows if r.where == "both"]
-
-    @property
-    def agent_only(self) -> List[DiffRow]:
-        return [r for r in self.rows if r.where == "agent only"]
-
-    @property
-    def rules_only(self) -> List[DiffRow]:
-        return [r for r in self.rows if r.where == "rules only"]
-
-
-def _subjects(rows: Sequence[Mapping[str, Any]], key: str,
-              label: str) -> Dict[str, str]:
-    """`{subject_key: label}` for one side of the comparison."""
-    out: Dict[str, str] = {}
-    for row in rows:
-        if not isinstance(row, Mapping):
-            continue
-        subject = str(row.get(key) or "")
-        if subject:
-            # ⚠️ A BETTER LABEL UPGRADES A WORSE ONE, and `setdefault` alone
-            # could not. The FIRST occurrence used to win outright, so a
-            # titleless row recorded by an older release permanently shadowed
-            # the same finding re-recorded with a title — the owner regenerated
-            # a briefing, pressed Re-read, and got the same ten hashes back,
-            # because the fix was in the store and the shadow was in the join.
-            existing = out.get(subject)
-            better = str(row.get(label) or "")
-            if existing is not None and better and existing.startswith("(untitled"):
-                out[subject] = better
-                continue
-            # ⚠️ NEVER THE KEY AS A LABEL. It used to fall back to the
-            # subject_key, so a finding stored without a title rendered as a
-            # SHA-256 prefix — ten of them on the page a cutover is decided
-            # from. An opaque hash is not a label a person can weigh; saying
-            # the title is missing is at least a fact they can act on.
-            out.setdefault(subject, str(row.get(label) or "")
-                           or f"(untitled finding {subject[:8]})")
-    return out
-
-
-def diff(agent_concerns: Sequence[Mapping[str, Any]],
-         rule_findings: Sequence[Mapping[str, Any]], *,
-         coverage_complete: bool = True) -> Diff:
-    """Compare a shadow period's concerns against what the rules found.
-
-    ⚠️ KEYED ON `subject_key`, WHICH BOTH SIDES ALREADY COMPUTE THE SAME WAY.
-    `reports.analysis.base.subject_key` is `sha256(entity_id)[:16]` and
-    `agent.contracts.subject_key` delegates to it rather than restating it, so
-    the two layers recognise the same equipment without either holding an
-    identifier. A diff keyed on titles would compare prose and find nothing in
-    common.
-
-    ⚠️ AND `rules only` IS THE ROW THAT DECIDES THE CUTOVER. "The agent found
-    things the rules could not" is the pleasant half and the one confirmation
-    bias reaches for; the question that matters is what the rules caught and
-    the agent did not, because those are the regressions a cutover would ship.
-    """
-    mine = _subjects(agent_concerns, "subject_key", "title")
-    theirs = _subjects(rule_findings, "subject_key", "title")
-    rows = [DiffRow(subject=key,
-                    by_agent=mine.get(key, ""),
-                    by_rules=theirs.get(key, ""))
-            for key in sorted(set(mine) | set(theirs))]
-    return Diff(rows=rows, agent_total=len(mine), rules_total=len(theirs),
-                coverage_complete=coverage_complete)
-
-
-def report(result: Diff, *, title: str = "Shadow period") -> str:
-    """The diff as a person reads it. TASK-050.
-
-    ⚠️ IT LEADS WITH WHAT THE AGENT MISSED. The ordering is an argument about
-    what the reader should weigh first, and the flattering half is last on
-    purpose — this document exists to decide whether to retire working
-    automations, and a page that opens with the agent's wins is a page written
-    to be agreed with.
-    """
-    lines: List[str] = [title, ""]
-
-    if not result.coverage_complete:
-        lines.append("⚠️ COVERAGE WAS INCOMPLETE for this period, so a subject "
-                     "missing from BOTH columns proves nothing — neither layer "
-                     "was watching throughout. Read this as partial.")
-        lines.append("")
-
-    lines.append(f"The rules found {result.rules_total}; the agent found "
-                 f"{result.agent_total}.")
-    lines.append("")
-
-    lines.append(f"Caught by the rules and NOT by the agent "
-                 f"({len(result.rules_only)}) — these are the regressions a "
-                 f"cutover would ship:")
-    for row in result.rules_only or []:
-        lines.append(f"  - {row.by_rules}")
-    if not result.rules_only:
-        lines.append("  - none")
-    lines.append("")
-
-    lines.append(f"Caught by both ({len(result.both)}):")
-    for row in result.both:
-        lines.append(f"  - {row.by_agent}")
-    if not result.both:
-        lines.append("  - none")
-    lines.append("")
-
-    lines.append(f"Caught by the agent and NOT by the rules "
-                 f"({len(result.agent_only)}):")
-    for row in result.agent_only or []:
-        lines.append(f"  - {row.by_agent}")
-    if not result.agent_only:
-        lines.append("  - none")
-    return "\n".join(lines)
-
+# ⚠️ THE DIFF WAS DELETED IN 2.756.0 AND ITS QUESTION IS RECORDED HERE, because
+# the answer is the only part still worth anything. `DiffRow`, `Diff`,
+# `_subjects`, `diff()` and `report()` compared what the agent concluded during
+# a shadow period against what the blueprint layer concluded over the same one,
+# so an owner could decide whether retiring the automations was safe.
+#
+# That decision is TAKEN. The automations are retired, so one side of the
+# comparison is permanently silent and the diff can never produce a comparison
+# again — it could only ever print "N things your automations caught and the
+# villa did not" about a period in which nothing was listening on that side.
+# An instrument whose question has closed does not stay neutral: it keeps
+# printing a number somebody eventually reads as meaning something.
+#
+# What it concluded, kept so nobody re-derives it: the comparison was never able
+# to show a match, because a concern raised about free text is keyed on
+# `sha256("topic:"+text)` while the rules side always hashes an entity id. That
+# defect is fixed (`triage.Escalation.entity_id`, `runtime._seeded`) and the fix
+# stands on its own — it is what makes a concern nameable, not just diffable.
+#
+# SHADOW MODE ITSELF STAYS. `suppressed()` below is the run mode "observe only"
+# — run everything, deliver nothing — which is a live feature and the first
+# position of the one mode switch. Deleting the diff does not touch it.
 
 def recorded() -> List[Dict[str, Any]]:
     """Every concern this shadow period stored, as dicts. Never raises.

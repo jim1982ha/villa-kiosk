@@ -154,37 +154,11 @@ def test_the_limit_is_never_stored_beside_the_counter() -> None:
 
 # ── the chat sub-ceiling ───────────────────────────────────────────────────
 
-def test_chat_has_its_own_ceiling_inside_the_same_budget() -> None:
-    """⚠️ A person can type all day; supervision cannot. Two INDEPENDENT
-    budgets could both be under while the bill is over, so this is a slice of
-    one ceiling rather than a second one."""
-    cfg = _cfg(monthly_limit=100)          # chat share -> 25
-    assert budget.chat_limit_of(cfg) == 25
-    for _ in range(25):
-        budget.spend("chat", now=JAN)
-    assert not budget.check(cfg, kind="chat", now=JAN).allowed
-    # ...and supervision is untouched.
-    assert budget.check(cfg, kind="run", now=JAN).allowed
-
-
-def test_chat_declining_says_supervision_is_unaffected() -> None:
-    cfg = _cfg(monthly_limit=4)
-    for _ in range(budget.chat_limit_of(cfg)):
-        budget.spend("chat", now=JAN)
-    reason = budget.check(cfg, kind="chat", now=JAN).reason
-    assert "Supervision is unaffected" in reason
-
-
 def test_chat_spending_counts_against_the_MAIN_ceiling_too() -> None:
     """Otherwise a conversation is free, which is the arithmetic that makes a
     budget stop meaning anything."""
     budget.spend("chat", now=JAN)
     assert budget.status(_cfg(), now=JAN)["used"] == 1
-
-
-def test_an_explicit_chat_limit_cannot_exceed_the_main_one() -> None:
-    cfg = _cfg(monthly_limit=10, chat_monthly_limit=999)
-    assert budget.chat_limit_of(cfg) == 10
 
 
 # ── check vs spend ─────────────────────────────────────────────────────────
@@ -283,3 +257,18 @@ def test_the_breaker_is_deliberately_NOT_persisted() -> None:
     import inspect
     source = inspect.getsource(budget.Breaker)
     assert "write_json" not in source and "BUDGET_FILE" not in source
+
+
+def test_chat_SPEND_is_still_counted_even_though_it_has_no_ceiling() -> None:
+    """⚠️ THE SUB-CEILING WENT IN 2.756.0; THE FIGURE DID NOT. "How much of this
+    month went on conversation" is still worth showing — what went is a third
+    ceiling nobody set, counted in a unit (requests) that spans 37x in price.
+    Dropping the counter with the limit would have removed the answer along with
+    the control, which is the shape of over-deletion dry-audit Part 2 warns
+    about."""
+    budget.spend("chat")
+    status = budget.status({})
+    assert status["chat_used"] >= 1
+    assert "chat_limit" not in status, (
+        "a ceiling nobody sets is back; two ceilings answer two questions and a "
+        "third answers neither")

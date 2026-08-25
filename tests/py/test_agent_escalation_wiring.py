@@ -33,7 +33,7 @@ from reports import usage as usage_mod  # noqa: E402
 
 DEVICE = "sensor.example_pump_power"
 
-ON: Dict[str, Any] = {"enabled": True, "shadow": False, "model_triage": "t",
+ON: Dict[str, Any] = {"enabled": True, "mode": "live", "model_triage": "t",
                       "model_reason": "r", "triggers": {"scheduled": True}}
 
 
@@ -193,7 +193,7 @@ def test_an_unreadable_cap_falls_back_rather_than_crashing_the_clock(
 
 def test_approve_mode_records_the_escalations_and_spends_nothing() -> None:
     provider = _Provider([says(_escalating(2))])
-    outcome = _run({**ON, "investigate_mode": "approve"}, provider)
+    outcome = _run({**ON, "mode": "ask"}, provider)
 
     assert "2 queued for approval" in outcome
     assert not concerns.read()
@@ -203,10 +203,14 @@ def test_approve_mode_records_the_escalations_and_spends_nothing() -> None:
     assert len(provider.calls) == 1
 
 
-def test_auto_is_the_default_because_shadow_suppresses_delivery() -> None:
+def test_observe_STILL_investigates_because_it_is_delivery_that_is_held() -> None:
     assert reason.auto({}) is True
-    assert reason.auto({"investigate_mode": "approve"}) is False
-    assert agent_config.DEFAULTS["investigate_mode"] == "auto"
+    assert reason.auto({"mode": "ask"}) is False
+    # ⚠️ "observe" INVESTIGATES. Running everything and delivering nothing is
+    # the whole point of the mode; refusing to investigate would make an
+    # observe period a record of nothing having been looked at.
+    assert reason.auto({"mode": "observe"}) is True
+    assert agent_config.DEFAULTS["mode"] == "observe"
 
 
 # ── the bounds ──────────────────────────────────────────────────────────────
@@ -304,7 +308,7 @@ def test_in_shadow_mode_the_concern_lands_in_the_shadow_store() -> None:
     provider = _Provider([
         says(_escalating(1)), asks("read_villa", {}, "tu_1"),
         _concern_call(), says("done")])
-    _run({**ON, "shadow": True}, provider)
+    _run({**ON, "mode": "observe"}, provider)
 
     assert not concerns.read(), "the live store must be untouched"
     assert len(shadow.recorded()) == 1

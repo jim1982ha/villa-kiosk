@@ -52,6 +52,17 @@ from agent import contracts
 #: ⚠️ THE SHAPE, NOT THE STORED DOCUMENT. Nothing writes this dict; it is spread
 #: UNDER a stored config at read time. Adding a key here changes what an
 #: unconfigured villa does, and changes nothing about one already configured.
+#: How deep an investigation goes: turns, and tool calls within them.
+#: ⚠️ THE ONLY PLACE THESE NUMBERS EXIST. Two free integers in the store let a
+#: villa hold a pair that cannot happen (more tool calls than turns can spend),
+#: and gave the owner two dials for one decision.
+DEPTH: Final[Dict[str, Dict[str, int]]] = {
+    "brief":    {"turns": 4,  "tool_calls": 12},
+    "normal":   {"turns": 8,  "tool_calls": 24},
+    "thorough": {"turns": 12, "tool_calls": 36},
+}
+
+
 DEFAULTS: Final[Dict[str, Any]] = {
     # ── the kill switches, and the address they gate ─────────────────────
     #: ⚠️ OFF ON A FRESH INSTALL. An add-on that begins reasoning about a villa
@@ -80,7 +91,17 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: PH-3's "run everything, deliver nothing": the concerns accumulate for the
     #: diff and reach nobody. If shadow is ever turned off while this is auto,
     #: findings start messaging people, which is the cutover and is meant to be.
-    "investigate_mode": "auto",
+    # ⚠️ ONE KEY FOR WHAT WAS TWO (2.756.0). `shadow` (bool) and
+    # `investigate_mode` ("auto"/"approve") were two stored booleans-in-disguise
+    # for ONE three-position choice, and the UI had already merged them into one
+    # control that wrote both — so two keys could disagree and nothing could say
+    # which the villa was actually in. "observe" runs everything and delivers
+    # nothing; "ask" investigates only what a person approves; "live" is normal.
+    #
+    # ⚠️ "observe" IS THE SHIPPED DEFAULT, exactly as `shadow: true` was: a
+    # villa that has just switched supervision on gets a period it can read
+    # before anything reaches a phone.
+    "mode": "observe",
     #: ⚠️ HOW MANY INVESTIGATIONS ONE PASS MAY START. A bound on the worst case
     #: rather than a judgement about which findings matter: a pass escalating
     #: six subjects would otherwise be six frontier-model runs, and this is the
@@ -117,7 +138,6 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: which is wrong by eight hours on the reference villa — so it is read from
     #: discovery where possible rather than typed.
     "timezone": "",
-    "shadow": True,
 
     # ── cadence ──────────────────────────────────────────────────────────
     "triage_minutes": 15,
@@ -125,7 +145,6 @@ DEFAULTS: Final[Dict[str, Any]] = {
 
     # ── cost ─────────────────────────────────────────────────────────────
     "monthly_limit": 4_000,
-    "chat_monthly_limit": 0,          # 0 = derive the share, see budget.py
     # ⚠️ 8 -> 4 (2.752.0), BECAUSE 8 WAS NEVER A CEILING EITHER — all eleven
     # investigations of the observed period used exactly 8 of 8, which means
     # the cap and not the task decided when to stop. The runs that have since
@@ -133,8 +152,18 @@ DEFAULTS: Final[Dict[str, Any]] = {
     # is instructed that a partial-and-labelled answer beats silence
     # (`registry.LAST_TURN_NOTE`), so a genuinely deep case degrades rather
     # than vanishing. Cost is `prefix x turns`; this is the second factor.
-    "max_turns": 4,
-    "max_tool_calls": 24,
+    # ⚠️ ONE KEY FOR WHAT WAS TWO (2.756.0), for the same reason as `mode`
+    # above. `max_turns` and `max_tool_calls` are not independent dials — they
+    # are one answer to "how deep should an investigation go", and the UI has
+    # only ever offered three presets while the store held two free integers
+    # that could contradict each other (24 tool calls across 4 turns is a cap
+    # that never binds). `DEPTH` is the table; `policy.for_run` reads it.
+    #
+    # ⚠️ "brief" IS THE MEASURED DEFAULT, not a cautious guess — see
+    # `test_agent_cost.py`. Every investigation on the reference villa used all
+    # eight of its old turns, which means the cap and not the task decided when
+    # to stop; the runs since answer in four.
+    "depth": "brief",
 
     #: How many output tokens ONE turn may produce. ⚠️ A CEILING, NOT A SPEND —
     #: billing is for tokens actually generated, so raising this costs nothing
@@ -248,7 +277,47 @@ def view(raw: Any) -> Dict[str, Any]:
             out["triggers"] = merged
             continue
         out[str(key)] = value
+
+    # ⚠️ A STORED CONFIG WRITTEN BEFORE 2.756.0 IS MIGRATED ON READ, NEVER
+    # REWRITTEN. Every villa already has `shadow` and `investigate_mode` on
+    # disk, and a straight rename would have silently reset each one to the
+    # shipped default — supervision back to "observe" on a property running
+    # live. Derived here, so an old file keeps meaning what it meant and a new
+    # write simply stops carrying the old keys.
+    #
+    # ⚠️ THE NEW KEY WINS WHERE BOTH EXIST. `mode` is what this version writes,
+    # so a file holding both was written by this version and the legacy pair is
+    # a leftover.
+    # ⚠️ ONLY WHEN THE OLD KEY IS ACTUALLY PRESENT. The first cut ran this
+    # whenever `mode` was absent from the raw document, which is true of a
+    # FRESH config too — so `out.get("shadow")` read None, fell to the else
+    # branch and produced "ask" for a villa that had never configured anything.
+    # `DEFAULTS["mode"]` is already in `out`; migration must only ever
+    # OVERRIDE it, never fill it in.
+    stored = raw if isinstance(raw, Mapping) else {}
+    if "mode" not in stored:
+        if "shadow" in stored and bool(stored.get("shadow")):
+            out["mode"] = "observe"
+        elif "investigate_mode" in stored or "shadow" in stored:
+            out["mode"] = ("live"
+                           if str(stored.get("investigate_mode", "auto")) == "auto"
+                           else "ask")
+    if "depth" not in stored:
+        turns = stored.get("max_turns")
+        if isinstance(turns, (int, float)) and not isinstance(turns, bool):
+            out["depth"] = ("brief" if turns <= 5
+                            else "thorough" if turns >= 11 else "normal")
     return out
+
+
+def depth_of(config: Any = None) -> Dict[str, int]:
+    """The turn and tool-call budget for this villa's chosen depth.
+
+    ⚠️ AN UNKNOWN VALUE FALLS BACK TO THE DEFAULT rather than raising: this is
+    read on every run, and a config someone hand-edited to `depth: "deep"` must
+    produce a working investigation, not take supervision down."""
+    chosen = str(view(config).get("depth") or "")
+    return dict(DEPTH.get(chosen) or DEPTH[str(DEFAULTS["depth"])])
 
 
 def errors(value: Any) -> List[str]:
@@ -275,6 +344,18 @@ def errors(value: Any) -> List[str]:
                 if not isinstance(on, bool):
                     problems.append(f"triggers.{name} must be true or false")
 
+    chosen = value.get("mode")
+    if chosen is not None and chosen not in ("observe", "ask", "live"):
+        problems.append("mode must be 'observe', 'ask' or 'live'")
+    depth = value.get("depth")
+    if depth is not None and depth not in DEPTH:
+        problems.append("depth must be " + ", ".join(repr(k) for k in DEPTH))
+
+    # ⚠️ THE LEGACY KEY IS STILL VALIDATED, AND NOT BY OVERSIGHT. `view()`
+    # reads it to migrate a pre-2.756.0 document, so a malformed value there
+    # would silently migrate to "ask" — supervision holding every escalation for
+    # a person on a villa that had chosen otherwise. It is validated because it
+    # is still READ, and it stops being read the day no stored document has it.
     mode = value.get("investigate_mode")
     if mode is not None and mode not in ("auto", "approve"):
         # ⚠️ REFUSED, NOT DEFAULTED — the same rule `allowed_senders` states
@@ -282,8 +363,8 @@ def errors(value: Any) -> List[str]:
         # behaviours that differ by whether the villa spends money unattended.
         problems.append("investigate_mode must be 'auto' or 'approve'")
 
-    for name in ("triage_minutes", "monthly_limit", "chat_monthly_limit",
-                 "max_turns", "max_tool_calls", "max_investigations_per_pass",
+    for name in ("triage_minutes", "monthly_limit",
+                 "max_investigations_per_pass",
                  "max_output_tokens", "daily_usd_limit"):
         if name not in value:
             continue

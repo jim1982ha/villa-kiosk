@@ -13,14 +13,56 @@
 // reads as a broken feature. The tier's real output was already being recorded
 // and was only visible on the Handover page, three clicks away under Advanced.
 //
-// ⚠️ ONE COMPONENT, TWO CALL SITES, and the pass→outcome rules stay in
-// `ShadowDiffPanel` where they are pinned (`test_pass_reason_contract.py`). A
-// second copy of "what does `nothing to escalate` mean" is exactly the drift
-// that pin exists to stop — so this imports them rather than restating them.
+// ⚠️ THE PASS→OUTCOME RULES LIVE HERE NOW (2.756.0). They were in
+// `ShadowDiffPanel`, which is deleted — its comparison could never produce a
+// comparison again once the automations were retired. This is their only
+// consumer, and `test_pass_reason_contract.py` follows them here: they parse
+// string literals that `agent/scheduler.py` and `agent/audit.py` produce, in
+// two languages, with nothing but a pin between them.
 
 import { Pager, usePaged } from "@/components/common/Paged";
-import { outcomeOf, reasonOf, subjectsOf } from "@/components/settings/ShadowDiffPanel";
 import type { TriagePass } from "@/agent/agentApi";
+
+
+/** What a pass actually did. ⚠️ THREE, NOT THE TWO THE STORE HOLDS — see the
+ *  header. `blocked` is every reason that is not one of the two the triage path
+ *  produces when it ran, which is why it is derived by exclusion: a new guard
+ *  added to `scheduler._run_once` returns a new reason string and lands here as
+ *  "could not run" without anybody remembering to update this file. */
+export type PassOutcome = "raised" | "quiet" | "blocked";
+
+export function outcomeOf(reason: string): PassOutcome {
+  if (reason.startsWith("escalated ")) return "raised";
+  if (reason === "nothing to escalate") return "quiet";
+  return "blocked";
+}
+
+/** The human half of `detail`: `audit.record_pass` joins the reason and the
+ *  numbers with " | ", and everything after the first separator is the numbers. */
+export const reasonOf = (p: TriagePass) => (p.detail || "").split(" | ")[0].trim();
+
+/** How many subjects a pass INVESTIGATED and how many concerns came back, out
+ *  of `Followup.clause` ("investigated 3, 1 concern").
+ *
+ *  ⚠️ THIS IS WHERE THE MONEY GOES AND THE PAGE WAS BLIND TO IT. An
+ *  investigation is a frontier-model run; "reached 0 of 24" reads as an
+ *  assistant that is not working, and cannot be told apart from one that
+ *  looked twenty times and correctly concluded nothing — which `reason.SYSTEM`
+ *  instructs outright ("finding nothing is a good outcome and a complete
+ *  answer"). Both numbers were already in the sentence; neither was on screen. */
+export function yieldOf(reason: string): { looked: number; raised: number } {
+  const looked = /investigated (\d+)/.exec(reason);
+  const raised = /(\d+) concerns?/.exec(reason);
+  return { looked: looked ? Number(looked[1]) : 0,
+           raised: raised ? Number(raised[1]) : 0 };
+}
+
+/** `escalated 2 (investigated 2): A, B` → `A, B`. */
+export const subjectsOf = (reason: string) => {
+  const i = reason.indexOf(": ");
+  return i < 0 ? "" : reason.slice(i + 2).trim();
+};
+
 
 export default function RecentChecks({ passes, empty, children }: {
   passes: TriagePass[];
@@ -39,8 +81,24 @@ export default function RecentChecks({ passes, empty, children }: {
 
   if (rows.length === 0) return <p className="muted body-text">{empty}</p>;
 
+  // ⚠️ THE ONE FIGURE THAT SAYS WHERE THE MONEY WENT, and it moved here in
+  // 2.756.0 when the Handover page was deleted. An investigation is a
+  // frontier-model run; "N raised" alone reads as broken and "M investigated"
+  // alone reads as busy. Together they are the honest measure, and the gap
+  // between them is a deliberate instruction (`reason.SYSTEM`: "finding
+  // nothing is a good outcome and a complete answer"), not a fault.
+  const work = rows.reduce((acc, r) => {
+    const y = yieldOf(r.reason);
+    return { looked: acc.looked + y.looked, raised: acc.raised + y.raised };
+  }, { looked: 0, raised: 0 });
+
   return (
     <>
+      {work.looked > 0 && (
+        <p className="muted body-text">
+          {work.looked} looked into, {work.raised} raised as a concern.
+        </p>
+      )}
       <Pager paged={paged} unit="check">{children}</Pager>
       {/* ⚠️ `.fm-list` — WHICH IS A FLEX COLUMN OF ROWS, NOT A BULLETED LIST.
           It was the one list class in styles.css that did not reset
