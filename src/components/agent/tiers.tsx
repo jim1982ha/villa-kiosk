@@ -25,6 +25,7 @@
 import type { ReactNode } from "react";
 import { Gauge, Sparkles, WifiOff } from "lucide-react";
 import SourceChip, { type Source } from "@/components/common/SourceChip";
+import InfoHint from "@/components/common/InfoHint";
 
 export interface Tier {
   /** The tier number from the HLD, kept because the document uses it. */
@@ -34,8 +35,14 @@ export interface Tier {
    *  technical vocabulary needs no translation, so translating it would only
    *  break the link between the screen and the document. */
   name: string;
-  /** What it does, in one sentence a person can act on. */
+  /** What it does, in ONE line a person can act on.
+   *  ⚠️ ONE LINE, NOT A PARAGRAPH. This renders directly above a facts row and
+   *  a control's own description, so three two-line blocks stack into six lines
+   *  of grey before the reader reaches a switch — reported from the screen as
+   *  the tab being hard to read. Detail goes in `more`. */
   what: string;
+  /** The rest, behind the inline (i). */
+  more?: string;
   /** How fast it answers. */
   speed: string;
   /** ⚠️ WHETHER A MODEL IS IN THE PATH — the single most important fact on the
@@ -72,35 +79,33 @@ export interface Tier {
 export const STEPS: Record<string, Tier> = {
   watched: {
     n: 1, name: "What is watched",
-    what: "The fixed checks that run over this villa's own history, and the "
-        + "automations you have installed. Each check works the same way every "
-        + "time and can be switched off.",
+    what: "Fixed checks over this villa's own history, plus your automations.",
+    more: "Each check works the same way every time and can be switched off.",
     speed: "each briefing", model: false, offline: true, source: "check",
   },
   visible: {
     n: 2, name: "What it can see",
-    what: "Whether this property actually reports the things a check needs. A "
-        + "check with nothing to read says so rather than passing quietly.",
+    what: "Whether this property reports the things a check needs.",
+    more: "A check with nothing to read says so rather than passing quietly.",
     speed: "checked live", model: false, offline: false,
   },
   brief: {
     n: 3, name: "The briefing",
-    what: "Everything found, written up in one message. Put together by the "
-        + "add-on itself — an AI only rewords the finished text, and only if "
-        + "you switch that on.",
+    what: "Everything found, written up in one message by the add-on itself.",
+    more: "An AI only rewords the finished text, and only if you switch that on.",
     speed: "on the schedule below", model: false, offline: true,
     source: "check",
   },
   sent: {
     n: 4, name: "Sending it",
-    what: "When a briefing goes out, and to whom. A record of every delivery "
-        + "is kept, including the ones that failed.",
+    what: "When a briefing goes out, and to whom.",
+    more: "A record of every delivery is kept, including the ones that failed.",
     speed: "on schedule", model: false, offline: false, source: "check",
   },
   work: {
     n: 5, name: "What it asked for",
-    what: "Jobs raised by your automations and written to a Home Assistant "
-        + "to-do list. Ticking one here records it as done everywhere.",
+    what: "Jobs your automations raised, on a Home Assistant to-do list.",
+    more: "Ticking one here records it as done everywhere.",
     speed: "as raised", model: false, offline: false, source: "reflex",
   },
 };
@@ -108,16 +113,16 @@ export const STEPS: Record<string, Tier> = {
 export const TIERS: Record<string, Tier> = {
   reflex: {
     n: 0, name: "Reflex",
-    what: "Acts on its own, in under a second, for the handful of things that "
-        + "cannot wait for anyone — a leak, smoke, a critical device dropping "
-        + "out. It does something about it; it does not write a report.",
+    what: "Acts on its own, in under a second, on the few things that cannot wait.",
+    more: "A leak, smoke, a critical device dropping out. It does something "
+        + "about it; it does not write a report.",
     speed: "under a second", model: false, offline: true, source: "reflex",
   },
   observe: {
     n: 1, name: "Observe",
-    what: "Records every meaningful change in the villa and scores it against "
-        + "what that same device normally does. No thresholds to set — each "
-        + "reading is judged against its own four weeks of history.",
+    what: "Records every meaningful change and scores it against that device's own past.",
+    more: "No thresholds to set — each reading is judged against its own "
+        + "recorded history rather than a number somebody typed in.",
     speed: "continuous", model: false, offline: true,
   },
   triage: {
@@ -127,26 +132,24 @@ export const TIERS: Record<string, Tier> = {
     // runs 360. A screen quoting a number the settings contradict is worse than
     // one that omits it, so the sentence describes the JOB and `speed` carries
     // the figure, filled in from config by whoever renders it.
-    what: "One cheap question, on a fixed cadence: is anything here worth a "
-        + "person's attention, or a closer look? It cannot act, cannot notify "
-        + "and cannot decide how serious something is — it only points.",
+    what: "One cheap question on a schedule: is anything here worth a closer look?",
+    more: "It cannot act, cannot notify and cannot decide how serious "
+        + "something is — it only points.",
     speed: "on a schedule you set", model: true, offline: false,
     source: "triage",
   },
   reason: {
     n: 3, name: "Reason",
-    what: "Investigates what triage pointed at, across everything it can read, "
-        + "and writes a conclusion with the evidence behind it. This is the "
-        + "only part that decides how serious something is.",
+    what: "Investigates what triage pointed at, and writes a conclusion with evidence.",
+    more: "This is the only part that decides how serious something is.",
     speed: "when something is escalated", model: true, offline: false,
     source: "agent",
   },
   act: {
     n: 4, name: "Act & Tell",
-    what: "Decides who is told, on what channel, and whether the villa is "
-        + "allowed to do anything about it. Deliberately not a judgement — a "
-        + "fixed table — because deciding who to wake at 3am should not be a "
-        + "model's call.",
+    what: "Decides who is told, how, and whether the villa may act.",
+    more: "Deliberately a fixed table rather than a judgement, because "
+        + "deciding who to wake at 3am should not be a model's call.",
     speed: "immediate", model: false, offline: true, source: "agent",
   },
 };
@@ -180,7 +183,12 @@ export function TierIntro({ tier, speed, children }: {
             fixed home whatever the heading says. */}
         {tier.source && <SourceChip source={tier.source} className="tier-chip" />}
       </div>
-      <p className="muted body-text">{tier.what}</p>
+      <p className="muted body-text">
+        {tier.what}
+        {tier.more
+          ? <InfoHint label={tier.name}>{tier.more}</InfoHint>
+          : null}
+      </p>
       {/* ⚠️ ICONS, NOT WORDS, SO THE THREE ALWAYS SHARE ONE ROW. "Speed",
           "Uses AI" and "Works offline" are longer than several of the VALUES
           they head, so at any realistic width the row wrapped and the third

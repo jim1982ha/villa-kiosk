@@ -347,8 +347,18 @@ async def occupancy_now(session: Any) -> Optional[bool]:
     if session is None:
         return None
     try:
-        from reports import hass
-        states = await hass.get_states(session)
+        # ⚠️ `HassClient(session).command("get_states")`, WHICH IS HOW EVERY
+        # OTHER CALLER IN THIS REPOSITORY ASKS. The first version called
+        # `hass.get_states(session)` — a module-level function that has never
+        # existed — so this raised `AttributeError` on EVERY sweep, was
+        # swallowed, and occupancy has been `None` since the outbox was
+        # written. `None` means "cannot tell" and `route.holds_until_morning`
+        # delivers on it, so nothing was held that should have gone; what was
+        # lost is the ability to hold anything BACK for an empty villa, and
+        # `guests_present` was false for every routing decision ever made.
+        from reports.hass import HassClient
+        async with HassClient(session) as client:
+            states = await client.command("get_states")
     except Exception as err:  # noqa: BLE001 - a sweep is not worth a failed pass
         swallow("could not read occupancy", err)
         return None

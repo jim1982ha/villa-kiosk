@@ -183,3 +183,20 @@ def test_prose_beside_a_control_is_ALSO_two_lines() -> None:
     assert not bad, ("prose beside a control, longer than two lines — shorten "
                      "it and move the rest into an <InfoHint>:\n  "
                      + "\n  ".join(bad))
+
+
+def test_a_step_header_is_ONE_line_with_the_rest_behind_the_hint() -> None:
+    """⚠️ THREE GREY BLOCKS STACKED IS WHAT WAS REPORTED, NOT ONE LONG ONE. A
+    step tab renders the tier description, then a facts row, then the control's
+    own note — so two-line descriptions became six lines of grey before the
+    reader reached a switch. Each is short enough alone and the STACK is the
+    defect, which is why this measures the header specifically."""
+    src = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    longest = max(len(re.sub(r"\s+", " ", m))
+                  for m in re.findall(r'what:\s*"([^"]*)"', src))
+    assert longest <= 90, (
+        f"a step description is {longest} chars — it wraps to two lines above "
+        "a facts row and a control note; shorten it and use `more`")
+    assert "more?" in src and "InfoHint" in src, (
+        "TierIntro offers no hint, so shortening `what` would delete detail "
+        "rather than move it")

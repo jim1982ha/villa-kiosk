@@ -86,9 +86,16 @@ class RaiseConcern(BaseTool):
                       "description": "One short line naming the subject and "
                                      "the problem, as it will appear in a list."},
             "body": {"type": "string",
-                     "description": "What is wrong, what it rests on, and what "
-                                    "a person should do. Cite only figures you "
-                                    "read from a tool in this run."},
+                     "description": "AT MOST THREE SHORT SENTENCES, read on a "
+                                    "phone: what is wrong, the single figure "
+                                    "that shows it, and what to do. Do not "
+                                    "narrate the investigation, list every "
+                                    "reading, or explain what you could not "
+                                    "check — the evidence rows already hold "
+                                    "all of that and a person can open them. "
+                                    "Cite only figures you read from a tool in "
+                                    "this run; anything else is removed and "
+                                    "leaves a visible gap in your sentence."},
             "severity": {"type": "string", "enum": list(contracts.SEVERITY),
                          "description": "How urgently a person should look. "
                                         "There is no default — choose one."},

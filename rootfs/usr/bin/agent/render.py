@@ -44,7 +44,16 @@ from typing import Any, Dict, List, Mapping, Sequence
 #: That is the tool's job to fix (TASK-113: return the count, so the number IS
 #: evidence), not this checker's.
 READING_UNITS = (r"%|W|kW|kWh|V|A|°C|°F|IDR|EUR|USD|L|L/min|bar")
-DERIVED_UNITS = (r"hours?|hrs?|minutes?|mins?|days?|times?|starts?")
+#: ⚠️ `sigma` AND `n` JOINED THE DERIVED LIST FOR THE REASON ABOVE, NOT AS A
+#: LOOSENING. A sigma is arithmetic the model performs over salience's own
+#: median and spread; it is not a value the villa measured, so no evidence row
+#: can ever contain it and demanding one strips a correct figure. Measured on a
+#: delivered message: "((unsourced figure removed) sigma, n=144)" reached the
+#: owner's phone mid-sentence. Same defect the counts note records, one class
+#: further along — and the same argument decides it: the failure mode for a
+#: derived number is ARITHMETIC, which a citation check cannot catch anyway.
+DERIVED_UNITS = (r"hours?|hrs?|minutes?|mins?|days?|times?|starts?"
+                 r"|sigma|σ|n")
 
 FIGURE = re.compile(
     r"(?<![\w.])"
