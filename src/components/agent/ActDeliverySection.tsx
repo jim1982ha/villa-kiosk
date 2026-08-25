@@ -16,7 +16,6 @@
 // already wraps them in.
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
-import ToggleField from "@/components/common/ToggleField";
 import InfoHint from "@/components/common/InfoHint";
 import ActuableDevicesPanel from "@/components/settings/ActuableDevicesPanel";
 
@@ -32,30 +31,14 @@ export default function ActDeliverySection() {
 
   return (
     <>
-      {/* ⚠️ OWNERSHIP FIRST, TIMING SECOND, BY THE OWNER'S OWN ORDERING. This
-          tab reads top-down as one question narrowing: WHO decides what is
-          worth saying, then WHAT it may touch, then WHEN it may reach you. The
-          quiet window used to lead, which put a preference about sleep above
-          the switch that decides whether the assistant speaks for the villa at
-          all. */}
-      <h3 className="settings-section-title">Who decides what is worth saying</h3>
-      <ToggleField
-        checked={c.agentOwnsAnalysis === true}
-        disabled={ctx.saving}
-        onChange={(agentOwnsAnalysis) => edit({ agentOwnsAnalysis })}
-        label="Let the assistant decide, not your automations"
-        note="Turn this on once the assistant is the one you rely on."
-        more={<>
-          Off, a built-in check steps aside whenever one of your automations
-          covers the same ground — installed is taken as doing the job. That is
-          right while you still run them, and wrong once you have retired them:
-          a switched-off rule is still installed, so it keeps its replacement
-          switched off too, permanently.{" "}
-          <strong>This does not double anything up.</strong> If one of your
-          automations does report something, the assistant's version of that
-          same device is still dropped in favour of yours, every time.
-        </>}
-      />
+      {/* ⚠️ "WHO DECIDES WHAT IS WORTH SAYING" WAS DELETED IN 2.755.0, AND
+          THE ANSWER IS NOW THE HEADER SWITCH. It held one toggle,
+          `agent_owns_analysis`, whose only job was to override a stand-down
+          that no longer exists — a second master switch beside the real one,
+          which is how an owner ends up with supervision ON and detection OFF
+          and no screen able to say so. Supervision on means the assistant
+          supersedes the automations; off means they do the job. One control,
+          in the header, visible from every tab. */}
       <h3 className="settings-section-title">When it may interrupt you</h3>
       <p className="muted body-text">
         Inside this window the villa holds anything that can wait until morning.

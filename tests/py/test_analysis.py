@@ -82,6 +82,13 @@ def _context(inventory_ids: Sequence[str], series: Dict[str, Any],
         "capabilities": ["statistics", "energy_devices"],
         "inventory": {"energy": {"devices": list(inventory_ids)}},
         "settings": {}, "min_history_days": 14, "stats": fetch, "labels": {},
+        # ⚠️ ON BY DEFAULT HERE, because every test in this file is about
+        # something OTHER than the supersede switch — history, capabilities,
+        # audience, failure counts. Leaving it False would stand the module
+        # down for the one reason none of them is testing, and each would fail
+        # for a true-but-irrelevant reason. The switch itself is tested in
+        # `test_dedupe.py`, both ways.
+        "supervision_enabled": True,
     }
     base.update(kw)
     return ModuleContext(**base)
@@ -683,55 +690,9 @@ def _ctx(**kw):
         "capabilities": ["statistics", "energy_devices", "blueprint_layer"],
         "inventory": {}, "settings": {}, "min_history_days": 14,
         "stats": lambda *a, **k: [], "labels": {},
-        "silent_blueprints": (), "installed_blueprints": (),
-        "heard_nothing_for_days": 200.0,
+        "supervision_enabled": True,
     }
     base.update(kw)
     return ModuleContext(**base)
 
 
-def test_a_RETIRED_covering_blueprint_does_not_stand_a_check_down() -> None:
-    """⚠️ THE DEFECT THE CUTOVER WOULD HAVE HIT ON DAY ONE. `silent_blueprints`
-    is installed-minus-seen, so a DELETED blueprint drops out of it exactly as a
-    healthy one does — and the gate read that emptiness as "the covering rule is
-    alive", leaving the replacement check switched off and printing "your own
-    automations already cover this" about a rule that no longer existed.
-
-    Not for 45 days: FOREVER, because the grace window is only reached by a
-    blueprint that is still installed. Retiring `maintenance_silence` would have
-    permanently disabled `sensor_health`, the check meant to replace it."""
-    from reports.analysis import registry
-
-    # The layer still exists — `critical_*` keeps emitting — but the covering
-    # rule has been retired.
-    runs, _, _ = registry.gate(_gated_module(), _ctx(
-        installed_blueprints=("critical_binary_trip", "critical_watchdog")),
-        {}, 90)
-    assert runs, (
-        "the built-in check stayed down for a blueprint that is not installed; "
-        "retiring a rule would disable its own replacement")
-
-
-def test_an_INSTALLED_covering_blueprint_still_stands_the_check_down() -> None:
-    """⚠️ THE OTHER HALF, AND IT MUST NOT REGRESS. On a property whose own
-    automations do cover this, running the built-in module duplicates them and
-    duplicates them worse — five false positives in one week on the reference
-    villa is what put this stand-down here."""
-    from reports.analysis import registry
-
-    runs, why, _ = registry.gate(_gated_module(), _ctx(
-        installed_blueprints=("maintenance_silence", "critical_watchdog")),
-        {}, 90)
-    assert not runs and why == "missing_capability"
-
-
-def test_an_unknown_installed_list_changes_nothing() -> None:
-    """⚠️ EMPTY MEANS "CANNOT SAY", NOT "NONE INSTALLED" — `collect.state`
-    returns an empty list when the blueprint fetch fell back, and its own
-    comment says nothing may be concluded from it. Reversing a stand-down on
-    that would duplicate findings on every property with a broken fetch."""
-    from reports.analysis import registry
-
-    runs, why, _ = registry.gate(_gated_module(), _ctx(installed_blueprints=()),
-                                 {}, 90)
-    assert not runs and why == "missing_capability"

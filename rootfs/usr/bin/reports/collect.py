@@ -98,7 +98,7 @@ def _stems_from_blueprints(listing: Any) -> List[str]:
     three pump findings in a single brief — while `maintenance_silence` had
     `last_triggered: null` on all four of its instances, and the brief reported
     "your own automations already cover this" about a rule that had never
-    reported anything in its life. See `silent_blueprints` in `state()`.
+    reported anything in its life.
 
     ⚠️ KEYED ON THE BLUEPRINT, NEVER ON THE AUTOMATION. An automation instance
     is named by whoever filled the form — `roi_idle_load---living_room_ac` on
@@ -186,7 +186,7 @@ async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
     ⚠️ RETURNS THE INSTALLED BLUEPRINTS TOO, and that second value is not
     decoration. It is what tells the rest of the subsystem that this property
     HAS a detection layer — see `blueprint_layer_present` — and, per blueprint,
-    which parts of that layer have ever actually reported (`silent_blueprints`).
+    which event types it emits.
     An empty list means the fallback was used, so nothing may be concluded
     from it.
     """
@@ -237,8 +237,6 @@ def read_buffer() -> Dict[str, Any]:
         # Which BLUEPRINTS have produced an event, by stem, cumulative. Same
         # shape and same purpose as `seen_types` one level finer — see
         # `_stems_from_blueprints` for why the coarser one was not enough.
-        "seen_blueprints": (raw.get("seen_blueprints")
-                            if isinstance(raw.get("seen_blueprints"), dict) else {}),
         "online_since": raw.get("online_since") or "",
         "last_seen": raw.get("last_seen") or "",
         "offline_seconds": raw.get("offline_seconds") or 0,
@@ -382,15 +380,6 @@ def state() -> Dict[str, Any]:
         # unmentioned in every brief. This is what `registry.gate` reads to stop
         # claiming coverage it cannot demonstrate.
         #
-        # ⚠️ CUMULATIVE, NOT PER-PERIOD, AND DELIBERATELY SO. "Has never
-        # reported since this add-on started listening" is a statement about
-        # the RULE; "did not report this week" is a statement about the week,
-        # and a well-run villa has many quiet weeks. Only the first is evidence
-        # that a stand-down is unproven.
-        "silent_blueprints": sorted(
-            s for s in buffer["blueprint_names"]
-            if not buffer["seen_blueprints"].get(s)
-        ),
         "last_event_at": events[-1].get("at") if events else "",
     }
 
@@ -442,25 +431,13 @@ class Collector:
             buffer = read_buffer()
             events = list(buffer["events"]) + self._pending
             seen = dict(buffer["seen_types"])
-            by_blueprint = dict(buffer["seen_blueprints"])
             for entry in self._pending:
                 name = entry["type"]
                 if name:
                     seen[name] = int(seen.get(name, 0)) + 1
-                # ⚠️ THE BLUEPRINT NAMES ITSELF IN ITS OWN EVENT DATA, and that
-                # is the only trustworthy source. The automation INSTANCE is
-                # named by whoever filled the form and differs per property;
-                # `data["blueprint"]` is the file, which is the same everywhere
-                # it is installed. An event without it counts toward its type
-                # and toward no blueprint, which is honest — a rule using an
-                # older payload shape is exactly what `schema_drift` reports.
-                stem = str(entry["data"].get("blueprint") or "").strip().lower()
-                if stem:
-                    by_blueprint[stem] = int(by_blueprint.get(stem, 0)) + 1
             store.write_json(store.REPORTS_EVENTS_FILE, {
                 "events": events[-MAX_EVENTS:],
                 "seen_types": seen,
-                "seen_blueprints": by_blueprint,
                 "online_since": buffer["online_since"] or _now(),
                 "last_seen": _now(),
                 "offline_seconds": buffer["offline_seconds"],
@@ -501,7 +478,6 @@ class Collector:
             store.write_json(store.REPORTS_EVENTS_FILE, {
                 "events": buffer["events"],
                 "seen_types": buffer["seen_types"],
-                "seen_blueprints": buffer["seen_blueprints"],
                 "online_since": buffer["online_since"] or _now(),
                 "last_seen": buffer["last_seen"],
                 "offline_seconds": buffer["offline_seconds"],
@@ -574,27 +550,6 @@ class Collector:
             except Exception as err:  # noqa: BLE001
                 swallow("collector error", err)
             await asyncio.sleep(retry_seconds)
-
-
-def listening_days() -> Optional[float]:
-    """How long the collector has been listening, in days. None if it cannot say.
-
-    ⚠️ FROM `online_since`, WHICH PERSISTS ACROSS RESTARTS — the point is total
-    observation time, not this process's uptime. `connected_since` is the
-    in-memory liveness field and would answer a different question badly: a
-    restart would reset the grace window in `registry.gate` and a property that
-    reboots weekly would never accumulate enough silence to conclude anything.
-    """
-    online_since = str(read_buffer().get("online_since") or "")
-    if not online_since:
-        return None
-    try:
-        started = datetime.fromisoformat(online_since)
-    except ValueError:
-        return None
-    if started.tzinfo is None:
-        started = started.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - started).total_seconds() / 86400.0
 
 
 def connected_seconds() -> float:

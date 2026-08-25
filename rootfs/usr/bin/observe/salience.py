@@ -340,7 +340,7 @@ def unscorable(scored: Sequence[Salience]) -> List[Salience]:
     ⚠️ A FIRST-CLASS RESULT, NOT A LEFTOVER. "I could not assess 40 of your
     devices and here is why" is one of the most useful sentences this system can
     produce, and it is the honest half of a coverage claim — the current
-    pipeline's inability to say it is what `covered_but_silent` was invented to
-    paper over.
+    pipeline's inability to say it is what the old blueprint stand-down papered
+    over (deleted in 2.755.0).
     """
     return [s for s in scored if s.score is None]

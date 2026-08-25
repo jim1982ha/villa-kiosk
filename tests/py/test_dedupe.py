@@ -1,25 +1,23 @@
-"""Both detection layers run; the report prints each thing once.
+"""One switch decides which layer detects, and the report prints each thing once.
 
-⚠️ WHAT THIS REPLACES. A covering blueprint being INSTALLED used to switch a
-whole built-in check off, unconditionally and forever. Two consequences, and the
-second was invisible:
+⚠️ THIS FILE USED TO TEST A SIX-OUTCOME GATE AND MOST OF IT WAS DELETED IN
+2.755.0. The rule was: a covering blueprint stands a built-in check down while
+it is installed, unless it has never fired, unless it has been silent longer
+than a 45-day grace window measured from when the collector started listening,
+unless an operator override flag is set. Every branch was individually
+defensible. Together they were unstatable, and one of them could never be
+reached — `seen_blueprints` never decayed, so a blueprint switched OFF but still
+installed counted as live coverage forever and the grace window sat behind a
+return that always fired first.
 
-  * A property that imported the VESTA blueprint pack and built NO automations
-    from it stood every check down while nothing could ever fire — the
-    brand-new deployment detecting nothing at all.
-  * A rule watching four of a property's five pumps left the fifth unreported by
-    ANYONE, because the check that would have caught it was off property-wide.
+The owner replaced the whole thing with one sentence: supervision ON means the
+assistant supersedes the automations; supervision OFF means the automations do
+the job. There is no grace window, no installed test, no silence test and no
+second flag.
 
-Now both layers run and the pipeline drops a built-in finding whose SUBJECT the
-blueprint layer also reported. The blueprint always wins: it sees occupancy,
-schedules and tariffs a statistical module cannot, which is the same reason the
-stand-down existed.
-
-⚠️ THE STAND-DOWN IS NOT GONE, AND MUST NOT BE. While the covering rule is
-speaking, the check stays down — running it would put back the five false
-positives in one week that `level_anomaly` produced on the reference villa.
-Only the UNCONDITIONAL half is gone, and only after `BLUEPRINT_GRACE_DAYS` of
-silence measured from when the collector started listening.
+What is still tested here is the part that was never about the gate: both layers
+compute `subject_key` the same way, so the two can recognise the same equipment
+without either holding an identifier.
 """
 
 from __future__ import annotations
@@ -114,46 +112,6 @@ def test_every_module_sets_a_subject_key() -> None:
 
 # ── the deduplication ────────────────────────────────────────────────────────
 
-def test_a_finding_the_blueprint_layer_also_reported_is_dropped() -> None:
-    kept, dropped = pipeline_mod._without_blueprint_subjects(
-        [_finding(PUMP)], _Group(PUMP).subject_keys)
-    assert dropped == 1 and kept == []
-
-
-def test_a_finding_about_a_device_nobody_watches_survives() -> None:
-    """⚠️ THE CASE THE OLD ARRANGEMENT COULD NOT REACH. A rule watching four of
-    five pumps left the fifth unreported by anyone, because the check that would
-    have caught it was switched off property-wide."""
-    kept, dropped = pipeline_mod._without_blueprint_subjects(
-        [_finding(OTHER)], _Group(PUMP).subject_keys)
-    assert dropped == 0 and len(kept) == 1
-
-
-def test_a_group_covering_several_devices_suppresses_all_of_them() -> None:
-    """`maintenance_silence` fires with every silent entity in one payload."""
-    subjects = _Group(PUMP, OTHER, "light.hall").subject_keys
-    kept, dropped = pipeline_mod._without_blueprint_subjects(
-        [_finding(PUMP), _finding(OTHER)], subjects)
-    assert dropped == 2 and kept == []
-
-
-def test_a_finding_with_no_subject_is_never_dropped() -> None:
-    """⚠️ STATED RATHER THAN LEFT TO THE COMPARISON. An empty string matches
-    nothing today; a future finding that forgets its subject must not become
-    silently droppable if that ever changes."""
-    bare = Finding(ref="d0", kind="OBSERVATION", severity="info",
-                   label="x", detail="y").as_dict()
-    kept, dropped = pipeline_mod._without_blueprint_subjects(
-        [bare], _Group(PUMP).subject_keys)
-    assert dropped == 0 and kept == [bare]
-
-
-def test_no_blueprint_activity_drops_nothing() -> None:
-    findings = [_finding(PUMP), _finding(OTHER)]
-    kept, dropped = pipeline_mod._without_blueprint_subjects(findings, set())
-    assert dropped == 0 and kept == findings
-
-
 def test_the_subject_key_does_not_reach_the_narration_payload() -> None:
     """⚠️ IT IS A HASH AND IT STILL DOES NOT TRAVEL. `payload.build` loops over
     the ALLOW-LIST rather than over the input, so a field is admitted only by
@@ -174,88 +132,27 @@ def test_the_subject_key_does_not_reach_the_narration_payload() -> None:
 
 # ── the gate ─────────────────────────────────────────────────────────────────
 
-def test_a_speaking_blueprint_still_stands_its_module_down() -> None:
-    """⚠️ THE HALF THAT MUST NOT CHANGE. Running a statistical check beside a
-    blueprint that is actively reporting is how the reference villa got five
-    false positives in one week."""
-    ok, _, detail = registry.gate(
-        _module("sensor_health"),
-        _context(silent_blueprints=[], heard_nothing_for_days=999.0), {}, 60)
-    assert ok is False
-    assert detail == "your own automations already cover this"
-
-
-def test_a_silent_blueprint_within_the_grace_window_still_stands_it_down() -> None:
-    """A listener that came up recently has no standing to call a monthly rule
-    silent, so the conservative answer holds and the brief says which rule."""
-    ok, reason, detail = registry.gate(
-        _module("sensor_health"),
-        _context(silent_blueprints=["maintenance_silence"],
-                 heard_nothing_for_days=3.0), {}, 60)
-    assert ok is False
-    # ⚠️ THE DETAIL IS THE BLUEPRINT NAME, NOT A SENTENCE (2.578.0). The brief
-    # gathers these under one sub-heading and writes the explanation once.
-    assert reason == "covered_but_silent"
-    assert detail == "Maintenance silence"
-
-
-def test_a_long_silent_blueprint_lets_its_module_run() -> None:
-    """⚠️ THIS IS THE FRESH-INSTALL FIX. Pack imported, no automations built,
-    nothing can ever fire — and the check used to stay off forever."""
+@pytest.mark.parametrize("module_name", ["sensor_health", "standby_creep",
+                                         "level_anomaly"])
+def test_every_superseded_module_can_still_be_reached(module_name: str) -> None:
+    """⚠️ EVERY superseded module, not one — the rule must reach all three or a
+    cutover switches one check on and leaves the others dark."""
     ok, reason, _ = registry.gate(
-        _module("sensor_health"),
-        _context(silent_blueprints=["maintenance_silence"],
-                 heard_nothing_for_days=registry.BLUEPRINT_GRACE_DAYS + 1), {}, 60)
-    assert ok is True, f"still refused: {reason}"
-
-
-def test_an_unknown_listening_time_leaves_the_stand_down_in_place() -> None:
-    """None means the collector cannot say — never "long enough"."""
-    ok, _, _ = registry.gate(
-        _module("sensor_health"),
-        _context(silent_blueprints=["maintenance_silence"],
-                 heard_nothing_for_days=None), {}, 60)
-    assert ok is False
-
-
-def test_the_grace_outlasts_the_longest_cadence() -> None:
-    """⚠️ A MONTHLY BRIEF IS 31 DAYS. A rule that legitimately fires once a
-    month must not be declared silent by a check that waited three weeks."""
-    assert registry.BLUEPRINT_GRACE_DAYS > 31
-
-
-def test_the_grace_is_measured_from_the_listener_not_the_process() -> None:
-    """⚠️ `online_since` PERSISTS ACROSS RESTARTS and `connected_since` does
-    not. Measuring from the process would reset the window on every reboot, and
-    a property that restarts weekly would never accumulate enough silence to
-    conclude anything."""
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
-                               "collect.py"), encoding="utf-8").read()
-    body = re.search(r"def listening_days\(\).*?\n\n\n", source, re.DOTALL)
-    assert body, "listening_days moved — this test is blind"
-    # ⚠️ COMMENTS STRIPPED FIRST. The docstring EXPLAINS why `connected_since`
-    # is the wrong field, so a bare substring search finds the word it is
-    # asserting the absence of, inside the sentence explaining the absence —
-    # the third time this session, and exactly /dry-audit step 7's shape.
-    code = re.sub(r'""".*?"""', "", body.group(0), flags=re.DOTALL)
-    code = re.sub(r"^\s*#.*$", "", code, flags=re.MULTILINE)
-    assert "online_since" in code
-    assert "connected_since" not in code
+        _module(module_name), _context(supervision_enabled=True), {}, 999)
+    assert ok is True, f"{module_name} refused with {reason}"
 
 
 @pytest.mark.parametrize("module_name", ["sensor_health", "standby_creep",
                                          "level_anomaly"])
-def test_every_superseded_module_can_still_be_reached(module_name: str) -> None:
-    """A module whose covering blueprint is silent long enough must become
-    runnable — otherwise the grace window applies to one check and the others
-    stay dark on a fresh install."""
-    module = _module(module_name)
+def test_supervision_OFF_hands_the_job_back_to_the_automations(
+        module_name: str) -> None:
+    """The other half of the one rule, and it must be symmetric: nothing else
+    may make a covered check run or stand down."""
     ok, reason, _ = registry.gate(
-        _module(module_name),
-        _context(silent_blueprints=list(module.superseded_by),
-                 heard_nothing_for_days=registry.BLUEPRINT_GRACE_DAYS + 1),
-        {}, 999)
-    assert ok is True, f"{module_name} refused with {reason}"
+        _module(module_name), _context(supervision_enabled=False), {}, 999)
+    assert ok is False and reason == "superseded", (
+        f"{module_name} stood down for {reason!r}, not for the one reason "
+        "there is")
 
 
 def test_the_silent_cover_skip_reaches_the_renderer_with_its_own_code() -> None:
@@ -267,10 +164,9 @@ def test_the_silent_cover_skip_reaches_the_renderer_with_its_own_code() -> None:
     """
     module = _module("sensor_health")
     ok, reason, detail = registry.gate(
-        module, _context(silent_blueprints=["maintenance_silence"],
-                         heard_nothing_for_days=3.0), {}, 60)
+        module, _context(supervision_enabled=False), {}, 60)
     assert ok is False
-    assert reason == "covered_but_silent", (
+    assert reason == "superseded", (
         "the gate no longer marks this skip as its own kind, so the renderer "
         "cannot group it without parsing English")
     assert detail == "Maintenance silence", (
@@ -279,7 +175,7 @@ def test_the_silent_cover_skip_reaches_the_renderer_with_its_own_code() -> None:
 
     described = registry.describe_skips([{"module": module.name,
                                           "reason": reason, "detail": detail}])
-    assert described[0]["code"] == "covered_but_silent", (
+    assert described[0]["code"] == "superseded", (
         "describe_skips drops the raw code, so the renderer sees only prose")
 
 
@@ -303,3 +199,92 @@ def test_the_two_keys_share_one_hash_expression() -> None:
     # And the observable property the convergence exists to preserve.
     for subject in ("sensor.a", "", "pump-01", "x" * 500):
         assert base.dedup_key("mod", subject) == f"mod:{base.subject_key(subject)}"
+
+
+# ── the rule cannot grow back ────────────────────────────────────────────────
+def test_the_gate_asks_ONE_question_and_the_machinery_is_GONE() -> None:
+    """⚠️ THE POINT OF 2.755.0 WAS THE DELETION, so the deletion is what is
+    pinned. Every name below was a live input to the old six-outcome gate, and
+    every one of them is the kind of thing that comes back one plausible commit
+    at a time: a grace window "just for the monthly rules", an installed check
+    "so a fresh install is not noisy", an override flag "for the transition".
+
+    The rule an owner was given is one sentence. If a future change needs more
+    than `supervision_enabled` to decide whether a check runs, it is not a
+    refinement of this rule — it is a different rule, and it needs saying out
+    loud rather than accreting.
+    """
+    src = inspect.getsource(registry.gate)
+    for gone in ("installed_blueprints", "silent_blueprints",
+                 "heard_nothing_for_days", "agent_owns_analysis",
+                 "BLUEPRINT_GRACE_DAYS", "blueprint_layer"):
+        assert gone not in src, (
+            f"the gate consults {gone} again; the rule is supervision on/off "
+            "and nothing else")
+    assert src.count("return (False,") == 1 or "superseded" in src, (
+        "the gate grew a second way to stand a check down")
+
+
+def test_nothing_in_the_tree_still_reads_the_deleted_machinery() -> None:
+    """⚠️ A DELETION IS NOT DONE WHILE A CALLER SURVIVES. tsc and pytest both
+    pass with a dead helper sitting in a module nobody imports, and the next
+    reader takes its presence as evidence it is used."""
+    import os
+    roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin"),
+             os.path.join(REPO_ROOT, "src")]
+    dead = ("BLUEPRINT_GRACE_DAYS", "covered_but_silent", "agent_owns_analysis",
+            "agentOwnsAnalysis", "_without_blueprint_subjects",
+            "_blueprint_subjects", "seen_blueprints", "listening_days")
+    offenders = []
+    for root in roots:
+        for base, _dirs, files in os.walk(root):
+            if "__pycache__" in base or "node_modules" in base:
+                continue
+            for name in files:
+                if not name.endswith((".py", ".ts", ".tsx")):
+                    continue
+                path = os.path.join(base, name)
+                with open(path, "r", encoding="utf-8") as handle:
+                    body = handle.read()
+                # ⚠️ CODE ONLY, AND BLOCKS ARE STRIPPED AS BLOCKS. A line filter
+                # keyed on the first character passed the OPENING line of every
+                # JSX and docstring comment and then flagged its continuation
+                # lines, which start with an ordinary word — the same trap that
+                # has now produced a false pin three times in this repo. The
+                # comments recording this deletion name it deliberately, and
+                # dry-audit Part 2 says a record of an answered question stays.
+                body = re.sub(r"/\*[\s\S]*?\*/", "", body)
+                body = re.sub(r'"""[\s\S]*?"""', "", body)
+                for n, line in enumerate(body.splitlines(), 1):
+                    if line.lstrip().startswith(("#", "//")):
+                        continue
+                    for token in dead:
+                        if token in line:
+                            offenders.append(
+                                f"{os.path.relpath(path, REPO_ROOT)}:{n} {token}")
+    assert not offenders, "deleted machinery still referenced in code:\n" + \
+        "\n".join(offenders)
+
+
+def test_the_pipeline_reads_the_MASTER_SWITCH_and_not_a_constant() -> None:
+    """⚠️ FOUND BY MUTATION, NOT BY REVIEW. Replacing the pipeline's
+    `supervision_enabled=bool(agent_cfg.get("enabled"))` with a literal `False`
+    left all 1,877 tests green — every gate test builds its own context, so
+    nothing checked that the one production caller passes the real value. The
+    whole rule would have been correct and the villa would have stood every
+    covered check down forever.
+
+    That is `feedback_pin-the-caller`, and this repo's `two correct halves`
+    defect for the fourteenth time: the helper is tested, the call is not.
+    """
+    src = inspect.getsource(pipeline_mod)
+    call = re.search(r"supervision_enabled=([^,\n]+)", src)
+    assert call, "the pipeline no longer passes supervision_enabled at all"
+    reads = [m.group(1) for m in re.finditer(r"supervision_enabled=([^,\n]+)", src)]
+    assert any('agent_cfg.get("enabled")' in r for r in reads), (
+        "the pipeline passes something other than the villa's master switch: "
+        f"{reads}")
+    for r in reads:
+        assert r.strip() not in ("False", "True"), (
+            f"supervision_enabled is hard-coded to {r.strip()} somewhere in the "
+            "pipeline, so the switch decides nothing")

@@ -41,7 +41,6 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 from reports import aggregate as agg                              # noqa: E402
 from reports.narrate import DeterministicNarrator, ReportContext  # noqa: E402
 from reports.narrate.deterministic import _amount                 # noqa: E402
-from reports.analysis.registry import BLUEPRINT_GRACE_DAYS      # noqa: E402
 from reports.narrate.style import name_of                         # noqa: E402
 
 #: Verbatim from `ha_get_automation_traces` on the reference villa, 08:00 scan.
@@ -469,10 +468,10 @@ def test_the_brief_says_facility_manager_not_caretaker() -> None:
 SILENT_SKIPS = [
     {"module": "level_anomaly", "title": "Unusual consumption for the day of week",
      "reason": "Roi baseline deviation", "detail": "Roi baseline deviation",
-     "code": "covered_but_silent"},
+     "code": "superseded"},
     {"module": "sensor_health", "title": "Meters that stopped reporting",
      "reason": "Maintenance silence", "detail": "Maintenance silence",
-     "code": "covered_but_silent"},
+     "code": "superseded"},
     {"module": "standby_creep", "title": "Equipment drawing more at rest",
      "reason": "your own automations already cover this",
      "detail": "your own automations already cover this",
@@ -494,15 +493,16 @@ def test_silent_cover_skips_are_gathered_under_one_heading() -> None:
 
 
 def test_the_shared_sentence_is_written_once() -> None:
-    """⚠️ ANCHORED ON THE CONSTANT, NOT ON THE PROSE. This test named the
-    sentence verbatim and the sentence has now been reworded twice on owner
-    feedback — the second time as "very bad details, barely understandable" —
-    so the test had to be edited each time to keep saying what it always meant.
-    The grace period is the one thing the note MUST state and cannot state
-    twice, and it comes from the module that owns it."""
+    """⚠️ ONE EXPLANATION FOR THE WHOLE GROUP, NOT ONE PER LINE. The note used
+    to be anchored on `BLUEPRINT_GRACE_DAYS` because the number was the one
+    thing it had to state exactly once. That number is gone — 2.755.0 deleted
+    the grace window, and with it a promise the gate could never keep ("after
+    45 days the check runs anyway", behind a return that always fired first).
+    What must still hold is that the group explains itself ONCE."""
     body = _render([AUDIT_EVENT], skipped=SILENT_SKIPS)
-    assert body.count(f"{BLUEPRINT_GRACE_DAYS} days") == 1
-    assert "which has not reported since it was installed" not in body
+    assert body.count("supervision is off") == 1
+    assert "days" not in body.split("never reported")[1], (
+        "the note is promising a waiting period again; there is none")
 
 
 def test_the_grouping_reads_the_code_not_the_sentence() -> None:
@@ -511,7 +511,7 @@ def test_the_grouping_reads_the_code_not_the_sentence() -> None:
     SKIP_REASON value and is pinned across both artefacts by
     `test_contract_parity`."""
     from reports.contracts import SKIP_REASON
-    assert "covered_but_silent" in SKIP_REASON
+    assert "superseded" in SKIP_REASON
     reworded = [{**s, "detail": "totally different words", "reason": "x"}
                 if s["code"] == "covered_but_silent" else s for s in SILENT_SKIPS]
     body = _render([AUDIT_EVENT], skipped=reworded)
@@ -548,6 +548,6 @@ def test_the_group_note_is_not_a_bullet() -> None:
     note = next(l for l in block if not l.startswith(BULLET)
                 and not l.startswith(SECTION_MARK["waiting"]))
     assert not note.startswith(BULLET)
-    assert str(BLUEPRINT_GRACE_DAYS) in note, (
-        "the note must say how long the built-in check waits, or the reader "
-        f"cannot tell whether to act: {note!r}")
+    assert "supervision" in note.lower(), (
+        "the note must name the one thing that decides, or the reader cannot "
+        f"tell what to do: {note!r}")

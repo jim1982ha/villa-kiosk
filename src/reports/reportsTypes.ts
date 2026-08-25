@@ -126,7 +126,7 @@ export const SKIP_REASON = [
   // check standing down for a covering rule that has never fired. Added to
   // `contracts.py` first and caught here by `test_contract_parity` on the same
   // run — which is the whole reason that test exists.
-  "covered_but_silent",
+  "superseded",
 ] as const;
 export type SkipReason = (typeof SKIP_REASON)[number];
 

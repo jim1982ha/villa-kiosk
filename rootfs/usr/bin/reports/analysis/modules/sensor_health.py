@@ -63,7 +63,7 @@ class SensorHealth:
     #: installed, and used to say "your own automations already cover this"
     #: without being able to name which one or to check it had ever reported.
     #: Naming it makes the claim checkable: see `registry.gate` and
-    #: `collect.state()["silent_blueprints"]`. A stem, because that is the one
+    #: the skip line names when supervision is off. A stem, because that is the one
     #: part of a VESTA rule that is the same on every property — the automation
     #: INSTANCE is named by whoever filled the form.
     superseded_by: Sequence[str] = ("maintenance_silence",)

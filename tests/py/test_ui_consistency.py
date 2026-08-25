@@ -283,20 +283,6 @@ def test_every_blueprint_family_the_villa_reports_has_a_described_ROLE() -> None
         "an unlisted family still renders a blank role rather than saying so")
 
 
-def test_the_briefing_tab_states_precedence_CONTEXTUALLY() -> None:
-    """⚠️ THE TAB ASSERTED A FIXED HIERARCHY THAT `agent_owns_analysis` INVERTS.
-    Its section order calls automations "the primary detection layer, which
-    WINS" and the checks "the fallback", and the lead paragraph said the checks
-    run "when they do not". With the agent owning detection the checks ALWAYS
-    run and a rule wins only on a device it actually reported."""
-    tab = _read(os.path.join(SRC, "components", "reports", "ModulesTab.tsx"))
-    assert "agentOwns" in tab, "the tab cannot tell which layer is in charge"
-    assert "loadAgentConfig" in tab, "it invents its own source for that fact"
-    assert tab.count("{agentOws" if False else "{agentOwns") >= 2, (
-        "only one sentence was made contextual — the precedence is stated in "
-        "more than one place")
-
-
 def test_switching_supervision_off_dims_ONLY_the_tiers_that_stop() -> None:
     """⚠️ THREE OF SIX, AND THE OTHER THREE MUST STAY LIVE. `scheduler`,
     `runtime` and `outbox` each refuse on `enabled`, so Triage, Reason and Act
@@ -578,18 +564,6 @@ def test_the_source_legend_lives_in_ADVANCED_and_only_there() -> None:
                              "AgentAdvancedModal.tsx"))
     assert "<SourceLegend" not in main, "the legend is back on the daily path"
     assert "<SourceLegend" in adv, "the legend is not in Advanced either"
-
-
-def test_act_and_tell_asks_WHO_before_WHEN() -> None:
-    """The tab reads top-down as one question narrowing: who decides what is
-    worth saying, then what it may touch, then when it may reach you. The quiet
-    window used to lead, which put a preference about sleep above the switch
-    deciding whether the assistant speaks for the villa at all."""
-    src = _read(os.path.join(SRC, "components", "agent",
-                            "ActDeliverySection.tsx"))
-    assert (src.index("Who decides what is worth saying")
-            < src.index("When it may interrupt you")), (
-        "timing is asked before ownership")
 
 
 def test_a_component_lives_where_it_is_RENDERED() -> None:

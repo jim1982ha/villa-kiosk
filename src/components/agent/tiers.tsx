@@ -248,17 +248,15 @@ export const FAMILIES: Record<string, { role: string; reflex?: true }> = {
   // `agent/triage.py`. The agent watches raw state and judges it; it never
   // consumes a rule's output.
   //
-  // ⚠️ THE TWO LAYERS MEET ONLY IN THE BRIEF, and that is a report-composition
-  // step rather than a dependency: `pipeline._without_blueprint_subjects` drops
-  // an agent concern when a blueprint reported the same subject, preferring the
-  // blueprint WHILE ONE STILL EXISTS. That is what makes retiring a family safe
-  // — without it, switching one off would remove its findings from every
-  // report before the agent's equivalent was trusted.
+  // ⚠️ THE TWO LAYERS MEET ONLY IN THE BRIEF, and since 2.755.0 the rule is one
+  // sentence: supervision ON and the assistant supersedes the automations;
+  // supervision OFF and the automations do the job. There is no per-device
+  // preference, no grace window and no second flag — all of that was deleted
+  // after it produced a stand-down that could never expire.
   //
-  // ⚠️ THE UN-SUPPRESSION IS A SIDE EFFECT AND WAS NOT THE SUCCESSION STORY.
-  // `analysis/modules/level_anomaly.py` carries
-  // `superseded_by: ("roi_baseline_deviation",)`, so that deterministic check
-  // stands down while the blueprint exists and switches back on when it goes.
+  // ⚠️ `analysis/modules/level_anomaly.py` still carries
+  // `superseded_by: ("roi_baseline_deviation",)`, but only to NAME the rule in
+  // the skip line an owner reads when supervision is off.
   // True, and a second-order detail: it explains why `docs/PROGRESS.md` calls
   // maintenance "the only family with upside", not who takes over the job.
   maintenance: { role: "superseded — the assistant now spots this itself" },

@@ -60,86 +60,7 @@ def _superseded() -> List[Any]:
 
 # ── the signal ───────────────────────────────────────────────────────────────
 
-def test_a_busy_category_does_not_vouch_for_a_silent_blueprint() -> None:
-    """THE REFERENCE CASE, as it stood on the villa that reported it."""
-    installed = ["critical_watchdog", "maintenance_signature_drift",
-                 "maintenance_silence", "roi_baseline_deviation"]
-    heard = {"maintenance_signature_drift": 12, "critical_watchdog": 9,
-             "roi_baseline_deviation": 4}
-    silent = sorted(s for s in installed if not heard.get(s))
-    assert silent == ["maintenance_silence"], (
-        "a category-level check would call `maintenance` healthy here — it is, "
-        "and the rule inside it that matters has still never fired")
-
-
-def test_a_stem_is_kept_not_reduced_to_its_category() -> None:
-    listing = {
-        "maintenance_silence.yaml": {"metadata": {"author": "VESTA"}},
-        "maintenance_signature_drift.yaml": {"metadata": {"author": "VESTA"}},
-    }
-    assert collect._stems_from_blueprints(listing) == [
-        "maintenance_signature_drift", "maintenance_silence"]
-    # The coarse view still works and still has exactly one implementation.
-    assert collect._categories_from_blueprints(listing) == ["maintenance"]
-    assert collect.category_of("maintenance_silence") == "maintenance"
-
-
-def test_an_unknown_blueprint_list_does_not_accuse_anything() -> None:
-    """⚠️ A STORE WRITTEN BEFORE THIS RELEASE HAS NO `blueprint_names`.
-
-    Treating that absence as "nothing is installed" would be harmless; treating
-    it as "everything is silent" would put a false alarm about a working check
-    into the first brief after every upgrade. The subtraction can only name a
-    blueprint the store has positively recorded, so an empty list accuses
-    nobody — which is the safe direction and is asserted rather than assumed.
-    """
-    silent = sorted(s for s in [] if not {}.get(s))
-    assert silent == []
-
-
 # ── the sentence ─────────────────────────────────────────────────────────────
-
-def test_the_stand_down_names_the_rule_that_has_never_reported() -> None:
-    module = next(m for m in _superseded() if m.name == "sensor_health")
-    _, reason, detail = registry.gate(
-        module, _context(silent_blueprints=["maintenance_silence"]), {}, 60)
-    # ⚠️ THE SENTENCE MOVED TO THE RENDERER (2.578.0) and the gate now returns
-    # the blueprint NAME plus its own reason code. The property is unchanged —
-    # the reader must be told WHICH rule to look at — but the brief writes the
-    # explanation once under a sub-heading instead of on every line.
-    assert reason == "covered_but_silent"
-    assert detail == "Maintenance silence", (
-        "the reader has to know WHICH rule to go and look at; an unnamed one "
-        "is the reassurance this replaced")
-    assert "maintenance_silence" not in detail, (
-        "an identifier in prose on the owner's phone — `readable_label` exists "
-        "for exactly this and the gate must go through it")
-
-
-def test_a_blueprint_that_has_spoken_keeps_the_short_sentence() -> None:
-    """⚠️ THE LONGER LINE IS A WARNING, NOT A LABEL. If it appeared for every
-    stood-down check it would say nothing, and this section is already the one
-    a reader is least likely to reach."""
-    module = next(m for m in _superseded() if m.name == "sensor_health")
-    _, _, detail = registry.gate(module, _context(silent_blueprints=[]), {}, 60)
-    assert detail == "your own automations already cover this"
-
-
-def test_the_module_still_stands_down_either_way() -> None:
-    """⚠️ INSTALLED BEATS FIRED, AND THAT IS NOT WHAT THIS RELEASE CHANGED.
-    A version of this fix that ran the module instead would reintroduce the
-    duplicate findings the gate exists to prevent."""
-    module = next(m for m in _superseded() if m.name == "sensor_health")
-    # ⚠️ THE REASON CODE DIFFERS BY ARM AND THE REFUSAL DOES NOT. A silent
-    # cover is its own kind of skip so the brief can group it; a speaking one
-    # is the plain capability refusal. Both stand the module down, which is the
-    # property this test is about.
-    for silent, expected in (([], "missing_capability"),
-                             (["maintenance_silence"], "covered_but_silent")):
-        ok, reason, _ = registry.gate(
-            module, _context(silent_blueprints=silent), {}, 60)
-        assert ok is False and reason == expected
-
 
 # ── the wiring, which is where this class of bug actually lives ──────────────
 
@@ -180,25 +101,3 @@ def test_run_all_copies_every_context_field_to_the_per_module_context() -> None:
         f"context, so each module sees their default instead: {missing}")
 
 
-def test_the_buffer_carries_both_blueprint_keys_through_every_writer() -> None:
-    """⚠️ EACH WRITER REWRITES THE WHOLE DOCUMENT, so a key it forgets is a key
-    it DELETES — and the loss is invisible until the next report reads it. This
-    already cost a release for `blueprint_categories`; there are now two.
-    """
-    source = inspect.getsource(collect)
-    writers = re.findall(r"store\.write_json\(store\.REPORTS_EVENTS_FILE, \{(.*?)\n            \}\)",
-                         source, re.DOTALL)
-    assert len(writers) >= 2, "the buffer writers moved — this test is blind"
-    for index, writer in enumerate(writers):
-        for key in ("blueprint_categories", "blueprint_names",
-                    "seen_types", "seen_blueprints"):
-            assert f'"{key}"' in writer, (
-                f"writer #{index} drops {key!r}, which deletes it from the store")
-
-
-def test_read_buffer_shapes_both_new_keys() -> None:
-    """A key the reader does not shape is a KeyError in a `state()` call that
-    every diagnostics request makes."""
-    shaped = collect.read_buffer()
-    for key in ("blueprint_names", "seen_blueprints"):
-        assert key in shaped

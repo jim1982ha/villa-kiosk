@@ -65,36 +65,6 @@ def _rejected_candidates() -> List[Dict[str, Any]]:
     return out
 
 
-def _blueprint_subjects(aggregated: Dict[str, Any]) -> Set[str]:
-    """Every piece of equipment the automation layer reported on this period.
-
-    Hashed — see `analysis.base.subject_key`. Tolerant of both shapes the
-    aggregation arrives in, because a stored history entry hands back plain
-    dicts where a live pass hands back `Group` objects, and a reader that works
-    for one and raises on the other is this renderer's oldest trap.
-    """
-    subjects: Set[str] = set()
-    for group in aggregated.get("groups") or []:
-        keys = getattr(group, "subject_keys", None)
-        if keys:
-            subjects |= set(keys)
-    return subjects
-
-
-#: Where a briefing gets the agent's findings from. ⚠️ A HOOK, NOT AN IMPORT.
-#: `reports/` may not import `agent/` — the deterministic layer must not depend
-#: on the interpretive one, which is ARCH-003 and is pinned by
-#: `test_reports_never_imports_agent`. The first version of this reached into
-#: `agent.sources` directly and that test caught it, naming the fix: pass a
-#: callback in from the proxy, the same way `Collector.on_event` is wired.
-#:
-#: ⚠️ THE ROWS ARRIVE READY TO PRINT — title, severity, subject_key, age_days —
-#: because computing the age here would mean parsing a timestamp format this
-#: package does not own, which is a second pinned rule (`series.parse_day`).
-#: Whoever supplies the concerns already knows how old they are.
-_CONCERNS_SOURCE: Optional[Any] = None
-
-
 def set_concerns_source(source: Optional[Any]) -> None:
     """Register where briefings read the agent's findings. Called once, at boot.
 
@@ -177,18 +147,17 @@ def _degrade(context: ReportContext, title: str, err: Exception) -> Tuple[str, s
         return "The report could not be composed. See the add-on log.", ""
 
 
-def _agent_concerns(blueprint_subjects: Set[str]) -> List[Dict[str, Any]]:
-    """Open Concerns for this briefing, minus what a blueprint already reported.
+def _agent_concerns(seen_subjects: Set[str]) -> List[Dict[str, Any]]:
+    """Open Concerns for this briefing, minus devices this brief already names.
 
     ⚠️ THE BRIEFING AND THE KIOSK MUST NEVER DESCRIBE THE SAME VILLA
     DIFFERENTLY, and until this existed they did: the agent investigated, filed
     a Concern, and it rendered on the wall and nowhere else.
 
-    ⚠️ DEDUPLICATED BY SUBJECT, PREFERRING THE BLUEPRINT — the same rule and the
-    same preference `_without_blueprint_subjects` applies one layer up, and for
-    the same reason: while a blueprint covers a device it sees occupancy,
-    schedules and tariffs the agent's evidence does not. Retire that blueprint
-    and the Concern becomes the only report of the device, and appears.
+    ⚠️ IT USED TO DROP A CONCERN A BLUEPRINT HAD ALSO REPORTED, preferring the
+    blueprint. Removed in 2.755.0 with the rest of that machinery: supervision
+    ON means the agent supersedes, so hiding its Concern behind an automation's
+    line is exactly backwards.
 
     ⚠️ AND IT NEVER RAISES. A briefing that failed because the agent's store was
     unreadable would be the interpretive layer taking down the deterministic
@@ -206,45 +175,11 @@ def _agent_concerns(blueprint_subjects: Set[str]) -> List[Dict[str, Any]]:
     for row in rows if isinstance(rows, (list, tuple)) else []:
         if not isinstance(row, Mapping):
             continue
-        if str(row.get("subject_key") or "") in blueprint_subjects:
+        key = str(row.get("subject_key") or "")
+        if key and key in seen_subjects:
             continue
         out.append(dict(row))
     return out
-
-
-def _without_blueprint_subjects(
-        findings: List[Dict[str, Any]],
-        subjects: Set[str]) -> Tuple[List[Dict[str, Any]], int]:
-    """Drop built-in findings about equipment a blueprint already reported.
-
-    ⚠️ THIS IS WHAT MAKES BOTH LAYERS SAFE TO RUN AT ONCE, and it is per DEVICE,
-    not per property. The old arrangement switched a whole check off because a
-    covering blueprint existed anywhere; a property could therefore have a rule
-    watching four pumps, a fifth pump watched by nobody, and no way to hear
-    about the fifth. Now the check runs, and yields on exactly the four.
-
-    ⚠️ THE BLUEPRINT WINS, ALWAYS, and not because it fired first: it sees
-    occupancy, schedules and tariffs that a statistical module cannot, which is
-    the same reason the stand-down was introduced. Preferring the richer witness
-    is the whole content of this function.
-
-    ⚠️ A FINDING WITH NO SUBJECT IS NEVER DROPPED. `subject_key` defaults to ""
-    and a bare `in` test on an empty string would match nothing — but a future
-    finding that forgets to set one must not silently become undroppable OR
-    silently dropped, so the empty case is stated rather than left to fall
-    through the comparison.
-    """
-    if not subjects:
-        return findings, 0
-    kept: List[Dict[str, Any]] = []
-    dropped = 0
-    for finding in findings:
-        key = str(finding.get("subject_key") or "")
-        if key and key in subjects:
-            dropped += 1
-            continue
-        kept.append(finding)
-    return kept, dropped
 
 
 def _entity_labels(states: Any) -> Dict[str, str]:
@@ -426,7 +361,7 @@ async def analyse(
     settings: Dict[str, Any],
     min_history_days: int,
     failures: Dict[str, int],
-    agent_owns_analysis: bool = False,
+    supervision_enabled: bool = False,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]], Dict[str, int],
            List[str], Dict[str, Any]]:
     """Run every registered module against this pass's data.
@@ -451,15 +386,12 @@ async def analyse(
         # this property HAVE a detection layer"; only the event buffer knows
         # which parts of it have ever spoken, and that is the difference
         # between "covered" and "covered on paper" — see `registry.gate`.
-        silent_blueprints=list(collect.state().get("silent_blueprints") or []),
         # ⚠️ SO THE GATE CAN TELL "RETIRED" FROM "INSTALLED AND QUIET".
-        installed_blueprints=list(collect.state().get("blueprint_names") or []),
-        heard_nothing_for_days=collect.listening_days(),
         # ⚠️ FROM THE CONFIG VIEW, NOT A LITERAL — and the three fields above
         # become dead inputs when it is True. Without this line the flag would
         # be defined, defaulted, documented and never reach the gate: the
         # thirteen-times defect this repository names `feedback_pin-the-caller`.
-        agent_owns_analysis=bool(agent_owns_analysis),
+        supervision_enabled=bool(supervision_enabled),
     )
     # History depth is not yet measured per statistic; the recorder's presence
     # is the proxy for it, and each module applies its own `min_days` to the
@@ -542,7 +474,7 @@ async def run_report(
     #: looked up there is always None and the flag would never reach the gate.
     #: Threaded exactly like `min_history_days` above, which is the same shape
     #: of top-level value and already had to be passed separately.
-    agent_owns_analysis: bool = False,
+    supervision_enabled: bool = False,
     module_failures: Optional[Dict[str, int]] = None,
     preview: bool = False,
     narration: Optional[Dict[str, Any]] = None,
@@ -584,7 +516,7 @@ async def run_report(
     findings, skipped, failures, ran, data_tally = await analyse(
         session, found, audience, cadence, now_local, settings,
         min_history_days, module_failures,
-        agent_owns_analysis=agent_owns_analysis)
+        supervision_enabled=supervision_enabled)
 
     # ── synthesise ──────────────────────────────────────────────────────────
     # ⚠️ SCOPED TO THE PERIOD, NOT THE WHOLE BUFFER. The ring holds up to
@@ -616,11 +548,18 @@ async def run_report(
     # ⚠️ COUNTED, NOT SILENT. `suppressed` is the number of findings this
     # property's own automations already covered; a zero here on a villa with a
     # busy blueprint layer means the join is not matching, and a count nobody
-    # records is the four-instruments-reading-zero problem again.
-    findings, suppressed = _without_blueprint_subjects(
-        findings, _blueprint_subjects(aggregated))
-    if suppressed:
-        log(f"{suppressed} finding(s) already covered by the automation layer")
+    # ⚠️ THE PER-DEVICE DEDUPLICATION WAS DELETED IN 2.755.0, and it is worth
+    # saying WHY rather than letting its absence read as an oversight. It
+    # dropped a built-in finding whose device a blueprint had also reported,
+    # preferring the blueprint. Under the one rule that replaced the gate it
+    # cannot fire in either direction: with supervision OFF the built-in check
+    # never ran, so there is nothing to drop; with supervision ON the agent
+    # supersedes the blueprint, which is the opposite of what it did.
+    #
+    # ⚠️ ACCEPTED CONSEQUENCE: a villa running BOTH layers on one device hears
+    # about it twice. That is a true statement about a contradictory
+    # configuration — supervision on, and a superseded automation left enabled —
+    # and a report should not paper over it.
 
     # ── reconcile ───────────────────────────────────────────────────────────
     # ⚠️ THE SAME TASK ARRIVES BY TWO ROUTES. A blueprint fires its event AND
@@ -735,17 +674,18 @@ async def run_report(
         noise=noise_summary,
         history=_history_series(cadence),
         currency=str(found.get("currency") or ""),
-        # ⚠️ DEDUPED AGAINST BOTH LAYERS, NOT JUST THE BLUEPRINTS. The first
-        # cut passed only `_blueprint_subjects`, so a device the built-in checks
-        # had already reported could appear TWICE in one brief — once as a
-        # finding and once as a Concern, in different words, about the same
-        # equipment. That is the duplication both dedup rules exist to stop, and
-        # it would have shown up on the first briefing after a concern was
-        # filed about anything metered.
+        # ⚠️ DEDUPED AGAINST THIS BRIEF'S OWN FINDINGS, AND NOTHING ELSE NOW.
+        # A device the built-in checks already reported could otherwise appear
+        # TWICE in one brief — once as a finding and once as a Concern, in
+        # different words, about the same equipment.
+        #
+        # ⚠️ THE BLUEPRINT HALF OF THIS DEDUPE WENT IN 2.755.0 with the rest of
+        # the stand-down machinery: supervision ON means the agent supersedes,
+        # so hiding its Concern behind an automation's line is backwards. What
+        # is left is agent-against-agent and has nothing to do with blueprints.
         concerns=_agent_concerns(
-            _blueprint_subjects(aggregated)
-            | {str(f.get("subject_key") or "") for f in findings
-               if isinstance(f, Mapping) and f.get("subject_key")}),
+            {str(f.get("subject_key") or "") for f in findings
+             if isinstance(f, Mapping) and f.get("subject_key")}),
     )
     narrator = DeterministicNarrator()
     #: Which rung of the degradation ladder produced this brief, "" on the happy
@@ -1304,8 +1244,10 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
                 targets, now_local, found, entry_id=str(entry["key"]),
                 settings=modules_cfg if isinstance(modules_cfg, dict) else {},
                 min_history_days=int(config.get("min_history_days") or 14),
-                agent_owns_analysis=bool(
-                    agent_cfg.get("agent_owns_analysis")),
+                # ⚠️ THE MASTER SWITCH, AND NOTHING ELSE (2.755.0). It used to
+                # read `agent_owns_analysis`, a second flag that existed only
+                # to override a stand-down that no longer exists.
+                supervision_enabled=bool(agent_cfg.get("enabled")),
                 module_failures=(state.get("moduleFailures")
                                  if isinstance(state.get("moduleFailures"), dict)
                                  else {}),

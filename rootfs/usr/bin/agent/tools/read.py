@@ -157,8 +157,8 @@ class ReadSalient(BaseTool):
         if args.get("include_unscorable"):
             # ⚠️ A FIRST-CLASS RESULT, NOT A LEFTOVER. "I could not assess 40 of
             # your devices and here is why" is the honest half of any coverage
-            # claim, and the pipeline's inability to say it is what
-            # `covered_but_silent` was invented to paper over.
+            # claim, and the pipeline's inability to say it is what the old
+            # blueprint stand-down papered over (deleted in 2.755.0).
             missing = salience_mod.unscorable(list(scored))
             blocks.append(data({"unscorable":
                                 [self._as_row(m.as_dict()) for m in missing]}))

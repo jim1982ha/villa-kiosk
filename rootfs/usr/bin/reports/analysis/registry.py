@@ -39,18 +39,6 @@ MODULE_TIMEOUT_S = 30.0
 #: Consecutive failures before a module is switched off and the operator told.
 FAILURES_BEFORE_DISABLE = 3
 
-#: How long a covering blueprint may stay silent before "installed" stops being
-#: evidence that it works, and the built-in check runs beside it.
-#:
-#: ⚠️ LONGER THAN THE LONGEST CADENCE, DELIBERATELY. A monthly brief is 31 days;
-#: a rule that legitimately fires once a month must not be declared silent by a
-#: check that waited three weeks. 45 days is the shortest span that cannot
-#: mistake one quiet month for an absent automation.
-#:
-#: ⚠️ AND EXPIRY IS SAFE ONLY BECAUSE OF THE SUBJECT DEDUPLICATION. Without it,
-#: this constant would simply reintroduce the duplicate findings the stand-down
-#: exists to prevent. The two ship together and neither is correct alone.
-BLUEPRINT_GRACE_DAYS = 45
 
 _REGISTRY: Dict[str, AnalysisModule] = {}
 
@@ -80,96 +68,26 @@ def gate(module: AnalysisModule, context: ModuleContext,
     # Not deleted, because the add-on is redistributable: a fresh install has no
     # blueprints, and there these modules are the only analysis there is. The
     # deployment is detected rather than configured.
+    # ⚠️ ONE QUESTION, AND IT USED TO BE SIX (2.755.0). This block asked whether
+    # a covering blueprint was INSTALLED, whether it had EVER FIRED, how long
+    # the collector had been LISTENING, and weighed those against a 45-day grace
+    # window and an operator override — ~90 lines with six exits, every one of
+    # them individually defensible and the whole unstatable in a sentence.
+    #
+    # It was not academic. Because `seen_blueprints` never decayed, a blueprint
+    # that was switched OFF but still installed counted as live coverage
+    # FOREVER: the grace window sat behind an earlier return and could never be
+    # reached. So retiring an automation removed detection from both layers at
+    # once, silently, and the only thing preventing it was an override flag on a
+    # settings tab. Explaining that to the owner took three rounds.
+    #
+    # The owner's ruling is the whole specification now: supervision ON means
+    # the agent supersedes the blueprint; supervision OFF means the blueprint
+    # does the work. Nothing else is consulted, and there is nothing left that
+    # can be true-but-surprising.
     covered_by = list(getattr(module, "superseded_by", ()) or ())
-    # ⚠️ THE OPERATOR CAN END THIS ARGUMENT ENTIRELY, AND ON A CUT-OVER
-    # PROPERTY THEY MUST BE ABLE TO. Everything below reasons about whether a
-    # blueprint is installed, silent, or has been quiet long enough to doubt —
-    # all of which presume the blueprint layer is still the one in charge. When
-    # the agent owns detection, the presumption is wrong and the whole block is
-    # the wrong question rather than a question answered wrongly.
-    #
-    # ⚠️ THIS IS NOT "DELETE THE STAND-DOWN", WHICH THIS FILE HAS SAID SINCE
-    # 2.572.0 MUST NOT HAPPEN. Duplicate suppression survives intact one layer
-    # up: `pipeline._without_blueprint_subjects` drops any built-in finding
-    # whose subject a blueprint reported THIS PERIOD, per device, preferring
-    # the blueprint. So a rule that is actually speaking still wins on its own
-    # equipment — the five-false-positives-in-one-week case is still covered.
-    # What stops counting is a rule's mere PRESENCE.
-    #
-    # ⚠️ AND PRESENCE HAD TO STOP COUNTING FOR A REASON THAT IS NOT PREFERENCE.
-    # `silent_blueprints` is installed-minus-EVER-seen, and the seen flag never
-    # decays — so a retired-but-still-installed blueprint is neither absent nor
-    # silent, and suppressed its replacement FOREVER. A property that keeps the
-    # files installed on purpose, as the reference villa does, could not
-    # otherwise get its built-in checks back at all.
-    if covered_by and context.agent_owns_analysis:
-        covered_by = []
-    if covered_by and "blueprint_layer" in context.capabilities:
-        # ⚠️ SUPERSEDED BY A BETTER-INFORMED LAYER — WHILE THAT LAYER IS
-        # ACTUALLY ANSWERING. On a property whose own automations detect this,
-        # running the built-in module duplicates it, and duplicates it WORSE: a
-        # blueprint sees occupancy, schedules and tariffs while these modules
-        # see only statistics. On the reference villa that gap produced five
-        # false positives in one week, and standing the modules down is what
-        # stopped it. That reasoning is unchanged and this branch still exists.
-        #
-        # ⚠️ WHAT CHANGED IN 2.572.0 IS THE UNCONDITIONAL HALF. "Installed
-        # beats fired" was correct as far as it went and had no floor, so a
-        # property that imported the VESTA blueprint pack and built NO
-        # automations from it stood every check down FOREVER while nothing could
-        # ever fire — the worst-behaved deployment in the whole system being the
-        # brand-new one. Installation is evidence that the layer is there; after
-        # long enough with not one event from that blueprint, it stops being
-        # evidence that it WORKS.
-        #
-        # ⚠️ THE GRACE IS MEASURED FROM WHEN THE COLLECTOR STARTED LISTENING,
-        # never from now: a listener that has been up for an hour has no
-        # standing to conclude anything about a rule that fires monthly.
-        # `heard_nothing_for_days` is None when the collector cannot say.
-        # ⚠️ A RETIRED BLUEPRINT IS NOT COVERAGE, AND THIS IS THE FIRST
-        # QUESTION. `silent_blueprints` is installed-minus-seen, so a blueprint
-        # somebody DELETED is absent from it exactly as a healthy one is — and
-        # the branch below read that emptiness as "the covering rule is alive",
-        # leaving the built-in check off and telling the reader "your own
-        # automations already cover this" about a rule that was gone. Not for
-        # 45 days: FOREVER, because the grace window below is only reached by a
-        # blueprint that is still installed. Retiring `maintenance_silence`
-        # would have permanently disabled the check meant to replace it.
-        #
-        # ⚠️ AN EMPTY `installed` MEANS "CANNOT SAY", NOT "NONE INSTALLED" —
-        # `collect.state` returns an empty list when the blueprint fetch fell
-        # back, and its own comment says nothing may be concluded from it. So
-        # this reverses a stand-down only on positive evidence that the layer
-        # exists and this rule is not in it.
-        installed = set(context.installed_blueprints)
-        if installed and not any(b in installed for b in covered_by):
-            return (True, "", "")
-
-        silent = [b for b in covered_by if b in set(context.silent_blueprints)]
-        if not silent:
-            # ⚠️ SHORT, BECAUSE IT IS PRINTED IN A NOTIFICATION. This was
-            # "covered by this property's own automation layer, which sees
-            # occupancy and cost context these checks cannot" — ninety-eight
-            # characters, three times over in one brief, in the section a
-            # reader is least likely to reach. WHY the automations are better
-            # belongs on the Checks tab, which has room and already says it.
-            return (False, "missing_capability",
-                    "your own automations already cover this")
-        listening = context.heard_nothing_for_days
-        if listening is not None and listening >= BLUEPRINT_GRACE_DAYS:
-            # Runs. ⚠️ AND IT IS NOT A DUPLICATE RISK: the pipeline drops any
-            # finding whose SUBJECT the blueprint layer also reported this
-            # period (`pipeline._without_blueprint_subjects`), so the moment
-            # that rule starts speaking about a device, the built-in check
-            # yields on it — per device, not per property.
-            return (True, "", "")
-        # ⚠️ ITS OWN REASON CODE, AND THE DETAIL IS THE BLUEPRINT NAME ALONE.
-        # The renderer gathers every skip of this shape under one sub-heading
-        # and writes the explanation once, so a sentence here would repeat on
-        # every line — which is what the brief did, three times over, until an
-        # owner asked for them grouped. Grouping on the PROSE would have worked
-        # today and broken the next time a reader asked for different words.
-        return (False, "covered_but_silent", readable_label(silent[0]))
+    if covered_by and not context.supervision_enabled:
+        return (False, "superseded", readable_label(covered_by[0]))
 
     missing = [c for c in module.requires if c not in context.capabilities]
     if missing:
@@ -225,24 +143,17 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             settings=settings if isinstance(settings, dict) else {},
             min_history_days=context.min_history_days,
             stats=context.stats, labels=context.labels,
-            # ⚠️ EVERY FIELD, AND THIS ONE IS WHY THE RULE EXISTS. This
-            # re-assembles the context per module, so a field added to the
-            # dataclass and not copied HERE arrives at the gate as its default
-            # — silently, with no type error, because the default is a valid
-            # value. `silent_blueprints` defaulting to `()` makes every covering
-            # blueprint look like it has reported, which is precisely the false
-            # reassurance this release removes. Same shape as the `reachY` the
-            # badge tier lost in 2.429.0.
-            silent_blueprints=context.silent_blueprints,
-            installed_blueprints=context.installed_blueprints,
-            heard_nothing_for_days=context.heard_nothing_for_days,
-            # ⚠️ AND THE RULE ABOVE CAUGHT THIS ONE ON THE DAY IT WAS ADDED.
-            # Omitted, every module would have seen `False` — the shipped
-            # default — so an operator who handed detection to the agent would
-            # have had the stand-down apply anyway, with the config saved, the
-            # gate correct and nothing to see. `test_coverage_claim` failed
-            # before the commit, which is the pin doing exactly its job.
-            agent_owns_analysis=context.agent_owns_analysis,
+            # ⚠️ EVERY FIELD, AND THE RULE STILL MATTERS WITH ONE LEFT.
+            # This re-assembles the context per module, so a field added to the
+            # dataclass and not copied HERE arrives at the gate as its DEFAULT —
+            # silently, with no type error, because the default is a valid
+            # value. `supervision_enabled` defaults to False, so omitting it
+            # would stand every covered check down on a villa whose supervision
+            # is on: the config saved, the gate correct, and nothing to see.
+            # `test_coverage_claim` caught exactly that on the day the old flag
+            # was added. Same shape as the `reachY` the badge tier lost in
+            # 2.429.0.
+            supervision_enabled=context.supervision_enabled,
         )
 
         ok, reason, detail = gate(module, module_context, counts, history_days)
@@ -278,7 +189,12 @@ def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
         "audience_mismatch": "not part of this brief",
         "timed_out": "took too long",
         "errored": "failed",
-        "covered_but_silent": "covered by a rule that has never reported",
+        # ⚠️ A MISSING ENTRY HERE RENDERS THE RAW CODE. `readable.get(reason,
+        # reason)` falls back to the code itself, so a skip reason added without
+        # a phrase reaches the owner as `superseded` in the middle of a
+        # sentence — which is what this map replaced `covered_but_silent` with
+        # when the gate changed, found by the pin rather than by reading.
+        "superseded": "your own automation is doing this job",
     }
     out: List[Dict[str, str]] = []
     for item in skipped:

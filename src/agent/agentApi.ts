@@ -26,7 +26,6 @@ import { ROLE_ORDER, type Role } from "@/auth/roles";
 const AGENT_WIRE_KEYS = {
   enabled: "enabled",
   act_enabled: "actEnabled",
-  agent_owns_analysis: "agentOwnsAnalysis",
   /** The Home Assistant MCP add-on's address. ⚠️ SNAKE_CASE ON THE WIRE like
    *  every other key here — a camelCase key is ACCEPTED AND IGNORED by the
    *  store, so the save returns 200 and the setting silently never applies. */
@@ -151,9 +150,6 @@ export function targetsForRole(people: Person[], role: string): string[] {
 export interface AgentConfig {
   enabled: boolean;
   actEnabled: boolean;
-  /** Detection handed to the agent: a blueprint's mere presence stops
-   *  standing built-in checks down. Overlap is still deduplicated per device. */
-  agentOwnsAnalysis: boolean;
   /** Where the Home Assistant MCP add-on answers. Empty = not configured, which
    *  is the default and a supported state: the villa keeps its built-in tools. */
   mcpUrl: string;

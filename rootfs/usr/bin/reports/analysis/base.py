@@ -125,43 +125,30 @@ class ModuleContext:
     #: for why a quiet, well-run villa must not get duplicate findings. What
     #: this adds is honesty about the claim: a check that stood down for a
     #: blueprint which has never reported is covered in theory only, and the
-    #: brief now says which.
-    silent_blueprints: Sequence[str] = ()
-    #: Every VESTA blueprint currently INSTALLED on the property, by stem.
+    #: Is the villa's supervision switched on?
     #:
-    #: ⚠️ "DELETED" AND "INSTALLED BUT NEVER FIRED" ARE DIFFERENT FACTS AND THE
-    #: GATE COULD NOT TELL THEM APART. `silent_blueprints` is installed-minus-
-    #: seen, so a RETIRED blueprint drops out of it — and the gate read an empty
-    #: `silent` list as "the covering rule is alive and well", stood the built-in
-    #: check down, and printed "your own automations already cover this" about a
-    #: rule that no longer existed. Permanently, for as long as any other
-    #: blueprint kept the layer detectable — which the `critical_*` family does
-    #: by design, since it is the one family nobody is retiring.
+    #: ⚠️ THE WHOLE GATE, AND IT REPLACED FOUR FIELDS AND ~90 LINES (2.755.0).
+    #: This used to ask whether a covering blueprint was installed, whether it
+    #: had ever fired, and how long the collector had been listening, then
+    #: weigh those against a 45-day grace window and an operator override. Six
+    #: outcomes, each individually defensible, and together a rule nobody could
+    #: state in a sentence — including me: explaining it to the owner took three
+    #: rounds and produced a warning about a coverage hole that did not exist.
     #:
-    #: That is the exact failure the cutover would hit on its first day: retire
-    #: `maintenance_silence` and its replacement stays switched off. Found by
-    #: reading the gate against the retirement plan rather than against a test.
-    installed_blueprints: Sequence[str] = ()
-    #: How long the collector has been listening, in days — or None when it
-    #: cannot say (never connected, or the buffer has no `online_since`).
+    #: The owner's ruling, and it is the whole specification: "the VESTA AGENT
+    #: shall always be on and supersede the blueprint as soon as Supervision is
+    #: ON. If Supervision is OFF, then the automation is used. There is no other
+    #: option, and no 45 days period."
     #:
-    #: ⚠️ NOT "HOW LONG SINCE THE BLUEPRINT LAST FIRED", AND THE DIFFERENCE IS
-    #: THE WHOLE POINT. A listener that came up an hour ago has no standing to
-    #: conclude anything about a rule that fires monthly, however long that rule
-    #: has actually been quiet. The question the gate asks is "have I been
-    #: watching long enough for this silence to mean something", which is a fact
-    #: about the LISTENER. None means "cannot say", and the gate then leaves the
-    #: stand-down in place — the conservative direction.
-    heard_nothing_for_days: Optional[float] = None
-
-    #: Has the operator handed detection to the agent entirely?
-    #:
-    #: ⚠️ WHEN TRUE THE THREE FIELDS ABOVE STOP BEING CONSULTED — not because
-    #: they became wrong, but because "is a blueprint installed" stops being a
-    #: question anyone is asking. Overlap is still prevented, one layer up and
-    #: per DEVICE, by `pipeline._without_blueprint_subjects`; what goes is the
-    #: deferral to a rule's mere EXISTENCE.
-    agent_owns_analysis: bool = False
+    #: ⚠️ WHAT WAS GIVEN UP, STATED PLAINLY: a villa running BOTH layers on one
+    #: device now hears about it twice. The old arrangement preferred the
+    #: blueprint per device, on the grounds that it sees occupancy and tariffs a
+    #: statistical module cannot. That is still true — and it is no longer this
+    #: system's problem to hide, because "supervision is on" now means the agent
+    #: is in charge, and a villa that also leaves the superseded automation
+    #: running has said something contradictory that a report should not paper
+    #: over.
+    supervision_enabled: bool = False
 
     @property
     def zone(self) -> Any:

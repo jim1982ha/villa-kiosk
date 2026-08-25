@@ -211,44 +211,6 @@ def test_only_RECENT_events_count() -> None:
 
 # ── the gate ─────────────────────────────────────────────────────────────────
 
-def test_modules_stand_down_when_the_automation_layer_is_present() -> None:
-    """⚠️ THE DUPLICATION THIS WHOLE DESIGN EXISTS TO PREVENT. All three
-    built-in modules have a deployed blueprint equivalent that does the job
-    with occupancy and tariff context they cannot see."""
-    from reports.analysis import gate
-    from reports.analysis.modules.standby_creep import StandbyCreep
-    from reports.analysis.modules.level_anomaly import LevelAnomaly
-    from reports.analysis.modules.sensor_health import SensorHealth
-    from reports.analysis.base import ModuleContext
-
-    context = ModuleContext(
-        audience="owner", cadence="weekly", now_local=datetime.now(timezone.utc),
-        capabilities=["statistics", "energy_devices", "blueprint_layer"],
-        inventory={}, settings={}, min_history_days=14, stats=None, labels={})
-
-    for module in (StandbyCreep(), LevelAnomaly(), SensorHealth()):
-        ok, reason, detail = gate(module, context, {}, 120)
-        assert not ok, f"{module.name} ran alongside the automation layer"
-        # ⚠️ THE REASON IS SHORTER NOW because it is PRINTED IN A
-        # NOTIFICATION, three times over in one brief. Why the automations are
-        # better belongs on the Checks tab, which has room and already says it.
-        assert "your own automations" in detail
-
-
-def test_modules_run_when_there_is_no_automation_layer() -> None:
-    """The redistributable case, and why nothing was deleted."""
-    from reports.analysis import gate
-    from reports.analysis.modules.standby_creep import StandbyCreep
-    from reports.analysis.base import ModuleContext
-
-    context = ModuleContext(
-        audience="owner", cadence="weekly", now_local=datetime.now(timezone.utc),
-        capabilities=["statistics", "energy_devices"],
-        inventory={}, settings={}, min_history_days=14, stats=None, labels={})
-    ok, _, _ = gate(StandbyCreep(), context, {}, 120)
-    assert ok, "a property with no blueprints must still get analysis"
-
-
 # ── portability: the subscription must not depend on this villa ──────────────
 # ⚠️ AN AUTOMATION INSTANCE IS NAMED BY WHOEVER FILLED THE FORM. On this villa
 # they read `roi_idle_load---living_room_ac`; on the next property they will read
@@ -422,7 +384,10 @@ def test_no_automation_instance_name_appears_in_the_collector() -> None:
 # five subscriptions and then produced five duplicate findings, because nothing
 # had tripped yet. A quiet villa is when duplicate findings are least wanted.
 
-def test_installed_blueprints_are_enough_to_stand_the_modules_down() -> None:
+def test_installed_blueprints_are_enough_to_report_the_layer_present() -> None:
+    """⚠️ RENAMED IN 2.755.0 — it no longer stands anything down. The capability
+    survives because "does this property have an automation layer" is a real
+    question the Briefings tab asks; what went is the gate that consulted it."""
     buffer = collect.read_buffer()
     store.write_json(store.REPORTS_EVENTS_FILE,
                      {**buffer, "blueprint_categories": ["roi", "critical"]})

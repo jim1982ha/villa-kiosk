@@ -60,7 +60,6 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
-from ..analysis.registry import BLUEPRINT_GRACE_DAYS
 # ⚠️ ALIASED. This file ALREADY has a `PERIOD_WORD` ({'daily': 'Daily'}) for
 # the title, and importing schedule's under the same name shadowed it: every
 # scoped heading rendered "What went wrong Weekly". The tests could not see
@@ -575,13 +574,15 @@ class DeterministicNarrator:
     def _agent_findings(self, context: ReportContext) -> List[str]:
         """What the agent investigated and judged worth saying. REQ-036.
 
-        ⚠️ THE SAME FINDING MUST NOT APPEAR TWICE UNDER TWO NAMES. During the
-        cutover both layers run, so a Concern about equipment the blueprint
-        layer already reported this period is dropped here — the same rule, and
-        the same preference, that `pipeline._without_blueprint_subjects` applies
-        to the built-in modules. The blueprint wins while it exists because it
-        sees occupancy, schedules and tariffs; when it is retired the Concern is
-        the only report of that device and appears.
+        ⚠️ THE SAME FINDING MUST NOT APPEAR TWICE UNDER TWO NAMES. A Concern
+        about equipment this same brief already reports as a finding is dropped
+        in `pipeline._agent_concerns` — agent against agent, one brief, one line
+        per device.
+
+        ⚠️ IT USED TO PREFER THE BLUEPRINT TOO, and that half went in 2.755.0
+        with the rest of the stand-down machinery. Supervision ON means the
+        assistant supersedes the automations, so hiding its Concern behind an
+        automation's line was exactly backwards.
 
         ⚠️ WORST FIRST — AND `severity_rank` MEANS THE OPPOSITE HERE FROM WHAT
         IT MEANS IN `agent/`. Two functions, one name, inverted conventions:
@@ -1670,7 +1671,7 @@ class DeterministicNarrator:
                 str(item.get("module") or "a check")))
             # ⚠️ ON THE CODE, NEVER ON THE SENTENCE. `reason` below is prose and
             # is reworded whenever a reader complains; `code` is the contract.
-            if str(item.get("code") or "") == "covered_but_silent":
+            if str(item.get("code") or "") == "superseded":
                 silent.append((name, str(item.get("detail")
                                          or item.get("reason") or "")))
                 continue
@@ -1710,23 +1711,21 @@ class DeterministicNarrator:
             # check while "they" are the blueprints, so the sentence inverts
             # what stands in for what, and nowhere does it say the plain fact
             # that these checks are not running.
-            # ⚠️ WRITTEN OUT IN FULL PER NUMBER, NOT ASSEMBLED WORD BY WORD.
-            # The first draft interpolated each clause ("it defers"/"each
-            # defers", "that rule has"/"none of those rules has") and produced
-            # "None of these checks is NOT running" and "that rule has ever
-            # fired" — a double negative and a dropped "never", both of which
-            # reverse the meaning, and neither of which any test could see. Two
-            # literals cost one duplicated noun and cannot do that.
+            # ⚠️ ONE SENTENCE NOW, AND IT NO LONGER PROMISES A DATE (2.755.0).
+            # It used to say "after 45 days with no event the check runs
+            # anyway" — a promise the gate could not keep, because the grace
+            # window sat behind an earlier return that a still-installed
+            # blueprint always took. A brief telling an owner to wait 45 days
+            # for something that was never going to happen is worse than
+            # saying nothing. There is no waiting now: the switch decides.
             out.append(
-                (f"This check is not running: it defers to the rule beside it, "
-                 f"and that rule has never fired. Check the rule works — after "
-                 f"{BLUEPRINT_GRACE_DAYS} days with no event the check runs "
-                 f"anyway.")
-                if len(silent) == 1 else
-                (f"None of these checks is running: each defers to the rule "
-                 f"beside it, and none of those rules has ever fired. Check "
-                 f"the rules work — after {BLUEPRINT_GRACE_DAYS} days with no "
-                 f"event each check runs anyway."))
+                "These checks are not running because supervision is off, so "
+                "your own automations are doing this job. Switch supervision "
+                "on to hand it to the assistant."
+                if len(silent) > 1 else
+                "This check is not running because supervision is off, so your "
+                "own automation is doing this job. Switch supervision on to "
+                "hand it to the assistant.")
         return out
 
     def _coverage(self, context: ReportContext) -> List[str]:

@@ -16,8 +16,9 @@ says what it supersedes.
 
 ⚠️ VERIFICATION REQUIRES COVERAGE, AND SAYS SO WHEN IT LACKS IT. "It did not
 recur" and "I was not listening" produce the same empty result and mean opposite
-things — the exact ambiguity `covered_but_silent` and the 45-day grace were
-invented to paper over. A sweep with incomplete coverage returns `cannot_verify`,
+things — the exact ambiguity the old blueprint stand-down papered over with a
+45-day grace window (deleted in 2.755.0; the villa's supervision switch decides
+now, and nothing waits). A sweep with incomplete coverage returns `cannot_verify`,
 never `verified`.
 
 ⚠️ AND `dismissed` IS NOT `closed`. Closed means the thing was dealt with;
