@@ -131,7 +131,7 @@ def test_no_control_description_runs_past_two_lines() -> None:
     # dialog's width is roughly 200 characters; that is the thing the rule is
     # about and the thing a reader sees.
     bad = []
-    for p in _files("components/settings", "components/agent"):
+    for p in _files("components"):
         for first, block in _notes(_read(p)):
             text = "".join(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', block))
             text += "".join(re.findall(r"`([^`]*)`", block))
@@ -148,3 +148,38 @@ def test_the_hint_is_not_a_native_title_tooltip() -> None:
     hint = _read(os.path.join(SRC, "components", "common", "InfoHint.tsx"))
     assert "onClick" in hint, "the hint cannot be opened by touch"
     assert 'role="tooltip"' in hint
+
+
+def test_prose_beside_a_control_is_ALSO_two_lines() -> None:
+    """⚠️ THE PIN WAS BLIND AND PASSING, WHICH IS WORSE THAN FAILING. Scoped to
+    `note=`, it saw only the four wrapper components — so widening it from two
+    directories to every component changed nothing and looked like proof the
+    rest were clean. They were not: ten paragraphs of 200–321 characters sat
+    beside controls in the Facility, Reports, Cockpit and Settings surfaces,
+    written as raw markup rather than through a wrapper.
+
+    A rule that only reaches the callers who already adopted the shared
+    component is a rule that cannot find the ones who did not.
+    """
+    bad = []
+    for p in _files("components"):
+        src = _read(p)
+        # only files that actually render a control — prose elsewhere is content
+        if not re.search(r"<(input|select|textarea|ToggleField)\b", src):
+            continue
+        for m in re.finditer(r'<p className="muted body-text">(.*?)</p>', src, re.S):
+            body = m.group(1)
+            if "<InfoHint" in body:          # the detail already moved
+                body = body[:body.index("<InfoHint")]
+            # ⚠️ STRIP JSX EXPRESSIONS BEFORE COUNTING. `{Math.round(100 *
+            # summary.total.cache_read / (…))}` renders as two or three
+            # characters and is ninety of source — counting it flagged a
+            # correct 180-character paragraph at 274. Fourth time in this
+            # session that the instrument, not the code, was the finding.
+            body = re.sub(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", "0", body)
+            text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", body)).strip()
+            if len(text) > MAX_NOTE_CHARS:
+                bad.append(f"{os.path.basename(p)}: {len(text)}c — {text[:56]}…")
+    assert not bad, ("prose beside a control, longer than two lines — shorten "
+                     "it and move the rest into an <InfoHint>:\n  "
+                     + "\n  ".join(bad))

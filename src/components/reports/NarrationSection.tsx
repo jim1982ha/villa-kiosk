@@ -31,6 +31,7 @@
 // ring and the placeholder colour, all of which were being approximated here.
 
 import { useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { KeyRound } from "lucide-react";
 import type { NarrationMode, ReportsConfig } from "@/reports/reportsTypes";
 
@@ -98,12 +99,14 @@ export default function NarrationSection({
         </label>
       </div>
       <p className="muted body-text">
-        Off by default: the add-on writes every brief itself, offline, and that
-        is the version you read in Preview. Switching this on rephrases the same
-        findings — it cannot add, remove or change one. If the service is
-        unreachable or over budget, the brief still arrives on time in the
-        built-in wording.
-      </p>
+          Off by default: the add-on writes every brief itself, offline.
+          <InfoHint label="Rewriting briefs with a service">
+            Switching this on rephrases the same findings — it cannot add, remove or
+            change one. If the service is unreachable or over budget the brief still
+            arrives on time, in the built-in wording, which is the version Preview
+            shows.
+          </InfoHint>
+        </p>
 
       {on && (
         <>
@@ -201,11 +204,13 @@ export default function NarrationSection({
                   restates a control or duplicates a panel is what makes a
                   settings page feel heavy. */}
               <p className="muted body-text">
-                Past that many, briefings keep arriving in the built-in wording;
-                the count is in memory and resets when the add-on restarts.
-                Requests are billed at the service&rsquo;s own rates — Preview
-                shows exactly what would be sent.
-              </p>
+          Past that many, briefings keep arriving in the built-in wording.
+          <InfoHint label="Monthly narration limit">
+            The count is held in memory and resets when the add-on restarts. Requests
+            are billed at the service’s own rates — Preview shows exactly what would
+            be sent.
+          </InfoHint>
+        </p>
             </>
           )}
         </>

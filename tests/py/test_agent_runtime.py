@@ -310,11 +310,27 @@ def test_a_duplicate_tool_name_is_REFUSED_not_overwritten() -> None:
 
 def test_the_real_registry_is_built_from_ONE_place() -> None:
     """ARCH-012: the MCP server serves this same object, so the two paths
-    cannot drift into different tool sets."""
+    cannot drift into different tool sets.
+
+    ⚠️ THE SET IS `ALL_TOOLS` MINUS ANYTHING WITH NO SOURCE, AND THAT CARVE-OUT
+    IS NEW (2026-08-25). `read_logs` is constructed with no log source, so it
+    could only ever return "this tool is not connected to the villa's logs" —
+    and once the agent went live that refusal reached the OWNER'S PHONE inside a
+    warning saying log access was down. Publishing a schema that can never
+    answer also spends prefix tokens in the tier where schemas are 84% of the
+    bill. The equality above is kept as an equality rather than relaxed to a
+    subset: a subset assertion would pass while the registry quietly lost tools
+    that DO work.
+    """
     live = reg.build_registry()
     from agent.tools import ALL_TOOLS
-    assert set(live.names) == {cls().name for cls in ALL_TOOLS}
-    assert len(live.describe()) == len(ALL_TOOLS)
+    from agent import sources as sources_mod
+    withheld = {n for n in (cls().name for cls in ALL_TOOLS)
+                if n in sources_mod._UNWIRED_SEEN_NAMES}
+    assert set(live.names) == {cls().name for cls in ALL_TOOLS} - withheld
+    assert len(live.describe()) == len(ALL_TOOLS) - len(withheld)
+    assert withheld, ("nothing is withheld — if a source was wired, delete this "
+                      "carve-out rather than leaving it to hide the next gap")
 
 
 # ── the output ceiling, the salvage, and the last-turn notice ────────────────

@@ -61,6 +61,7 @@
 // person behind that profile is removed.
 
 import ToggleField from "@/components/common/ToggleField";
+import InfoHint from "@/components/common/InfoHint";
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { fetchNextRuns, type ReportsDiagnostics } from "@/reports/reportsApi";
@@ -364,11 +365,13 @@ Off by default. Read one from the Preview tab first — that is what this
           The time is the other thing the controls cannot say, because a browser
           shows the READER's clock and the schedule fires on the VILLA's. */}
       <p className="muted body-text">
-        One briefing each: how often, at what time in the villa&rsquo;s own
-        clock, and which profile it is for. Where a profile&rsquo;s briefings
-        go — and whose voice they are written in — comes from that
-        person&rsquo;s row in Advanced Settings → Supervision.
-      </p>
+          One briefing each: how often, at what time, and which profile it is for.
+          <InfoHint label="Briefing schedules">
+            Times are in the villa’s own clock. Where a profile’s briefings go — and
+            whose voice they are written in — comes from that person’s row in
+            Advanced Settings → Supervision.
+          </InfoHint>
+        </p>
       {schedules.length === 0 && (
         <p className="muted body-text">
           None yet. Nothing is sent until you add one.

@@ -17,6 +17,7 @@
 // someone asked for it, not "whenever this component happened to re-render".
 
 import { useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { Sparkles, Download, Save } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -96,11 +97,13 @@ export default function ReportTab({
   return (
     <div className="fm-stack">
       <p className="muted body-text">
-        The operational annex for the monthly owner report — maintenance performed
-        against the configured schedule, spend against the Minor Maintenance cap,
-        faults and response times. Financial reporting is out of scope and stays
-        with whoever already handles it.
-      </p>
+          The operational annex for the monthly owner report.
+          <InfoHint label="Operational annex">
+            Maintenance performed against the configured schedule, spend against the
+            Minor Maintenance cap, faults and response times. Financial reporting is
+            out of scope and stays with whoever already handles it.
+          </InfoHint>
+        </p>
 
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <label className="fm-field" style={{ maxWidth: 200 }}>

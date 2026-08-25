@@ -251,7 +251,26 @@ async def run_forever(session: ClientSession,
                 store.read_json(store.REPORTS_CONFIG_FILE, {}))
         minutes = cadence_minutes(settings)
         try:
-            counts = await run_once(session)
+            # ⚠️ A REAL STAMP, AND ITS ABSENCE MADE COVERAGE LIE FOREVER.
+            # `run_once`'s `now_iso` defaults to "" and this call never passed
+            # one, so `journal.append` wrote `online_since: "" or ""` on every
+            # cycle since the loop was written — and `journal.coverage`
+            # computes `complete = bool(online_since)`, so the journal has
+            # NEVER once reported complete coverage on any villa. The Villa
+            # Document printed "part of this window was not observed" above
+            # every delta a listening villa ever produced. That exact sentence
+            # is what `coverage`'s own docstring records having already fixed
+            # once, for a different cause, calling it "an instrument lying
+            # about the thing it exists to measure".
+            #
+            # ⚠️ UTC WITH AN EXPLICIT +00:00, MATCHING `sources._coverage`.
+            # That function builds its window the same way and calls
+            # `journal.coverage(since_iso)` with no `as_utc` normaliser, so the
+            # two are compared as raw strings — a local-offset stamp here would
+            # replace a permanent false alarm with an intermittent one, which
+            # is harder to find.
+            now_iso = time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime())
+            counts = await run_once(session, now_iso=now_iso)
             # ⚠️ THE SEED COUNT IS ON THE LINE BECAUSE ITS ABSENCE IS WHAT MADE
             # THE DEFECT INVISIBLE. `observed 1256 entities, 1256 changed` reads
             # as a villa in which everything moved at once; it was a restart

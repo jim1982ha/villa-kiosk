@@ -46,7 +46,7 @@ from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
 
 from agent.refs import RefTable
 from agent.tools.base import BaseTool
-from reports.log import swallow
+from reports.log import swallow, warn
 
 #: ⚠️ THE WINDOW AND THE SAMPLE MINIMUMS BELONG TO `observe/salience.py` AND ARE
 #: NOT RESTATED HERE. This module decides what to feed it, never what counts as
@@ -612,6 +612,27 @@ def service_caller(session: Any) -> Optional[Callable[..., Any]]:
     return call
 
 
+#: Names already reported, so the warning is once per process rather than once
+#: per run. ⚠️ A per-run warning would print the same line eight times an hour
+#: and train a reader to skip it.
+_UNWIRED_SEEN: set = set()
+
+#: The TOOL names withheld, as the model would have seen them. ⚠️ Separate from
+#: `_UNWIRED_SEEN`, which holds CLASS names for the once-only warning: a test
+#: comparing against `Registry.names` needs the published name, and deriving one
+#: from the other by convention is how the two drift.
+_UNWIRED_SEEN_NAMES: set = set()
+
+
+def _warn_unwired(name: str) -> None:
+    """Say a tool exists but has no source, once."""
+    if name in _UNWIRED_SEEN:
+        return
+    _UNWIRED_SEEN.add(name)
+    warn(f"{name} has no source wired, so it is NOT published to the model — "
+         f"it would refuse every call and that refusal reaches the owner")
+
+
 def build_tools(session: Any = None, *,
                 config: Optional[Mapping[str, Any]] = None,
                 refs: Optional[RefTable] = None) -> List[BaseTool]:
@@ -659,7 +680,26 @@ def build_tools(session: Any = None, *,
         if cls not in _wired:
             made.append(cls())
     made.extend(cls(refs=refs) for cls in ha_tools.HA_TOOLS)
-    made.extend(cls(refs=refs) for cls in log_tools.LOG_TOOLS)
+    # ⚠️ AN UNWIRED TOOL IS NO LONGER PUBLISHED, AND WHAT CHANGED IS THE
+    # CONSEQUENCE, NOT THE CODE BEING WRONG BEFORE. The note above says a
+    # source-less tool "REFUSES and says so, so an unwired member is loudly
+    # missing rather than quietly empty" — true while refusals were read by
+    # developers. Not any more: on 2026-08-25 an investigation called
+    # `read_logs`, got "this tool is not connected to the villa's logs", and
+    # told the OWNER on their phone that "log access is also down" — which
+    # reads as a fault on the property and is not one. It also spends prefix
+    # tokens on a schema that can never answer, in the tier where schemas are
+    # already 84% of the bill.
+    #
+    # ⚠️ SO THE GAP IS MADE LOUD TO THE OPERATOR INSTEAD — once, in the add-on
+    # log, which is where the previous design wanted it — never to a household.
+    for cls in log_tools.LOG_TOOLS:
+        tool = cls(refs=refs)
+        if getattr(tool, "_source", None) is None:
+            _warn_unwired(cls.__name__)
+            _UNWIRED_SEEN_NAMES.add(tool.name)
+            continue
+        made.append(tool)
     made.extend(cls() for cls in ledger_tools.LEDGER_TOOLS)
     # ⚠️ NO SOURCE ARGUMENT: its source is the filesystem the add-on ships, so
     # it is the one tool here that answers correctly on a fresh install with no

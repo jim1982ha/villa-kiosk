@@ -52,6 +52,7 @@
 // first subscribe — through every drop and restart. See `collect._LIVE`.
 
 import { Ban, Check, Info, PlugZap, Radio, RefreshCw } from "lucide-react";
+import InfoHint from "@/components/common/InfoHint";
 import type { ReportPreview, ReportsDiagnostics } from "@/reports/reportsApi";
 import type { ReportsConfig } from "@/reports/reportsTypes";
 
@@ -337,12 +338,14 @@ export default function ModulesTab({
           screen. */}
       <h3 className="settings-section-title">Adding your own checks</h3>
       <p className="muted body-text">
-        These arrive with the add-on — nothing to install, nothing to delete.
-        Your own Home Assistant automations are the ones that extend a brief:
-        anything they report is grouped, priced and written in automatically.
-        &ldquo;Your automations&rdquo; above lists what has been heard, which is
-        how you confirm a new one is arriving.
-      </p>
+          These arrive with the add-on — nothing to install, nothing to delete.
+          <InfoHint label="Built-in checks">
+            Your own Home Assistant automations are what extend a brief: anything they
+            report is grouped, priced and written in automatically. “Your automations”
+            above lists what has been heard, which is how you confirm a rule is
+            actually firing.
+          </InfoHint>
+        </p>
     </div>
   );
 }

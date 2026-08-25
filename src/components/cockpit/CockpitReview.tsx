@@ -34,6 +34,7 @@
 // decision whatever the browser sends.
 
 import { useCallback, useEffect, useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { Check, ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
 import SourceChip from "@/components/common/SourceChip";
 
@@ -115,11 +116,12 @@ export default function CockpitReview() {
         <SourceChip source="agent" />
       </div>
       <p className="muted body-text">
-        The villa has written these down after investigating something and is
-        asking whether to keep them. An approved one is consulted every time
-        something similar happens again; nothing here is in use until you say
-        so.
-      </p>
+          The villa wrote these after investigating, and asks whether to keep them.
+          <InfoHint label="Proposed notes">
+            An approved one is consulted every time something similar happens again.
+            Nothing here is in use until you say so.
+          </InfoHint>
+        </p>
 
       <div className="cockpit-attention-list">
         {rows.map((draft) => (

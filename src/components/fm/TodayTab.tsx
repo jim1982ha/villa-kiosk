@@ -7,6 +7,7 @@
 // maintenance-standard clause exists to prevent, whatever that clause is.
 
 import { useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
 import { scheduleBoard, formatIdr, localStamp, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
@@ -52,11 +53,12 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
         <CalendarClock size={28} />
         <h3>No maintenance schedule yet</h3>
         <p className="muted body-text">
-          Add your property's own recurring maintenance tasks — air
-          conditioning service, pest control, pool and landscaping, whatever
-          your own schedule or agreement calls for — in the
-          <strong> Schedule</strong> tab. Each task tracks its own interval,
-          due date and completion history from there.
+          Add your property's own recurring maintenance tasks in the Schedule tab.
+          <InfoHint label="Recurring maintenance">
+            Air conditioning service, pest control, pool and landscaping — whatever your
+            own schedule or agreement calls for. Each task tracks its own interval,
+            due date and completion history from there.
+          </InfoHint>
         </p>
         {/* Even with no schedule configured, work already logged — a fault
             fixed, say — is part of the record and must not vanish behind an

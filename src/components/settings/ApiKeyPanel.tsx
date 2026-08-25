@@ -24,6 +24,7 @@
 // cannot show it, and neither can anything else.
 
 import { useCallback, useEffect, useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { KeyRound, Loader2 } from "lucide-react";
 
 import { fetchNarrationSecrets, saveNarrationSecret } from "@/reports/reportsApi";
@@ -79,11 +80,14 @@ export default function ApiKeyPanel() {
   return (
     <div className="fm-stack">
       <p className="muted body-text">
-        One key, spent by everything the villa reasons with: the checks on their
-        cadence, every investigation, every answer to a message, and a briefing
-        if you have asked for one to be written by a service. Nothing here runs
-        without it — and nothing spends it while supervision is off.
-      </p>
+          One key, spent by everything the villa reasons with.
+          <InfoHint label="Provider key">
+            The checks on their cadence, every investigation, every answer to a
+            message, and a briefing if you have asked for one to be written by a
+            service. Nothing here runs without it — and nothing spends it while
+            supervision is off.
+          </InfoHint>
+        </p>
 
       {providers.length > 1 && (
         <label className="fm-field">
