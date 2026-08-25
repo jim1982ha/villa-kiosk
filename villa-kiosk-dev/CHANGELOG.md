@@ -1,13 +1,13 @@
-## 2.741.0
+## 2.742.0
 
-### Added — a switch for "let the assistant decide, not your automations", on Act & Tell
+### Changed — four settings became two, and a combination that recorded nothing is now unreachable
 
-2.740.0 added the setting and no control wrote it, so it could only be changed by editing the stored
-document — an invisible flag that silently changes which checks run, which is what gets forgotten and
-then misdiagnosed weeks later. It is now a switch on Act & Tell beside quiet hours and the actuable
-devices, the same authority question one level up: those say what the villa may DO, this says who
-decides what is worth SAYING. The setting also moved from the reports config into the agent config
-where that tab already has a draft, since splitting one dialog across two stored documents for one
-checkbox was the wrong seam. Its explanation says plainly that nothing is doubled up: a finding about
-a device one of your automations reported is still dropped in favour of yours, per device.
+"Stay silent" and "investigate without asking" were independent checkboxes, so a fourth combination
+existed nobody would choose on purpose: everything queues, nothing is investigated, nothing is
+recorded, and the comparison the cutover is read from comes back empty looking like a verdict on the
+assistant — this villa spent its whole observation period there. They are now one choice, Observe only
+/ Ask me first / Live, so it cannot be selected, and each option explains itself. Separately, the two
+numbers bounding one investigation became Brief / Normal / Thorough; the paragraph above them already
+began "both of these bound a single investigation". The per-step token ceiling did not join them: it
+costs nothing unused, and filing it among paid settings is how it gets turned down. Nothing stored changed.
 
