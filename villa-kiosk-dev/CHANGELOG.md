@@ -1,3 +1,15 @@
+## 2.753.0
+
+### Changed — rationale moved into (i) tooltips, and the Triage tab stopped being blank
+Six paragraphs of "why" sat on screen where a line plus a tooltip does the job; a
+scan found every body paragraph over two lines without one. The Triage tab
+rendered a step header over nothing on a villa running Live — its approval queue
+is correctly empty there, but the tier's real output was only visible under
+Advanced. Also: `.fm-list` was the one list class not resetting its bullet; the
+segmented control's height is a token now, tighter for a mouse and the full 44px
+for a finger; a field's name sits under its own control; Act & Tell asks who
+decides before when to interrupt; the source key moved to Advanced.
+
 ## 2.752.0
 
 ### Fixed — supervision cost $8.55/day because 84% of every request was tools it never called
