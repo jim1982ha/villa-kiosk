@@ -1,3 +1,15 @@
+## 2.762.0
+
+### Removed — a trigger nothing could fire
+The agent's settings offered three triggers and one of them, `event`, had no
+producer anywhere: no code path ever started a pass on a villa event. It was
+never in the interface either, which is the only reason it never misled anyone —
+switching it would have changed nothing in either direction. Wiring it was the
+alternative and was refused: a villa event waking the agent means a full
+investigation every time something trips, and the safety automations that would
+trip it already alert you directly in under a second. A test now checks that
+every trigger an owner can switch on has something able to fire it.
+
 ## 2.761.0
 
 ### Fixed — the Home Assistant switch described the wrong difference

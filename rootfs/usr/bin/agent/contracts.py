@@ -35,7 +35,13 @@ CONTRACT_VERSION: Final[int] = 1
 #: is the same reasoning run with a different origin and a reply at the end;
 #: making it a separate path is how the two drift and how a question gets an
 #: answer the scheduled brief would have contradicted.
-TRIGGER: Final[Tuple[str, ...]] = ("manual", "scheduled", "event", "chat")
+# ⚠️ `event` WENT IN 2.762.0 — nothing ever produced one. Removing a value from
+# a STORED vocabulary is normally the dangerous kind of change; it is safe here
+# precisely because no code path ever called `run_once(trigger="event")`, so no
+# audit row, run id or usage record on any villa can carry it. The three that
+# remain are the three real entry points: the clock, the "check the villa now"
+# button, and chat.
+TRIGGER: Final[Tuple[str, ...]] = ("manual", "scheduled", "chat")
 
 # ── CTR-008 · how a run ended ───────────────────────────────────────────────
 #: ⚠️ `declined` IS NOT `failed`. Declining is a correct outcome — the budget

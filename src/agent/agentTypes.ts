@@ -25,7 +25,7 @@
 export const AGENT_CONTRACT_VERSION = 1;
 
 /** What caused a run. `chat` is a first-class trigger, not a special case. */
-export const TRIGGER = ["manual", "scheduled", "event", "chat"] as const;
+export const TRIGGER = ["manual", "scheduled", "chat"] as const;
 export type Trigger = (typeof TRIGGER)[number];
 
 /** How a run ended. `declined` is a CORRECT outcome and is not `failed`. */

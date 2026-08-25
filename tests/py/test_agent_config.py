@@ -39,8 +39,15 @@ def test_every_kill_switch_ships_OFF() -> None:
     fresh = config.view({})
     assert fresh["enabled"] is False
     assert fresh["act_enabled"] is False
-    assert fresh["triggers"]["chat"] is False
-    assert fresh["triggers"]["event"] is False
+    # ⚠️ EVERY TRIGGER EXCEPT THE CLOCK, DERIVED RATHER THAN LISTED. This named
+    # `chat` and `event` individually, so deleting the dead `event` trigger in
+    # 2.762.0 turned it red for a reason that had nothing to do with the
+    # property — and a test that must be edited to follow an intended deletion
+    # is measuring the edit. `scheduled` is the one that ships ON, because the
+    # cadence IS the product; it spends nothing until `enabled` is also true.
+    for name, on in fresh["triggers"].items():
+        if name != "scheduled":
+            assert on is False, f"the {name} trigger ships ON"
 
 
 # ── defaults are never persisted ───────────────────────────────────────────

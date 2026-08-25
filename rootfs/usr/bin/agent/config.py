@@ -83,7 +83,20 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: true the moment anything is added under it, which is why the heading now
     #: names the shape instead of counting it.
     "mcp_url": "",
-    "triggers": {"scheduled": True, "event": False, "chat": False},
+    # ⚠️ TWO, AND `event` WAS DELETED IN 2.762.0 BECAUSE NOTHING COULD FIRE IT.
+    # It was a switch an owner could set and no code path anywhere called
+    # `run_once(trigger="event")` — the three real entry points are the clock,
+    # the "check the villa now" button and chat. It was never in the UI either,
+    # which is the only reason it never misled anybody: flipping it changed
+    # nothing in either direction.
+    #
+    # ⚠️ AND WIRING IT WAS THE OTHER OPTION, REFUSED ON PURPOSE (owner decision,
+    # 2026-08-26). A villa event waking the agent means a frontier-model
+    # investigation every time something trips, and the `critical_*` blueprints
+    # that would trip it ALREADY alert the owner directly in under a second with
+    # no add-on and no internet. The agent's job is finding what nobody alarmed
+    # on; paying it to react to things that already alarmed is the opposite.
+    "triggers": {"scheduled": True, "chat": False},
     #: ⚠️ WHAT HAPPENS WHEN TRIAGE ESCALATES (ADR-021, owner decision
     #: 2026-08-23). "auto" investigates; "approve" records the escalation and
     #: waits for a person. AUTO IS THE DEFAULT, and it is safe as a default only

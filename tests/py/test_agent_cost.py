@@ -277,3 +277,51 @@ def test_the_ha_tools_copy_states_the_REAL_tool_count() -> None:
             f"the copy says {wrong!r}: five times is what is SENT, about twice "
             "is what is PAID — uncached input and output do not shrink with the "
             "tool list")
+
+
+def test_every_TRIGGER_the_config_offers_can_actually_START_a_pass() -> None:
+    """⚠️ THE `event` TRIGGER WAS A SWITCH NOTHING COULD FIRE (deleted 2.762.0).
+    It sat in `DEFAULTS["triggers"]` and in the contract vocabulary, and no code
+    path anywhere called `run_once(trigger="event")`. It was never in the UI
+    either, which is the ONLY reason it never misled anyone — flipping it would
+    have changed nothing in either direction.
+
+    That is this project's silent-subsystem shape for the sixth time: a control
+    that looks like a decision and is not connected to one. So the rule is
+    checked rather than remembered — a trigger an owner can switch must have a
+    producer, and a producer must be switchable.
+    """
+    import os
+    bins = os.path.join(ROOT, "rootfs", "usr", "bin")
+    produced = set()
+    for base, dirs, files in os.walk(bins):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(base, name), "r", encoding="utf-8") as fh:
+                src = fh.read()
+            # ⚠️ CODE ONLY, AND THE FIRST CUT OF THIS PIN FOUND `event` IN ITS
+            # OWN DOCUMENTATION. The comments in config.py and contracts.py
+            # explaining the deletion both quote `run_once(trigger="event")`, so
+            # the scan counted the record of the removal as evidence the thing
+            # still existed and the mutation survived. FIFTH time in one session
+            # — it is written down in `feedback_mutation-testing` and I still did
+            # not apply it here. Strip docstrings and comment lines first.
+            src = re.sub(r'"""[\s\S]*?"""', "", src)
+            src = "\n".join(l for l in src.splitlines()
+                             if not l.lstrip().startswith("#"))
+            # ⚠️ THE LITERAL AT A CALL SITE, and `MANUAL`, which the proxy's
+            # "check the villa now" button passes as a constant rather than a
+            # string. A grep for quoted words alone would report `manual` dead.
+            produced.update(re.findall(r'trigger=["\'](\w+)["\']', src))
+            if "trigger=MANUAL" in src or "MANUAL: Final" in src:
+                produced.add("manual")
+
+    offered = set(agent_config.DEFAULTS["triggers"])
+    # `manual` is deliberately NOT offered — see scheduler._run_once: it is
+    # exempt rather than looked up, because a person pressing a button IS the
+    # authorisation, and a `trigger_enabled` lookup would refuse it by absence.
+    dead = sorted(offered - produced - {"scheduled"})
+    assert not dead, (
+        f"these triggers can be switched on and nothing can fire them: {dead}")

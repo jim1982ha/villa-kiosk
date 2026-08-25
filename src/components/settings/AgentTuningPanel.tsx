@@ -61,7 +61,7 @@ const EMPTY: Draft = {
   // A DEFAULT: a seeded entry here would be an agent acting on a device nobody
   // authorised, on every villa that has not opened this panel.
   actuableEntities: [],
-  triggers: { scheduled: true, event: false, chat: false },
+  triggers: { scheduled: true, chat: false },
 };
 
 /** ⚠️ CLAMPED ON BLUR, NEVER ON KEYSTROKE, AND THE FIRST VERSION DID THE

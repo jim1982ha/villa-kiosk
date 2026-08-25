@@ -76,7 +76,7 @@ const AGENT_WIRE_KEYS = {
   suppressed_subjects: "suppressedSubjects",
 } as const;
 
-export type AgentTrigger = "scheduled" | "event" | "chat";
+export type AgentTrigger = "scheduled" | "chat";
 
 /** One row of the people table.
  *
