@@ -223,3 +223,30 @@ def test_the_report_does_not_recompute_what_snapshot_already_decided() -> None:
     import inspect
     src = inspect.getsource(heartbeat.report)
     assert "journal.read" not in src and "_span_days" not in src
+
+
+# ── coverage, so "is it fixed" has an answer a person can read ─────────────
+
+def test_the_heartbeat_reports_coverage_AND_the_stamp_behind_it() -> None:
+    """⚠️ THE VERDICT ALONE CANNOT SEPARATE TWO DIFFERENT ANSWERS. `complete` is
+    computed as `bool(online_since)`, so a bare INCOMPLETE means either "the
+    stamp is missing" — the v2.744.0 defect, which reached an owner's phone as a
+    warning about a gap that never happened — or "the window genuinely starts
+    before we were listening", which is real and needs no fix."""
+    _fill([{"id": "light.a", "at": "2026-08-20T00:00:00+00:00"},
+           {"id": "light.b", "at": "2026-08-22T00:00:00+00:00"}])
+    line = heartbeat.report(heartbeat.snapshot({}))[0]
+    assert "coverage complete" in line
+    assert "listening-since 2026-08-22T00:00:00+00:00" in line
+
+
+def test_an_UNSTAMPED_journal_says_INCOMPLETE_and_shows_why() -> None:
+    journal.append([{"event_type": "state_changed", "time_fired": "t",
+                     "data": {"entity_id": "light.a", "old_state": None,
+                              "new_state": {"state": "on", "attributes": {}}}}],
+                   now_iso="")
+    line = heartbeat.report(heartbeat.snapshot({}))[0]
+    assert "coverage INCOMPLETE" in line
+    assert "listening-since ?" in line, (
+        "an empty stamp must print as ? — it IS the defect, and a blank there "
+        "reads as a formatting slip rather than a finding")

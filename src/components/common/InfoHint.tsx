@@ -18,8 +18,22 @@
 // bubbles open at once overlap unreadably in a narrow pane, and a provider
 // threaded through every settings surface for one popover is more machinery
 // than the problem deserves.
+//
+// ⚠️ IT IS A PORTAL WITH `position: fixed`, AND THE FIRST VERSION WAS NEITHER.
+// As an absolutely-positioned child it lived inside `.modal`, which sets
+// `overflow: hidden`, and inside a pane that scrolls — so the bubble was CLIPPED
+// by the dialog edge and by the footer, and a hint near the bottom of a pane
+// showed two lines and a cut. Reported from the screen. No amount of z-index
+// fixes a clip; the element has to leave the clipping ancestor entirely.
+//
+// ⚠️ AND IT ANCHORS TO THE PARAGRAPH, NOT TO THE ICON. The (i) sits at the END
+// of a sentence, so aligning the bubble to it put a 42ch block starting at the
+// right-hand edge of the text and hanging off the dialog — the second thing
+// visible in that report. It now takes the icon's VERTICAL position and the
+// text block's LEFT edge, which is where a reader's eye already is.
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 
 /** Which hint is open, so opening one closes the last. ⚠️ The id is not held
@@ -31,6 +45,8 @@ function setOpen(id: string | null) {
   for (const fn of listeners) fn(id);
 }
 
+interface Spot { top: number; left: number; width: number; above: boolean; }
+
 export default function InfoHint({ children, label }: {
   /** The detail. Prose, not a second description — it is read on demand. */
   children: React.ReactNode;
@@ -39,7 +55,47 @@ export default function InfoHint({ children, label }: {
 }) {
   const id = useId();
   const [open, setLocal] = useState(false);
+  const [spot, setSpot] = useState<Spot | null>(null);
   const box = useRef<HTMLSpanElement | null>(null);
+  const bubble = useRef<HTMLDivElement | null>(null);
+
+  /** Where to put it, in viewport coordinates. */
+  const place = useCallback(() => {
+    const btn = box.current?.getBoundingClientRect();
+    if (!btn) return;
+    // ⚠️ THE PARAGRAPH, NOT THE ICON, decides the left edge and the width — see
+    // the header. Falls back to the icon when the hint is not inside a block,
+    // which is the case a future caller will hit before this comment is read.
+    const host = box.current?.closest("p, label, div")?.getBoundingClientRect();
+    const pad = 8;
+    const width = Math.min(host?.width ?? 320, window.innerWidth - pad * 2, 420);
+    const left = Math.max(pad, Math.min(
+      host?.left ?? btn.left, window.innerWidth - width - pad));
+    // Flip above when the space below cannot hold a few lines. Measured against
+    // the real bubble once it exists, estimated before that.
+    const need = bubble.current?.offsetHeight ?? 96;
+    const below = window.innerHeight - btn.bottom - pad;
+    return setSpot({
+      top: below < need && btn.top > need ? btn.top - need - 6 : btn.bottom + 6,
+      left, width, above: below < need && btn.top > need,
+    });
+  }, []);
+
+  useLayoutEffect(() => { if (open) place(); }, [open, place]);
+
+  // ⚠️ RE-PLACE ON SCROLL AND RESIZE, AND CLOSE IS NOT ENOUGH. These panes
+  // scroll; a fixed bubble left behind while its icon moves is worse than one
+  // that vanishes, because it still looks anchored to something.
+  useEffect(() => {
+    if (!open) return;
+    const on = () => place();
+    window.addEventListener("resize", on);
+    window.addEventListener("scroll", on, true);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("scroll", on, true);
+    };
+  }, [open, place]);
 
   useEffect(() => {
     const fn = (next: string | null) => setLocal(next === id);
@@ -75,9 +131,12 @@ export default function InfoHint({ children, label }: {
       >
         <Info size={14} aria-hidden="true" />
       </button>
-      {open && (
-        <span className="info-hint-bubble" role="tooltip">{children}</span>
-      )}
+      {open && spot && createPortal(
+        <div ref={bubble} role="tooltip" className="info-hint-bubble"
+             style={{ top: spot.top, left: spot.left, width: spot.width }}>
+          {children}
+        </div>,
+        document.body)}
     </span>
   );
 }

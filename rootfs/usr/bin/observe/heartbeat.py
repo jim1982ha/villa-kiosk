@@ -109,6 +109,18 @@ def snapshot(stats: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
                 talkers[entity_id] = talkers.get(entity_id, 0) + 1
     ranked = sorted(talkers.items(), key=lambda kv: (-kv[1], kv[0]))
 
+    # ⚠️ COVERAGE ON THE HEARTBEAT, BECAUSE "IS IT FIXED" HAD NO ANSWER A
+    # PERSON COULD READ. `journal.coverage` decides whether the agent believes
+    # it was watching, and it answered INCOMPLETE on every villa from the day
+    # the loop was written (v2.744.0) — which reached an owner as a phone
+    # warning about a gap that never happened. The fix is one line in the
+    # cycle; confirming it was a code trace. Now it is a field.
+    #
+    # ⚠️ IT REPORTS `online_since` RATHER THAN JUST THE VERDICT. `complete` is
+    # computed as `bool(online_since)`, so a bare "complete=n" cannot separate
+    # "the stamp is missing" — the defect — from "the window genuinely starts
+    # before we were listening", which is a real and different answer.
+    cov = journal.coverage("")
     st = dict(stats or {})
     cycles = int(st.get("cycles") or 0)
     rows = int(st.get("rows") or 0)
@@ -129,6 +141,7 @@ def snapshot(stats: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
                          if total else None),
         "online_since": current["online_since"],
         "last_seen": current["last_seen"],
+        "complete": bool(cov.get("complete")),
         "cycles": cycles,
         "rows": rows,
         "mean_rows": (rows / cycles) if cycles else None,
@@ -163,7 +176,12 @@ def report(snap: Mapping[str, Any]) -> List[str]:
             + f" mean {_num(snap.get('mean_rows'), '', 1)}/cycle"
             + f" restarts {snap['restarts']}"
             + f" seeded {snap['seeded']:,}"
-            + f" up {_num(snap.get('uptime_hours'), 'h', 1)}")
+            + f" up {_num(snap.get('uptime_hours'), 'h', 1)}"
+            # ⚠️ THE STAMP IS PRINTED, NOT JUST THE VERDICT. An empty one IS
+            # the defect this field exists to catch, and "listening ?" says so
+            # in a way "coverage n" cannot.
+            + f" | coverage {'complete' if snap.get('complete') else 'INCOMPLETE'}"
+            + f" listening-since {snap.get('online_since') or '?'}")
 
     share = snap.get("talker_share")
     named = " ".join(f"{eid} {n:,}" for eid, n in snap["talkers"]) or "none"

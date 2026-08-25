@@ -5466,18 +5466,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .info-hint-btn:hover, .info-hint-btn[aria-expanded="true"] { color: var(--text); }
 .info-hint-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ⚠️ CONSTRAINED IN CH, NOT PX. A bubble sized in pixels is a different number
-   of words per line on every device; ~42ch keeps it readable on a phone and
-   stops it becoming a single long line on a desktop. */
+/* ⚠️ `fixed`, AND IN A PORTAL ON <body> — see InfoHint's header. As an
+   absolutely-positioned child it lived inside `.modal { overflow: hidden }` and
+   inside a scrolling pane, so a hint near the bottom of a dialog was CLIPPED by
+   the dialog edge and the footer. z-index cannot beat a clip.
+   ⚠️ NO WIDTH OR OFFSET HERE — the component measures the paragraph it belongs
+   to and sets top/left/width inline, because those depend on where the reader
+   is, which CSS cannot see. This rule carries only appearance. */
 .info-hint-bubble {
-  position: absolute; z-index: 40; inset-inline-start: 0; top: calc(100% + 6px);
-  display: block; width: max-content; max-width: min(42ch, 78vw);
+  position: fixed; z-index: 1200;
   padding: 8px 10px; border-radius: var(--radius-sm);
   background: var(--surface-3); color: var(--text);
   border: 1px solid var(--border); box-shadow: var(--shadow-2);
   font-size: var(--text-sm); font-weight: 400; line-height: 1.45;
   text-align: start; white-space: normal;
 }
-/* Near the right edge a start-anchored bubble overflows the dialog; flipping on
-   the last third of the row is cheaper than measuring. */
-.info-hint:nth-last-child(-n+2) .info-hint-bubble { inset-inline-start: auto; inset-inline-end: 0; }
