@@ -158,6 +158,43 @@ function Num({ label, note, value, min, onChange }: {
 const MODELS = ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"];
 const OTHER = "\u2026";  // the escape-hatch segment, not a model id
 
+/** One choice from a small closed set, on the `.segmented` control this
+ *  stylesheet already defines. Same reading order as `Num` and `Text`:
+ *  explanation, control, name.
+ *
+ *  ⚠️ IT EXISTS BECAUSE TWO PAIRS OF CONTROLS WERE EACH ONE CONCEPT WEARING
+ *  TWO WIDGETS, and one of the pairs had a combination that silently did
+ *  nothing. A closed set makes the dead combination unreachable rather than
+ *  merely discouraged — the same reason `agent/review.py` puts an unapproved
+ *  playbook in a different DIRECTORY instead of behind a flag. */
+function Choice<T extends string>({ label, note, value, options, onChange }: {
+  label: string; note: React.ReactNode; value: T;
+  options: { id: T; text: string; hint: string }[];
+  onChange: (v: T) => void;
+}) {
+  const chosen = options.find((o) => o.id === value) ?? options[0];
+  return (
+    <label className="fm-field">
+      <p className="muted body-text">{note}</p>
+      <div className="segmented segmented-wrap" role="group" aria-label={label}>
+        {options.map((o) => (
+          <button key={o.id} type="button" title={o.hint}
+                  className={value === o.id ? "active" : ""}
+                  onClick={() => onChange(o.id)}>
+            {o.text}
+          </button>
+        ))}
+      </div>
+      {/* ⚠️ THE CHOSEN OPTION EXPLAINS ITSELF UNDERNEATH. A segmented control
+          shows three words and hides the consequence of picking one; the whole
+          point of the merge is fewer controls, not less information. */}
+      <p className="muted body-text">{chosen.hint}</p>
+      <span>{label}</span>
+    </label>
+  );
+}
+
+
 function Text({ label, note, value, placeholder, onChange }: {
   label: string; note: string; value: string; placeholder?: string;
   onChange: (v: string) => void;
@@ -284,16 +321,49 @@ Off means nothing runs and nothing is spent. Home Assistant keeps
         </>}
       />
 
-      <ToggleField
-        checked={draft.shadow}
-        onChange={(shadow) => edit({ shadow })}
-        label="Stay silent — write findings down, tell nobody"
+      {/* ⚠️ TWO CHECKBOXES BECAME ONE CHOICE BECAUSE THE 2x2 HAD A DEAD CELL,
+          AND THE REFERENCE VILLA SPENT ITS WHOLE SHADOW PERIOD IN IT. `shadow`
+          and `investigate_mode` are independent booleans, so "stay silent" +
+          "ask before investigating" was reachable — and in that combination
+          triage escalates, `reason.follow_up` returns early recording each
+          escalation as AWAITING, no Concern is ever produced, and the shadow
+          diff the cutover is read from compares an empty column against the
+          rules. It read "21 things your automations caught and the villa did
+          not / Both found (0)" and looked like a verdict on the agent. It was
+          a verdict on the settings.
+          ⚠️ EACH BOX'S COPY ALSO ASSUMED THE OTHER'S STATE: "read a few weeks
+          of what it would have sent" is false when nothing is investigated,
+          and "stay silent already stops anything reaching you" is the reason
+          auto is safe. Two controls that can only be explained in terms of
+          each other are one control.
+          ⚠️ THE STORED KEYS ARE UNCHANGED — this writes both, so there is no
+          migration and the backend, the API and every test are untouched. */}
+      <Choice<"observe" | "ask" | "live">
+        label="How it should work"
         note={<>
-On to begin with, so you can read a few weeks of what it would have sent
-        before it sends anything. ⚠️ It still costs the same while silent — it
-        does all the same thinking and only holds back the message. To spend
-        nothing, switch the watching off above instead.
+          Three ways to run it, from most cautious to fully live. The middle one
+          is the safe place to start once you want it to reach you.
         </>}
+        value={draft.shadow ? "observe"
+               : draft.investigateMode === "auto" ? "live" : "ask"}
+        onChange={(mode) => edit(
+          mode === "observe" ? { shadow: true, investigateMode: "auto" }
+          : mode === "ask" ? { shadow: false, investigateMode: "approve" }
+          : { shadow: false, investigateMode: "auto" })}
+        options={[
+          { id: "observe", text: "Observe only",
+            hint: "It watches, looks into what it notices and writes findings "
+                + "down — and tells you nothing. Use this to read a few weeks "
+                + "of what it would have sent. It costs the same as running "
+                + "live: it does all the thinking and holds back the message." },
+          { id: "ask", text: "Ask me first",
+            hint: "It watches and flags what looks wrong, then waits for you "
+                + "to approve each closer look before spending anything on it. "
+                + "Findings reach you once approved." },
+          { id: "live", text: "Live",
+            hint: "It watches, looks into what it notices by itself, and tells "
+                + "you what it concludes. This is the normal way to run it." },
+        ]}
       />
 
       <div className="settings-section-title">
@@ -397,17 +467,6 @@ Off, and nothing the villa does can change a switch, a light or a lock —
           lets an owner read that permission without assembling it from two
           dialogs. The switch stays here because it is a tuning dial; the list
           is a permission. */}
-      <ToggleField
-        checked={draft.investigateMode === "auto"}
-        onChange={(on) => edit({ investigateMode: on ? "auto" : "approve" })}
-        label="Investigate what it notices, without asking you first"
-        note={<>
-A check only spots that something looks wrong; an investigation is the
-        slow, expensive part that works out why. On by default, because “stay
-        silent” above already stops anything reaching you. Off, it lists what it
-        wanted to look into and spends nothing until you approve each one.
-        </>}
-      />
       {/* ⚠️ A SETTING WITH NO CONTROL IS THE SAME DEFECT AS A CONTROL WITH NO
           SETTING, AND I SHIPPED ONE. v2.696.0 added the quiet-hours window to
           the store, the wire map and the TypeScript type, and nothing here
@@ -420,26 +479,40 @@ A check only spots that something looks wrong; an investigation is the
       <div className="settings-section-title">
         How deeply it looks into one problem
       </div>
-      <p className="muted body-text">
-        Both of these bound a single investigation. Lower is cheaper and reaches
-        shallower conclusions; higher costs more and is more likely to find the
-        real cause.
-      </p>
-      <Num
-        label="Think again at most … times"
-        note={"Each round it reads what it has found so far and decides what to"
-              + " check next. Running out simply ends the investigation with"
-              + " what it has."}
-        value={draft.maxTurns} min={1}
-        onChange={(v) => edit({ maxTurns: v })}
-      />
-      <Num
-        label="Read at most … things from Home Assistant"
-        note={"How many separate readings — a device's history, a room's"
-              + " temperature, an automation's log — it may take while looking"
-              + " into one problem."}
-        value={draft.maxToolCalls} min={1}
-        onChange={(v) => edit({ maxToolCalls: v })}
+      {/* ⚠️ TWO NUMBERS BECAME ONE CHOICE, AND THE PARAGRAPH THAT USED TO SIT
+          HERE IS WHY: it opened "Both of these bound a single investigation" —
+          the screen was already telling a reader this was one concept wearing
+          two widgets, and asking them to pick a pair of integers that only
+          make sense together. Nobody wants twelve rounds and four readings.
+          ⚠️ `max_output_tokens` DELIBERATELY DID NOT JOIN THEM. It is a
+          CEILING that costs nothing unused, while these two are each a billable
+          round trip — collapsing all three would file a free setting among
+          paid ones and invite it to be turned down, which is the setting that
+          was silently killing 7 of every 8 supervision passes.
+          ⚠️ STORED KEYS UNCHANGED: this writes both, so no migration. */}
+      <Choice<"brief" | "normal" | "thorough">
+        label="How thorough each investigation is"
+        note={<>
+          One investigation is a slow, expensive look at one piece of equipment.
+          This is the only setting that changes what one costs.
+        </>}
+        value={draft.maxTurns <= 5 ? "brief"
+               : draft.maxTurns >= 11 ? "thorough" : "normal"}
+        onChange={(depth) => edit(
+          depth === "brief" ? { maxTurns: 4, maxToolCalls: 12 }
+          : depth === "thorough" ? { maxTurns: 12, maxToolCalls: 36 }
+          : { maxTurns: 8, maxToolCalls: 24 })}
+        options={[
+          { id: "brief", text: "Brief",
+            hint: "Four rounds of thinking and twelve readings. Cheapest, and "
+                + "it will sometimes stop before it has worked out the cause." },
+          { id: "normal", text: "Normal",
+            hint: "Eight rounds and twenty-four readings. Suits most villas." },
+          { id: "thorough", text: "Thorough",
+            hint: "Twelve rounds and thirty-six readings. Half again the cost "
+                + "of Normal, and more likely to reach the real cause. Worth "
+                + "it if investigations keep ending without a conclusion." },
+        ]}
       />
       {/* ⚠️ A CEILING, NOT A SPEND, AND THE NOTE SAYS SO — otherwise this reads
           as a cost dial and gets turned DOWN, which is the setting that was
