@@ -5547,6 +5547,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-sm); font-weight: 400; line-height: 1.45;
   text-align: start; white-space: normal;
 }
+/* ⚠️ PARAGRAPHS, SO A HINT CAN BE SENTENCES INSTEAD OF A WALL. A tooltip that
+   needs more than one idea used to run them together with bold labels mid-line
+   ("**Either way** it can … **On adds** the ability to …"), which reads as one
+   long sentence with shouting in it — reported twice on the same hint. The
+   browser default margin here is 1em, far too loose inside a 10px bubble. */
+.info-hint-bubble p { margin: 0; }
+.info-hint-bubble p + p { margin-top: 7px; }
 
 /* ── a tier that is switched off ────────────────────────────────────────────
    ⚠️ DIMMED AND UNRESPONSIVE, NEVER HIDDEN. Somebody deciding whether to turn

@@ -434,12 +434,21 @@ export default function AgentTuningPanel() {
         label="Never spend more than … dollars a day"
         note="0 means no daily limit. Reached, the villa stops asking the AI until midnight."
         more={<>
-          The other two boxes count requests, which are not all the same price:
-          a quick look costs a fraction of a cent and a full investigation costs
-          a few tens of cents. This one is in dollars, so it is the setting that
-          decides your bill. It covers everything — the villa&rsquo;s own checks
-          and your conversations alike — because a ceiling with an exemption in
-          it is not a ceiling.
+          {/* ⚠️ SHORT SENTENCES, ONE IDEA PER PARAGRAPH — the same rewrite the
+              tools hint needed twice. A 32-word sentence with two dashes in it
+              is where this one was. */}
+          <p>
+            The other box counts requests. Requests are not all the same price.
+            A quick look costs a fraction of a cent. A full investigation costs
+            a few tens of cents.
+          </p>
+          <p>
+            This box is in dollars, so it is the setting that decides your bill.
+          </p>
+          <p>
+            It covers everything: the villa&rsquo;s own checks and your
+            conversations. A ceiling with an exemption in it is not a ceiling.
+          </p>
         </>}
         value={draft.dailyUsdLimit} min={0}
         onChange={(v) => edit({ dailyUsdLimit: v })}
@@ -499,10 +508,15 @@ export default function AgentTuningPanel() {
         label="Let it operate devices, not just watch them"
         note="Off, it reads and tells you and cannot change a switch, light or lock."
         more={<>
-          Separate from everything above: those decide how much it looks and who
-          it tells, this decides whether it may touch anything at all. Leave it
-          off unless you have a reason. What it may touch is listed on Act &amp;
-          Tell, and both must agree before anything happens.
+          <p>
+            Every other setting here decides how much it looks and who it tells.
+            This one decides whether it may touch anything at all.
+          </p>
+          <p>Leave it off unless you have a reason.</p>
+          <p>
+            What it may touch is listed on Act &amp; Tell. Both that list and
+            this switch must agree before anything happens.
+          </p>
         </>}
       />
       {/* ⚠️ THE DEVICE ALLOW-LIST MOVED TO "ACT & TELL" IN 2.729.0. It is
@@ -585,19 +599,33 @@ export default function AgentTuningPanel() {
         checked={draft.haTools}
         onChange={(haTools) => edit({ haTools })}
         label="Let it look things up in Home Assistant directly"
-        note="Off, it investigates using what this add-on already records. On, it can also ask Home Assistant."
+        note="Off, it uses only what this add-on records. On, it can also look things up in Home Assistant."
         more={<>
-          <strong>Either way</strong> it can read each device&rsquo;s recorded
-          history, its own earlier findings, your maintenance record and the
-          villa&rsquo;s notes — which is everything its own trace shows it uses.
-          {" "}<strong>On adds</strong> the ability to search Home Assistant for
-          a device by name, read an integration&rsquo;s details or check system
-          health, the way you would yourself. Worth turning on if you find
-          investigations missing something you can see in Home Assistant.
-          {" "}<strong>It costs</strong> about twice as much per investigation:
-          each step carries a description of all 44 Home Assistant tools instead
-          of its own 10, which is roughly five times more sent every time.
-          Chatting with the assistant always has the full set, either way.
+          {/* ⚠️ SHORT SENTENCES IN PARAGRAPHS, NOT BOLD LABELS RUN INTO PROSE.
+              This hint was rewritten twice and reported both times — the second
+              version opened "**Either way** it can read …" and ran three ideas
+              together with bold words inside them, which reads as one long
+              sentence being shouted at intervals. One idea per paragraph, one
+              claim per sentence. */}
+          <p>
+            Off, it uses only what this add-on has recorded. That is each
+            device&rsquo;s history, its own past findings, your maintenance
+            record and the villa&rsquo;s notes.
+          </p>
+          <p>
+            On, it can also look things up in Home Assistant. It can find a
+            device by name. It can open an integration&rsquo;s details. It can
+            check system health.
+          </p>
+          <p>
+            Turn it on if investigations keep missing something you can see in
+            Home Assistant yourself.
+          </p>
+          <p>
+            On costs about twice as much per investigation. Each step sends 44
+            tool descriptions instead of its own 10.
+          </p>
+          <p>Chatting with the assistant always gets all 44, either way.</p>
         </>}
       />
       {/* ⚠️ A CEILING, NOT A SPEND, AND THE NOTE SAYS SO — otherwise this reads

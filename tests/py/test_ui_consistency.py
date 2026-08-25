@@ -599,3 +599,47 @@ def test_the_tier_FACTS_sit_above_the_description() -> None:
     body = tiers[tiers.index("export function TierIntro"):]
     assert body.index('<dl className="tier-facts">') < body.index("{tier.what}"), (
         "the facts row is below the description again")
+
+
+def test_no_tooltip_is_a_WALL_of_text() -> None:
+    """⚠️ REPORTED THREE TIMES ON ONE HINT. The Home Assistant tools tooltip was
+    rewritten twice and reported twice — the second version opened
+    "**Either way** it can read …" and ran three ideas together with bold words
+    inside them, which reads as one long sentence being shouted at intervals.
+
+    ⚠️ THE MEASURE IS SENTENCE LENGTH, NOT TOTAL LENGTH, and that distinction is
+    the whole rule. The fixed version of that hint is LONGER than the version
+    that was reported (97 words against 71) and reads far more easily, because
+    its longest sentence is 16 words rather than 32. A word budget would have
+    forced the wrong edit — cutting content instead of cutting clauses.
+
+    28 words is the bar: comfortably above every sentence that now ships, and
+    below every one that was reported.
+    """
+    limit = 28
+    offenders = []
+    for path, src in _tsx_sources():
+        for m in re.finditer(r"more=\{<>(.*?)</>\}", src, re.S):
+            body = re.sub(r"\{/\*.*?\*/\}", "", m.group(1), flags=re.S)
+            body = re.sub(r"<[^>]+>", "", body)
+            body = re.sub(r"\{[^{}]*\}", " ", body)
+            flat = " ".join(body.split())
+            for sentence in re.split(r"(?<=[.!?])\s+", flat):
+                words = len(sentence.split())
+                if words > limit:
+                    line = src[:m.start()].count("\n") + 1
+                    offenders.append(
+                        f"{os.path.relpath(path, SRC)}:{line} — {words} words")
+    assert not offenders, (
+        f"a tooltip sentence runs past {limit} words; split it rather than "
+        "trimming it:\n  " + "\n  ".join(offenders))
+
+
+def test_a_multi_paragraph_tooltip_is_SPACED() -> None:
+    """⚠️ THE BROWSER DEFAULT IS 1em, WHICH IS ENORMOUS INSIDE A 10px BUBBLE.
+    Splitting a wall into paragraphs only helps if the paragraphs are laid out;
+    without this rule the fix reads worse than the wall it replaced."""
+    css = _read(os.path.join(SRC, "styles.css"))
+    assert ".info-hint-bubble p {" in css and ".info-hint-bubble p + p" in css, (
+        "hint paragraphs have no spacing rule, so a split hint renders with "
+        "browser-default 1em gaps or none at all")
