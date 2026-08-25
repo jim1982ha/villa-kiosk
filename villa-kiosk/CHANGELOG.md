@@ -1,13 +1,13 @@
-## 2.747.0
+## 2.748.0
 
-### Fixed — the (i) bubble had no background, and twelve other rules were dropped the same way
+### Fixed — every add-on restart fired a full supervision pass, ignoring the cadence
 
-The bubble named six colour and radius tokens that this stylesheet has never declared, and a `var()`
-with no fallback and no declaration is an invalid value — so `background` simply did not apply and the
-text rendered straight over the row beneath it, unreadable on a phone. It now uses the same tokens as
-the existing banner surface. The scan for it found the same fault in twelve other places: eight rules
-reading `--text-muted` and four reading `--status-ok`, neither of which exists, both silently
-colourless. This had already been found once and fixed at a single call site, with a comment recording
-it — so a test now refuses any rule that reads a property nothing declares, deriving the runtime-set
-exceptions from the app rather than from a list, so removing a writer fails too.
+The triage loop ran a pass before its first sleep and nothing recorded when the last one had run, so a
+restart reset the clock to zero. On a day of add-on updates that turned a 360-minute cadence into ten
+passes in twelve hours; four of them escalated into eleven frontier-model investigations, and the
+exported ledger for that window is $4.21 against roughly $0.85 the cadence actually promises. The last
+pass is now written to disk and a restart waits out whatever is left of the period. A villa that has
+never run one still goes immediately, so a fresh install proves itself without waiting six hours, and a
+clock that jumps backwards — an NTP correction after a power cut, which is exactly when a villa
+restarts — is clamped rather than silencing supervision for days.
 

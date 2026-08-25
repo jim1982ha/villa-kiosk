@@ -31,14 +31,16 @@ nowhere else.
 from __future__ import annotations
 
 import asyncio
+import time
 
-from typing import Any, Callable, Mapping, Optional
+from typing import Final, Any, Callable, Mapping, Optional
 
 from agent import audit
 from agent import budget as budget_mod
 from agent import config as agent_config
 from agent import reason as reason_mod
 from agent import triage as triage_mod
+from reports import store
 from reports.log import log, swallow, warn
 
 #: How long to wait after a failed pass before trying again. ⚠️ NOT THE
@@ -179,6 +181,54 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
             f"({follow.clause()}): {subjects}")
 
 
+#: When a pass last ran, on disk. ⚠️ ON DISK AND NOT IN MEMORY, WHICH IS THE
+#: WHOLE POINT — the loop below runs a pass BEFORE its first sleep, so every
+#: process start fired one regardless of how recently the last had run. On the
+#: reference villa that turned a 360-minute cadence into TEN passes in twelve
+#: hours during a day of add-on updates, and four of them escalated into eleven
+#: frontier-model investigations at ~$0.37 each. The cadence is a promise about
+#: how often the model is asked; a restart must not be able to break it.
+PASS_FILE: Final[str] = f"{store.DATA_DIR}/vesta/triage-clock.json"
+
+
+def _last_pass_at() -> float:
+    """Epoch seconds of the last pass, or 0.0 when there has never been one."""
+    raw = store.read_json(PASS_FILE, {})
+    try:
+        return float(raw.get("at") or 0.0) if isinstance(raw, dict) else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _record_pass(now: float) -> None:
+    """⚠️ WRITTEN EVEN WHEN THE PASS DECLINED. A pass that was refused by the
+    budget or found nothing still consumed its slot; recording only the ones
+    that did work would let a declining villa retry every restart forever."""
+    try:
+        store.write_json(PASS_FILE, {"at": float(now)})
+    except Exception as err:  # noqa: BLE001 - a clock note is not worth a pass
+        swallow("could not record the triage clock", err)
+
+
+def due_in(minutes: float, now: Optional[float] = None,
+           last: Optional[float] = None) -> float:
+    """Seconds to wait before the next pass. Never negative, never > one period.
+
+    ⚠️ CLAMPED AT THE TOP TOO. A clock that jumps BACKWARDS — an NTP correction
+    after a power cut, which is exactly when a villa restarts — would otherwise
+    compute a wait of days from a `last` in the future and silence supervision
+    until somebody noticed.
+    """
+    period = max(0.0, minutes) * 60.0
+    if period <= 0:
+        return 0.0
+    seen = _last_pass_at() if last is None else last
+    if seen <= 0:
+        return 0.0                      # never run: go now, as before
+    elapsed = (time.time() if now is None else now) - seen
+    return max(0.0, min(period, period - elapsed))
+
+
 async def run_forever(session: Any,
                       config_source: Optional[Callable[[], Mapping[str, Any]]]
                       = None) -> None:
@@ -204,6 +254,15 @@ async def run_forever(session: Any,
         wait = RETRY_S if minutes <= 0 else minutes * 60.0
         try:
             if minutes > 0:
+                # ⚠️ WAIT OUT WHATEVER IS LEFT OF THE PERIOD FIRST. See
+                # PASS_FILE — a restart used to reset the cadence to zero.
+                remaining = due_in(minutes)
+                if remaining > 0:
+                    log(f"triage: {remaining / 60:.0f} min left of the current "
+                        f"period, not starting a pass")
+                    await asyncio.sleep(remaining)
+                    continue
+                _record_pass(time.time())
                 outcome = await _pass(session, config)
                 if outcome:
                     log(f"triage: {outcome}")
