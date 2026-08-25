@@ -60,6 +60,36 @@ DEFAULTS: Final[Dict[str, Any]] = {
     "enabled": False,
     #: ⚠️ OFF, AND SEPARATELY. Reading and reasoning are safe; acting is not.
     "act_enabled": False,
+    #: ⚠️ WHO OWNS DETECTION — THE AGENT, OR THIS PROPERTY'S BLUEPRINTS.
+    #:
+    #: False (shipped) is every earlier release's behaviour: a built-in analysis
+    #: module whose `superseded_by` names an INSTALLED blueprint stands down,
+    #: because a blueprint sees occupancy, schedules and tariffs while a
+    #: statistical module sees only numbers. Right for a property still running
+    #: its automations, and this add-on is redistributable, so it stays default.
+    #:
+    #: True hands the workflow to the agent: `registry.gate` stops consulting
+    #: the stand-down at all. ⚠️ IT DOES NOT REMOVE THE DUPLICATE PROTECTION,
+    #: which is the whole reason it is safe — `pipeline._without_blueprint_subjects`
+    #: still drops any built-in finding whose SUBJECT a blueprint reported this
+    #: period, per DEVICE, preferring the blueprint. A rule that is SPEAKING
+    #: still wins on its own equipment; only mere PRESENCE stops deciding.
+    #:
+    #: ⚠️ AND PRESENCE HAD TO STOP COUNTING, NOT MERELY DECAY. `silent_blueprints`
+    #: is installed-minus-EVER-seen and that flag never expires, so a blueprint
+    #: that fired once and was retired is neither absent nor silent — it
+    #: suppressed its replacement FOREVER, and no grace window reaches it. A
+    #: property that keeps the files installed deliberately, as the reference
+    #: villa does, could not otherwise get its built-in checks back at all.
+    #:
+    #: ⚠️ IT LIVES HERE RATHER THAN IN THE REPORTS CONFIG, and the first draft
+    #: had it there. "Does the agent own detection" is agent policy, the Act &
+    #: Tell tab already edits this document, and `reports/pipeline.py` already
+    #: holds this config as `agent_cfg` (via `people.read_config`, which reads
+    #: the file directly rather than importing `agent/` — the one-way dependency
+    #: `test_reports_never_imports_agent` enforces). Splitting it across two
+    #: stores would have meant a second draft in one dialog for one checkbox.
+    "agent_owns_analysis": False,
     #: ⚠️ THE ADDRESS OF THE HOME ASSISTANT MCP ADD-ON, PASTED BY THE OWNER.
     #: Empty is a supported state and the default: no upstream tools, and every
     #: built-in reader answers exactly as it did before. It is not discovered

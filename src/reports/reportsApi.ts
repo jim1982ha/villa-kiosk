@@ -243,7 +243,6 @@ const CONFIG_WIRE_KEYS = {
   noise_threshold_fires: "noiseThresholdFires",
   noise_window_days: "noiseWindowDays",
   observe_cycle_minutes: "observeCycleMinutes",
-  agent_owns_analysis: "agentOwnsAnalysis",
 } as const;
 
 /** ⚠️ AND THE SAME RULE ONE LEVEL DOWN. `providers.shared()` reads the

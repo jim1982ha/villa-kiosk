@@ -1304,7 +1304,8 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
                 targets, now_local, found, entry_id=str(entry["key"]),
                 settings=modules_cfg if isinstance(modules_cfg, dict) else {},
                 min_history_days=int(config.get("min_history_days") or 14),
-                agent_owns_analysis=bool(config.get("agent_owns_analysis")),
+                agent_owns_analysis=bool(
+                    agent_cfg.get("agent_owns_analysis")),
                 module_failures=(state.get("moduleFailures")
                                  if isinstance(state.get("moduleFailures"), dict)
                                  else {}),

@@ -16,6 +16,7 @@
 // already wraps them in.
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
+import ToggleField from "@/components/common/ToggleField";
 import ActuableDevicesPanel from "@/components/settings/ActuableDevicesPanel";
 
 export default function ActDeliverySection() {
@@ -65,6 +66,36 @@ export default function ActDeliverySection() {
           ? c.actuableEntities.map(String) : []}
         onChange={(actuableEntities) => edit({ actuableEntities })}
         disabled={ctx.saving}
+      />
+
+      {/* ⚠️ IT BELONGS ON THIS TAB BECAUSE IT IS AN OWNERSHIP QUESTION, NOT A
+          TUNING ONE. Everything else here answers "what may the villa do"; this
+          answers "who decides what is worth saying" — the same authority
+          boundary, one level up. Putting it under Settings beside the cadences
+          would file a question about AUTHORITY among questions about COST. */}
+      <h3 className="settings-section-title">Who decides what is worth saying</h3>
+      <ToggleField
+        checked={c.agentOwnsAnalysis === true}
+        disabled={ctx.saving}
+        onChange={(agentOwnsAnalysis) => edit({ agentOwnsAnalysis })}
+        label="Let the assistant decide, not your automations"
+        note={
+          <>
+            Off, a built-in check steps aside whenever one of your own
+            automations covers the same ground — it is installed, so it is
+            assumed to be doing the job. That is right while you are still
+            running those automations, and wrong once you have retired them:
+            a rule that has been switched off is still installed, so it keeps
+            its replacement switched off too, permanently. Turn this on once
+            the assistant is the one you rely on.{" "}
+            <strong>
+              This does not double anything up.
+            </strong>{" "}
+            If one of your automations does report something, the assistant's
+            version of that same device is still dropped in favour of yours —
+            per device, every time.
+          </>
+        }
       />
     </>
   );

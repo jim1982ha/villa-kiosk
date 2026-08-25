@@ -20,7 +20,8 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports import pipeline, store  # noqa: E402
+from agent import config as agent_config  # noqa: E402
+from reports import pipeline  # noqa: E402
 from reports.analysis import base, registry  # noqa: E402
 
 
@@ -105,26 +106,45 @@ def test_the_duplicate_protection_is_NOT_what_was_removed() -> None:
 
 # ── the wiring, which is where this shape of change actually breaks ─────────
 
-def test_the_flag_REACHES_the_gate_from_the_real_config() -> None:
-    """⚠️ PIN THE CALLER. The first draft read it off `settings`, which at that
-    call site is the `modules` SLICE of the config — so a top-level key was
-    always None and the flag would have been defined, defaulted, documented and
-    dead. Caught before commit; pinned so it cannot come back."""
+def test_the_flag_REACHES_the_gate_FROM_THE_AGENT_CONFIG() -> None:
+    """⚠️ PIN THE CALLER, AND IT HAS ALREADY BEEN WRONG TWICE. The first draft
+    read it off `settings`, which at that call site is the `modules` SLICE — a
+    top-level key there is always None. The second put it in the REPORTS config,
+    which works but splits one dialog across two stored documents. It now comes
+    from `agent_cfg`, the agent config the pipeline already holds."""
     src = inspect.getsource(pipeline)
-    assert 'agent_owns_analysis=bool(config.get("agent_owns_analysis"))' in src, (
-        "the scheduler does not pass the flag from the config")
+    assert 'agent_cfg.get("agent_owns_analysis")' in src, (
+        "the scheduler does not pass the flag from the agent config")
     assert "agent_owns_analysis=agent_owns_analysis)" in src, (
         "run_report does not forward it to analyse")
     assert 'settings.get("agent_owns_analysis")' not in src, (
         "read off the modules slice again — that key is never there")
 
 
-def test_it_is_a_real_config_key_with_a_wire_name() -> None:
+def test_it_is_a_real_agent_config_key_with_a_wire_name() -> None:
     """Both halves of the store-envelope lesson: a default the store knows, and
     a camelCase mapping, or the app writes a key nothing reads."""
-    assert store.CONFIG_DEFAULTS["agent_owns_analysis"] is False
-    assert store.config_view({"agent_owns_analysis": True})[
+    assert agent_config.DEFAULTS["agent_owns_analysis"] is False
+    assert agent_config.view({"agent_owns_analysis": True})[
         "agent_owns_analysis"] is True
-    api = os.path.join(REPO_ROOT, "src", "reports", "reportsApi.ts")
+    api = os.path.join(REPO_ROOT, "src", "agent", "agentApi.ts")
     with open(api, encoding="utf-8") as handle:
         assert 'agent_owns_analysis: "agentOwnsAnalysis"' in handle.read()
+
+
+def test_the_OWNER_CAN_ACTUALLY_REACH_IT_from_the_app() -> None:
+    """⚠️ THE LAST HOP, AND THE ONE THIS PROJECT KEEPS LOSING. A flag that is
+    correct, plumbed, defaulted and pinned is still useless if no control writes
+    it — `agent/tools/act.py` sat wired to nothing for exactly this reason. It
+    is a switch on Act & Tell, edited through the draft that tab already owns."""
+    tab = os.path.join(REPO_ROOT, "src", "components", "agent",
+                       "ActDeliverySection.tsx")
+    with open(tab, encoding="utf-8") as handle:
+        src = handle.read()
+    assert "agentOwnsAnalysis" in src, "no control writes the flag"
+    assert "edit({ agentOwnsAnalysis })" in src, (
+        "not written through the tab's own draft — a second draft on one "
+        "document is a lost update")
+    assert "ToggleField" in src, (
+        "hand-rolled markup instead of the shared toggle, which is how the "
+        "explanation ends up inside the click target")
