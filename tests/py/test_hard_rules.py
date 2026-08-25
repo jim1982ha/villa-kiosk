@@ -82,6 +82,10 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.a", "sensor.b", "sensor.moon_phase",
     "fan.ceiling_fan_",  # a PREFIX in a matcher, not an id
     "todo.shopping_list",  # HA's own default list name
+    # ⚠️ A ONE-LETTER STAND-IN IN `test_task_loop`, chosen so it CANNOT be
+    # mistaken for a device: the test needs some non-empty list id to prove the
+    # loop refuses a concern with no id, and which list it is has no bearing.
+    "todo.x",
     # The upstream ref-boundary fixtures (v2.711.0). ⚠️ `fan.a` is NOT a fifth
     # placeholder — it is what `inert` MAKES of `fan.a_first_unit` by turning
     # the underscores into spaces, and the shortened form still matches the
