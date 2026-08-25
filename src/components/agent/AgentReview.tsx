@@ -1,4 +1,4 @@
-// src/components/cockpit/CockpitReview.tsx
+// src/components/agent/AgentReview.tsx
 //
 // The half of TASK-094 that makes the queue reachable: procedures the agent has
 // proposed, and a person deciding on each one.
@@ -30,7 +30,7 @@
 // nowhere` forbids `manageFacility` in `CockpitModal` and `CockpitTab` — the
 // modal exists precisely so a profile without it can reach the Cockpit view —
 // so a control that needs the capability owns its own check, exactly as
-// `CockpitConcerns` does. It is cosmetic either way: the proxy refuses a guest's
+// `AgentConcerns` does. It is cosmetic either way: the proxy refuses a guest's
 // decision whatever the browser sends.
 
 import { useCallback, useEffect, useState } from "react";
@@ -42,7 +42,7 @@ import { decideReviewDraft, loadReviewDrafts, type ReviewDraft } from "@/agent/a
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 
-export default function CockpitReview() {
+export default function AgentReview() {
   const { role } = useProfile();
   const canReview = role != null && hasCapability(role, "manageFacility");
   const [rows, setRows] = useState<ReviewDraft[] | null>(null);

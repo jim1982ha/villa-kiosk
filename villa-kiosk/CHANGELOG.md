@@ -1,3 +1,14 @@
+## 2.754.0
+
+### Changed — five agent components were named after a page that never rendered them
+`CockpitQueue`, `CockpitConcerns`, `CockpitProposals`, `CockpitMemories` and
+`CockpitReview` sat in `components/cockpit/` and were imported only by the VESTA
+Agent modal; the Cockpit imports none of them, and every one of them imports only
+from `@/agent/*`. The name cost a real misunderstanding — explaining why the
+Triage tab was blank read as though a Cockpit setting reached into the agent.
+It does not, and nothing in the Cockpit ever has. Renamed to `Agent*` and moved,
+with a pin that fails if an agent surface imports from the cockpit folder again.
+
 ## 2.753.0
 
 ### Changed — rationale moved into (i) tooltips, and the Triage tab stopped being blank

@@ -36,11 +36,11 @@ import RecentChecks from "@/components/agent/RecentChecks";
 import { loadTriagePasses, type TriagePass } from "@/agent/agentApi";
 import { AgentConfigProvider,
          useAgentConfigDraft } from "@/agent/AgentConfigDraft";
-import CockpitConcerns from "@/components/cockpit/CockpitConcerns";
-import CockpitMemories from "@/components/cockpit/CockpitMemories";
-import CockpitProposals from "@/components/cockpit/CockpitProposals";
-import CockpitQueue from "@/components/cockpit/CockpitQueue";
-import CockpitReview from "@/components/cockpit/CockpitReview";
+import AgentConcerns from "@/components/agent/AgentConcerns";
+import AgentMemories from "@/components/agent/AgentMemories";
+import AgentProposals from "@/components/agent/AgentProposals";
+import AgentQueue from "@/components/agent/AgentQueue";
+import AgentReview from "@/components/agent/AgentReview";
 import { ReflexTab, ObserveTab } from "./ReflexObserve";
 import { TierIntro, TIERS } from "./tiers";
 import ActDeliverySection from "./ActDeliverySection";
@@ -267,8 +267,8 @@ function AgentDialog(
                   notify, cannot write. It only escalates" — and it assigns NO
                   severity, because severity is what the investigation decides.
                   A row here is a pointer, not a finding. */}
-              <CockpitQueue />
-              {/* ⚠️ AND THIS TAB WAS BLANK WITHOUT THE TRACE. `CockpitQueue`
+              <AgentQueue />
+              {/* ⚠️ AND THIS TAB WAS BLANK WITHOUT THE TRACE. `AgentQueue`
                   correctly renders NOTHING in `auto` mode — an empty approval
                   queue on a villa that investigates by itself is the permanent
                   and correct state — so a villa running Live saw a step header
@@ -292,15 +292,15 @@ function AgentDialog(
               {/* Concerns first: the HLD calls a Concern "the single currency
                   of everything downstream", and this tier is the only thing
                   that mints one. */}
-              <CockpitConcerns />
+              <AgentConcerns />
               {/* ⚠️ MEMORY AND DRAFTS BELONG TO THIS TIER, NOT TO SETTINGS.
                   Both are things the agent WORKED OUT — a learned claim about
                   the property, and a procedure it wrote — so they are outputs
                   of reasoning, filed with it. Memory is written only on the
                   reasoning path, never from a tool result, which is the rule
                   that stops a device name becoming a permanent claim. */}
-              <CockpitMemories />
-              <CockpitReview />
+              <AgentMemories />
+              <AgentReview />
             </div>
           )}
 
@@ -318,7 +318,7 @@ function AgentDialog(
                   the same word directly beneath itself — reported as a
                   redundant badge. The legend earns its place where SEVERAL
                   sources appear together, not where one does. */}
-              <CockpitProposals />
+              <AgentProposals />
               <ActDeliverySection />
             </div>
           )}

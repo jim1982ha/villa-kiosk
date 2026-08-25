@@ -3,11 +3,12 @@
 // The triage trace: did the villa look, and what happened when it did.
 //
 // ⚠️ EXTRACTED BECAUSE THE TRIAGE TAB WAS BLANK (2.753.0). It rendered a step
-// header and `CockpitQueue`, and that component correctly returns `null` in
+// header and `AgentQueue`, and that component correctly returns `null` in
 // `auto` mode — its own comment says an empty approval queue on a villa that
 // investigates by itself "is not information, it is the permanent and correct
-// state". True in the Cockpit, where it is one block among many. On a tab whose
-// entire job is to show this tier, it left a heading over nothing, which is the
+// state". That reasoning was written when it was one block among many on a
+// crowded page. On a tab whose entire job is to show this tier, it left a
+// heading over nothing, which is the
 // silent-subsystem defect this project keeps paying for: correct behaviour that
 // reads as a broken feature. The tier's real output was already being recorded
 // and was only visible on the Handover page, three clicks away under Advanced.

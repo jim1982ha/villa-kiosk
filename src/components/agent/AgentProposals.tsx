@@ -1,4 +1,4 @@
-// src/components/cockpit/CockpitProposals.tsx
+// src/components/agent/AgentProposals.tsx
 //
 // The confirm turn, on the wall. TASK-083, REQ-029, ARCH-007.
 //
@@ -21,8 +21,8 @@
 // asleep for five minutes must show the time that is ACTUALLY left, not the time
 // that was left when the page last ran.
 //
-// ⚠️ AND THE CAPABILITY IS READ IN THE LEAF, like `CockpitConcerns` and
-// `CockpitReview`. `test_cockpit_is_gated_nowhere` forbids a capability in
+// ⚠️ AND THE CAPABILITY IS READ IN THE LEAF, like `AgentConcerns` and
+// `AgentReview`. `test_cockpit_is_gated_nowhere` forbids a capability in
 // either Cockpit shell — the modal exists so a profile WITHOUT `manageFacility`
 // can still see the villa's state — so a control that needs one carries its own
 // check. This one wants the OWNER, matching the proxy exactly: these are the
@@ -49,7 +49,7 @@ function left(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export default function CockpitProposals() {
+export default function AgentProposals() {
   const { role } = useProfile();
   const mayConfirm = role != null && hasCapability(role, "editConfig");
   const [rows, setRows] = useState<Proposal[] | null>(null);

@@ -279,7 +279,7 @@ def test_an_audience_is_NOT_a_role() -> None:
 def test_the_severity_ORDERING_agrees_across_both_languages() -> None:
     """⚠️ IT WAS WRITTEN THREE TIMES AND TWO COPIES BROKE THE PROJECT'S RULE.
 
-    `fallback.py` and `CockpitConcerns.tsx` each carried
+    `fallback.py` and `AgentConcerns.tsx` each carried
     `{critical: 0, warning: 1, notice: 2, info: 3}` with an unknown severity
     defaulting to 9 — so a severity nobody had classified sorted LAST, into the
     quietest position, in the brief AND on the wall. `route.py` and
@@ -335,7 +335,7 @@ def test_no_module_hand_writes_a_severity_ORDER_map() -> None:
     # failure this whole file exists to prevent: a test reaching for a name
     # from a sibling because both files look alike.
     src_root = os.path.join(REPO_ROOT, "src")
-    for rel in ("components/cockpit/CockpitConcerns.tsx",):
+    for rel in ("components/agent/AgentConcerns.tsx",):
         with open(os.path.join(src_root, rel), encoding="utf-8") as handle:
             body = re.sub(r"//[^\n]*", "", handle.read())
         if re.search(r"critical\s*:\s*0", body):

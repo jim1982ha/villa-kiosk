@@ -1,4 +1,4 @@
-// src/components/cockpit/CockpitMemories.tsx
+// src/components/agent/AgentMemories.tsx
 //
 // What the villa believes, and the one way to tell it otherwise. TASK-110,
 // REQ-056.
@@ -38,7 +38,7 @@ import { useProfile } from "@/auth/ProfileContext";
 /** How much of a claim is shown before it is worth opening the row. */
 const CLAIM_PREVIEW = 160;
 
-export default function CockpitMemories() {
+export default function AgentMemories() {
   const { role } = useProfile();
   const canCorrect = role != null && hasCapability(role, "manageFacility");
   const [rows, setRows] = useState<VillaMemory[] | null>(null);
@@ -114,7 +114,7 @@ export default function CockpitMemories() {
                   draft nested it and invented an `fm-input` class that does not
                   exist, which would have shipped an unstyled box with no touch
                   target on a phone — the same defect phone-parity caught in
-                  `CockpitQueue` one release earlier. */}
+                  `AgentQueue` one release earlier. */}
               {editing === m.subjectKey && (
                 <input
                   type="text" value={text}

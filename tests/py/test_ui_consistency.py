@@ -536,7 +536,7 @@ def test_a_field_puts_its_NAME_directly_under_its_CONTROL() -> None:
 
 
 def test_the_triage_tab_is_never_a_heading_over_nothing() -> None:
-    """⚠️ `CockpitQueue` RETURNS null IN `auto` MODE, CORRECTLY — its own comment
+    """⚠️ `AgentQueue` RETURNS null IN `auto` MODE, CORRECTLY — its own comment
     says an empty approval queue on a villa that investigates by itself is the
     permanent and correct state. True in the Cockpit, where it is one block among
     many; on a tab whose entire job is this tier it left a step header over an
@@ -590,3 +590,33 @@ def test_act_and_tell_asks_WHO_before_WHEN() -> None:
     assert (src.index("Who decides what is worth saying")
             < src.index("When it may interrupt you")), (
         "timing is asked before ownership")
+
+
+def test_a_component_lives_where_it_is_RENDERED() -> None:
+    """⚠️ FIVE COMPONENTS NAMED `Cockpit*` WERE RENDERED ONLY BY THE AGENT
+    MODAL, AND THE COCKPIT RENDERED NONE OF THEM. `AgentQueue`, `AgentConcerns`,
+    `AgentProposals`, `AgentMemories` and `AgentReview` sat in
+    `components/cockpit/` under a name they had presumably earned once and kept
+    after moving. Every one of them imports only from `@/agent/*`.
+
+    It cost a real misunderstanding: explaining why the Triage tab was blank, I
+    wrote "CockpitQueue returns nothing in Live mode" and the owner reasonably
+    read it as an option in the Cockpit dialog reaching into the agent —
+    "Nothing in the Cockpit modal shall act on VESTA Agent modal, right?" Right,
+    and nothing does. The names said otherwise.
+
+    A misnamed file is not cosmetic: it is a claim about ownership that review
+    reads as true. This pin is the cheap half — nothing under
+    `components/cockpit/` may be imported by the agent surfaces.
+    """
+    agent_dir = os.path.join(SRC, "components", "agent")
+    offenders = []
+    for name in sorted(os.listdir(agent_dir)):
+        if not name.endswith((".tsx", ".ts")):
+            continue
+        src = _read(os.path.join(agent_dir, name))
+        for hit in re.findall(r'from "@/components/cockpit/(\w+)"', src):
+            offenders.append(f"agent/{name} imports cockpit/{hit}")
+    assert not offenders, (
+        "a component the agent renders lives in the cockpit folder, which is a "
+        "claim about ownership that is not true: " + "; ".join(offenders))

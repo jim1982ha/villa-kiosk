@@ -1,4 +1,4 @@
-// src/components/cockpit/CockpitQueue.tsx
+// src/components/agent/AgentQueue.tsx
 //
 // The approval queue, on the wall. TASK-105, ADR-021.
 //
@@ -20,8 +20,8 @@
 // server-side from the audit row that id names, so this screen cannot ask for an
 // investigation of something nobody escalated — there is no field for it.
 //
-// ⚠️ THE CAPABILITY IS READ IN THE LEAF, like `CockpitConcerns`,
-// `CockpitReview` and `CockpitProposals`. `test_cockpit_is_gated_nowhere`
+// ⚠️ THE CAPABILITY IS READ IN THE LEAF, like `AgentConcerns`,
+// `AgentReview` and `AgentProposals`. `test_cockpit_is_gated_nowhere`
 // forbids a capability in either Cockpit shell — the modal exists so a profile
 // WITHOUT it can still see the villa's state — so a control that needs one
 // carries its own check. This one wants the OWNER, matching the proxy exactly:
@@ -36,7 +36,7 @@ import {
 } from "@/agent/agentApi";
 import { useProfile } from "@/auth/ProfileContext";
 
-export default function CockpitQueue() {
+export default function AgentQueue() {
   const { role } = useProfile();
   const [queue, setQueue] = useState<ApprovalQueue | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -130,7 +130,7 @@ export default function CockpitQueue() {
         A check flagged these and stopped. Looking into one costs a full,
         expensive investigation; dismissing settles it without spending.
       </p>
-      {/* ⚠️ `sev-warning` AND `role="alert"`, the pair `CockpitProposals`
+      {/* ⚠️ `sev-warning` AND `role="alert"`, the pair `AgentProposals`
           already uses for the same job. A first draft invented a
           `form-error` class that does not exist in styles.css — the error
           would have rendered as unstyled body text, which reads as part of
@@ -160,7 +160,7 @@ export default function CockpitQueue() {
             {/* ⚠️ THE BUTTONS ARE SIBLINGS OF THE FIELDS, NOT WRAPPED. A first
                 draft put them in an `editable-row-actions` div, which is not a
                 class this stylesheet defines — `.editable-row` lays its own
-                children out, exactly as `CockpitConcerns` relies on two rows
+                children out, exactly as `AgentConcerns` relies on two rows
                 above. `.icon-btn` and `.btn` carry the 44px touch target;
                 inventing a container would have lost it on a phone. */}
             {/* ⚠️ EVERY ICON BUTTON CARRIES A `title` AS WELL AS AN

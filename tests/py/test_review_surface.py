@@ -39,7 +39,7 @@ def _code(path: str) -> str:
     """Source with comments stripped.
 
     ⚠️ FIVE TESTS IN THIS REPO HAVE NOW MATCHED THE PROSE EXPLAINING THE THING
-    THEY CHECK. `CockpitReview`'s header quotes the capability it gates on and
+    THEY CHECK. `AgentReview`'s header quotes the capability it gates on and
     names the test that forbids it in the shells; a bare substring search reads
     that sentence as the code.
     """
@@ -144,7 +144,7 @@ def test_APPROVAL_requires_the_draft_to_have_been_OPENED() -> None:
 
 def test_the_surface_is_actually_RENDERED_somewhere() -> None:
     """⚠️ A COMPONENT THAT EXISTS IS NOT A SURFACE THAT IS REACHABLE, and this
-    is the v2.650.0 defect one step later: deleting `<CockpitReview />` from the
+    is the v2.650.0 defect one step later: deleting `<AgentReview />` from the
     tab leaves the file, its client and every other assertion in this module
     intact, with nothing on any screen again. Mutation testing found it — the
     first version of this file collected the component by its own import and
@@ -210,7 +210,7 @@ def test_the_surface_reads_its_capability_IN_THE_LEAF() -> None:
     `test_cockpit_is_gated_nowhere` forbids `manageFacility` in either shell,
     because `CockpitModal` exists precisely so a profile without it can see the
     villa's status. A control that needs the capability therefore carries its
-    own check, exactly as `CockpitConcerns` does; hoisting it into the shell
+    own check, exactly as `AgentConcerns` does; hoisting it into the shell
     would turn a control's gate into a gate on the view."""
     found = _surfaces()
     assert found, "no surface — every loop below would compare empty sets"

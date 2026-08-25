@@ -1,4 +1,4 @@
-// src/components/cockpit/CockpitConcerns.tsx
+// src/components/agent/AgentConcerns.tsx
 //
 // What the agent has concluded, on the wall. TASK-061, TASK-062.
 //
@@ -34,7 +34,7 @@ import { severityRank, type Concern } from "@/agent/agentTypes";
  *  record, not the state of the villa. */
 const LIVE = new Set(["open", "acted"]);
 
-export default function CockpitConcerns() {
+export default function AgentConcerns() {
   // ⚠️ THE CAPABILITY IS READ HERE, IN THE LEAF, AND NOT PASSED DOWN FROM A
   // SHELL. `test_cockpit_is_gated_nowhere` forbids `manageFacility` in
   // `CockpitModal` and in `CockpitTab` — the modal exists precisely so a
