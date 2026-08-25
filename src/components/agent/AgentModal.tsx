@@ -48,9 +48,8 @@ import AgentAdvancedModal from "./AgentAdvancedModal";
 import { loadAgentConfig } from "@/agent/agentApi";
 import { fetchReportsDiagnostics,
          type ReportsDiagnostics } from "@/reports/reportsApi";
-import AgentTuningPanel from "@/components/settings/AgentTuningPanel";
 
-type Tab = "reflex" | "observe" | "triage" | "reason" | "act" | "settings";
+type Tab = "reflex" | "observe" | "triage" | "reason" | "act";
 
 /** ⚠️ THE SIX TABS ARE THE HLD'S FIVE TIERS, IN ITS ORDER, PLUS SETTINGS.
  *  §4 orders them by how fast each must answer and how much judgement it is
@@ -76,7 +75,11 @@ const TABS: { id: Tab; label: string; icon: typeof Sparkles; owner?: true }[] = 
   { id: "triage", label: "Triage", icon: Search, owner: true },
   { id: "reason", label: "Reason", icon: Brain },
   { id: "act", label: "Act & Tell", icon: Send, owner: true },
-  { id: "settings", label: "Settings", icon: SlidersHorizontal, owner: true },
+  // ⚠️ "Settings" MOVED INTO THE ADVANCED DIALOG IN 2.759.0, by request, and
+  // that dialog is now "Settings & Others". The five that remain are the five
+  // TIERS — one story, read top to bottom, each answering "what happens at this
+  // step". A settings pane among them was the only tab that was not a step, and
+  // it sat where a reader following the sequence expected a sixth one.
 ];
 
 /** The tiers that genuinely stop when supervision is switched off.
@@ -324,26 +327,6 @@ function AgentDialog(
           )}
 
           {/* ── Settings ───────────────────────────────────────────────── */}
-          {tab === "settings" && (
-            <div className="reports-pane">
-                <AgentTuningPanel />
-                {/* ⚠️ THE REST BEHIND ONE DOOR, THE SAME SHAPE SETTINGS USES
-                    FOR ADVANCED SETTINGS. Cost, people, the API key and the
-                    shadow comparison are all things an owner opens
-                    occasionally and none belong in the daily path — putting
-                    them inline would bury the four dials that are actually
-                    tuned. */}
-                {/* ⚠️ `SourceLegend` MOVED TO ADVANCED IN 2.753.0, by the
-                    owner's instruction. Its journey is the argument for where
-                    it ended up: it started under three tier tabs, where it
-                    restated the one chip already in each header (reported as a
-                    redundant badge), then sat here — correct, because the six
-                    labels are learnt once and used across both dialogs, but
-                    still on the daily path below the four dials people
-                    actually tune. It is reference material: read once,
-                    consulted rarely. That is what Advanced is for. */}
-            </div>
-          )}
         </div>
 
         {/* ⚠️ `commit={draft}` IS WHAT MAKES SAVE EXIST. Without it the button
@@ -362,7 +345,7 @@ function AgentDialog(
           leading={
             <button className="btn ghost" onClick={() => setAdvanced(true)}>
               <SlidersHorizontal size={16} aria-hidden="true" />
-              <span>Cost, people and advanced</span>
+              <span>Settings &amp; others</span>
             </button>
           } onClose={onClose} />
       </div>

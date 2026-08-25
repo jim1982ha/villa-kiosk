@@ -1,3 +1,14 @@
+## 2.759.0
+
+### Fixed — the speed/AI/offline row said one thing and drew another
+Both glyphs were fixed regardless of the value, so a struck wifi sat beside
+"Needs internet" and a plain sparkle beside "No AI" — on three of the five tabs
+the picture negated the words next to it. Each now follows its value, with one
+strike rule rather than a second icon, since lucide has no struck sparkle and
+that is this app's AI mark everywhere else. The row also moved directly under the
+step number and name: it is a header, not a footnote after the description. And
+Settings moved into the advanced dialog, now "Settings & others".
+
 ## 2.758.0
 
 ### Fixed — the Home Assistant tools switch never said what it does, and its number was wrong

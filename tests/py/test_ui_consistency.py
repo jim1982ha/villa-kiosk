@@ -262,8 +262,12 @@ def test_the_master_switch_is_in_the_header_and_NOT_duplicated() -> None:
 def test_the_advanced_opener_is_in_the_footer_so_every_tab_reaches_it() -> None:
     modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
     i = modal.index("<ModalFooter")
-    assert "Cost, people and advanced" in modal[i:i + 900], (
-        "the advanced opener is not in the footer, so it is reachable from one "
+    # ⚠️ RENAMED IN 2.759.0 WHEN "Settings" MOVED INTO IT. The property is
+    # unchanged — the opener lives in the FOOTER so every tier tab reaches it —
+    # and it matters more now, because the settings pane is behind this button
+    # rather than being a tab of its own.
+    assert "Settings &amp; others" in modal[i:i + 900], (
+        "the settings opener is not in the footer, so it is reachable from one "
         "tab only")
 
 
@@ -550,3 +554,48 @@ def test_a_component_lives_where_it_is_RENDERED() -> None:
     assert not offenders, (
         "a component the agent renders lives in the cockpit folder, which is a "
         "claim about ownership that is not true: " + "; ".join(offenders))
+
+
+def test_a_tier_fact_ICON_follows_its_VALUE() -> None:
+    """⚠️ THE PICTURE SAID THE OPPOSITE OF THE WORDS BESIDE IT. Both glyphs were
+    fixed: `WifiOff` rendered next to "Needs internet" and a plain `Sparkles`
+    next to "No AI", so on three of the five tier tabs a reader glancing at the
+    row read the negation of what it said. Reported from a screenshot.
+
+    ⚠️ ONE STRIKE RULE, NOT A SECOND GLYPH. lucide ships `WifiOff` but no
+    `SparklesOff`, and `Sparkles` is this app's AI mark everywhere else — using
+    a different icon for the negative case alone would mean two metaphors for
+    one fact. So both facts render their PLAIN glyph and `.tier-fact-off` draws
+    the diagonal, which is also why the CSS has to exist for this to work at all.
+    """
+    tiers = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    css = _read(os.path.join(SRC, "styles.css"))
+    # ⚠️ CODE ONLY, AND THIS IS THE FOURTH TIME IN ONE SESSION THAT A FIRST-CUT
+    # PIN MATCHED THE COMMENT RECORDING ITS OWN FIX. The header above `TierIntro`
+    # names `WifiOff` deliberately — it is the record of what was wrong — and
+    # dry-audit Part 2 says that record stays. Strip blocks as BLOCKS: a filter
+    # keyed on the first character passes a `{/*` opener and then flags every
+    # continuation line, which starts with an ordinary word.
+    code = re.sub(r"\{?/\*[\s\S]*?\*/\}?", "", tiers)
+    code = "\n".join(l for l in code.splitlines()
+                      if not l.lstrip().startswith("//"))
+    assert "WifiOff" not in code, (
+        "the offline glyph is fixed again, so it contradicts 'Needs internet'")
+    assert "tier-fact-off" in code, "nothing marks the negative case"
+    assert ".tier-fact-off::after" in css, (
+        "the strike has no CSS, so the negative case renders identically to the "
+        "positive one — the exact defect this replaced")
+    # both facts must be conditional, not one of them
+    assert code.count("tier-fact-off") >= 2, (
+        "only one of the two facts follows its value")
+
+
+def test_the_tier_FACTS_sit_above_the_description() -> None:
+    """⚠️ THEY ARE A HEADER, NOT A FOOTNOTE. How fast, what it costs and whether
+    it survives an outage belong with the step number and the name — a reader
+    who stops after the first line should still have them. They used to sit
+    after a paragraph of prose."""
+    tiers = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    body = tiers[tiers.index("export function TierIntro"):]
+    assert body.index('<dl className="tier-facts">') < body.index("{tier.what}"), (
+        "the facts row is below the description again")

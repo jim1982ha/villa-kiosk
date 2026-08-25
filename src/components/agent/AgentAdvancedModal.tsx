@@ -9,7 +9,7 @@
 // actually tuned, which is the reading problem the whole reorganisation is
 // about.
 
-import { KeyRound, Receipt, Users } from "lucide-react";
+import { KeyRound, Receipt, SlidersHorizontal, Users } from "lucide-react";
 
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
@@ -19,15 +19,25 @@ import { AgentConfigProvider,
 import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
 import PeoplePanel from "@/components/settings/PeoplePanel";
 import SourceLegend from "@/components/common/SourceLegend";
+import AgentTuningPanel from "@/components/settings/AgentTuningPanel";
 import UsagePanel from "@/components/settings/UsagePanel";
 import { useState } from "react";
 
-type Tab = "cost" | "people" | "key";
+type Tab = "settings" | "cost" | "people" | "key";
 
 const TABS: { id: Tab; label: string; icon: typeof Receipt }[] = [
-  // ⚠️ COST FIRST. It is the one an owner opens unprompted, and the HLD prices
-  // the whole design — the volume tier is the largest line and the reason the
-  // cadence dial exists at all.
+  // ⚠️ SETTINGS FIRST, AND IT MOVED HERE IN 2.759.0 BY REQUEST. The tier dialog
+  // is five TABS THAT ARE STEPS, read top to bottom; a settings pane among them
+  // was the only one that was not a step and sat where a reader following the
+  // sequence expected a sixth. It leads here because it is the one an owner
+  // opens to CHANGE something — cost, people and the key are read far more
+  // often than they are edited.
+  //
+  // ⚠️ COST WAS FIRST UNTIL THEN, on the grounds that it is the tab an owner
+  // opens unprompted. Still true, and it is second rather than displaced: the
+  // dials that decide the cost now sit directly beside the page that reports
+  // it, which is the pairing the old arrangement split across two dialogs.
+  { id: "settings", label: "Settings", icon: SlidersHorizontal },
   { id: "cost", label: "Cost", icon: Receipt },
   { id: "people", label: "Who may talk to it", icon: Users },
   { id: "key", label: "Provider key", icon: KeyRound },
@@ -75,13 +85,16 @@ function AdvancedDialog({ onBack }: { onBack: () => void }) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Advanced assistant settings"
+        aria-label="Assistant settings and others"
       >
-        <div className="settings-header"><h2>Cost, people and advanced</h2></div>
+        <div className="settings-header"><h2>Settings &amp; others</h2></div>
         <ModalTabs tabs={TABS} active={tab} onSelect={setTab}
                    commit={draft}
           label="Advanced assistant sections" />
         <div className="settings-body">
+          {tab === "settings" && (
+            <div className="reports-pane"><AgentTuningPanel /></div>
+          )}
           {tab === "cost" && (
             <div className="reports-pane">
               <UsagePanel />

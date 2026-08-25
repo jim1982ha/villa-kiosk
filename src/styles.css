@@ -4865,6 +4865,20 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   min-width: 0;
 }
 .tier-facts > div > dt { display: flex; color: var(--text-secondary); flex: 0 0 auto; }
+/* ⚠️ "NOT THIS", DRAWN ONCE FOR ANY FACT. lucide ships `WifiOff` but no
+   `SparklesOff`, and `Sparkles` is this app's AI mark everywhere else — so the
+   negative case cannot be a different GLYPH without meaning two metaphors for
+   one fact. The strike is the same grammar lucide's own -Off icons use, applied
+   by the value rather than baked into an import, which is what stopped the icon
+   contradicting the words beside it.
+   ⚠️ `currentColor` AND A ROTATED BOX, not a text-decoration: the target is an
+   SVG, which `line-through` does not touch. */
+.tier-facts > div > dt.tier-fact-off { position: relative; }
+.tier-facts > div > dt.tier-fact-off::after {
+  content: ""; position: absolute; left: -1px; right: -1px; top: 50%;
+  height: 1.5px; background: currentColor; border-radius: 1px;
+  transform: rotate(-45deg); transform-origin: center;
+}
 .tier-facts > div > dd {
   margin: 0;
   min-width: 0;

@@ -23,7 +23,7 @@
 // them.
 
 import type { ReactNode } from "react";
-import { Gauge, Sparkles, WifiOff } from "lucide-react";
+import { Gauge, Sparkles, Wifi } from "lucide-react";
 import SourceChip, { type Source } from "@/components/common/SourceChip";
 import InfoHint from "@/components/common/InfoHint";
 
@@ -183,12 +183,12 @@ export function TierIntro({ tier, speed, children }: {
             fixed home whatever the heading says. */}
         {tier.source && <SourceChip source={tier.source} className="tier-chip" />}
       </div>
-      <p className="muted body-text">
-        {tier.what}
-        {tier.more
-          ? <InfoHint label={tier.name}>{tier.more}</InfoHint>
-          : null}
-      </p>
+      {/* ⚠️ THE THREE FACTS SIT DIRECTLY UNDER THE STEP LINE, not under the
+          description (moved 2.759.0, by request). They are a HEADER — how fast,
+          what it costs, whether it survives an outage — and belong with the
+          step number and the name, not after a paragraph of prose that a reader
+          may or may not finish. The description then reads as detail about a
+          tier the reader has already been told the shape of. */}
       {/* ⚠️ ICONS, NOT WORDS, SO THE THREE ALWAYS SHARE ONE ROW. "Speed",
           "Uses AI" and "Works offline" are longer than several of the VALUES
           they head, so at any realistic width the row wrapped and the third
@@ -199,22 +199,42 @@ export function TierIntro({ tier, speed, children }: {
           ⚠️ THE WORDS ARE NOT LOST, THEY MOVE TO `title` AND `aria-label`. An
           icon on its own is a rebus; a screen reader still hears "Speed", and a
           pointer still gets it on hover. */}
+      {/* ⚠️ THE GLYPH FOLLOWS THE VALUE, AND IT USED TO CONTRADICT IT. Both
+          icons were FIXED: `WifiOff` rendered beside "Needs internet" and a
+          plain `Sparkles` beside "No AI", so on three of the five tabs the
+          picture said the opposite of the words next to it. Reported.
+          ⚠️ ONE STRIKE RULE, NOT A SECOND GLYPH. lucide ships `Wifi` but no
+          `SparklesOff`, and `Sparkles` is this app's established AI mark (HUD,
+          Spend, the tab strip) — swapping it for `BotOff` on the negative case
+          alone would mean two different metaphors for one fact. So both facts
+          render their PLAIN glyph and `.tier-fact-off` draws the diagonal, the
+          same grammar lucide uses and one mechanism for any fact added later. */}
       <dl className="tier-facts">
         <div title="Speed">
           <dt aria-label="Speed"><Gauge size={14} aria-hidden="true" /></dt>
           <dd>{speed || tier.speed}</dd>
         </div>
-        <div title="Uses AI">
-          <dt aria-label="Uses AI"><Sparkles size={14} aria-hidden="true" /></dt>
+        <div title={tier.model ? "Uses AI" : "Does not use AI"}>
+          <dt aria-label={tier.model ? "Uses AI" : "Does not use AI"}
+              className={tier.model ? undefined : "tier-fact-off"}>
+            <Sparkles size={14} aria-hidden="true" />
+          </dt>
           <dd>{tier.model ? "Uses AI" : "No AI"}</dd>
         </div>
-        <div title="Works offline">
-          <dt aria-label="Works offline">
-            <WifiOff size={14} aria-hidden="true" />
+        <div title={tier.offline ? "Works offline" : "Needs internet"}>
+          <dt aria-label={tier.offline ? "Works offline" : "Needs internet"}
+              className={tier.offline ? "tier-fact-off" : undefined}>
+            <Wifi size={14} aria-hidden="true" />
           </dt>
           <dd>{tier.offline ? "Works offline" : "Needs internet"}</dd>
         </div>
       </dl>
+      <p className="muted body-text">
+        {tier.what}
+        {tier.more
+          ? <InfoHint label={tier.name}>{tier.more}</InfoHint>
+          : null}
+      </p>
       {children}
     </div>
   );
