@@ -66,6 +66,50 @@ export default function ActDeliverySection() {
         </label>
       </div>
 
+      {/* ⚠️ THE CARETAKER LIST BELONGS ON THIS TAB, not under Settings. It is
+          not a tuning dial — it decides whether a finding becomes a JOB
+          somebody is asked to do, which is the same authority question as
+          "who is told" and "what may it touch" directly above and below it. */}
+      <h3 className="settings-section-title">Turning findings into jobs</h3>
+      <p className="muted body-text">
+        Leave empty and nothing is added to a list.
+        <InfoHint label="Turning findings into jobs">
+          <p>
+            Name a to-do list and every finding the villa sends you is also
+            added to it as a job.
+          </p>
+          <p>
+            The job carries the finding&rsquo;s reference in brackets. That is
+            what lets one tick count everywhere: the Facility Manager screen on
+            the tablet, the to-do list itself, and the acknowledgement count in
+            your next briefing all read the same one.
+          </p>
+          <p>
+            If you also install the VESTA task automation in Home Assistant, the
+            job arrives on Telegram with a Done button and chases whoever is
+            responsible until somebody answers.
+          </p>
+          <p>
+            {/* ⚠️ NO EXAMPLE ENTITY ID, NOT EVEN AS A PLACEHOLDER. This shipped
+                one and `test_hard_rules` caught it twice over: an id-shaped
+                string in rendered TSX reaches every install, and a placeholder
+                is rendered. The shape is described instead. */}
+            You will find the reference in Home Assistant under Settings,
+            Devices &amp; services, Helpers. It begins with the word todo and a
+            dot.
+          </p>
+        </InfoHint>
+      </p>
+      <label className="fm-field">
+        <input
+          type="text"
+          value={String(c.taskList ?? "")}
+          onChange={(e) => edit({ taskList: e.target.value.trim() })}
+          disabled={ctx.saving}
+        />
+        <span>Caretaker to-do list</span>
+      </label>
+
       {/* ⚠️ THE ALLOW-LIST LIVES WITH THE TIER THAT ENFORCES IT. It is only
           consulted here, at the authority boundary, and it is AND-ed with the
           master switch on the Settings tab — so an owner who turns actuation on

@@ -451,6 +451,19 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     if not ok:
         return "failed"
     _mark_delivered(str(concern.get("id") or ""), now=now)
+
+    # ⚠️ AFTER THE SEND, AND ONLY AFTER IT. A caretaker job raised for a concern
+    # whose delivery then failed is a task nobody was told about, sitting on a
+    # list with no message to explain it. Same ordering rule, same reason, as
+    # `_mark_delivered` directly above.
+    #
+    # ⚠️ DELIVERY IS THE BAR, AND THERE IS DELIBERATELY NO SECOND ONE. Tier 4
+    # has already decided this concern is worth a person's attention; a severity
+    # threshold here would be a second opinion about a question that was just
+    # answered, and the first villa where the two disagreed would have a job
+    # nobody was told about or a message with no job behind it.
+    from agent import task as task_mod
+    await task_mod.raise_for(session, concern, config=config)
     return "sent"
 
 

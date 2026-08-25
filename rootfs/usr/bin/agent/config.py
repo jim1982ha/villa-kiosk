@@ -249,6 +249,10 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: ⚠️ ENTITY IDS, NOT HANDLES — see the module docstring. The name said
     #: `refs` and the code compared handles, which made it a slot number rather
     #: than an allow-list.
+    # ⚠️ EMPTY, AND EMPTY MEANS THE CARETAKER LOOP IS OFF. Which to-do list a
+    # property uses is a fact about that property; a seeded default would write
+    # jobs into a stranger's list. See `agent/task.py`.
+    "task_list": "",
     "actuable_entities": [],
     #: Subjects a person has told us to stop raising. Filled by the feedback
     #: loop's counter, never by the agent's judgement.

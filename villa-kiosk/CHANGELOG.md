@@ -1,3 +1,15 @@
+## 2.763.0
+
+### Added — a finding the villa sends you can become a job somebody ticks off
+Retiring the maintenance, ROI and audit automations kept their detection and
+silently dropped the other half of what they did: raising a caretaker task, then
+chasing whoever is responsible until somebody answers. The assistant could not
+write a to-do item at all, so a finding was something to read and never something
+anybody was asked to do. Name a to-do list under Act & Tell and every finding the
+villa sends you is added to it, carrying the finding's reference so one tick
+counts on the tablet, on the list and in the next briefing. With the VESTA task
+automation installed it also arrives on Telegram with a Done button.
+
 ## 2.762.0
 
 ### Removed — a trigger nothing could fire

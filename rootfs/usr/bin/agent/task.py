@@ -1,0 +1,147 @@
+"""Turn a delivered Concern into a caretaker job somebody can tick off.
+
+⚠️ THIS CLOSES A LOOP THE CUTOVER OPENED, AND THAT IS THE WHOLE JUSTIFICATION.
+The `maintenance_*`, `roi_*` and `audit_*` blueprints did two things when they
+fired: they emitted their event, and they called `todo.add_item` with a caretaker
+task. Retiring them kept the detection (the agent replaces it) and silently
+dropped the SECOND half — raise a job, ask the caretaker, chase, escalate, tick
+it off. The agent could not write a to-do item at all: nothing under `agent/`
+touched a todo list, so a Concern was something to READ on the tablet and in a
+brief, and never something anybody was asked to do.
+
+⚠️ IT IS TIER 4, DETERMINISTIC, AND THE MODEL HAS NO SAY. `reason.SYSTEM`'s
+boundary is that the model decides what MATTERS and never who is told or what is
+executed. So this is not a tool the model can call: the outbox raises a task for
+a concern it has just DELIVERED, and delivery is already the bar for "worth a
+person's attention". One rule, statable in a sentence, with no severity
+threshold to argue about — a second bar here would be a second opinion about
+something Tier 4 already decided.
+
+⚠️ AFTER THE SEND, NEVER BEFORE, for the same reason `_mark_delivered` is: a
+task raised for a concern whose delivery then failed is a job nobody was told
+about, sitting on a list, with no message to explain it.
+
+⚠️ TWO WRITES, AND BOTH ARE NEEDED — this is the contract with
+`vesta_task_actions.yaml` and it is easy to half-implement:
+
+  1. The TODO ITEM, whose summary must contain `[<rule_id>]`. The blueprint's
+     "Done" button completes the item it finds with `selectattr('summary',
+     'match', '\\[' ~ rule_id ~ '\\]')`, so an item without the bracketed id can
+     never be completed by a button press.
+  2. The EVENT, carrying `task_text` and `rule_id`. The blueprint triggers on
+     the event, not on the todo item appearing — writing only the item produces
+     a job nobody is ever asked about.
+
+⚠️ `vesta_task_event` IS DELIBERATELY NOT A TYPE THE COLLECTOR SUBSCRIBES TO.
+`collect.state()` derives its subscription from installed blueprint STEMS, and
+anything it receives becomes a `Group` and then a finding in the brief — so
+announcing a task on `vesta_maintenance_event` would put the concern in the
+briefing TWICE, once as a Concern and once as a blueprint finding, which is
+exactly the double-reporting the per-device dedupe used to paper over. This is a
+delivery mechanism, not a detection event, and it stays outside that vocabulary.
+
+⚠️ OFF UNTIL A LIST IS NAMED. `task_list` ships empty, like every other
+villa-specific setting here: which to-do list a property uses is a fact about
+that property, and a seeded default would write jobs into a stranger's list.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, Mapping, Optional
+
+from agent import config as agent_config
+from reports.log import log, swallow
+
+#: The stored key naming the caretaker list. Empty means the feature is off.
+CONFIG_KEY: str = "task_list"
+
+#: What the blueprint listens for. ⚠️ NOT a `vesta_<category>_event` — see the
+#: module docstring. If this name changes, the blueprint instance's "Task events
+#: to watch" must change with it; `test_task_loop.py` pins the pair.
+EVENT_TYPE: str = "vesta_task_event"
+
+
+def list_for(config: Optional[Mapping[str, Any]] = None) -> str:
+    """The configured caretaker list, or "" when the loop is switched off."""
+    return str(agent_config.view(config).get(CONFIG_KEY) or "").strip()
+
+
+def summary_for(concern: Mapping[str, Any]) -> str:
+    """`[c12] Pool pump drawing more than usual`.
+
+    ⚠️ THE BRACKETED ID IS LOAD-BEARING, NOT DECORATION. It is how the "Done"
+    button finds the item to complete, and how the brief's acknowledgement
+    counter and the tablet's Facility Manager list recognise the same job — one
+    acknowledgement record rather than three.
+
+    ⚠️ AND IT IS THE CONCERN ID, WHICH IS SHORT ON PURPOSE. Telegram caps
+    `callback_data` at 64 bytes and the blueprint builds `vd:<rule_id>` from it,
+    so a `subject_key` (16 hex chars) would fit and a title would not. `c12` is
+    what `concerns._mint` produces.
+    """
+    rule_id = str(concern.get("id") or "").strip()
+    title = " ".join(str(concern.get("title") or "").split())
+    return f"[{rule_id}] {title}".strip()
+
+
+async def raise_for(session: Any, concern: Mapping[str, Any], *,
+                    config: Optional[Mapping[str, Any]] = None) -> str:
+    """Create the caretaker job and announce it. `raised | off | failed`.
+
+    ⚠️ NEVER RAISES. It is called from the delivery sweep, which runs on a
+    background clock; an exception here would take supervision down for the life
+    of the process, and the concern has already reached the person either way.
+    A task that could not be created is strictly less bad than that.
+    """
+    entity_id = list_for(config)
+    if not entity_id:
+        return "off"
+
+    rule_id = str(concern.get("id") or "").strip()
+    summary = summary_for(concern)
+    if not rule_id or not summary:
+        # ⚠️ A CONCERN WITH NO ID CANNOT BE TICKED OFF, so it must not become a
+        # job. Refusing is honest; writing an item no button can ever complete
+        # is a job that stays open forever and looks like nobody did it.
+        return "failed"
+
+    try:
+        from reports.hass import HassClient
+        async with HassClient(session) as hass:
+            await hass.command(
+                "call_service", domain="todo", service="add_item",
+                target={"entity_id": entity_id},
+                service_data={"item": summary,
+                              # ⚠️ THE BODY GOES IN THE DESCRIPTION, NOT THE
+                              # SUMMARY. A todo summary is one line on a phone
+                              # and in the Facility Manager list; the evidence
+                              # belongs where it can be read without truncating
+                              # the thing the button matches on.
+                              "description": str(concern.get("body") or "")})
+            await hass.command(
+                "fire_event", event_type=EVENT_TYPE,
+                event_data={"rule_id": rule_id,
+                            "task_text": str(concern.get("title") or ""),
+                            # ⚠️ CARRIED FOR THE ROUTING THE BLUEPRINT DOES NOT
+                            # DO. `audience` decides whose Telegram it is in a
+                            # future instance; today the blueprint routes by its
+                            # own inputs and this is inert. Recorded rather than
+                            # omitted because an event shape is a contract and
+                            # adding a field later is the harder change.
+                            "audience": str(concern.get("audience") or "owner"),
+                            "severity": str(concern.get("severity") or "")})
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow(f"could not raise a caretaker task for {rule_id}", err)
+        return "failed"
+
+    log(f"task: raised {summary!r} on {entity_id}")
+    return "raised"
+
+
+def status(config: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """What the settings screen shows. ⚠️ `configured` SEPARATE FROM the id, so
+    a diagnostic can say "no list chosen" without putting an entity id on a
+    caller's stack that has no use for one."""
+    entity_id = list_for(config)
+    return {"configured": bool(entity_id), "list": entity_id,
+            "event_type": EVENT_TYPE}
