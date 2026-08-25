@@ -1,3 +1,15 @@
+## 2.760.0
+
+### Fixed — tooltips that read as one long shouted sentence
+The Home Assistant tools hint ran three ideas together with bold words inside
+them, and was reported twice. It is now short sentences, one idea per paragraph.
+Two other hints had the same shape and were rewritten with it. The measure is
+sentence length, not total length: the fixed tools hint is longer than the
+version that was reported and reads far more easily, because its longest sentence
+went from 32 words to 16 — a word budget would have forced the wrong edit,
+cutting content instead of cutting clauses. Hint paragraphs also gained a spacing
+rule; the browser default is 1em, which is enormous inside a small bubble.
+
 ## 2.759.0
 
 ### Fixed — the speed/AI/offline row said one thing and drew another
