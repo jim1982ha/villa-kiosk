@@ -426,6 +426,7 @@ async def analyse(
     settings: Dict[str, Any],
     min_history_days: int,
     failures: Dict[str, int],
+    agent_owns_analysis: bool = False,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]], Dict[str, int],
            List[str], Dict[str, Any]]:
     """Run every registered module against this pass's data.
@@ -454,6 +455,11 @@ async def analyse(
         # ⚠️ SO THE GATE CAN TELL "RETIRED" FROM "INSTALLED AND QUIET".
         installed_blueprints=list(collect.state().get("blueprint_names") or []),
         heard_nothing_for_days=collect.listening_days(),
+        # ⚠️ FROM THE CONFIG VIEW, NOT A LITERAL — and the three fields above
+        # become dead inputs when it is True. Without this line the flag would
+        # be defined, defaulted, documented and never reach the gate: the
+        # thirteen-times defect this repository names `feedback_pin-the-caller`.
+        agent_owns_analysis=bool(agent_owns_analysis),
     )
     # History depth is not yet measured per statistic; the recorder's presence
     # is the proxy for it, and each module applies its own `min_days` to the
@@ -531,6 +537,12 @@ async def run_report(
     entry_id: Optional[str] = None,
     settings: Optional[Dict[str, Any]] = None,
     min_history_days: int = 14,
+    #: ⚠️ ITS OWN PARAMETER, NOT READ OFF `settings` — `settings` here is the
+    #: `modules` SLICE of the config (see the call site), so a top-level key
+    #: looked up there is always None and the flag would never reach the gate.
+    #: Threaded exactly like `min_history_days` above, which is the same shape
+    #: of top-level value and already had to be passed separately.
+    agent_owns_analysis: bool = False,
     module_failures: Optional[Dict[str, int]] = None,
     preview: bool = False,
     narration: Optional[Dict[str, Any]] = None,
@@ -571,7 +583,8 @@ async def run_report(
     # ── analyse ─────────────────────────────────────────────────────────────
     findings, skipped, failures, ran, data_tally = await analyse(
         session, found, audience, cadence, now_local, settings,
-        min_history_days, module_failures)
+        min_history_days, module_failures,
+        agent_owns_analysis=agent_owns_analysis)
 
     # ── synthesise ──────────────────────────────────────────────────────────
     # ⚠️ SCOPED TO THE PERIOD, NOT THE WHOLE BUFFER. The ring holds up to
@@ -1291,6 +1304,7 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
                 targets, now_local, found, entry_id=str(entry["key"]),
                 settings=modules_cfg if isinstance(modules_cfg, dict) else {},
                 min_history_days=int(config.get("min_history_days") or 14),
+                agent_owns_analysis=bool(config.get("agent_owns_analysis")),
                 module_failures=(state.get("moduleFailures")
                                  if isinstance(state.get("moduleFailures"), dict)
                                  else {}),

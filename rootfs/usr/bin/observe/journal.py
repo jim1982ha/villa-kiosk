@@ -76,13 +76,29 @@ JOURNAL_FILE: Final[str] = f"{VESTA_DIR}/journal.json"
 #: estimated: a typical row with a long real entity id serialises to 102 bytes,
 #: so 20,000 is ~2.0 MB — small beside the assets this add-on already ships,
 #: and large enough to hold a busy villa's material
+#: ⚠️ RAISED 20,000 -> 105,000 ON 2026-08-25, AND THE NUMBER IS A MEASUREMENT.
+#: The heartbeat measured this property at 7,322 rows/day, so 20,000 held 2.84
+#: DAYS — and salience builds every baseline from whatever is in this ring, so a
+#: three-day memory absorbs slow drift instead of reporting it: a pump degrading
+#: a few percent a week simply becomes its own new normal. 105,000 is ~14 days,
+#: which is longer than the drift timescales that matter (weeks) and is the
+#: largest step defensible without measuring the write cost first.
+#:
+#: ⚠️ THE COST IS PAID 96 TIMES A DAY AND NO SETTING REDUCES IT. `append` is a
+#: whole-file read-modify-write on the OBSERVATION cadence
+#: (`observe_cycle_minutes`, 15) — NOT the triage cadence an operator can see in
+#: the app, which is a different clock entirely. The binding constraint is
+#: TRANSIENT MEMORY during the parse (~5-10x file size resident, so ~75-125 MB
+#: at this bound), not CPU: 11 MB parses in ~150 ms, about 30 s/day in total.
+#: 28 days (~205,000, ~21 MB, 150-250 MB transient) is the spec's intent and is
+#: the next step IF the heartbeat shows this one holding.
 #: changes for days rather than hours. `collect.py` bounds its own ring at 2,000
 #: because it only ever sees `vesta_*` events; this one sees the whole villa, so
 #: the same number would be a few hours of history and the agent would be asked
 #: to reason about a period it cannot see. RISK NAMED IN THE TASK: an unbounded
 #: journal fills the disk on a property nobody visits, so the bound is asserted
 #: in the tests rather than trusted.
-JOURNAL_MAX_ENTRIES: Final[int] = 20_000
+JOURNAL_MAX_ENTRIES: Final[int] = 105_000
 
 #: Attribute names admitted by rule 3. Commanded or discrete; never a mirror of
 #: a measurement that has its own entity. Keep it SHORT — every addition is

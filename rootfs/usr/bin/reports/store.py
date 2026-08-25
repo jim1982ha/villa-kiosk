@@ -123,6 +123,32 @@ CONFIG_DEFAULTS: Final[Dict[str, Any]] = {
     # a per-property constant by another name. `observe/cycle.py` re-reads this
     # every cycle, so a change takes effect without restarting the add-on.
     "observe_cycle_minutes": 15,
+    # ⚠️ WHO OWNS DETECTION: THE AGENT, OR THIS PROPERTY'S BLUEPRINTS.
+    #
+    # False (the shipped default) is the behaviour every release before this
+    # one had: a built-in module whose `superseded_by` names an INSTALLED
+    # blueprint stands down, on the reasoning that a blueprint sees occupancy,
+    # schedules and tariffs while a statistical module sees only numbers. That
+    # remains right for a property still running its automations, and this
+    # add-on is redistributable, so it stays the default.
+    #
+    # True hands the whole workflow to the agent: the stand-down is not
+    # consulted and the modules always run. ⚠️ IT DOES NOT REMOVE THE
+    # DUPLICATE PROTECTION, and that is the entire reason this is safe.
+    # `pipeline._without_blueprint_subjects` still drops any built-in finding
+    # whose SUBJECT a blueprint reported this period, per DEVICE and preferring
+    # the blueprint — its own docstring calls that "what makes both layers safe
+    # to run at once". So a rule that is actually SPEAKING still wins on the
+    # equipment it speaks about; only its mere PRESENCE stops deciding.
+    #
+    # ⚠️ THE OWNER'S CASE, AND WHY PRESENCE HAD TO STOP COUNTING (2026-08-25).
+    # `silent_blueprints` is installed-minus-EVER-seen and the seen flag is a
+    # boolean that never decays, so a blueprint that fired once and was then
+    # retired is neither absent nor silent — it suppressed its replacement
+    # PERMANENTLY. The reference villa disabled 69 automations and kept the
+    # files installed deliberately; without this flag its built-in checks could
+    # never have come back at all.
+    "agent_owns_analysis": False,
 }
 
 

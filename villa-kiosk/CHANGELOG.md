@@ -1,11 +1,13 @@
-## 2.739.1
+## 2.740.0
 
-### Fixed — a placeholder entity id shipped past the hard-rules gate, for the second time
+### Changed — the agent can now own detection outright, and the villa remembers 14 days instead of 3
 
-`tests/py/test_heartbeat.py` reached the repository carrying `light.quiet`, which nothing had
-classified. The gate that exists to stop this was run and was green: it builds its file list from
-TRACKED source, so a brand-new file is invisible to it until the commit that adds it — and the commit
-is the one moment nobody re-runs the suite. Classified now, and the ship procedure has been changed
-rather than the lesson merely re-noted: staging new files moved ahead of verifying, because the old
-step order guaranteed the blind spot for any release adding a file.
+A blueprint retired but left installed suppressed its built-in replacement permanently:
+`silent_blueprints` is installed-minus-ever-seen and that flag never decays, so such a rule is neither
+absent nor silent and no waiting period released it. The new `agent_owns_analysis` setting (off by
+default) makes a rule's mere presence stop deciding anything. The duplicate protection this looks like
+it removes is untouched — findings are still deduplicated per device against what a blueprint reported
+this period, so a rule that is speaking still wins on its own equipment. Separately the observation
+journal now holds 105,000 entries rather than 20,000: measured at 7,322 rows/day the old bound was
+2.84 days, and every salience baseline is built from that ring, so slow drift became the new normal.
 

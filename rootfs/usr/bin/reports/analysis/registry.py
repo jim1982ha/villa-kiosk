@@ -81,6 +81,29 @@ def gate(module: AnalysisModule, context: ModuleContext,
     # blueprints, and there these modules are the only analysis there is. The
     # deployment is detected rather than configured.
     covered_by = list(getattr(module, "superseded_by", ()) or ())
+    # ⚠️ THE OPERATOR CAN END THIS ARGUMENT ENTIRELY, AND ON A CUT-OVER
+    # PROPERTY THEY MUST BE ABLE TO. Everything below reasons about whether a
+    # blueprint is installed, silent, or has been quiet long enough to doubt —
+    # all of which presume the blueprint layer is still the one in charge. When
+    # the agent owns detection, the presumption is wrong and the whole block is
+    # the wrong question rather than a question answered wrongly.
+    #
+    # ⚠️ THIS IS NOT "DELETE THE STAND-DOWN", WHICH THIS FILE HAS SAID SINCE
+    # 2.572.0 MUST NOT HAPPEN. Duplicate suppression survives intact one layer
+    # up: `pipeline._without_blueprint_subjects` drops any built-in finding
+    # whose subject a blueprint reported THIS PERIOD, per device, preferring
+    # the blueprint. So a rule that is actually speaking still wins on its own
+    # equipment — the five-false-positives-in-one-week case is still covered.
+    # What stops counting is a rule's mere PRESENCE.
+    #
+    # ⚠️ AND PRESENCE HAD TO STOP COUNTING FOR A REASON THAT IS NOT PREFERENCE.
+    # `silent_blueprints` is installed-minus-EVER-seen, and the seen flag never
+    # decays — so a retired-but-still-installed blueprint is neither absent nor
+    # silent, and suppressed its replacement FOREVER. A property that keeps the
+    # files installed on purpose, as the reference villa does, could not
+    # otherwise get its built-in checks back at all.
+    if covered_by and context.agent_owns_analysis:
+        covered_by = []
     if covered_by and "blueprint_layer" in context.capabilities:
         # ⚠️ SUPERSEDED BY A BETTER-INFORMED LAYER — WHILE THAT LAYER IS
         # ACTUALLY ANSWERING. On a property whose own automations detect this,
@@ -213,6 +236,13 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             silent_blueprints=context.silent_blueprints,
             installed_blueprints=context.installed_blueprints,
             heard_nothing_for_days=context.heard_nothing_for_days,
+            # ⚠️ AND THE RULE ABOVE CAUGHT THIS ONE ON THE DAY IT WAS ADDED.
+            # Omitted, every module would have seen `False` — the shipped
+            # default — so an operator who handed detection to the agent would
+            # have had the stand-down apply anyway, with the config saved, the
+            # gate correct and nothing to see. `test_coverage_claim` failed
+            # before the commit, which is the pin doing exactly its job.
+            agent_owns_analysis=context.agent_owns_analysis,
         )
 
         ok, reason, detail = gate(module, module_context, counts, history_days)

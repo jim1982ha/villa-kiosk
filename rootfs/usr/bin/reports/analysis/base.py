@@ -154,6 +154,15 @@ class ModuleContext:
     #: stand-down in place — the conservative direction.
     heard_nothing_for_days: Optional[float] = None
 
+    #: Has the operator handed detection to the agent entirely?
+    #:
+    #: ⚠️ WHEN TRUE THE THREE FIELDS ABOVE STOP BEING CONSULTED — not because
+    #: they became wrong, but because "is a blueprint installed" stops being a
+    #: question anyone is asking. Overlap is still prevented, one layer up and
+    #: per DEVICE, by `pipeline._without_blueprint_subjects`; what goes is the
+    #: deferral to a rule's mere EXISTENCE.
+    agent_owns_analysis: bool = False
+
     @property
     def zone(self) -> Any:
         """The timezone every day bucket in this pass must be built in.
