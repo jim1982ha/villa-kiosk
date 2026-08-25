@@ -17,6 +17,7 @@
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import ToggleField from "@/components/common/ToggleField";
+import InfoHint from "@/components/common/InfoHint";
 import ActuableDevicesPanel from "@/components/settings/ActuableDevicesPanel";
 
 export default function ActDeliverySection() {
@@ -34,8 +35,10 @@ export default function ActDeliverySection() {
       <h3 className="settings-section-title">When it may interrupt you</h3>
       <p className="muted body-text">
         Inside this window the villa holds anything that can wait until morning.
-        Leave both empty and it never holds anything back. Something urgent
-        ignores the window entirely — that is what makes it urgent.
+        <InfoHint label="When it may interrupt you">
+          Leave both empty and it never holds anything back. Something urgent
+          ignores the window entirely — that is what makes it urgent.
+        </InfoHint>
       </p>
       {/* ⚠️ `.row` + `.settings-row-half`, THE PAIR SETTINGS ALREADY USES.
           A first draft invented `.settings-row`, which is not a class this
@@ -79,23 +82,17 @@ export default function ActDeliverySection() {
         disabled={ctx.saving}
         onChange={(agentOwnsAnalysis) => edit({ agentOwnsAnalysis })}
         label="Let the assistant decide, not your automations"
-        note={
-          <>
-            Off, a built-in check steps aside whenever one of your own
-            automations covers the same ground — it is installed, so it is
-            assumed to be doing the job. That is right while you are still
-            running those automations, and wrong once you have retired them:
-            a rule that has been switched off is still installed, so it keeps
-            its replacement switched off too, permanently. Turn this on once
-            the assistant is the one you rely on.{" "}
-            <strong>
-              This does not double anything up.
-            </strong>{" "}
-            If one of your automations does report something, the assistant's
-            version of that same device is still dropped in favour of yours —
-            per device, every time.
-          </>
-        }
+        note="Turn this on once the assistant is the one you rely on."
+        more={<>
+          Off, a built-in check steps aside whenever one of your automations
+          covers the same ground — installed is taken as doing the job. That is
+          right while you still run them, and wrong once you have retired them:
+          a switched-off rule is still installed, so it keeps its replacement
+          switched off too, permanently.{" "}
+          <strong>This does not double anything up.</strong> If one of your
+          automations does report something, the assistant's version of that
+          same device is still dropped in favour of yours, every time.
+        </>}
       />
     </>
   );

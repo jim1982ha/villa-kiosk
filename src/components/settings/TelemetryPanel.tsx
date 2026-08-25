@@ -9,6 +9,7 @@
 // explain an iOS white-screen-after-app-switch.
 
 import { useCallback, useEffect, useState } from "react";
+import { usePaged, Pager } from "@/components/common/Paged";
 import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
 import CollapsibleSection from "@/components/common/CollapsibleSection";
@@ -288,10 +289,10 @@ const TONE: Record<string, string> = {
  *  supervisor-proxy.py's TELEMETRY_MAX_EVENTS ring buffer), but 500 rows of
  *  DOM in one long scroll is its own kind of unusable. Copy all/Download
  *  still act on the FULL fetched set, not just what's visibly rendered. */
-const VISIBLE_ROWS = 10;
 
 export default function TelemetryPanel() {
   const [events, setEvents] = useState<TelemetryEvent[] | null>(null);
+  const paged = usePaged(events ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -481,7 +482,7 @@ export default function TelemetryPanel() {
       {!!events?.length && (
         <>
           <div className="config-table">
-            {events.slice(0, VISIBLE_ROWS).map((e, i) => (
+            {paged.page.map((e, i) => (
               /* Layout lives in styles.css (.telemetry-row), NOT inline: the
                  phone tier has to re-flow this row onto two lines, and a media
                  query cannot override an inline style prop. */
@@ -504,12 +505,10 @@ export default function TelemetryPanel() {
               </div>
             ))}
           </div>
-          {events.length > VISIBLE_ROWS && (
-            <p className="muted body-text" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
-              Showing the newest {VISIBLE_ROWS} of {events.length} — use <strong>Copy</strong> or
-              <strong> Download</strong> above for the rest.
-            </p>
-          )}
+          {/* ⚠️ WAS A SENTENCE READING "use Copy or Download above for the
+              rest" — a log telling the reader to leave the app in order to read
+              it. Now the same pager every other long list in the app uses. */}
+          <Pager paged={paged} unit="event" />
         </>
       )}
       </CollapsibleSection>

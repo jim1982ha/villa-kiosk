@@ -21,21 +21,31 @@
 // silently flips the setting it is warning them about.
 
 import type { ReactNode } from "react";
+import InfoHint from "./InfoHint";
 
 export default function ToggleField({
-  checked, onChange, label, note, disabled,
+  checked, onChange, label, note, more, disabled,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   /** The switch's own name — short, and it rides the control. */
   label: string;
-  /** What happens if you flip it. Rendered ABOVE the switch. */
+  /** What happens if you flip it, in AT MOST TWO LINES. Rendered above the
+   *  switch. ⚠️ Anything longer belongs in `more` — a settings pane where every
+   *  control carries a paragraph is one nobody reads. */
   note: ReactNode;
+  /** The rest of the explanation, behind an inline (i). Optional: a control
+   *  whose two lines say everything needs no bubble, and an empty one would be
+   *  a button that rewards a tap with nothing. */
+  more?: ReactNode;
   disabled?: boolean;
 }) {
   return (
     <div className="toggle-field">
-      <p className="muted body-text">{note}</p>
+      <p className="muted body-text">
+        {note}
+        {more ? <InfoHint label={label}>{more}</InfoHint> : null}
+      </p>
       <label className="toggle">
         <input
           type="checkbox"

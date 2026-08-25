@@ -37,7 +37,8 @@
 // figures the bar can only approximate.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2, RefreshCw } from "lucide-react";
+import { usePaged, Pager } from "@/components/common/Paged";
 
 import { loadUsage, type UsageBucket, type UsageRow, type UsageSummary } from "@/agent/agentApi";
 
@@ -67,7 +68,6 @@ const MAX_SLICES = 5;
  *  rows, roughly two months of triage). Asked directly whether this log could
  *  grow indefinitely: it cannot — `record()` rewrites `entries[-MAX_ROWS:]` on
  *  every append, so the file is a ring like every other store under `/data`. */
-const PAGE_SIZE = 20;
 
 /** ⚠️ A SEQUENTIAL RAMP OF ONE HUE, NEVER THE CATEGORY PALETTE. CLAUDE.md's own
  *  gotcha: reusing `CATEGORY_COLORS` for non-category UI made a room chip read
@@ -246,12 +246,8 @@ export default function UsagePanel() {
    *  from" to a narrower range leaves the reader on page 12 of a list that now
    *  has three pages — an empty table under a heading that says there are
    *  requests, which reads as a bug in the ledger rather than in the pager. */
-  const [pageNo, setPageNo] = useState(0);
-  useEffect(() => { setPageNo(0); }, [rows]);
-
-  const lastPage = Math.max(0, Math.ceil(recent.length / PAGE_SIZE) - 1);
-  const first = Math.min(pageNo, lastPage) * PAGE_SIZE;
-  const page = recent.slice(first, first + PAGE_SIZE);
+  const paged = usePaged(recent);
+  const page = paged.page;
 
   /** ⚠️ A BLOB AND AN OBJECT URL, revoked immediately — the same idiom
    *  `TelemetryPanel.downloadAll` uses, and for the same reason: this add-on
@@ -416,33 +412,12 @@ export default function UsagePanel() {
                       because THIS is the control that hides rows — a reader
                       who has just been told they are seeing 20 of 500 is
                       exactly the reader who wants the other 480. */}
-                  <div className="usage-pager">
-                    <span className="muted">
-                      {recent.length <= PAGE_SIZE
-                        ? `${recent.length} request(s)`
-                        : `${first + 1}–${first + page.length} of ${recent.length}`}
-                    </span>
-                    <span className="usage-pager-controls">
-                      <button className="btn ghost" onClick={download}
-                              title="Download every request in this window as a CSV">
-                        <Download size={16} aria-hidden /> CSV
-                      </button>
-                      {recent.length > PAGE_SIZE && (
-                        <>
-                          <button className="btn ghost" disabled={pageNo === 0}
-                                  onClick={() => setPageNo((p) => Math.max(0, p - 1))}
-                                  aria-label="Previous page">
-                            <ChevronLeft size={16} aria-hidden />
-                          </button>
-                          <button className="btn ghost" disabled={pageNo >= lastPage}
-                                  onClick={() => setPageNo((p) => Math.min(lastPage, p + 1))}
-                                  aria-label="Next page">
-                            <ChevronRight size={16} aria-hidden />
-                          </button>
-                        </>
-                      )}
-                    </span>
-                  </div>
+                  <Pager paged={paged} unit="request">
+                    <button className="btn ghost" onClick={download}
+                            title="Download every request in this window as a CSV">
+                      <Download size={16} aria-hidden /> CSV
+                    </button>
+                  </Pager>
                 </div>
               )}
             </>

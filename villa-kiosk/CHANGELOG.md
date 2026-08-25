@@ -1,13 +1,13 @@
-## 2.742.0
+## 2.743.0
 
-### Changed — four settings became two, and a combination that recorded nothing is now unreachable
+### Changed — descriptions fit two lines with the detail behind an (i), and every long list uses one pager
 
-"Stay silent" and "investigate without asking" were independent checkboxes, so a fourth combination
-existed nobody would choose on purpose: everything queues, nothing is investigated, nothing is
-recorded, and the comparison the cutover is read from comes back empty looking like a verdict on the
-assistant — this villa spent its whole observation period there. They are now one choice, Observe only
-/ Ask me first / Live, so it cannot be selected, and each option explains itself. Separately, the two
-numbers bounding one investigation became Brief / Normal / Thorough; the paragraph above them already
-began "both of these bound a single investigation". The per-step token ceiling did not join them: it
-costs nothing unused, and filing it among paid settings is how it gets turned down. Nothing stored changed.
+Control explanations had grown to four, five and six lines each, so a settings pane was a wall of prose
+and the switch you wanted was somewhere inside it. Every description is now at most two lines, with the
+rest moved — not deleted — into a small (i) beside it. That icon opens on tap rather than hover, because
+the villa's kiosk is a wall-mounted iPad and the `title` tooltips it replaces were unreachable there.
+Long lists had four different behaviours: a shared "first three plus Show all", a pager private to the
+usage ledger, and two silent caps that showed a prefix with no way to reach the rest — telemetry told
+the reader to export the file to read it. Logs now share one pager and one page size; the "first three"
+pattern stays for short config lists, which answer a different question. Nothing stored changed.
 

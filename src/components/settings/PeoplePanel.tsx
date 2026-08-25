@@ -216,14 +216,17 @@ export default function PeoplePanel() {
         disabled={saving || !agentOn}
         label="Answer messages"
         note={agentOn
-          ? "Lets the people below start a conversation with the villa — each "
-            + "row gains a “Can message the villa” field. It is asked "
-            + "separately from their devices because the two are opposite "
-            + "directions: a device is an address the villa sends to, and only "
-            + "a private Telegram chat identifies who is speaking. Group chats "
-            + "are not offered: a group's id names the room, not the person."
-          : "Turn “Supervision is switched on” on, under Cadence and cost "
-            + "below, to use this."}
+          ? "Lets the people below start a conversation with the villa."
+          : "Turn “Supervision is switched on” on, under Cadence and cost below."}
+        more={agentOn ? (
+          <>
+            Each row gains a “Can message the villa” field, asked separately
+            from their devices because the two point opposite ways: a device is
+            an address the villa sends TO, and only a private Telegram chat
+            identifies who is SPEAKING. Group chats are not offered — a group's
+            id names the room, not the person.
+          </>
+        ) : undefined}
       />
 
       {legacy && (

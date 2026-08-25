@@ -25,6 +25,7 @@
 // PUT is owner-only there. Nothing in this file is a control.
 
 import ToggleField from "@/components/common/ToggleField";
+import InfoHint from "@/components/common/InfoHint";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -74,8 +75,8 @@ const EMPTY: Draft = {
  *
  *  This is the rule `VillaCoordinates` already states one file over: apply on
  *  blur, because a half-typed number is not a value. */
-function Num({ label, note, value, min, onChange }: {
-  label: string; note: string; value: number; min: number;
+function Num({ label, note, more, value, min, onChange }: {
+  label: string; note: string; more?: React.ReactNode; value: number; min: number;
   onChange: (v: number) => void;
 }) {
   const [typed, setTyped] = useState<string | null>(null);
@@ -118,7 +119,7 @@ function Num({ label, note, value, min, onChange }: {
           observe on their device, the markup now says the same thing the
           stylesheet does. The two agree, so `order` is a no-op here and remains
           only to cover the fields still written the other way round. */}
-      <p className="muted body-text">{note}</p>
+      <p className="muted body-text">{note}{more ? <InfoHint label={label}>{more}</InfoHint> : null}</p>
       <input
         type="number"
         inputMode="numeric"
@@ -167,15 +168,15 @@ const OTHER = "\u2026";  // the escape-hatch segment, not a model id
  *  nothing. A closed set makes the dead combination unreachable rather than
  *  merely discouraged — the same reason `agent/review.py` puts an unapproved
  *  playbook in a different DIRECTORY instead of behind a flag. */
-function Choice<T extends string>({ label, note, value, options, onChange }: {
-  label: string; note: React.ReactNode; value: T;
+function Choice<T extends string>({ label, note, more, value, options, onChange }: {
+  label: string; note: React.ReactNode; more?: React.ReactNode; value: T;
   options: { id: T; text: string; hint: string }[];
   onChange: (v: T) => void;
 }) {
   const chosen = options.find((o) => o.id === value) ?? options[0];
   return (
     <label className="fm-field">
-      <p className="muted body-text">{note}</p>
+      <p className="muted body-text">{note}{more ? <InfoHint label={label}>{more}</InfoHint> : null}</p>
       <div className="segmented segmented-wrap" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={o.id} type="button" title={o.hint}
@@ -195,8 +196,8 @@ function Choice<T extends string>({ label, note, value, options, onChange }: {
 }
 
 
-function Text({ label, note, value, placeholder, onChange }: {
-  label: string; note: string; value: string; placeholder?: string;
+function Text({ label, note, more, value, placeholder, onChange }: {
+  label: string; note: string; more?: React.ReactNode; value: string; placeholder?: string;
   onChange: (v: string) => void;
 }) {
   // What is in force: the typed value, or the default the placeholder names.
@@ -206,7 +207,7 @@ function Text({ label, note, value, placeholder, onChange }: {
   return (
     <label className="fm-field">
       {/* Same order as `Num`: explanation, control, then the field's name. */}
-      <p className="muted body-text">{note}</p>
+      <p className="muted body-text">{note}{more ? <InfoHint label={label}>{more}</InfoHint> : null}</p>
       <div className="segmented segmented-wrap" role="group" aria-label={label}>
         {MODELS.map((m) => (
           <button
@@ -315,9 +316,11 @@ export default function AgentTuningPanel() {
         checked={draft.enabled}
         onChange={(enabled) => edit({ enabled })}
         label="Watch the villa and look for problems"
-        note={<>
-Off means nothing runs and nothing is spent. Home Assistant keeps
-        working exactly as it does today — this only adds the watching.
+        note="Off, nothing runs and nothing is spent."
+        more={<>
+          Home Assistant keeps working exactly as it does today — this only adds
+          the watching on top. Turning it off is the one setting that stops all
+          spending; the others only change how much.
         </>}
       />
 
@@ -340,9 +343,12 @@ Off means nothing runs and nothing is spent. Home Assistant keeps
           migration and the backend, the API and every test are untouched. */}
       <Choice<"observe" | "ask" | "live">
         label="How it should work"
-        note={<>
-          Three ways to run it, from most cautious to fully live. The middle one
-          is the safe place to start once you want it to reach you.
+        note="Three ways to run it, from most cautious to fully live."
+        more={<>
+          <strong>Observe only</strong> costs the same as running live — it does
+          all the same thinking and holds back the message. <strong>Ask me
+          first</strong> is the safe place to start once you want findings to
+          reach you. Whichever you pick, urgent things ignore quiet hours.
         </>}
         value={draft.shadow ? "observe"
                : draft.investigateMode === "auto" ? "live" : "ask"}
@@ -377,11 +383,13 @@ Off means nothing runs and nothing is spent. Home Assistant keeps
           add-on at the least privilege that works. */}
       <label className="fm-field">
         <p className="muted body-text">
-          Open the Home Assistant MCP add-on, look at its log, and copy the
-          address on the line beginning “Starting MCP server” — it ends in a
-          long random path. That add-on is what lets the villa answer questions
-          about your home; leave this empty and it answers from a much smaller
-          set of its own.
+          Lets the villa answer questions about your home. Empty still works,
+          from a much smaller set of its own.
+          <InfoHint label="Home Assistant MCP add-on address">
+            Open the Home Assistant MCP add-on, look at its log, and copy the
+            address on the line beginning “Starting MCP server” — it ends in a
+            long random path.
+          </InfoHint>
         </p>
         <input
           value={draft.mcpUrl}
@@ -397,26 +405,35 @@ Off means nothing runs and nothing is spent. Home Assistant keeps
       </div>
       <Num
         label="Check the villa every … minutes"
-        note={`About ${perDay} checks a day. This is the single biggest thing`
-              + ` on the bill: doubling the number roughly halves it. Cannot be`
-              + ` set below ${MIN_TRIAGE_MINUTES} minutes.`}
+        note={`About ${perDay} checks a day, and the single biggest thing on the bill.`}
+        more={<>
+          Doubling this roughly halves the cost. It cannot go below{" "}
+          {MIN_TRIAGE_MINUTES} minutes. It sets how often the model is asked —
+          not how often the villa is observed, which runs on its own faster
+          clock and costs nothing.
+        </>}
         value={draft.triageMinutes} min={MIN_TRIAGE_MINUTES}
         onChange={(v) => edit({ triageMinutes: v })}
       />
 
       <Num
         label="Never use more than … AI requests a month"
-        note={"A hard ceiling on everything below. When it is reached the villa"
-              + " stops asking the AI and says so, rather than running up a"
-              + " bill you did not agree to."}
+        note="A hard ceiling. Reached, the villa stops asking the AI and says so."
+        more={<>
+          It counts requests, not words — one investigation that thinks eight
+          times spends eight of them. This is what stops a bill you did not
+          agree to, rather than a warning after the fact.
+        </>}
         value={draft.monthlyLimit} min={0}
         onChange={(v) => edit({ monthlyLimit: v })}
       />
       <Num
         label="Of those, keep … aside for answering you"
-        note={"So a long conversation with the villa cannot use up the requests"
-              + " its own checks need. Leave at 0 and it works out a sensible"
-              + " share on its own."}
+        note="Leave at 0 and it works out a sensible share on its own."
+        more={<>
+          This reserves part of the ceiling above for answering you, so a long
+          conversation cannot use up the requests the villa's own checks need.
+        </>}
         value={draft.chatMonthlyLimit} min={0}
         onChange={(v) => edit({ chatMonthlyLimit: v })}
       />
@@ -430,10 +447,11 @@ Off means nothing runs and nothing is spent. Home Assistant keeps
           decision from what it costs and now says so. */}
       <Num
         label="Look into at most … things per check"
-        note={"Each investigation is a full, expensive look at one piece of"
-              + " equipment. Anything above this waits for the next check"
-              + " instead of being dropped, so nothing is lost — it is just"
-              + " looked at a little later."}
+        note="Each one is a full, expensive look at a single piece of equipment."
+        more={<>
+          Anything above this waits for the next check rather than being
+          dropped — nothing is lost, it is looked at a little later.
+        </>}
         value={draft.maxInvestigationsPerPass} min={0}
         onChange={(v) => edit({ maxInvestigationsPerPass: v })}
       />
@@ -453,11 +471,12 @@ Off means nothing runs and nothing is spent. Home Assistant keeps
         checked={draft.actEnabled}
         onChange={(actEnabled) => edit({ actEnabled })}
         label="Let it operate devices, not just watch them"
-        note={<>
-Off, and nothing the villa does can change a switch, a light or a lock —
-        it reads and it tells you. This is separate from everything above: those
-        decide how much it looks and who it tells, this decides whether it may
-        touch anything at all. Leave it off unless you have a reason.
+        note="Off, it reads and tells you and cannot change a switch, light or lock."
+        more={<>
+          Separate from everything above: those decide how much it looks and who
+          it tells, this decides whether it may touch anything at all. Leave it
+          off unless you have a reason. What it may touch is listed on Act &amp;
+          Tell, and both must agree before anything happens.
         </>}
       />
       {/* ⚠️ THE DEVICE ALLOW-LIST MOVED TO "ACT & TELL" IN 2.729.0. It is
@@ -492,9 +511,11 @@ Off, and nothing the villa does can change a switch, a light or a lock —
           ⚠️ STORED KEYS UNCHANGED: this writes both, so no migration. */}
       <Choice<"brief" | "normal" | "thorough">
         label="How thorough each investigation is"
-        note={<>
-          One investigation is a slow, expensive look at one piece of equipment.
-          This is the only setting that changes what one costs.
+        note="The only setting that changes what one investigation costs."
+        more={<>
+          An investigation is the slow part that works out <em>why</em>, after a
+          check has spotted that something looks wrong. Raise this if
+          investigations keep ending without reaching a conclusion.
         </>}
         value={draft.maxTurns <= 5 ? "brief"
                : draft.maxTurns >= 11 ? "thorough" : "normal"}
@@ -519,11 +540,12 @@ Off, and nothing the villa does can change a switch, a light or a lock —
           silently killing 7 of every 8 supervision passes. */}
       <Num
         label="Room to think and answer, per step (tokens)"
-        note={"How much the assistant may write in one step, including its"
-              + " own reasoning. This is a limit, not a cost: you pay for what"
-              + " it actually writes. Set too low, a step runs out mid-thought"
-              + " and everything it read is thrown away. Raise it if answers"
-              + " stop arriving; 8192 suits most villas."}
+        note="A limit, not a cost — you pay for what it writes. 8192 suits most villas."
+        more={<>
+          How much it may write in one step, its own reasoning included. Set too
+          low, a step runs out mid-thought and everything it read that step is
+          thrown away. Raise it if answers stop arriving.
+        </>}
         value={draft.maxOutputTokens} min={1024}
         onChange={(v) => edit({ maxOutputTokens: v })}
       />
@@ -550,23 +572,26 @@ Off, and nothing the villa does can change a switch, a light or a lock —
       </p>
       <Text label="For the routine checks" value={draft.modelTriage}
         placeholder="claude-haiku-4-5"
-        note="Runs every few minutes, all day. A small fast model is the right
-              fit, and this is where an expensive choice costs the most."
+        note="Runs all day. A small fast model is the right fit."
+        more="This is where an expensive choice costs the most, because it runs
+              far more often than anything else here."
         onChange={(v) => edit({ modelTriage: v })} />
       <Text label="For answering your questions" value={draft.modelChat}
         placeholder="claude-sonnet-5"
-        note="Every message you send the villa. Worth a capable model — but not
-              the most expensive one, because you will use it often."
+        note="Every message you send the villa. Worth a capable model."
+        more="Not the most expensive one, though — you will use this often."
         onChange={(v) => edit({ modelChat: v })} />
       <Text label="For investigating a problem" value={draft.modelReason}
         placeholder="claude-opus-5"
-        note="Runs only on something already worth a closer look, so it runs
-              rarely. This is the one job where the best model earns its price."
+        note="The one job where the best model earns its price."
+        more="It runs only on something already judged worth a closer look, so
+              it runs rarely — a better model here changes the conclusions you
+              get without moving the bill much."
         onChange={(v) => edit({ modelReason: v })} />
       <Text label="For writing your briefings" value={draft.modelBrief}
         placeholder="claude-sonnet-5"
-        note="Turns the findings into the summary you receive. Runs once per
-              briefing, so the choice barely moves the bill."
+        note="Turns the findings into the summary you receive."
+        more="It runs once per briefing, so this choice barely moves the bill."
         onChange={(v) => edit({ modelBrief: v })} />
 
     </div>
