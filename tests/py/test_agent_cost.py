@@ -252,10 +252,18 @@ def test_the_ha_tools_copy_states_the_REAL_tool_count() -> None:
         src = handle.read()
     block = src[src.index('checked={draft.haTools}'):]
     block = block[:block.index("      />")]
-    assert f"its own {len(registry.REASON_TOOLS)}" in block, (
-        f"the tooltip does not say the real tool count "
-        f"({len(registry.REASON_TOOLS)}); a number in prose that nobody checks "
-        "drifts from the list it describes")
+    # ⚠️ CONDITIONAL, NOT MANDATORY — AND THE FIRST VERSION HAD THAT BACKWARDS.
+    # It REQUIRED the copy to say "its own 10", so when the third rewrite dropped
+    # the count as jargon (a reader does not think in tool descriptions) the test
+    # went red and would have forced the number back into the UI. A pin exists to
+    # stop a stated number DRIFTING from the list it describes; it has no
+    # business insisting the number be stated at all. Copy is not the test's to
+    # decide.
+    stated = re.findall(r"its own (\d+)", block)
+    for count in stated:
+        assert int(count) == len(registry.REASON_TOOLS), (
+            f"the tooltip says {count} tools and the list holds "
+            f"{len(registry.REASON_TOOLS)}")
     # ⚠️ AND THE COST CLAIM MAY NOT OVERSTATE ITSELF AGAIN. The error was not
     # the NUMBER — "five times more sent" is true and is in this copy on
     # purpose. It was attaching that ratio to the PRICE. So the pin targets the

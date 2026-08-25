@@ -598,34 +598,39 @@ export default function AgentTuningPanel() {
       <ToggleField
         checked={draft.haTools}
         onChange={(haTools) => edit({ haTools })}
-        label="Let it look things up in Home Assistant directly"
-        note="Off, it uses only what this add-on records. On, it can also look things up in Home Assistant."
+        label="Let it go looking in Home Assistant"
+        note="Off, it can only examine devices the villa already knows about."
         more={<>
-          {/* ⚠️ SHORT SENTENCES IN PARAGRAPHS, NOT BOLD LABELS RUN INTO PROSE.
-              This hint was rewritten twice and reported both times — the second
-              version opened "**Either way** it can read …" and ran three ideas
-              together with bold words inside them, which reads as one long
-              sentence being shouted at intervals. One idea per paragraph, one
-              claim per sentence. */}
+          {/* ⚠️ THE THIRD REWRITE, AND THE FIRST TWO WERE INACCURATE AS WELL AS
+              UNCLEAR. Both implied that OFF means no Home Assistant access. It
+              does not: `read_state`, `read_history` and `read_automation_trace`
+              all talk to HA either way. What OFF restricts is the REACH — those
+              tools take a `ref`, a handle minted from the villa's own records
+              (`refs.resolve`), so the assistant can examine any device the
+              villa already knows about and cannot go looking for one nobody has
+              mentioned. That is the real distinction and it is what a reader
+              can act on; "44 tool descriptions instead of 10" is our plumbing. */}
           <p>
-            Off, it uses only what this add-on has recorded. That is each
-            device&rsquo;s history, its own past findings, your maintenance
-            record and the villa&rsquo;s notes.
+            Off, it can still read any device the villa already knows about. It
+            sees their state and their history. What it cannot do is go looking
+            for something nobody has mentioned.
           </p>
           <p>
-            On, it can also look things up in Home Assistant. It can find a
-            device by name. It can open an integration&rsquo;s details. It can
-            check system health.
+            On, it can search Home Assistant itself. It can find a device by
+            name. It can open an integration. It can check system health.
           </p>
           <p>
             Turn it on if investigations keep missing something you can see in
-            Home Assistant yourself.
+            Home Assistant.
           </p>
           <p>
-            On costs about twice as much per investigation. Each step sends 44
-            tool descriptions instead of its own 10.
+            It roughly doubles what each investigation costs, because every step
+            carries a much longer list of what it may use.
           </p>
-          <p>Chatting with the assistant always gets all 44, either way.</p>
+          <p>
+            Your own conversations with the assistant are unaffected. They
+            always have everything.
+          </p>
         </>}
       />
       {/* ⚠️ A CEILING, NOT A SPEND, AND THE NOTE SAYS SO — otherwise this reads

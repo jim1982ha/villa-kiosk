@@ -1,3 +1,15 @@
+## 2.761.0
+
+### Fixed — the Home Assistant switch described the wrong difference
+The first two rewrites both implied that "off" means no Home Assistant access.
+It does not: the assistant reads device state, history and automation traces from
+Home Assistant either way. What "off" restricts is reach — it can examine any
+device the villa already knows about, and cannot go looking for one nobody has
+mentioned. That is what the description now says, and it drops the tool counts,
+which were our plumbing rather than anything a reader can act on. The test that
+required the count is now conditional: it stops a stated number drifting, and no
+longer insists the number be stated.
+
 ## 2.760.0
 
 ### Fixed — tooltips that read as one long shouted sentence
