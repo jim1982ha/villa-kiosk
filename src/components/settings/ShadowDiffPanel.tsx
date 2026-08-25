@@ -108,6 +108,22 @@ export function outcomeOf(reason: string): PassOutcome {
  *  numbers with " | ", and everything after the first separator is the numbers. */
 const reasonOf = (p: TriagePass) => (p.detail || "").split(" | ")[0].trim();
 
+/** How many subjects a pass INVESTIGATED and how many concerns came back, out
+ *  of `Followup.clause` ("investigated 3, 1 concern").
+ *
+ *  ⚠️ THIS IS WHERE THE MONEY GOES AND THE PAGE WAS BLIND TO IT. An
+ *  investigation is a frontier-model run; "reached 0 of 24" reads as an
+ *  assistant that is not working, and cannot be told apart from one that
+ *  looked twenty times and correctly concluded nothing — which `reason.SYSTEM`
+ *  instructs outright ("finding nothing is a good outcome and a complete
+ *  answer"). Both numbers were already in the sentence; neither was on screen. */
+export function yieldOf(reason: string): { looked: number; raised: number } {
+  const looked = /investigated (\d+)/.exec(reason);
+  const raised = /(\d+) concerns?/.exec(reason);
+  return { looked: looked ? Number(looked[1]) : 0,
+           raised: raised ? Number(raised[1]) : 0 };
+}
+
 /** `escalated 2 (investigated 2): A, B` → `A, B`. */
 const subjectsOf = (reason: string) => {
   const i = reason.indexOf(": ");
@@ -156,6 +172,12 @@ export default function ShadowDiffPanel() {
   const paged = usePaged(recent);
 
   const last = recent[0];
+  /** ⚠️ SUMMED OVER EVERY RECORDED PASS, not the page, because a reader
+   *  paging back is not changing the villa's history. */
+  const work = useMemo(() => recent.reduce((acc, r) => {
+    const y = yieldOf(r.reason);
+    return { looked: acc.looked + y.looked, raised: acc.raised + y.raised };
+  }, { looked: 0, raised: 0 }), [recent]);
   /** Passes in the last 24 h — the honest measure of "is it running", where a
    *  total since install would keep reading healthy long after it stopped. */
   const dayPasses = useMemo(() => {
@@ -275,11 +297,21 @@ export default function ShadowDiffPanel() {
    *  what BLOCKS what. A coverage percentage computed while the assistant was
    *  never given the villa's notes to read is a number about nothing, so the
    *  two "it could not look" states come first and say so instead. */
-  const verdict: "never" | "blocked" | "blind" | "progress" =
+  /** ⚠️ `one-sided` WAS IN THE PREVIOUS VERSION AND I DROPPED IT IN THE
+   *  REBUILD — a regression, reported the same day as "how come the handover is
+   *  blocked by this". EVERY finding lands in "not matched" by construction
+   *  when the other column is empty, so `matched of covered` carries no
+   *  information about the assistant at all: an assistant that has raised
+   *  nothing produces exactly the page an assistant that is failing produces.
+   *  That is this project's most repeated defect — one output for the two
+   *  outcomes an instrument exists to separate — and the rebuild reintroduced
+   *  it while removing five other instances of it. */
+  const verdict: "never" | "blocked" | "blind" | "one-sided" | "progress" =
     last === undefined ? "never"
       : last.outcome === "blocked" ? "blocked"
         : blind ? "blind"
-          : "progress";
+          : diff.agentTotal === 0 ? "one-sided"
+            : "progress";
   const bad = verdict !== "progress";
 
   return (
@@ -301,6 +333,9 @@ export default function ShadowDiffPanel() {
               ? `The assistant could not run its last check — ${last!.reason}`
               : verdict === "blind"
                 ? "The assistant ran, but was handed nothing to read"
+              : verdict === "one-sided"
+                ? `Not a comparison yet — your automations reported `
+                  + `${diff.rulesTotal}, the assistant nothing`
                 : covered === 0
                   ? "The assistant is watching. Nothing has been reported by "
                     + "either side yet"
@@ -327,6 +362,16 @@ export default function ShadowDiffPanel() {
           picks up where it left off.
         </p>
       )}
+      {verdict === "one-sided" && (
+        <p className="muted body-text">
+          Every finding lands under “not matched” when the other column is
+          empty, so that count says nothing about the assistant yet — one that
+          has raised nothing produces exactly this page. What it HAS been doing
+          is below: look at how many subjects it investigated against how many
+          concerns it raised. Investigating and concluding nothing is a correct
+          outcome, not a failure, and it is what it is told to do.
+        </p>
+      )}
       {verdict === "blind" && (
         <p className="muted body-text">
           It looked and found nothing to raise — but it was given an empty set
@@ -345,6 +390,14 @@ export default function ShadowDiffPanel() {
         <div>
           <dt>Checks in 24 h</dt>
           <dd>{dayPasses}</dd>
+        </div>
+        <div>
+          {/* ⚠️ THE PAIR, NOT EITHER ALONE. "Investigated 10" alone reads as
+              busy; "raised 2" alone reads as broken. Together they are the one
+              honest measure of what the spend bought, and the gap between them
+              is a deliberate instruction rather than a fault. */}
+          <dt>Investigated → raised</dt>
+          <dd>{work.looked} → {work.raised}</dd>
         </div>
         <div>
           <dt>Villa notes read</dt>

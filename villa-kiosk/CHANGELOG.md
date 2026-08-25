@@ -1,3 +1,14 @@
+## 2.751.0
+
+### Fixed — "not matched yet (24)" read as a verdict when it was arithmetic
+Every finding lands in that list when the other column is empty, so the count
+says nothing about the assistant — one that has raised nothing produces exactly
+the page one that is failing produces. 2.750.0 dropped that guard while removing
+five other instances of the same defect; it is back, with the pair that says
+where the money went (investigated → raised). /dry-audit: the pass reason is
+prose parsed by three readers in two languages and nothing joined them (pinned);
+CLAUDE.md's journal bound and store-factory count were stale; `badge` is muted.
+
 ## 2.750.0
 
 ### Changed — the handover tab reported technically and gave no usable insight

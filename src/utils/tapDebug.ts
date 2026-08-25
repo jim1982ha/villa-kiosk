@@ -55,12 +55,19 @@ import { debugFlagEnabled } from "@/utils/devLog";
  * happened" — the exact misread that has cost this project four separate
  * rounds. Every capture states which channels were off.
  */
-const MUTED_BY_DEFAULT = new Set(["place", "seat", "chip", "mesh", "variant", "beam"]);
-// ⚠️ `badge` is deliberately NOT in that set: it is a live investigation (the
-// badge value's drawn geometry, see EntityVisuals.logBadgeGeometry) and the owner
-// has to get it from a plain `?debug`. It is deduped to one line per layout, so
-// it costs a line, not a stream. Move it into the set — or delete the emitter —
-// the moment it has answered.
+const MUTED_BY_DEFAULT = new Set(["place", "seat", "chip", "mesh", "variant",
+                                  "beam", "badge"]);
+// ⚠️ `badge` JOINED THE SET IN 2.751.0, ON THE INSTRUCTION THE PREVIOUS COMMENT
+// LEFT HERE: "move it into the set the moment it has answered". It answered in
+// 2.455.0 — the owner accepted the drawn geometry on screen at `gap=2.60
+// visR=3.00`, and `test:placement` now pins the equation on both the ideal and
+// the floored strut widths, so the finding survives without the emitter running
+// on every capture.
+// ⚠️ THE EMITTER IS KEPT, NOT DELETED, and that is the other half of the same
+// rule: CLAUDE.md tells the next session to read `logBadgeGeometry`'s three
+// numbers rather than reason about badge geometry, because four rounds were
+// spent losing to screenshots. Muted means `?debug=badge` still has it; deleted
+// would mean the next round starts by rebuilding the instrument.
 
 const wanted: Set<string> = (() => {
   try {
