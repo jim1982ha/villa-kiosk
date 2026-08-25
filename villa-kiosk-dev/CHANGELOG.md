@@ -1,3 +1,12 @@
+## 2.763.1
+
+### Fixed — a failing test shipped because the gate was piped
+The hard-rules check went red on an unclassified placeholder in the new test file
+and 2.763.0 was committed anyway: the verification command ended in a pipe, so the
+shell reported the exit status of `tail`, not of pytest. Nothing about the feature
+is affected — the placeholder is a one-letter stand-in in a test — but the gate
+was not a gate.
+
 ## 2.763.0
 
 ### Added — a finding the villa sends you can become a job somebody ticks off
