@@ -1,3 +1,15 @@
+## 2.752.0
+
+### Fixed — supervision cost $8.55/day because 84% of every request was tools it never called
+Measured, not estimated: the investigation prefix was 52,108 tokens per turn, of
+which 43,700 were 44 tool schemas — Home Assistant's whole catalogue, folded in
+for chat and inherited by the scheduled tiers, which its own trace shows reached
+for one of them. The autonomous tiers now carry the ten they use (`ha_tools`
+puts the rest back); turns 8→4 and investigations per pass 3→2, both of which
+bound every time and so were multipliers, not ceilings; plus a daily dollar
+ceiling, since a request count spans 37x in price. An escalated device also
+carries its entity id now, so its concern can match what an automation reported.
+
 ## 2.751.0
 
 ### Fixed — "not matched yet (24)" read as a verdict when it was arithmetic
