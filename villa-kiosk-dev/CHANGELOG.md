@@ -1,3 +1,14 @@
+## 2.750.0
+
+### Changed — the handover tab reported technically and gave no usable insight
+It argued a decision the move to agent-owned supervision had closed, headlining
+"24 things your automations caught and the villa did not". Rebuilt as progress:
+is it looking, was it handed anything to read, how much has it matched. Lists
+now group by check with a count — the diff keys on equipment, so four devices
+failing one check drew four identical rows — a pass that never ran no longer
+reports as quiet, and the per-row doc/model fields moved into the CSV.
+Supervision off dims the three tabs that stop; its header control is an icon.
+
 ## 2.749.0
 
 ### Changed — a master switch in the header, advanced in the footer, and a precedence stated as fixed
