@@ -167,6 +167,21 @@
   --toggle-box: 22px;
   --toggle-pad: calc((var(--touch-min) - var(--toggle-box)) / 2);
 
+  /* ⚠️ THE SEGMENTED CONTROL'S PAINTED HEIGHT, AND IT IS POINTER-CLASS
+     DEPENDENT. `.segmented button` carried a flat `min-height: 40px` which,
+     inside a 4px track, drew a 48px slab — reported as "the height of the
+     selectable toggles is too big" from a laptop, where nothing is operated by
+     finger and 48px of pill around one word of text is all air.
+
+     This is the SAME defect as `--toggle-pad` above and it is fixed the same
+     way: a NUMBER a rule can vary, not a min-height nobody can subtract. A
+     mouse gets a compact control; a touchscreen keeps the full `--touch-min`,
+     because on the wall tablet this dialog is the thing being poked. Every
+     `.segmented` variant reads this one token, so a third one cannot be sized
+     by hand and drift. */
+  --segmented-h: 32px;
+  --segmented-pad: 3px;
+
   /* ── THE ICON CHIP, defined once for both renderers ────────────────────
      A category-coloured rounded square holding a glyph, with a label or a
      value beside it. The bottom bar draws it in the DOM (.summary-tile-icon);
@@ -2334,13 +2349,22 @@ input[type="range"]::-moz-range-thumb {
    off it as a plain --bg-modal chip, NOT a solid accent block — three green
    blocks per screen used to compete with each other and with the app's real
    accent moments (VESTA-DESIGN.md §1.7). */
-.segmented { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-pill); background: var(--bg-input); }
+.segmented { display: flex; gap: 4px; padding: var(--segmented-pad);
+             border-radius: var(--radius-pill); background: var(--bg-input); }
 .segmented button {
   flex: 1 1 0; display: flex; align-items: center; justify-content: center; gap: 7px;
-  min-height: 40px; border-radius: var(--radius-pill); font-size: var(--text-base); font-weight: 500;
+  min-height: var(--segmented-h); border-radius: var(--radius-pill);
+  font-size: var(--text-base); font-weight: 500;
   color: var(--text-secondary); transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 .segmented button svg { flex: 0 0 auto; }
+/* ⚠️ A FINGER GETS THE FULL TARGET BACK. `--touch-min` is 44px and this dialog
+   is operated by hand on the wall tablet; the compact height above is for a
+   pointer that does not need it. Declared as the TOKEN, not as a rule on the
+   button, so every `.segmented` variant follows without naming itself. */
+@media (pointer: coarse) {
+  :root { --segmented-h: var(--touch-min); --segmented-pad: 4px; }
+}
 /* Selected segment: a soft ACCENT tint with an accent-coloured glyph — the
    exact treatment the HUD's category filter chips already use, so "this one
    is on" looks the same everywhere in the app.
@@ -2360,7 +2384,13 @@ input[type="range"]::-moz-range-thumb {
 /* Icon-only variant (theme selector in the Settings header): compact, not
    full-width, square buttons — the Sun/Moon/Monitor glyphs are self-explanatory. */
 .segmented-icons { flex: 0 0 auto; gap: 3px; padding: 3px; }
-.segmented-icons button { flex: 0 0 auto; width: 38px; min-height: 34px; gap: 0; }
+/* ⚠️ WIDTH TRACKS THE HEIGHT TOKEN TOO, so the icon variant stays square-ish
+   at either pointer class instead of turning into a letterbox when the height
+   moves. It was `width: 38px; min-height: 34px`, two literals that had to be
+   remembered together. */
+.segmented-icons button { flex: 0 0 auto; gap: 0;
+                          width: calc(var(--segmented-h) + 6px);
+                          min-height: var(--segmented-h); }
 
 /* Timeline header: the range label and its preset picker on one line. The
    picker reuses .segmented (so it inherits the selected-segment treatment)
@@ -3685,7 +3715,15 @@ label.toggle span { user-select: none; line-height: 1.4; }
    generated" tell; a wash this quiet is barely noticeable until something
    is actually wrong, which is the point — criticality should read as a
    deliberate, occasional signal, not decoration applied uniformly. */
-.fm-list { display: flex; flex-direction: column; gap: 8px; }
+/* ⚠️ `list-style: none` — AND IT WAS THE ONLY LIST CLASS IN THIS FILE WITHOUT
+   IT. `.reports-list`, `.reports-tasks`, `.reports-deliveries` and
+   `.first-run-tip-list` all reset their marker; this one is laid out as flex
+   ROWS, so a bullet is not a smaller version of the design, it is a marker
+   beside a row that was never meant to have one. Reported from the Handover
+   tab's "Recent checks". Four of five agreeing and one not is the applicable-set
+   defect /dry-audit exists for: the rule was rolled out by call site. */
+.fm-list { display: flex; flex-direction: column; gap: 8px;
+           list-style: none; padding-left: 0; margin: 0; }
 .fm-row {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 12px 14px; border-radius: 12px;

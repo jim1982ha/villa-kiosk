@@ -32,7 +32,8 @@ import {
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
-import SourceLegend from "@/components/common/SourceLegend";
+import RecentChecks from "@/components/agent/RecentChecks";
+import { loadTriagePasses, type TriagePass } from "@/agent/agentApi";
 import { AgentConfigProvider,
          useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import CockpitConcerns from "@/components/cockpit/CockpitConcerns";
@@ -147,6 +148,12 @@ function AgentDialog(
     });
   }, []);
   useEffect(() => { void fetchReportsDiagnostics().then(setDiagnostics); }, []);
+  /** ⚠️ FETCHED HERE AND NOT INSIDE `RecentChecks`, so the component stays a
+   *  renderer with no I/O of its own — the Handover panel already loads these
+   *  alongside its diff and would otherwise be fetching them twice, once
+   *  itself and once through its child. */
+  const [passes, setPasses] = useState<TriagePass[]>([]);
+  useEffect(() => { void loadTriagePasses().then(setPasses); }, []);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -255,12 +262,26 @@ function AgentDialog(
                   "every 15 minutes" while this property runs 360 — a screen the
                   settings contradict. */}
               <TierIntro tier={TIERS.triage} speed={cadence} />
-              {/* ⚠️ THE QUEUE IS THIS TIER'S ONLY OUTPUT, and the HLD is
-                  emphatic about why it looks weak: triage "cannot act, cannot
+              {/* ⚠️ THE QUEUE IS THIS TIER'S ONLY *PENDING* OUTPUT, and the HLD
+                  is emphatic about why it looks weak: triage "cannot act, cannot
                   notify, cannot write. It only escalates" — and it assigns NO
                   severity, because severity is what the investigation decides.
                   A row here is a pointer, not a finding. */}
               <CockpitQueue />
+              {/* ⚠️ AND THIS TAB WAS BLANK WITHOUT THE TRACE. `CockpitQueue`
+                  correctly renders NOTHING in `auto` mode — an empty approval
+                  queue on a villa that investigates by itself is the permanent
+                  and correct state — so a villa running Live saw a step header
+                  over an empty pane, which reads as a broken tier rather than a
+                  working one. The passes were being recorded the whole time and
+                  were only visible on the Handover page under Advanced. */}
+              <div className="settings-section-title">Recent checks</div>
+              <RecentChecks
+                passes={passes}
+                empty={<>No check has run yet. One runs on the schedule above,
+                       or immediately from &ldquo;Check the villa now&rdquo; on
+                       the Handover tab.</>}
+              />
             </div>
           )}
 
@@ -312,17 +333,15 @@ function AgentDialog(
                     occasionally and none belong in the daily path — putting
                     them inline would bury the four dials that are actually
                     tuned. */}
-                {/* ⚠️ THE KEY LIVES HERE NOW, AND NOWHERE ELSE. It was under
-                    three tier tabs, each of which shows exactly ONE source —
-                    so the key repeated the chip already in that tab's header,
-                    directly beneath it, which is what the owner reported as a
-                    redundant badge. A legend earns its place where a reader
-                    learns the whole vocabulary at once, not where it restates
-                    a single label. This is that place, and it is the only one:
-                    the six labels are used across BOTH dialogs, so learning
-                    them belongs with the settings rather than with any one
-                    step. */}
-                <SourceLegend />
+                {/* ⚠️ `SourceLegend` MOVED TO ADVANCED IN 2.753.0, by the
+                    owner's instruction. Its journey is the argument for where
+                    it ended up: it started under three tier tabs, where it
+                    restated the one chip already in each header (reported as a
+                    redundant badge), then sat here — correct, because the six
+                    labels are learnt once and used across both dialogs, but
+                    still on the daily path below the four dials people
+                    actually tune. It is reference material: read once,
+                    consulted rarely. That is what Advanced is for. */}
             </div>
           )}
         </div>

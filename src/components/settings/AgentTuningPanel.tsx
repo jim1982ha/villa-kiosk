@@ -188,11 +188,18 @@ function Choice<T extends string>({ label, note, more, value, options, onChange 
           </button>
         ))}
       </div>
+      {/* ⚠️ THE NAME GOES DIRECTLY UNDER ITS CONTROL, exactly as `Num` and
+          `Text` place theirs — it used to sit AFTER the chosen option's
+          explanation, so a paragraph separated a field from its own label and
+          the label read as a heading for whatever came next. Reported from the
+          Settings tab: "How it should work" floating under a sentence about
+          Live mode. `.fm-field` is a plain column with no `order` rules, so
+          DOM order is what the reader sees. */}
+      <span>{label}</span>
       {/* ⚠️ THE CHOSEN OPTION EXPLAINS ITSELF UNDERNEATH. A segmented control
           shows three words and hides the consequence of picking one; the whole
           point of the merge is fewer controls, not less information. */}
       <p className="muted body-text">{chosen.hint}</p>
-      <span>{label}</span>
     </label>
   );
 }
@@ -540,16 +547,24 @@ export default function AgentTuningPanel() {
           depth === "brief" ? { maxTurns: 4, maxToolCalls: 12 }
           : depth === "thorough" ? { maxTurns: 12, maxToolCalls: 36 }
           : { maxTurns: 8, maxToolCalls: 24 })}
+        // ⚠️ THE GUIDANCE CHANGED WITH THE MEASUREMENT (2.752.0), not with
+        // taste. "Normal suits most villas" was written before anyone had
+        // measured a real investigation: every one of them used all eight
+        // rounds, which means the cap and not the task was deciding when to
+        // stop, and the runs since have answered in four with seven readings.
+        // Brief is the shipped default now and the copy says so.
         options={[
           { id: "brief", text: "Brief",
-            hint: "Four rounds of thinking and twelve readings. Cheapest, and "
-                + "it will sometimes stop before it has worked out the cause." },
+            hint: "Four rounds of thinking and twelve readings — and the "
+                + "measured setting: real investigations here finish in four. "
+                + "This is the default." },
           { id: "normal", text: "Normal",
-            hint: "Eight rounds and twenty-four readings. Suits most villas." },
+            hint: "Eight rounds and twenty-four readings. Roughly twice the "
+                + "cost of Brief. Worth it only if investigations keep ending "
+                + "without a conclusion." },
           { id: "thorough", text: "Thorough",
-            hint: "Twelve rounds and thirty-six readings. Half again the cost "
-                + "of Normal, and more likely to reach the real cause. Worth "
-                + "it if investigations keep ending without a conclusion." },
+            hint: "Twelve rounds and thirty-six readings — three times Brief. "
+                + "For a villa where the cause is genuinely hard to reach." },
         ]}
       />
       {/* ⚠️ THIS SITS UNDER "how thorough" BECAUSE IT IS THE OTHER FACTOR OF
@@ -602,9 +617,13 @@ export default function AgentTuningPanel() {
           the box stays typeable, so a model this release never heard of is
           reachable without one. */}
       <p className="muted body-text">
-        Leave a box empty to use the model named in it. A bigger model is not
-        better here — most of the bill goes on the routine checks and on
-        answering you, and those two want a small fast model.
+        Leave a box empty to use the model named in it.
+        <InfoHint label="Choosing a model">
+          A bigger model is not better here. Most of the bill goes on the
+          routine checks and on answering you, and both of those want a small
+          fast model — the one job where a capable model earns its price is
+          investigating a problem, which happens rarely.
+        </InfoHint>
       </p>
       <Text label="For the routine checks" value={draft.modelTriage}
         placeholder="claude-haiku-4-5"

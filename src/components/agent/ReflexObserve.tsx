@@ -9,6 +9,7 @@
 // earn its own module; splitting them would mean two files importing the same
 // payload and the same helpers to render four numbers each.
 
+import InfoHint from "@/components/common/InfoHint";
 import { TierIntro, TIERS, FAMILIES } from "./tiers";
 import type { ReportsDiagnostics } from "@/reports/reportsApi";
 
@@ -86,19 +87,24 @@ export function ReflexTab({ diagnostics }: {
           thing the assistant ever reads — is the observation journal, salience,
           its own concerns, the facility ledger and coverage. No blueprint
           output reaches it. */}
+      {/* ⚠️ ONE LINE PLUS AN (i), NOT TWO PARAGRAPHS. Both of these were
+          RATIONALE — why the safety rules stay, why retiring the others costs
+          nothing — which is exactly what a tooltip is for: it answers the reader
+          who doubts the line and costs nothing to the reader who does not. */}
       <p className="muted body-text">
-        Only the safety ones survive the move to an assistant, and they are kept
-        deliberately: a leak has to close a valve in under a second, with no
-        internet and nothing thinking about it first. The rest are being retired
-        because the assistant already does their job better — and it does not
-        read them to do it. It watches the villa&apos;s own readings directly, so
-        switching an automation off takes nothing away from what it can notice.
-      </p>
-      <p className="muted body-text">
-        The one place the two meet is the briefing: while an automation still
-        reports something, the briefing prefers its wording over the
-        assistant&apos;s for the same piece of equipment, so nothing is said
-        twice and nothing disappears on the day you retire one.
+        Only the safety ones survive the move to an assistant. The rest are
+        being retired, and nothing is lost by it.
+        <InfoHint label="Why the safety rules stay">
+          A leak has to close a valve in under a second, with no internet and
+          nothing thinking about it first — no assistant can promise that. The
+          rest are retired because the assistant already does their job better,
+          and it does not read them to do it: it watches the villa&apos;s own
+          readings directly, so switching an automation off takes nothing away
+          from what it can notice. The one place the two meet is the briefing —
+          while an automation still reports something, the briefing prefers its
+          wording for that same piece of equipment, so nothing is said twice and
+          nothing disappears on the day you retire one.
+        </InfoHint>
       </p>
     </div>
   );
@@ -153,13 +159,17 @@ export function ObserveTab({ diagnostics }: {
           quietly stopped being true. Say the rule, and let the count above say
           the depth. */}
       <p className="muted body-text">
-        Every material change is written to a rolling record on the property, and
-        each reading is scored against that device's own recorded history rather
-        than against a number somebody typed in. That is what lets the villa
-        watch everything it can see without anyone tuning a threshold — and why a
-        device behaving oddly <em>for itself</em> is noticed even when its value
-        looks ordinary. How far back it can look is bounded by the record above:
-        once that is full, the oldest changes are dropped to make room.
+        Each reading is scored against that device's own past, not against a
+        threshold anybody typed in.
+        <InfoHint label="How the record works">
+          Every material change is written to a rolling record on the property.
+          Scoring each reading against that device's own history is what lets
+          the villa watch everything it can see without anyone tuning a number —
+          and why a device behaving oddly <em>for itself</em> is noticed even
+          when its value looks ordinary. How far back it can look is bounded by
+          the record above: once that is full, the oldest changes are dropped to
+          make room.
+        </InfoHint>
       </p>
 
       {c?.silentTypes && c.silentTypes.length > 0 && (
@@ -170,8 +180,14 @@ export function ObserveTab({ diagnostics }: {
               once hid an entire alert tier. */}
           <p className="muted body-text">
             Nothing has arrived from {c.silentTypes.join(", ")} in this window.
-            That is either a quiet villa or a source that is not reporting, and
-            from here the two look the same.
+            {/* ⚠️ THE AMBIGUITY MOVES, IT IS NOT DROPPED. A zero here means
+                either outcome and saying so is the whole value of the line;
+                what it does not need is a second sentence of screen. */}
+            <InfoHint label="Heard nothing from">
+              That is either a quiet villa or a source that is not reporting,
+              and from here the two look the same. Worth checking only if you
+              expected that kind of event recently.
+            </InfoHint>
           </p>
         </>
       )}

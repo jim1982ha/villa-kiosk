@@ -25,6 +25,7 @@
 // noticing an absence.
 
 import type { Concern, ConcernState } from "@/agent/agentTypes";
+import InfoHint from "@/components/common/InfoHint";
 
 /** ⚠️ ONE TABLE, AND IT IS THE ONLY PLACE A STATE IS NAMED OR EXPLAINED. Five
  *  states rendered ad hoc across a list and a history view is five chances to
@@ -135,10 +136,14 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
         </p>
       )}
       <p className="muted body-text">
-        “Fixed and confirmed” is the only count that says an action actually
-        worked: the condition stopped after somebody did something. Dismissals
-        are just as useful in the other direction — they are how the villa learns
-        what you do not want to hear about.
+        “Fixed and confirmed” is the only count that says something actually
+        worked.
+        <InfoHint label="Reading these counts">
+          It means the condition stopped after somebody did something — every
+          other count says only what was said, not what changed. Dismissals are
+          just as useful in the other direction: they are how the villa learns
+          what you do not want to hear about.
+        </InfoHint>
       </p>
     </>
   );

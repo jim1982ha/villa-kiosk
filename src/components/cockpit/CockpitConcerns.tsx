@@ -19,6 +19,7 @@
 // lights" must work reliably rather than probabilistically.
 
 import { useCallback, useEffect, useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { Eye, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 
 import { acknowledgeConcern, loadAgentConfig, loadConcerns,
@@ -128,11 +129,13 @@ export default function CockpitConcerns() {
           Concerns — what the villa concluded
         </div>
         <p className="muted body-text">
-          Nothing is shown here while “stay silent” is switched on: findings are
-          being written down separately so you can review a period before
-          anything is sent. Turn it off under Settings to see them here as they
-          are raised — the comparison against the old rules is under Cost,
-          people and advanced.
+          Nothing is shown here while “stay silent” is switched on.
+          <InfoHint label="Why this is empty">
+            Findings are still being written down, separately, so you can review
+            a whole period before anything is sent. Turn “stay silent” off under
+            Settings to see them here as they are raised; the comparison against
+            your old automations is under Cost, people and advanced.
+          </InfoHint>
         </p>
       </>
     );

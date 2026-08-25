@@ -19,6 +19,7 @@ import { AgentConfigProvider,
 import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
 import PeoplePanel from "@/components/settings/PeoplePanel";
 import ShadowDiffPanel from "@/components/settings/ShadowDiffPanel";
+import SourceLegend from "@/components/common/SourceLegend";
 import UsagePanel from "@/components/settings/UsagePanel";
 import { useState } from "react";
 
@@ -79,7 +80,17 @@ function AdvancedDialog({ onBack }: { onBack: () => void }) {
                    commit={draft}
           label="Advanced assistant sections" />
         <div className="settings-body">
-          {tab === "cost" && <div className="reports-pane"><UsagePanel /></div>}
+          {tab === "cost" && (
+            <div className="reports-pane">
+              <UsagePanel />
+              {/* ⚠️ THE LEGEND LANDS ON *COST*, NOT ON A TAB OF ITS OWN. Every
+                  one of its six labels answers "where did this come from", and
+                  the page where that question is actually asked is the one
+                  itemising what each source charged. A seventh tab holding one
+                  static key would be a tab nobody opens twice. */}
+              <SourceLegend />
+            </div>
+          )}
           {/* ⚠️ ONE DRAFT PROVIDER AROUND THE TWO THAT WRITE CONFIG. Two panels
               each loading, versioning and PUTting one document is a lost
               update — the store refuses a write whose revision is stale, so

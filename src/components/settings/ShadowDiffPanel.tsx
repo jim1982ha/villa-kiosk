@@ -56,9 +56,10 @@
 // switches that act on it.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { AlertTriangle, CheckCircle2, Download, Eye, Loader2, Play, RefreshCw } from "lucide-react";
 
-import { Pager, usePaged } from "@/components/common/Paged";
+import RecentChecks from "@/components/agent/RecentChecks";
 import { loadShadowDiff, loadTriagePasses, runAgentNow, type ShadowDiff, type TriagePass } from "@/agent/agentApi";
 
 /** Titles that are entirely id-shaped, rendered as a person would write them.
@@ -106,7 +107,7 @@ export function outcomeOf(reason: string): PassOutcome {
 
 /** The human half of `detail`: `audit.record_pass` joins the reason and the
  *  numbers with " | ", and everything after the first separator is the numbers. */
-const reasonOf = (p: TriagePass) => (p.detail || "").split(" | ")[0].trim();
+export const reasonOf = (p: TriagePass) => (p.detail || "").split(" | ")[0].trim();
 
 /** How many subjects a pass INVESTIGATED and how many concerns came back, out
  *  of `Followup.clause` ("investigated 3, 1 concern").
@@ -125,7 +126,7 @@ export function yieldOf(reason: string): { looked: number; raised: number } {
 }
 
 /** `escalated 2 (investigated 2): A, B` → `A, B`. */
-const subjectsOf = (reason: string) => {
+export const subjectsOf = (reason: string) => {
   const i = reason.indexOf(": ");
   return i < 0 ? "" : reason.slice(i + 2).trim();
 };
@@ -169,7 +170,6 @@ export default function ShadowDiffPanel() {
     const reason = reasonOf(p);
     return { pass: p, reason, outcome: outcomeOf(reason) };
   }), [passes]);
-  const paged = usePaged(recent);
 
   const last = recent[0];
   /** ⚠️ SUMMED OVER EVERY RECORDED PASS, not the page, because a reader
@@ -364,12 +364,17 @@ export default function ShadowDiffPanel() {
       )}
       {verdict === "one-sided" && (
         <p className="muted body-text">
-          Every finding lands under “not matched” when the other column is
-          empty, so that count says nothing about the assistant yet — one that
-          has raised nothing produces exactly this page. What it HAS been doing
-          is below: look at how many subjects it investigated against how many
-          concerns it raised. Investigating and concluding nothing is a correct
-          outcome, not a failure, and it is what it is told to do.
+          That count says nothing about the assistant yet — read
+          “Investigated → raised” below instead.
+          <InfoHint label="Why this is not a comparison">
+            Every finding lands under “not matched” when the other column is
+            empty, so an assistant that has raised nothing produces exactly this
+            page — the same one a failing assistant would. What it HAS been
+            doing is the pair of numbers below: how many subjects it looked
+            into, against how many concerns came back. Investigating and
+            concluding nothing is a correct outcome and is what it is told to
+            do.
+          </InfoHint>
         </p>
       )}
       {verdict === "blind" && (
@@ -484,59 +489,17 @@ export default function ShadowDiffPanel() {
           inconclusive. */}
       <div className="usage-block">
         <h4 className="usage-block-title">Recent checks</h4>
-        {recent.length === 0 ? (
-          <p className="muted body-text">
-            None recorded. Until one is, an empty list above means “not
-            measured”, not “the assistant agreed”.
-          </p>
-        ) : (
-          <>
-            <Pager paged={paged} unit="check">
-              <button className="btn ghost" onClick={download} disabled={busy}
-                      title="Download the findings and the full trace as a CSV">
-                <Download size={16} aria-hidden /> CSV
-              </button>
-            </Pager>
-            <ul className="fm-list">
-              {paged.page.map(({ pass, reason, outcome }, i) => {
-                const who = subjectsOf(reason);
-                return (
-                  <li key={`${pass.at}-${i}`} className="body-text">
-                    <span className="muted">
-                      {pass.at.replace("T", " ").slice(0, 16)}
-                    </span>{" · "}
-                    {/* ⚠️ PLAIN LANGUAGE, AND THE NUMBERS ONLY WHERE THEY CHANGE
-                        A READING. `doc=5246c/51L | escalated=0 | model=…` on
-                        thirty rows is the same string thirty times; the one part
-                        of it that ever matters is a headline now, and all of it
-                        is still in the CSV. */}
-                    {outcome === "raised" ? (
-                      <>
-                        <strong>Raised {pass.escalated ?? ""}</strong>
-                        {who ? <> — {who}</> : null}
-                      </>
-                    ) : outcome === "quiet" ? (
-                      <>Looked, nothing to raise</>
-                    ) : (
-                      <>
-                        <strong className="sev-warning">Could not run</strong>
-                        {" — "}{reason}
-                      </>
-                    )}
-                    {/* ⚠️ NOT ON A BLOCKED ROW. A pass that never reached the
-                        model has no document by construction, so the badge
-                        would fire on every "could not run" row and say a second
-                        thing about a row that has already explained itself.
-                        The fault it reports is a pass that RAN on nothing. */}
-                    {outcome !== "blocked" && pass.docChars === 0 && (
-                      <span className="sev-warning"> · nothing to read</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
+        <RecentChecks
+          passes={passes}
+          empty={<>None recorded. Until one is, an empty list above means
+                 &ldquo;not measured&rdquo;, not &ldquo;the assistant
+                 agreed&rdquo;.</>}
+        >
+          <button className="btn ghost" onClick={download} disabled={busy}
+                  title="Download the findings and the full trace as a CSV">
+            <Download size={16} aria-hidden /> CSV
+          </button>
+        </RecentChecks>
       </div>
     </div>
   );

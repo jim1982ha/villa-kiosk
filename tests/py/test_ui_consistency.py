@@ -457,3 +457,136 @@ def test_an_absent_document_size_is_not_read_as_an_empty_document() -> None:
     assert "docChars === 0" in panel, "nothing detects the empty-document fault"
     assert not re.search(r"!\s*\w+\.docChars|docChars\s*\|\|", panel), (
         "a falsy test collapses `undefined` and 0, which are opposite claims")
+
+
+def test_every_list_class_used_on_a_UL_resets_its_marker() -> None:
+    """⚠️ FOUR OF FIVE AGREED AND ONE DID NOT — the applicable-set defect in its
+    purest form. `.reports-list`, `.reports-tasks`, `.reports-deliveries` and
+    `.first-run-tip-list` all set `list-style: none`; `.fm-list` did not, and it
+    is laid out as flex ROWS, so every row drew a bullet beside a design that
+    never expected one. Reported as clutter on the Handover tab.
+
+    Rolled out by call site rather than by what it applies to, which is what
+    /dry-audit exists to catch — so this asks the question the other way round:
+    take every class the markup puts on a `<ul>`, and require it.
+    """
+    css = _read(os.path.join(SRC, "styles.css"))
+    used = set()
+    for _path, src in _tsx_sources():
+        used.update(re.findall(r'<ul className="([a-z0-9 -]+)"', src))
+    classes = {c for group in used for c in group.split() if c != "body-text"}
+    assert classes, "no <ul> classes found — the scan anchor moved"
+    for name in sorted(classes):
+        block = re.search(rf"\.{re.escape(name)}\s*\{{(.*?)\}}", css, re.S)
+        assert block, f".{name} is used on a <ul> and is not declared"
+        assert "list-style" in block.group(1), (
+            f".{name} is used on a <ul> and never resets its marker, so every "
+            "row draws a bullet")
+
+
+def test_the_segmented_control_is_sized_by_a_TOKEN_and_grows_for_a_finger() -> None:
+    """⚠️ A `min-height` IS NOT A QUANTITY A RULE CAN VARY — the same lesson
+    `--toggle-pad` records four fields above it. `.segmented button` carried a
+    flat 40px which drew a 48px slab inside its track; reported from a laptop,
+    where nothing is operated by finger.
+
+    ⚠️ AND SHRINKING IT MUST NOT SHRINK THE TOUCH TARGET. A coarse pointer gets
+    `--touch-min` back, declared as the token so every variant follows without
+    naming itself.
+    """
+    css = _read(os.path.join(SRC, "styles.css"))
+    seg = re.search(r"\.segmented button \{(.*?)\}", css, re.S)
+    assert seg and "var(--segmented-h)" in seg.group(1), (
+        "the segmented control is sized by a literal again")
+    coarse = re.search(r"@media \(pointer: coarse\) \{[^}]*--segmented-h:\s*"
+                       r"var\(--touch-min\)", css)
+    assert coarse, (
+        "a touchscreen no longer gets the full target back, so the dialog on "
+        "the wall tablet shrank with the laptop")
+    # ⚠️ `min-height` SPECIFICALLY, NOT "the token appears somewhere in the
+    # block". The first version passed when min-height was mutated back to a
+    # literal, because the WIDTH line still mentioned the token — a pin reading
+    # a whole block cannot say which declaration it checked.
+    icons = re.search(r"\.segmented-icons button \{(.*?)\}", css, re.S)
+    assert icons, ".segmented-icons button is no longer declared"
+    assert re.search(r"min-height:\s*var\(--segmented-h\)", icons.group(1)), (
+        "the icon variant's height is a literal again and will drift from its "
+        "sibling")
+
+
+def test_a_field_puts_its_NAME_directly_under_its_CONTROL() -> None:
+    """⚠️ `.fm-field` IS A PLAIN COLUMN WITH NO `order` RULES, so DOM order is
+    what the reader sees. `Choice` rendered note → buttons → chosen-hint → label,
+    which put a paragraph between a field and its own name — the label then read
+    as a heading for whatever came next. Reported: "How it should work" floating
+    under a sentence about Live mode."""
+    panel = _read(os.path.join(SRC, "components", "settings",
+                               "AgentTuningPanel.tsx"))
+    # ⚠️ THE WHOLE COMPONENT, not up to the first `\n}` — `Choice` contains
+    # nested braces (the options map), so that anchor stopped inside the JSX and
+    # the label was simply not in the slice. A slice that misses what it is
+    # looking for raises rather than passing, which is the only reason this was
+    # caught rather than being a vacuous green.
+    body = panel[panel.index("function Choice"):panel.index("function Text")]
+    label_at = body.index("<span>{label}</span>")
+    hint_at = body.index("{chosen.hint}")
+    assert label_at < hint_at, (
+        "the field's name is rendered after the chosen option's explanation, "
+        "so it reads as a heading for the next section")
+
+
+def test_the_triage_tab_is_never_a_heading_over_nothing() -> None:
+    """⚠️ `CockpitQueue` RETURNS null IN `auto` MODE, CORRECTLY — its own comment
+    says an empty approval queue on a villa that investigates by itself is the
+    permanent and correct state. True in the Cockpit, where it is one block among
+    many; on a tab whose entire job is this tier it left a step header over an
+    empty pane, which reads as a broken tier. The passes were being recorded the
+    whole time and were visible only under Advanced."""
+    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    tab = modal[modal.index('tab === "triage"'):]
+    tab = tab[:tab.index("tab === \"reason\"")]
+    # ⚠️ THE ELEMENT, WITH ITS BOUNDARY. `"RecentChecks" in tab` is TRUE for
+    # `<RecentChecksX>` too — a substring match passed a mutation that renamed
+    # the component away, which is the same shape as the symbol-regex false
+    # positives /dry-audit's step 7 warns about.
+    assert re.search(r"<RecentChecks[\s/>]", tab), (
+        "the triage tab renders only the approval queue, which is null on a "
+        "villa running Live — so the tab is blank")
+
+
+def test_recent_checks_has_ONE_implementation() -> None:
+    """⚠️ TWO TABS, ONE COMPONENT — and the pass→outcome rules stay in
+    ShadowDiffPanel where `test_pass_reason_contract.py` pins them. A second copy
+    of "what does `nothing to escalate` mean" is exactly the drift that pin
+    exists to stop."""
+    shared = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    assert "outcomeOf" in shared and "import" in shared
+    panel = _read(os.path.join(SRC, "components", "settings",
+                               "ShadowDiffPanel.tsx"))
+    assert "<RecentChecks" in panel, "the Handover tab kept its own copy"
+    assert panel.count("Looked, nothing to raise") == 0, (
+        "the row rendering is written twice")
+
+
+def test_the_source_legend_lives_in_ADVANCED_and_only_there() -> None:
+    """⚠️ ITS JOURNEY IS THE ARGUMENT. It started under three tier tabs, where it
+    restated the one chip already in each header (reported as a redundant badge),
+    then moved to Settings — correct, but still on the daily path below the dials
+    people tune. It is reference material: read once, consulted rarely."""
+    main = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    adv = _read(os.path.join(SRC, "components", "agent",
+                             "AgentAdvancedModal.tsx"))
+    assert "<SourceLegend" not in main, "the legend is back on the daily path"
+    assert "<SourceLegend" in adv, "the legend is not in Advanced either"
+
+
+def test_act_and_tell_asks_WHO_before_WHEN() -> None:
+    """The tab reads top-down as one question narrowing: who decides what is
+    worth saying, then what it may touch, then when it may reach you. The quiet
+    window used to lead, which put a preference about sleep above the switch
+    deciding whether the assistant speaks for the villa at all."""
+    src = _read(os.path.join(SRC, "components", "agent",
+                            "ActDeliverySection.tsx"))
+    assert (src.index("Who decides what is worth saying")
+            < src.index("When it may interrupt you")), (
+        "timing is asked before ownership")
