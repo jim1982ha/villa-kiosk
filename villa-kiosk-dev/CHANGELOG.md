@@ -1,3 +1,43 @@
+## 2.789.0
+
+### Fixed — the briefing's concern list crashed its own error handler
+A dry-audit sweep found `_log(...)` — an undefined name since 2.696.0 — in the
+one arm whose comment promises "a briefing must not fail for this"; it now uses
+the shared `swallow`, and a new pyflakes pin fails the suite on any undefined
+name in the backend. The same sweep deleted the renderer's never-called slot
+enumeration, two dead locals, a duplicate document assembly on the run-now
+preview, and ~30 unused imports.
+
+## 2.788.0
+
+### Fixed — a tooltip showed six literal characters instead of an apostrophe
+A JSX attribute does not process backslash escapes, so "Don\u2019t investigate"
+reached the screen exactly as written. Pinned for every attribute in the app.
+
+## 2.787.0
+
+### Changed — the two controls sit where they act
+"Check the villa now" is on the heading's own line, icon-only on a phone, and
+"Cancel all" moved into the pager row beside the page arrows.
+
+### Fixed — two concern buttons had no tooltip
+Thumbs up and thumbs down said nothing to anyone using a mouse. The intro above
+them now says what a concern is and why it is on that screen, rather than
+opening with a detail about escalation.
+
+## 2.786.0
+
+### Fixed — Observe was showing a different subsystem entirely
+"Changes recorded" counted blueprint events, not entity state changes, so a
+light turning on moved nothing. The tiles now read the journal — the record the
+checks actually reason over — and say how many devices are watched and how much
+history is held, with a warning when the record is full.
+
+### Changed — Reflex lists only what acts by itself
+Retired detection families were listed on the tier whose definition is "acts on
+its own, in under a second". Only the rules that operate something appear now,
+and the explanation sits above the table rather than after it.
+
 ## 2.785.0
 
 ### Fixed — the moon drew its own complement, so a full moon looked black
