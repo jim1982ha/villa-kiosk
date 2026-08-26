@@ -345,12 +345,20 @@ export default function AgentTuningPanel() {
           migration and the backend, the API and every test are untouched. */}
       <Choice<"observe" | "ask" | "live">
         label="How it should work"
-        note="Three ways to run it, from most cautious to fully live."
+        /* ⚠️ NOT "from most cautious to fully live" ANY MORE. That framing said
+           these are one ladder, and on spending they are not: "Observe only"
+           investigated on every pass at full price while "Ask me first" spent
+           nothing until approved, so the leftmost option was the most
+           expensive. Reported by the owner reading the labels literally, which
+           is the correct way to read a label. They are three points in two
+           axes — who decides to investigate, and whether you are told at the
+           time — and the note now says that instead of implying a ladder. */
+        note="All three write your briefing. They differ in who decides to investigate, and whether you are told at the time."
         more={<>
-          <strong>Observe only</strong> costs the same as running live — it does
-          all the same thinking and holds back the message. <strong>Ask me
-          first</strong> is the safe place to start once you want findings to
-          reach you. Whichever you pick, urgent things ignore quiet hours.
+          <strong>Briefing only</strong> and <strong>Alert me</strong> cost the
+          same — both investigate everything. <strong>Ask first</strong> spends
+          nothing until you approve. Whichever you pick, urgent things ignore
+          quiet hours.
         </>}
         value={draft.mode}
         // ⚠️ ONE KEY WRITTEN, NOT TWO (2.756.0). This used to write `shadow`
@@ -362,18 +370,31 @@ export default function AgentTuningPanel() {
         // where a child goes.
         onChange={(mode) => edit({ mode })}
         options={[
-          { id: "observe", text: "Observe only",
-            hint: "It watches, looks into what it notices and writes findings "
-                + "down — and tells you nothing. Use this to read a few weeks "
-                + "of what it would have sent. It costs the same as running "
-                + "live: it does all the thinking and holds back the message." },
-          { id: "ask", text: "Ask me first",
-            hint: "It watches and flags what looks wrong, then waits for you "
-                + "to approve each closer look before spending anything on it. "
-                + "Findings reach you once approved." },
-          { id: "live", text: "Live",
-            hint: "It watches, looks into what it notices by itself, and tells "
-                + "you what it concludes. This is the normal way to run it." },
+          /* ⚠️ THE STORED IDS ARE UNCHANGED. Only the labels move — an id is
+             written into every villa's config document, and renaming one would
+             silently reset the setting on read.
+
+             ⚠️ AND EVERY HINT NAMES THE SAME THREE THINGS, in the same order:
+             does it investigate by itself, does it message you, does it chase.
+             The old copy named only the first two, so the difference that
+             matters most to an unattended villa — a live finding re-sends at
+             15 minutes, adds the owner at 45, and can be acknowledged, while a
+             briefing-only one is written once and never chased — was in none
+             of the three descriptions. */
+          { id: "observe", text: "Briefing only",
+            hint: "It investigates everything by itself. What it finds goes "
+                + "into your briefing and nowhere else. It never messages you, "
+                + "never adds a job, and never chases. It costs the same as "
+                + "Alert me." },
+          { id: "ask", text: "Ask first",
+            hint: "It flags what looks wrong and stops there. Nothing is "
+                + "investigated until you approve it, so it spends almost "
+                + "nothing on its own. What you approve then reaches you in "
+                + "full." },
+          { id: "live", text: "Alert me",
+            hint: "It investigates by itself and messages you when it concludes "
+                + "something. It also adds a job to your to-do list, and keeps "
+                + "chasing until someone acknowledges it." },
         ]}
       />
 
