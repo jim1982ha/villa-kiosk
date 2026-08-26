@@ -39,6 +39,18 @@ jobs:
         # an arm64/musl check, which is why Pydantic was withdrawn from the plan.
         run: pip install --quiet pytest mypy aiohttp
 
+      - name: Install the SPA's packages for the parity harness
+        # ⚠️ THE PYTHON JOB NEEDS node_modules, and that is not a mistake.
+        # test_consistency_parity runs the SHIPPED TypeScript
+        # (tests/consistency/kiosk_view.ts) through plain node so the tablet
+        # and the briefing can never describe one villa differently — and that
+        # file's import graph reaches real npm packages (lucide-react via
+        # EntityCategories). Without this step the harness dies with
+        # ERR_MODULE_NOT_FOUND and 25 parity tests fail; skipping them instead
+        # would silently un-run the one pin that enforces the consistency rule
+        # on every push. npm ci reads the tracked package-lock.json.
+        run: npm ci --no-audit --no-fund
+
       - name: Tests
         run: python -m pytest tests/py -q
 

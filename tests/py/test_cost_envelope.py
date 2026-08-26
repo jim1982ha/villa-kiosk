@@ -193,12 +193,22 @@ def test_the_monthly_request_ceiling_covers_the_modelled_volume() -> None:
         f"{passes + runs:.0f} requests the default cadence implies")
 
 
+@pytest.mark.skipif(
+    not os.path.isdir(os.path.join(REPO_ROOT, "docs", "refdata")),
+    reason="docs/ is gitignored (ADR-018) and absent on a fresh clone and on "
+           "CI; the workbook half of this pin exists only where docs/ does")
 def test_the_estimate_in_the_workbook_names_the_models_that_ship() -> None:
     """⚠️ THE VARIANCE TASK-102 FOUND WAS A CONFIGURATION, NOT A MODEL. The
     summary's arithmetic says "Haiku triage"; the shipped default agrees; the
     owner's villa was running `claude-sonnet-5` on that tier, which is ~3x the
     input price on 96 passes a day. This pins the two halves that ARE in this
-    repository — a villa's own config is not."""
+    repository — a villa's own config is not.
+
+    ⚠️ SKIPPED WHERE `docs/` IS ABSENT — which includes CI. Found the day the
+    suite first RAN to completion on CI (2026-08-27): this import had failed
+    there on every push, masked first by earlier failures and then read as
+    part of one red wall. `test_docs_current` had the guard from birth; this
+    file imports refdata from ONE test, so the guard is per-test."""
     sys.path.insert(0, os.path.join(REPO_ROOT, "docs"))
     from refdata.core import EXECUTIVE_SUMMARY
 
