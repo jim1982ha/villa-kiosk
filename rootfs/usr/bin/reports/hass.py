@@ -40,7 +40,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Type
 
 from aiohttp import ClientError, ClientSession, WSMsgType
 
-from .log import log, warn
+from .log import warn
 
 SUPERVISOR = "supervisor"
 WS_URL = f"ws://{SUPERVISOR}/core/websocket"

@@ -20,7 +20,7 @@ threshold, and thresholds are what this redesign exists to remove.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from agent.tools.base import BaseTool, data, fail
 

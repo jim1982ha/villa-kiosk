@@ -26,7 +26,7 @@ add-on's own token, against one entity and one uid it has just verified.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List
 
 from .hass import HassClient, HassUnavailable
 from .ledger import todo_lists, todo_tasks

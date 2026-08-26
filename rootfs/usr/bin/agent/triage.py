@@ -29,7 +29,7 @@ from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
 from agent.registry import Registry, build_registry, narrowed
-from reports.log import log, stage
+from reports.log import stage
 
 #: The only tool triage may see. ⚠️ A NAME, not a mode: `read_state` is READ too
 #: and would let a cheap pass fan out across the villa one entity at a time.
@@ -248,7 +248,6 @@ async def run(*, provider: Provider, document: str,
     the one question it answers. The default stays `scheduled` so the clock's
     behaviour is unchanged.
     """
-    cfg = agent_config.view(config)
     reg = registry_for(registry, session=session)
     result = await runtime.investigate(
         provider=provider,

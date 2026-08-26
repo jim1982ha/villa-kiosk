@@ -57,7 +57,6 @@ entity ids here WOULD be a violation; this is not one.
 
 from __future__ import annotations
 
-import os
 from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
 
 from reports import store

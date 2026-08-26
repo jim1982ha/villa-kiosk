@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Tuple
 
 from agent import contracts
 from reports.narrate.style import inert

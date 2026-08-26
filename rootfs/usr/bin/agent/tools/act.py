@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from agent import audit as audit_mod
 from agent import config as agent_config
 from agent import proposals as proposals_mod
-from agent import contracts, policy as policy_mod
+from agent import policy as policy_mod
 from agent.tools.base import BaseTool, data, fail, text
 from reports.log import log, swallow
 

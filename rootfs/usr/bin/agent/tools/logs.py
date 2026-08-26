@@ -23,8 +23,7 @@ with every appearance of rigour.
 
 from __future__ import annotations
 
-import re
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Sequence
 
 from agent.tools.base import BaseTool, data, fail, text, truncate
 

@@ -37,7 +37,6 @@ open tool surface on the LAN that nobody would notice was open.
 from __future__ import annotations
 
 import hmac
-import json
 from dataclasses import replace
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 

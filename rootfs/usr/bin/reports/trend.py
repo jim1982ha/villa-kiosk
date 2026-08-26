@@ -21,7 +21,7 @@ the owner acts on — the same rule `providers._prompt` states for the LLM.
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 #: Low to high. ⚠️ EIGHT LEVELS, NOT MORE: these are the Unicode block elements
 #: that every platform tested renders at a consistent width. Mixing in other

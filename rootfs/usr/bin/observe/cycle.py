@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from aiohttp import ClientSession
 
 from observe import heartbeat as heartbeat_mod
-from observe import journal, salience as salience_mod
+from observe import journal
 from reports import store
 from reports.hass import HassClient, HassUnavailable
 from reports.log import log, swallow, warn

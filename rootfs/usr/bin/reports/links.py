@@ -65,7 +65,7 @@ owner's home instance for no benefit at all. `test_links` asserts it is absent.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from urllib.parse import urlsplit
 
 #: Kiosk destinations a brief may point at. ⚠️ A CLOSED SET — see rule 3.

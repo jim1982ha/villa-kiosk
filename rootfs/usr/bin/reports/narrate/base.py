@@ -44,8 +44,9 @@ class ReportContext:
     #: is appended after delivery — or every trend would compare a value with
     #: itself and read "about usual" forever. See `reports.trend`.
     history: Dict[str, List[float]] = field(default_factory=dict)
-    #: Prose a narration provider supplied, per slot. Absent or unusable keys
-    #: fall back to the deterministic sentence — see `DeterministicNarrator.SLOTS`.
+    #: Prose a narration provider supplied, per slot. `"lead"` is the only slot;
+    #: an absent or unusable key falls back to the deterministic sentence — see
+    #: `DeterministicNarrator._lead_sentence` and the slot note above it.
     slots: Dict[str, str] = field(default_factory=dict)
     discovery: Dict[str, Any] = field(default_factory=dict)
     #: Analysis output. Empty until Phase 3 introduces modules.

@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 from agent import audit as audit_mod
 from agent import budget as budget_mod
@@ -42,7 +42,7 @@ from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
 from agent.registry import REASON_TOOLS
-from reports.log import log, stage, swallow
+from reports.log import stage, swallow
 
 #: How many investigations one pass may start when config says nothing.
 #: ⚠️ MIRRORS `config.DEFAULTS`, and `test_agent_reason` pins that it does. A

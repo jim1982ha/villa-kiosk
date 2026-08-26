@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from agent.llm.base import ToolCall, Turn
 from agent.tools.base import flatten_blocks
-from reports.log import log, swallow
+from reports.log import swallow
 
 #: The provider's API host. ⚠️ THIS STRING LIVES HERE AND NOWHERE ELSE — see the
 #: module docstring. It is not used to build a request (the SDK does that); it

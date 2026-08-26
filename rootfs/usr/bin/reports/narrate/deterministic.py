@@ -647,27 +647,29 @@ class DeterministicNarrator:
 
     # ── framing ──────────────────────────────────────────────────────────────
 
-    #: The prose a provider may replace, and nothing else.
-    #:
-    #: ⚠️ THE PROVIDER FILLS SLOTS; IT NO LONGER REBUILDS THE DOCUMENT. Whole-body
-    #: replacement made the model responsible for structure it cannot be trusted
-    #: with — sparklines, aligned columns and every number would be retyped by a
-    #: language model, and a third of the prompt was format rules restating
-    #: `style.py` in English where the two could drift. Worse, one weak answer
-    #: cost the entire brief.
-    #:
-    #: With slots the renderer keeps the document — zones, charts, columns,
-    #: figures, the footer — and the model writes the sentences it is actually
-    #: good at. Degradation gets FINER, not weaker: an unusable slot falls back
-    #: to its deterministic text on its own, so a bad answer costs one sentence.
-    #: The safety property CLAUDE.md records ("a provider can only replace, so
-    #: doing nothing is the fallback") is unchanged in kind and stronger in
-    #: degree.
-    SLOTS: Tuple[str, ...] = ("lead",)
-
-    def slot_defaults(self, context: ReportContext) -> Dict[str, str]:
-        """What each slot says when nobody improves on it."""
-        return {"lead": self._lead_sentence(context)}
+    # ⚠️ THE PROVIDER FILLS A SLOT; IT NO LONGER REBUILDS THE DOCUMENT.
+    # Whole-body replacement made the model responsible for structure it cannot
+    # be trusted with — sparklines, aligned columns and every number would be
+    # retyped by a language model, and a third of the prompt was format rules
+    # restating `style.py` in English where the two could drift. Worse, one
+    # weak answer cost the entire brief.
+    #
+    # With the slot the renderer keeps the document — zones, charts, columns,
+    # figures, the footer — and the model writes the one sentence it is
+    # actually good at. Degradation gets FINER, not weaker: an unusable slot
+    # falls back to its deterministic text on its own (the `or` in `render`
+    # below), so a bad answer costs one sentence. The safety property CLAUDE.md
+    # records ("a provider can only replace, so doing nothing is the fallback")
+    # is unchanged in kind and stronger in degree.
+    #
+    # ⚠️ "LEAD" IS THE ONLY SLOT, AND THE ENUMERATION MACHINERY IS GONE
+    # (dry-audit 2026-08-27). A `SLOTS` tuple and a `slot_defaults()` method
+    # shipped with this design and were never called by anything: the pipeline
+    # writes `context.slots = {"lead": …}` by name and the fallback below reads
+    # `_lead_sentence` by name, so the generic enumeration had no reader — the
+    # abstraction for the second slot before any second slot exists. If one is
+    # ever added, both ends grow together (pipeline fill + render fallback);
+    # re-adding the tuple alone would wire nothing, exactly as before.
 
     def _lead_sentence(self, context: ReportContext) -> str:
         """The one line a push notification shows before it is cut off.
@@ -1519,7 +1521,7 @@ class DeterministicNarrator:
             # "responding is not stopping it" both mean retune-or-retire, but a
             # reader who has been ticking these off every week needs to be told
             # that the ticking is the evidence, not the fix.
-            tail = (f"was never acknowledged"
+            tail = ("was never acknowledged"
                     if not acks else
                     f"was acknowledged {_plural(acks, 'time')} and kept firing")
             out.append(

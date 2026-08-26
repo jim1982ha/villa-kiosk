@@ -29,7 +29,7 @@ narration payload, which `PAYLOAD_ALLOWED_FIELDS` enforces by construction.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 

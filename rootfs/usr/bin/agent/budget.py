@@ -33,12 +33,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Final, Mapping, Optional, Tuple
+from typing import Any, Dict, Final, Mapping, Optional
 
 from agent import config as agent_config
 from reports import store
 from reports import usage as usage_mod
-from reports.log import log, swallow
+from reports.log import swallow
 
 BUDGET_FILE: Final[str] = f"{store.DATA_DIR}/vesta/budget.json"
 

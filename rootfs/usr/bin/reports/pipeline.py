@@ -20,7 +20,6 @@ yet" sentence rather than implying all is well.
 
 from __future__ import annotations
 
-import time
 import asyncio
 import os
 from datetime import datetime, timedelta, timezone

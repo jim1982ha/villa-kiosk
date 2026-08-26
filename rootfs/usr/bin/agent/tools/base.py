@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 
-from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence
+from typing import Any, Dict, List, Mapping, Protocol, Sequence
 
 from agent import contracts
 

@@ -25,7 +25,7 @@ Imports nothing, by design — see the layering note in `__init__.py`.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Final, List, Optional, Tuple
+from typing import Any, Dict, Final, List, Tuple
 
 #: Bumped when a value's MEANING changes, never for an addition.
 CONTRACT_VERSION: Final[int] = 1

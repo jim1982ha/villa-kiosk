@@ -1,3 +1,13 @@
+## 2.789.0
+
+### Fixed — the briefing's concern list crashed its own error handler
+A dry-audit sweep found `_log(...)` — an undefined name since 2.696.0 — in the
+one arm whose comment promises "a briefing must not fail for this"; it now uses
+the shared `swallow`, and a new pyflakes pin fails the suite on any undefined
+name in the backend. The same sweep deleted the renderer's never-called slot
+enumeration, two dead locals, a duplicate document assembly on the run-now
+preview, and ~30 unused imports.
+
 ## 2.788.0
 
 ### Fixed — a tooltip showed six literal characters instead of an apostrophe

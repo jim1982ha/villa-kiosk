@@ -30,7 +30,7 @@ unrelated, and that is the point.
 
 from __future__ import annotations
 
-from typing import Dict, Iterator, List, Mapping, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
 from reports.text import readable_label
 

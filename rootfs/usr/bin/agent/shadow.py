@@ -38,8 +38,7 @@ cutover, and it should be a decision somebody makes after reading a diff.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from agent import config as agent_config
 from reports.log import log, swallow

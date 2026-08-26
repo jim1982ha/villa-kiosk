@@ -2309,7 +2309,11 @@ def _agent_concerns_for_reports() -> List[Dict[str, Any]]:
                 for r in rows
                 if str(r.get("state") or "open") not in agent_concerns.SETTLED]
     except Exception as err:  # noqa: BLE001 - a briefing must not fail for this
-        _log(f"could not read concerns for the briefing: {err}")
+        # ⚠️ `swallow`, AND IT WAS `_log` — an undefined name — from 2.696.0
+        # until the first pyflakes pass (tests/py/test_pyflakes.py). The one
+        # arm whose comment promises "must not fail" was the one arm that
+        # raised, and nothing could see it because the path never fired.
+        reports_log.swallow("could not read concerns for the briefing", err)
         return []
 
 
@@ -2642,13 +2646,12 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
     if not isinstance(body, dict):
         body = {}
 
-    from agent import config as agent_config
-    # ⚠️ THE STORED DOCUMENT, NOT AN ENVELOPE — see `_chat_dispatch`.
-    config = agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {}))
     document = await _agent_document_text()
     if body.get("preview"):
+        # ⚠️ THE DOCUMENT ALREADY ASSEMBLED ON THE LINE ABOVE — this response
+        # re-assembled it (journal read included) for no difference in content.
         return web.json_response({"ok": True, "preview": True,
-                                  "document": await _agent_document_text()})
+                                  "document": document})
 
     # ⚠️ A TRIAGE PASS, NOT A CONVERSATION, WHEN ASKED FOR ONE. The two are
     # different products of the same machinery and only one of them RAISES A

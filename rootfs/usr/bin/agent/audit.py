@@ -26,11 +26,11 @@ paths ever write different rows, they are not going through the same gate.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Final, List, Mapping, Optional, Tuple
 
 from agent import contracts
 from reports import store
-from reports.log import log, swallow
+from reports.log import swallow
 
 AUDIT_FILE: Final[str] = f"{store.DATA_DIR}/vesta/audit.json"
 

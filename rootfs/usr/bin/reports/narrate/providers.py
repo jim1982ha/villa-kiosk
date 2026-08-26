@@ -44,7 +44,7 @@ from .. import secrets, usage
 from ..contracts import NARRATION_MODE
 from ..log import log, swallow, warn
 from . import payload as payload_mod
-from .style import BULLET, SECTION_MARK
+from .style import BULLET
 
 #: One request's ceiling. ⚠️ SHORT ON PURPOSE. A scheduled report is composed
 #: inside a 60-second tick; a provider that takes longer than this has already
