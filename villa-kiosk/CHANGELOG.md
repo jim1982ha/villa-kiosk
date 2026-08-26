@@ -1,3 +1,13 @@
+## 2.777.0
+
+### Changed — the supervision modes are a ladder now, and named after their verbs
+They are reordered least-to-most and renamed "Flag & Ask", "Investigate & Log",
+"Investigate, Log & Escalate". Each step does everything the one before it does
+and one thing more, so spend, autonomy and what reaches you all increase
+together — with the old order the leftmost option was the most expensive. The
+first is not named after the briefing because that mode produces none: nothing
+is investigated until you approve it. Stored values are unchanged.
+
 ## 2.776.0
 
 ### Changed — the supervision modes are named after what you get

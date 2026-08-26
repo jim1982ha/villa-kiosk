@@ -2,7 +2,7 @@
 
 ⚠️ FOUND ON THE REFERENCE VILLA WITH TWENTY-FOUR ITEMS IN IT. An
 `awaiting-approval` row is written in exactly one place — `reason.follow_up`'s
-`not auto(config)` arm — which is reachable only in "Ask me first" mode. And an
+`not auto(config)` arm — which is reachable only in "Flag & Ask" mode (stored `ask`). And an
 item leaves `audit.pending_escalations` only when a row carrying its OWN run id
 is settled. So the moment a villa moves to Observe or Live, the queue freezes:
 nothing new can enter it and nothing can drain it, for the life of the audit.
@@ -77,7 +77,7 @@ def test_only_ask_mode_can_ever_fill_this_queue() -> None:
     above stops holding and this test says so."""
     reason = _read(REASON)
     assert reason.count("verdict=audit_mod.AWAITING") == 1, (
-        "AWAITING is written somewhere new; the queue's 'only Ask me first "
+        "AWAITING is written somewhere new; the queue's 'only Flag & Ask "
         "fills this' diagnosis no longer holds")
     assert 'return str(agent_config.view(config).get("mode")) in ("live", "observe")' \
         in reason, ("`auto` no longer names the two modes that investigate, so "

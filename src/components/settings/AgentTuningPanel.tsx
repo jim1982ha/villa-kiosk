@@ -353,12 +353,13 @@ export default function AgentTuningPanel() {
            is the correct way to read a label. They are three points in two
            axes — who decides to investigate, and whether you are told at the
            time — and the note now says that instead of implying a ladder. */
-        note="All three write your briefing. They differ in who decides to investigate, and whether you are told at the time."
+        note="Each step does everything the one before it does, and one thing more."
         more={<>
-          <strong>Briefing only</strong> and <strong>Alert me</strong> cost the
-          same — both investigate everything. <strong>Ask first</strong> spends
-          nothing until you approve. Whichever you pick, urgent things ignore
-          quiet hours.
+          <strong>Flag &amp; Ask</strong> spends almost nothing until you
+          approve a closer look. The other two both investigate everything and
+          cost the same as each other; only the last one interrupts you and
+          chases until someone acknowledges. Whichever you pick, urgent things
+          ignore quiet hours, and your briefing is written either way.
         </>}
         value={draft.mode}
         // ⚠️ ONE KEY WRITTEN, NOT TWO (2.756.0). This used to write `shadow`
@@ -370,31 +371,45 @@ export default function AgentTuningPanel() {
         // where a child goes.
         onChange={(mode) => edit({ mode })}
         options={[
-          /* ⚠️ THE STORED IDS ARE UNCHANGED. Only the labels move — an id is
-             written into every villa's config document, and renaming one would
-             silently reset the setting on read.
+          /* ⚠️ THE STORED IDS ARE UNCHANGED (`observe`/`ask`/`live`). An id is
+             written into every villa's config document; renaming one would
+             silently reset the setting on read. Only the ORDER and the TEXT
+             move.
 
-             ⚠️ AND EVERY HINT NAMES THE SAME THREE THINGS, in the same order:
-             does it investigate by itself, does it message you, does it chase.
-             The old copy named only the first two, so the difference that
-             matters most to an unattended villa — a live finding re-sends at
-             15 minutes, adds the owner at 45, and can be acknowledged, while a
-             briefing-only one is written once and never chased — was in none
-             of the three descriptions. */
-          { id: "observe", text: "Briefing only",
-            hint: "It investigates everything by itself. What it finds goes "
-                + "into your briefing and nowhere else. It never messages you, "
-                + "never adds a job, and never chases. It costs the same as "
-                + "Alert me." },
-          { id: "ask", text: "Ask first",
+             ⚠️ THE ORDER IS NOW ASK · OBSERVE · LIVE, AND THAT IS WHAT MAKES IT
+             A LADDER AT LAST. Owner's proposal, and it is right: with `observe`
+             leftmost, the row was non-monotonic on every axis that matters —
+             the "most cautious" option investigated on every pass at full price
+             while the middle one spent almost nothing. In this order all three
+             axes increase together: spend (≈$0.01 → full → full), autonomy
+             (none → investigates → investigates and acts), and what reaches you
+             (nothing → the briefing → the briefing, your phone and a job).
+
+             ⚠️ AND THE NAMES ARE THE VERBS, NOT A MOOD. "Observe only" said
+             do-less and meant costs-the-same; "Live" said nothing at all. Each
+             label now lists what the villa actually does, and each step ADDS a
+             verb to the one before it.
+
+             ⚠️ THE FIRST ONE IS "FLAG & ASK", NOT "LOG ONLY (BRIEFING)" — the
+             owner's suggested wording, corrected against the code. In `ask`,
+             `reason.follow_up` records the escalations and RETURNS without
+             calling `investigate_subject`, so no Concern is ever created and
+             NOTHING agent-derived reaches the briefing. Naming it after the
+             briefing would promise content this mode cannot produce, which is
+             the exact defect "Observe only" had. */
+          { id: "ask", text: "Flag & Ask",
             hint: "It flags what looks wrong and stops there. Nothing is "
                 + "investigated until you approve it, so it spends almost "
-                + "nothing on its own. What you approve then reaches you in "
-                + "full." },
-          { id: "live", text: "Alert me",
-            hint: "It investigates by itself and messages you when it concludes "
-                + "something. It also adds a job to your to-do list, and keeps "
-                + "chasing until someone acknowledges it." },
+                + "nothing on its own. Until you approve something, nothing "
+                + "reaches you and nothing reaches the briefing." },
+          { id: "observe", text: "Investigate & Log",
+            hint: "It investigates everything by itself and writes what it "
+                + "finds into your briefing. It never messages you, never adds "
+                + "a job, and never chases. It costs the same as the next one." },
+          { id: "live", text: "Investigate, Log & Escalate",
+            hint: "Everything above, and it tells you at the time: a message "
+                + "when it concludes something, a job on your to-do list, and "
+                + "it keeps chasing until someone acknowledges it." },
         ]}
       />
 
