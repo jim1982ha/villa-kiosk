@@ -1,3 +1,15 @@
+## 2.797.0
+
+### Changed — the briefing is written by the agent's own plain author now
+Phase 5 complete. The 2,124-line report renderer and the machinery that
+parsed, counted and cross-checked blueprint events (~3,440 lines in all) are
+deleted — the last producer of those events stopped this morning. Briefs now
+come from the same author that writes the offline rungs: standing state
+first, then concerns, findings and open jobs, severity-ordered, with the
+provider still contributing at most one lead sentence. Every honesty rule of
+the old renderer is re-pinned against the new one, and the offline ladder is
+unchanged beneath it.
+
 ## 2.796.0
 
 ### Changed — the reflex blueprints stopped reporting into VESTA
