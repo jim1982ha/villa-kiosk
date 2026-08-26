@@ -5303,14 +5303,37 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   justify-content: flex-end;
 }
-/* ⚠️ SQUARE AND EQUAL, so the three read as one control group rather than as
-   three buttons that happen to be adjacent. `--touch-min` on BOTH axes is also
-   what makes them honest targets on a phone, where they are the only way out of
-   a dialog — and icon-only is what lets three of them fit a 360px footer beside
-   a version string. */
+/* ⚠️ EQUAL, AND SQUARE ONLY WHERE THE LABEL IS HIDDEN. The pair read as one
+   control group rather than as two buttons that happen to be adjacent, and
+   `--touch-min` on BOTH axes is what makes them honest targets on a phone,
+   where they are the only way out of a dialog.
+
+   ⚠️ THE FIXED `width` MOVED INTO THE PHONE TIER IN 2.770.0 AND THAT IS THE
+   WHOLE MECHANISM. It used to be unconditional, so a button containing text
+   would have been clipped to 44px on every screen — hiding the label at the
+   phone tier does nothing on its own if the box can never grow. `padding: 0`
+   travels with it for the same reason: the base `.btn`'s `0 18px` is what gives
+   a labelled button its air, and is dead space around a lone glyph. */
 .modal-footer-actions > button {
   min-height: var(--touch-min); min-width: var(--touch-min);
-  width: var(--touch-min); padding: 0; justify-content: center;
+  justify-content: center;
+}
+
+/* The word beside the glyph. ⚠️ A CLASS, NOT THE `hidden` ATTRIBUTE — an author
+   `display` rule silently defeats `[hidden]`, which this project has been bitten
+   by twice and carries a global `!important` guard for. The accessible name
+   lives on the button's own `aria-label`, so hiding this text never leaves a
+   control unnamed. */
+.btn-label { margin-left: 8px; }
+
+@media (max-width: 720px) {
+  /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a version
+     string do not fit a 360px footer — the row wrapped, which is what sent the
+     whole footer icon-only in 2.667.0. Square, `--touch-min` on both axes. */
+  .modal-footer-actions > button {
+    width: var(--touch-min); padding: 0;
+  }
+  .btn-label { display: none; }
 }
 
 /* The plain-language answer to "when does this actually go out", under the row

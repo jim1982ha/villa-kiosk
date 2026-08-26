@@ -113,20 +113,28 @@ def test_every_settings_modal_offers_a_visible_way_out() -> None:
     # individual dialog still passing, which is exactly the vacuous pass this
     # file keeps guarding against.
     footer = _read("src/components/common/ModalFooter.tsx")
-    # ⚠️ ICON-ONLY SINCE v2.667.0, so the exits are found by their ACCESSIBLE
-    # NAME rather than their text. That is also the property worth pinning: a
-    # button with a glyph and no label is unreadable to a screen reader and
-    # ambiguous to everyone else, and these three differ only in consequence.
+    # ⚠️ THE EXITS ARE FOUND BY THEIR ACCESSIBLE NAME, NOT THEIR TEXT. The
+    # visible label is hidden at the phone tier (2.770.0), so a test that
+    # matched the word "Close" would pass while describing a screen nobody on a
+    # phone sees — and a button whose only name is hidden text is unreadable to
+    # a screen reader exactly where the glyph is hardest to interpret.
     exits = [b for b in _primary_buttons_any(footer)
              if re.search(r'aria-label="(Cancel|Close)', b)]
-    assert len(exits) >= 2, (
-        "ModalFooter no longer renders both exits — Cancel discards and closes, "
-        "Close asks first; every dialog in the family delegates its only "
-        "visible way out to them")
-    # ⚠️ AND IT MUST NOT BE DISABLABLE. Cancel is the exit: these dialogs have
-    # no X, and Escape and the backdrop are not discoverable on a wall tablet.
-    # A `disabled` on this button strands whoever opened a clean dialog — which
-    # is why the fixed pair greys SAVE and never this one.
+    # ⚠️ EXACTLY ONE SINCE 2.770.0, AND THE COUNT IS PINNED IN BOTH DIRECTIONS.
+    # It was two — Cancel discarded and closed without asking, which was a
+    # shortcut PAST the safety question Close raises, and on a clean draft the
+    # two buttons were indistinguishable. Fewer than one is a dialog with no way
+    # out, which is the defect this whole file was written for; more than one is
+    # the redundant pair coming back.
+    assert len(exits) == 1, (
+        f"ModalFooter renders {len(exits)} exits, expected exactly one. Zero "
+        "means a dialog nobody can leave; two means Cancel is back, offering "
+        "'discard without being asked' beside a Close that asks")
+    # ⚠️ AND IT MUST NOT BE DISABLABLE — now the STRONGER claim, because it is
+    # the ONLY exit. These dialogs have no X, and Escape and the backdrop are
+    # not discoverable on a wall tablet, so a `disabled` here strands the
+    # operator outright rather than merely inconveniencing them. This is why the
+    # pair greys SAVE and never this one.
     # ⚠️ `element`, NOT the obvious singular. That word is a real Home Assistant
     # DOMAIN, so dotting a method off it reads as an entity id to the
     # hard-rules pin — the same false positive `agentApi` hit one release ago,
@@ -138,6 +146,17 @@ def test_every_settings_modal_offers_a_visible_way_out() -> None:
             "an icon-only exit with no tooltip: unreadable to anyone who does "
             "not already know what the glyph means")
     assert "onClose()" in footer, "the footer no longer closes the dialog"
+    # ⚠️ THE PROPERTY THAT MADE DELETING CANCEL SAFE. Close is now the only exit,
+    # so if it stopped asking, a dirty draft would be discarded silently by the
+    # single button everyone presses — strictly worse than the redundancy that
+    # was removed. The Discard answer must still reach `discard`, or the
+    # capability went with the button.
+    assert re.search(r"dirty \?\s*setAsking\(true\)\s*:\s*onClose\(\)", footer), (
+        "Close no longer asks when there is an unsaved draft — with Cancel gone "
+        "this is the only exit, so an edit would vanish on one press")
+    assert "commit?.discard?.()" in footer, (
+        "nothing calls discard any more, so the Discard answer in the unsaved "
+        "question cannot throw the draft away")
 
     # ⚠️ AND SAVE IS THE ONE THAT GREYS. The pair is fixed so the footer never
     # rearranges itself while somebody types — the defect that produced "it

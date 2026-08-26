@@ -10,34 +10,41 @@
 // different ideas about where a Save goes. The test could notice a missing
 // part; it could not make the parts identical. This can.
 //
-// ⚠️ THREE BUTTONS, ICON-ONLY, EQUAL WIDTH, IN ONE ORDER: Cancel · Save ·
-// Close. Each does exactly one thing, which is what the previous two designs
-// got wrong in opposite directions — first a label that changed as you typed
-// ("2 different configurations fighting"), then a Save that also closed, so
-// there was no way to commit and keep working.
+// ⚠️ TWO BUTTONS: Save · Close. It was THREE until 2.770.0, and the third was
+// redundant on its own terms.
 //
-//   Cancel   discards the draft AND closes. One press, no question: the
-//            operator has just said they do not want their changes.
 //   Save     commits and STAYS. It is the only button that does not close.
-//   Close    closes — but asks first if there is anything unsaved, because a
-//            dialog that discards silently is how an edit disappears.
+//   Close    closes — asking first if there is anything unsaved, and that
+//            question already offers Save · Discard · Stay.
 //
-// ⚠️ SAVE IS THE ONLY ONE THAT GREYS. Cancel and Close are always live: they
-// are the two ways out, these dialogs have no X, and Escape and the backdrop
-// are not discoverable on a wall-mounted tablet — which is what
-// `test_modal_shell` was written for after a dialog shipped with no exit.
+// ⚠️ CANCEL WAS DELETED BECAUSE `UnsavedChanges` ALREADY OFFERS IT. Its only
+// distinct behaviour was "discard without being asked", which is exactly the
+// Discard answer in the dialog Close raises — so the footer carried a shortcut
+// past a safety question, one press from an edit gone with no confirmation. On
+// a clean draft it was indistinguishable from Close, which is the worse half:
+// two buttons that did the same thing most of the time and quietly different
+// things the rest. Standard behaviour is one exit that asks; the owner asked
+// for it in those terms and they are right.
 //
-// ⚠️ ICON-ONLY IS A PHONE DECISION AS MUCH AS A TIDINESS ONE. Three labelled
-// buttons plus a version string do not fit a 360px footer, and the previous row
-// wrapped there. Three 44px squares always fit, and 44 is `--touch-min` on both
-// axes rather than a painted box that happens to look big enough.
+// ⚠️ SAVE IS THE ONLY ONE THAT GREYS. Close is always live: it is now the ONLY
+// way out, these dialogs have no X, and Escape and the backdrop are not
+// discoverable on a wall-mounted tablet — which is what `test_modal_shell` was
+// written for after a dialog shipped with no exit. A `disabled` on Close would
+// now strand the operator completely rather than merely inconvenience them.
+//
+// ⚠️ LABELLED ON DESKTOP, ICON-ONLY ON A PHONE. Three labelled buttons plus a
+// version string did not fit a 360px footer and the row wrapped, which is why
+// everything went icon-only in 2.667.0. Two do fit with room to spare, so the
+// label is restored where there is width for it and dropped at the phone tier —
+// the icon and `--touch-min` square are unchanged there. The accessible name is
+// on the button either way, so the visible text is never the only label.
 //
 // ⚠️ AND THE UNSAVED QUESTION IS ONE COMPONENT, shared with `ModalTabs` —
 // switching tab and closing ask the same thing, and two copies would drift on
 // the answer that matters: which one the backdrop maps to.
 
 import { useState, type ReactNode } from "react";
-import { Save as SaveIcon, Undo2, X } from "lucide-react";
+import { Save as SaveIcon, X } from "lucide-react";
 
 import UnsavedChanges from "./UnsavedChanges";
 
@@ -63,9 +70,10 @@ export interface ModalCommit {
    *  must leave the dialog open with its error, or the operator watches their
    *  edit disappear and has no idea it did not land. */
   save: () => void | boolean | Promise<unknown>;
-  /** Throw the draft away. ⚠️ OPTIONAL, BUT ITS ABSENCE IS A REAL STATE: a
-   *  dialog that cannot discard should not offer Cancel, so it simply keeps
-   *  Close and the caller passes no commit at all. */
+  /** Throw the draft away. ⚠️ STILL REQUIRED AFTER THE CANCEL BUTTON WENT: it
+   *  is what the Discard answer in `UnsavedChanges` calls. Removing the button
+   *  removed a shortcut, not the capability — a dialog whose draft could not be
+   *  thrown away would trap an operator who opened it by mistake. */
   discard?: () => void;
 }
 
@@ -89,7 +97,9 @@ export default function ModalFooter({
   const [asking, setAsking] = useState(false);
 
   const close = () => (dirty ? setAsking(true) : onClose());
-  const cancel = () => { commit?.discard?.(); onClose(); };
+  // ⚠️ NOT A BUTTON ANY MORE — reached only through the Discard answer of the
+  // question `close` raises. The draft is thrown away and the dialog goes.
+  const discardAndClose = () => { commit?.discard?.(); onClose(); };
 
   return (
     <div className="settings-footer">
@@ -107,18 +117,12 @@ export default function ModalFooter({
           // single-button footer worked around by hand.
           : <span />}
 
-      {/* ⚠️ TITLE AND ARIA-LABEL ON EVERY ONE. An icon-only control is
-          unreadable to a screen reader and ambiguous to everyone else without
-          them, and these three differ only in consequence. */}
+      {/* ⚠️ TITLE AND ARIA-LABEL ON BOTH, INDEPENDENTLY OF THE VISIBLE LABEL.
+          The text is hidden at the phone tier, so a name that came from the
+          text would vanish exactly where the control is hardest to identify —
+          and `title` is the tooltip that explains the CONSEQUENCE, which the
+          one-word label deliberately does not. */}
       <div className="modal-footer-actions">
-        <button
-          className="btn ghost"
-          aria-label="Cancel — discard any changes and close"
-          title="Cancel — discard any changes and close"
-          onClick={cancel}
-        >
-          <Undo2 size={18} aria-hidden />
-        </button>
         <button
           className="btn primary"
           disabled={busy || saving || !dirty}
@@ -131,14 +135,16 @@ export default function ModalFooter({
           onClick={() => { void commit?.save(); }}
         >
           <SaveIcon size={18} aria-hidden />
+          <span className="btn-label">Save</span>
         </button>
         <button
           className="btn"
           aria-label="Close"
-          title="Close"
+          title={dirty ? "Close — asks what to do with your changes" : "Close"}
           onClick={close}
         >
           <X size={18} aria-hidden />
+          <span className="btn-label">Close</span>
         </button>
       </div>
 
@@ -154,7 +160,7 @@ export default function ModalFooter({
               if (ok !== false) onClose();
             });
           }}
-          onDiscard={() => { setAsking(false); cancel(); }}
+          onDiscard={() => { setAsking(false); discardAndClose(); }}
           onStay={() => setAsking(false)}
         />
       )}

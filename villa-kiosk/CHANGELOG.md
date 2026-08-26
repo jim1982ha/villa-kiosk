@@ -1,3 +1,15 @@
+## 2.770.0
+
+### Changed — the third footer button is gone, and the other two say what they do
+Cancel discarded a draft and closed without asking — a shortcut past the very
+question Close raises, which already offers Save, Discard and Stay. On a clean
+dialog it was indistinguishable from Close. Closing now always asks when there
+is something unsaved, which is the standard behaviour and the only exit.
+
+Save and Close carry their words on a desktop screen and stay icon-only at the
+phone tier, where two labelled buttons beside the version string do not fit and
+the row used to wrap.
+
 ## 2.769.0
 
 ### Fixed — there was no way to run a check on demand
