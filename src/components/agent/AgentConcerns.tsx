@@ -34,6 +34,45 @@ import { severityRank, type Concern } from "@/agent/agentTypes";
  *  record, not the state of the villa. */
 const LIVE = new Set(["open", "acted"]);
 
+/** Profile ids as a person reads them on the People tab. ⚠️ `ops` IS THE
+ *  FACILITY MANAGER — the store's word and the screen's word differ, and
+ *  showing the store's would name a role nobody has heard of. */
+const PROFILE_NAME: Record<string, string> = {
+  owner: "Owner",
+  ops: "Facility manager",
+  guest: "Guest",
+};
+
+/** `sent to Owner 26 Aug 14:27` — and every later send after it.
+ *
+ *  ⚠️ EVERY SEND, NOT THE LAST ONE. The escalation ladder re-sends to a SECOND
+ *  profile ("add the owner" is the whole point of the middle band), so a card
+ *  showing only one would say the facility manager was told and never mention
+ *  that the owner was too — or the reverse. The list is appended to by both the
+ *  delivery sweep and the escalation sweep for exactly this reason.
+ *
+ *  ⚠️ AND CONCERNS RAISED BEFORE 2.782.0 HAVE NO LIST. Falling back to the
+ *  AUDIENCE is honest — it says who the concern was written FOR, which is what
+ *  decided the profile — and saying nothing would read as "never sent" beside
+ *  a `delivered_at` that says otherwise. */
+function sentSummary(c: Concern): string {
+  const when = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? "" : ` ${d.toLocaleString(undefined, { day: "numeric", month: "short",
+                                               hour: "2-digit", minute: "2-digit" })}`;
+  };
+  const rows = c.deliveries ?? [];
+  if (rows.length === 0) {
+    const profile = c.audience === "facility" ? "ops" : "owner";
+    return `sent to ${PROFILE_NAME[profile] ?? profile}${when(c.delivered_at ?? "")}`;
+  }
+  return "sent to " + rows
+    .map((r) => `${PROFILE_NAME[r.profile] ?? r.profile}${when(r.at)}`)
+    .join(", then ");
+}
+
+
 export default function AgentConcerns() {
   // ⚠️ THE CAPABILITY IS READ HERE, IN THE LEAF, AND NOT PASSED DOWN FROM A
   // SHELL. `test_cockpit_is_gated_nowhere` forbids `manageFacility` in
@@ -235,11 +274,8 @@ export default function AgentConcerns() {
               <span className="body-text concern-text">
                 {c.title}
                 {c.delivered_at && (
-                  <span className="muted" title={`Sent ${c.delivered_at}`}>
-                    {" "}({c.delivered_to
-                      ? `sent to ${c.delivered_to}`
-                      : `sent to the ${c.audience === "facility"
-                          ? "facility manager" : "owner"}`})
+                  <span className="muted">
+                    {" ("}{sentSummary(c)}{")"}
                   </span>
                 )}
               </span>

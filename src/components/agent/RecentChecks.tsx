@@ -31,7 +31,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search, X, FileText, AlertCircle, MinusCircle } from "lucide-react";
 
-import { Pager, usePaged } from "@/components/common/Paged";
+import { PAGE_CARDS, Pager, usePaged } from "@/components/common/Paged";
 import {
   checkIdOf, decideEscalation, loadCheckFlags, loadConcerns,
   type CheckFlag, type TriagePass,
@@ -98,14 +98,14 @@ function FlagRow({ flag, mode, concern, busy, onDecide }: {
         <>
           <button className="icon-btn" disabled={busy}
                   aria-label={`Investigate ${flag.subject}`}
-                  title="Investigate this now — runs straight away and costs a full investigation"
+                  title="Click to investigate"
                   onClick={() => onDecide(flag.runId, "approve")}>
             {busy ? <Loader2 size={16} className="spin" aria-hidden />
                   : <Search size={16} aria-hidden />}
           </button>
           <button className="icon-btn" disabled={busy}
                   aria-label={`Cancel ${flag.subject}`}
-                  title="Cancel — do not investigate this. Costs nothing."
+                  title="Don\u2019t investigate and dismiss"
                   onClick={() => onDecide(flag.runId, "dismiss")}>
             <X size={16} aria-hidden />
           </button>
@@ -213,7 +213,23 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
     const mine = id ? flags.filter((f) => checkIdOf(f.runId) === id) : [];
     return { pass: p, reason, outcome: outcomeOf(reason), flags: mine };
   });
-  const paged = usePaged(rows);
+
+  // ⚠️ A FLAG WHOSE CHECK CANNOT BE IDENTIFIED IS STILL SHOWN, and the first cut
+  // of this hid fourteen of them. Checks written before 2.780.0 carry
+  // `run_id: ""`, so nothing can pair them with their flags — and because the
+  // flags were only ever drawn INSIDE a check, every one of those became
+  // invisible the moment the two lists merged. The owner could see "Cancel all
+  // 14 waiting" and not one of the fourteen. Hiding a thing the reader can act
+  // on is strictly worse than the duplication the merge removed, so anything
+  // unmatched gets its own card that says why it is on its own.
+  const attached = new Set(rows.flatMap((r) => r.flags.map((f) => f.runId)));
+  const orphans = flags.filter((f) => !attached.has(f.runId));
+
+  // ⚠️ CARDS, NOT ROWS — see `PAGE_CARDS`. Each entry here is several lines
+  // with its flagged items nested under it, so the row count that suits a
+  // one-line log is a scroll with no end in sight. Named constant, not a
+  // literal: the rule is one owner for pagination, not one number.
+  const paged = usePaged(rows, PAGE_CARDS);
 
   if (rows.length === 0) return <p className="muted body-text">{empty}</p>;
 
@@ -238,9 +254,39 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
           <button className="btn ghost" disabled={busy !== null}
                   onClick={() => void cancelAll()}
                   title="Cancel every flag still waiting — spends nothing, and anything still true is flagged again by the next check">
-            <X size={16} aria-hidden /> Cancel all {waiting} waiting
+            <X size={16} aria-hidden /> Cancel all {waiting} flagged item{waiting === 1 ? "" : "s"}
           </button>
         </div>
+      )}
+      {/* ⚠️ THE UNATTACHED FLAGS, ABOVE THE CHECKS, IN ONE CARD THAT EXPLAINS
+          ITSELF. These are real and answerable — they are what "Cancel all N"
+          acts on — and the merge made them invisible because a flag was only
+          ever drawn inside a check. They are almost always legacy: a check
+          written before 2.780.0 stored no id, so nothing can say which one
+          raised them. Saying that is better than either hiding them or
+          guessing a parent by timestamp, which is the pairing this release
+          replaced precisely because it goes wrong when checks overlap. */}
+      {orphans.length > 0 && (
+        <ul className="fm-list">
+          <li className="body-text">
+            <div>
+              <strong>{orphans.length} flagged item{orphans.length === 1 ? "" : "s"}</strong>
+              {" from earlier checks"}
+              <span className="muted">
+                {" · recorded before checks carried an id, so which check "}
+                {"raised them is not known"}
+              </span>
+            </div>
+            <ul className="fm-list" style={{ marginTop: 6, paddingLeft: 14 }}>
+              {orphans.map((f) => (
+                <FlagRow key={f.runId} flag={f} mode={mode || ""}
+                         concern={concerns.find((c) => c.run_id === f.runId)}
+                         busy={busy === f.runId}
+                         onDecide={canAct ? decide : () => {}} />
+              ))}
+            </ul>
+          </li>
+        </ul>
       )}
       <Pager paged={paged} unit="check">{children}</Pager>
       {/* ⚠️ `.fm-list` — A FLEX COLUMN OF ROWS, NOT A BULLETED LIST. It was the
@@ -257,7 +303,14 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
                 </span>{" · "}
                 {outcome === "raised" ? (
                   <>
-                    <strong>Flagged {pass.escalated ?? ""}</strong>
+                    {/* ⚠️ "N items flagged in this check", NOT "Flagged N".
+                        The old form read as a verdict on the check itself —
+                        the owner's wording names WHAT the number counts, which
+                        matters because the same screen also counts checks. */}
+                    <strong>
+                      {pass.escalated ?? 0} item{pass.escalated === 1 ? "" : "s"}
+                      {" flagged in this check"}
+                    </strong>
                     {/* ⚠️ THE NAMES ONLY WHERE THE FLAGS THEMSELVES ARE NOT
                         DRAWN BELOW — otherwise the same subjects appear twice
                         in one card, which is the duplication this merge exists
@@ -265,7 +318,7 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
                     {mine.length === 0 && named ? <> — {named}</> : null}
                   </>
                 ) : outcome === "quiet" ? (
-                  <>Looked, nothing to flag</>
+                  <>Nothing to flag in this check</>
                 ) : (
                   <>
                     <strong className="sev-warning">Could not run</strong>

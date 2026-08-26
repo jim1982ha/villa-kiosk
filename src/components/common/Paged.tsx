@@ -27,6 +27,16 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
  *  different sizes is exactly the drift this file replaces. */
 export const PAGE_ROWS = 20;
 
+/** Cards per page, where a "row" is several lines with children nested under
+ *  it. ⚠️ A SECOND NUMBER, IN THE SAME FILE, ON PURPOSE. The rule this module
+ *  enforces is that no page size is a literal scattered through a component —
+ *  not that every list must page identically, which was never true of lists
+ *  whose entries are different heights. Twenty one-line rows is a page; twenty
+ *  checks each carrying its own flagged items is a scroll with no end in sight,
+ *  reported as exactly that. Both numbers live here so there is still ONE place
+ *  that owns pagination. */
+export const PAGE_CARDS = 10;
+
 export interface Paged<T> {
   page: T[];
   /** 1-based index of the first row on this page, for the "n–m of N" line. */

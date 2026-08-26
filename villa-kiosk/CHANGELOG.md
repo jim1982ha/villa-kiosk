@@ -1,3 +1,16 @@
+## 2.782.0
+
+### Fixed — flagged items were invisible on the Triage tab
+Merging the two lists drew every flag inside the check that raised it, and a
+check recorded before the previous release carries no id — so fourteen waiting
+flags rendered nowhere while a button offered to cancel all of them. Anything
+that cannot be matched now gets its own card saying why.
+
+### Changed — a concern names the profile it reached, and every send
+"Sent to Owner 26 Aug 14:27, then Facility manager 26 Aug 14:42" rather than a
+notify entity id. Escalation adds a second entry instead of overwriting the
+first. Cards read "3 items flagged in this check", ten to a page.
+
 ## 2.781.0
 
 ### Fixed — a concern said "sent" without saying who to

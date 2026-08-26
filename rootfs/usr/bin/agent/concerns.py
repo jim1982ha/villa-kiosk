@@ -87,14 +87,20 @@ class Concern:
     #: somebody is either spammed or told nothing. `outbox.undelivered` reads
     #: exactly this field.
     delivered_at: str = ""
-    #: Where it was actually sent, comma-separated, or "" if it never was.
-    #: ⚠️ "SENT" WITHOUT "TO WHOM" IS HALF AN ANSWER, and the missing half is the
-    #: one an owner checks. A concern routes by AUDIENCE — `owner` reaches the
-    #: owner's chats, `facility` reaches the facility manager's — so a villa
-    #: with two Telegram chats can deliver every concern successfully to the one
-    #: nobody is reading, and the card said only "sent". Reported exactly that
-    #: way: two concerns marked sent, nothing on the owner's own chat.
-    delivered_to: str = ""
+    #: One entry per send: `{profile, at}`. ⚠️ A LIST, NOT A FIELD, BECAUSE
+    #: ESCALATION SENDS AGAIN TO SOMEBODY ELSE. `route.escalate`'s ladder goes
+    #: to the same target, then adds the owner, then reaches everyone — so a
+    #: single "delivered to" would be overwritten by the second send and the
+    #: card would claim the first never happened. Each entry names the PROFILE
+    #: rather than the notify entity: `owner` and `ops` are what a person
+    #: recognises from the People tab, and an entity id tells them nothing about
+    #: who is reading it.
+    #:
+    #: ⚠️ `delivered_at` STAYS AND IS STILL THE FIRST SEND. `outbox.undelivered`
+    #: and `awaiting_acknowledgement` both key on it, so replacing it with this
+    #: list would rewrite the delivery and escalation sweeps for a display
+    #: change. This is additive on purpose.
+    deliveries: List[Dict[str, str]] = field(default_factory=list)
     #: When somebody said "I have seen this", and who. ⚠️ NOT A STATE — see
     #: `acknowledge`. Acknowledging stops escalation; it does not claim the
     #: problem is fixed, and a concern stays `open` until it actually is.
@@ -104,7 +110,7 @@ class Concern:
     def as_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id, "subject_key": self.subject_key,
-            "run_id": self.run_id, "delivered_to": self.delivered_to,
+            "run_id": self.run_id, "deliveries": list(self.deliveries),
             "title": self.title, "body": self.body,
             "severity": self.severity, "audience": self.audience,
             "confidence": self.confidence, "state": self.state,

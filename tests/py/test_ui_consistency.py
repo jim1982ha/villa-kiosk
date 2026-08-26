@@ -102,8 +102,41 @@ def test_there_is_exactly_ONE_page_size_in_the_app() -> None:
     # its own header says so. This asserts no THIRD number appears.
     sizes = set()
     for p in _files("components"):
+        # ⚠️ A LITERAL, NOT A NAMED CONSTANT. The rule is that no page size is
+        # scattered through a component — `PAGE_CARDS` is declared beside
+        # `PAGE_ROWS` in this same module for a list whose entries are cards
+        # rather than rows, so pagination still has ONE owner. A bare number
+        # here is the drift; a second exported name is a decision.
         sizes |= set(re.findall(r"usePaged\([^,)]+,\s*(\d+)\s*\)", _read(p)))
-    assert not sizes, f"a caller overrode the shared page size: {sizes}"
+    assert not sizes, f"a caller overrode the shared page size with a literal: {sizes}"
+    assert "export const PAGE_CARDS" in paged
+
+
+def test_a_flag_with_no_identifiable_check_is_still_RENDERED() -> None:
+    """⚠️ THE REGRESSION 2.780.0 SHIPPED, FOUND BY THE OWNER LOOKING AT IT.
+    Merging the two lists drew every flag INSIDE the check that raised it — and
+    a check written before that release stored `run_id: ""`, so nothing can
+    pair it with its flags. Fourteen waiting flags became invisible: the owner
+    saw "Cancel all 14" and not one of the fourteen.
+
+    ⚠️ HIDING SOMETHING THE READER CAN ACT ON IS WORSE THAN THE DUPLICATION THE
+    MERGE REMOVED, and `tsc` cannot see it — the variable was computed and
+    simply never rendered, which type-checks perfectly. So the pin asserts the
+    RENDER, not the computation.
+    """
+    src = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    code = re.sub(r"\{/\*[\s\S]*?\*/\}", "", src)
+    code = "\n".join(l for l in code.splitlines()
+                      if not l.strip().startswith("//"))
+    assert "orphans" in code, (
+        "RecentChecks no longer separates flags whose check cannot be "
+        "identified, so legacy flags are silently dropped")
+    assert "orphans.map(" in code, (
+        "the unmatched flags are computed and never rendered — the reader sees "
+        "a Cancel-all button for items that appear nowhere")
+    assert "orphans.length > 0 &&" in code, (
+        "the unmatched-flags block is not conditional on there being any, so "
+        "an empty card renders on every villa that has none")
 
 
 # ── one hint, and short descriptions ────────────────────────────────────────
@@ -515,7 +548,7 @@ def test_recent_checks_has_ONE_implementation() -> None:
     # vocabulary — a CHECK raises FLAGS, a flag may become a CONCERN. `== 1`
     # catches both a second copy and a vanished anchor, so this cannot pass
     # vacuously if the wording moves again.
-    hits = [p for p, src in _tsx_sources() if "Looked, nothing to flag" in src]
+    hits = [p for p, src in _tsx_sources() if "Nothing to flag in this check" in src]
     assert len(hits) == 1, f"the row rendering is written {len(hits)} times"
 
 

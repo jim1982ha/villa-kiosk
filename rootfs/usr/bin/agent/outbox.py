@@ -277,12 +277,17 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     if not any(str(r.get("status")) == "sent" for r in results
                if isinstance(r, Mapping)):
         return False
-    _mark_escalated(str(concern.get("id") or ""), verdict.step, now=now)
+    # ⚠️ THE ESCALATION IS A SEND IN ITS OWN RIGHT, to a profile the first one
+    # may not have reached — "add the owner" is the whole point of the band.
+    # Recording only the band would leave the card saying "sent to Facility
+    # manager" long after the owner had also been told.
+    _mark_escalated(str(concern.get("id") or ""), verdict.step, now=now,
+                    profile=role)
     return True
 
 
 def _mark_escalated(concern_id: str, step: str, *,
-                    now: Optional[float] = None) -> bool:
+                    now: Optional[float] = None, profile: str = "") -> bool:
     """Record which band was taken. ⚠️ AFTER THE SEND, like `_mark_delivered`,
     and for the identical reason: marking first loses the escalation entirely
     when the send fails, and at worst marking second escalates twice, which a
@@ -297,6 +302,7 @@ def _mark_escalated(concern_id: str, step: str, *,
             if str(row.get("id")) == concern_id:
                 row["escalated_step"] = str(step)
                 row["escalated_at"] = stamp
+                _record_send(row, profile, stamp)
                 return concerns_mod._write(rows)
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow(f"could not stamp concern {concern_id} as escalated", err)
@@ -515,8 +521,7 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
               if isinstance(r, Mapping) and str(r.get("status")) == "sent"]
     if not landed:
         return "failed"
-    _mark_delivered(str(concern.get("id") or ""), now=now,
-                    delivered_to=", ".join(landed))
+    _mark_delivered(str(concern.get("id") or ""), now=now, profile=role)
 
     # ⚠️ AFTER THE SEND, AND ONLY AFTER IT. A facility manager job raised for a concern
     # whose delivery then failed is a task nobody was told about, sitting on a
@@ -533,8 +538,21 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     return "sent"
 
 
+def _record_send(row: Dict[str, Any], profile: str, stamp: str) -> None:
+    """Append one send to a concern's own history. ⚠️ APPEND, NEVER REPLACE —
+    the escalation ladder sends to a SECOND profile, and overwriting would make
+    the card claim the first send never happened."""
+    if not profile:
+        return
+    history = row.get("deliveries")
+    if not isinstance(history, list):
+        history = []
+    history.append({"profile": profile, "at": stamp})
+    row["deliveries"] = history
+
+
 def _mark_delivered(concern_id: str, *, now: Optional[float] = None,
-                    delivered_to: str = "") -> bool:
+                    profile: str = "") -> bool:
     """Stamp a concern as sent. ⚠️ AFTER THE SEND, NEVER BEFORE.
 
     Marking first and sending second loses the concern entirely when the send
@@ -552,12 +570,7 @@ def _mark_delivered(concern_id: str, *, now: Optional[float] = None,
         for row in rows:
             if str(row.get("id")) == concern_id:
                 row["delivered_at"] = stamp
-                # ⚠️ THE TARGETS THAT ACTUALLY ACCEPTED IT, not the ones it was
-                # aimed at. A partial delivery — one chat up, one down — must
-                # record the one that landed, or the card claims a reach it
-                # never had.
-                if delivered_to:
-                    row["delivered_to"] = delivered_to
+                _record_send(row, profile, stamp)
                 return concerns_mod._write(rows)
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow(f"could not stamp concern {concern_id} as delivered", err)

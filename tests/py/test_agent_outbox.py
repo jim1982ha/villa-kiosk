@@ -631,3 +631,67 @@ def test_the_proxy_EXPOSES_an_acknowledgement_route() -> None:
                              "nginx.conf"), encoding="utf-8").read()
     assert '"/agent-acknowledge"' in src
     assert "location = /agent-acknowledge" in conf
+
+
+# ── who was told, and when ──────────────────────────────────────────────────
+def test_every_send_is_recorded_with_its_PROFILE_and_time() -> None:
+    """⚠️ A LIST, BECAUSE ESCALATION SENDS AGAIN TO SOMEBODY ELSE. `route.escalate`
+    goes to the same target, then ADDS THE OWNER, then reaches everyone — so a
+    single "delivered to" field is overwritten by the second send and the card
+    then claims the first never happened.
+
+    ⚠️ AND THE PROFILE, NOT THE NOTIFY ENTITY. `notify.living_room_…_jm` tells a
+    reader nothing about who is reading it; "Owner" and "Facility manager" are
+    what the People tab calls them. The owner reported two concerns marked
+    "sent" and nothing on their own chat — a concern routes by AUDIENCE, so a
+    villa with two chats can deliver every one successfully to the chat nobody
+    reads, and the card has to name which.
+    """
+    cid = _raise(severity="critical")
+    outbox._mark_delivered(cid, now=1_787_000_000.0, profile="owner")
+    outbox._mark_escalated(cid, "add the owner", now=1_787_000_900.0,
+                           profile="ops")
+
+    row = [r for r in concerns.read() if r["id"] == cid][0]
+    sends = row.get("deliveries")
+    assert isinstance(sends, list) and len(sends) == 2, (
+        f"expected both sends recorded, got {sends!r} — the escalation "
+        "overwrote the delivery instead of appending to it")
+    assert [s["profile"] for s in sends] == ["owner", "ops"], (
+        "the profiles are wrong or out of order; the card reads them in "
+        "sequence as 'sent to X, then Y'")
+    assert all(s["at"] for s in sends), "a send carries no time"
+    # ⚠️ THE FIRST SEND IS STILL `delivered_at`, because `undelivered` and
+    # `awaiting_acknowledgement` both key on it. Replacing it with this list
+    # would have rewritten both sweeps for a display change.
+    assert row.get("delivered_at"), "delivered_at no longer marks the first send"
+
+    # ⚠️ AND BOTH CALLERS MUST ACTUALLY PASS A PROFILE. The assertions above
+    # hand `_mark_delivered` and `_mark_escalated` one directly, so they prove
+    # the helpers honour it and nothing more — emptying the argument at either
+    # CALL SITE left them green. `feedback_pin-the-caller`, third instance in a
+    # day. Scoped to each call, because `profile=` appears in the signatures too.
+    import inspect
+
+    for fn, label in ((outbox._deliver_one, "the delivery sweep"),
+                      (outbox._escalate_one, "the escalation sweep")):
+        src = inspect.getsource(fn)
+        code = "\n".join(l for l in src.splitlines()
+                          if not l.strip().startswith("#"))
+        start = code.index("_mark_")
+        call = code[start:code.index(")", code.index("now=", start))]
+        assert "profile=role" in call, (
+            f"{label} no longer passes the profile, so every send it records "
+            f"is anonymous. The call reads: {call!r}")
+
+
+def test_a_send_with_no_profile_is_not_recorded_as_a_blank_one() -> None:
+    """⚠️ THE DEGENERATE ROW. An empty profile would render as "sent to " with
+    nothing after it — worse than the missing field it replaced, because it
+    looks like a name that failed to load."""
+    cid = _raise(severity="critical")
+    outbox._mark_delivered(cid, now=1_787_000_000.0, profile="")
+    row = [r for r in concerns.read() if r["id"] == cid][0]
+    assert not row.get("deliveries"), (
+        f"a blank profile was recorded as a send: {row.get('deliveries')!r}")
+    assert row.get("delivered_at"), "the send itself must still be marked"

@@ -141,9 +141,11 @@ export interface Concern {
    *  reports `0/3 identified`. Snake_case for the same reason as the two above:
    *  the store is written by Python and served verbatim. */
   run_id?: string;
-  /** Where it actually landed, comma-separated. ⚠️ THE HALF "sent" WAS MISSING:
-   *  a concern routes by audience, so a villa with two chats can deliver every
-   *  one successfully to the chat nobody reads. Absent on concerns raised
-   *  before 2.781.0, where the audience is the honest fallback. */
-  delivered_to?: string;
+  /** One entry per send. ⚠️ A LIST BECAUSE ESCALATION SENDS AGAIN, to a profile
+   *  the first send may not have reached — "add the owner" is the whole point
+   *  of the second band, and a single field would be overwritten by it. The
+   *  PROFILE is recorded rather than the notify entity: `owner` and `ops` are
+   *  what a person recognises from the People tab. Absent on concerns raised
+   *  before 2.782.0, where the audience is the honest fallback. */
+  deliveries?: Array<{ profile: string; at: string }>;
 }
