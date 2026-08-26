@@ -183,6 +183,20 @@ def test_the_device_list_is_INERT_when_the_master_switch_is_off() -> None:
         "honouring a prop nobody sets is this repository's most repeated defect")
 
 
+def test_every_icon_only_concern_button_carries_a_TOOLTIP() -> None:
+    """⚠️ TWO OF THE THREE HAD NONE. An icon-only control whose meaning lives
+    only in `aria-label` is readable to a screen reader and to nobody using a
+    mouse — which is everybody on the wall tablet. `test_modal_shell` already
+    pins this for the footer's exits; the concern row had escaped it."""
+    src = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    buttons = re.findall(r"<button\b[^>]*?>", src, re.S)
+    icon_only = [b for b in buttons if "aria-label=" in b]
+    assert icon_only, "no labelled buttons found; this test would be vacuous"
+    missing = [b[:70] for b in icon_only if "title=" not in b]
+    assert not missing, (
+        f"{len(missing)} icon-only concern button(s) have no tooltip: {missing}")
+
+
 # ── one hint, and short descriptions ────────────────────────────────────────
 
 def test_the_shared_controls_all_offer_a_hint() -> None:

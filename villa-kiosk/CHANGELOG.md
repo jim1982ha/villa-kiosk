@@ -1,3 +1,14 @@
+## 2.787.0
+
+### Changed — the two controls sit where they act
+"Check the villa now" is on the heading's own line, icon-only on a phone, and
+"Cancel all" moved into the pager row beside the page arrows.
+
+### Fixed — two concern buttons had no tooltip
+Thumbs up and thumbs down said nothing to anyone using a mouse. The intro above
+them now says what a concern is and why it is on that screen, rather than
+opening with a detail about escalation.
+
 ## 2.786.0
 
 ### Fixed — Observe was showing a different subsystem entirely

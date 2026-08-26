@@ -202,8 +202,15 @@ export default function AgentConcerns() {
           by design. What was missing is anywhere saying so: the chip describes
           the concern's own state and the reader infers a chase that was never
           going to happen. */}
+      {/* ⚠️ THE OLD LINE ANSWERED A QUESTION NOBODY HAD ASKED YET. "A warning is
+          sent once and then waits for you" is a fact about the ESCALATION
+          ladder, which matters only once a reader knows what these rows ARE and
+          why they are on this screen at all. That is what the owner asked for,
+          and it is the first thing a tier tab should say. */}
       <p className="muted body-text">
-        A warning is sent once and then waits for you.
+        Everything the assistant investigated and judged worth telling you
+        about. Each one was raised during a check and is waiting for you to say
+        you have seen it.
         <InfoHint label="What gets chased">
           <p>
             Only a critical concern is chased. If nobody acknowledges one, the
@@ -303,7 +310,7 @@ export default function AgentConcerns() {
                 <button
                   type="button" className="row-action" disabled={busy === c.id}
                   aria-label={`I have seen this: ${c.title}`}
-                  title="I have seen this — stops it escalating"
+                  title="I have seen this — stops it being re-sent and chased"
                   onClick={() => void acknowledge(c.id)}
                 >
                   <Eye size={16} aria-hidden />
@@ -315,6 +322,7 @@ export default function AgentConcerns() {
                 <button
                   type="button" className="row-action" disabled={busy === c.id}
                   aria-label={`Useful: ${c.title}`}
+                  title="This was worth telling me — the villa raises this kind more readily"
                   onClick={() => void judge(c.id, true)}
                 >
                   <ThumbsUp size={16} aria-hidden />
@@ -323,6 +331,7 @@ export default function AgentConcerns() {
                   type="button" className="row-action danger"
                   disabled={busy === c.id}
                   aria-label={`Not useful: ${c.title}`}
+                  title="This was not worth telling me — the villa raises this kind less readily"
                   onClick={() => void judge(c.id, false)}
                 >
                   <ThumbsDown size={16} aria-hidden />

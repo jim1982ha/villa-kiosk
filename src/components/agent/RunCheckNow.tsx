@@ -79,14 +79,21 @@ export default function RunCheckNow({ onDone }: { onDone?: () => void }) {
 
   return (
     <>
-      {note && <p className="muted body-text">{note}</p>}
-      <div className="modal-actions" style={{ margin: 0 }}>
-        <button className="btn" disabled={busy} onClick={() => void run()}>
-          {busy ? <Loader2 size={16} className="spin" aria-hidden />
-                : <Play size={16} aria-hidden />}
-          {busy ? "Checking…" : "Check the villa now (spends a request)"}
-        </button>
-      </div>
+      {/* ⚠️ THE NOTE IS RENDERED BY THE CALLER'S ROW, NOT UNDER THE BUTTON.
+          This component now sits on the heading's line, so a paragraph inside
+          it would push the heading's own row apart. */}
+      {note && <p className="muted body-text" role="status">{note}</p>}
+      <button className="btn ghost" disabled={busy} onClick={() => void run()}
+              title="Check the villa now — spends one request">
+        {busy ? <Loader2 size={16} className="spin" aria-hidden />
+              : <Play size={16} aria-hidden />}
+        {/* ⚠️ THE WORDS GO AT THE PHONE TIER, THE ICON NEVER DOES. `.btn-label`
+            is the same class the modal footer uses for exactly this, so there
+            is one rule for "hide the word, keep the target" rather than two.
+            The accessible name is on the button, so hiding the text never
+            leaves the control unnamed. */}
+        <span className="btn-label">Check the villa now</span>
+      </button>
     </>
   );
 }

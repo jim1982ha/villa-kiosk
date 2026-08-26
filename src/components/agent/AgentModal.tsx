@@ -275,7 +275,13 @@ function AgentDialog(
                   granularities, in two lists, with nothing pairing them. The
                   flags are now drawn inside the check that raised them, so the
                   component is gone from this tab rather than stacked on it. */}
-              <div className="settings-section-title">Recent &amp; flagged checks</div>
+              {/* ⚠️ THE ACTION SITS ON THE HEADING'S OWN LINE. It was a full
+                  button below the list, which put the one control that STARTS a
+                  check as far as possible from the heading that names them. */}
+              <div className="section-head-row">
+                <div className="settings-section-title">Recent &amp; flagged checks</div>
+                <RunCheckNow onDone={() => void loadTriagePasses().then(setPasses)} />
+              </div>
               <RecentChecks
                 passes={passes}
                 mode={String(draft.config.mode || "")}
@@ -283,7 +289,6 @@ function AgentDialog(
                 empty={<>No check has run yet. One runs on the schedule above,
                        or immediately with the button below.</>}
               />
-              <RunCheckNow onDone={() => void loadTriagePasses().then(setPasses)} />
             </div>
           )}
 

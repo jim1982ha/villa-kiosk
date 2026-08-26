@@ -4586,6 +4586,17 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    stylesheet keeps warning about. */
 .reports-pane > p { margin-bottom: 0; }
 
+/* A section heading with its own action on the same line. ⚠️ THE HEADING KEEPS
+   ITS MARGIN AND THE ROW DOES NOT ADD ONE — `.settings-section-title` already
+   carries `margin: 20px 0 0`, so putting it in a flex row and giving the ROW a
+   margin too would be the double-spacing this file keeps correcting. The row is
+   transparent; only the heading inside it is positioned. */
+.section-head-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.section-head-row > .settings-section-title { margin-bottom: 0; }
+
 /* ⚠️ `.reports-h3` IS DELETED, NOT RESTYLED. It was a SECOND DEFINITION of the
    uppercase section eyebrow — same role as `.settings-section-title`, at
    --text-sm against --text-xs, 0.04em tracking against 0.18em, and

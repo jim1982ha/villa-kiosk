@@ -278,37 +278,25 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
         </p>
       )}
       {note && <p className="muted body-text" role="status">{note}</p>}
-      {/* ⚠️ ONLY WHEN MORE THAN ONE IS WAITING. A single flag has its own
-          buttons two lines below; a whole-list control beside it would be two
-          ways to do one thing. */}
-      {canAct && waiting > 1 && (
-        <div className="modal-actions" style={{ margin: "0 0 12px" }}>
-          <button className="btn ghost" disabled={busy !== null}
-                  onClick={() => void cancelAll()}
-                  title="Cancel every flag still waiting — spends nothing, and anything still true is flagged again by the next check">
-            <X size={16} aria-hidden /> Cancel all {waiting} flagged item{waiting === 1 ? "" : "s"}
-          </button>
-        </div>
-      )}
-      {/* ⚠️ THE UNATTACHED FLAGS, ABOVE THE CHECKS, IN ONE CARD THAT EXPLAINS
-          ITSELF. These are real and answerable — they are what "Cancel all N"
-          acts on — and the merge made them invisible because a flag was only
-          ever drawn inside a check. They are almost always legacy: a check
-          written before 2.780.0 stored no id, so nothing can say which one
-          raised them. Saying that is better than either hiding them or
-          guessing a parent by timestamp, which is the pairing this release
-          replaced precisely because it goes wrong when checks overlap. */}
+      {/* ⚠️ THE UNATTACHED FLAGS, IN ONE CARD THAT EXPLAINS ITSELF. These are
+          real and answerable — they are what "Cancel all N" acts on — and the
+          merge made them invisible because a flag was only ever drawn inside a
+          check. They are legacy: a check written before 2.780.0 stored no id,
+          so nothing can say which one raised them. Saying that is better than
+          hiding them or guessing a parent by timestamp, which is the pairing
+          this release replaced precisely because it goes wrong when two checks
+          overlap. */}
       {orphans.length > 0 && (
         <ul className="fm-list">
-          <li className="body-text">
-            <div>
+          <li className="editable-row-card">
+            <div className="body-text">
               <strong>{orphans.length} flagged item{orphans.length === 1 ? "" : "s"}</strong>
               {" waiting, from checks recorded before "}
               <span className="muted">
                 {"checks carried an id — so which check raised them is not known"}
               </span>
             </div>
-            <ul className="fm-list" style={{ marginTop: 6, paddingLeft: 14 }}>
+            <ul className="fm-list" style={{ marginTop: 6 }}>
               {orphans.map((f) => (
                 <FlagRow key={f.runId} flag={f} mode={mode || ""}
                          concern={concerns.find((c) => c.run_id === f.runId)}
@@ -319,7 +307,24 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
           </li>
         </ul>
       )}
-      <Pager paged={paged} unit="check">{children}</Pager>
+      {/* ⚠️ IN THE PAGER ROW, LEFT OF THE ARROWS. `Pager` already renders its
+          children there — that slot exists for exactly this — and a control
+          floating in its own row above the list read as belonging to the
+          heading rather than to the list it acts on.
+
+          ⚠️ ONLY WHEN MORE THAN ONE IS WAITING. A single flag has its own
+          buttons in the card below; a whole-list control beside it would be two
+          ways to do one thing. */}
+      <Pager paged={paged} unit="check">
+        {canAct && waiting > 1 && (
+          <button className="btn ghost" disabled={busy !== null}
+                  onClick={() => void cancelAll()}
+                  title="Cancel every flag still waiting — spends nothing, and anything still true is flagged again by the next check">
+            <X size={16} aria-hidden /> Cancel all {waiting} flagged item{waiting === 1 ? "" : "s"}
+          </button>
+        )}
+        {children}
+      </Pager>
       {/* ⚠️ `.fm-list` — A FLEX COLUMN OF ROWS, NOT A BULLETED LIST. It was the
           one list class in styles.css that did not reset `list-style`, so every
           row drew a marker; reported as clutter. */}
