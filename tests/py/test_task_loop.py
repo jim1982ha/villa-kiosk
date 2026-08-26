@@ -59,7 +59,13 @@ def test_the_loop_is_OFF_until_a_list_is_named() -> None:
     hard rule this repo ships under."""
     assert agent_config.DEFAULTS[task.CONFIG_KEY] == ""
     assert task.list_for({}) == ""
-    assert task.status({})["configured"] is False
+    # ⚠️ `status()` WENT IN 2.767.0 — I wrote it "for the settings screen" and
+    # never wired it to one, and this line was its ONLY caller. A test is not a
+    # consumer: it kept an uncalled function looking alive for three releases,
+    # which is dry-audit Part 2's exact failure mode. The field on Act & Tell is
+    # the answer to "is the loop on", and an empty list IS the off state.
+    assert task.list_for({"task_list": "  "}) == "", (
+        "a whitespace-only list must read as off, not as a list named '  '")
 
 
 def test_no_list_means_no_write_and_no_error() -> None:

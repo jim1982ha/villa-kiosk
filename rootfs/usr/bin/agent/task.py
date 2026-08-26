@@ -47,7 +47,7 @@ that property, and a seeded default would write jobs into a stranger's list.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Mapping, Optional
 
 from agent import config as agent_config
 from reports.log import log, swallow
@@ -138,10 +138,12 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
     return "raised"
 
 
-def status(config: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-    """What the settings screen shows. ⚠️ `configured` SEPARATE FROM the id, so
-    a diagnostic can say "no list chosen" without putting an entity id on a
-    caller's stack that has no use for one."""
-    entity_id = list_for(config)
-    return {"configured": bool(entity_id), "list": entity_id,
-            "event_type": EVENT_TYPE}
+# ⚠️ `status()` WAS DELETED HERE, AND IT WAS MINE — written in 2.763.0 "for the
+# settings screen" and never wired to one. Nothing called it for three releases.
+# dry-audit Part 2's rule is that an instrument whose question nothing asks is
+# not neutral: it rots until somebody reads it as meaning something.
+#
+# The question it was meant to answer — "is the loop switched on" — already has
+# a better answer: the field on Act & Tell shows the configured list, and an
+# empty one IS the off state. A second reporter of the same fact is the drift
+# this repository keeps paying for.
