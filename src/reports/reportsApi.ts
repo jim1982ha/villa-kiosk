@@ -364,7 +364,7 @@ export type FacilityTask = {
 };
 
 export async function fetchTasks(): Promise<{ tasks: FacilityTask[]; reachable: boolean }> {
-  // ⚠️ THROUGH `ingressPath`, LIKE THE OTHER TEN CALLS IN THIS FILE. These two
+  // ⚠️ THROUGH `ingressPath`, LIKE THE OTHER EIGHT CALLS IN THIS FILE. These two
   // were bare relative fetches and worked only by accident: a relative URL
   // resolves against the DOCUMENT's directory, which matches the ingress base
   // solely because Home Assistant serves the SPA at `.../<token>/` with a

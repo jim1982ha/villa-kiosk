@@ -426,11 +426,29 @@ def test_an_unlisted_sender_gets_no_run_and_no_reply() -> None:
     from agent import audit as audit_mod
 
     before = len(audit_mod.rows(500))
-    assert _handle(_event(), config={"enabled": True,
-                                     "triggers": {"chat": True},
-                                     "allowed_senders": {}}) == "sender not allowed"
+    verdict = _handle(_event(), config={"enabled": True,
+                                        "triggers": {"chat": True},
+                                        "allowed_senders": {}})
+    # ⚠️ THE VERDICT IS NAMED IN THE MESSAGE BECAUSE THIS TEST FAILED ONCE,
+    # ON 2026-08-26, AND COULD NOT BE REPRODUCED IN SEVEN LATER RUNS OF THE
+    # FULL SUITE. A bare `==` prints both sides, but the run that failed was
+    # piped through `tail -3` and the detail was lost — so the one thing needed
+    # to diagnose it was thrown away by the person watching, which is this
+    # repository's `feedback_verify-by-exit-status` in its other direction.
+    #
+    # `_handle` reaches this verdict through TWO guards that read state this
+    # test does not set: `trigger_enabled`, and `is_fresh` against
+    # `collect.connected_seconds()` — a module-level global in another package
+    # that the autouse fixture does not reset. If this ever fires again, the
+    # message says which guard answered instead of leaving it to be guessed.
+    assert verdict == "sender not allowed", (
+        f"the handler refused for a different reason: {verdict!r}. If this "
+        "names a freshness or trigger guard, the cause is leaked module state "
+        "rather than the allow-list this test is about")
     rows = audit_mod.rows(500)[before:]
-    assert len(rows) == 1, f"expected one audit row, got {len(rows)}"
+    assert len(rows) == 1, (
+        f"expected one audit row, got {len(rows)}: "
+        f"{[r.get('tool') for r in rows]}")
     assert rows[0]["verdict"] == "refused"
     assert "222" not in str(rows[0]), (
         "the row must not record the prober's id verbatim")

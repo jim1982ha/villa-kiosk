@@ -23,9 +23,21 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 
 export default function RunCheckNow({ onDone }: { onDone?: () => void }) {
-  // ⚠️ THE SAME CAPABILITY THAT GATES EVERY OTHER AGENT CONTROL, read the same
-  // way `AgentProposals` reads it. A second spelling of "may this person spend
-  // the budget" is the drift this repository keeps paying for.
+  // ⚠️ `editConfig` MIRRORS THE SERVER, WHICH IS THE ONLY REASON TO PICK IT.
+  // `agent_run_now_handler` refuses anything but `_role_for(request) ==
+  // "owner"`, and `editConfig` is held by the owner alone — `ops` does not have
+  // it. So this hides a control the proxy would refuse anyway, rather than
+  // inventing a second opinion about who may spend the budget.
+  //
+  // ⚠️ AND IT IS DELIBERATELY NOT THE CAPABILITY MOST AGENT CONTROLS USE. This
+  // comment claimed `editConfig` was "the same capability that gates every
+  // other agent control"; /dry-audit checked and it is one of TWO vocabularies.
+  // `AgentProposals` is the only other `editConfig` reader — `AgentConcerns`,
+  // `AgentMemories` and `AgentReview` all use `manageFacility`, which the
+  // facility manager holds and the owner also holds. Those are content
+  // judgements the facility manager is meant to make; this spends money and is
+  // owner-only. Copying the wrong half of that sentence onto a concerns control
+  // would hide the facility manager's own workspace from them.
   const { role } = useProfile();
   const mayRun = role != null && hasCapability(role, "editConfig");
   const [busy, setBusy] = useState(false);

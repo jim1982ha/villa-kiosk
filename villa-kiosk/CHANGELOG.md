@@ -1,3 +1,12 @@
+## 2.772.0
+
+### Fixed — two comments that described the code inaccurately
+A note in the reports client counted ten sibling calls where there are eight,
+and the new "Check the villa now" button claimed its permission was the one
+gating every agent control. It gates one other; three use `manageFacility`
+instead. That sentence would have sent the next reader to hide the facility
+manager's own workspace from them. Comments only — no behaviour changed.
+
 ## 2.771.0
 
 ### Fixed — the escalation line counted concerns it then accounted for nowhere
