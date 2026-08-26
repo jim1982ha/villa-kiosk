@@ -1,3 +1,18 @@
+## 2.771.0
+
+### Fixed — the escalation line counted concerns it then accounted for nowhere
+The first end-to-end capture read `considered 2, sent 0, held 0, suppressed 0,
+stood down 0` — five numbers explaining neither concern. A warning never
+escalates and a recent critical is inside its first band; both verdicts were
+correct and neither had a counter, so a sweep working perfectly looked like one
+that had silently dropped two concerns. Each quiet outcome is now counted with
+its reason.
+
+### Changed — one CSV button on Recent requests, not two
+The pager row carried a second button calling the same download as the toolbar
+above it. The toolbar keeps it, beside the range picker that decides what an
+export would contain.
+
 ## 2.770.0
 
 ### Changed — the third footer button is gone, and the other two say what they do
