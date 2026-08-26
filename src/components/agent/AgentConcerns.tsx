@@ -151,10 +151,6 @@ export default function AgentConcerns() {
     );
   }
 
-  // ⚠️ NOTHING AT ALL WHEN THERE IS NOTHING, rather than a green "all clear".
-  // An empty concern list means nobody has raised anything — which is not the
-  // same as the villa being well, and the health headline above already speaks
-  // to that from data the kiosk measured itself.
   if (rows.length === 0) {
     // ⚠️ SILENCE IS ONLY HONEST WHEN IT MEANS "NOTHING WAS RAISED". While
     // "stay silent" is on, findings are written to a SEPARATE store that this
@@ -164,7 +160,27 @@ export default function AgentConcerns() {
     // finished, then shown an empty tab. Saying which of the two it is costs
     // one sentence and is the difference between a quiet villa and a broken
     // one.
-    if (!shadow) return null;
+    //
+    // ⚠️ AND `return null` WAS WRONG THE MOMENT THIS MOVED TABS. Rendering
+    // nothing was decided when this block sat on the Cockpit under a health
+    // headline that already spoke; on the Reason tab it left a step header
+    // over an empty pane — the exact "broken tier" read this file's own
+    // sibling comment warns about — and the owner asked whether an empty tab
+    // after an investigation was expected. One sentence answers it.
+    if (!shadow) {
+      return (
+        <>
+          <div className="settings-section-title">
+            Concerns — what the villa concluded
+          </div>
+          <p className="muted body-text">
+            No concerns right now. When an investigation decides something
+            needs your attention, it appears here — an investigation that
+            finds nothing raises nothing, and that is a complete answer.
+          </p>
+        </>
+      );
+    }
     return (
       <>
         <div className="settings-section-title">

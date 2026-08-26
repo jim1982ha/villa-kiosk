@@ -1,3 +1,14 @@
+## 2.794.0
+
+### Fixed — a flag doubled after Investigate, and said only its name
+The audit records a flag's life as several rows sharing one id; the panel drew
+one card per row, so pressing Investigate made the flag appear twice. Rows now
+merge into one card that says why triage flagged it (its own recorded reason),
+and — once settled — the outcome, the time, and whether it was your go-ahead
+or the villa acting alone, in visible text rather than hover-only tooltips.
+The Reason tab also says why an empty concern list is empty instead of
+rendering nothing.
+
 ## 2.793.0
 
 ### Fixed — CI's mypy step has been failing since 2.755.0's sweep

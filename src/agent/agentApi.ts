@@ -549,12 +549,35 @@ export interface TriagePass {
  *  ⚠️ READ FROM THE AUDIT, NOT PARSED OUT OF THE CHECK'S SENTENCE. The subject
  *  names are also in `detail` ("escalated 3 (…): A, B, C") and `subjectsOf`
  *  recovers them, but that form loses the run id — so it can say WHAT was
- *  flagged and never what became of it. These rows carry both. */
+ *  flagged and never what became of it. These rows carry both.
+ *
+ *  ⚠️ ONE FLAG PER RUN ID, MERGED FROM EVERY ROW THAT SHARES IT. The audit is
+ *  append-only — a flag's life is SEVERAL rows with one id (queued, then the
+ *  approval's link row, then the run's own start/end rows) — and the first cut
+ *  mapped rows 1:1, so pressing Investigate made the flag appear TWICE, both
+ *  copies "Settled". Reported from a screenshot the same day it shipped. The
+ *  merge folds the whole life into one object so the card can say what was
+ *  flagged, why, and what became of it, in order. */
 export interface CheckFlag {
   runId: string;
   subject: string;
+  /** Triage's own one-line reason — WHY this was flagged. From the queued (or
+   *  link) row's `detail`; empty on rows written before it was stored. */
+  reason: string;
+  /** When the check flagged it (the first row's timestamp, local ISO). */
+  flaggedAt: string;
   /** `awaiting-approval` while it waits for a person; otherwise how it ended. */
   verdict: string;
+  /** When it stopped waiting, if it has (the settling row's timestamp). */
+  settledAt: string;
+  /** `person` when someone pressed Investigate or Cancel; `villa` when the
+   *  villa investigated by itself. Empty while waiting. */
+  settledBy: "person" | "villa" | "";
+  /** The note typed when it was cancelled, if any. */
+  dismissNote: string;
+  /** How the investigation run itself ended (`answered` / `declined` /
+   *  `failed`), when one ran and reported back. Empty otherwise. */
+  runStatus: string;
 }
 
 /** A stored audit field that should be a number, or undefined if it is absent
@@ -646,23 +669,64 @@ export async function loadCheckFlags(): Promise<CheckFlag[]> {
   if (!r.ok) return [];
   const d = (await r.json().catch(() => null)) as { rows?: unknown } | null;
   const rows = Array.isArray(d?.rows) ? d!.rows : [];
-  return rows
-    .filter((x): x is Record<string, unknown> => {
-      if (!x || typeof x !== "object") return false;
-      const rec = x as Record<string, unknown>;
-      // ⚠️ A RUN ROW WITH A SUBJECT. Pass rows share the store and carry no
-      // subject; a run row without one is an investigation of something the
-      // model named itself, which belongs to no flag.
-      return String(rec.tool ?? "").startsWith("run:")
-          && String(rec.subject ?? "").trim() !== ""
-          && String(rec.run_id ?? "").includes("-e");
-    })
-    .map((x) => ({
-      runId: String(x.run_id ?? ""),
-      subject: String(x.subject ?? ""),
-      verdict: String(x.verdict ?? ""),
-    }));
+
+  // ⚠️ TWO PASSES OVER ONE CHRONOLOGICAL LIST. A row with a SUBJECT is what
+  // makes a flag exist (pass rows share the store and carry none; a run row
+  // without one is the model investigating something it named itself, which
+  // belongs to no flag). Every LATER row sharing the id — subject or not —
+  // tells the same flag's story onward: the approval's link row, a dismissal,
+  // the run's own answered/declined row. Mapping rows 1:1 here is what drew
+  // one flag twice after Investigate was pressed.
+  const flags = new Map<string, CheckFlag>();
+  for (const x of rows) {
+    if (!x || typeof x !== "object") continue;
+    const rec = x as Record<string, unknown>;
+    const runId = String(rec.run_id ?? "");
+    if (!runId.includes("-e") || !String(rec.tool ?? "").startsWith("run:")) {
+      continue;
+    }
+    const verdict = String(rec.verdict ?? "");
+    const detail = String(rec.detail ?? "");
+    const at = String(rec.at ?? "");
+    const subject = String(rec.subject ?? "").trim();
+    // ⚠️ `run:approved` IS THE PERSON MARKER. The queued row and an automatic
+    // investigation both carry the check's own trigger (`run:scheduled`,
+    // `run:manual`); only a pressed button records the `approved` trigger, and
+    // a dismissal writes `actor: "owner"` outright.
+    const byPerson = String(rec.tool ?? "") === "run:approved"
+                  || String(rec.actor ?? "") === "owner";
+
+    const known = flags.get(runId);
+    if (!known) {
+      if (!subject) continue; // a subject-less row cannot START a flag
+      flags.set(runId, {
+        runId, subject, flaggedAt: at, verdict,
+        reason: verdict === "dismissed" ? "" : detail,
+        settledAt: verdict === AWAITING_VERDICT ? "" : at,
+        settledBy: verdict === AWAITING_VERDICT ? ""
+                 : (byPerson ? "person" : "villa"),
+        dismissNote: verdict === "dismissed" ? detail : "",
+        runStatus: "",
+      });
+      continue;
+    }
+    // The run's own end rows say how the investigation itself finished.
+    if (!subject && verdict !== "started") known.runStatus = verdict;
+    if (!subject) continue;
+    if (verdict === AWAITING_VERDICT) continue; // a re-queue adds nothing
+    known.verdict = verdict;
+    known.settledAt = at;
+    known.settledBy = byPerson ? "person" : "villa";
+    if (verdict === "dismissed") known.dismissNote = detail;
+    else if (!known.reason) known.reason = detail;
+  }
+  return [...flags.values()];
 }
+
+/** The stored literal for "waiting for a person" — `agent/audit.py`'s
+ *  `AWAITING`, mirrored here because the merge above needs it three times and
+ *  a typo in one of them would silently mis-file a flag's whole life. */
+const AWAITING_VERDICT = "awaiting-approval";
 
 /** The check a flag belongs to: its own id with the `-eN` suffix removed. */
 export const checkIdOf = (flagRunId: string) =>

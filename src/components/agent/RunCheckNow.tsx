@@ -84,7 +84,7 @@ export default function RunCheckNow({ onDone }: { onDone?: () => void }) {
           it would push the heading's own row apart. */}
       {note && <p className="muted body-text" role="status">{note}</p>}
       <button className="btn ghost" disabled={busy} onClick={() => void run()}
-              title="Check the villa now — spends one request">
+              title="Run a check right now instead of waiting for the schedule. Costs about a cent; anything it flags appears in the list below.">
         {busy ? <Loader2 size={16} className="spin" aria-hidden />
               : <Play size={16} aria-hidden />}
         {/* ⚠️ THE WORDS GO AT THE PHONE TIER, THE ICON NEVER DOES. `.btn-label`

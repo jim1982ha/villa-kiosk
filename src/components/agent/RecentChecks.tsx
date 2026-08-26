@@ -76,7 +76,21 @@ export const subjectsOf = (reason: string) => {
 };
 
 
-/** One flag, drawn inside the check that raised it. */
+/** `2026-08-26T19:09:12` → `26 Aug 19:09` — short enough for a status line. */
+const whenOf = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.replace("T", " ").slice(0, 16);
+  return d.toLocaleString(undefined,
+    { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+};
+
+/** One flag, drawn inside the check that raised it.
+ *
+ *  ⚠️ A CARD THAT ANSWERS THE READER'S THREE QUESTIONS — what was flagged, why,
+ *  and what became of it — because "Jacuzzi Pump" on its own answers none of
+ *  them (reported from a screenshot: the reason was in the audit the whole
+ *  time and never mapped). The WHY is triage's own sentence, verbatim: it was
+ *  written to justify a closer look, which is exactly the reader's question. */
 function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
   flag: CheckFlag;
   /** The mode the CHECK ran under, not the villa's mode today. */
@@ -87,9 +101,31 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
   waiting: boolean;
   onDecide: (runId: string, action: "approve" | "dismiss") => void;
 }) {
+  // ⚠️ WHO SETTLED IT IS PART OF THE ANSWER. "person" is a pressed button —
+  // the merge reads it off the `approved` trigger and the dismissal's actor —
+  // and everything else was the villa acting on its own mode.
+  const byWhom = flag.settledBy === "person" ? " after your go-ahead"
+               : flag.settledBy === "villa" ? " by the villa itself" : "";
+  const at = flag.settledAt ? ` · ${whenOf(flag.settledAt)}` : "";
+
   return (
     <li className="fm-row body-text">
-      <span style={{ flex: 1 }}>{flag.subject}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div>{flag.subject}</div>
+        {/* Triage's reason: why this earned a closer look. Older audit rows
+            carry none, and an absent reason renders nothing rather than a
+            placeholder pretending one was recorded. */}
+        {flag.reason && (
+          <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
+            {flag.reason}
+          </div>
+        )}
+        {flag.dismissNote && (
+          <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
+            Note: {flag.dismissNote}
+          </div>
+        )}
+      </div>
 
       {/* ⚠️ THE AFFORDANCE FOLLOWS THE FLAG'S STATE FIRST AND THE MODE SECOND.
           A villa switched from Flag & Ask to Alert me still has flags that were
@@ -100,14 +136,14 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
         <>
           <button className="icon-btn" disabled={busy}
                   aria-label={`Investigate ${flag.subject}`}
-                  title="Click to investigate"
+                  title="Look into this now — one AI investigation, a few cents. The result lands on the Reason tab if anything is wrong."
                   onClick={() => onDecide(flag.runId, "approve")}>
             {busy ? <Loader2 size={16} className="spin" aria-hidden />
                   : <Search size={16} aria-hidden />}
           </button>
           <button className="icon-btn" disabled={busy}
                   aria-label={`Cancel ${flag.subject}`}
-                  title="Don’t investigate and dismiss"
+                  title="Skip it — nothing is spent. If it is still true, the next check flags it again."
                   onClick={() => onDecide(flag.runId, "dismiss")}>
             <X size={16} aria-hidden />
           </button>
@@ -117,24 +153,36 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
            (2.780.0). Before that a concern named its subject as a HASH of an
            entity id the flag usually does not carry, so this could only ever
            have said "no concern" — including when there was one. */
-        <span className="sev-warning" title={`Raised a concern: ${concern.title}. It is on the Reason tab.`}>
-          <AlertCircle size={16} aria-hidden /> Concern
+        <span className="sev-warning" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}, and it found something: “${concern.title}”. Read it on the Reason tab.`}>
+          <AlertCircle size={16} aria-hidden /> Concern{at}
         </span>
-      ) : mode === "live" ? (
-        <span className="muted" title="Investigated, and it concluded nothing worth raising. That is a complete answer, not a failure.">
-          <MinusCircle size={16} aria-hidden /> Nothing raised
+      ) : flag.verdict === "dismissed" ? (
+        <span className="muted" title={`Skipped${byWhom}, without spending anything. If it is still true, a later check flags it again.`}>
+          <MinusCircle size={16} aria-hidden /> Skipped{at}
+        </span>
+      ) : flag.runStatus === "failed" || flag.runStatus === "declined" ? (
+        <span className="sev-warning" title={`The investigation started${byWhom} but could not finish (${flag.runStatus}). Nothing was concluded — flag it again or check Spend & people for a budget stop.`}>
+          <AlertCircle size={16} aria-hidden /> Did not finish{at}
+        </span>
+      ) : flag.verdict === "escalated" || mode === "live" ? (
+        /* ⚠️ AN HONEST CLAIM, NOW PROVABLE PER FLAG. The merged audit rows say
+           an investigation RAN (`escalated`), and the concern store says
+           nothing came of it — so "looked at, found nothing to raise" is a
+           statement about THIS flag, not a guess from the villa's mode. */
+        <span className="muted" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}. It looked at the evidence and concluded nothing needs your attention — a complete answer, not a failure.`}>
+          <MinusCircle size={16} aria-hidden /> Looked into — all clear{at}
         </span>
       ) : mode === "observe" ? (
-        <span className="muted" title="Investigated. Anything it concluded is in your next briefing.">
-          <FileText size={16} aria-hidden /> In the briefing
+        <span className="muted" title="Investigated quietly. Whatever it concluded is written into your next briefing rather than sent as an alert.">
+          <FileText size={16} aria-hidden /> In your next briefing{at}
         </span>
       ) : (
-        /* ⚠️ NO MODE RECORDED — a check written before 2.785.0. Saying
-           "in the briefing" would be a claim about a setting nobody stored,
-           and it is FALSE in Flag & Ask, where nothing reaches the briefing.
-           "Settled" is the most this row can honestly say. */
-        <span className="muted" title="This flag was dealt with. The check that raised it did not record which mode it ran under.">
-          <MinusCircle size={16} aria-hidden /> Settled
+        /* ⚠️ NO MODE AND NO RUN RECORDED — a check written before 2.785.0.
+           Claiming "in the briefing" would be a claim about a setting nobody
+           stored, and it is FALSE in Flag & Ask. "Settled" is the most this
+           row can honestly say. */
+        <span className="muted" title="This flag was dealt with, but the check that raised it predates the record of how.">
+          <MinusCircle size={16} aria-hidden /> Settled{at}
         </span>
       )}
     </li>
