@@ -1,3 +1,8 @@
+## 2.778.0
+
+### Changed — "Worth a closer look" is now "Flagged checks"
+Both the populated and the empty state.
+
 ## 2.777.0
 
 ### Changed — the supervision modes are a ladder now, and named after their verbs
