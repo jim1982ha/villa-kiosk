@@ -197,6 +197,26 @@ def test_every_icon_only_concern_button_carries_a_TOOLTIP() -> None:
         f"{len(missing)} icon-only concern button(s) have no tooltip: {missing}")
 
 
+def test_no_JSX_attribute_carries_an_UNPROCESSED_escape() -> None:
+    """⚠️ JSX ATTRIBUTE STRINGS ARE NOT JAVASCRIPT STRINGS. `title="Don\\u2019t"`
+    renders the six characters `\\u2019` to the reader, because a JSX attribute
+    literal does not process backslash escapes. Found by /dry-audit on
+    2026-08-26 in a tooltip I had just written — it type-checks, it builds, and
+    it is only wrong on screen, which is this session's most repeated shape.
+
+    Use the character itself, or an HTML entity, or a `{"..."}` expression."""
+    bad = []
+    for path in _files("components"):
+        for n, line in enumerate(_read(path).splitlines(), 1):
+            if not re.search(r'(title|placeholder|aria-label|alt)="', line):
+                continue
+            if re.search(r'="[^"]*\\(u[0-9a-fA-F]{4}|n|t)', line):
+                bad.append(f"{os.path.basename(path)}:{n}")
+    assert not bad, (
+        f"JSX attribute(s) containing a backslash escape that will render "
+        f"literally: {bad}")
+
+
 # ── one hint, and short descriptions ────────────────────────────────────────
 
 def test_the_shared_controls_all_offer_a_hint() -> None:

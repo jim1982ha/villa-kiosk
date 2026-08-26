@@ -1,3 +1,9 @@
+## 2.788.0
+
+### Fixed — a tooltip showed six literal characters instead of an apostrophe
+A JSX attribute does not process backslash escapes, so "Don\u2019t investigate"
+reached the screen exactly as written. Pinned for every attribute in the app.
+
 ## 2.787.0
 
 ### Changed — the two controls sit where they act

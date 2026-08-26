@@ -107,7 +107,7 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
           </button>
           <button className="icon-btn" disabled={busy}
                   aria-label={`Cancel ${flag.subject}`}
-                  title="Don\u2019t investigate and dismiss"
+                  title="Don’t investigate and dismiss"
                   onClick={() => onDecide(flag.runId, "dismiss")}>
             <X size={16} aria-hidden />
           </button>
