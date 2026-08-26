@@ -42,6 +42,8 @@ export default function AgentQueue() {
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<string>("");
   const [done, setDone] = useState<string>("");
+  /** How many of a bulk dismiss are left, or null when none is running. */
+  const [clearing, setClearing] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setQueue(await loadApprovalQueue());
@@ -92,6 +94,38 @@ export default function AgentQueue() {
       await load();
     }, [load]);
 
+  // ⚠️ DISMISS ONLY, NEVER "INVESTIGATE ALL". One investigation is a frontier
+  // run; a button that starts twenty-four of them is one press between an owner
+  // and their whole daily ceiling, and there is no undo. Dismissing spends
+  // nothing and is the direction a mistake is survivable in.
+  //
+  // ⚠️ IT LOOPS THE SINGLE PATH RATHER THAN ADDING A BULK ROUTE. `decideEscalation`
+  // is what the server already authorises and audits per item, so a batch
+  // endpoint would be a second authority over the same decision — and the one
+  // nobody tests. Sequential, not `Promise.all`: each writes an audit row, and
+  // firing two dozen writes at one JSON store is how a read-modify-write store
+  // loses rows.
+  const dismissAll = useCallback(async () => {
+    const ids = (queue?.pending ?? []).map((i) => i.runId);
+    if (ids.length === 0) return;
+    setFailed("");
+    setDone("");
+    let failures = 0;
+    for (let i = 0; i < ids.length; i += 1) {
+      setClearing(ids.length - i);
+      const out = await decideEscalation(ids[i], "dismiss");
+      if (!out.ok) failures += 1;
+    }
+    setClearing(null);
+    // ⚠️ THE FAILURE COUNT IS SHOWN RATHER THAN THE LAST ERROR. Twenty-four
+    // requests produce twenty-four reasons and the last one is not the story;
+    // what an owner needs to know is whether the list is now empty.
+    if (failures) setFailed(`${failures} of ${ids.length} could not be dismissed.`);
+    setDone(`Dismissed ${ids.length - failures}. Anything still true will be `
+          + "flagged again by the next check.");
+    await load();
+  }, [queue, load]);
+
   // ⚠️ OWNER ONLY, AND SILENT OTHERWISE rather than shown-and-disabled. A
   // profile that can never press these has no use for the list, and the server
   // refuses them regardless — this only avoids rendering a row whose buttons
@@ -135,6 +169,26 @@ export default function AgentQueue() {
           `form-error` class that does not exist in styles.css — the error
           would have rendered as unstyled body text, which reads as part of
           the description rather than as a failure. */}
+      {/* ⚠️ THE WHOLE-LIST ACTION SITS ABOVE THE LIST, because on the reference
+          villa this queue reached TWENTY-FOUR items and the only way to clear it
+          was twenty-four presses — on a phone, scrolling between each. The items
+          were residue: `awaiting-approval` rows can only be written in "Ask me
+          first" mode, and once the villa moves to Observe or Live nothing can
+          ever drain them, because an item leaves only when a row with its own
+          run id is settled. A queue that cannot empty itself needs one control
+          that can. */}
+      {queue.pending.length > 1 && (
+        <div className="modal-actions" style={{ margin: "0 0 12px" }}>
+          <button className="btn ghost" onClick={() => void dismissAll()}
+                  disabled={clearing !== null || busy !== null}
+                  title="Dismiss every item here — spends nothing, and anything
+                         still true is flagged again by the next check">
+            {clearing !== null
+              ? <><Loader2 size={16} className="spin" aria-hidden /> Dismissing… {clearing} left</>
+              : <><X size={16} aria-hidden /> Dismiss all {queue.pending.length}</>}
+          </button>
+        </div>
+      )}
       {failed ? <p className="body-text sev-warning" role="alert">{failed}</p> : null}
       {/* ⚠️ `role="status"`, NOT `alert`. A completed investigation is not a
           problem, and an assertive live region interrupts a screen reader

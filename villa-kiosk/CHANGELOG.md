@@ -1,3 +1,13 @@
+## 2.775.0
+
+### Added — "Dismiss all" on the closer-look queue, which could not empty itself
+An `awaiting-approval` item is only ever written in "Ask me first" mode, and it
+only leaves the list when its own run id is settled. So a villa that has since
+moved to Observe or Live has a queue nothing can enter and nothing can drain —
+the reference villa held twenty-four, four of them the same phase and four the
+same pump. Clearing it meant one press per item. Dismiss only, never
+"investigate all": one investigation is a full frontier run.
+
 ## 2.774.0
 
 ### Fixed — every facility manager job would have been lost on a Shopping List
