@@ -4270,6 +4270,28 @@ label.toggle span { user-select: none; line-height: 1.4; }
 button.cockpit-attention-row.tappable { cursor: pointer; }
 button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
 .cockpit-attention-icon { flex: 0 0 auto; }
+
+/* ── a concern row: its four facts stacked, the sentence given the width ────
+   ⚠️ THEY USED TO BE INLINE WITH THE TITLE. Severity, source, lifecycle and
+   whether it was sent are four short things and the title is a full sentence,
+   so laying all five in one flex line squeezed the only part that says what
+   happened — reported as needing more space for the description. Stacked, the
+   four take one narrow column and the sentence takes the rest.
+   ⚠️ `align-items: flex-start` SO THE CHIPS DO NOT STRETCH to the column's
+   width; a pill as wide as the widest sibling reads as a button. */
+.concern-meta {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 4px; flex: 0 0 auto; max-width: 45%;
+}
+.concern-text { flex: 1 1 220px; min-width: 0; }
+/* ⚠️ ON A PHONE THE TWO COLUMNS BECOME TWO ROWS. At 360 CSS px a 45% meta
+   column leaves the sentence ~180px, which wraps every two words. The parent
+   already wraps (`.editable-row-fields`), so this only has to release the
+   width cap and let each take a full line. */
+@media (max-width: 560px) {
+  .concern-meta { max-width: 100%; flex-direction: row; flex-wrap: wrap; }
+  .concern-text { flex: 1 1 100%; }
+}
 /* These two were SWAPPED, which inverted the one distinction the status
    vocabulary exists to protect (utils/stateColors, babylon/colors): amber is
    "Home Assistant has lost contact, the state is unknown", red is "a confirmed

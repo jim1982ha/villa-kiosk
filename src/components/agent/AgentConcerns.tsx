@@ -154,10 +154,45 @@ export default function AgentConcerns() {
           explanation, not for the noun somebody is searching for — so the
           section carries both. */}
       <div className="settings-section-title">Concerns — what the villa concluded</div>
+      {/* ⚠️ "Nothing done yet" READS AS "SOMETHING IS STILL COMING" AND IT IS
+          NOT. Reported: two delivered warnings sitting at that state, and
+          "I didn't click to stop escalating, though I don't see any escalation
+          anywhere". Nothing is wrong — `route.escalate`'s FIRST line is
+          `if severity != "critical": return (False, "", "only a critical
+          escalates")`, so a warning is sent once and then waits for a person,
+          by design. What was missing is anywhere saying so: the chip describes
+          the concern's own state and the reader infers a chase that was never
+          going to happen. */}
+      <p className="muted body-text">
+        A warning is sent once and then waits for you.
+        <InfoHint label="What gets chased">
+          <p>
+            Only a critical concern is chased. If nobody acknowledges one, the
+            villa re-sends it, and then brings the owner in.
+          </p>
+          <p>
+            A warning is told to you once. It stays here at &ldquo;nothing done
+            yet&rdquo; until somebody acts on it or the condition stops on its
+            own — nothing further will arrive on your phone about it.
+          </p>
+          <p>
+            So a warning sitting here is the system working, not a chase that
+            failed.
+          </p>
+        </InfoHint>
+      </p>
       <div className="cockpit-attention-list">
         {rows.map((c) => (
           <div className="editable-row" key={c.id}>
             <div className="editable-row-fields" style={{ alignItems: "flex-start" }}>
+              {/* ⚠️ THE FOUR FACTS ARE ONE BLOCK, STACKED, NOT FOUR SIBLINGS OF
+                  THE TITLE (2.765.0). They sat inline with it, so on any real
+                  concern the title was squeezed into whatever was left after
+                  three chips and a word — and the title is the only part that
+                  says what actually happened. Reported: "give more space to
+                  description". Stacked, they occupy one narrow column and the
+                  sentence gets the rest of the row. */}
+              <div className="concern-meta">
               <span className={`cockpit-concern-sev cockpit-sev-${c.severity}`}>
                 {String(c.severity)}
               </span>
@@ -185,7 +220,8 @@ export default function AgentConcerns() {
               ) : (
                 <span className="muted body-text">not sent yet</span>
               )}
-              <span className="body-text" style={{ flex: "1 1 200px", minWidth: 0 }}>
+              </div>
+              <span className="body-text concern-text">
                 {c.title}
               </span>
             </div>

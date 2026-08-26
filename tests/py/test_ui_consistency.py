@@ -643,3 +643,59 @@ def test_a_multi_paragraph_tooltip_is_SPACED() -> None:
     assert ".info-hint-bubble p {" in css and ".info-hint-bubble p + p" in css, (
         "hint paragraphs have no spacing rule, so a split hint renders with "
         "browser-default 1em gaps or none at all")
+
+
+def test_the_actuation_SWITCH_sits_with_the_LIST_it_is_anded_with() -> None:
+    """⚠️ ITS TOOLTIP HAD TO END IN A CROSS-REFERENCE, AND THAT WAS THE TELL.
+    The switch lived under Settings and the device allow-list on Act & Tell, so
+    the hint finished "what it may touch is listed on Act & Tell, both must
+    agree" — pointing at something the reader could not see, and after 2.759.0
+    not even in the same dialog. Reported as "there is no list and the text is
+    not clear about it".
+
+    The fix was not better wording. Two halves of one authority decision on two
+    screens is what the sentence existed to paper over.
+    """
+    act = _read(os.path.join(SRC, "components", "agent",
+                             "ActDeliverySection.tsx"))
+    tuning = _read(os.path.join(SRC, "components", "settings",
+                                "AgentTuningPanel.tsx"))
+    assert "draft.actEnabled" not in tuning and "actEnabled: c." not in tuning, (
+        "the actuation switch is back on the tuning panel, away from the list "
+        "it is AND-ed with")
+    assert "actEnabled" in act and "ActuableDevicesPanel" in act, (
+        "the switch and its allow-list are no longer on the same screen")
+    assert act.index("actEnabled") < act.index("<ActuableDevicesPanel"), (
+        "the switch renders after its own list, so the list appears before "
+        "anything has said what it is for")
+
+
+def test_the_concerns_list_says_WHAT_GETS_CHASED() -> None:
+    """⚠️ "Nothing done yet" READS AS "SOMETHING IS STILL COMING" AND IT IS NOT.
+    `route.escalate` refuses on its first line for anything that is not
+    critical, so a warning is delivered once and then waits for a person — and
+    no screen said so. An owner watching two delivered warnings sit at that
+    state reasonably concluded a chase had failed or been switched off.
+
+    ⚠️ THE COPY IS PINNED AGAINST THE RULE, NOT RESTATED. If `escalate` ever
+    starts chasing warnings, this goes red rather than the screen quietly
+    lying.
+    """
+    import re as _re
+    root = os.path.dirname(SRC)
+    with open(os.path.join(root, "rootfs", "usr", "bin", "agent", "route.py"),
+              encoding="utf-8") as handle:
+        route = handle.read()
+    critical_only = _re.search(
+        r'if str\(severity\)\.lower\(\) != "critical":\s*\n\s*return Escalation\(False',
+        route)
+    concerns = _read(os.path.join(SRC, "components", "agent",
+                                  "AgentConcerns.tsx"))
+    if critical_only:
+        assert "waits for you" in concerns and "Only a critical" in concerns, (
+            "only critical concerns are chased and no screen says so, so a "
+            "delivered warning reads as a chase that failed")
+    else:
+        assert "Only a critical" not in concerns, (
+            "the copy still says only a critical is chased, and the ladder no "
+            "longer works that way")

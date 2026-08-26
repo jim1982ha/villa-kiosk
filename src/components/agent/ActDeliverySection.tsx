@@ -18,6 +18,7 @@
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import InfoHint from "@/components/common/InfoHint";
 import ActuableDevicesPanel from "@/components/settings/ActuableDevicesPanel";
+import ToggleField from "@/components/common/ToggleField";
 
 export default function ActDeliverySection() {
   const ctx = useAgentConfigDraft();
@@ -110,6 +111,35 @@ export default function ActDeliverySection() {
         <span>Caretaker to-do list</span>
       </label>
 
+      <div className="settings-section-title">
+        What it may do without asking
+      </div>
+      {/* ⚠️ THE GATE ON TOUCHING THE VILLA, AND IT SHIPS CLOSED (ADR-023).
+          Home Assistant's own MCP add-on is where the villa's readings come
+          from, and its tool surface includes calling services, deleting
+          entities and restarting Home Assistant. `act_enabled` is the switch
+          that decides whether any of that is reachable — it has existed and
+          defaulted to false since the agent was written, and nothing in
+          Settings could see it, so an owner had no way to know the promise was
+          being kept. A guarantee nobody can check is not a guarantee. */}
+      <ToggleField
+        checked={c.actEnabled === true}
+        onChange={(actEnabled: boolean) => edit({ actEnabled })}
+        label="Let it operate devices, not just watch them"
+        note="Off, it reads and tells you and cannot change a switch, light or lock."
+        disabled={ctx.saving}
+        more={<>
+          <p>
+            Every other setting decides how much it looks and who it tells.
+            This one decides whether it may touch anything at all.
+          </p>
+          <p>Leave it off unless you have a reason.</p>
+          <p>
+            It only ever touches what you add to the list below. The switch and
+            the list must both allow it.
+          </p>
+        </>}
+      />
       {/* ⚠️ THE ALLOW-LIST LIVES WITH THE TIER THAT ENFORCES IT. It is only
           consulted here, at the authority boundary, and it is AND-ed with the
           master switch on the Settings tab — so an owner who turns actuation on

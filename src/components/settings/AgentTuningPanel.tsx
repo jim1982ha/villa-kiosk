@@ -43,7 +43,7 @@ const MIN_TRIAGE_MINUTES = 5;
  *  would make this app the thing that has to ship for a new model to be usable,
  *  which is exactly what that decision avoided. */
 type Draft = Pick<AgentConfig,
-  "enabled" | "mode" | "actEnabled" | "mcpUrl" | "triageMinutes" | "monthlyLimit"
+  "enabled" | "mode" | "mcpUrl" | "triageMinutes" | "monthlyLimit"
   | "dailyUsdLimit" | "haTools"
   | "depth" | "maxOutputTokens"
   | "maxInvestigationsPerPass" | "quietHoursStart" | "quietHoursEnd" | "modelTriage" | "modelReason" | "modelBrief"
@@ -51,7 +51,7 @@ type Draft = Pick<AgentConfig,
   & { triggers: AgentConfig["triggers"] };
 
 const EMPTY: Draft = {
-  enabled: false, mode: "observe", actEnabled: false, mcpUrl: "", triageMinutes: 15, monthlyLimit: 4000,
+  enabled: false, mode: "observe", mcpUrl: "", triageMinutes: 15, monthlyLimit: 4000,
   haTools: false,
   dailyUsdLimit: 0, depth: "brief", maxOutputTokens: 8192,
   maxInvestigationsPerPass: 2,
@@ -270,10 +270,6 @@ export default function AgentTuningPanel() {
     // by a NEWER version survives a downgrade untouched (`config.view` keeps
     // unknown keys), so this can be handed a word it has never heard of.
     mode: (c.mode === "live" || c.mode === "ask") ? c.mode : "observe",
-    // ⚠️ FALSE WHEN ABSENT, matching the backend. Reading a missing
-    // `act_enabled` as true would render "may operate devices" for a villa
-    // that cannot — the most misleading possible direction for this flag.
-    actEnabled: c.actEnabled === true,
     mcpUrl: String(c.mcpUrl ?? ""),
     triageMinutes: Number(c.triageMinutes ?? EMPTY.triageMinutes),
     monthlyLimit: Number(c.monthlyLimit ?? EMPTY.monthlyLimit),
@@ -491,34 +487,16 @@ export default function AgentTuningPanel() {
         onChange={(v) => edit({ maxInvestigationsPerPass: v })}
       />
 
-      <div className="settings-section-title">
-        What it may do without asking
-      </div>
-      {/* ⚠️ THE GATE ON TOUCHING THE VILLA, AND IT SHIPS CLOSED (ADR-023).
-          Home Assistant's own MCP add-on is where the villa's readings come
-          from, and its tool surface includes calling services, deleting
-          entities and restarting Home Assistant. `act_enabled` is the switch
-          that decides whether any of that is reachable — it has existed and
-          defaulted to false since the agent was written, and nothing in
-          Settings could see it, so an owner had no way to know the promise was
-          being kept. A guarantee nobody can check is not a guarantee. */}
-      <ToggleField
-        checked={draft.actEnabled}
-        onChange={(actEnabled) => edit({ actEnabled })}
-        label="Let it operate devices, not just watch them"
-        note="Off, it reads and tells you and cannot change a switch, light or lock."
-        more={<>
-          <p>
-            Every other setting here decides how much it looks and who it tells.
-            This one decides whether it may touch anything at all.
-          </p>
-          <p>Leave it off unless you have a reason.</p>
-          <p>
-            What it may touch is listed on Act &amp; Tell. Both that list and
-            this switch must agree before anything happens.
-          </p>
-        </>}
-      />
+      {/* ⚠️ "What it may do without asking" MOVED TO ACT & TELL IN 2.765.0,
+          NEXT TO THE LIST IT IS AND-ED WITH. It lived here while the device
+          allow-list lived on Act & Tell, so its tooltip had to END with a
+          cross-reference — "what it may touch is listed on Act & Tell, both
+          must agree" — pointing at something the reader could not see, and
+          since 2.759.0 not even in the same dialog. Reported: "there is no
+          list and the text is not clear about it".
+          ⚠️ THE FIX WAS NOT BETTER WORDING. Two halves of one authority
+          decision, two screens: the sentence existed to paper over the split.
+          Put them together and it is not needed at all. */}
       {/* ⚠️ THE DEVICE ALLOW-LIST MOVED TO "ACT & TELL" IN 2.729.0. It is
           AND-ed with the switch above, so it belongs beside it in principle —
           but it is only ever CONSULTED at the authority boundary, and putting
