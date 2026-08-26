@@ -1,3 +1,13 @@
+## 2.792.0
+
+### Fixed — CI was still red after 2.791.0, on two environment gaps
+Both latent, unmasked once collection succeeded. The kiosk/briefing parity
+pin runs the shipped TypeScript through node and its imports reach real npm
+packages — the CI job never installed them, so 25 parity tests failed with
+ERR_MODULE_NOT_FOUND; the workflow now runs `npm ci` first. And one cost test
+imports the gitignored `docs/refdata`, absent on CI by design (ADR-018) — it
+now skips where `docs/` does not exist, like `test_docs_current` always has.
+
 ## 2.791.0
 
 ### Fixed — CI failed to collect the test suite on the deploy workflow
