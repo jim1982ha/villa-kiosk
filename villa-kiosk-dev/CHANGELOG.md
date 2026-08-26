@@ -1,3 +1,14 @@
+## 2.796.0
+
+### Changed — the reflex blueprints stopped reporting into VESTA
+TASK-067 is live on the reference villa: the six reporting critical_*
+blueprints no longer carry rule_id, report_bucket or severity and no longer
+emit a vesta event — they trigger, they push, and that is all, so they work
+with the add-on stopped. All twelve critical automations verified still on.
+The rest of Phase 5 is recorded as blocked on one remaining decision: the
+weekly channel-test canary is the last thing emitting a VESTA event, and the
+parser cannot be deleted while anything still produces one.
+
 ## 2.795.0
 
 ### Added — the assistant can now run the three statistical checks itself
