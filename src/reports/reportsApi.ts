@@ -74,6 +74,18 @@ export interface ReportsDiagnostics {
     silentTypes: string[];
     lastEventAt: string;
   };
+  /** The rolling record of entity state changes — what the CHECKS read.
+   *  ⚠️ NOT `collector`, WHICH THIS TAB SHOWED INSTEAD UNTIL 2.786.0. The
+   *  collector is subscribed to `vesta_*_event` and `telegram_text`, never to
+   *  `state_changed`, so a light turning on moved nothing on that screen. */
+  journal: {
+    entries: number;
+    bound: number;
+    atBound: boolean;
+    spanDays: number;
+    rowsPerDay: number;
+    entities: number;
+  };
 }
 
 /** The composed prose plus the diagnostic surface, from a PREVIEW.
@@ -625,6 +637,7 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
     if (!r.ok) return null;
     const d = obj(await r.json());
     const collector = obj(d.collector);
+    const journal = obj(d.journal);
     return {
       ready: bool(d.ready),
       contractVersion: num(d.contract_version),
@@ -686,6 +699,14 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
         blueprintCategories: strs(collector.blueprint_categories),
         silentTypes: strs(collector.silent_types),
         lastEventAt: str(collector.last_event_at),
+      },
+      journal: {
+        entries: num(journal.entries),
+        bound: num(journal.bound),
+        atBound: bool(journal.at_bound),
+        spanDays: num(journal.span_days),
+        rowsPerDay: num(journal.rows_per_day),
+        entities: num(journal.entities),
       },
     };
   } catch {

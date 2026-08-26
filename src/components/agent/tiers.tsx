@@ -298,6 +298,13 @@ export const FAMILIES: Record<string, { role: string; reflex?: true }> = {
   // vesta_maintenance/audit/roi events and emits none of its own; the collector
   // subscribed to `vesta_vesta_event` only because it derives the event name
   // from the blueprint's filename prefix. Neither count will ever move.
-  control: { role: "operates devices; never reports, so it has no count here" },
+  // ⚠️ `reflex: true` — IT ACTS BY ITSELF, WHICH IS THE ONLY TEST THIS TIER
+  // APPLIES. It was unmarked, so the one other family that genuinely belongs on
+  // the Reflex tab was indistinguishable from the retired detection families
+  // listed beside it.
+  control: {
+    role: "turns things on and off by itself; reports nothing, so it has no count",
+    reflex: true,
+  },
   vesta: { role: "handles the to-do actions in a brief; emits nothing itself" },
 };

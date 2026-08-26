@@ -1,3 +1,16 @@
+## 2.786.0
+
+### Fixed — Observe was showing a different subsystem entirely
+"Changes recorded" counted blueprint events, not entity state changes, so a
+light turning on moved nothing. The tiles now read the journal — the record the
+checks actually reason over — and say how many devices are watched and how much
+history is held, with a warning when the record is full.
+
+### Changed — Reflex lists only what acts by itself
+Retired detection families were listed on the tier whose definition is "acts on
+its own, in under a second". Only the rules that operate something appear now,
+and the explanation sits above the table rather than after it.
+
 ## 2.785.0
 
 ### Fixed — the moon drew its own complement, so a full moon looked black

@@ -36,27 +36,50 @@ export function ReflexTab({ diagnostics }: {
   diagnostics: ReportsDiagnostics | null;
 }) {
   const c = diagnostics?.collector;
-  const families = c?.blueprintCategories ?? [];
+  // ⚠️ ONLY WHAT ACTS BY ITSELF. This listed EVERY blueprint family the
+  // collector knows about — including `maintenance` and `roi`, which are
+  // retired detection the assistant replaced, and `audit`, which is a channel
+  // test. None of them acts on anything. Tier 0's whole definition is "acts on
+  // its own, in under a second, with no AI", so a family that only REPORTS has
+  // no business on this tab; listing it invited the reader to think this tier
+  // still does the villa's detecting. Reported as confusing and irrelevant, and
+  // it was both.
+  const families = (c?.blueprintCategories ?? [])
+    .filter((cat) => FAMILIES[cat]?.reflex);
   return (
     <div className="reports-pane">
       <TierIntro tier={TIERS.reflex} />
 
       <h3 className="settings-section-title">What acts on its own</h3>
-      {/* ⚠️ THE COUNT IS EVIDENCE THEY ARE WIRED, AND THE ROLE IS WHY THEY ARE
-          KEPT. Those are opposite questions and this list used to answer only
-          the first: a family that has never fired looks identical to one that
-          does not exist, and a family being retired looked identical to one
-          that is permanent. */}
+      {/* ⚠️ ABOVE THE TABLE, NOT UNDER IT. Nothing follows a table anywhere else
+          in this app, and this paragraph is the ANSWER to the question the table
+          raises rather than a footnote to it: these are the only rules left, and
+          the assistant does not depend on them. `sources.build_document` — the
+          only thing triage ever reads — is the observation journal, salience,
+          the open concerns, the facility ledger and coverage. No blueprint
+          output reaches it. */}
+      <p className="muted body-text">
+        These act by themselves, with no assistant and no internet. Everything
+        else the villa notices is judged by the assistant instead.
+        <InfoHint label="Why these stay">
+          <p>
+            A leak has to close a valve in under a second, with no internet and
+            nothing thinking about it first — no assistant can promise that.
+          </p>
+          <p>
+            The rules that only REPORTED have been retired, and nothing is lost:
+            the assistant never read their output. It watches the villa&apos;s
+            own readings directly, so switching one off takes nothing away from
+            what it can notice.
+          </p>
+        </InfoHint>
+      </p>
       {/* ⚠️ A GRID, NOT `.reports-list`. Each row carried a name, a chip, a
           sentence and a count in one flex line, so on a phone every row wrapped
           differently and the counts landed under the prose instead of in a
           column — reported as barely readable. Three tracks give the name, the
-          role and the count one position each, and the count is right-aligned
-          with tabular figures so the numbers line up.
-          ⚠️ AND THE PER-ROW "Safety reflex" CHIP IS GONE. The step header
-          already carries it; repeating it on the one row it applies to said the
-          same thing twice in the same glance. What the row needs is what makes
-          it DIFFERENT from its neighbours, which is the sentence. */}
+          role and the count one position each, right-aligned with tabular
+          figures so the numbers line up. */}
       <dl className="reflex-table">
         {families.map((cat) => {
           const seen = c?.seenTypes[`vesta_${cat}_event`] ?? 0;
@@ -76,36 +99,12 @@ export function ReflexTab({ diagnostics }: {
         })}
         {families.length === 0 && (
           <p className="muted body-text">
-            None are installed. Nothing on this property acts by itself, and the
-            checks in Briefings do the watching instead.
+            None are installed, so nothing on this property acts by itself.
+            The assistant still watches and tells you; it just cannot close a
+            valve for you.
           </p>
         )}
       </dl>
-      {/* ⚠️ THIS PARAGRAPH IS WHERE THE OWNER'S QUESTION LANDED: does the
-          assistant depend on these? It does not, and saying so plainly is worth
-          more than any of the rows above. `sources.build_document` — the only
-          thing the assistant ever reads — is the observation journal, salience,
-          its own concerns, the facility ledger and coverage. No blueprint
-          output reaches it. */}
-      {/* ⚠️ ONE LINE PLUS AN (i), NOT TWO PARAGRAPHS. Both of these were
-          RATIONALE — why the safety rules stay, why retiring the others costs
-          nothing — which is exactly what a tooltip is for: it answers the reader
-          who doubts the line and costs nothing to the reader who does not. */}
-      <p className="muted body-text">
-        Only the safety ones survive the move to an assistant. The rest are
-        being retired, and nothing is lost by it.
-        <InfoHint label="Why the safety rules stay">
-          A leak has to close a valve in under a second, with no internet and
-          nothing thinking about it first — no assistant can promise that. The
-          rest are retired because the assistant already does their job better,
-          and it does not read them to do it: it watches the villa&apos;s own
-          readings directly, so switching an automation off takes nothing away
-          from what it can notice. The one place the two meet is the briefing —
-          while an automation still reports something, the briefing prefers its
-          wording for that same piece of equipment, so nothing is said twice and
-          nothing disappears on the day you retire one.
-        </InfoHint>
-      </p>
     </div>
   );
 }
@@ -114,6 +113,10 @@ export function ObserveTab({ diagnostics }: {
   diagnostics: ReportsDiagnostics | null;
 }) {
   const c = diagnostics?.collector;
+  // ⚠️ TWO DIFFERENT INPUTS, AND CONFLATING THEM IS WHAT THIS TAB DID. `c` is
+  // the blueprint-event collector; `j` is the journal of entity state changes,
+  // which is the one the checks reason over.
+  const j = diagnostics?.journal;
   return (
     <div className="reports-pane">
       <TierIntro tier={TIERS.observe} />
@@ -131,25 +134,45 @@ export function ObserveTab({ diagnostics }: {
             + "empty window."}
       </div>
 
+      {/* ⚠️ THE JOURNAL, NOT THE COLLECTOR. This block showed `collector` —
+          which counts BLUEPRINT EVENTS (`vesta_*_event`, `telegram_text`) and
+          is not subscribed to `state_changed` at all — under a heading claiming
+          it was what the checks read. So a light turning on moved nothing here,
+          and the owner asked why. The checks read the JOURNAL: every entity
+          polled on the observation cycle, every material change written down.
+          The collector is a separate input and is nearly silent now that the
+          blueprints it listens to are retired, which is why it is one line
+          below rather than three tiles. */}
       <h3 className="settings-section-title">What the checks read</h3>
       <dl className="reports-facts">
         <div>
           <dt>Changes recorded</dt>
-          <dd>{num(c?.buffered ?? 0)}</dd>
-        </div>
-        {/* ⚠️ DROPS ARE SHOWN EVEN AT ZERO, unlike most counters here. A gap in
-            the record is the one fault that makes the tiers above quietly
-            wrong, so its absence has to be readable as "checked, none" rather
-            than as "not measured". */}
-        <div>
-          <dt>Changes missed</dt>
-          <dd>{num(c?.drops ?? 0)}</dd>
+          <dd>{num(j?.entries ?? 0)}</dd>
         </div>
         <div>
-          <dt>Recording since</dt>
-          <dd>{ago(c?.connectedSince ?? "") || "—"}</dd>
+          <dt>Devices watched</dt>
+          <dd>{num(j?.entities ?? 0)}</dd>
+        </div>
+        <div>
+          {/* ⚠️ THE DEPTH ON HAND, NOT THE DESIGN FIGURE. `salience` is built
+              around 28 days; what the villa actually holds is whatever fits the
+              ring at its own change rate. Saying the design number here is the
+              claim this screen was corrected for once already. */}
+          <dt>History held</dt>
+          <dd>{j?.spanDays
+            ? `${j!.spanDays.toFixed(1)} days` : "—"}</dd>
         </div>
       </dl>
+      {/* ⚠️ THE RING IS BOUNDED AND SAYS SO WHEN IT BINDS. At the bound the
+          oldest changes are being dropped, which silently shortens every window
+          the checks reason over — the one fact about this store that changes
+          what the tiers above can conclude. */}
+      {j?.atBound && (
+        <p className="body-text sev-warning" role="status">
+          The record is full at {num(j!.bound)} changes, so the oldest are
+          being dropped. Checks can only reason over what is left.
+        </p>
+      )}
       {/* ⚠️ "FOUR WEEKS OF HISTORY" WAS A CLAIM THIS SCREEN CANNOT KEEP, and it
           was mine. Four weeks is the scoring window's DESIGN figure; what the
           villa actually holds is whatever fits in the rolling record, which at
@@ -174,7 +197,7 @@ export function ObserveTab({ diagnostics }: {
 
       {c?.silentTypes && c.silentTypes.length > 0 && (
         <>
-          <h3 className="settings-section-title">Nothing recorded from</h3>
+          <h3 className="settings-section-title">Blueprint events not seen</h3>
           {/* ⚠️ A ZERO IS AMBIGUOUS AND MUST SAY SO: either nothing of that kind
               happened, or that source does not report at all. The second is what
               once hid an entire alert tier. */}

@@ -811,3 +811,47 @@ def test_the_APP_never_shows_the_word_caretaker_either() -> None:
     assert not offenders, (
         "the app says 'caretaker'; this product says Facility Manager:\n  "
         + "\n  ".join(offenders))
+
+
+def test_the_reflex_tab_lists_ONLY_what_acts_by_itself() -> None:
+    """⚠️ IT LISTED EVERY BLUEPRINT FAMILY, INCLUDING THE RETIRED ONES. Tier 0's
+    whole definition is "acts on its own, in under a second, with no AI" — so
+    `maintenance` and `roi`, which are retired DETECTION the assistant replaced,
+    and `audit`, which is a channel test, have no business on that tab. Listing
+    them invited the reader to think this tier still does the villa's detecting.
+    Reported as confusing and irrelevant, and it was both."""
+    src = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    code = "\n".join(l for l in src.splitlines()
+                      if not l.strip().startswith("//"))
+    assert "FAMILIES[cat]?.reflex" in code, (
+        "the Reflex tab no longer filters to families that ACT, so retired "
+        "detection rules are listed as things that act on their own")
+
+    fam = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    # ⚠️ THE TWO THAT ACT. `critical` closes valves and sounds alarms; `control`
+    # turns lights and fans on and off. Everything else only ever reported.
+    for name in ("critical", "control"):
+        block = fam[fam.index(f"  {name}: {{"):]
+        assert "reflex: true" in block[:400], (
+            f"{name} is no longer marked as a reflex, so it drops off the tab "
+            "that exists to list what acts by itself")
+
+
+def test_the_observe_tab_reads_the_JOURNAL_not_the_event_collector() -> None:
+    """⚠️ THE TAB DESCRIBED A DIFFERENT SUBSYSTEM. It showed `collector`, which
+    counts BLUEPRINT EVENTS (`vesta_*_event`, `telegram_text`) and is not
+    subscribed to `state_changed` at all — under a heading claiming it was what
+    the checks read. So a light turning on moved nothing, and the owner asked
+    why. The checks read the JOURNAL: every entity polled on the observation
+    cycle, every material change written down."""
+    src = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    code = "\n".join(l for l in src.splitlines()
+                      if not l.strip().startswith("//"))
+    head = code[code.index("What the checks read"):]
+    head = head[:head.index("</dl>")]
+    assert "j?.entries" in head, (
+        "the 'what the checks read' tiles no longer show the journal, so the "
+        "screen is describing the blueprint-event collector again")
+    assert "buffered" not in head, (
+        "the collector's event buffer is back under a heading about what the "
+        "checks read — those are different subsystems")

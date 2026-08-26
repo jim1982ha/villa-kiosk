@@ -3068,6 +3068,30 @@ async def reports_secret_put_handler(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "configured": bool(value.strip())})
 
 
+def _journal_facts() -> Dict[str, Any]:
+    """What the villa has recorded, for the Observe tab. Never raises.
+
+    ⚠️ A SUBSET, NOT THE WHOLE SNAPSHOT. `heartbeat.snapshot()` also carries
+    `talkers` — the entity ids that fill the ring fastest — which is a
+    diagnostic for deciding whether to raise the bound, and putting real entity
+    ids on a screen anyone can photograph is not something a tab needs to do.
+    """
+    try:
+        from observe import heartbeat as observe_heartbeat
+        snap = observe_heartbeat.snapshot()
+        return {
+            "entries": snap.get("entries"),
+            "bound": snap.get("bound"),
+            "at_bound": snap.get("at_bound"),
+            "span_days": snap.get("span_days"),
+            "rows_per_day": snap.get("rows_per_day"),
+            "entities": snap.get("entities"),
+        }
+    except Exception as err:  # noqa: BLE001 - a diagnostic never fails a page
+        print(f"[supervisor-proxy] journal facts unavailable: {err}", flush=True)
+        return {}
+
+
 async def reports_diagnostics_handler(request: web.Request) -> web.Response:
     """What this deployment can and cannot analyse.
 
@@ -3128,6 +3152,20 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
         # categories. Without this the only way to tell "nothing happened" from
         # "nothing is listening" is to read a file on the host.
         "collector": reports_collect.state(),
+        # ⚠️ THE JOURNAL, WHICH IS WHAT THE CHECKS ACTUALLY READ — and no figure
+        # from it reached the browser until 2.786.0. The Observe tab showed only
+        # `collector`, which counts BLUEPRINT EVENTS (`vesta_*_event`,
+        # `telegram_text`) and is not subscribed to `state_changed` at all. So a
+        # light turning on moved nothing on that screen, the owner asked why,
+        # and the honest answer was that the screen was describing a different
+        # subsystem. Worse, 2.781.0 relabelled its heading "What the checks
+        # read", which made a true-ish label into a false one.
+        #
+        # ⚠️ `heartbeat.snapshot()` ALREADY COMPUTES ALL OF THIS for the hourly
+        # log — entries, bound, span, rate, entity count. Recomputing it here
+        # would be a second answer to one question; this is the same call the
+        # log line uses.
+        "journal": _journal_facts(),
         # ⚠️ WHEN EACH SCHEDULE NEXT FIRES, COMPUTED BY THE SCHEDULER'S OWN
         # FUNCTION. The dialog could not say this, and its absence cost a week:
         # a weekly schedule created on a Friday next fires the following MONDAY,
