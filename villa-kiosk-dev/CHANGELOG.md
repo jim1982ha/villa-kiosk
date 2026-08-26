@@ -1,3 +1,18 @@
+## 2.780.0
+
+### Changed — flagged checks and recent checks are one list
+A flag is now drawn inside the check that raised it, with an action that
+follows the mode: Investigate or Cancel while it waits, a briefing mark once
+it has been looked at, and whether a Concern came out of it. Cancel-all came
+across with it. The modes are "Investigate & Log Only" and "Investigate & Log
++Escalation".
+
+### Fixed — a concern recorded nothing about where it came from
+It named its subject as a hash of an entity id that a flag usually does not
+carry, so nothing could say whether a flag turned into anything. A check and
+its flags now share an exact key, and a concern records the investigation that
+produced it.
+
 ## 2.779.0
 
 ### Fixed — the mode tooltip contradicted the description under it
