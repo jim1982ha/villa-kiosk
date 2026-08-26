@@ -390,9 +390,12 @@ def test_every_blueprint_family_the_villa_reports_has_a_described_ROLE() -> None
     block = tiers[tiers.index("export const FAMILIES"):]
     block = block[:block.index("\n};")]
     named = set(re.findall(r"^  (\w+):", block, re.M))
-    assert {"critical", "maintenance", "roi", "audit", "control", "vesta"} <= named, (
-        f"families missing a role: {sorted({'critical','maintenance','roi',
-        'audit','control','vesta'} - named)}")
+    # ⚠️ HOISTED OUT OF THE f-STRING: a multi-line expression inside braces is
+    # PEP 701 (Python 3.12+) and CI runs 3.11, where it is a SyntaxError that
+    # kills COLLECTION of this whole file — every other test in it included.
+    expected = {"critical", "maintenance", "roi", "audit", "control", "vesta"}
+    assert expected <= named, (
+        f"families missing a role: {sorted(expected - named)}")
     reflex = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
     assert 'fam?.role ?? ""' not in reflex, (
         "an unlisted family still renders a blank role rather than saying so")

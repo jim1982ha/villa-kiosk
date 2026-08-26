@@ -1,3 +1,12 @@
+## 2.791.0
+
+### Fixed — CI failed to collect the test suite on the deploy workflow
+An f-string holding a multi-line expression is Python 3.12 syntax (PEP 701);
+CI runs 3.11, so `test_ui_consistency.py` died at collection and took every
+test in the file with it. The local venv is 3.12, which is why the gate here
+stayed green. The expression is hoisted out, and a new gate compiles every
+Python file under a real 3.11 interpreter so the grammar gap cannot recur.
+
 ## 2.790.0
 
 ### Added — a pin that keeps the agent's cost model structural
