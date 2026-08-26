@@ -1,3 +1,15 @@
+## 2.765.0
+
+### Changed — the actuation switch now sits with the list it depends on
+Its description had to end by pointing at a list on another tab, and since the
+Settings move, another dialog: "there is no list and the text is not clear about
+it". The switch is on Act & Tell now, directly above the devices it governs, so
+the cross-reference is gone rather than reworded. A concern row also stacks its
+four labels into one narrow column instead of laying them across the line, which
+gives the sentence the width it needed. And the concerns list now says what gets
+chased — only a critical concern is re-sent; a warning is told to you once and
+then waits, which is why a delivered warning sits at "nothing done yet".
+
 ## 2.764.0
 
 ### Fixed — nginx served requests before the backend was listening
