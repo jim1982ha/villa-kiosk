@@ -60,6 +60,24 @@ CONFIG_KEY: str = "task_list"
 #: to watch" must change with it; `test_task_loop.py` pins the pair.
 EVENT_TYPE: str = "vesta_task_event"
 
+#: Home Assistant's `TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM`.
+#:
+#: ⚠️ NOT EVERY TODO LIST HAS ONE, AND SENDING A DESCRIPTION TO ONE THAT DOES
+#: NOT IS A 500 THAT LOSES THE WHOLE ITEM. Found on the reference villa the
+#: first time the loop was fired by hand: `todo.shopping_list` — the built-in
+#: Shopping List, which is the list most people already have and the obvious
+#: one to name — reports `supported_features: 15` (create, delete, update,
+#: move) and refuses `description` outright. So every facility manager job this
+#: module raised would have failed on that villa, `swallow`ed as "failed", with
+#: the owner having configured everything correctly.
+#:
+#: This is `feedback_guessed-field-shapes`: the field NAME was right, the
+#: capability was assumed, and a degrade-never-fail wrapper would have hidden it
+#: for the life of the feature. It was found by an END-TO-END test rather than
+#: by any of the 1,908 pins, because both halves — the service call and the
+#: blueprint — are correct in isolation.
+DESCRIPTION_FEATURE: int = 64
+
 
 def list_for(config: Optional[Mapping[str, Any]] = None) -> str:
     """The configured facility manager list, or "" when the loop is switched off."""
@@ -82,6 +100,30 @@ def summary_for(concern: Mapping[str, Any]) -> str:
     rule_id = str(concern.get("id") or "").strip()
     title = " ".join(str(concern.get("title") or "").split())
     return f"[{rule_id}] {title}".strip()
+
+
+async def _accepts_description(hass: Any, entity_id: str) -> bool:
+    """Does this to-do list accept a description on an item?
+
+    ⚠️ FALSE WHEN THE ANSWER CANNOT BE READ, WHICH IS THE SAFE DIRECTION. A
+    missing description makes a job terser; a rejected one makes the job not
+    exist. Guessing "yes" is how the reference villa's every task would have
+    been lost, so an unreadable state degrades to the shape that always works.
+    """
+    try:
+        states = await hass.command("get_states")
+        for row in states or ():
+            if not isinstance(row, Mapping):
+                continue
+            if str(row.get("entity_id")) != entity_id:
+                continue
+            attrs = row.get("attributes")
+            features = int((attrs or {}).get("supported_features") or 0) \
+                if isinstance(attrs, Mapping) else 0
+            return bool(features & DESCRIPTION_FEATURE)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow(f"could not read the features of {entity_id}", err)
+    return False
 
 
 async def raise_for(session: Any, concern: Mapping[str, Any], *,
@@ -108,16 +150,23 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
     try:
         from reports.hass import HassClient
         async with HassClient(session) as hass:
+            # ⚠️ THE BODY GOES IN THE DESCRIPTION, NOT THE SUMMARY. A todo
+            # summary is one line on a phone and in the Facility Manager list;
+            # the evidence belongs where it can be read without truncating the
+            # thing the Done button matches on.
+            #
+            # ⚠️ BUT ONLY WHERE THE LIST ACCEPTS ONE — see DESCRIPTION_FEATURE.
+            # The ITEM is what the loop needs; the description is what makes it
+            # readable. Dropping the second to keep the first is the right
+            # trade, and sending it blind cost the whole job on the commonest
+            # list in Home Assistant.
+            fields = {"item": summary}
+            body = str(concern.get("body") or "")
+            if body and await _accepts_description(hass, entity_id):
+                fields["description"] = body
             await hass.command(
                 "call_service", domain="todo", service="add_item",
-                target={"entity_id": entity_id},
-                service_data={"item": summary,
-                              # ⚠️ THE BODY GOES IN THE DESCRIPTION, NOT THE
-                              # SUMMARY. A todo summary is one line on a phone
-                              # and in the Facility Manager list; the evidence
-                              # belongs where it can be read without truncating
-                              # the thing the button matches on.
-                              "description": str(concern.get("body") or "")})
+                target={"entity_id": entity_id}, service_data=fields)
             await hass.command(
                 "fire_event", event_type=EVENT_TYPE,
                 event_data={"rule_id": rule_id,

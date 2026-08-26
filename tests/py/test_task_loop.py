@@ -193,3 +193,118 @@ def test_ESCALATION_re_sends_without_raising_a_SECOND_job() -> None:
     assert "raise_for" not in src and "task_mod" not in src, (
         "escalation raises a second facility manager job for a concern that already "
         "has one")
+
+
+# ── the capability nobody checked ───────────────────────────────────────────
+class _Hass:
+    """A to-do list with a declared feature set, recording what it was sent."""
+
+    def __init__(self, features: int) -> None:
+        self.features = features
+        self.calls: list = []
+
+    async def __aenter__(self) -> "_Hass":
+        return self
+
+    async def __aexit__(self, *_a: object) -> bool:
+        return False
+
+    async def command(self, command_type: str, **payload: object) -> object:
+        if command_type == "get_states":
+            return [{"entity_id": "todo.x",
+                     "attributes": {"supported_features": self.features}}]
+        self.calls.append((command_type, payload))
+        return None
+
+
+def _raise_with(monkeypatch, features: int) -> _Hass:
+    import asyncio
+
+    from agent import task as task_mod
+    from reports import hass as hass_mod
+
+    hass = _Hass(features)
+    monkeypatch.setattr(hass_mod, "HassClient", lambda _s: hass)
+    asyncio.run(task_mod.raise_for(
+        None, {"id": "c1", "title": "Pool pump drawing more than usual",
+               "body": "It has been at 340 W for six hours.",
+               "severity": "warning", "audience": "facility"},
+        config={"task_list": "todo.x"}))
+    return hass
+
+
+def _item_fields(hass: _Hass) -> dict:
+    for kind, payload in hass.calls:
+        if kind == "call_service" and payload.get("service") == "add_item":
+            return dict(payload.get("service_data") or {})
+    raise AssertionError(f"no add_item was sent: {hass.calls}")
+
+
+def test_a_list_that_REFUSES_a_description_still_gets_its_job(
+        monkeypatch) -> None:
+    """⚠️ THE DEFECT THE FIRST END-TO-END TEST FOUND, ON THE COMMONEST LIST IN
+    HOME ASSISTANT. `todo.shopping_list` reports `supported_features: 15` —
+    create, delete, update, move — and NO `SET_DESCRIPTION_ON_ITEM` (64).
+    Sending one anyway is HTTP 500, and `raise_for` swallows it and returns
+    "failed", so every facility manager job on that villa vanished with the
+    owner having configured everything correctly.
+
+    ⚠️ 1,908 pins were green through this, and none of them could have caught
+    it: the service call is correct, the blueprint is correct, and the defect
+    lives in an assumption about the third party between them —
+    `feedback_guessed-field-shapes`. The field NAME was right and the
+    CAPABILITY was assumed."""
+    fields = _item_fields(_raise_with(monkeypatch, 15))
+    assert "description" not in fields, (
+        "a description was sent to a list that does not accept one — Home "
+        "Assistant answers 500 and the job is lost entirely")
+    assert fields.get("item", "").startswith("[c1]"), (
+        "the ITEM is what the Done button matches on and must survive")
+
+
+def test_a_list_that_ACCEPTS_one_still_gets_the_evidence(monkeypatch) -> None:
+    """⚠️ THE OTHER DIRECTION, PINNED SO THE FIX IS NOT 'DROP IT ALWAYS'. A
+    summary is one line on a phone; the evidence belongs in the description
+    wherever there is one to put it in."""
+    fields = _item_fields(_raise_with(monkeypatch, 15 | 64))
+    assert fields.get("description"), (
+        "a list that accepts a description got none, so the evidence behind "
+        "the job is nowhere a person can read it")
+
+
+def test_a_list_declaring_NO_features_gets_no_description(monkeypatch) -> None:
+    """The readable-but-incapable case, distinct from the unreadable one below."""
+    assert "description" not in _item_fields(_raise_with(monkeypatch, 0))
+
+
+def test_an_UNREADABLE_feature_set_degrades_to_the_shape_that_always_works(
+        monkeypatch) -> None:
+    """⚠️ THE SAFE DIRECTION IS 'NO DESCRIPTION'. A terser job is a job; a
+    rejected one does not exist. Guessing yes is exactly how this shipped.
+
+    ⚠️ THE FIRST VERSION OF THIS TEST PASSED `features=0` AND PROVED NOTHING —
+    that is a list that ANSWERED and said "no capabilities", which never reaches
+    the exception path the docstring is about. A mutation flipping the fallback
+    to `True` stayed GREEN. `feedback_mutation-testing`, and the second time
+    today: a test is unproven until it has gone red."""
+    import asyncio
+
+    from agent import task as task_mod
+    from reports import hass as hass_mod
+
+    class _Broken(_Hass):
+        async def command(self, command_type: str, **payload: object) -> object:
+            if command_type == "get_states":
+                raise RuntimeError("Home Assistant is mid-restart")
+            return await super().command(command_type, **payload)
+
+    hass = _Broken(15 | 64)          # capable, but the answer cannot be read
+    monkeypatch.setattr(hass_mod, "HassClient", lambda _s: hass)
+    asyncio.run(task_mod.raise_for(
+        None, {"id": "c1", "title": "Pool pump", "body": "340 W",
+               "severity": "warning", "audience": "facility"},
+        config={"task_list": "todo.x"}))
+
+    assert "description" not in _item_fields(hass), (
+        "an unreadable feature set was guessed as 'supports descriptions' — on "
+        "a list that does not, that guess loses the job entirely")
