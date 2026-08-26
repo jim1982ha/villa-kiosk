@@ -209,50 +209,59 @@ def test_no_module_quotes_a_name_by_hand() -> None:
 def test_no_reader_ever_sees_the_word_caretaker() -> None:
     """⚠️ A STANDING OWNER RULE THAT WAS BROKEN AFTER BEING ACCEPTED.
 
-    "there is no mention to `Caretaker` in the Kiosk UI: change it consistently
+    "there is no mention to `Facility manager` in the Kiosk UI: change it consistently
     (and everywhere it has to) to **Facility Manager**, as this is how it is
     referenced in the VESTA Kiosk UI." It was applied to the renderer and missed
-    `verify.EVIDENCE_TASK`, so a delivered brief still read "the caretaker
+    `verify.EVIDENCE_TASK`, so a delivered brief still read "the facility manager
     marked the job done" — and the owner had to ask a second time, worried it
     had not been done fully. It had not.
 
     ⚠️ STRING LITERALS ONLY, AND DOCSTRINGS ARE FOUND BY THE AST, NOT GUESSED.
-    `caretaker` is the right engineering word here and appears in ~20
+    `facility manager` is the right word for a READER; `caretaker` survives in ~20
     docstrings; the blueprints' own input is literally `caretaker_todo_list` and
     renaming it would break every property's YAML. The rule is about what a
     READER sees. The first cut tried to spot docstrings by their leading
     whitespace and flagged eight of them — a filter that guesses is how the real
     one hides in the noise.
     """
-    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports")
+    # ⚠️ IT WALKED `reports/` ALONE, AND THAT IS HOW THE RULE WAS BROKEN AGAIN.
+    # 2.763.0 added `agent/task.py` and a settings field labelled "Caretaker
+    # to-do list", neither of which this test could see — so the owner reported
+    # the same wrong word a THIRD time, in a feature built while the pin that
+    # forbids it was green. A rule enforced where it was WRITTEN rather than
+    # where it APPLIES is `feedback_audit-applicable-set`, and this is its
+    # textbook shape: the scan root was the file the rule was born in.
+    roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports"),
+             os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")]
     offenders: List[str] = []
-    for folder, _, files in os.walk(root):
-        for name in sorted(f for f in files if f.endswith(".py")):
-            path = os.path.join(folder, name)
-            tree = ast.parse(open(path, encoding="utf-8").read())
-            docstrings = set()
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.Module, ast.ClassDef,
-                                     ast.FunctionDef, ast.AsyncFunctionDef)):
-                    body = getattr(node, "body", [])
-                    if (body and isinstance(body[0], ast.Expr)
-                            and isinstance(body[0].value, ast.Constant)
-                            and isinstance(body[0].value.value, str)):
-                        docstrings.add(id(body[0].value))
-            for node in ast.walk(tree):
-                if (isinstance(node, ast.Constant)
-                        and isinstance(node.value, str)
-                        and id(node) not in docstrings
-                        and "caretaker" in node.value.lower()):
-                    offenders.append(
-                        f"{os.path.relpath(path, REPO_ROOT)}:{node.lineno}: "
-                        f"{node.value[:70]!r}")
+    for root in roots:
+      for folder, _, files in os.walk(root):
+          for name in sorted(f for f in files if f.endswith(".py")):
+              path = os.path.join(folder, name)
+              tree = ast.parse(open(path, encoding="utf-8").read())
+              docstrings = set()
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.Module, ast.ClassDef,
+                                       ast.FunctionDef, ast.AsyncFunctionDef)):
+                      body = getattr(node, "body", [])
+                      if (body and isinstance(body[0], ast.Expr)
+                              and isinstance(body[0].value, ast.Constant)
+                              and isinstance(body[0].value.value, str)):
+                          docstrings.add(id(body[0].value))
+              for node in ast.walk(tree):
+                  if (isinstance(node, ast.Constant)
+                          and isinstance(node.value, str)
+                          and id(node) not in docstrings
+                          and "caretaker" in node.value.lower()):
+                      offenders.append(
+                          f"{os.path.relpath(path, REPO_ROOT)}:{node.lineno}: "
+                          f"{node.value[:70]!r}")
     # `caretaker_todo_list` is the blueprints' own input name — operator YAML,
     # not prose. Log text reaches the add-on log, never a reader.
     offenders = [o for o in offenders
                  if "caretaker_todo_list" not in o
-                 and "skipping caretaker tasks" not in o
-                 and "could not read the caretaker list" not in o]
+                 and "skipping facility manager tasks" not in o
+                 and "could not read the facility manager list" not in o]
     assert not offenders, (
         "these strings can reach a delivered brief and say 'caretaker'; the "
         "kiosk calls that role the Facility Manager everywhere, so a second "

@@ -699,3 +699,33 @@ def test_the_concerns_list_says_WHAT_GETS_CHASED() -> None:
         assert "Only a critical" not in concerns, (
             "the copy still says only a critical is chased, and the ladder no "
             "longer works that way")
+
+
+def test_the_APP_never_shows_the_word_caretaker_either() -> None:
+    """⚠️ THE THIRD TIME THIS RULE WAS BROKEN, AND THE FIRST IN THE UI. The
+    owner's standing instruction is that this product says **Facility Manager**,
+    because that is the profile name the kiosk uses everywhere else. It was
+    applied to the brief renderer, then missed in `verify.EVIDENCE_TASK`, then
+    missed again in 2.763.0 — a settings field labelled "Caretaker to-do list"
+    and a whole new module written around the word.
+
+    `test_inert` enforced it over `reports/` only, which is where the rule was
+    born; nothing looked at the app at all. Two scans now, because a python AST
+    walk cannot read TSX and a text scan of python would flag the twenty
+    docstrings where `caretaker` is legitimate engineering shorthand.
+
+    ⚠️ RENDERED TEXT AND LABELS, NOT COMMENTS — the header comments that RECORD
+    this history name the word deliberately, and dry-audit Part 2 keeps them.
+    """
+    offenders = []
+    for path, src in _tsx_sources():
+        body = re.sub(r"\{?/\*[\s\S]*?\*/\}?", "", src)
+        body = "\n".join(l for l in body.splitlines()
+                         if not l.lstrip().startswith("//"))
+        for n, line in enumerate(body.splitlines(), 1):
+            if "caretaker" in line.lower():
+                offenders.append(
+                    f"{os.path.relpath(path, SRC)}:{n}: {line.strip()[:70]}")
+    assert not offenders, (
+        "the app says 'caretaker'; this product says Facility Manager:\n  "
+        + "\n  ".join(offenders))

@@ -1,4 +1,4 @@
-"""Reconciling the HA caretaker list against this period's own events.
+"""Reconciling the HA facility manager list against this period's own events.
 
 ⚠️ EVERY FIXTURE IS A VERBATIM ITEM FROM THE REFERENCE DEPLOYMENT, read over MCP
 on 2026-08-21. Two shapes are in use across the nine blueprints that call
@@ -50,7 +50,7 @@ def test_both_blueprint_item_shapes_are_recognised() -> None:
 
 
 def test_an_ordinary_shopping_item_is_not_claimed() -> None:
-    """⚠️ THE CARETAKER LIST IS ALSO THE HOUSEHOLD'S SHOPPING LIST on the
+    """⚠️ THE FACILITY MANAGER LIST IS ALSO THE HOUSEHOLD'S SHOPPING LIST on the
     reference deployment — the blueprints are pointed at `todo.shopping_list`.
     An unclaimed item is never parsed, counted or carried anywhere."""
     for grocery in ("milk", "2x bread", "call the plumber", ""):
@@ -142,7 +142,7 @@ def test_reconcile_is_read_only() -> None:
 # ── the rendered result ──────────────────────────────────────────────────────
 
 def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
-    """⚠️ NOT MORE BULLETS UNDER "Raised for the caretaker". These were raised
+    """⚠️ NOT MORE BULLETS UNDER "Raised for the facility manager". These were raised
     in an EARLIER period; folding them in reports old work as this week's."""
     from reports.narrate import DeterministicNarrator, ReportContext
     context = ReportContext(
@@ -159,7 +159,7 @@ def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
     # and two consecutive headings could not be told apart by scanning.
     from reports.narrate.deterministic import section_heading
     assert section_heading("preventive_open") in body
-    assert "Raised for the caretaker:" not in body
+    assert "Raised for the facility manager:" not in body
     assert "sensor." not in body
 
 

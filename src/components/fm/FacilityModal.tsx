@@ -76,7 +76,7 @@ const TABS: { id: FacilityTab; label: string; icon: typeof ListChecks }[] = [
   // `ops` does not hold; Briefings opened to `manageFacility` in 2026-08-22 and
   // the note here was rewritten to argue that a job list belongs beside the work
   // it is about. That is true of the FACILITY's own work — faults, readiness,
-  // the maintenance schedule — and a caretaker task is not that: it is written
+  // the maintenance schedule — and a facility manager task is not that: it is written
   // by an AUTOMATION into a Home Assistant to-do list and read back. It now
   // lives with the rest of the automation pipeline, once.
   { id: "spend", label: "Spend", icon: Wallet },

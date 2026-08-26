@@ -1,10 +1,10 @@
-"""Turn a delivered Concern into a caretaker job somebody can tick off.
+"""Turn a delivered Concern into a facility manager job somebody can tick off.
 
 ⚠️ THIS CLOSES A LOOP THE CUTOVER OPENED, AND THAT IS THE WHOLE JUSTIFICATION.
 The `maintenance_*`, `roi_*` and `audit_*` blueprints did two things when they
-fired: they emitted their event, and they called `todo.add_item` with a caretaker
+fired: they emitted their event, and they called `todo.add_item` with a facility manager
 task. Retiring them kept the detection (the agent replaces it) and silently
-dropped the SECOND half — raise a job, ask the caretaker, chase, escalate, tick
+dropped the SECOND half — raise a job, ask the facility manager, chase, escalate, tick
 it off. The agent could not write a to-do item at all: nothing under `agent/`
 touched a todo list, so a Concern was something to READ on the tablet and in a
 brief, and never something anybody was asked to do.
@@ -52,7 +52,7 @@ from typing import Any, Dict, Mapping, Optional
 from agent import config as agent_config
 from reports.log import log, swallow
 
-#: The stored key naming the caretaker list. Empty means the feature is off.
+#: The stored key naming the facility manager list. Empty means the feature is off.
 CONFIG_KEY: str = "task_list"
 
 #: What the blueprint listens for. ⚠️ NOT a `vesta_<category>_event` — see the
@@ -62,7 +62,7 @@ EVENT_TYPE: str = "vesta_task_event"
 
 
 def list_for(config: Optional[Mapping[str, Any]] = None) -> str:
-    """The configured caretaker list, or "" when the loop is switched off."""
+    """The configured facility manager list, or "" when the loop is switched off."""
     return str(agent_config.view(config).get(CONFIG_KEY) or "").strip()
 
 
@@ -86,7 +86,7 @@ def summary_for(concern: Mapping[str, Any]) -> str:
 
 async def raise_for(session: Any, concern: Mapping[str, Any], *,
                     config: Optional[Mapping[str, Any]] = None) -> str:
-    """Create the caretaker job and announce it. `raised | off | failed`.
+    """Create the facility manager job and announce it. `raised | off | failed`.
 
     ⚠️ NEVER RAISES. It is called from the delivery sweep, which runs on a
     background clock; an exception here would take supervision down for the life
@@ -131,7 +131,7 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
                             "audience": str(concern.get("audience") or "owner"),
                             "severity": str(concern.get("severity") or "")})
     except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow(f"could not raise a caretaker task for {rule_id}", err)
+        swallow(f"could not raise a facility manager task for {rule_id}", err)
         return "failed"
 
     log(f"task: raised {summary!r} on {entity_id}")

@@ -92,7 +92,7 @@ MAX_LINES = 8
 #: ⚠️ NOT A CHANGE TO `MAX_LINES`, WHICH SIXTEEN SECTIONS READ. The workbook's
 #: Report Spec caps avoidable-cost at five lines and the code was emitting eight;
 #: retuning the shared constant to satisfy that would silently truncate standing
-#: state, caretaker tasks, forecasts, rules and drift as well — a spec item for
+#: state, facility manager tasks, forecasts, rules and drift as well — a spec item for
 #: one section applied to fifteen that never asked for it.
 #:
 #: ⚠️ FIVE IS A READING BUDGET, NOT A DATA LIMIT, AND THE REST IS NOT LOST. This
@@ -1225,7 +1225,7 @@ class DeterministicNarrator:
             # restating one fact. Same treatment the `waiting` group already
             # gets, and the note is NOT bulleted: it is about the list, not in it.
             # ⚠️ ITS OWN HEADING. These rendered as bare bullets above
-            # "Raised for the caretaker", orphaned under nothing — and a
+            # "Raised for the facility manager", orphaned under nothing — and a
             # verification is the one line in the report that says a story
             # ENDED, which is precisely the line a reader should be able to
             # find. "Followed up" describes the ACTION, which is evidenced;
@@ -1249,7 +1249,7 @@ class DeterministicNarrator:
                 lines.append(_capitalise(shared.strip(" .,;—-")) + ".")
         if resolved:
             # ⚠️ A BULLET UNDER A HEADING, NOT A BARE SENTENCE. It used to sit
-            # unmarked directly above "For the caretaker", so once headings
+            # unmarked directly above "For the facility manager", so once headings
             # carried markers every other top-level line in the body was either
             # a marked heading or a bullet and this one was neither — it read as
             # a heading that had lost its icon. Found by rendering a brief from
@@ -1278,7 +1278,7 @@ class DeterministicNarrator:
 
         ⚠️ THE TASKS ARE REPORTED, NOT CREATED. Nine blueprints call
         `todo.add_item` beside their event; this says what they raised. The
-        report never writes to the caretaker list or the Facility Manager
+        report never writes to the facility manager list or the Facility Manager
         store — reconciling the two is Phase B, and a report generator that
         mutates the record it reports on is one nobody can trust.
         """
@@ -1292,7 +1292,7 @@ class DeterministicNarrator:
             # with no blank line between them — visible in the first delivered
             # brief that had both. The separator belongs wherever a heading
             # follows content, not only at a section boundary.
-            # ⚠️ "FACILITY MANAGER", NOT "CARETAKER". The kiosk calls this
+            # ⚠️ "FACILITY MANAGER", NOT "FACILITY MANAGER". The kiosk calls this
             # person the Facility Manager everywhere — the workspace, the role,
             # the permission — and the brief was the only surface using a
             # second word for them. The blueprints' own `caretaker_todo_list`
@@ -1377,7 +1377,7 @@ class DeterministicNarrator:
             # carried `transition_count`, `max_transitions` and `deviation_pct`.
             # The maintenance blueprints emit no `detail` field at all; the
             # numbers ARE the detail, and the section was redundant with the
-            # caretaker list above it until it printed them.
+            # facility manager list above it until it printed them.
             said = self._detail(group) or self._measurement(group)
             lines.append(f"{BULLET}{label}: {said}" if said else f"{BULLET}{label}")
         for item in forecast[:MAX_LINES]:

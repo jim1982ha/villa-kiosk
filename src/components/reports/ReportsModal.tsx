@@ -117,7 +117,7 @@ const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[
   { id: "coverage", label: "What it can see", icon: ShieldQuestion, configure: true },
   { id: "preview", label: "The briefing", icon: FileText, configure: true },
   { id: "schedule", label: "Sending it", icon: CalendarClock, configure: true },
-  // ⚠️ NOT `configure`-GATED. A caretaker task is the facility manager's work,
+  // ⚠️ NOT `configure`-GATED. A facility manager task is the facility manager's work,
   // and the proxy gates COMPLETING one on `manageFacility` — the capability
   // that opens this dialog — not on `editConfig`.
   { id: "tasks", label: "What it asked for", icon: ClipboardList },
@@ -125,7 +125,7 @@ const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[
 
 export default function ReportsModal(
   { onClose, canAck, canConfigure }:
-  // ⚠️ `canAck` IS BACK, WITH THE TAB. A caretaker task is written by an
+  // ⚠️ `canAck` IS BACK, WITH THE TAB. A facility manager task is written by an
   // AUTOMATION into a Home Assistant to-do list and read back here — so it
   // belongs in this dialog and NOT in Facility, where it was rendering the same
   // component against the same endpoint. `canAck` is a rendering convenience;

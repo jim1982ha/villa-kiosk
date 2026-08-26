@@ -590,7 +590,7 @@ async def run_report(
             # ⚠️ NON-FATAL, LIKE THE TODO READ ABOVE AND FOR THE SAME REASON: a
             # brief that cannot reach Home Assistant is thinner, never absent.
             # It shares this `try` deliberately — a failure here must not cost
-            # the caretaker reconciliation either, and both are the same kind
+            # the facility manager reconciliation either, and both are the same kind
             # of "the villa was unreachable" outcome.
             states = await hass.command("get_states")
             standing = _standing_rows(states)
@@ -627,7 +627,7 @@ async def run_report(
             prior, inside, done, ledger.read(),
             listening_throughout=bool(coverage.get("complete")))
     except Exception as err:  # noqa: BLE001 - a report must still go out
-        swallow("could not read the caretaker list", err)
+        swallow("could not read the facility manager list", err)
 
     # ── noise ───────────────────────────────────────────────────────────────
     # ⚠️ ITS OWN WINDOW, NOT THE REPORT'S. The catalog's rule is "N fires a

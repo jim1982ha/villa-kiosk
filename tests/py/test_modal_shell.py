@@ -521,7 +521,7 @@ def _component_path(name: str) -> str:
 def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
     """⚠️ THE TASKS TAB SHIPPED BEHIND A DOOR ITS OWN USER COULD NOT OPEN.
 
-    Completing a caretaker task is the FACILITY MANAGER's job — the server
+    Completing a facility manager task is the FACILITY MANAGER's job — the server
     gates it on `TASK_ACK_ROLES = ("owner", "ops")`. The tab was built into
     Briefings, which `Dashboard` gated on `editConfig`, a capability `ops` does
     not hold. So every check passed, the RBAC was correct on both sides, and the

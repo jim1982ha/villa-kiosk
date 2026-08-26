@@ -19,7 +19,7 @@ So all three of these must hold before anything is said, and the third is a hard
 gate rather than a caveat:
 
   1. it happened BEFORE this period      (from the collector's own ring)
-  2. somebody DID something              (a completed caretaker task, or a
+  2. somebody DID something              (a completed facility manager task, or a
                                           resolved Facility Manager ticket)
   3. it has not happened SINCE           (and the collector was up throughout)
 
@@ -44,9 +44,9 @@ from .ledger import resolved_tickets_for
 
 #: How the evidence is described, per route. Kept as prose rather than a code so
 #: the renderer never has to translate one — and so the reader is told WHICH
-#: kind of evidence this is, because "the caretaker ticked it off" and "a ticket
+#: kind of evidence this is, because "the facility manager ticked it off" and "a ticket
 #: was closed with a cost against it" are different strengths of claim.
-#: ⚠️ "FACILITY MANAGER", NEVER "CARETAKER" — the owner's standing rule, and
+#: ⚠️ "FACILITY MANAGER", NEVER "FACILITY MANAGER" — the owner's standing rule, and
 #: this string is the one that slipped through it. The kiosk names the role that
 #: way everywhere (workspace, permission, profile), so a brief using a second
 #: word for the same person reads as a different person. Reported twice: once as
@@ -181,7 +181,7 @@ def _sentence(occurrences: int, last_seen: str, evidence: str,
     stops reading the report, and there is no way to earn that word back.
     """
     # ⚠️ SENTENCES, NOT A CHAIN OF SEMICOLONS. This rendered as "reported once
-    # up to 2026-08-21; the caretaker marked the job done; has not recurred
+    # up to 2026-08-21; the facility manager marked the job done; has not recurred
     # since" — three clauses welded together, an ISO date mid-prose, and no
     # subject on the last one. Reported as "very badly rendered text". Each
     # clause answers a different question (how often, who acted, what since),

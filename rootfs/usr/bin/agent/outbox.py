@@ -452,7 +452,7 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
         return "failed"
     _mark_delivered(str(concern.get("id") or ""), now=now)
 
-    # ⚠️ AFTER THE SEND, AND ONLY AFTER IT. A caretaker job raised for a concern
+    # ⚠️ AFTER THE SEND, AND ONLY AFTER IT. A facility manager job raised for a concern
     # whose delivery then failed is a task nobody was told about, sitting on a
     # list with no message to explain it. Same ordering rule, same reason, as
     # `_mark_delivered` directly above.

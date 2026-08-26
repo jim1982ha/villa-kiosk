@@ -349,21 +349,21 @@ export function parseReportsConfig(raw: unknown): ReportsConfig {
  *
  *  `raw` carries keys this app version does not recognise, so an older client
  *  cannot delete a newer one's field on write. Same rule as the FM store. */
-/** An outstanding caretaker task, as the brief lists it.
+/** An outstanding facility manager task, as the brief lists it.
  *
  *  ⚠️ `uid` AND `entityId` ARE OPAQUE HANDLES, NOT ADDRESSES. The client sends
  *  them back to complete a task and the SERVER re-verifies both against the
  *  same parser that produced them — a uid from a browser proves only that
- *  somebody typed it. See `reports/tasks.py`; the caretaker list is also the
+ *  somebody typed it. See `reports/tasks.py`; the facility manager list is also the
  *  household's shopping list on a real deployment. */
-export type CaretakerTask = {
+export type FacilityTask = {
   ruleId: string;
   text: string;
   uid: string;
   entityId: string;
 };
 
-export async function fetchTasks(): Promise<{ tasks: CaretakerTask[]; reachable: boolean }> {
+export async function fetchTasks(): Promise<{ tasks: FacilityTask[]; reachable: boolean }> {
   const r = await fetch("reports-tasks", { headers: { Accept: "application/json" } });
   if (!r.ok) return { tasks: [], reachable: false };
   const body = (await r.json()) as { tasks?: unknown; reachable?: unknown };
@@ -387,7 +387,7 @@ export async function fetchTasks(): Promise<{ tasks: CaretakerTask[]; reachable:
 }
 
 export async function completeTask(
-  task: CaretakerTask,
+  task: FacilityTask,
 ): Promise<{ ok: boolean; error?: string }> {
   const r = await fetch("reports-tasks-complete", {
     method: "POST",

@@ -1,4 +1,4 @@
-"""Acknowledging a caretaker task from the kiosk.
+"""Acknowledging a facility manager task from the kiosk.
 
 ⚠️ THE WHOLE FEATURE EXISTS BECAUSE THE ONLY ACK CHANNEL WAS HOME ASSISTANT.
 The brief tells the Facility Manager what to do; the only way to say it was done
@@ -8,7 +8,7 @@ acknowledged late or not at all — and the noise counter, the "Followed up"
 section and the blueprint's own re-arm all key on that tick.
 
 ⚠️ ONLY ITEMS THIS SYSTEM WROTE MAY BE COMPLETED, AND THAT IS THE SECURITY RULE
-HERE RATHER THAN A TIDINESS ONE. The caretaker list is whatever `todo` entity the
+HERE RATHER THAN A TIDINESS ONE. The facility manager list is whatever `todo` entity the
 operator pointed their blueprints at, and on the reference deployment that is
 `todo.shopping_list` — the household's actual shopping list. Without the filter,
 any authorized kiosk session could tick off somebody's groceries through an
@@ -34,13 +34,13 @@ from .log import warn
 
 
 async def open_tasks(hass: HassClient) -> List[Dict[str, str]]:
-    """Every outstanding caretaker task, with what it takes to complete one."""
+    """Every outstanding facility manager task, with what it takes to complete one."""
     lists = await todo_lists(hass)
     return await todo_tasks(hass, lists, status="needs_action")
 
 
 async def complete(hass: HassClient, entity_id: str, uid: str) -> Dict[str, Any]:
-    """Mark one caretaker task done. Refuses anything this system did not write.
+    """Mark one facility manager task done. Refuses anything this system did not write.
 
     ⚠️ THE UID IS RE-VERIFIED, NEVER TRUSTED. It arrives from a browser, so the
     only thing it proves is that somebody typed it. Completion re-lists the

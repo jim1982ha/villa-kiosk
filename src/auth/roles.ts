@@ -3,7 +3,7 @@
 // lives in permissions.ts, and who is currently signed in lives in
 // ProfileContext.tsx, so each concern can change independently.
 
-/** Kiosk profile. "ops" is the facility manager / caretaker. */
+/** Kiosk profile. "ops" is the facility manager / facility manager. */
 export type Role = "guest" | "owner" | "ops";
 
 /** Fixed display order for the profile-select screen. */

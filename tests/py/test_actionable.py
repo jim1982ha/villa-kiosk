@@ -426,7 +426,7 @@ def test_a_named_rule_is_quoted() -> None:
     body = _render([AUDIT_EVENT], labels=LABELS)
     # ⚠️ CHECKED ON EACH LINE THAT NAMES A RULE, NOT ON THE BODY. The first
     # version searched the whole message and survived a mutation that removed
-    # the brackets from `_subjects`, because the caretaker-task line builds its
+    # the brackets from `_subjects`, because the facility manager-task line builds its
     # own and still had them. Two code paths, one assertion.
     audit = next(l for l in body.splitlines() if "critical automation off" in l)
     task = next(l for l in body.splitlines() if "Re-enable" in l)

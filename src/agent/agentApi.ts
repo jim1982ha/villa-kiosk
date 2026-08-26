@@ -71,7 +71,7 @@ const AGENT_WIRE_KEYS = {
    *  `allowed_senders`, which is kept and still read when this is empty so an
    *  existing villa's bot does not go deaf on upgrade. */
   people: "people",
-  /** ⚠️ THE CARETAKER LIST. Empty means the loop is off: a delivered concern
+  /** ⚠️ THE FACILITY MANAGER LIST. Empty means the loop is off: a delivered concern
    *  reaches a person and becomes nothing anybody is asked to DO. Naming a list
    *  turns each delivered concern into a job with the rule id in its summary,
    *  which is what `vesta_task_actions.yaml`'s "Done" button completes. */
@@ -217,7 +217,7 @@ export interface AgentConfig {
    *  ⚠️ ENTITY IDS, NOT the opaque per-run handles the model sees. It held
    *  handles until 2.718.0, and since a handle means a different device in
    *  every run, a stored list authorised a POSITION rather than a device. */
-  /** Which Home Assistant to-do list gets caretaker jobs. "" = the loop is
+  /** Which Home Assistant to-do list gets facility manager jobs. "" = the loop is
    *  off. See `agent/task.py`. */
   taskList: string;
   actuableEntities: string[];

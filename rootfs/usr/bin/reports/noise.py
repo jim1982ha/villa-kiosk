@@ -34,7 +34,7 @@ clear, and fires with no clear. Home Assistant's `todo/item/list` returns
 system can obtain — and `todo_tasks` correctly does not invent one. Three of the
 four ship; the fourth is stated as unavailable rather than estimated from the
 report's own send time, which would measure the schedule rather than the
-caretaker. See `feedback_instruments-never-skip`: a figure nobody can source is
+facility manager. See `feedback_instruments-never-skip`: a figure nobody can source is
 worse than a figure nobody has.
 """
 
@@ -76,7 +76,7 @@ def fires_by_rule(items: Sequence[Any]) -> Dict[str, Tuple[int, str]]:
 
 
 def acks_by_rule(done: Sequence[Dict[str, str]]) -> Dict[str, int]:
-    """How many completed caretaker tasks each rule has.
+    """How many completed facility manager tasks each rule has.
 
     ⚠️ A COUNT, NOT A SET, AND THE REFERENCE DEPLOYMENT IS WHY. This returned a
     set and `noisy` exempted any rule appearing in it — "one acknowledgement

@@ -177,7 +177,7 @@ def cost_total(data: Dict[str, Any], since_iso: Optional[str] = None) -> float:
     return total
 
 
-# ── the caretaker list ───────────────────────────────────────────────────────
+# ── the facility manager list ───────────────────────────────────────────────────────
 #
 # ⚠️ TWO TASK SYSTEMS EXIST AND NEITHER KNOWS ABOUT THE OTHER. Nine blueprints
 # call `todo.add_item` beside their event; the kiosk's Facility Manager keeps
@@ -195,7 +195,7 @@ def cost_total(data: Dict[str, Any], since_iso: Optional[str] = None) -> float:
 #:     item: "[{{ rule_id }}] {{ matched_entities | join(', ') }} - {{ task_text }}"
 #:
 #: ⚠️ THE MARKER IS THE BLUEPRINT'S OWN CONVENTION, NOT A LIST NAME. Which todo
-#: entity the caretaker list IS varies per property — on the reference
+#: entity the facility manager list IS varies per property — on the reference
 #: deployment the blueprints write to `todo.shopping_list`, HA's default — so
 #: keying on a name would work on exactly one villa. Keying on the prefix is the
 #: same rule as `_categories_from_blueprints`: identify by what the blueprint
@@ -215,7 +215,7 @@ ENTITY_ID = re.compile(r"\b[a-z_]+\.[a-z0-9_]+\b")
 
 
 async def todo_lists(hass: HassClient) -> List[str]:
-    """Every `todo` entity, so the caretaker list need not be configured.
+    """Every `todo` entity, so the facility manager list need not be configured.
 
     Reading them ALL and filtering by `TASK_PREFIX` is what makes this portable:
     the add-on cannot know which list a property's blueprints were pointed at
@@ -224,7 +224,7 @@ async def todo_lists(hass: HassClient) -> List[str]:
     try:
         result: Any = await hass.command("get_states")
     except HassUnavailable as err:
-        warn(f"could not list todo entities ({err}); skipping caretaker tasks")
+        warn(f"could not list todo entities ({err}); skipping facility manager tasks")
         return []
     if not isinstance(result, list):
         return []
@@ -287,10 +287,10 @@ def clean_summary(summary: str) -> str:
 async def todo_tasks(hass: HassClient,
                      entity_ids: Optional[Sequence[str]] = None,
                      status: str = "needs_action") -> List[Dict[str, str]]:
-    """Caretaker tasks a blueprint raised, from every todo list.
+    """Facility manager tasks a blueprint raised, from every todo list.
 
     ⚠️ READ ONLY, AND ONLY THE ITEMS THIS SYSTEM WROTE. An unclaimed item is not
-    parsed, not counted and not carried anywhere — the caretaker list on the
+    parsed, not counted and not carried anywhere — the facility manager list on the
     reference deployment is also the household's shopping list, and a report
     that enumerated it would be reading somebody's groceries.
 
@@ -324,7 +324,7 @@ async def todo_tasks(hass: HassClient,
                 # TWICE. Acknowledging a task from the kiosk needs the item's
                 # id and the list it is on, and the ONLY safe way to get them is
                 # from the same pass that already decided this item is one of
-                # ours — `TASK_PREFIX` is what separates a caretaker task from
+                # ours — `TASK_PREFIX` is what separates a facility manager task from
                 # somebody's groceries, and the reference deployment keeps both
                 # on one list. A second reader would be a second chance to get
                 # that filter wrong.
@@ -336,7 +336,7 @@ async def todo_tasks(hass: HassClient,
 
 def reconcile(todo: Sequence[Dict[str, str]],
               reported: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """Caretaker tasks NOT already stated from this period's own events.
+    """Facility manager tasks NOT already stated from this period's own events.
 
     ⚠️ THE SAME TASK REACHES THE REPORT BY TWO ROUTES. A blueprint fires its
     event AND calls `todo.add_item` in the same action, so a task raised inside

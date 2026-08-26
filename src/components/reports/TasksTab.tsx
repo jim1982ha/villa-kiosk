@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
 import SourceChip from "@/components/common/SourceChip";
 
-import { completeTask, fetchTasks, type CaretakerTask } from "@/reports/reportsApi";
+import { completeTask, fetchTasks, type FacilityTask } from "@/reports/reportsApi";
 
 /**
- * Acknowledging a caretaker task without leaving the kiosk.
+ * Acknowledging a facility manager task without leaving the kiosk.
  *
  * ⚠️ THE ONLY ACK CHANNEL USED TO BE HOME ASSISTANT. A brief tells the Facility
  * Manager what to do; the only way to record that it was done was to open HA's
@@ -22,7 +22,7 @@ import { completeTask, fetchTasks, type CaretakerTask } from "@/reports/reportsA
  * papered over.
  */
 export default function TasksTab({ canAck }: { canAck: boolean }) {
-  const [tasks, setTasks] = useState<CaretakerTask[]>([]);
+  const [tasks, setTasks] = useState<FacilityTask[]>([]);
   const [reachable, setReachable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function TasksTab({ canAck }: { canAck: boolean }) {
 
   useEffect(() => { void load(); }, [load]);
 
-  const onComplete = useCallback(async (task: CaretakerTask) => {
+  const onComplete = useCallback(async (task: FacilityTask) => {
     setBusy(task.uid);
     setError(null);
     const result = await completeTask(task);

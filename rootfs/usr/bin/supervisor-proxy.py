@@ -3125,7 +3125,7 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
     }, headers={"Cache-Control": "no-store"})
 
 
-#: Who may tick a caretaker task off. ⚠️ `ops` IS THE POINT OF THE FEATURE —
+#: Who may tick a facility manager task off. ⚠️ `ops` IS THE POINT OF THE FEATURE —
 #: the Facility Manager is the person who does the work, and an acknowledgement
 #: loop only the owner can close is not an acknowledgement loop. Guests are
 #: excluded: they can raise a fault report (see `_fm_write_guard`) and must not
@@ -3134,7 +3134,7 @@ TASK_ACK_ROLES = ("owner", "ops")
 
 
 async def reports_tasks_get_handler(request: web.Request) -> web.Response:
-    """Outstanding caretaker tasks, as the brief lists them.
+    """Outstanding facility manager tasks, as the brief lists them.
 
     Readable by any authorized session, because the same tasks already appear in
     a delivered brief and in the Facility tab; the restriction that matters is
@@ -3150,7 +3150,7 @@ async def reports_tasks_get_handler(request: web.Request) -> web.Response:
         async with reports_hass.HassClient(request.app["session"]) as hass:
             items = await reports_tasks.open_tasks(hass)
     except Exception as err:  # noqa: BLE001 - a panel must render without HA
-        print(f"[supervisor-proxy] could not list caretaker tasks: {err}",
+        print(f"[supervisor-proxy] could not list facility manager tasks: {err}",
               flush=True)
         return web.json_response({"tasks": [], "reachable": False},
                                  headers={"Cache-Control": "no-store"})
@@ -3159,7 +3159,7 @@ async def reports_tasks_get_handler(request: web.Request) -> web.Response:
 
 
 async def reports_tasks_complete_handler(request: web.Request) -> web.Response:
-    """Mark one caretaker task done, from the kiosk.
+    """Mark one facility manager task done, from the kiosk.
 
     ⚠️ THE VALIDATION IS IN `reports.tasks`, NOT HERE, and deliberately so: the
     rule is "only an item this system wrote", which is a property of the todo
@@ -3171,7 +3171,7 @@ async def reports_tasks_complete_handler(request: web.Request) -> web.Response:
         return _unauthorized()
     if _role_for(request) not in TASK_ACK_ROLES:
         return _forbidden("Only the owner or facility manager may complete a "
-                          "caretaker task.")
+                          "facility manager task.")
     try:
         body = await request.json()
     except (json.JSONDecodeError, ValueError):

@@ -67,7 +67,7 @@ export default function ActDeliverySection() {
         </label>
       </div>
 
-      {/* ⚠️ THE CARETAKER LIST BELONGS ON THIS TAB, not under Settings. It is
+      {/* ⚠️ THE FACILITY MANAGER LIST BELONGS ON THIS TAB, not under Settings. It is
           not a tuning dial — it decides whether a finding becomes a JOB
           somebody is asked to do, which is the same authority question as
           "who is told" and "what may it touch" directly above and below it. */}
@@ -108,7 +108,7 @@ export default function ActDeliverySection() {
           onChange={(e) => edit({ taskList: e.target.value.trim() })}
           disabled={ctx.saving}
         />
-        <span>Caretaker to-do list</span>
+        <span>Facility manager to-do list</span>
       </label>
 
       <div className="settings-section-title">

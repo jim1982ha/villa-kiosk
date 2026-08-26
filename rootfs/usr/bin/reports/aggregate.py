@@ -820,7 +820,7 @@ def savings_total(groups: Sequence[Group]) -> Dict[str, Any]:
 
 
 def open_tasks(groups: Sequence[Group]) -> List[Dict[str, Any]]:
-    """Caretaker task text the blueprints raised, deduplicated.
+    """Facility manager task text the blueprints raised, deduplicated.
 
     ⚠️ READ-ONLY, AND NOT THE `todo` LIST. Nine blueprints call `todo.add_item`
     alongside their event; this reports what they SAID, and never writes to

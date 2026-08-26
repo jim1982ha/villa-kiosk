@@ -1,8 +1,8 @@
-"""The caretaker loop: a delivered Concern becomes a job somebody can tick off.
+"""The facility manager loop: a delivered Concern becomes a job somebody can tick off.
 
 ⚠️ WHAT THIS RESTORES. The `maintenance_*`, `roi_*` and `audit_*` blueprints did
 TWO things when they fired: emitted their event, and called `todo.add_item` with
-a caretaker task. Retiring them kept the detection — the agent replaces it — and
+a facility manager task. Retiring them kept the detection — the agent replaces it — and
 silently dropped the second half. Nothing under `agent/` could write a to-do
 item, so a Concern was something to READ and never something anybody was asked
 to do. `vesta_task_actions.yaml` was left with no producer and read as leftover
@@ -107,7 +107,7 @@ def test_the_EVENT_TYPE_matches_what_the_blueprint_listens_for() -> None:
     as a Concern and once as a blueprint finding."""
     from reports import collect
     assert task.EVENT_TYPE not in collect.FALLBACK_EVENT_TYPES, (
-        f"{task.EVENT_TYPE} is a collected type, so every caretaker task would "
+        f"{task.EVENT_TYPE} is a collected type, so every facility manager task would "
         "also arrive as a finding and the brief would say it twice")
     body = _blueprint()
     default = re.search(r"task_source:[\s\S]*?default:\s*\n((?:\s*-\s*\S+\n)+)",
@@ -175,7 +175,7 @@ def test_ESCALATION_re_sends_without_raising_a_SECOND_job() -> None:
     concern nobody acknowledged — to the same target, then to the owner — and
     each of those is a `deliver_mod.deliver` call sitting next to the one in
     `_deliver_one`. Raising a task there too would put a second, third and
-    fourth copy of the same job on the caretaker's list, each with the same
+    fourth copy of the same job on the facility manager's list, each with the same
     bracketed id, and the Done button completes only the first one it finds.
 
     The chasing is the BLUEPRINT's job (re-ask, then escalate, then leave open);
@@ -185,5 +185,5 @@ def test_ESCALATION_re_sends_without_raising_a_SECOND_job() -> None:
     assert "deliver_mod.deliver" in src, (
         "the escalation path no longer sends, so this test is measuring nothing")
     assert "raise_for" not in src and "task_mod" not in src, (
-        "escalation raises a second caretaker job for a concern that already "
+        "escalation raises a second facility manager job for a concern that already "
         "has one")

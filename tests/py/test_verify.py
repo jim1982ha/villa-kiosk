@@ -169,7 +169,7 @@ def test_a_verification_reaches_the_report() -> None:
 
 
 def test_a_verification_gets_its_own_heading() -> None:
-    """⚠️ It rendered as a bare bullet above "Raised for the caretaker",
+    """⚠️ It rendered as a bare bullet above "Raised for the facility manager",
     orphaned under nothing. A verification is the one line in the report that
     says a story ENDED, which is exactly the line a reader should be able to
     find."""
