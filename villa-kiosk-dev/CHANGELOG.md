@@ -1,3 +1,13 @@
+## 2.774.0
+
+### Fixed — every facility manager job would have been lost on a Shopping List
+Raising a job always sent a `description` with the to-do item. Home Assistant's
+built-in Shopping List — the list most people already have, and the obvious one
+to name — does not accept one, and answers HTTP 500, so the whole item was
+refused and the failure was swallowed as "failed". The description is now sent
+only where the list declares it accepts one, and omitted when that cannot be
+read: a terser job is still a job, a rejected one does not exist.
+
 ## 2.773.0
 
 ### Fixed — "Check the villa now" said the check stopped every single time
