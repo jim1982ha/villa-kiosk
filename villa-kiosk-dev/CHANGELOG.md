@@ -1,3 +1,14 @@
+## 2.776.0
+
+### Changed — the supervision modes are named after what you get
+"Observe only" sounded like the cheap, do-less option and was the most
+expensive: it investigates on every pass at the same price as "Live", and only
+holds the message back. "Live" said nothing about what changes. They are now
+"Briefing only", "Ask first" and "Alert me", the note no longer calls them a
+ladder from cautious to live, and every description names the same three
+things: does it investigate by itself, does it message you, does it chase you
+until someone acknowledges. The stored values are unchanged.
+
 ## 2.775.0
 
 ### Added — "Dismiss all" on the closer-look queue, which could not empty itself
