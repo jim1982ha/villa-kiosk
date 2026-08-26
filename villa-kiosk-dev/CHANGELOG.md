@@ -1,3 +1,11 @@
+## 2.767.0
+
+### Removed — a status helper nothing ever called
+It was written three releases ago "for the settings screen" and never wired to
+one; its only caller was the test that checked it existed. The question it was
+meant to answer — whether the task loop is switched on — is already answered by
+the field on Act & Tell, where an empty list is the off state.
+
 ## 2.766.0
 
 ### Changed — the app says Facility Manager everywhere, including the new parts
