@@ -179,3 +179,4 @@ def test_run_once_DECLINES_without_a_provider_so_the_caller_must_pass_one() -> N
     assert "provider=" in call, (
         "the manual triage route calls run_once without a provider, so every "
         "press declines and the shadow diff can never gain an agent column")
+

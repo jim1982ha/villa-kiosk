@@ -66,7 +66,7 @@ def test_every_mode_is_one_a_person_would_ACTUALLY_want() -> None:
 
 
 def test_observe_INVESTIGATES_and_that_is_the_whole_point() -> None:
-    """⚠️ THE ONE COMBINATION THAT LOOKS WRONG AND IS RIGHT. "Investigate & Log" (stored `observe`) must
+    """⚠️ THE ONE COMBINATION THAT LOOKS WRONG AND IS RIGHT. "Investigate & Log Only" (stored `observe`) must
     still investigate — running everything and delivering nothing is what makes
     the period readable. Refusing to investigate would make it a record of
     nothing having been looked at, which is the defect this whole file is

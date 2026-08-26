@@ -89,16 +89,24 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     """
     doc = document or ""
     escalated, subjects = 0, ""
+    # ⚠️ ONE INSTANT FOR THE WHOLE CHECK, minted here and used by BOTH the row
+    # below and every flag `reason.follow_up` records. `_ident` builds a flag id
+    # as `f"{trigger}{int(now)}-e{N}"`, so sharing `now` is what makes the check
+    # id a strict prefix of its flags' ids. Without it the two were joinable
+    # only by comparing timestamps, which is a guess that goes wrong exactly
+    # when two checks overlap — the case a manual check beside the clock creates.
+    started = time.time()
+    check_id = f"{trigger}{int(started)}"
     try:
         reason = await _run_once(session, config=config, provider=provider,
-                                 document=doc, trigger=trigger)
+                                 document=doc, trigger=trigger, now=started)
     except Exception:
         # ⚠️ RECORD, THEN RE-RAISE. run_forever swallows and logs; without this
         # the one outcome an operator most needs to see is the one absent from
         # the trace.
         audit.record_pass(reason="raised", trigger=trigger,
                           doc_chars=len(doc), doc_lines=doc.count("\n") + 1,
-                          escalated=0)
+                          escalated=0, run_id=check_id)
         raise
     if reason.startswith("escalated "):
         head, _, subjects = reason.partition(": ")
@@ -108,14 +116,15 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
             escalated = 1
     audit.record_pass(reason=reason, trigger=trigger, doc_chars=len(doc),
                       doc_lines=doc.count("\n") + 1, escalated=escalated,
-                      subjects=subjects,
+                      subjects=subjects, run_id=check_id,
                       model=str(agent_config.view(config).get("model_triage", "")))
     return reason
 
 
 async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
                     provider: Any = None, document: str = "",
-                    trigger: str = "scheduled") -> str:
+                    trigger: str = "scheduled",
+                    now: Optional[float] = None) -> str:
     """The guards themselves. Wrapped by run_once, which records the outcome.
 
     ⚠️ THE TRIGGER IS ASKED ABOUT ITSELF, NOT ABOUT THE CLOCK. This gate read
@@ -169,7 +178,7 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     # `reason.follow_up` never raises: it is called from a background clock.
     follow = await reason_mod.follow_up(
         result.escalations, provider=provider, document=document,
-        config=config, session=session, trigger=trigger)
+        config=config, session=session, trigger=trigger, now=now)
 
     subjects = ", ".join(e.subject for e in result.escalations[:3])
     # ⚠️ THE CLAUSE GOES BEFORE THE COLON, and `Followup.clause` may not contain

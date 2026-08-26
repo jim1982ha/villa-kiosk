@@ -134,4 +134,11 @@ export interface Concern {
    *  happening. Snake_case for the same reason as `delivered_at` above. */
   acknowledged_at?: string;
   acknowledged_by?: string;
+  /** The investigation that produced this concern. ⚠️ THE LINK BACK TO THE FLAG
+   *  (2.780.0). Until then a concern named its subject only as `subjectKey`, a
+   *  HASH, so "did this flag turn into anything?" could only be answered by
+   *  hashing an entity id the flag usually does not carry — the reference villa
+   *  reports `0/3 identified`. Snake_case for the same reason as the two above:
+   *  the store is written by Python and served verbatim. */
+  run_id?: string;
 }

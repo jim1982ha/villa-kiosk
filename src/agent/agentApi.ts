@@ -532,6 +532,24 @@ export interface TriagePass {
    *  "nothing to escalate" exactly as a genuinely quiet one does. Optional
    *  because rows written before v2.685.0 carry only the rendered sentence. */
   docChars?: number; docLines?: number; escalated?: number; model?: string;
+  /** The check's own id. ⚠️ THE JOIN KEY, and it was `""` on every row before
+   *  2.780.0 — a check and the flags it produced had nothing in common, so
+   *  pairing them meant comparing timestamps and hoping. A flag's id is this
+   *  string plus `-eN`, so the pairing is exact even when two checks overlap. */
+  runId?: string;
+}
+
+/** One flag a check raised, from the same audit the checks come from.
+ *
+ *  ⚠️ READ FROM THE AUDIT, NOT PARSED OUT OF THE CHECK'S SENTENCE. The subject
+ *  names are also in `detail` ("escalated 3 (…): A, B, C") and `subjectsOf`
+ *  recovers them, but that form loses the run id — so it can say WHAT was
+ *  flagged and never what became of it. These rows carry both. */
+export interface CheckFlag {
+  runId: string;
+  subject: string;
+  /** `awaiting-approval` while it waits for a person; otherwise how it ended. */
+  verdict: string;
 }
 
 /** A stored audit field that should be a number, or undefined if it is absent
@@ -610,8 +628,39 @@ export async function loadTriagePasses(): Promise<TriagePass[]> {
       docLines: numOr(x.doc_lines),
       escalated: numOr(x.escalated),
       model: x.model === undefined ? undefined : String(x.model),
+      runId: String(x.run_id ?? "") || undefined,
     }));
 }
+
+/** Every flag in the audit, newest last. ⚠️ ONE FETCH FOR BOTH LISTS — the
+ *  checks and their flags are rows of the same store, so asking twice would be
+ *  two answers to one question and a chance for them to disagree. */
+export async function loadCheckFlags(): Promise<CheckFlag[]> {
+  const r = await fetch(ingressPath("agent-audit"), { credentials: "same-origin" });
+  if (!r.ok) return [];
+  const d = (await r.json().catch(() => null)) as { rows?: unknown } | null;
+  const rows = Array.isArray(d?.rows) ? d!.rows : [];
+  return rows
+    .filter((x): x is Record<string, unknown> => {
+      if (!x || typeof x !== "object") return false;
+      const rec = x as Record<string, unknown>;
+      // ⚠️ A RUN ROW WITH A SUBJECT. Pass rows share the store and carry no
+      // subject; a run row without one is an investigation of something the
+      // model named itself, which belongs to no flag.
+      return String(rec.tool ?? "").startsWith("run:")
+          && String(rec.subject ?? "").trim() !== ""
+          && String(rec.run_id ?? "").includes("-e");
+    })
+    .map((x) => ({
+      runId: String(x.run_id ?? ""),
+      subject: String(x.subject ?? ""),
+      verdict: String(x.verdict ?? ""),
+    }));
+}
+
+/** The check a flag belongs to: its own id with the `-eN` suffix removed. */
+export const checkIdOf = (flagRunId: string) =>
+  flagRunId.replace(/-e\d+$/, "");
 
 /** One escalation waiting for a person, from `/agent-queue`.
  *

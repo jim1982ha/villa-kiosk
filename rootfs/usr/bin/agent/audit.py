@@ -166,7 +166,8 @@ def pending_escalations() -> List[Dict[str, Any]]:
 
 def record_pass(*, reason: str, trigger: str, doc_chars: int,
                 doc_lines: int, escalated: int, subjects: str = "",
-                model: str = "", now: Optional[float] = None) -> bool:
+                model: str = "", run_id: str = "",
+                now: Optional[float] = None) -> bool:
     """One row for EVERY triage pass, including the quiet ones.
 
     ⚠️ THE QUIET PASSES ARE THE WHOLE POINT. `run_once` already returned a
@@ -184,7 +185,14 @@ def record_pass(*, reason: str, trigger: str, doc_chars: int,
     this cannot be allowed to hide, because it looks exactly like success.
     """
     return _append({
-        "at": _now_iso(now), "run_id": "", "actor": "agent",
+        # ⚠️ A REAL ID SINCE 2.780.0, AND IT IS THE JOIN KEY. This was `""`,
+        # so a check and the flags it produced had NOTHING in common: a flag's
+        # id is `f"{trigger}{stamp}-e{N}"` and the only way to pair them was to
+        # compare timestamps and hope. `run_once` now mints one instant for the
+        # whole check and hands it to both, so a flag belongs to the check whose
+        # run_id is its own id with the `-eN` suffix removed — exact, and
+        # unambiguous when two checks overlap.
+        "at": _now_iso(now), "run_id": run_id, "actor": "agent",
         "tool": f"pass:{trigger}",
         "verdict": "escalated" if escalated else "quiet",
         "detail": (f"{reason} | doc={doc_chars}c/{doc_lines}L"

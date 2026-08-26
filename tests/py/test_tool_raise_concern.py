@@ -490,3 +490,62 @@ def test_read_concerns_follows_shadow_mode() -> None:
     live = {t.name: t for t in sources.build_tools(config={"shadow": False})}
     empty = asyncio.run(live["read_concerns"].call({}))[0].get("json") or {}
     assert empty.get("count") == 0, empty
+
+
+def test_a_concern_records_WHICH_investigation_produced_it() -> None:
+    """⚠️ THE LINK BACK TO THE FLAG, AND IT DID NOT EXIST UNTIL 2.780.0. A
+    concern named its subject only as `subject_key` — a HASH of an entity id —
+    so "did this flag turn into anything?" could be answered only by hashing an
+    id the flag usually does not carry: the reference villa reports
+    `0/3 identified`. The consequence was a screen that could only ever say
+    "no concern", including when there was one, and a Handover column stuck at
+    0 matched.
+
+    ⚠️ FOUND BY MUTATION. Replacing `run_id=ident` with `run_id=""` at the
+    construction site in `runtime.investigate` left all 1,917 tests green while
+    breaking every one of those readers — `feedback_pin-the-caller` again, on
+    the same day, for the same reason: the field existed and nobody checked
+    that anything filled it.
+
+    ⚠️ SET AT CONSTRUCTION, NEVER FROM ARGUMENTS. The model cannot influence it;
+    it is the audit's own answer to "which run wrote this", not something the
+    concern claims about itself.
+    """
+    import inspect
+
+    from agent import runtime as runtime_mod
+
+    class _Sink:
+        def __init__(self) -> None:
+            self.seen: List[Any] = []
+
+        def __call__(self, concern: Any) -> Any:
+            self.seen.append(concern)
+            return True, ""
+
+    sink = _Sink()
+    tool = RaiseConcern(refs=_refs(), evidence_source=lambda: EVIDENCE,
+                        sink=sink, run_id="scheduled1787751552-e2")
+    _call(tool)
+    assert sink.seen, "nothing was recorded; this test would be vacuous"
+    assert sink.seen[0].run_id == "scheduled1787751552-e2", (
+        "the concern does not carry the run that produced it, so nothing can "
+        "pair it with the flag it came from")
+
+    # ⚠️ AND THE CALLER MUST PASS IT. The tool honouring the argument proves
+    # nothing if the one construction site hands it an empty string — which is
+    # exactly the mutation that stayed green.
+    # ⚠️ SCOPED TO THE `RaiseConcern(` CALL, NOT THE FUNCTION. The first
+    # version of this assertion grepped the whole of `investigate` for
+    # "run_id=ident" — which appears at FIVE other lines in it (every
+    # `AgentResult`, and the two other tool constructions), so the mutation that
+    # empties THIS one stayed green. A source-grep pin is only as strong as the
+    # narrowest thing it can point at.
+    src = inspect.getsource(runtime_mod.investigate)
+    code = "\n".join(l for l in src.splitlines()
+                     if not l.strip().startswith("#"))
+    start = code.index("RaiseConcern(")
+    call = code[start:code.index("))", start)]
+    assert "run_id=ident" in call, (
+        "runtime.investigate no longer hands RaiseConcern the run id, so every "
+        f"concern is written with an empty origin. The call reads: {call!r}")

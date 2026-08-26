@@ -510,7 +510,12 @@ def test_recent_checks_has_ONE_implementation() -> None:
     # still worth pinning is that the row rendering exists ONCE — a copy would
     # be a second answer to "what does `nothing to escalate` mean", which is
     # what `test_pass_reason_contract.py` exists to keep singular.
-    hits = [p for p, src in _tsx_sources() if "Looked, nothing to raise" in src]
+    # ⚠️ THE ANCHOR IS THE QUIET-CHECK ROW, and its wording moved in 2.780.0
+    # from "nothing to raise" to "nothing to flag" when the app settled on ONE
+    # vocabulary — a CHECK raises FLAGS, a flag may become a CONCERN. `== 1`
+    # catches both a second copy and a vanished anchor, so this cannot pass
+    # vacuously if the wording moves again.
+    hits = [p for p, src in _tsx_sources() if "Looked, nothing to flag" in src]
     assert len(hits) == 1, f"the row rendering is written {len(hits)} times"
 
 

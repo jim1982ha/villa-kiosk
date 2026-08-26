@@ -406,10 +406,10 @@ export default function AgentTuningPanel() {
             hint: "Spends almost nothing on its own. Approving one runs the "
                 + "full investigation straight away, and that one then behaves "
                 + "like the last step." },
-          { id: "observe", text: "Investigate & Log",
+          { id: "observe", text: "Investigate & Log Only",
             hint: "Costs the same as the last step. What it finds appears in "
                 + "your briefing and nowhere else." },
-          { id: "live", text: "Investigate, Log & Escalate",
+          { id: "live", text: "Investigate & Log +Escalation",
             hint: "Messages you when it concludes something, adds a job to "
                 + "your to-do list, and chases until someone acknowledges." },
         ]}

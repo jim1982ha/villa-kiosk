@@ -71,6 +71,15 @@ class Concern:
     supersedes: List[str] = field(default_factory=list)
     #: Why it left `open`, in a person's words where a person set it.
     outcome: str = ""
+    #: The investigation that produced this. ⚠️ THE LINK BACK TO THE FLAG, and
+    #: it did not exist until 2.780.0: a concern recorded its subject only as
+    #: `subject_key`, a HASH, so nothing could answer "did this flag turn into
+    #: anything?" except by hashing an entity id the flag often does not carry —
+    #: the reference villa reports `0/3 identified`. The consequence was a UI
+    #: that could only ever say "no concern", including when there was one, and
+    #: a Handover column stuck at 0 matched. `run_id` is the flag's own id, so
+    #: the join is exact and works whether or not a device was identified.
+    run_id: str = ""
     #: When this was sent to somebody, or "" if it never was.
     #: ⚠️ ON THE CONCERN, NOT IN A SEPARATE QUEUE. The store is already the
     #: record of what the villa concluded; a delivery queue beside it is a
@@ -87,6 +96,7 @@ class Concern:
     def as_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id, "subject_key": self.subject_key,
+            "run_id": self.run_id,
             "title": self.title, "body": self.body,
             "severity": self.severity, "audience": self.audience,
             "confidence": self.confidence, "state": self.state,

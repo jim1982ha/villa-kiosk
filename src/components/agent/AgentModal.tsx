@@ -40,7 +40,6 @@ import { AgentConfigProvider,
 import AgentConcerns from "@/components/agent/AgentConcerns";
 import AgentMemories from "@/components/agent/AgentMemories";
 import AgentProposals from "@/components/agent/AgentProposals";
-import AgentQueue from "@/components/agent/AgentQueue";
 import AgentReview from "@/components/agent/AgentReview";
 import { ReflexTab, ObserveTab } from "./ReflexObserve";
 import { TierIntro, TIERS } from "./tiers";
@@ -271,29 +270,19 @@ function AgentDialog(
                   notify, cannot write. It only escalates" — and it assigns NO
                   severity, because severity is what the investigation decides.
                   A row here is a pointer, not a finding. */}
-              <AgentQueue />
-              {/* ⚠️ AND THIS TAB WAS BLANK WITHOUT THE TRACE. `AgentQueue`
-                  correctly renders NOTHING in `auto` mode — an empty approval
-                  queue on a villa that investigates by itself is the permanent
-                  and correct state — so a villa running Live saw a step header
-                  over an empty pane, which reads as a broken tier rather than a
-                  working one. The passes were being recorded the whole time and
-                  were only visible on the Handover page under Advanced. */}
-              <div className="settings-section-title">Recent checks</div>
+              {/* ⚠️ ONE SECTION SINCE 2.780.0. `AgentQueue` rendered "Flagged
+                  checks" directly above "Recent checks" — the same events at two
+                  granularities, in two lists, with nothing pairing them. The
+                  flags are now drawn inside the check that raised them, so the
+                  component is gone from this tab rather than stacked on it. */}
+              <div className="settings-section-title">Recent &amp; flagged checks</div>
               <RecentChecks
                 passes={passes}
-                /* ⚠️ THIS SENTENCE POINTED AT A TAB DELETED IN 2.756.0, and
-                   said so for twelve releases. The Handover page held the only
-                   "Check the villa now" button in the app; deleting the page
-                   took the button, and the copy went on naming it. A reader
-                   following it looked for a tab that was not there. */
+                mode={String(draft.config.mode || "")}
+                canAct={canConfigure}
                 empty={<>No check has run yet. One runs on the schedule above,
                        or immediately with the button below.</>}
               />
-              {/* ⚠️ OUTSIDE `RecentChecks`, NOT PASSED AS ITS CHILD. That
-                  component renders ONLY the empty sentence when no pass has
-                  run, so a button placed inside it would be missing in exactly
-                  the state whose text tells you to press it. */}
               <RunCheckNow onDone={() => void loadTriagePasses().then(setPasses)} />
             </div>
           )}

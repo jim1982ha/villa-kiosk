@@ -249,3 +249,62 @@ def test_dismissing_settles_without_spending() -> None:
 def test_dismissing_something_not_queued_is_refused() -> None:
     ok, why = reason.dismiss("never-existed")
     assert not ok and "not waiting" in why
+
+
+# ── the check ↔ flag join key ───────────────────────────────────────────────
+def test_a_check_and_its_flags_share_an_EXACT_key() -> None:
+    """⚠️ THE WHOLE FLAG-NESTING FEATURE RESTS ON THIS ONE ARGUMENT, and until
+    2.780.0 nothing pinned it. `audit.record_pass` stored `run_id: ""`, so a
+    check and the flags it produced had NOTHING in common — the UI could pair
+    them only by comparing clocks, a guess that goes wrong exactly when a manual
+    check overlaps the scheduled one.
+
+    ⚠️ FOUND BY MUTATION, NOT BY REVIEW. Deleting `run_id=check_id` from the
+    `record_pass` call left all 1,916 tests green while silently un-nesting
+    every flag in the app: checks still rendered, flags still rendered, and they
+    simply stopped being drawn together. `feedback_pin-the-caller` — the helper
+    was correct and nobody was passing the argument.
+
+    The property: a flag's id is the check's id plus `-eN`, so stripping that
+    suffix returns the check. `RecentChecks.checkIdOf` performs exactly that
+    strip, and this is the other half of that contract.
+    """
+    import re
+    import time as _time
+
+    from agent import reason as reason_mod
+
+    # ⚠️ THE CLOCK IS PUSHED FORWARD FOR THE FLAG-ID STAGE ONLY, and without
+    # this the test passes by coincidence. `_ident` falls back to
+    # `int(time.time())` when it is handed no `now`, and a test completes inside
+    # one second — so check and flags land on the same stamp whether or not
+    # `run_once` threaded its instant through. A REAL check takes 8-28 seconds
+    # and straddles second boundaries routinely, so the coincidence does not
+    # hold in the field. Moving this clock five seconds makes the difference
+    # between "threaded" and "happened to agree" visible.
+    _real = _time.time
+    reason_mod.time = type("_C", (), {"time": staticmethod(lambda: _real() + 5)})()
+    try:
+        _queue_two()
+    finally:
+        reason_mod.time = _time
+
+    rows = audit.rows(200)
+    checks = [r for r in rows if str(r.get("tool", "")).startswith("pass:")]
+    flags = [r for r in rows if "-e" in str(r.get("run_id", ""))]
+
+    assert len(checks) == 1, f"expected one check row, got {len(checks)}"
+    check_id = str(checks[0].get("run_id") or "")
+    assert check_id, (
+        "the check row carries no run_id, so nothing can pair it with the "
+        "flags it produced and the UI falls back to guessing by timestamp")
+
+    assert len(flags) == 2, (
+        f"expected the two flags this pass raised, got {len(flags)} — this "
+        "test would otherwise pass vacuously")
+    for f in flags:
+        stripped = re.sub(r"-e\d+$", "", str(f.get("run_id") or ""))
+        assert stripped == check_id, (
+            f"flag {f.get('run_id')!r} does not belong to check {check_id!r}: "
+            "the suffix strip RecentChecks.checkIdOf performs no longer "
+            "recovers the check, so flags render outside their own check")

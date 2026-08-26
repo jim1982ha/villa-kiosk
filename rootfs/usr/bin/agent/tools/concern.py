@@ -136,11 +136,16 @@ class RaiseConcern(BaseTool):
 
     def __init__(self, *, refs: Optional[RefTable] = None,
                  evidence_source: Optional[Callable[[], Sequence[Mapping[str, Any]]]] = None,
-                 sink: Optional[Callable[[Concern], Tuple[bool, str]]] = None
-                 ) -> None:
+                 sink: Optional[Callable[[Concern], Tuple[bool, str]]] = None,
+                 run_id: str = "") -> None:
         self._refs = refs
         self._evidence_source = evidence_source
         self._sink = sink
+        # ⚠️ A PER-RUN BINDING LIKE THE OTHER THREE, set at construction rather
+        # than read from anywhere later. The model cannot influence it, which is
+        # the point: it is the audit's own answer to "which investigation wrote
+        # this", not something the concern claims about itself.
+        self._run_id = str(run_id)
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
         severity = str(args.get("severity") or "").strip().lower()
@@ -198,6 +203,7 @@ class RaiseConcern(BaseTool):
             evidence=_stored_evidence(evidence),
             supersedes=[str(i).strip() for i in _list(args.get("supersedes"))
                         if str(i).strip()],
+            run_id=self._run_id,
         )
 
         recorded, reason = self._sink(concern)

@@ -24,7 +24,11 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-QUEUE = os.path.join(ROOT, "src", "components", "agent", "AgentQueue.tsx")
+# ⚠️ MOVED IN 2.780.0. `AgentQueue` was deleted when the flags were merged into
+# the checks that raised them; the bulk action came across to `RecentChecks`
+# with it, because the reason for it is unchanged — a villa left in Flag & Ask
+# still accumulates one waiting flag per check.
+QUEUE = os.path.join(ROOT, "src", "components", "agent", "RecentChecks.tsx")
 REASON = os.path.join(ROOT, "rootfs", "usr", "bin", "agent", "reason.py")
 
 
@@ -42,7 +46,7 @@ def _code(src: str) -> str:
 
 def test_the_queue_can_be_emptied_in_one_action() -> None:
     code = _code(_read(QUEUE))
-    assert "dismissAll" in code, (
+    assert "cancelAll" in code, (
         "there is no whole-list action, so a queue that cannot drain itself "
         "needs one press per item — twenty-four on the reference villa")
 
@@ -52,8 +56,8 @@ def test_the_bulk_action_never_STARTS_investigations() -> None:
     with nothing to undo it; a bulk dismiss spends nothing and anything still
     true is flagged again by the next check."""
     code = _code(_read(QUEUE))
-    body = code[code.index("const dismissAll"):]
-    body = body[:body.index("}, [queue, load]);")]
+    body = code[code.index("const cancelAll"):]
+    body = body[:body.index("}, [flags, load]);")]
     assert '"dismiss"' in body and '"approve"' not in body, (
         "the whole-list action can start investigations — one press would "
         "spend a frontier run per queued item")
@@ -62,7 +66,15 @@ def test_the_bulk_action_never_STARTS_investigations() -> None:
 def test_it_reuses_the_single_item_path_rather_than_a_batch_route() -> None:
     """⚠️ ONE AUTHORITY OVER ONE DECISION. A batch endpoint would be a second
     place that decides who may settle an escalation, and the one nobody tests."""
-    body = _code(_read(QUEUE))
+    # ⚠️ SCOPED TO THE BULK FUNCTION, NOT THE FILE. This asserted `Promise.all`
+    # appeared nowhere in the source, which was true while the file did one
+    # thing and became wrong the moment the component also LOADED two lists —
+    # where running two independent reads in parallel is correct. A whole-file
+    # ban on a construct is a rule about the wrong unit: what must be sequential
+    # is the WRITES, because each appends to a read-modify-write JSON store.
+    code = _code(_read(QUEUE))
+    body = code[code.index("const cancelAll"):]
+    body = body[:body.index("}, [flags, load]);")]
     assert "decideEscalation(ids[i]" in body, (
         "the bulk path does not go through `decideEscalation`, so it is a "
         "second route past the server's per-item authorisation and audit")

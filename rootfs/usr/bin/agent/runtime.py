@@ -296,7 +296,8 @@ async def investigate(*, provider: Provider,
             reg = reg.with_tool(concern_mod.RaiseConcern(
                 refs=getattr(reg, "refs", None),
                 evidence_source=lambda: evidence,
-                sink=concern_mod.writer(policy, config)))
+                sink=concern_mod.writer(policy, config),
+                run_id=ident))
 
         # ⚠️ THE ACTUATOR, AND UNTIL 2.718.0 NOTHING BUILT ONE. `act.build` had
         # exactly one caller in the tree and it was its own test, so
