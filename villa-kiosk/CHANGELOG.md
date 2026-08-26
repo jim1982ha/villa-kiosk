@@ -1,3 +1,11 @@
+## 2.784.0
+
+### Fixed — the card said 54 and the button said 14
+The unmatched-flags card listed every flag whose check could not be identified;
+the Cancel-all button counted only the ones still waiting. Forty of those were
+already settled, carried no action, and displayed a state that is not true in
+Flag & Ask mode. Both now count the same set.
+
 ## 2.783.0
 
 ### Changed — the device permission reads as one decision

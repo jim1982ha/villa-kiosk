@@ -134,6 +134,14 @@ def test_a_flag_with_no_identifiable_check_is_still_RENDERED() -> None:
     assert "orphans.map(" in code, (
         "the unmatched flags are computed and never rendered — the reader sees "
         "a Cancel-all button for items that appear nowhere")
+    # ⚠️ THE CARD AND THE BULK BUTTON MUST COUNT THE SAME SET. They did not:
+    # the button offered to cancel 14 while the card listed 54, because the card
+    # took every unmatched flag and the button took only the waiting ones. Two
+    # numbers for two different things on one screen reads as a broken button —
+    # reported exactly that way. Both now filter on `awaiting-approval`.
+    assert 'f.verdict === "awaiting-approval"' in code.split("const orphans")[1][:400], (
+        "the unmatched-flags card no longer filters to what is WAITING, so its "
+        "count disagrees with the Cancel-all button beside it")
     assert "orphans.length > 0 &&" in code, (
         "the unmatched-flags block is not conditional on there being any, so "
         "an empty card renders on every villa that has none")

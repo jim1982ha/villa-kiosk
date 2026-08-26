@@ -223,7 +223,19 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
   // on is strictly worse than the duplication the merge removed, so anything
   // unmatched gets its own card that says why it is on its own.
   const attached = new Set(rows.flatMap((r) => r.flags.map((f) => f.runId)));
-  const orphans = flags.filter((f) => !attached.has(f.runId));
+  // ⚠️ WAITING ONLY, AND THE COUNT ON THE BUTTON IS THE SAME SET. The first cut
+  // listed EVERY unmatched flag — fifty-four of them against a button offering
+  // to cancel fourteen, which is two numbers for two different things on one
+  // screen and reads as a bug in the button. Forty were already settled: their
+  // check cannot be identified, so they carry no context, and their outcome
+  // went to the briefing weeks ago. They had no action, no home and no reader.
+  //
+  // ⚠️ AND A SETTLED ORPHAN RENDERED A STATE THAT CAN BE FALSE. `FlagRow` falls
+  // through to "In the briefing" for anything settled outside Escalate mode —
+  // true of Investigate & Log, and NOT true in Flag & Ask, where nothing
+  // reaches the briefing at all. Dropping them removes the claim with them.
+  const orphans = flags.filter(
+    (f) => !attached.has(f.runId) && f.verdict === "awaiting-approval");
 
   // ⚠️ CARDS, NOT ROWS — see `PAGE_CARDS`. Each entry here is several lines
   // with its flagged items nested under it, so the row count that suits a
@@ -271,10 +283,9 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
           <li className="body-text">
             <div>
               <strong>{orphans.length} flagged item{orphans.length === 1 ? "" : "s"}</strong>
-              {" from earlier checks"}
+              {" waiting, from checks recorded before "}
               <span className="muted">
-                {" · recorded before checks carried an id, so which check "}
-                {"raised them is not known"}
+                {"checks carried an id — so which check raised them is not known"}
               </span>
             </div>
             <ul className="fm-list" style={{ marginTop: 6, paddingLeft: 14 }}>
