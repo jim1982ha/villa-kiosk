@@ -14,16 +14,14 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from reports import trend  # noqa: E402
-from reports.narrate import DeterministicNarrator, ReportContext  # noqa: E402
-from reports.narrate.deterministic import (  # noqa: E402
-    ALL_SECTIONS, SECTIONS_FOR, ZONE_OF_SECTION, ZONE_ORDER, zone_heading)
+from reports.narrate import ReportContext  # noqa: E402
 from reports.narrate.style import inert  # noqa: E402
 
 
@@ -125,84 +123,13 @@ def test_history_is_filtered_to_the_same_cadence() -> None:
 
 # ── zones ───────────────────────────────────────────────────────────────────
 
-def test_every_section_belongs_to_exactly_one_zone() -> None:
-    """⚠️ A SECTION MISSING FROM THE TABLE WOULD RENDER IN NO ZONE — the silent
-    disappearance `SECTION_FOR_KIND` guards against, one layer up. Derived from
-    the section list so a tenth section is covered the day it is added."""
-    missing = [s for s in ALL_SECTIONS if s not in ZONE_OF_SECTION]
-    assert not missing, f"these sections have no zone: {missing}"
-    for audience, sections in SECTIONS_FOR.items():
-        unzoned = [s for s in sections if s not in ZONE_OF_SECTION]
-        assert not unzoned, f"{audience}: {unzoned}"
-    assert set(ZONE_OF_SECTION.values()) <= set(ZONE_ORDER)
 
 
-def test_zones_render_in_their_declared_order() -> None:
-    body = DeterministicNarrator().render(_ctx(
-        standing=[{"kind": "unavailable", "title": "A device",
-                   "detail": "Unavailable", "room": ""}],
-        findings=[{"kind": "ANOMALY", "label": "AC", "severity": "warning",
-                   "detail": "odd", "window_days": 3}]))[1]
-    seen = [body.index(zone_heading(z)) for z in ZONE_ORDER
-            if zone_heading(z) in body]
-    assert len(seen) >= 2 and seen == sorted(seen)
-
-
-def test_an_empty_zone_prints_nothing_at_all() -> None:
-    """⚠️ "NEEDS YOU" OVER SILENCE IS THE LOUDEST WAY TO SAY NOTHING IS WRONG,
-    and it would train the reader to skip the one banner that must never be
-    skipped."""
-    body = DeterministicNarrator().render(_ctx(
-        findings=[{"kind": "ANOMALY", "label": "AC", "severity": "warning",
-                   "detail": "odd", "window_days": 3}]))[1]
-    assert zone_heading("needs_you") not in body
-    assert zone_heading("this_period") in body
-
-
-def test_a_zone_rule_survives_the_sanitiser() -> None:
-    for zone in ZONE_ORDER:
-        rule = zone_heading(zone)
-        assert inert(rule) == rule, rule
 
 
 # ── the narration slot ──────────────────────────────────────────────────────
 
-def test_the_lead_falls_back_to_the_deterministic_sentence() -> None:
-    """⚠️ THE SAFETY PROPERTY, UNCHANGED IN KIND AND STRONGER IN DEGREE. Before
-    v2.592.0 a provider REPLACED the body, and "degrade on any failure" was
-    whatever happened when that block did nothing. Now it fills one slot, so the
-    fallback is per-slot: no provider, a declined answer or an unusable one all
-    leave the same sentence the renderer wrote."""
-    body = DeterministicNarrator().render(_ctx(
-        standing=[{"kind": "unavailable", "title": "A device",
-                   "detail": "Unavailable", "room": ""}]))[1]
-    assert body.splitlines()[0].endswith("right now.")
 
-
-def test_a_provider_sentence_replaces_only_the_lead() -> None:
-    """The document is the renderer's. A provider contributes prose, and every
-    number, chart, column and heading around it is untouched."""
-    rows = [{"kind": "unavailable", "title": "A device", "detail": "Unavailable",
-             "room": ""}]
-    plain = DeterministicNarrator().render(_ctx(standing=rows))[1]
-    narrated = DeterministicNarrator().render(_ctx(
-        standing=rows, slots={"lead": "One device stopped reporting overnight."}))[1]
-    assert narrated.splitlines()[0] == "One device stopped reporting overnight."
-    # Everything from the dateline down is byte-identical.
-    assert plain.split("Prepared", 1)[1] == narrated.split("Prepared", 1)[1]
-
-
-def test_the_lead_never_leads_with_the_monitoring_system() -> None:
-    """⚠️ `about_report` MUST NEVER LEAD. A notification whose one visible line
-    is about the reporting system, while a device is offline, is the report
-    talking about itself instead of the villa."""
-    body = DeterministicNarrator().render(_ctx(
-        standing=[{"kind": "unavailable", "title": "A device",
-                   "detail": "Unavailable", "room": ""}],
-        skipped=[{"module": "standby_creep", "reason": "no data",
-                  "code": "missing_capability"}]))[1]
-    first = body.splitlines()[0]
-    assert "right now" in first and "did not run" not in first
 
 
 def test_the_pipeline_rejects_a_paragraph_where_a_sentence_belongs() -> None:
@@ -236,28 +163,6 @@ def test_the_pipeline_rejects_a_paragraph_where_a_sentence_belongs() -> None:
     assert usable_lead("  One   device   stopped.  ") == "One device stopped."
 
 
-def test_the_payload_carries_the_zone_from_the_renderers_own_table() -> None:
-    """⚠️ DERIVED, NOT RESTATED. Computing the zone separately in the payload
-    would let the model's idea of "needs you" drift from the document's — the
-    divergence this whole subsystem exists to prevent."""
-    from reports.narrate import payload
-
-    class Ctx:
-        discovery = {"capability_absent": {}, "capabilities_missing": []}
-        collector: Dict[str, Any] = {}
-        findings = [{"kind": "DATA_QUALITY", "label": "Hall sensor",
-                     "severity": "warning", "detail": "must not travel",
-                     "entity_id": "sensor.x"}]
-        aggregated: Dict[str, Any] = {}
-        audience, cadence, period = "owner", "daily", "2026-08-22"
-
-    out = payload.from_context(Ctx())
-    sent = out["findings"][0]
-    assert sent["zone"] == ZONE_OF_SECTION["health"], (
-        "DATA_QUALITY routes to `health`, which is `about_report`")
-    assert "detail" not in sent and "entity_id" not in sent
-    assert payload.audit(out) == []
-
 
 def test_an_unknown_zone_or_direction_is_dropped_not_forwarded() -> None:
     """⚠️ THE NEW ENUMS GET THE SAME OUTBOUND VALIDATION as severity and kind.
@@ -273,71 +178,9 @@ def test_an_unknown_zone_or_direction_is_dropped_not_forwarded() -> None:
     assert sent["occurrences"] == 3
 
 
-def test_the_lead_sentence_agrees_with_its_own_count() -> None:
-    """⚠️ "1 unavailable device NEED attention" reached a rendered brief. The
-    noun went through `_plural` and the VERB did not — the "2 categorys" defect
-    one word to the right of where that helper looks."""
-    def lead(n: int) -> str:
-        rows = [{"kind": "unavailable", "title": f"Device {i}",
-                 "detail": "Unavailable", "room": ""} for i in range(n)]
-        return DeterministicNarrator().render(_ctx(standing=rows))[1].splitlines()[0]
-    assert lead(1) == "1 unavailable device needs attention right now."
-    assert lead(3) == "3 unavailable devices need attention right now."
-
-
-def test_one_prior_period_is_not_an_average() -> None:
-    """⚠️ A DELIVERED BRIEF SAID "↑ 2934% vs 1-day AVERAGE of 74 IDR", at the top
-    of the money section, on the second report ever. An average of one sample is
-    not an average, and a 2934% swing computed off a single quiet day is noise
-    presented as insight.
-
-    ⚠️ THE CHART ALREADY REFUSED BELOW TWO POINTS AND THE SENTENCE DID NOT, so
-    the two halves of one feature disagreed about when they had enough data —
-    and the half that spoke was the one a reader believes. Both read
-    `MIN_TREND_PERIODS` now.
-    """
-    assert trend.phrase(2245, [74], "IDR", "daily") == ""
-    assert trend.phrase(2245, [74, 80], "IDR", "daily") != ""
-
-    from reports.narrate.deterministic import DeterministicNarrator
-    import test_sections as sections
-    one = sections._render(cadence="daily", currency="IDR",
-                           history={"avoidableCost": [74.0]},
-                           aggregated=sections._events(
-                               sections._roi("Lights", 2245.0)))
-    assert "average" not in one and "▁" not in one and "▅" not in one
-
-
-def test_a_worklist_line_leads_with_its_subject() -> None:
-    """⚠️ A TELEGRAM SCREENSHOT SHOWED SEVEN, each opening with a different
-    instruction and wrapping to three lines, so the left edge — the only part a
-    reader scans — said nothing about which equipment each line was. The
-    instruction is what you read AFTER deciding a line is yours."""
-    import test_sections as sections
-    body = sections._render(aggregated=sections._events(
-        sections._maintenance("Check for a stuck check valve.")))
-    line = next(l for l in body.splitlines() if "stuck check valve" in l)
-    assert line.index("Check for a stuck") > line.index("House pump"), (
-        f"the instruction leads and the subject trails: {line!r}")
-
-
-def test_no_decorative_line_can_wrap_on_a_phone() -> None:
-    """⚠️ ALL THREE ZONE RULES ARRIVED SPLIT ACROSS TWO LINES, reported from a
-    Telegram screenshot. They were padded to 44 characters; Telegram fits about
-    32 on a phone, so each one wrapped and left a ragged stub of box-drawing on
-    the line below.
-
-    ⚠️ THE FIX IS NOT A NARROWER PAD. No width is right — the destination's is
-    unknown and moves with the reader's font size, language and device. PROSE
-    wrapping is normal and invisible; a broken decorative rule is neither. So
-    the separator is short by construction.
-
-    The bound is deliberately a literal and not `ZONE_RULE_LEAD + max(title)`:
-    that would be self-referential, passing for any prefix however long, which
-    is the trap `MAX_LEAD_CHARS` fell into two releases ago.
-    """
-    from reports.narrate.deterministic import ZONE_ORDER, zone_heading
-    for zone in ZONE_ORDER:
-        rendered = zone_heading(zone)
-        assert len(rendered) <= 24, (
-            f"{rendered!r} is {len(rendered)} chars and will wrap on a phone")
+# ⚠️ TWELVE TESTS LEFT WITH THEIR RENDERER (TASK-073, 2026-08-27): the zone
+# layout, the slot fallback chain, the lead grammar, the sparkline-in-sections
+# and worklist-line rules were all properties of `deterministic.py`'s document,
+# and its 2,058 lines were deleted with the blueprint-event taxonomy they
+# formatted. What survives here is the trend MATH (`reports/trend.py`) and the
+# pipeline's lead-length guard, which kept their subjects.

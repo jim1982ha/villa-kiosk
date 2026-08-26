@@ -59,18 +59,11 @@ export default function PreviewTab({
               the operator something different from what arrives on the phone. */}
           <pre className="reports-body">{preview.body}</pre>
 
-          <dl className="reports-facts">
-            <div><dt>Alerts read</dt><dd>{preview.analysis.aggregated.eventsSeen}</dd></div>
-            <div><dt>Grouped into</dt><dd>{preview.analysis.aggregated.groups}</dd></div>
-            <div><dt>Priced</dt><dd>{preview.analysis.aggregated.groupsPriced}</dd></div>
-            <div><dt>Open incidents</dt><dd>{preview.analysis.aggregated.openIncidents}</dd></div>
-            {preview.analysis.aggregated.eventsDropped > 0 && (
-              <div>
-                <dt>Unreadable</dt>
-                <dd>{preview.analysis.aggregated.eventsDropped}</dd>
-              </div>
-            )}
-          </dl>
+          {/* ⚠️ THE AGGREGATION FACTS ROW IS GONE (TASK-075). It counted
+              blueprint events read/grouped/priced, and the last producer of
+              those events was retired at the cutover — four zeros in a row
+              read as a broken pipeline, not a quiet villa. What the preview
+              still shows is the brief itself and the exact payload below. */}
 
           {/* ⚠️ AFTER THE BRIEF, NOT BEFORE IT. The plan puts this at the END
               of onboarding — read a real report from real data, THEN see

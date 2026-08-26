@@ -84,12 +84,19 @@ def test_only_the_RENDERER_owns_the_rendering_vocabulary() -> None:
 def test_the_renderer_IS_where_the_prose_lives() -> None:
     """⚠️ THE VACUOUS-PASS GUARD, AND IT IS NOT OPTIONAL HERE. The test above
     passes trivially if the renderer's own vocabulary is renamed or the walk
-    stops finding files — a boundary test that cannot see either side reports a
-    clean boundary forever."""
-    renderer = _code(os.path.join(REPORTS, "narrate", "deterministic.py"))
-    assert renderer.count("BULLET") > 20, (
-        "the renderer no longer uses the vocabulary this file checks for "
-        "elsewhere, so the boundary test above is measuring nothing")
+    stops finding files — a boundary test that cannot see either side reports
+    a clean boundary forever.
+
+    ⚠️ THE RENDERER MOVED (TASK-073): `agent/fallback.py` writes every brief
+    and every rung now. Its vocabulary is plainer — list dashes and f-strings
+    rather than BULLET/heading calls — so the guard anchors on the seams that
+    define it: the composer, the rungs, and the inert() discipline."""
+    renderer = _code(os.path.join(ROOT, "rootfs", "usr", "bin", "agent",
+                                  "fallback.py"))
+    assert renderer.count("inert(") > 10, (
+        "the renderer no longer routes its strings through inert(), so the "
+        "boundary test above is measuring nothing")
+    assert "def brief(" in renderer and "def compose(" in renderer
     assert len(list(_synthesis_files())) >= 8, (
         "the synthesis walk found almost nothing; the boundary test above is "
         "passing because it looked at an empty set")
@@ -114,18 +121,8 @@ def test_the_shared_JUDGEMENTS_have_one_definition_each() -> None:
             "layers can now disagree about it without either being wrong")
 
 
-def test_the_blueprint_layer_already_speaks_the_analysis_layer_s_TYPE() -> None:
-    """⚠️ THE CONVERSION D12 SAID WAS MISSING ALREADY EXISTS. `to_findings`
-    turns a `Group` into the same `Finding` the analysis modules emit, and it is
-    wired — `aggregate()` returns it and the narration payload reads it. What it
-    deliberately does NOT do is replace `groups`, because a Finding cannot carry
-    money, duration, room or an open/closed lifecycle, and four sections render
-    exactly those."""
-    src = _code(os.path.join(REPORTS, "aggregate.py"))
-    assert re.search(r"^def to_findings\(", src, re.M)
-    assert '"findings": to_findings(groups)' in src, (
-        "aggregate no longer publishes the structured conversion, so the "
-        "narration payload has to re-derive one")
-    assert '"groups": groups' in src, (
-        "the rich Group shape is gone; the money, room and incident sections "
-        "render fields a Finding does not carry")
+# ⚠️ test_the_blueprint_layer_already_speaks_the_analysis_layer_s_TYPE LEFT
+# WITH TASK-071: `aggregate.to_findings` was the bridge it pinned, and the
+# whole blueprint-event layer it bridged FROM is gone — no producer, no Items,
+# no Groups. The one-renderer property this file exists for is unchanged and
+# is checked above against the renderer's new home.

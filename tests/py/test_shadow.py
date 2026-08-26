@@ -191,33 +191,8 @@ def test_a_history_ENTRY_carries_its_findings_not_just_a_count() -> None:
         "this is what makes it expensive")
 
 
-def test_the_history_record_reads_the_field_a_GROUP_actually_has() -> None:
-    """⚠️ `Group.label`, NOT `Group.title`. The record builder asked for a field
-    the dataclass does not define, and `getattr(…, "title", "")` answers "" for
-    a missing attribute rather than raising — so ten blueprint findings were
-    stored titleless and nothing failed."""
-    import inspect
-    import re
-
-    from reports.aggregate import Group
-    from reports import pipeline as pipeline_mod
-
-    # ⚠️ ANNOTATIONS, NOT `dataclasses.fields` — `Group` is a plain class with
-    # a hand-written __init__, and asking dataclasses about it raises. The
-    # first version of this pin failed on the tool rather than on the code.
-    names = set(getattr(Group, "__annotations__", {}))
-    assert "label" in names and "title" not in names, (
-        "Group's fields changed; this pin is checking the wrong one")
-
-    # ⚠️ COMMENTS STRIPPED. The note explaining this very fix quotes the
-    # offending expression, and without this the pin fires on the prose — the
-    # SEVENTH time a source-reading check in this repo has matched its own
-    # explanation.
-    source = re.sub(r"#[^\n]*", "", inspect.getsource(pipeline_mod.run_report))
-    entry = source[source.index('entry: Dict[str, Any] = {'):]
-    entry = entry[:entry.index("\n    }")]
-    assert not re.search(r'getattr\(g,\s*"title"', entry), (
-        "the record builder reads Group.title again — a field that does not "
-        "exist, so every blueprint finding is stored without one")
-
-
+# ⚠️ test_the_history_record_reads_the_field_a_GROUP_actually_has LEFT WITH
+# TASK-071: `aggregate.Group` is deleted, so there is no field for the record
+# builder to misread. The general lesson (getattr's default answers "" for a
+# missing attribute rather than raising) is recorded in
+# feedback_guessed-field-shapes and enforced by mypy --strict on reports/.

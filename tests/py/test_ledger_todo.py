@@ -142,38 +142,19 @@ def test_reconcile_is_read_only() -> None:
 # ── the rendered result ──────────────────────────────────────────────────────
 
 def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
-    """⚠️ NOT MORE BULLETS UNDER "Raised for the facility manager". These were raised
-    in an EARLIER period; folding them in reports old work as this week's."""
-    from reports.narrate import DeterministicNarrator, ReportContext
-    context = ReportContext(
-        audience="owner", cadence="weekly", period="P",
-        generated_at="2026-08-21T02:00:00+08:00",
-        discovery={"reachable": True, "capabilities": [],
-                   "capabilities_missing": [], "capability_absent": {},
-                   "preflight": []},
-        carried_tasks=[_parse(PM01)])
-    body = DeterministicNarrator().render(context)[1]
-    # ⚠️ ITS OWN GLYPH, DERIVED. This asserted `heading("preventive", …)`, which
-    # is how the shared-calendar bug survived: "Still open from earlier" and
-    # "Maintenance signals" are both `preventive` sections, so both rendered 📅
-    # and two consecutive headings could not be told apart by scanning.
-    from reports.narrate.deterministic import section_heading
-    assert section_heading("preventive_open") in body
-    assert "Raised for the facility manager:" not in body
+    """⚠️ RE-POINTED AT THE BRIEF'S NEW AUTHOR (TASK-073). The property: an
+    open job raised in an EARLIER period reaches the page, under a heading
+    that says it is still open rather than new — and no entity id travels."""
+    from agent import fallback as agent_fallback
+    body = agent_fallback.brief(carried=[_parse(PM01)]).text
+    assert "Jobs still open with the facility manager:" in body
     assert "sensor." not in body
 
 
 def test_a_week_whose_only_news_is_an_old_open_job_is_not_empty() -> None:
     """Saying "found nothing" over the top of an outstanding task is the
-    2.530.0 defect in a new place."""
-    from reports.narrate import DeterministicNarrator, ReportContext
-    context = ReportContext(
-        audience="owner", cadence="weekly", period="P",
-        generated_at="2026-08-21T02:00:00+08:00",
-        discovery={"reachable": True, "capabilities": [],
-                   "capabilities_missing": [], "capability_absent": {},
-                   "preflight": []},
-        carried_tasks=[_parse(PM01)])
-    body = DeterministicNarrator().render(context)[1]
+    2.530.0 defect in a new place — re-pinned against `fallback.brief`."""
+    from agent import fallback as agent_fallback
+    body = agent_fallback.brief(carried=[_parse(PM01)]).text
+    assert "Nothing needs your attention" not in body
     assert "found nothing" not in body
-    assert "nothing has been assessed" not in body

@@ -3410,6 +3410,10 @@ def main() -> None:
         # every concern, finding and standing fault of the period thrown away —
         # RISK-015, a component failing silently and the villa looking quiet.
         reports_pipeline.set_fallback_composer(agent_fallback.compose)
+        # ⚠️ THE NORMAL BRIEF'S AUTHOR TOO (TASK-073). Same file, same hook
+        # mechanism, different job: `brief` writes the banner-free happy path,
+        # `compose` writes the rungs when it cannot.
+        reports_pipeline.set_brief_composer(agent_fallback.brief)
         a["reports_task"] = asyncio.create_task(
             reports_pipeline.run_forever(a["session"]))
         # ⚠️ The collector is the only thing listening to the villa's own

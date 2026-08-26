@@ -175,19 +175,17 @@ def test_nothing_from_the_report_context_leaks_through_the_signature() -> None:
     assert params == {"findings", "audience", "cadence", "period", "blind_spots"}
 
 
-def test_a_real_aggregated_finding_passes_the_audit() -> None:
-    """End to end against the aggregator's own output, not a hand-built dict —
-    the same reason `test_sections` builds through `aggregate.aggregate`."""
-    from reports import aggregate
-    when = "2026-08-20T10:00:00+08:00"
-    events = [{"type": "vesta_roi_event", "fired": when, "at": when, "data": {
-        "blueprint": "roi_idle_load", "rule_id": "ROI-01",
-        "report_bucket": "Living room AC", "entities": ["climate.living"],
-        "kwh": 1.4, "cost_local": 2380.0, "basis": "estimated",
-        "timestamp": when}}]
-    findings = [f.as_dict() for f in
-                aggregate.to_findings(aggregate.group(
-                    aggregate.normalise_all(events)))]
+def test_a_real_module_finding_passes_the_audit() -> None:
+    """End to end against a producer's own output, not a hand-built dict.
+    ⚠️ THE PRODUCER CHANGED WITH TASK-071: the aggregator is gone, and the
+    real findings a payload now carries are the analysis modules' — so the
+    fixture is `Finding.as_dict()`, the exact type they emit."""
+    from reports.analysis.base import Finding
+    findings = [Finding(
+        ref="f1", kind="ANOMALY", severity="warning",
+        label="Living room AC", detail="idle draw rising against its own "
+        "baseline", area="Living room", metric="idle_floor", unit="kWh",
+        observed=1.4, baseline=0.9, delta=0.55, window_days=28).as_dict()]
     out = P.build(findings, audience="owner", cadence="weekly", period="2026-W34")
     assert P.audit(out) == []
     import json

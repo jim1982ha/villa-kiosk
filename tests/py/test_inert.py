@@ -38,7 +38,7 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from reports.narrate import style                              # noqa: E402
-from reports.narrate import DeterministicNarrator, ReportContext  # noqa: E402
+from agent import fallback as agent_fallback                  # noqa: E402
 
 #: The exact name that broke it, kept as the regression case.
 BROKE_IT = "Timmerflotte_8343 Temperature"
@@ -74,31 +74,30 @@ def test_it_leaves_everything_else_alone() -> None:
     assert style.inert(keep) == keep
 
 
-def test_the_deterministic_body_is_inert_end_to_end() -> None:
-    """The renderer is not asked to sanitise per site — the pipeline does it
-    once on the finished message. This checks the two agree by rendering a
-    context whose every human-supplied string is hostile."""
+def test_the_composed_body_is_inert_end_to_end() -> None:
+    """⚠️ RE-POINTED AT THE BRIEF'S NEW AUTHOR (TASK-073). The property is
+    identical: whoever writes the body, the pipeline sanitises the finished
+    message once, and this feeds the composer a context whose every
+    human-supplied string is hostile and checks the two agree."""
     rows: List[Dict[str, Any]] = [
         {"kind": "unavailable", "title": BROKE_IT, "detail": "Unavailable",
          "room": "Bedroom_2"},
         {"kind": "fault", "title": "Gate motor *grinding*", "detail": "Open fault",
          "room": "Entrance [north]"},
     ]
-    context = ReportContext(
-        audience="owner", cadence="daily", period="2026-08-21",
-        generated_at="2026-08-21T17:40:00+08:00",
-        discovery={"reachable": True, "capabilities": [], "capabilities_missing": [],
-                   "capability_absent": {}, "preflight": []},
-        standing=rows)
-    title, body = DeterministicNarrator().render(context)
-    clean_title, clean_body = style.inert(title), style.inert(body)
-    for character in ("_", "*", "`", "[", "]", "<", ">"):
+    body = agent_fallback.brief(
+        standing=rows,
+        concerns=[{"title": "Pump `odd`", "severity": "warning",
+                   "body": "cycling <fast>"}],
+        findings=[{"label": "AC_unit", "detail": "draw ~rising~"}]).text
+    clean_body = style.inert(body)
+    for character in ("_", "*", "`", "[", "]", "<", ">", "~"):
         assert character not in clean_body, f"{character!r} survived into the body"
-        assert character not in clean_title
     # The names are still readable, which is the other half of the requirement.
     assert "Timmerflotte 8343 Temperature" in clean_body
     assert "Gate motor grinding" in clean_body
     assert "Entrance (north)" in clean_body
+    assert "Pump 'odd'" in clean_body  # a backtick becomes an apostrophe
 
 
 def test_the_reports_own_quoting_is_not_markup_anywhere() -> None:
@@ -120,14 +119,14 @@ def test_the_pipeline_sanitises_after_both_narrators() -> None:
     source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
                                "pipeline.py"), encoding="utf-8").read()
     call = source.index("style_mod.inert(title)")
-    # ⚠️ THE OVERLAY IS A RE-RENDER NOW, NOT AN ASSIGNMENT. v2.592.0 made the
-    # provider fill the LEAD SLOT and re-ran the renderer, so the old anchor
-    # (`body, narration_mode = prose, …`) no longer exists. The property is
-    # unchanged and is what this asserts: whatever the provider contributes
-    # reaches `body` BEFORE `inert` runs, or the narrated path ships unsanitised.
-    overlay = source.index('context.slots = {"lead": lead}')
+    # ⚠️ THE PROVIDER'S LEAD IS HANDED TO THE COMPOSER NOW (TASK-073), so the
+    # anchors are: narrate, then compose, then inert, then deliver. The property
+    # is unchanged: whatever the provider contributes reaches `body` BEFORE
+    # `inert` runs, or the narrated path ships unsanitised.
+    overlay = source.index("provider.narrate")
+    composed = source.index("compose_brief(")
     deliver = source.index("deliveries = ([] if preview")
-    assert overlay < call < deliver, (
+    assert overlay < composed < call < deliver, (
         "the sanitiser must sit between the provider overlay and delivery")
 
 
@@ -148,8 +147,10 @@ def test_the_renderer_does_not_emit_markup_of_its_own() -> None:
     emitted `*bold*`, sanitising the finished message would silently delete it —
     so the claim that there is nothing to damage has to be checked, not assumed.
     `style.py`'s heading rule already forbids it; this is the enforcement."""
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
-                               "narrate", "deterministic.py"), encoding="utf-8").read()
+    # ⚠️ THE AUTHOR MOVED (TASK-073): `agent/fallback.py` writes every brief
+    # and every rung now, so it is the tree this claim is checked against.
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+                               "fallback.py"), encoding="utf-8").read()
     # ⚠️ THE `{...}` HALF OF AN f-STRING IS CODE, NOT OUTPUT. The first version
     # of this flagged `{singular[:-1]}ies` and `{names[0]}` — a subscript inside
     # an interpolation, which never reaches the message as a bracket. Step 7 of
@@ -316,7 +317,6 @@ def test_both_readers_of_the_label_map_humanise_it() -> None:
     import re
 
     targets = [
-        "rootfs/usr/bin/reports/narrate/deterministic.py",
         "rootfs/usr/bin/reports/analysis/base.py",
     ]
     offenders = []

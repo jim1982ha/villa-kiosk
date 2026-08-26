@@ -123,9 +123,13 @@ def test_it_does_not_reimplement_the_deterministic_renderer() -> None:
         elif isinstance(node, ast.Import):
             imported.update(a.name for a in node.names)
     assert not any("deterministic" in m for m in imported), imported
-    assert not any(m.startswith("reports.narrate.deterministic")
-                   for m in imported)
-    assert len(inspect.getsource(fallback).splitlines()) < 200
+    # ⚠️ THE BOUND MOVED WITH TASK-073 AND THE PROPERTY CHANGED WITH IT. While
+    # deterministic.py existed, smallness proved this was not a second renderer
+    # beside it. Now this IS the renderer — `brief()` joined `compose()` — and
+    # what the bound guards is the design sentence above: plain lists, severity
+    # order, no zones, no charts, no money ceilings. If this file cannot say
+    # that in ~450 lines, it has started growing the document it replaced.
+    assert len(inspect.getsource(fallback).splitlines()) < 450
 
 
 # ── the ladder is DESCENDED, not merely renderable (TASK-111) ────────────────
@@ -144,24 +148,24 @@ class _FakeSession:
 
 
 def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
-    """One report whose deterministic renderer raises. Returns the history entry.
+    """One report whose BRIEF COMPOSER raises. Returns the history entry.
 
-    The renderer is broken at the class it is constructed from, so the failure
-    lands exactly where a real one would — after collect, analyse, synthesise
-    and the concerns join, with a fully populated context in hand.
+    ⚠️ REWIRED FOR TASK-073: the failure this simulates is the registered
+    composer (`agent/fallback.brief` in production) falling over, which lands
+    exactly where the old renderer's exception did — after collect, analyse
+    and the concerns join, with a fully populated context in hand — and must
+    descend the same ladder.
     """
     import asyncio
     from datetime import datetime, timezone
 
     from reports import pipeline
-    from reports.narrate import DeterministicNarrator
 
-    def explode(self: Any, context: Any) -> Any:
-        raise RuntimeError("the renderer fell over")
+    def explode(**kw: Any) -> Any:
+        raise RuntimeError("the composer fell over")
 
-    original = DeterministicNarrator.render
     source = context_extras.get("concerns")
-    DeterministicNarrator.render = explode          # type: ignore[assignment]
+    pipeline.set_brief_composer(explode)
     pipeline.set_fallback_composer(fallback.compose)
     pipeline.set_concerns_source((lambda: source) if source else None)
     try:
@@ -171,7 +175,7 @@ def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
             found={"reachable": True, "preflight": []},
             entry_id="ladder:2026-08-24"))
     finally:
-        DeterministicNarrator.render = original     # type: ignore[assignment]
+        pipeline.set_brief_composer(None)
         pipeline.set_fallback_composer(None)
         pipeline.set_concerns_source(None)
 

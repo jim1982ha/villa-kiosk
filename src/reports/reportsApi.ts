@@ -109,17 +109,6 @@ export interface ReportPreview {
      *  code never reaches this endpoint. Checked because /dry-audit flagged
      *  `SkipReason` as an unused export and the obvious fix was to use it here. */
     skipped: { module: string; reason: string }[];
-    aggregated: {
-      eventsSeen: number;
-      eventsDropped: number;
-      groups: number;
-      groupsByCategory: Record<string, number>;
-      groupsPriced: number;
-      savings: { total: number; groups: number; basisMix: Record<string, number> };
-      tasks: number;
-      openIncidents: number;
-      schemaDrift: { blueprint: string; events: number; missing: string[]; legacy: string[] }[];
-    };
     periodSince: string;
   };
   /** ⚠️ WHAT WOULD ACTUALLY BE TRANSMITTED, built by the backend's own
@@ -746,8 +735,6 @@ export async function runReportNow(
     // "nothing would be sent".
     const pay = d._payload === undefined || d._payload === null
       ? null : obj(d._payload);
-    const agg = obj(analysis.aggregated);
-    const savings = obj(agg.savings);
     return {
       title: str(d._title),
       body: str(d._body),
@@ -759,29 +746,9 @@ export async function runReportNow(
           const item = obj(s);
           return { module: str(item.module), reason: str(item.reason) };
         }),
-        aggregated: {
-          eventsSeen: num(agg.events_seen),
-          eventsDropped: num(agg.events_dropped),
-          groups: num(agg.groups),
-          groupsByCategory: counts(agg.groups_by_category),
-          groupsPriced: num(agg.groups_priced),
-          savings: {
-            total: num(savings.total),
-            groups: num(savings.groups),
-            basisMix: counts(savings.basis_mix),
-          },
-          tasks: num(agg.tasks),
-          openIncidents: num(agg.open_incidents),
-          schemaDrift: arr(agg.schema_drift).map((s) => {
-            const item = obj(s);
-            return {
-              blueprint: str(item.blueprint),
-              events: num(item.events),
-              missing: strs(item.missing),
-              legacy: strs(item.legacy),
-            };
-          }),
-        },
+        // ⚠️ THE `aggregated` SLICE IS GONE (TASK-075): it summarised the
+        // blueprint-event parse, whose last producer was retired at the
+        // cutover, and the backend stopped emitting it with TASK-071.
         periodSince: str(analysis.period_since),
       },
       deliveries: arr(d.deliveries).map(parseDelivery),

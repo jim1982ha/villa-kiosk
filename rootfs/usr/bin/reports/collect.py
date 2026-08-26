@@ -490,13 +490,26 @@ class Collector:
             swallow("could not mark the collector online", err)
 
     async def run_once(self) -> None:
-        """One connection's lifetime. Returns when the socket closes."""
+        """One connection's lifetime. Returns when the socket closes.
+
+        ⚠️ THE `vesta_*` SUBSCRIPTION IS GONE (TASK-074, 2026-08-27). Every
+        producer was retired with the blueprint cutover — the critical_*
+        reflexes and the channel-test canary stopped emitting on the same day,
+        verified by reading the live blueprints back — so a derived event list
+        is a list of names nothing fires. What remains on this socket is the
+        chat event, which was never derived from anything (see
+        CHAT_EVENT_TYPES), plus whatever a caller passes explicitly.
+        `discover_event_types` survives for discovery's blueprint inventory;
+        the SUBSCRIPTION no longer consults it."""
         async with HassClient(self._session) as hass:
-            stems: List[str] = []
             if not self._types:
-                self._types, stems = await discover_event_types(hass)
+                self._types = _with_chat([])
             await hass.subscribe(self._types)
-            self._mark_online(stems)
+            # ⚠️ STILL CALLED, WITH NO STEMS — `online_since` lives in there and
+            # TASK-074's own constraint is that coverage semantics stay exact.
+            # An empty stems list preserves whatever blueprint inventory a
+            # previous pass recorded rather than erasing it.
+            self._mark_online([])
             # ⚠️ SET AFTER `subscribe`, NEVER BEFORE. An open websocket that has
             # not been subscribed receives nothing, so marking it connected on
             # connect would report a listener that is not listening — the same

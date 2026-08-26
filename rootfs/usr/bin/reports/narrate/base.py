@@ -8,9 +8,10 @@ in a villa that may have no WAN at all, and a report subsystem that only
 produces prose when a third party answers is a feature that works on a
 developer's desk and is missing on the wall.
 
-Which is why the fallback is named `deterministic.py` rather than the plan's
-`null.py`. A file called "null" reads as a placeholder, and placeholders rot;
-this one is what the owner actually reads every week.
+⚠️ THE DETERMINISTIC AUTHOR MOVED (TASK-073): `agent/fallback.py` writes
+every brief and every rung now, registered into the pipeline at boot. The
+guarantee above is unchanged — fixed code composes the document, a provider
+contributes at most one lead sentence.
 
 `ReportContext` is deliberately a plain dict-carrying dataclass rather than the
 narration PAYLOAD. The payload — the privacy-filtered, allow-listed subset that
@@ -33,21 +34,11 @@ class ReportContext:
     cadence: str
     period: str
     generated_at: str
-    #: Whole `discover()` result — capabilities, inventory, preflight.
-    #: Rules that fire and are never acknowledged — see `reports.noise`. Empty
-    #: `rules` with `known: True` means "asked and found none", which is a
-    #: different claim from `known: False` ("the buffer does not reach back far
-    #: enough to ask"), and the brief must not collapse them.
-    noise: Dict[str, Any] = field(default_factory=dict)
     #: Same-cadence values from PREVIOUS reports, oldest first, so a number can
     #: be judged rather than merely stated. ⚠️ THIS REPORT IS NOT IN IT — history
     #: is appended after delivery — or every trend would compare a value with
     #: itself and read "about usual" forever. See `reports.trend`.
     history: Dict[str, List[float]] = field(default_factory=dict)
-    #: Prose a narration provider supplied, per slot. `"lead"` is the only slot;
-    #: an absent or unusable key falls back to the deterministic sentence — see
-    #: `DeterministicNarrator._lead_sentence` and the slot note above it.
-    slots: Dict[str, str] = field(default_factory=dict)
     discovery: Dict[str, Any] = field(default_factory=dict)
     #: Analysis output. Empty until Phase 3 introduces modules.
     findings: List[Dict[str, Any]] = field(default_factory=list)
@@ -72,14 +63,6 @@ class ReportContext:
     #: "every check ran and found nothing" are the same empty result — and they
     #: mean opposite things to the person reading the report.
     ran: List[str] = field(default_factory=list)
-    #: `aggregate.aggregate()` over the period's collected blueprint events —
-    #: `groups`, `savings`, `tasks`, `open_incidents`, `schema_drift`, counts.
-    #:
-    #: ⚠️ EMPTY IS A REAL STATE AND NOT THE SAME AS ABSENT. A property with no
-    #: blueprint layer has no aggregation to do, and one whose collector was
-    #: offline has aggregation it could not do. `collector` below is what
-    #: separates them, and section 8 must not report the second as the first.
-    aggregated: Dict[str, Any] = field(default_factory=dict)
     #: `collect.state()` — whether anything was listening, and for how long.
     collector: Dict[str, Any] = field(default_factory=dict)
     #: Open facility manager tasks from the HA `todo` list that this period's own

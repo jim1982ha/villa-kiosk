@@ -202,31 +202,34 @@ ACCEPTED_IN_COMMENTS: Set[str] = {
 #: groups above use — a new fixture id fails until somebody classifies it.
 FIXTURES: Set[str] = {
     # Single letters and obvious stand-ins.
-    "sensor.a_energy", "sensor.b_energy", "sensor.c", "sensor.j", "sensor.n",
-    "sensor.p", "sensor.p_energy", "sensor.s", "sensor.s0", "sensor.x",
+    # ⚠️ TWELVE ENTRIES LEFT WITH PH-5's DELETED TESTS (2026-08-27): the ids
+    # lived only in test_aggregate/noise/verify/sections/actionable fixtures,
+    # and this list's own companion assertion is what noticed — an allow-listed
+    # id appearing nowhere is permission nobody asked for.
+    "sensor.a_energy", "sensor.b_energy", "sensor.c",
+    "sensor.p_energy", "sensor.s", "sensor.s0", "sensor.x",
     "sensor.x_energy", "sensor.new_energy", "sensor.old_energy",
-    "binary_sensor.x", "binary_sensor.leak_x", "climate.b", "light.a",
-    "automation.rule_", "automation.outdoor_",
+    "binary_sensor.leak_x", "light.a",
     # Named for the behaviour under test, not for a device.
-    "sensor.debris", "sensor.ghost", "sensor.night", "sensor.odd", "sensor.ok",
-    "sensor.only_one", "sensor.other", "sensor.mesh_only", "sensor.total",
+    "sensor.debris", "sensor.ghost", "sensor.odd", "sensor.ok",
+    "sensor.other", "sensor.mesh_only", "sensor.total",
     "sensor.energy", "sensor.tariff", "sensor.temperature",
     "sensor.meter_cost", "sensor.meter_export", "sensor.meter_import",
     "sensor.combo_humidity", "sensor.combo_temperature",
     "switch.hidden", "switch.kept",
     # Generic rooms and equipment — no villa has a claim on these.
     "binary_sensor.hall_motion", "binary_sensor.laundry_leak",
-    "binary_sensor.leak", "binary_sensor.leak_kitchen",
+    "binary_sensor.leak",
     "climate.living", "cover.blind", "cover.blind__open",
     "light.bedroom_lamp", "light.hall", "light.kitchen", "light.terrace_string",
     "lock.front", "sensor.bedroom_window",
-    "sensor.pump", "sensor.pump_pf", "sensor.pump_power",
+    "sensor.pump", "sensor.pump_power",
     "switch.pool_pump", "switch.pump_relay",
     # ⚠️ REAL, AND KEPT BECAUSE THE TEST IS ABOUT THE REAL SHAPE. The todo
     # parser is checked against the exact strings the villa's blueprints write;
     # a sanitised copy would stop proving the parser handles what it meets.
     # Listed so the decision is visible rather than accidental.
-    "sensor.house_pump_pf", "sensor.house_pump_power",
+    "sensor.house_pump_power",
     "sensor.jacuzzi_pump_power_factor", "sensor.pool_pump_power",
     "sensor.swimming_pool_massage_jet_pump_power_factor",
     "light.master_bedroom_master_bedroom_light_ceiling",

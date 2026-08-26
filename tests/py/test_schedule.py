@@ -434,23 +434,11 @@ def test_every_cadence_says_what_its_window_is() -> None:
     assert "1st" in schedule.WINDOW_PHRASE["monthly"]
 
 
-def test_a_scoped_heading_reads_as_english_not_as_a_cadence_name() -> None:
-    """⚠️ THE TEST THAT DERIVES THE HEADING CANNOT CHECK THE HEADING.
-
-    `deterministic` already had a `PERIOD_WORD` ({'daily': 'Daily'}) for the
-    title, and importing `schedule`'s under the same name shadowed it — every
-    scoped heading rendered "What went wrong Weekly". Every test that builds its
-    expectation from `section_heading` agreed, because they were reading the
-    same wrong expression. So this one asserts the VALUE, not the agreement.
-    """
-    from reports.narrate.deterministic import section_heading
-    for cadence, expected in (("daily", "today"), ("weekly", "this week"),
-                              ("monthly", "this month")):
-        rendered = section_heading("critical", cadence)
-        assert rendered.endswith(expected), rendered
-        assert cadence.title() not in rendered, (
-            f"{rendered!r} ends with the cadence's NAME, not a phrase a heading "
-            f"can end with — the shadowing bug")
+# ⚠️ test_a_scoped_heading_reads_as_english_not_as_a_cadence_name LEFT WITH
+# ITS RENDERER (TASK-073): `section_heading` and the scoped-heading grammar
+# were `deterministic.py`'s, and the new brief has no per-cadence headings to
+# shadow. The lesson it recorded — a test deriving its expectation from the
+# expression under test agrees with any bug in it — survives as prose here.
 
 
 def test_the_title_span_says_which_days_the_report_covers() -> None:

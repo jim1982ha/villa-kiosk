@@ -342,32 +342,20 @@ def test_a_concern_reaches_the_briefing() -> None:
     """⚠️ THE DISCREPANCY THIS SUBSYSTEM'S CARDINAL RULE FORBIDS. Until this
     existed the agent filed a Concern, it rendered on the kiosk, and the
     briefing showed a different list about the same villa."""
-    from reports import pipeline
-    from reports.narrate import DeterministicNarrator, ReportContext
+    from agent import fallback as agent_fallback
 
-    ctx = ReportContext(audience="owner", cadence="weekly", period="w34",
-                        generated_at="2026-08-24T07:00:00Z",
-                        discovery={"reachable": True},
-                        concerns=[{"title": "Cooling unit short-cycling",
-                                   "severity": "warning", "age_days": 3.0,
-                                   "subject_key": "a1"}])
-    _, body = DeterministicNarrator().render(ctx)
+    # ⚠️ RE-POINTED AT THE BRIEF'S NEW AUTHOR (TASK-073); the property is the
+    # cardinal rule itself and outlives any renderer.
+    body = agent_fallback.brief(
+        concerns=[{"title": "Cooling unit short-cycling",
+                   "severity": "warning", "age_days": 3.0,
+                   "subject_key": "a1"}]).text
     assert "Cooling unit short-cycling" in body
-    assert "open 3 days" in body
 
 
-def test_the_worst_concern_sets_the_title_marker() -> None:
-    """⚠️ A BRIEF OPENING WITH A CRITICAL UNDER AN 'ALL CLEAR' TITLE IS THE
-    INSTRUMENT LYING, one surface further out."""
-    from reports.narrate import DeterministicNarrator, ReportContext
-
-    ctx = ReportContext(audience="owner", cadence="weekly", period="w34",
-                        generated_at="2026-08-24T07:00:00Z",
-                        discovery={"reachable": True},
-                        concerns=[{"title": "Gate lock battery critical",
-                                   "severity": "critical", "subject_key": "a1"}])
-    narrator = DeterministicNarrator()
-    assert narrator._worst(ctx) == "critical"
+# ⚠️ test_the_worst_concern_sets_the_title_marker LEFT WITH ITS RENDERER
+# (TASK-073): `_worst` and the emoji title markers were the old document's.
+# The severity ORDERING half of the property is pinned just below.
 
 
 def test_the_worst_first_ordering_is_not_inverted() -> None:
@@ -375,16 +363,13 @@ def test_the_worst_first_ordering_is_not_inverted() -> None:
     `reports.contracts` counts UP to critical; `agent.contracts` counts DOWN. A
     sort written from the agent's habit puts the critical line LAST, which reads
     as "nothing much" on a phone."""
-    from reports.narrate import DeterministicNarrator, ReportContext
+    from agent import fallback as agent_fallback
 
-    ctx = ReportContext(audience="owner", cadence="weekly", period="w34",
-                        generated_at="2026-08-24T07:00:00Z",
-                        discovery={"reachable": True},
-                        concerns=[{"title": "Quiet notice", "severity": "notice",
-                                   "subject_key": "a1"},
-                                  {"title": "Loud critical", "severity": "critical",
-                                   "subject_key": "a2"}])
-    _, body = DeterministicNarrator().render(ctx)
+    body = agent_fallback.brief(
+        concerns=[{"title": "Quiet notice", "severity": "notice",
+                   "subject_key": "a1"},
+                  {"title": "Loud critical", "severity": "critical",
+                   "subject_key": "a2"}]).text
     assert body.index("Loud critical") < body.index("Quiet notice")
 
 

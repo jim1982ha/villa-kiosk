@@ -21,7 +21,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from reports.deliver import _service_path, deliver, deliver_one
-from reports.narrate import DeterministicNarrator, ReportContext
+from reports.narrate import ReportContext
 
 
 def _ctx(**kw: Any) -> ReportContext:
@@ -45,164 +45,6 @@ def _ctx(**kw: Any) -> ReportContext:
 
 
 # ── the renderer ─────────────────────────────────────────────────────────────
-
-def test_an_empty_report_does_not_claim_all_is_well() -> None:
-    """⚠️ The sentence that keeps a Phase 2 report honest."""
-    _, body = DeterministicNarrator().render(_ctx())
-    assert "nothing has been assessed" in body
-    for forbidden in ("all is well", "everything is fine", "no issues", "all good"):
-        assert forbidden not in body.lower()
-
-
-def test_blind_spots_travel_with_the_report() -> None:
-    """An owner reading a summary with no mention of cost must be told no
-    tariff is configured, not left to assume energy was free."""
-    _, body = DeterministicNarrator().render(_ctx(discovery={
-        **_ctx().discovery,
-        "capability_absent": {"energy_cost": "No tariff is configured."},
-    }))
-    assert "Not covered by this report" in body
-    assert "tariff" in body
-
-
-def test_blind_spots_use_the_absent_voice() -> None:
-    """⚠️ THE BUG A RENDERED SAMPLE CAUGHT.
-
-    `capability_meaning` says what a capability ENABLES. Printed under "not
-    covered by this report" it asserts the OPPOSITE of the truth — "A tariff is
-    configured, so consumption can be expressed as money" about a property with
-    no tariff — in the section whose whole job is honesty about blind spots.
-    Grammatical, plausible, and wrong; only reading the output finds it.
-    """
-    _, body = DeterministicNarrator().render(_ctx(discovery={
-        **_ctx().discovery,
-        "capability_meaning": {"energy_cost": "A tariff is configured, so "
-                                              "consumption can be expressed as money."},
-        "capability_absent": {"energy_cost": "No tariff is configured, so "
-                                             "consumption cannot be expressed as money."},
-    }))
-    assert "No tariff is configured" in body
-    assert "A tariff is configured" not in body
-
-
-def test_a_capability_explained_by_preflight_is_not_repeated() -> None:
-    """Said once, under "needs attention", where it is actionable — rather
-    than there AND again two lines later in slightly different words."""
-    _, body = DeterministicNarrator().render(_ctx(discovery={
-        **_ctx().discovery,
-        "capabilities_missing": ["energy_cost"],
-        "capability_absent": {"energy_cost": "No tariff is configured."},
-        "preflight": [{"severity": "notice", "capability": "energy_cost",
-                       "detail": "No tariff is configured on the Energy dashboard."}],
-    }))
-    # ⚠️ THE INVARIANT IS "SAID ONCE", NOT THE HEADING IT IS SAID UNDER. Phase D
-    # moved preflight into "Monitoring health", where a stale configuration
-    # belongs — it is a fault in the monitoring, not a limit of the property.
-    assert body.count("tariff is configured") == 1, body
-    assert "Monitoring health" in body
-    assert "Not covered by this report" not in body, (
-        "the only missing capability was already explained under monitoring health")
-
-
-def test_the_date_is_readable() -> None:
-    """An ISO timestamp in a message on a phone is not prose."""
-    _, body = DeterministicNarrator().render(_ctx())
-    assert "2026-08-20T07:00:00" not in body
-    assert "Thursday" in body and "August" in body
-
-
-def test_an_unreachable_pass_says_so_plainly() -> None:
-    """Silence is indistinguishable from a healthy quiet week."""
-    _, body = DeterministicNarrator().render(_ctx(discovery={
-        "reachable": False, "error": "connection refused",
-        "capabilities": [], "capabilities_missing": [], "preflight": [],
-    }))
-    assert "could not be reached" in body
-    assert "connection refused" in body
-    assert "Not covered by this report" not in body, (
-        "a blind-spot list built from an outage would imply the capabilities "
-        "were measured and found missing")
-
-
-def test_critical_preflight_is_not_buried(  ) -> None:
-    """A stale configuration EXPLAINS an empty report; under a pile of notices
-    it goes unread for months."""
-    _, body = DeterministicNarrator().render(_ctx(discovery={
-        **_ctx().discovery,
-        "preflight": [
-            {"severity": "notice", "detail": "A notice."},
-            {"severity": "critical", "detail": "Configuration is stale."},
-            {"severity": "warning", "detail": "A warning."},
-        ],
-    }))
-    # ⚠️ ASSERT THE ORDERING, NOT POSITION 0 IN THE DOCUMENT. `lines[0]` was a
-    # proxy that held only while preflight was the one bulleted section; Phase D
-    # added seven more. The rule was always "critical above notice", and reading
-    # it off the whole body made a section ABOVE preflight look like a
-    # regression when it was the new structure working.
-    order = [body.index(t) for t in
-             ("Configuration is stale.", "A warning.", "A notice.")]
-    assert order == sorted(order), (
-        "critical preflight must sort above warning and notice")
-
-
-def test_findings_are_rendered_when_present() -> None:
-    _, body = DeterministicNarrator().render(_ctx(findings=[
-        {"label": "Pool pump", "severity": "warning", "area": "Plant room",
-         "detail": "drawing more than its own baseline"},
-    ]))
-    # Phase D routes findings into sections by KIND rather than
-    # listing them under one heading. What must survive is every FIELD: the
-    # label, the AREA (the only thing distinguishing two identically named
-    # devices) and the detail.
-    assert "1 finding" in body
-    assert "Pool pump" in body and "Plant room" in body
-    assert "drawing more than its own baseline" in body
-    assert "nothing has been assessed" not in body
-
-
-def test_the_body_is_plain_text() -> None:
-    """⚠️ No markdown. Telegram would parse it; persistent_notification would
-    print the asterisks. Plain text reads correctly on both."""
-    _, body = DeterministicNarrator().render(_ctx(findings=[
-        {"label": "X", "severity": "info", "detail": "y"}]))
-    for markup in ("**", "__", "<b>", "<br", "```", "* "):
-        assert markup not in body, f"{markup!r} found in body"
-
-
-def test_the_title_names_the_period_and_audience() -> None:
-    """⚠️ IT PINNED THE CADENCE AND THE PERIOD KEY, WHICH IS WHAT WAS WRONG.
-    "Weekly property brief — 2026-W34" was reported as confusing twice over:
-    "would that always be daily?" (the cadence is a setting, restated) and
-    "based on what start/end date?" (`2026-W34` is a key, not dates). The title
-    now carries the SPAN, which answers both and makes the cadence redundant.
-    """
-    from reports.schedule import period_span
-    title, _ = DeterministicNarrator().render(_ctx())
-    assert period_span("weekly", datetime.fromisoformat(
-        "2026-08-20T07:00:00+08:00")) in title
-    assert "Weekly" not in title, "the cadence is a setting, not the window"
-    assert "2026-W34" not in title, "a period KEY is not a date range"
-    assert "brief" in title.lower()
-
-
-def test_the_renderer_never_invents_a_number() -> None:
-    """No "0 kWh" for a meter that reported nothing — that states a
-    measurement nobody took."""
-    _, body = DeterministicNarrator().render(_ctx())
-    assert "0 kWh" not in body and "0kWh" not in body
-
-
-def test_skipped_modules_are_named() -> None:
-    _, body = DeterministicNarrator().render(_ctx(skipped=[
-        {"module": "standby_creep", "reason": "insufficient history"}]))
-    # ⚠️ THE CHECK'S NAME, NOT ITS KEY — see `_skipped_lines`. A module that has
-    # declared a `title` prints that; one that has not (this fixture) falls back
-    # to its identifier humanised.
-    assert "Standby creep" in body and "insufficient history" in body
-
-
-# ── delivery ─────────────────────────────────────────────────────────────────
 
 def test_service_path_accepts_both_forms() -> None:
     """A config written by hand without the domain must still work, rather
@@ -409,19 +251,6 @@ def test_a_manual_send_is_marked_manual_and_carries_the_clock() -> None:
     assert entry["id"].endswith(":090955")
 
 
-def test_findings_are_counted_in_readable_english() -> None:
-    """"1 finding(s)" is machine output; this is read by the villa's owner."""
-    one = DeterministicNarrator().render(_ctx(findings=[
-        {"label": "A", "severity": "info", "detail": "x"}]))[1]
-    two = DeterministicNarrator().render(_ctx(findings=[
-        {"label": "A", "severity": "info", "detail": "x"},
-        {"label": "B", "severity": "info", "detail": "y"}]))[1]
-    assert "1 finding" in one and "(s)" not in one
-    assert "2 findings" in two and "(s)" not in two
-
-
-# ── preview ──────────────────────────────────────────────────────────────────
-
 def test_a_preview_composes_everything_and_sends_nothing() -> None:
     """⚠️ An operator deciding whether to switch reports on needs to READ one
     first. "Enable it and see what arrives" means finding out that a module is
@@ -485,49 +314,6 @@ def test_history_stores_no_prose_and_no_findings(tmp_path: Any) -> None:
 # automated checks are configured yet" about a property where a check had just
 # run and found nothing. Three different empties, one sentence — the same
 # failure as the blind-spot section asserting a tariff was configured.
-
-def test_a_check_that_ran_and_found_nothing_says_so() -> None:
-    _, body = DeterministicNarrator().render(_ctx(ran=["standby_creep"]))
-    assert "1 check ran and found nothing" in body
-    assert "not configured" not in body and "configured yet" not in body
-
-
-def test_several_checks_that_ran_are_counted_in_english() -> None:
-    _, body = DeterministicNarrator().render(_ctx(ran=["a", "b", "c"]))
-    assert "3 checks ran and found nothing" in body
-
-
-def test_no_modules_at_all_is_a_different_sentence() -> None:
-    _, body = DeterministicNarrator().render(_ctx(ran=[]))
-    assert "No automated checks are configured yet" in body
-
-
-def test_everything_skipped_is_a_third_sentence() -> None:
-    _, body = DeterministicNarrator().render(_ctx(
-        ran=[], skipped=[{"module": "x", "reason": "not enough history yet"}]))
-    assert "see the reasons below" in body
-    assert "configured yet" not in body
-
-
-def test_unreachable_still_wins_over_all_of_them() -> None:
-    _, body = DeterministicNarrator().render(_ctx(
-        ran=["standby_creep"],
-        discovery={"reachable": False, "error": "down", "capabilities": [],
-                   "capabilities_missing": [], "preflight": []}))
-    assert "could not be reached" in body
-
-
-def test_no_empty_sentence_claims_all_is_well() -> None:
-    """Whichever of the three it is, none may read as a conclusion."""
-    for kw in ({"ran": ["a"]}, {"ran": []},
-               {"ran": [], "skipped": [{"module": "x", "reason": "y"}]}):
-        _, body = DeterministicNarrator().render(_ctx(**kw))
-        for forbidden in ("all is well", "everything is fine", "no issues",
-                          "all good", "healthy"):
-            assert forbidden not in body.lower(), (kw, forbidden)
-
-
-# ── where one schedule's brief goes ─────────────────────────────────────────
 
 def test_a_schedule_without_targets_inherits_the_shared_list() -> None:
     """The common case, and why the shared list exists at all: one property,
@@ -611,39 +397,11 @@ def test_a_duplicate_route_to_an_offered_destination_is_not_offered() -> None:
     assert not _redundant("some_integration", speaks, {"mobile_app_x", "notify"})
 
 
-def test_the_history_entry_counts_the_findings_the_brief_actually_reports() -> None:
-    """⚠️ THE AUDIT TRAIL SAID A QUIET WEEK ABOUT THE WEEK IT DESCRIBED.
-
-    `findingCount` and `severity` walked preflight and MODULE findings only —
-    the two things that produce almost nothing on a property whose own
-    automations do the detecting. A live QA run recorded `findings=0
-    severity=notice` for a brief that opened "1 critical alert from this period
-    is still unresolved" and listed twelve groups.
-
-    The whole subsystem was rebuilt around the blueprint layer being the primary
-    detector, so omitting it made the record wrong in the COMMON case, not an
-    edge one.
-    """
-    import asyncio
-    from datetime import datetime, timezone as tz
-    from reports import pipeline, collect, aggregate
-
-    when = "2026-08-20T10:00:00+08:00"
-    events = [{"type": "vesta_critical_event", "fired": when, "at": when, "data": {
-        "blueprint": "critical_schedule", "rule_id": "CR-01",
-        "report_bucket": "Pool pump", "severity": "P1",
-        "entities": ["switch.pool_pump"], "timestamp": when}}]
-    groups = aggregate.group(aggregate.normalise_all(events))
-    assert groups, "the fixture must produce at least one group"
-
-    # The two lines the entry is built from, exercised directly: a group's
-    # severity must reach `severity`, and its existence must reach the count.
-    from reports.contracts import severity_rank
-    worst = max(severity_rank(getattr(g, "severity", "info")) for g in groups)
-    assert worst > severity_rank("notice"), (
-        "a P1 blueprint alert must outrank a notice, or the record understates "
-        "the report it stands for")
-    assert len(groups) == 1
+# ⚠️ test_the_history_entry_counts_the_findings_the_brief_actually_reports
+# LEFT WITH TASK-071: its subject was blueprint GROUPS reaching the history
+# entry's count and severity, and both the groups and their parser are gone —
+# no producer, no rows, nothing to count. Module findings and preflight still
+# reach the entry and are pinned elsewhere in this file.
 
 
 def test_a_service_that_parses_markup_is_told_not_to() -> None:
@@ -742,3 +500,10 @@ def test_an_entity_target_cannot_be_told_not_to_parse_and_says_so() -> None:
     assert _plain_mode(send_message_schema) == "", (
         "notify.send_message now offers a parse mode — entity targets can be "
         "defended at the wire after all; wire it through _notify_entities")
+
+
+# ⚠️ 19 RENDERER TESTS LEFT WITH THEIR RENDERER (TASK-073):
+# test_an_empty_report_does_not_claim_all_is_well, test_blind_spots_travel_with_the_report, test_blind_spots_use_the_absent_voice, test_a_capability_explained_by_preflight_is_not_repeated, test_the_date_is_readable, test_an_unreachable_pass_says_so_plainly, test_critical_preflight_is_not_buried, test_findings_are_rendered_when_present, test_the_body_is_plain_text, test_the_title_names_the_period_and_audience, test_the_renderer_never_invents_a_number, test_skipped_modules_are_named, test_findings_are_counted_in_readable_english, test_a_check_that_ran_and_found_nothing_says_so, test_several_checks_that_ran_are_counted_in_english, test_no_modules_at_all_is_a_different_sentence, test_everything_skipped_is_a_third_sentence, test_unreachable_still_wins_over_all_of_them, test_no_empty_sentence_claims_all_is_well.
+# Their subjects were sentences of `deterministic.py`'s document. The DELIVERY
+# half of this file — service paths, target records, idempotency keys, history
+# entries, the no-parse option — kept its subject and stays in full.

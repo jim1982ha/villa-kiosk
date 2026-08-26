@@ -25,9 +25,9 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from reports import model as model_mod                      # noqa: E402
 from reports import standing as standing_mod                 # noqa: E402
-from reports.narrate import DeterministicNarrator, ReportContext  # noqa: E402
+from agent import fallback as agent_fallback  # noqa: E402
+from reports.narrate import ReportContext  # noqa: E402
 from reports.narrate.style import BULLET                    # noqa: E402
-from reports.narrate import deterministic as det             # noqa: E402
 from reports.narrate.style import SECTION_MARK               # noqa: E402
 
 FIXTURES = os.path.join(REPO_ROOT, "tests", "consistency", "fixtures")
@@ -56,30 +56,26 @@ def _context(standing: List[Dict[str, Any]], audience: str = "owner") -> ReportC
 # ── the report must not contradict itself ────────────────────────────────────
 
 def test_a_brief_with_standing_state_has_found_something() -> None:
+    """⚠️ RE-POINTED AT THE NEW COMPOSER (TASK-073). The property is the one
+    the 2.530.0 defect paid for — a brief must never announce emptiness above
+    a list of problems — and it belongs to whoever writes the brief, which is
+    `agent/fallback.brief` now."""
     rows = _rows()
     assert rows, "the `both` fixture is supposed to be full of problems"
-    _, body = DeterministicNarrator().render(_context(rows))
-    assert "nothing has been assessed" not in body, (
+    body = agent_fallback.brief(standing=rows).text
+    assert "Nothing needs your attention" not in body, (
         "the brief announced it had found nothing directly above a list of "
         "what it found")
-
-
-def test_the_title_marker_reflects_standing_state() -> None:
-    """⚠️ THE TITLE IS OFTEN ALL THAT IS READ. A push notification shows it and
-    two lines; a chat list shows it alone. A green tick over five offline
-    devices is the whole message for most readers."""
-    title, _ = DeterministicNarrator().render(_context(_rows()))
-    assert title.startswith("\U0001F534"), f"expected a red mark, got {title!r}"
+    assert "need attention right now" in body
 
 
 def test_a_clean_villa_still_reads_as_clean() -> None:
-    """The mirror, and the easier half to break: an empty standing list must not
-    start colouring healthy briefs."""
-    title, body = DeterministicNarrator().render(_context([]))
-    assert title.startswith("✅")
-    assert "Right now" not in body, (
-        "a section reading 'nothing is wrong right now' in every healthy brief "
-        "is the line a reader learns to skip, and it takes the section with it")
+    """The mirror, and the easier half to break: an empty standing list must
+    not start colouring healthy briefs with a section a reader learns to
+    skip."""
+    body = agent_fallback.brief(standing=[]).text
+    assert "Nothing needs your attention" in body
+    assert "Needs attention right now" not in body
 
 
 def test_only_the_danger_kinds_reach_critical() -> None:
@@ -87,10 +83,9 @@ def test_only_the_danger_kinds_reach_critical() -> None:
     ⚠️ AND THE SPLIT COMES FROM `standing.DANGER_KINDS`, which the kiosk's
     `villaHealthFrom` also expresses — a second opinion here would put the
     tablet on red and the notification on amber for one villa."""
-    warn_only = [{"kind": "schedule", "title": "Pool service",
-                  "detail": "Overdue", "room": "Pool"}]
-    title, _ = DeterministicNarrator().render(_context(warn_only))
-    assert title.startswith("\U0001F7E0"), f"expected an amber mark, got {title!r}"
+    # ⚠️ THE RENDER HALF OF THIS TEST DIED WITH ITS RENDERER (TASK-073) — the
+    # title-marker glyphs were the old document's; what survives is the table
+    # agreement the kiosk still depends on.
     # ⚠️ THIS USED TO ASSERT IDENTITY ON A NAME THE RENDERER NO LONGER USES.
     # P4 switched the call to `severity_of`, orphaning the `DANGER_KINDS` import
     # — and this line kept it alive, so a test was the only reason a dead import
@@ -104,48 +99,33 @@ def test_only_the_danger_kinds_reach_critical() -> None:
 
 # ── the section itself ───────────────────────────────────────────────────────
 
-def test_every_kind_the_builder_emits_has_a_heading() -> None:
-    """⚠️ A KIND WITH NO HEADING PRINTS NO LINES AT ALL — it would be built,
-    counted toward the title's severity, and then silently absent from the page.
-    Derived from the builder rather than listed, so a fifth kind is covered on
-    the day it is added."""
+def test_every_kind_the_builder_emits_reaches_the_page() -> None:
+    """⚠️ THE 2.530.0 PROPERTY, RE-PINNED AGAINST THE NEW COMPOSER (TASK-073).
+    The old renderer routed each kind through a heading table, and a kind
+    missing from it was built, counted, and silently absent from the page.
+    `fallback.brief` has no table — every standing row prints — and this pin
+    is what notices if a table ever comes back: one row of EVERY kind the
+    builder emits, each title required on the page."""
     source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
                                "standing.py"), encoding="utf-8").read()
-    emitted = set(re.findall(r'kind="(\w+)"', source))
+    emitted = sorted(set(re.findall(r'kind="(\w+)"', source)))
     assert emitted, "could not read the emitted kinds — this test is blind"
-    headed = {kind for kind, _ in det.KIND_HEADINGS}
-    assert emitted <= headed, f"kinds with no heading: {sorted(emitted - headed)}"
+    rows = [{"kind": k, "title": f"Thing {i}", "detail": "d", "room": ""}
+            for i, k in enumerate(emitted)]
+    body = agent_fallback.brief(standing=rows).text
+    for i in range(len(emitted)):
+        assert f"Thing {i}" in body, (
+            f"kind {emitted[i]!r} was built and never printed")
 
 
-def test_the_section_is_in_every_audience_and_leads() -> None:
-    for audience, sections in det.SECTIONS_FOR.items():
-        assert "standing" in sections, f"{audience} never sees standing state"
-        assert sections[0] == "standing", (
-            f"{audience} reads the period before the present; the actionable "
-            f"half must lead")
-    assert "standing" in det.ALL_SECTIONS
-
-
-def test_the_section_has_its_own_marker() -> None:
-    """⚠️ NOT THE SAME GLYPH AS `critical`. The two sit next to each other and
-    answer different questions — what is wrong NOW against what went wrong THIS
-    PERIOD — and a reader skimming a phone tells them apart by that character
-    before reading either heading."""
-    assert SECTION_MARK.get("standing")
-    assert SECTION_MARK["standing"] != SECTION_MARK["critical"]
-
-
-def test_a_long_list_summarises_per_kind_rather_than_truncating() -> None:
-    """⚠️ FLAT TRUNCATION WOULD DROP WHICHEVER KIND SORTED LAST — losing the
-    alarms to a list of offline sensors. "and N more" is a summary; a missing
-    kind is a lie."""
-    many = [{"kind": "unavailable", "title": f"Device {i}",
-             "detail": "Unavailable", "room": ""} for i in range(20)]
-    many.append({"kind": "alarm", "title": "Laundry leak",
-                 "detail": "Leak detected", "room": "Laundry"})
-    _, body = DeterministicNarrator().render(_context(many))
-    assert "Laundry leak" in body, "the alarm was truncated away by the devices"
-    assert "and 12 more" in body
+def test_standing_leads_the_brief() -> None:
+    """The old rule "every audience sees standing first" survives its renderer:
+    the standing section must come before concerns and findings on the page."""
+    body = agent_fallback.brief(
+        standing=[{"kind": "alarm", "title": "STANDROW", "detail": "", "room": ""}],
+        concerns=[{"title": "CONCROW", "severity": "warning"}],
+        findings=[{"label": "FINDROW", "detail": ""}]).text
+    assert body.index("STANDROW") < body.index("CONCROW") < body.index("FINDROW")
 
 
 # ── the privacy boundary ─────────────────────────────────────────────────────
@@ -211,45 +191,4 @@ def test_a_file_that_is_not_a_glb_is_refused_quietly() -> None:
         os.unlink(path)
 
 
-def test_right_now_groups_each_state_under_its_own_sub_heading() -> None:
-    """⚠️ ASKED FOR WITH THE WANTED SHAPE WRITTEN OUT. The section was already
-    grouped by kind INTERNALLY and printed flat, so the reader saw the kind
-    repeated on every bullet — "LG webOS TV — Unavailable", "Timmerflotte 2623
-    Temperature — Unavailable" — with no visible structure at all.
 
-    Two consequences the shape forces: the label is not bulleted (it is not one
-    of the things, it is what they are), and the state word drops off each line
-    once the heading above says it.
-    """
-    rows = [
-        {"kind": "unavailable", "title": "A device", "detail": "Unavailable",
-         "room": ""},
-        {"kind": "unavailable", "title": "Another device",
-         "detail": "Unavailable", "room": ""},
-        {"kind": "fault", "title": "Not working", "detail": "Open fault",
-         "room": "Living Room"},
-    ]
-    body = DeterministicNarrator().render(_context(rows))[1]
-    block = [l for l in body.split("Right now")[1].splitlines() if l.strip()]
-
-    assert block[0] == "Unavailable devices:"
-    assert not block[0].startswith(BULLET), (
-        "the label is what the bullets ARE, not one of them")
-    assert block[1] == f"{BULLET}A device", (
-        "the state is on the heading now, so repeating it per line is the "
-        "duplication this grouping removed")
-    assert "Open ticket:" in block
-    # A ticket's own detail is NOT the heading's word, so it survives.
-    assert f"{BULLET}Not working — Open fault, Living Room" in block
-
-
-def test_a_group_label_agrees_with_how_many_are_under_it() -> None:
-    """⚠️ "(s)" IS A SHRUG, NOT A PLURAL. The worked example wrote "Unavailable
-    device(s):" as shorthand for the SHAPE. `_plural` exists in this codebase
-    because "2 categorys" reached a rendered report; printing "(s)" would be
-    that lesson unlearned one line further out. The count is known here."""
-    one = DeterministicNarrator().render(_context([
-        {"kind": "unavailable", "title": "A device", "detail": "Unavailable",
-         "room": ""}]))[1]
-    assert "Unavailable device:" in one and "devices:" not in one
-    assert "(s)" not in one

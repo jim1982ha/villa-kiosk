@@ -142,6 +142,98 @@ def nothing(*, title: str = "Villa briefing", detail: str = "") -> Brief:
     return Brief("\n".join(out), "nothing")
 
 
+def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
+          standing: Optional[Sequence[Mapping[str, Any]]] = None,
+          findings: Optional[Sequence[Mapping[str, Any]]] = None,
+          carried: Optional[Sequence[Mapping[str, Any]]] = None,
+          coverage_note: str = "", lead: str = "",
+          title: str = "") -> Brief:
+    """The NORMAL brief, banner-free. TASK-073's replacement for the renderer.
+
+    ⚠️ THIS IS NOT A RUNG AND CARRIES NO FALLBACK BANNER. When the cutover
+    retired the blueprint layer, 2,058 lines of `deterministic.py` were
+    formatting a taxonomy of events nothing emits any more; what a brief has
+    to say now is what the AGENT concluded (concerns), what is wrong RIGHT NOW
+    (standing), what the statistical checks measured (findings) and what jobs
+    are still open (carried). Said plainly, in severity order, inert. The
+    polish that went with the renderer — zones, sparklines, money columns —
+    formatted data that no longer exists.
+
+    ⚠️ `lead` IS THE PROVIDER'S ONE SENTENCE, WHEN THERE IS ONE. The caller
+    narrates first and hands the sentence in; empty means this composes its
+    own from the loudest fact. Same one-slot contract the old renderer had,
+    without the slot machinery.
+
+    ⚠️ EVERY SECTION SAYS WHICH TENSE IT IS IN — standing is the only one in
+    the present tense, exactly the rule the old renderer enforced, because
+    "failed and recovered this period" and "down right now" read as a
+    contradiction unless labelled.
+    """
+    from agent.contracts import severity_rank
+
+    stand = [s for s in (standing or []) if isinstance(s, Mapping)]
+    rows = sorted((c for c in (concerns or []) if isinstance(c, Mapping)),
+                  key=lambda c: (severity_rank(c.get("severity")),
+                                 str(c.get("title") or "")))
+    found = [f for f in (findings or []) if isinstance(f, Mapping)]
+    jobs = [t for t in (carried or []) if isinstance(t, Mapping)]
+
+    out: List[str] = [title, ""] if title else []
+    if lead.strip():
+        out += [inert(lead.strip()), ""]
+    elif stand:
+        out += [f"{len(stand)} thing(s) need attention right now.", ""]
+    elif rows:
+        out += [f"{len(rows)} concern(s) are open.", ""]
+    elif found:
+        out += [f"{len(found)} thing(s) stood out in this period's checks.", ""]
+    elif jobs:
+        # ⚠️ AN OPEN JOB IS NEWS — the 2.530.0 rule, and the FIRST draft of
+        # this chain broke it within the hour: "Nothing needs your attention"
+        # rendered directly above a list of outstanding facility work, caught
+        # by the pin that was being re-pointed at this file.
+        out += [f"{len(jobs)} job(s) are still open with the facility "
+                "manager.", ""]
+    else:
+        out += ["Nothing needs your attention.", ""]
+
+    if stand:
+        out.append("Needs attention right now:")
+        for row in stand[:20]:
+            label = inert(str(row.get("title") or row.get("label") or "?"))
+            detail = inert(str(row.get("detail") or "")).strip()
+            room = inert(str(row.get("room") or "")).strip()
+            out.append(f"- {label}"
+                       + (f" — {detail}" if detail else "")
+                       + (f", {room}" if room else ""))
+        out.append("")
+    if rows:
+        out.append("Concerns the assistant has raised:")
+        for row in rows[:20]:
+            sev = str(row.get("severity") or "notice").upper()
+            out.append(f"- {sev}: {inert(str(row.get('title') or 'unnamed'))}")
+            body_text = inert(str(row.get("body") or "")).strip()
+            if body_text:
+                out.append(f"    {body_text[:400]}")
+        out.append("")
+    if found:
+        out.append("From this period's checks:")
+        for row in found[:20]:
+            label = inert(str(row.get("label") or "?"))
+            detail = inert(str(row.get("detail") or "")).strip()
+            out.append(f"- {label}" + (f" — {detail}" if detail else ""))
+        out.append("")
+    if jobs:
+        out.append("Jobs still open with the facility manager:")
+        for row in jobs[:20]:
+            out.append(f"- {inert(str(row.get('text') or row.get('summary') or '?'))}")
+        out.append("")
+    if coverage_note.strip():
+        out.append(f"⚠️ {inert(coverage_note.strip())}")
+        out.append("")
+    return Brief("\n".join(out).rstrip() + "\n", "", complete=True)
+
+
 def compose(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
             salient: Optional[Sequence[Mapping[str, Any]]] = None,
             detail: str = "", title: str = "Villa briefing") -> Brief:

@@ -401,24 +401,32 @@ def test_a_property_with_no_blueprints_still_runs_the_modules() -> None:
     assert collect.blueprint_layer_present() is False
 
 
-def test_the_categories_are_recorded_on_subscribe() -> None:
+def test_subscribe_is_chat_only_and_keeps_the_established_record() -> None:
+    """⚠️ REWRITTEN FOR TASK-074. The subscription no longer derives a vesta_*
+    list from the installed blueprints — every producer is retired — so what
+    this pins now is the new contract's two halves: the socket subscribes to
+    the CHAT event alone, and going online with no stems PRESERVES whatever
+    blueprint record an earlier pass established rather than erasing it."""
+    store.write_json(store.REPORTS_EVENTS_FILE, {
+        "events": [], "seen_types": {}, "online_since": "",
+        "last_seen": "", "offline_seconds": 0.0,
+        "blueprint_categories": ["roi"], "blueprint_names": ["roi_idle_load"]})
     fake = _FakeHass([])
     collector = collect.Collector(None)  # type: ignore[arg-type]
     import reports.collect as module
 
-    async def fake_discover(hass: Any) -> Any:
-        return (["vesta_roi_event"], ["roi"])
-
-    original_client, original_discover = module.HassClient, module.discover_event_types
+    original_client = module.HassClient
     module.HassClient = lambda session: fake  # type: ignore[assignment,misc]
-    module.discover_event_types = fake_discover  # type: ignore[assignment]
     try:
         asyncio.run(collector.run_once())
     finally:
         module.HassClient = original_client  # type: ignore[assignment]
-        module.discover_event_types = original_discover  # type: ignore[assignment]
 
-    assert collect.read_buffer()["blueprint_categories"] == ["roi"]
+    assert fake.subscribed == ["telegram_text"], (
+        "the collector subscribed to something the villa can no longer emit")
+    after = collect.read_buffer()
+    assert after["blueprint_categories"] == ["roi"], "the record was erased"
+    assert after["online_since"], "online_since was not set on connect"
 
 
 def test_an_unreachable_pass_does_not_erase_what_was_established() -> None:

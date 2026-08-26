@@ -228,28 +228,14 @@ def from_context(context: Any) -> Dict[str, Any]:
         blind.append("This property's own automation alerts were not being "
                      "recorded for part of this period.")
 
-    # ⚠️ THE ZONE IS ATTACHED HERE, FROM THE RENDERER'S OWN TABLE, so the model
-    # is told what leads by the same rule the document is built with. Deriving it
-    # separately would let the two disagree about what "needs you" means, which
-    # is the divergence this whole subsystem exists to prevent.
-    def _zoned(item: Mapping[str, Any]) -> Mapping[str, Any]:
-        from .deterministic import SECTION_FOR_KIND, ZONE_OF_SECTION
-        section = SECTION_FOR_KIND.get(str(item.get("kind") or ""), "trends")
-        zone = ZONE_OF_SECTION.get(section)
-        return {**item, "zone": zone} if zone else item
-
+    # ⚠️ THE ZONE TABLE LEFT WITH THE RENDERER (TASK-073). It mapped each
+    # finding kind onto the deterministic document's section layout so the
+    # model would lead with what that layout led with; the layout is gone, the
+    # brief is severity-ordered, and severity already travels on every row.
+    # (`aggregated["findings"]` went with TASK-071 — no producer, no rows.)
     findings: List[Mapping[str, Any]] = [
-        _zoned(f) for f in (getattr(context, "findings", None) or [])
+        f for f in (getattr(context, "findings", None) or [])
         if isinstance(f, Mapping)]
-    # `aggregated["findings"]` are `Finding` objects — the blueprint layer's
-    # own output, already free of entity ids by `to_findings`' contract.
-    aggregated: Mapping[str, Any] = getattr(context, "aggregated", {}) or {}
-    for item in aggregated.get("findings") or []:
-        as_dict = getattr(item, "as_dict", None)
-        if callable(as_dict):
-            findings.append(as_dict())
-        elif isinstance(item, Mapping):
-            findings.append(item)
 
     return build(
         findings,

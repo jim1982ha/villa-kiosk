@@ -22,17 +22,19 @@ from __future__ import annotations
 
 import asyncio
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
-from . import (aggregate as aggregate_mod, collect, devices as devices_mod,
+# ⚠️ `aggregate`, `noise` and `verify` LEFT THIS LINE WITH THEIR PRODUCERS
+# (TASK-071/074, 2026-08-27). They parsed, counted and cross-checked the
+# `vesta_*` blueprint events; the last emitter stopped on the same day and a
+# parser with no producer is the machinery this phase exists to remove.
+from . import (collect, devices as devices_mod,
                discovery, ledger, links as links_mod, model as model_mod,
-               noise as noise_mod,
                schedule as schedule_mod, standing as standing_mod,
-               stats as stats_mod, store, trend as trend_mod,
-               verify as verify_mod)
+               stats as stats_mod, store, trend as trend_mod)
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
@@ -42,7 +44,7 @@ from .hass import HassClient, HassUnavailable
 from .deliver import deliver
 from .hass import fetch_timezone
 from .log import log, swallow, warn
-from .narrate import DeterministicNarrator, ReportContext
+from .narrate import ReportContext
 from .narrate import payload as payload_mod, providers as providers_mod
 from .narrate import style as style_mod
 from .schedule import period_key, period_start
@@ -103,6 +105,24 @@ def set_concerns_source(source: Optional[Any]) -> None:
 _FALLBACK_COMPOSER: Optional[Any] = None
 
 
+#: The NORMAL brief's author, registered the same way (TASK-073). The 2,058-line
+#: deterministic renderer was deleted with the blueprint-event taxonomy it
+#: formatted; `agent/fallback.brief` writes the plain replacement, and it
+#: arrives by hook because `reports/` may not import `agent/` (ARCH-003).
+_BRIEF_COMPOSER: Optional[Any] = None
+
+
+def set_brief_composer(composer: Optional[Any]) -> None:
+    """Register the brief's author. Called once, at boot.
+
+    ⚠️ UNREGISTERED MEANS THE LADDER WRITES EVERY BRIEF — the same body an
+    embedder without the agent package gets — and each one SAYS it is a
+    fallback, which is the honest description of a deployment missing its
+    writer."""
+    global _BRIEF_COMPOSER
+    _BRIEF_COMPOSER = composer
+
+
 def set_fallback_composer(composer: Optional[Any]) -> None:
     """Register the degradation ladder. Called once, at boot.
 
@@ -136,6 +156,23 @@ def _salient_rows(context: ReportContext) -> List[Dict[str, str]]:
                 rows.append({"label": label,
                              "reason": str(row.get(reason_key) or "").strip()})
     return rows
+
+
+def _coverage_note(since: str) -> str:
+    """One sentence when the listener missed part of the period, else "".
+
+    ⚠️ THE DISTINCTION TASK-074 KEEPS EXACTLY: a week with no findings and a
+    week with no listener must never render the same. `coverage()` computes it;
+    this only words it."""
+    try:
+        cov = collect.coverage(since)
+        if not cov.get("complete"):
+            return ("The add-on was not listening for the whole of this "
+                    "period, so a quiet section may mean a deaf listener "
+                    "rather than a quiet villa.")
+    except Exception as err:  # noqa: BLE001 - a note must not cost the brief
+        swallow("could not compute the coverage note", err)
+    return ""
 
 
 def _degrade(context: ReportContext, title: str, err: Exception) -> Tuple[str, str]:
@@ -457,11 +494,8 @@ def _withheld_fields(context: ReportContext,
     for finding in context.findings or []:
         if isinstance(finding, dict):
             source |= set(finding)
-    aggregated = context.aggregated or {}
-    for item in aggregated.get("findings") or []:
-        as_dict = getattr(item, "as_dict", None)
-        if callable(as_dict):
-            source |= set(as_dict())
+    # (The aggregated half of this scan left with TASK-071 — module findings
+    # above are the only field source now.)
 
     del outbound  # ⚠️ deliberately unread — see the docstring.
     return sorted(source - set(PAYLOAD_ALLOWED_FIELDS))
@@ -544,18 +578,6 @@ async def run_report(
     # restate every finding the owner has already read, and its savings total
     # would grow forever.
     since = period_start(cadence, now_local).isoformat(timespec="seconds")
-    try:
-        # ⚠️ THE SAME ROOM MAP THE KIOSK RENDERS FROM (`resolvedRooms` in
-        # the shared device-config store), so the brief and the tablet
-        # cannot place one device in two rooms. Absent on an unconfigured
-        # install, which `by_room` handles rather than failing over.
-        rooms = devices_mod.read_config().get("resolvedRooms")
-        aggregated = aggregate_mod.aggregate(
-            collect.events_since(since),
-            rooms if isinstance(rooms, dict) else None)
-    except Exception as err:  # noqa: BLE001 - a report must still go out
-        swallow("aggregation failed; reporting without it", err)
-        aggregated = {}
 
     # ── deduplicate ─────────────────────────────────────────────────────────
     # ⚠️ THE BUILT-IN CHECKS AND THE BLUEPRINTS NOW BOTH RUN, so the report is
@@ -598,7 +620,7 @@ async def run_report(
         async with HassClient(session) as hass:
             lists = await ledger.todo_lists(hass)
             todo = await ledger.todo_tasks(hass, lists)
-            done = await ledger.todo_tasks(hass, lists, status="completed")
+            # (the completed-tasks read fed `verify`, which left with TASK-074)
             # ── standing state ──────────────────────────────────────────────
             # ⚠️ LIVE STATE, ON THE CONNECTION THAT IS ALREADY OPEN. The brief
             # could not previously see a single thing the kiosk calls "needs
@@ -616,72 +638,24 @@ async def run_report(
             standing = _standing_rows(states)
             labels = _entity_labels(states)
             units = _entity_units(states)
-        carried = ledger.reconcile(todo, aggregated.get("tasks") or [])
+        # ⚠️ RECONCILED AGAINST NOTHING, AND THAT IS NOW ALWAYS RIGHT. The
+        # second argument was "tasks this period's blueprint events already
+        # stated", so the brief would not print a job twice; with no events
+        # there is no second route, and every open to-do is simply carried.
+        carried = ledger.reconcile(todo, [])
 
-        # ── verify ──────────────────────────────────────────────────────────
-        # ⚠️ THE PRIOR WINDOW IS THE REST OF THE RING, NOT ANOTHER PERIOD. A
-        # problem reported two months ago and fixed last week is still a
-        # verification; bounding this to "the previous period" would only find
-        # repairs that happened to land in one cadence.
-        #
-        # ⚠️ AND THE COLLECTOR MUST HAVE BEEN UP FOR THE WHOLE WINDOW. "It has
-        # not recurred" is a claim about the villa only if something was
-        # listening; otherwise it is a claim about the listener. See verify.py.
-        # ⚠️ BOTH SIDES NORMALISED TO UTC, AND SKIPPING THAT IS 2.528.0 AGAIN.
-        # `Item.when` is a MIXED-OFFSET field — a blueprint's own local
-        # `now().isoformat()` where it supplied a timestamp, the collector's UTC
-        # stamp where it did not — and `since` is the villa's LOCAL midnight.
-        # Compared as raw strings, an event four hours into the window reads as
-        # prior, and `verify` would then claim a critical alert "has not
-        # recurred" in the very period it recurred in. The legacy events on the
-        # reference deployment take exactly the fallback path that triggers it.
-        cutoff = collect.as_utc_iso(since)
-        everything = aggregate_mod.normalise_all(collect.events_since(""))
-        prior: List[Any] = []
-        inside: List[Any] = []
-        for item in everything:
-            moment = collect.as_utc_iso(item.when) if item.when else ""
-            (prior if moment and moment < cutoff else inside).append(item)
-        coverage = collect.coverage(since)
-        verified = verify_mod.verify(
-            prior, inside, done, ledger.read(),
-            listening_throughout=bool(coverage.get("complete")))
+        # ⚠️ VERIFY AND NOISE ARE GONE WITH THEIR INPUT (TASK-074). Both were
+        # computed OVER THE BLUEPRINT EVENTS: verify proved "reported, acted
+        # on, and has not recurred" by re-scanning the ring for the same rule,
+        # and noise counted fires-per-rule against a monthly threshold. With
+        # the last producer retired the ring gains nothing to scan, so each
+        # could only ever return empty — machinery whose one honest output is
+        # the default this code now states. What replaces them is not code:
+        # recurrence is the agent's question now (the concern lifecycle keys
+        # on subject_key precisely so a re-raised subject is the SAME concern),
+        # and alert fatigue is what the thumbs on every concern feed.
     except Exception as err:  # noqa: BLE001 - a report must still go out
         swallow("could not read the facility manager list", err)
-
-    # ── noise ───────────────────────────────────────────────────────────────
-    # ⚠️ ITS OWN WINDOW, NOT THE REPORT'S. The catalog's rule is "N fires a
-    # MONTH", and a daily brief must not answer it from one day's events — that
-    # would under-count by 30x and quietly report every noisy rule as fine. So
-    # this reaches back `noise_window_days` regardless of cadence, which is also
-    # why it is computed here rather than from `inside`.
-    #
-    # ⚠️ AND IT ASKS WHETHER THE BUFFER REACHES THAT FAR. `collect.MAX_EVENTS`
-    # bounds the ring, so on a busy property the oldest retained event can be
-    # newer than the window start — at which point every count is a FLOOR and
-    # comparing a floor against a threshold reports "not noisy" for the rules
-    # that are noisiest. `covered=False` makes the brief say it cannot tell.
-    noise_summary: Dict[str, Any] = {}
-    try:
-        settings_now = settings or {}
-        window_days = int(settings_now.get("noise_window_days")
-                          or noise_mod.DEFAULT_WINDOW_DAYS)
-        threshold = int(settings_now.get("noise_threshold_fires")
-                        or noise_mod.DEFAULT_THRESHOLD)
-        start = collect.as_utc_iso(
-            (now_local - timedelta(days=window_days)).isoformat())
-        buffered = aggregate_mod.normalise_all(collect.events_since(""))
-        stamps = [collect.as_utc_iso(i.when) for i in buffered if i.when]
-        in_window = [i for i in buffered
-                     if i.when and collect.as_utc_iso(i.when) >= start]
-        # The ring reaches back far enough iff its OLDEST event predates the
-        # window — or it is not full, in which case nothing has been evicted.
-        covered = (len(buffered) < collect.MAX_EVENTS
-                   or bool(stamps) and min(stamps) <= start)
-        noise_summary = noise_mod.summarise(
-            in_window, done, threshold, window_days, covered)
-    except Exception as err:  # noqa: BLE001 - never costs the report
-        swallow("could not assess alert noise", err)
 
     # ── narrate ─────────────────────────────────────────────────────────────
     context = ReportContext(
@@ -689,9 +663,8 @@ async def run_report(
         generated_at=generated_at, discovery=found,
         findings=findings + [f.as_dict() for f in verified],
         skipped=skipped, ran=ran,
-        aggregated=aggregated, collector=collect.state(),
+        collector=collect.state(),
         carried_tasks=carried, standing=standing, labels=labels, units=units,
-        noise=noise_summary,
         history=_history_series(cadence),
         currency=str(found.get("currency") or ""),
         # ⚠️ DEDUPED AGAINST THIS BRIEF'S OWN FINDINGS, AND NOTHING ELSE NOW.
@@ -707,98 +680,70 @@ async def run_report(
             {str(f.get("subject_key") or "") for f in findings
              if isinstance(f, Mapping) and f.get("subject_key")}),
     )
-    narrator = DeterministicNarrator()
-    #: Which rung of the degradation ladder produced this brief, "" on the happy
-    #: path. ⚠️ IT REACHES THE HISTORY ENTRY, because a record saying
-    #: `deterministic` about a brief the deterministic renderer failed to write
-    #: is an instrument describing the one case it exists to catch as normal.
-    rung = ""
-    try:
-        title, body = narrator.render(context)
-    except Exception as err:  # noqa: BLE001 - a narrator must never stop a report
-        # ⚠️ DESCEND, DO NOT GO QUIET (TASK-111, REQ-042, RISK-015). Everything
-        # this brief could have said was already gathered — concerns, findings,
-        # standing state — and until this call the whole of it was replaced by
-        # one sentence apologising. The ladder states which rung it used in the
-        # text a person reads, so a brief that arrives in plainer words is one
-        # the reader knows to trust differently.
-        swallow("narration failed; descending the degradation ladder", err)
-        title = f"{cadence.title()} report — {period}"
-        body, rung = _degrade(context, title, err)
-        if rung:
-            # ⚠️ NO QUOTES ROUND THE RUNG. `test_inert` forbids hand-quoting in
-            # this package — quoting is `text.name_of`'s job — and it does not
-            # care that this is a rung rather than a device name, which is the
-            # right call: the rule holds by shape, not by intent.
-            log(f"delivered a fallback brief at rung {rung}")
-
-    # ── narrate again, optionally, through a provider ───────────────────────
-    # ⚠️ AN OVERLAY, NOT A BRANCH, AND THAT IS THE WHOLE DESIGN OF PHASE 6. The
-    # deterministic body already exists on the line above and is already good
-    # enough to deliver; a provider can only REPLACE it. So "degrade to the
-    # built-in renderer on any failure" is not a code path that has to be
-    # written correctly and tested against every failure mode — it is what
-    # happens when this block does nothing, which is what it does on absence, a
-    # missing key, an open breaker, a spent budget, a timeout, an unusable
-    # answer and an exception alike. There is no arm of this that can end with
-    # no report.
-    #
-    # ⚠️ WHICH IS ALSO WHY THE DETERMINISTIC RENDER IS NOT SKIPPED when a
-    # provider is configured. Composing it is local, fast and free. The
-    # alternative — render only if the provider declines — makes the offline
-    # villa's report depend on control flow that runs only when a third party
-    # is unreachable, i.e. it puts the case that matters most on the path with
-    # the least coverage. See CLAUDE.md's second hard rule.
-    #
-    # ⚠️ AND IT IS SKIPPED ENTIRELY ON A FALLBACK RUNG, for two reasons that are
-    # each sufficient. A lead sentence is applied by RE-RENDERING through the
-    # very narrator that just raised, so this block would raise a second time on
-    # a path that has no third fallback — the report would be lost after the
-    # ladder had saved it. And buying prose to introduce a document the villa
-    # could not compose is spending money to make a degradation look polished,
-    # which is the opposite of what every rung says.
-    narration_mode = NARRATION_FALLBACK if rung else narrator.name
+    # ── narrate, optionally, through a provider ─────────────────────────────
+    # ⚠️ THE LEAD SENTENCE IS STILL THE WHOLE SURFACE (TASK-073 kept the slot
+    # contract and deleted the slot machinery). A provider writes ONE sentence
+    # or nothing; the body below is composed by fixed code either way, so
+    # absence, a missing key, an open breaker, a spent budget, a timeout, an
+    # unusable answer and an exception all end in the same delivered brief.
     narration_why = ""
-    provider = None if rung else providers_mod.shared(narration or {})
+    lead = ""
+    provider = providers_mod.shared(narration or {})
     if provider is not None:
         # ⚠️ THE ACTOR TRAVELS — see `providers._anthropic`. Filed as the
         # literal "schedule" until 2.686.0, so an owner pressing "run now" had
         # their narration spend attributed to the villa acting on its own.
         prose, narration_why = await provider.narrate(
             session, payload_mod.from_context(context), actor=actor)
-        # ⚠️ A SLOT, NOT THE BODY. The provider now writes the LEAD SENTENCE and
-        # the renderer keeps everything else — zones, charts, columns, figures.
-        # So the re-render below cannot lose structure however poor the answer
-        # is, and the worst case costs one sentence rather than the brief.
-        #
-        # ⚠️ REJECTED IF IT IS NOT ONE SENTENCE. A model asked for a line
-        # sometimes returns a paragraph, and pasting a paragraph where a lead
-        # belongs would push the dateline out of the notification preview — the
-        # exact thing the slot exists to protect. Cheap to check, and the
-        # fallback is the deterministic sentence that was already there.
+        # ⚠️ REJECTED IF IT IS NOT ONE SENTENCE — a paragraph pasted where a
+        # lead belongs pushes the dateline out of the notification preview.
         lead = usable_lead(prose)
-        # ⚠️ "DID IT ANSWER" IS THE FLATTENED TEXT, NOT THE OBJECT. `"   \n  "`
-        # is truthy and pure markup flattens to nothing — the same trap the
-        # narration layer already records — so a bare `bool(prose)` here would
-        # blame the provider's PHRASING for what was actually an empty answer.
-        answered = bool(str(prose or "").strip())
-        if lead:
-            context.slots = {"lead": lead}
-            title, body = narrator.render(context)
-            narration_mode = provider.name
-        elif answered:
-            # ⚠️ REACHABLE SINCE 2.608.0. This arm read `elif lead:` under an
-            # `if lead:`, so it could never run and the reason it exists to
-            # record was unreachable: a provider that answered with a PARAGRAPH
-            # was reported with whatever `narration_why` the adapter happened to
-            # leave behind, which is the one cause this branch can name exactly.
-            narration_why = "the answer was not a single short sentence"
+        # ⚠️ "DID IT ANSWER" IS THE FLATTENED TEXT, NOT THE OBJECT: `"   \n "`
+        # is truthy and pure markup flattens to nothing.
+        if not lead:
+            if bool(str(prose or "").strip()):
+                narration_why = "the answer was not a single short sentence"
             log(f"not narrated by a provider: {narration_why}")
-        else:
-            # ⚠️ A REASON, RECORDED. "This week's brief reads differently" is
-            # otherwise unanswerable — and the five causes call for different
-            # actions (configure a key, wait, raise a limit, or nothing).
-            log(f"not narrated by a provider: {narration_why}")
+
+    # ── compose ─────────────────────────────────────────────────────────────
+    # ⚠️ THE 2,058-LINE RENDERER IS GONE (TASK-073) AND THE LADDER'S OWN
+    # AUTHOR WRITES THE NORMAL BRIEF. `deterministic.py` formatted the
+    # blueprint-event taxonomy — zones, money columns, sparklines over data
+    # whose producers were all retired at the cutover. What a brief says now
+    # is what the agent concluded, what is wrong right now, what the checks
+    # measured and what jobs are open; `agent/fallback.brief` says exactly
+    # that, plainly, through the SAME boot-registered hook the rungs use
+    # (reports/ may not import agent/ — ARCH-003, pinned).
+    title = f"{cadence.title()} report — {period}"
+    #: Which rung produced this brief, "" on the happy path. ⚠️ IT REACHES THE
+    #: HISTORY ENTRY, because a record saying `deterministic` about a brief the
+    #: composer failed to write is the instrument describing the one case it
+    #: exists to catch as normal.
+    rung = ""
+    body = ""
+    compose_brief = _BRIEF_COMPOSER
+    if compose_brief is not None:
+        try:
+            made = compose_brief(
+                concerns=context.concerns, standing=context.standing,
+                findings=[f for f in context.findings
+                          if isinstance(f, Mapping)],
+                carried=context.carried_tasks,
+                coverage_note=_coverage_note(since), lead=lead)
+            body = str(made.text)
+        except Exception as err:  # noqa: BLE001 - never stops a report
+            swallow("the brief composer raised; descending the ladder", err)
+    if not body:
+        # ⚠️ DESCEND, DO NOT GO QUIET (TASK-111, REQ-042, RISK-015): the
+        # concerns, findings and standing state were all gathered above, and a
+        # one-line apology would throw every one of them away.
+        body, rung = _degrade(context, title,
+                              RuntimeError("no brief composer is registered"))
+        if rung:
+            log(f"delivered a fallback brief at rung {rung}")
+    narration_mode = (NARRATION_FALLBACK if rung
+                      else (provider.name if (provider and lead)
+                            else "deterministic"))
 
     # ── make it inert ───────────────────────────────────────────────────────
     # ⚠️ AFTER BOTH NARRATORS AND BEFORE EVERYTHING ELSE, so the deterministic
@@ -844,7 +789,7 @@ async def run_report(
     # history said a quiet week about the week it described. Since the whole
     # subsystem was rebuilt around the blueprint layer being the primary
     # detector, omitting it made the audit trail wrong in the common case.
-    grouped = [g for g in (aggregated.get("groups") or [])]
+    grouped: List[Dict[str, Any]] = []  # no event groups since TASK-071
     severity = "info"
     for candidate in ([str(i.get("severity", "info")) for i in
                        list(found.get("preflight") or []) + findings
@@ -909,8 +854,10 @@ async def run_report(
         # can add the column up (v2.586.0); a stored series must not, or seven
         # periods of rounding drift accumulate into the baseline the next brief
         # is judged against.
-        "avoidableCost": float(
-            (aggregated.get("savings") or {}).get("total") or 0.0),
+        # ⚠️ ALWAYS 0.0 SINCE TASK-071: the savings column summed the money
+        # fields of blueprint events, and nothing emits one. The FIELD stays so
+        # stored history rows keep one shape across the cutover.
+        "avoidableCost": 0.0,
         "currency": str(found.get("currency") or ""),
         "severity": severity,
         "deliveries": deliveries,
@@ -970,7 +917,6 @@ async def run_report(
                           # ⚠️ The synthesis layer's own instrument. Without it,
                           # an empty section cannot be told from an aggregation
                           # that raised and was swallowed two lines above.
-                          "aggregated": aggregate_mod.summary(aggregated),
                           "period_since": since,
                           # ⚠️ THE INSTRUMENT FOR "WHY IS THIS NOT NARRATED".
                           # Empty means it was, or that nothing was configured;
