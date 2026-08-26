@@ -1,3 +1,19 @@
+## 2.785.0
+
+### Fixed — the moon drew its own complement, so a full moon looked black
+One inverted winding flag: a 97% lit gibbous rendered as a 3% sliver. The
+astronomy was never wrong — it agrees with Home Assistant's own moon sensor.
+
+### Fixed — "11 of 14 could not be cancelled"
+The panel decided what was waiting by copying the server's rule instead of
+asking it, and missed that an already-dismissed flag keeps its original row
+forever. It now reads the server's own pending list.
+
+### Changed — the checks are cards, each showing what its own mode allowed
+One card per check with its flagged items and their actions on the right. Each
+check records the mode it ran under, so a past check keeps the affordance that
+matched at the time instead of being relabelled when the setting changes.
+
 ## 2.784.0
 
 ### Fixed — the card said 54 and the button said 14

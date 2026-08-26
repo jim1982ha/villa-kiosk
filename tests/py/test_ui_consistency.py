@@ -139,9 +139,15 @@ def test_a_flag_with_no_identifiable_check_is_still_RENDERED() -> None:
     # took every unmatched flag and the button took only the waiting ones. Two
     # numbers for two different things on one screen reads as a broken button —
     # reported exactly that way. Both now filter on `awaiting-approval`.
-    assert 'f.verdict === "awaiting-approval"' in code.split("const orphans")[1][:400], (
-        "the unmatched-flags card no longer filters to what is WAITING, so its "
-        "count disagrees with the Cancel-all button beside it")
+    # ⚠️ THE SERVER'S OWN PENDING LIST, NOT A COPY OF ITS RULE. This asserted
+    # the client re-derived `verdict === "awaiting-approval"`, which was the
+    # defect: `audit.pending_escalations` ALSO excludes any run id with a
+    # settling row, so eleven already-dismissed flags rendered as pending and
+    # every cancel was refused. Both the card and the button now read
+    # `pending`, which is `/agent-queue`'s answer.
+    assert "pending.has(f.runId)" in code.split("const orphans")[1][:400], (
+        "the unmatched-flags card no longer filters to the server's pending "
+        "list, so its count disagrees with the Cancel-all button beside it")
     assert "orphans.length > 0 &&" in code, (
         "the unmatched-flags block is not conditional on there being any, so "
         "an empty card renders on every villa that has none")

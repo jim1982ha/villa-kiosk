@@ -55,6 +55,14 @@ ROW_FIELDS: Final[Tuple[str, ...]] = (
     # `detail` keeps carrying the rendered line, because the panel reads it and
     # a reader wants the sentence.
     "doc_chars", "doc_lines", "escalated", "model",
+    # ⚠️ THE MODE THIS CHECK RAN UNDER, STORED BECAUSE IT CANNOT BE RECOVERED
+    # LATER. What a flag was allowed to become is decided at the moment the
+    # check runs — queued for a person, investigated silently, or investigated
+    # and delivered — and the panel has to show the affordance that MATCHED.
+    # Reading the CURRENT setting instead would relabel history every time an
+    # owner changed their mind, which is the same class of error as reading a
+    # threshold at render time.
+    "mode",
     # ⚠️ THE ESCALATED SUBJECT, AS ITSELF. It was in `detail` alone, which is
     # prose — and the approval queue has to hand a subject BACK to the
     # investigation loop when a person presses approve. Recovering it by
@@ -166,7 +174,7 @@ def pending_escalations() -> List[Dict[str, Any]]:
 
 def record_pass(*, reason: str, trigger: str, doc_chars: int,
                 doc_lines: int, escalated: int, subjects: str = "",
-                model: str = "", run_id: str = "",
+                model: str = "", run_id: str = "", mode: str = "",
                 now: Optional[float] = None) -> bool:
     """One row for EVERY triage pass, including the quiet ones.
 
@@ -192,7 +200,7 @@ def record_pass(*, reason: str, trigger: str, doc_chars: int,
         # whole check and hands it to both, so a flag belongs to the check whose
         # run_id is its own id with the `-eN` suffix removed — exact, and
         # unambiguous when two checks overlap.
-        "at": _now_iso(now), "run_id": run_id, "actor": "agent",
+        "at": _now_iso(now), "run_id": run_id, "actor": "agent", "mode": mode,
         "tool": f"pass:{trigger}",
         "verdict": "escalated" if escalated else "quiet",
         "detail": (f"{reason} | doc={doc_chars}c/{doc_lines}L"

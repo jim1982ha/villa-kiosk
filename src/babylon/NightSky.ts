@@ -225,15 +225,28 @@ export class NightSky {
     ctx.beginPath();
     // Lit limb: the right semicircle, top to bottom.
     ctx.arc(0, 0, R, -Math.PI / 2, Math.PI / 2, false);
-    // Terminator. Sweeping anticlockwise past π (the left side) ADDS the left
-    // half, giving gibbous→full; sweeping clockwise back across the right side
-    // SUBTRACTS, giving quarter→crescent→new. Hence the test on 0.5:
-    //   lit 1.00 → b = R, anticlockwise → full disc
-    //   lit 0.50 → b = 0        → the ellipse degenerates to a line: half disc
-    //   lit 0.25 → b = R/2, clockwise → crescent
-    //   lit 0.00 → b = R, clockwise → retraces the arc: nothing lit
+    // Terminator. ⚠️ THE WINDING FLAG WAS INVERTED AND THE MOON RENDERED ITS
+    // OWN COMPLEMENT: a 97%-lit gibbous drew as a 3% sliver, i.e. black.
+    // Reported as "the moon appears black in the sky whereas it is almost full
+    // outside", with the phase maths entirely correct — `getMoonIllumination`
+    // returned 0.973 waxing for that moment, which agrees with Home Assistant's
+    // own `waxing_gibbous` to the letter.
+    //
+    // ⚠️ THE COMMENT ABOVE IT WAS RIGHT ABOUT THE GEOMETRY AND WRONG ABOUT THE
+    // FLAG, which is why six readings never caught it. Canvas measures angles
+    // from +x with y DOWN, and `anticlockwise: true` means DECREASING angle —
+    // so π/2 → -π/2 anticlockwise passes through 0, the RIGHT side, not through
+    // π. Sweeping through the left needs `false`.
+    //
+    // Area check, since "it looks right" is what shipped the bug (R = 1):
+    //   through the LEFT  → πR²/2 + πbR/2 → lit·πR²   ✔ matches the fraction
+    //   through the RIGHT → πR²/2 − πbR/2 → (1−lit)·πR²
+    //   lit 1.00 → b = R, through left  → full disc
+    //   lit 0.50 → b = 0   → the ellipse degenerates to a line: half disc
+    //   lit 0.25 → b = R/2, through right → crescent
+    //   lit 0.00 → b = R, through right → retraces the arc: nothing lit
     ctx.ellipse(0, 0, R * Math.abs(1 - 2 * lit), R, 0,
-      Math.PI / 2, -Math.PI / 2, lit > 0.5);
+      Math.PI / 2, -Math.PI / 2, lit < 0.5);
     ctx.closePath();
     ctx.fill();
     ctx.restore();

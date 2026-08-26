@@ -89,6 +89,7 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     """
     doc = document or ""
     escalated, subjects = 0, ""
+    cfg_now = agent_config.view(config)
     # ⚠️ ONE INSTANT FOR THE WHOLE CHECK, minted here and used by BOTH the row
     # below and every flag `reason.follow_up` records. `_ident` builds a flag id
     # as `f"{trigger}{int(now)}-e{N}"`, so sharing `now` is what makes the check
@@ -106,7 +107,8 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
         # the trace.
         audit.record_pass(reason="raised", trigger=trigger,
                           doc_chars=len(doc), doc_lines=doc.count("\n") + 1,
-                          escalated=0, run_id=check_id)
+                          escalated=0, run_id=check_id,
+                          mode=str(cfg_now.get("mode") or ""))
         raise
     if reason.startswith("escalated "):
         head, _, subjects = reason.partition(": ")
@@ -117,7 +119,8 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     audit.record_pass(reason=reason, trigger=trigger, doc_chars=len(doc),
                       doc_lines=doc.count("\n") + 1, escalated=escalated,
                       subjects=subjects, run_id=check_id,
-                      model=str(agent_config.view(config).get("model_triage", "")))
+                      mode=str(cfg_now.get("mode") or ""),
+                      model=str(cfg_now.get("model_triage", "")))
     return reason
 
 

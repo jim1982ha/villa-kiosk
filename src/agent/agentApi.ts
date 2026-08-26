@@ -537,6 +537,11 @@ export interface TriagePass {
    *  pairing them meant comparing timestamps and hoping. A flag's id is this
    *  string plus `-eN`, so the pairing is exact even when two checks overlap. */
   runId?: string;
+  /** The supervision mode this check ran under. ⚠️ STORED, NOT READ FROM THE
+   *  CURRENT SETTING. What a flag was allowed to become was decided when the
+   *  check ran; reading today's setting would relabel every past check the
+   *  moment an owner changes their mind. Absent on checks before 2.785.0. */
+  mode?: string;
 }
 
 /** One flag a check raised, from the same audit the checks come from.
@@ -629,6 +634,7 @@ export async function loadTriagePasses(): Promise<TriagePass[]> {
       escalated: numOr(x.escalated),
       model: x.model === undefined ? undefined : String(x.model),
       runId: String(x.run_id ?? "") || undefined,
+      mode: String(x.mode ?? "") || undefined,
     }));
 }
 

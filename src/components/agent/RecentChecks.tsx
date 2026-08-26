@@ -33,7 +33,7 @@ import { Loader2, Search, X, FileText, AlertCircle, MinusCircle } from "lucide-r
 
 import { PAGE_CARDS, Pager, usePaged } from "@/components/common/Paged";
 import {
-  checkIdOf, decideEscalation, loadCheckFlags, loadConcerns,
+  checkIdOf, decideEscalation, loadApprovalQueue, loadCheckFlags, loadConcerns,
   type CheckFlag, type TriagePass,
 } from "@/agent/agentApi";
 import type { Concern } from "@/agent/agentTypes";
@@ -77,14 +77,16 @@ export const subjectsOf = (reason: string) => {
 
 
 /** One flag, drawn inside the check that raised it. */
-function FlagRow({ flag, mode, concern, busy, onDecide }: {
+function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
   flag: CheckFlag;
+  /** The mode the CHECK ran under, not the villa's mode today. */
   mode: string;
   concern?: Concern;
   busy: boolean;
+  /** From the server's own pending list — never re-derived here. */
+  waiting: boolean;
   onDecide: (runId: string, action: "approve" | "dismiss") => void;
 }) {
-  const waiting = flag.verdict === "awaiting-approval";
   return (
     <li className="fm-row body-text">
       <span style={{ flex: 1 }}>{flag.subject}</span>
@@ -119,12 +121,20 @@ function FlagRow({ flag, mode, concern, busy, onDecide }: {
           <AlertCircle size={16} aria-hidden /> Concern
         </span>
       ) : mode === "live" ? (
-        <span className="muted" title="Looked into it and concluded nothing worth raising. That is a complete answer, not a failure.">
+        <span className="muted" title="Investigated, and it concluded nothing worth raising. That is a complete answer, not a failure.">
           <MinusCircle size={16} aria-hidden /> Nothing raised
         </span>
-      ) : (
-        <span className="muted" title="Investigated. Anything it concluded appears in your next briefing.">
+      ) : mode === "observe" ? (
+        <span className="muted" title="Investigated. Anything it concluded is in your next briefing.">
           <FileText size={16} aria-hidden /> In the briefing
+        </span>
+      ) : (
+        /* ⚠️ NO MODE RECORDED — a check written before 2.785.0. Saying
+           "in the briefing" would be a claim about a setting nobody stored,
+           and it is FALSE in Flag & Ask, where nothing reaches the briefing.
+           "Settled" is the most this row can honestly say. */
+        <span className="muted" title="This flag was dealt with. The check that raised it did not record which mode it ran under.">
+          <MinusCircle size={16} aria-hidden /> Settled
         </span>
       )}
     </li>
@@ -145,14 +155,25 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
   children?: React.ReactNode;
 }) {
   const [flags, setFlags] = useState<CheckFlag[]>([]);
+  // ⚠️ THE SERVER DECIDES WHAT IS WAITING, AND THIS PANEL ASKS IT. The first
+  // cut re-derived it here as `verdict === "awaiting-approval"` on an audit
+  // row — but `audit.pending_escalations` ALSO excludes any run id that has a
+  // settling row, and an already-dismissed flag keeps its original AWAITING
+  // row forever. So eleven settled flags rendered as pending and every attempt
+  // to cancel them was refused: "11 of 14 could not be cancelled", reported
+  // exactly that way. A second implementation of a shared predicate is this
+  // repository's cardinal sin and this is what it cost.
+  const [pending, setPending] = useState<Set<string>>(new Set());
   const [concerns, setConcerns] = useState<Concern[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string>("");
 
   const load = useCallback(async () => {
-    const [f, c] = await Promise.all([loadCheckFlags(), loadConcerns()]);
+    const [f, c, q] = await Promise.all([
+      loadCheckFlags(), loadConcerns(), loadApprovalQueue()]);
     setFlags(f);
     setConcerns(c);
+    setPending(new Set((q?.pending ?? []).map((p) => p.runId)));
   }, []);
   useEffect(() => { void load(); }, [load]);
 
@@ -183,8 +204,7 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
   // not `Promise.all` — each writes an audit row through a read-modify-write
   // store, and two dozen concurrent writes is how rows are lost.
   const cancelAll = useCallback(async () => {
-    const ids = flags.filter((f) => f.verdict === "awaiting-approval")
-                     .map((f) => f.runId);
+    const ids = flags.filter((f) => pending.has(f.runId)).map((f) => f.runId);
     if (ids.length === 0) return;
     setNote("");
     let failures = 0;
@@ -199,9 +219,9 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
       : `Cancelled ${ids.length}. Anything still true is flagged again by the `
         + "next check.");
     await load();
-  }, [flags, load]);
+  }, [flags, pending, load]);
 
-  const waiting = flags.filter((f) => f.verdict === "awaiting-approval").length;
+  const waiting = pending.size;
 
   const rows = [...passes].reverse().map((p) => {
     const reason = reasonOf(p);
@@ -235,7 +255,7 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
   // true of Investigate & Log, and NOT true in Flag & Ask, where nothing
   // reaches the briefing at all. Dropping them removes the claim with them.
   const orphans = flags.filter(
-    (f) => !attached.has(f.runId) && f.verdict === "awaiting-approval");
+    (f) => !attached.has(f.runId) && pending.has(f.runId));
 
   // ⚠️ CARDS, NOT ROWS — see `PAGE_CARDS`. Each entry here is several lines
   // with its flagged items nested under it, so the row count that suits a
@@ -292,7 +312,7 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
               {orphans.map((f) => (
                 <FlagRow key={f.runId} flag={f} mode={mode || ""}
                          concern={concerns.find((c) => c.run_id === f.runId)}
-                         busy={busy === f.runId}
+                         busy={busy === f.runId} waiting={pending.has(f.runId)}
                          onDecide={canAct ? decide : () => {}} />
               ))}
             </ul>
@@ -307,53 +327,55 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
         {paged.page.map(({ pass, reason, outcome, flags: mine }, i) => {
           const named = subjectsOf(reason);
           return (
-            <li key={`${pass.at}-${i}`} className="body-text">
-              <div>
-                <span className="muted">
-                  {pass.at.replace("T", " ").slice(0, 16)}
-                </span>{" · "}
-                {outcome === "raised" ? (
-                  <>
-                    {/* ⚠️ "N items flagged in this check", NOT "Flagged N".
-                        The old form read as a verdict on the check itself —
-                        the owner's wording names WHAT the number counts, which
-                        matters because the same screen also counts checks. */}
-                    <strong>
-                      {pass.escalated ?? 0} item{pass.escalated === 1 ? "" : "s"}
-                      {" flagged in this check"}
-                    </strong>
-                    {/* ⚠️ THE NAMES ONLY WHERE THE FLAGS THEMSELVES ARE NOT
-                        DRAWN BELOW — otherwise the same subjects appear twice
-                        in one card, which is the duplication this merge exists
-                        to remove. */}
-                    {mine.length === 0 && named ? <> — {named}</> : null}
-                  </>
-                ) : outcome === "quiet" ? (
-                  <>Nothing to flag in this check</>
-                ) : (
-                  <>
-                    <strong className="sev-warning">Could not run</strong>
-                    {" — "}{reason}
-                  </>
-                )}
-                {/* ⚠️ NOT ON A BLOCKED ROW. A check that never reached the model
-                    has no document by construction, so this would fire on every
-                    "could not run" row and say a second thing about a row that
-                    has already explained itself. */}
-                {outcome !== "blocked" && pass.docChars === 0 && (
-                  <span className="sev-warning"> · nothing to read</span>
-                )}
+            /* ⚠️ A CARD PER CHECK, NOT A LINE. The list was a wall of
+                timestamps with the flags somewhere else entirely; the owner
+                asked for one card per check carrying its own items and its own
+                actions on the right. `.editable-row-card` is the app's existing
+                card, so this invents no new surface. */
+            <li key={`${pass.at}-${i}`} className="editable-row-card">
+              <div className="editable-row">
+                <div className="editable-row-fields editable-row-tight">
+                  <div className="body-text">
+                    <span className="muted">
+                      {pass.at.replace("T", " ").slice(0, 16)}
+                    </span>{" · "}
+                    {outcome === "raised" ? (
+                      <>
+                        <strong>
+                          {pass.escalated ?? 0} item{pass.escalated === 1 ? "" : "s"}
+                          {" flagged in this check"}
+                        </strong>
+                        {/* Names only where the items are not drawn below. */}
+                        {mine.length === 0 && named ? <> — {named}</> : null}
+                      </>
+                    ) : outcome === "quiet" ? (
+                      <>Nothing to flag in this check</>
+                    ) : (
+                      <>
+                        <strong className="sev-warning">Could not run</strong>
+                        {" — "}{reason}
+                      </>
+                    )}
+                    {outcome !== "blocked" && pass.docChars === 0 && (
+                      <span className="sev-warning"> · nothing to read</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {mine.length > 0 && (
-                <ul className="fm-list" style={{ marginTop: 6, paddingLeft: 14 }}>
+                <ul className="fm-list" style={{ marginTop: 6 }}>
                   {mine.map((f) => (
                     <FlagRow
                       key={f.runId}
                       flag={f}
-                      mode={mode || ""}
+                      /* ⚠️ THE CHECK'S OWN MODE. Reading the villa's CURRENT
+                         setting would relabel every past check the moment an
+                         owner changed their mind. */
+                      mode={pass.mode || ""}
                       concern={concerns.find((c) => c.run_id === f.runId)}
                       busy={busy === f.runId}
+                      waiting={pending.has(f.runId)}
                       onDecide={canAct ? decide : () => {}}
                     />
                   ))}

@@ -57,7 +57,7 @@ def test_the_bulk_action_never_STARTS_investigations() -> None:
     true is flagged again by the next check."""
     code = _code(_read(QUEUE))
     body = code[code.index("const cancelAll"):]
-    body = body[:body.index("}, [flags, load]);")]
+    body = body[:body.index("}, [flags, pending, load]);")]
     assert '"dismiss"' in body and '"approve"' not in body, (
         "the whole-list action can start investigations — one press would "
         "spend a frontier run per queued item")
@@ -74,7 +74,7 @@ def test_it_reuses_the_single_item_path_rather_than_a_batch_route() -> None:
     # is the WRITES, because each appends to a read-modify-write JSON store.
     code = _code(_read(QUEUE))
     body = code[code.index("const cancelAll"):]
-    body = body[:body.index("}, [flags, load]);")]
+    body = body[:body.index("}, [flags, pending, load]);")]
     assert "decideEscalation(ids[i]" in body, (
         "the bulk path does not go through `decideEscalation`, so it is a "
         "second route past the server's per-item authorisation and audit")
