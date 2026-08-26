@@ -1,3 +1,14 @@
+## 2.764.0
+
+### Fixed — nginx served requests before the backend was listening
+Every restart logged a pair of "connection refused" errors on the two things a
+kiosk page requests the moment it loads. s6 starts nginx as soon as the backend
+process has spawned, not when it has bound a socket — and the backend makes two
+Supervisor round trips before it serves anything, so there is a real window where
+one is accepting and the other is refusing. nginx now waits for the backend,
+bounded to ten seconds, and starts anyway if it never comes up: it serves the
+diagnostics that would explain such a failure, so refusing to start would hide it.
+
 ## 2.763.1
 
 ### Fixed — a failing test shipped because the gate was piped

@@ -1,3 +1,33 @@
 #!/command/with-contenv sh
 # Run nginx in the foreground so s6 supervises (and restarts) it.
+#
+# ⚠️ WAIT FOR THE BACKEND TO ACCEPT FIRST. s6's dependency on `supervisor-proxy`
+# orders the START of the two services and nothing more: s6 considers a longrun
+# "up" the moment it has SPAWNED, not when it is listening. The proxy then does
+# real work in `on_startup` before aiohttp serves anything — it creates the
+# session, writes the signing key, and makes TWO Supervisor round trips
+# (`_cleanup_stale_options`, `_publish_ingress_entry`) — so for a second or more
+# after every container start nginx is accepting requests and 127.0.0.1:8100 is
+# refusing them.
+#
+# The symptom in the add-on log is a pair of
+#   connect() failed (111: Connection refused) ... upstream 127.0.0.1:8100
+# on `/telemetry` and `/core/websocket` — which is not a coincidence: they are
+# the two things a kiosk page requests the instant it loads, which is exactly
+# when a just-restarted add-on is still inside `on_startup`. The browser retries
+# and the tab recovers, so the only visible trace is the error line.
+#
+# ⚠️ BOUNDED, AND IT STARTS ANYWAY ON TIMEOUT. A backend that never comes up is
+# a real failure, and nginx serving 502s is strictly better than nginx never
+# starting: the add-on's own diagnostics are served through it, so refusing to
+# start would hide the very fault somebody needs to see. Ten seconds is far
+# longer than a healthy start and far shorter than a person's patience.
+i=0
+while [ "$i" -lt 100 ]; do
+  nc -z 127.0.0.1 8100 2>/dev/null && break
+  i=$((i + 1))
+  sleep 0.1
+done
+[ "$i" -ge 100 ] && echo "[nginx] backend not accepting after 10s; starting anyway"
+
 exec nginx -g "daemon off;"
