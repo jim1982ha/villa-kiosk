@@ -1,3 +1,12 @@
+## 2.790.0
+
+### Added — a pin that keeps the agent's cost model structural
+An audit of the agentic workflow confirmed exactly two places can ask a model
+anything: the one agent loop and the brief's one-sentence narration overlay.
+`test_llm_call_sites.py` now fails the suite if a third call site appears
+anywhere in the backend, so a reviewer stage or a summarise-the-summary call
+cannot arrive silently. No behaviour change.
+
 ## 2.789.0
 
 ### Fixed — the briefing's concern list crashed its own error handler
