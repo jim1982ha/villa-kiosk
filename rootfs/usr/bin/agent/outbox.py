@@ -454,6 +454,25 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     # the audience string.
     role = "ops" if audience == "facility" else "owner"
     targets = people_mod.targets_for_role(config, role)
+    if not targets:
+        # ⚠️ THE SAME FALLBACK THE BRIEFING HAS HAD ALL ALONG, and its absence
+        # here was an asymmetry nobody could see from outside: `pipeline.
+        # targets_for` tries the People table, THEN the schedule's own list,
+        # THEN the shared `notify_targets`. This tried the People table and
+        # stopped. So a villa whose People table has no row for this profile
+        # delivers its BRIEFINGS perfectly and its CONCERNS nowhere — which
+        # reads as "the alerts are broken" when the alerts are unconfigured.
+        # Reported as briefings arriving and concern notifications never doing.
+        from reports import store as reports_store
+        stored = reports_store.config_view(
+            reports_store.read_json(reports_store.REPORTS_CONFIG_FILE,
+                                    reports_store.EMPTY_CONFIG))
+        shared = stored.get("notify_targets")
+        targets = [str(t) for t in shared
+                   if isinstance(t, str) and t.strip()] if isinstance(shared, list) else []
+        if targets:
+            warn(f"no destination is configured for the {role!r} profile; "
+                 f"falling back to the shared notify list for concern {concern.get('id')}")
 
     plan = route_mod.plan(concern, targets=targets, push_targets=targets,
                           occupied=occupied, quiet_hours=quiet, config=config)
@@ -492,11 +511,12 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
 
     results = await deliver_mod.deliver(session, plan.targets,
                                         plan.title, plan.body)
-    ok = any(str(r.get("status")) == "sent" for r in results
-             if isinstance(r, Mapping))
-    if not ok:
+    landed = [str(r.get("target")) for r in results
+              if isinstance(r, Mapping) and str(r.get("status")) == "sent"]
+    if not landed:
         return "failed"
-    _mark_delivered(str(concern.get("id") or ""), now=now)
+    _mark_delivered(str(concern.get("id") or ""), now=now,
+                    delivered_to=", ".join(landed))
 
     # ⚠️ AFTER THE SEND, AND ONLY AFTER IT. A facility manager job raised for a concern
     # whose delivery then failed is a task nobody was told about, sitting on a
@@ -513,7 +533,8 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     return "sent"
 
 
-def _mark_delivered(concern_id: str, *, now: Optional[float] = None) -> bool:
+def _mark_delivered(concern_id: str, *, now: Optional[float] = None,
+                    delivered_to: str = "") -> bool:
     """Stamp a concern as sent. ⚠️ AFTER THE SEND, NEVER BEFORE.
 
     Marking first and sending second loses the concern entirely when the send
@@ -531,6 +552,12 @@ def _mark_delivered(concern_id: str, *, now: Optional[float] = None) -> bool:
         for row in rows:
             if str(row.get("id")) == concern_id:
                 row["delivered_at"] = stamp
+                # ⚠️ THE TARGETS THAT ACTUALLY ACCEPTED IT, not the ones it was
+                # aimed at. A partial delivery — one chat up, one down — must
+                # record the one that landed, or the card claims a reach it
+                # never had.
+                if delivered_to:
+                    row["delivered_to"] = delivered_to
                 return concerns_mod._write(rows)
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow(f"could not stamp concern {concern_id} as delivered", err)

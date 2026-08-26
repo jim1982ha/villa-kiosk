@@ -25,6 +25,7 @@
 // and the keyboard behaviour are the ones already tested.
 
 import { useMemo, useState } from "react";
+import InfoHint from "@/components/common/InfoHint";
 import { Trash2 } from "lucide-react";
 
 import DeviceSearchPicker, { buildDeviceOptions,
@@ -83,6 +84,27 @@ export default function ActuableDevicesPanel({
       <div className="settings-section-title">
         Devices it may operate
       </div>
+      {/* ⚠️ TITLE → ONE-SENTENCE NOTE → CONTROL → SMALL LABEL, the rhythm every
+          other section on this tab uses. This section had the note where the
+          LIST goes and a second paragraph AFTER the small "Add a device" label,
+          so it read as three unrelated blocks and nothing followed the footer
+          anywhere else in the app. The detail moved into the hint; the safety
+          rule moved up here, because it qualifies the whole list rather than
+          the search box it used to sit under. */}
+      <p className="muted body-text">
+        It can only ever change something on this list.
+        <InfoHint label="Devices it may operate">
+          <p>
+            Both are required: the switch above, and a device on this list.
+            With either one missing the villa changes nothing.
+          </p>
+          <p>
+            Anything that could let somebody in, or silence an alarm, is never
+            done automatically — whatever is on this list. You are asked to
+            confirm it instead.
+          </p>
+        </InfoHint>
+      </p>
 
       {value.length === 0 ? (
         // ⚠️ THE EMPTY STATE STATES THE CONSEQUENCE, NOT THE ABSENCE. "No
@@ -90,9 +112,7 @@ export default function ActuableDevicesPanel({
         // owner needs to know is that the switch above is currently doing
         // nothing, which is a fact about the villa rather than about this form.
         <p className="muted body-text">
-          Empty, so the villa still cannot operate anything — the switch above
-          and this list are both required. Add a device only if you want it
-          changed without anyone being asked first.
+          Nothing added yet, so the villa still cannot change anything.
         </p>
       ) : (
         value.map((entityId) => {
@@ -147,11 +167,6 @@ export default function ActuableDevicesPanel({
           placeholder="Search the villa's devices…"
         />
       </div>
-      <p className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>
-        Anything that could let somebody in or silence an alarm is never done
-        automatically, whatever is on this list — it is offered to you to
-        confirm instead.
-      </p>
     </div>
   );
 }

@@ -213,16 +213,35 @@ export default function AgentConcerns() {
                   MATTERS, and the wall showed only the second. During a shadow
                   period nothing is sent at all, so a list of concerns with no
                   indication of that reads as "everyone has been notified". */}
-              {c.delivered_at ? (
-                <span className="muted body-text" title={`Sent ${c.delivered_at}`}>
-                  sent
-                </span>
-              ) : (
+              {!c.delivered_at && (
                 <span className="muted body-text">not sent yet</span>
               )}
               </div>
+              {/* ⚠️ INLINE AND IN PARENTHESES, at the owner's request — a
+                  standalone "sent" chip beside three other chips read as a
+                  fourth state of the concern rather than a fact about it.
+
+                  ⚠️ AND IT NAMES WHERE IT WENT, WHICH IS THE HALF THAT WAS
+                  MISSING. A concern routes by AUDIENCE: `owner` reaches the
+                  owner's chats, `facility` the facility manager's. A villa with
+                  two Telegram chats can deliver every concern successfully to
+                  the one nobody reads, and the card said only "sent" — reported
+                  exactly that way, two concerns marked sent and nothing on the
+                  owner's own chat. `delivered_to` is written by the outbox from
+                  the targets that actually ACCEPTED it, so a partial delivery
+                  names the one that landed rather than the ones it aimed at.
+                  Concerns raised before 2.781.0 have no such record, and the
+                  audience is the honest fallback — it says who it was FOR. */}
               <span className="body-text concern-text">
                 {c.title}
+                {c.delivered_at && (
+                  <span className="muted" title={`Sent ${c.delivered_at}`}>
+                    {" "}({c.delivered_to
+                      ? `sent to ${c.delivered_to}`
+                      : `sent to the ${c.audience === "facility"
+                          ? "facility manager" : "owner"}`})
+                  </span>
+                )}
               </span>
             </div>
             {/* ⚠️ ONLY ON WHAT WAS ACTUALLY SENT. Acknowledging something

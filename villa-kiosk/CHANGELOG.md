@@ -1,3 +1,20 @@
+## 2.781.0
+
+### Fixed — a concern said "sent" without saying who to
+It routes by audience, so a villa with two Telegram chats can deliver every
+concern successfully to the one nobody reads. The card now names the
+destination, inline and in parentheses.
+
+### Fixed — concerns were delivered nowhere when a profile had no destination
+Briefings fall back to the shared notify list; concern delivery stopped at the
+People table, so a villa could receive every briefing and no alert. It now uses
+the same fallback and says so in the log.
+
+### Changed — Observe and Reason use the same words as Triage
+A check reads changes, raises flags, and a flag may become a concern. Redundant
+spacing removed under section notes, and the devices section reordered so
+nothing follows its footer label.
+
 ## 2.780.0
 
 ### Changed — flagged checks and recent checks are one list

@@ -4571,6 +4571,20 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    dialogs said "--hint-gap under a heading", for the same kind of heading over
    the same kind of sentence. */
 .reports-pane > label.toggle { margin-top: 0; }
+/* ⚠️ A NOTE'S BOTTOM MARGIN IS ADDED TO THE PANE'S GAP, NOT COLLAPSED INTO IT.
+   Flex items do not collapse margins, so a `<p class="muted body-text">` under
+   a section heading contributed the browser's own `1em` on top of the pane's
+   12px and read as a blank line between the sentence and the control it
+   describes — reported on the quiet-hours fields and again on the to-do list
+   box. `.settings-body` has carried the equivalent rule for a while; this is
+   the same fix in the container that lacked it.
+
+   ⚠️ BOTTOM ONLY. Every rule above sets a paragraph's margin-TOP deliberately
+   (`> label.toggle + p`, `> .settings-section-title + *`), and zeroing the
+   whole `margin-block` here would silently outrank all of them — a later
+   shorthand beating an earlier longhand is exactly the cascade collision this
+   stylesheet keeps warning about. */
+.reports-pane > p { margin-bottom: 0; }
 
 /* ⚠️ `.reports-h3` IS DELETED, NOT RESTYLED. It was a SECOND DEFINITION of the
    uppercase section eyebrow — same role as `.settings-section-title`, at

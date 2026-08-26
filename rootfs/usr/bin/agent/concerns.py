@@ -87,6 +87,14 @@ class Concern:
     #: somebody is either spammed or told nothing. `outbox.undelivered` reads
     #: exactly this field.
     delivered_at: str = ""
+    #: Where it was actually sent, comma-separated, or "" if it never was.
+    #: ⚠️ "SENT" WITHOUT "TO WHOM" IS HALF AN ANSWER, and the missing half is the
+    #: one an owner checks. A concern routes by AUDIENCE — `owner` reaches the
+    #: owner's chats, `facility` reaches the facility manager's — so a villa
+    #: with two Telegram chats can deliver every concern successfully to the one
+    #: nobody is reading, and the card said only "sent". Reported exactly that
+    #: way: two concerns marked sent, nothing on the owner's own chat.
+    delivered_to: str = ""
     #: When somebody said "I have seen this", and who. ⚠️ NOT A STATE — see
     #: `acknowledge`. Acknowledging stops escalation; it does not claim the
     #: problem is fixed, and a concern stays `open` until it actually is.
@@ -96,7 +104,7 @@ class Concern:
     def as_dict(self) -> Dict[str, Any]:
         return {
             "id": self.id, "subject_key": self.subject_key,
-            "run_id": self.run_id,
+            "run_id": self.run_id, "delivered_to": self.delivered_to,
             "title": self.title, "body": self.body,
             "severity": self.severity, "audience": self.audience,
             "confidence": self.confidence, "state": self.state,

@@ -126,15 +126,15 @@ export function ObserveTab({ diagnostics }: {
           `connected` was added to replace. */}
       <div className={`fm-banner${c?.connected ? "" : " warn"}`}>
         {c?.connected
-          ? `Listening. Last change seen ${ago(c.lastEventAt) || "recently"}.`
-          : "Not listening — nothing is being recorded, so anything above this "
-            + "is judging an empty window."}
+          ? `Recording. Last change seen ${ago(c.lastEventAt) || "recently"}.`
+          : "Not recording — so every check above this one is reading an "
+            + "empty window."}
       </div>
 
-      <h3 className="settings-section-title">What is being recorded</h3>
+      <h3 className="settings-section-title">What the checks read</h3>
       <dl className="reports-facts">
         <div>
-          <dt>Changes buffered</dt>
+          <dt>Changes recorded</dt>
           <dd>{num(c?.buffered ?? 0)}</dd>
         </div>
         {/* ⚠️ DROPS ARE SHOWN EVEN AT ZERO, unlike most counters here. A gap in
@@ -146,7 +146,7 @@ export function ObserveTab({ diagnostics }: {
           <dd>{num(c?.drops ?? 0)}</dd>
         </div>
         <div>
-          <dt>Listening since</dt>
+          <dt>Recording since</dt>
           <dd>{ago(c?.connectedSince ?? "") || "—"}</dd>
         </div>
       </dl>
@@ -174,7 +174,7 @@ export function ObserveTab({ diagnostics }: {
 
       {c?.silentTypes && c.silentTypes.length > 0 && (
         <>
-          <h3 className="settings-section-title">Heard nothing from</h3>
+          <h3 className="settings-section-title">Nothing recorded from</h3>
           {/* ⚠️ A ZERO IS AMBIGUOUS AND MUST SAY SO: either nothing of that kind
               happened, or that source does not report at all. The second is what
               once hid an entire alert tier. */}

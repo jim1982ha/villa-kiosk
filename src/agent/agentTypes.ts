@@ -141,4 +141,9 @@ export interface Concern {
    *  reports `0/3 identified`. Snake_case for the same reason as the two above:
    *  the store is written by Python and served verbatim. */
   run_id?: string;
+  /** Where it actually landed, comma-separated. ⚠️ THE HALF "sent" WAS MISSING:
+   *  a concern routes by audience, so a villa with two chats can deliver every
+   *  one successfully to the chat nobody reads. Absent on concerns raised
+   *  before 2.781.0, where the audience is the honest fallback. */
+  delivered_to?: string;
 }
