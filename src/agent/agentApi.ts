@@ -576,11 +576,20 @@ export async function runTriageNow(): Promise<{ ok: boolean; reason: string }> {
   });
   const d = (await r.json().catch(() => ({}))) as
     { ok?: boolean; reason?: string; status?: string };
+  // ⚠️ `ok` HERE MEANS "THE PASS RAN", NOT "THE PASS FOUND NOTHING WRONG", and
+  // it deliberately does NOT read the body's own `ok` field. That field is
+  // `not reason` on the proxy, and `run_once` returns a reason on EVERY path —
+  // "nothing to escalate" and "escalated 3 (investigated 2): …" included — so
+  // it was false for every pass that ever succeeded. The owner ran a textbook
+  // pass that escalated three subjects and investigated two, and the panel
+  // told them "The check stopped".
+  //
+  // What a reason MEANS is classified in exactly one place, `outcomeOf` in
+  // RecentChecks, which `test_pass_reason_contract.py` pins against the
+  // producer's own literals. A second classifier here — in either language —
+  // is the drift that pin exists to prevent.
   if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
-  return {
-    ok: d.ok === true,
-    reason: d.reason || (d.ok === true ? "" : String(d.status || "declined")),
-  };
+  return { ok: true, reason: d.reason || String(d.status || "") };
 }
 
 

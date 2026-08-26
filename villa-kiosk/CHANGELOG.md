@@ -1,3 +1,13 @@
+## 2.773.0
+
+### Fixed — "Check the villa now" said the check stopped every single time
+The button reported success from the response's `ok` field, which the proxy
+computes as "there is no reason" — and a pass returns a reason on every path,
+including "nothing to escalate" and "escalated 3 (investigated 2)". So it was
+false for every pass that had ever succeeded, and a run that escalated three
+subjects and investigated two reported "The check stopped". It now says which
+of the three things happened, using the same rule as the list above it.
+
 ## 2.772.0
 
 ### Fixed — two comments that described the code inaccurately

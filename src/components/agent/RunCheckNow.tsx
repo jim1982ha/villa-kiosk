@@ -19,6 +19,7 @@ import { useCallback, useState } from "react";
 import { Play, Loader2 } from "lucide-react";
 
 import { runTriageNow } from "@/agent/agentApi";
+import { outcomeOf } from "@/components/agent/RecentChecks";
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 
@@ -47,15 +48,25 @@ export default function RunCheckNow({ onDone }: { onDone?: () => void }) {
     setBusy(true);
     setNote(null);
     const result = await runTriageNow();
-    // ⚠️ "FOUND NOTHING" IS NOT A FAILURE AND MUST NOT READ AS ONE. A villa the
-    // assistant judges well produces exactly this, and `reason.SYSTEM` instructs
-    // it outright — "finding nothing is a good outcome and a complete answer".
-    // An earlier wording implied a successful check always leaves something
-    // behind, which made every quiet pass look broken.
-    setNote(result.ok
-      ? "The check ran. Anything worth raising is in the list above — a check "
-        + "that finds the villa well adds nothing, which is not a failure."
-      : `The check stopped: ${result.reason}`);
+    // ⚠️ THREE OUTCOMES, CLASSIFIED BY THE SHARED PREDICATE. Until 2.773.0 this
+    // read the response's `ok` field, which was `not reason` on the proxy while
+    // `run_once` returns a reason on every path — so it was false for every
+    // pass that had ever succeeded, and a textbook run that escalated three
+    // subjects and investigated two reported "The check stopped".
+    //
+    // ⚠️ AND "FOUND NOTHING" IS NOT A FAILURE EITHER. A villa the assistant
+    // judges well produces exactly that, and `reason.SYSTEM` says so outright:
+    // "finding nothing is a good outcome and a complete answer".
+    const outcome = result.ok ? outcomeOf(result.reason) : "blocked";
+    setNote(
+      !result.ok ? `Could not reach the villa: ${result.reason}`
+      : outcome === "raised"
+        ? `The check ran and raised something — ${result.reason}. It is in the `
+          + "list above."
+      : outcome === "quiet"
+        ? "The check ran and found nothing worth raising, which is a complete "
+          + "answer rather than a failure."
+        : `The check could not run: ${result.reason}`);
     setBusy(false);
     onDone?.();
   }, [onDone]);

@@ -108,6 +108,43 @@ def test_the_escalated_reason_keeps_the_shape_BOTH_parsers_depend_on() -> None:
         "silently truncates the subject list in the audit row and on screen")
 
 
+def test_the_run_now_BUTTON_classifies_with_the_same_predicate() -> None:
+    """⚠️ A THIRD READER OF THE REASON APPEARED IN 2.769.0 AND GOT IT WRONG.
+
+    `RunCheckNow` reported success from the response's `ok` field, which the
+    proxy computes as `not reason` — and `run_once` returns a reason on EVERY
+    path, "nothing to escalate" and "escalated 3 (investigated 2): …" included.
+    So `ok` was false for every pass that had ever succeeded, and the owner's
+    textbook run — three escalations, two investigations, both answered —
+    reported "The check stopped".
+
+    ⚠️ THE FIX IS CONVERGENCE, NOT A FOURTH BRANCH. `outcomeOf` is the one place
+    that says what a reason MEANS, and this file already pins it against the
+    producer's own literals. The button must go through it rather than
+    re-deciding, in either language.
+    """
+    panel = _read(os.path.join(
+        ROOT, "src", "components", "agent", "RunCheckNow.tsx"))
+    assert "outcomeOf(" in panel, (
+        "the run-now button classifies the pass reason itself instead of using "
+        "the shared predicate, so it can disagree with the list right above it")
+    assert '"ok"' not in panel and "d.ok" not in panel, (
+        "the button is reading an `ok` flag again — the proxy's is `not reason` "
+        "and is false for every successful pass")
+
+
+def test_the_wire_does_not_promise_an_outcome_it_cannot_compute() -> None:
+    """⚠️ THE CLIENT MUST NOT RESURRECT THE PROXY'S `ok`. Classifying a reason
+    in Python would be a second copy of `outcomeOf` across a language boundary
+    — the exact defect this file was written for."""
+    api = _read(os.path.join(ROOT, "src", "agent", "agentApi.ts"))
+    body = api[api.index("export async function runTriageNow"):]
+    body = body[:body.index("\n}")]
+    assert "d.ok === true" not in body, (
+        "runTriageNow reads the proxy's `ok` again; it is `not reason` and "
+        "false for every pass that succeeded")
+
+
 def test_the_panel_shows_the_investigation_yield_the_clause_carries() -> None:
     """⚠️ THE CLAUSE IS WHERE THE MONEY IS, AND IT WAS RENDERED AS PROSE ONLY.
     `Followup.clause` writes "investigated N, M concerns"; N is what was paid
