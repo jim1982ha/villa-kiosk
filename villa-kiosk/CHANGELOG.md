@@ -1,3 +1,14 @@
+## 2.793.0
+
+### Fixed — CI's mypy step has been failing since 2.755.0's sweep
+That release's deletion took the module-level `_CONCERNS_SOURCE = None`
+binding with it, leaving a `global` writer and two readers — a NameError
+waiting on the one documented state ("agent off, source unset") whose own
+docstring promises it is not an error, invisible to pyflakes because `global`
+counts as a definition. The binding is restored with its original comment,
+and CI's `mypy --strict reports/` gate now also runs locally as a test, so a
+strict break is caught before the push instead of on the runner.
+
 ## 2.792.0
 
 ### Fixed — CI was still red after 2.791.0, on two environment gaps

@@ -64,6 +64,27 @@ def _rejected_candidates() -> List[Dict[str, Any]]:
     return out
 
 
+#: Where a briefing gets the agent's findings from. ⚠️ A HOOK, NOT AN IMPORT.
+#: `reports/` may not import `agent/` — the deterministic layer must not depend
+#: on the interpretive one, which is ARCH-003 and is pinned by
+#: `test_reports_never_imports_agent`. The first version of this reached into
+#: `agent.sources` directly and that test caught it, naming the fix: pass a
+#: callback in from the proxy, the same way `Collector.on_event` is wired.
+#:
+#: ⚠️ THE ROWS ARRIVE READY TO PRINT — title, severity, subject_key, age_days —
+#: because computing the age here would mean parsing a timestamp format this
+#: package does not own, which is a second pinned rule (`series.parse_day`).
+#: Whoever supplies the concerns already knows how old they are.
+#:
+#: ⚠️ THIS BINDING WAS DELETED BY 2.755.0's SWEEP AND RESTORED 2026-08-27. The
+#: `global` writer below kept pyflakes quiet, so only mypy --strict saw it —
+#: and every run since had the proxy call the setter at boot, so the NameError
+#: waited for the one documented state ("agent off, source unset") that the
+#: reader's own docstring promises is not an error. Same class as the `_log`
+#: defect test_pyflakes.py pins, one tool further down the ladder.
+_CONCERNS_SOURCE: Optional[Any] = None
+
+
 def set_concerns_source(source: Optional[Any]) -> None:
     """Register where briefings read the agent's findings. Called once, at boot.
 
