@@ -42,7 +42,7 @@ from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
 from agent.registry import REASON_TOOLS
-from reports.log import log, swallow
+from reports.log import log, stage, swallow
 
 #: How many investigations one pass may start when config says nothing.
 #: ⚠️ MIRRORS `config.DEFAULTS`, and `test_agent_reason` pins that it does. A
@@ -183,7 +183,7 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
                                  subject=_subject_of(item),
                                  detail=str(getattr(item, "reason", "") or ""))
         out.queued = len(escalations)
-        log(f"reason: {out.queued} escalation(s) queued for approval")
+        stage("reason", f"{out.queued} escalation(s) queued for approval")
         return out
 
     before = _concern_count(config)
@@ -255,7 +255,7 @@ async def investigate_subject(item: Any, *, provider: Provider,
     except Exception as err:  # noqa: BLE001 - the clock must survive this
         swallow(f"investigation of {subject!r} raised", err)
         return False
-    log(f"reason: {run_id} {result.status} on {subject!r}")
+    stage("reason", f"{run_id} {result.status} on {subject!r}")
     return True
 
 

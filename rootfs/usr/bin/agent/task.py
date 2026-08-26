@@ -50,7 +50,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Optional
 
 from agent import config as agent_config
-from reports.log import log, swallow
+from reports.log import stage, swallow
 
 #: The stored key naming the facility manager list. Empty means the feature is off.
 CONFIG_KEY: str = "task_list"
@@ -134,7 +134,7 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
         swallow(f"could not raise a facility manager task for {rule_id}", err)
         return "failed"
 
-    log(f"task: raised {summary!r} on {entity_id}")
+    stage("task", f"raised {summary!r} on {entity_id}")
     return "raised"
 
 

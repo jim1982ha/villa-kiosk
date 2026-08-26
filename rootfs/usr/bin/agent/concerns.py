@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import contracts
 from reports import store
-from reports.log import log, swallow
+from reports.log import stage, swallow
 
 CONCERNS_FILE: str = f"{store.DATA_DIR}/vesta/concerns.json"
 
@@ -173,7 +173,7 @@ def raise_concern(concern: Concern, *, now: Optional[float] = None
     rows.append(out.as_dict())
     if not _write(rows):
         return None, "the concern store could not be written"
-    log(f"concern {out.id} opened: {out.severity} {out.title[:60]}")
+    stage("concern", f"{out.id} opened: {out.severity} {out.title[:60]}")
     return out, ""
 
 

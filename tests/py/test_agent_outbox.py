@@ -279,6 +279,14 @@ def test_unknown_occupancy_delivers(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ── the caller ──────────────────────────────────────────────────────────────
+def _decommented(src: str) -> str:
+    """⚠️ COMMENTS STRIPPED BEFORE MATCHING. Six pins in this repository have
+    passed by matching their own PROSE — a sentence about a call is not a
+    call — and every one of them was found the same way."""
+    return "\n".join(l for l in src.splitlines()
+                      if not l.strip().startswith("#"))
+
+
 def test_the_clock_runs_the_sweep_every_pass() -> None:
     """⚠️ UNCONDITIONALLY, AND THAT IS WHAT RELEASES A HELD CONCERN. Running it
     only after a pass that escalated would leave a concern held overnight and
@@ -287,12 +295,46 @@ def test_the_clock_runs_the_sweep_every_pass() -> None:
 
     from agent import scheduler
 
-    src = inspect.getsource(scheduler._pass)
-    code = "\n".join(l for l in src.splitlines()
-                     if not l.strip().startswith("#"))
-    assert "outbox_mod.sweep(" in code, (
-        "the triage clock does not run the outbox, so no Concern reaches a "
+    assert "outbox_mod.sweep(" in _decommented(
+        inspect.getsource(scheduler.dispatch)), (
+        "the dispatch tail does not run the outbox, so no Concern reaches a "
         "phone and a held one is never released")
+    assert "dispatch(" in _decommented(inspect.getsource(scheduler._pass)), (
+        "the triage clock no longer dispatches, so a scheduled pass mints "
+        "concerns and carries none of them")
+
+
+def test_the_BUTTON_delivers_too_and_not_only_the_clock() -> None:
+    """⚠️ THE DEFECT THIS FILE'S OTHER PIN COULD NOT SEE, AND IT SHIPPED FOR
+    SIXTY RELEASES. `outbox.sweep` had exactly ONE caller — the scheduled pass —
+    while "Check the villa now" called `run_once` directly. So a check an owner
+    ran HIMSELF investigated, minted a Concern, recorded it and showed it on the
+    tablet, and sent nothing to anybody until the six-hourly clock came round.
+
+    Both halves were correct and nothing joined them, which is this project's
+    most-repeated defect (`feedback_two-correct-halves`). The pin above proved
+    the CLOCK delivers and would have stayed green through all of it, because it
+    only ever asked about one of the two callers — `feedback_pin-the-caller`
+    applied to the caller nobody thought to name.
+
+    ⚠️ IT READS THE PROXY AS TEXT because the handler needs an aiohttp request,
+    a session and a provider to run. What must be true is a WIRING fact, and a
+    wiring fact is visible in the source.
+    """
+    import os
+
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    with open(os.path.join(root, "rootfs", "usr", "bin",
+                           "supervisor-proxy.py"), encoding="utf-8") as fh:
+        proxy = _decommented(fh.read())
+
+    assert "agent_scheduler.dispatch(" in proxy, (
+        "the manual 'Check the villa now' button does not dispatch, so a pass "
+        "an owner started himself delivers nothing to anybody until the "
+        "scheduled clock next runs")
+    assert "agent_scheduler.run_once(" in proxy, (
+        "the manual button no longer runs a triage pass at all")
 
 
 # ── the briefing carries what the agent concluded ───────────────────────────

@@ -29,7 +29,7 @@ from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
 from agent.registry import Registry, build_registry, narrowed
-from reports.log import log
+from reports.log import log, stage
 
 #: The only tool triage may see. ⚠️ A NAME, not a mode: `read_state` is READ too
 #: and would let a cheap pass fan out across the villa one entity at a time.
@@ -276,7 +276,7 @@ async def run(*, provider: Provider, document: str,
     # handles no longer mean what they meant.
     _identify(found, getattr(reg, "refs", None))
     named = sum(1 for e in found if e.entity_id)
-    log(f"triage: {len(found)} escalation(s) from {result.turns} turn(s)"
+    stage("triage", f"{len(found)} escalation(s) from {result.turns} turn(s)"
         # ⚠️ COUNTED, BECAUSE "identified 0 of 3" AND "identified 3 of 3" ARE
         # THE TWO OUTCOMES THAT DECIDE WHETHER THE HANDOVER PAGE CAN EVER SHOW
         # A MATCH, and they are otherwise indistinguishable from outside.

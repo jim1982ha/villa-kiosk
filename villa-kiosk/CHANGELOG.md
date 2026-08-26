@@ -1,3 +1,18 @@
+## 2.768.0
+
+### Fixed — "Check the villa now" investigated, concluded, and told nobody
+The button ran a triage pass directly, and the two delivery sweeps were the tail
+of the SCHEDULED pass — so `outbox.sweep` had exactly one caller. A check an
+owner started himself could mint a concern, record it and show it on the tablet
+while sending no message and raising no facility manager job until the six-hourly
+clock came round. Both halves were correct; nothing joined them.
+
+### Added — a pass is now readable end to end in the add-on log
+Every tier stamps its line with a shared pass id and reports even when it did
+nothing, because "no line" and "nothing to do" read identically. The villa
+document and the routing verdict had no voice at all; a document too thin to be
+about a villa now warns instead of being a number nobody reads.
+
 ## 2.767.0
 
 ### Removed — a status helper nothing ever called

@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from agent import concerns as concerns_mod
 from agent import config as agent_config
 from agent import route as route_mod
-from reports.log import log, swallow
+from reports.log import stage, swallow, warn
 
 #: How many concerns one sweep may deliver. ⚠️ A BURST GUARD, NOT A POLICY. A
 #: villa that has been in shadow for a month has a backlog, and turning delivery
@@ -145,6 +145,9 @@ async def escalation_sweep(session: Any, *,
     pending = awaiting_acknowledgement()
     out.considered = len(pending)
     if not pending:
+        # ⚠️ SAME RULE AS THE DELIVERY SWEEP. "Nothing is waiting to be chased"
+        # is a fact; silence is an unanswered question.
+        stage("escalation", "nothing awaiting acknowledgement")
         return out
 
     cfg = agent_config.view(config)
@@ -174,8 +177,9 @@ async def escalation_sweep(session: Any, *,
             if not verdict.act:
                 if verdict.step == "stand down":
                     stood_down += 1
-                    log(f"outbox: concern {row.get('id')} stood down — "
-                        f"{verdict.reason}")
+                    stage("escalation",
+                          f"concern {row.get('id')} stood down — "
+                          f"{verdict.reason}")
                 continue
             # ⚠️ ONE STEP IS TAKEN ONCE. Without this the same band fires on
             # every sweep, five minutes apart, for as long as nobody answers —
@@ -194,8 +198,7 @@ async def escalation_sweep(session: Any, *,
             swallow(f"could not escalate concern {row.get('id')}", err)
             out.failed += 1
 
-    if out.sent or out.failed or stood_down:
-        log(f"outbox escalation: {out.line()}, stood down {stood_down}")
+    stage("escalation", f"{out.line()}, stood down {stood_down}")
     return out
 
 
@@ -380,6 +383,11 @@ async def sweep(session: Any, *,
     pending = undelivered()
     out.considered = len(pending)
     if not pending:
+        # ⚠️ A TIER THAT DID NOTHING STILL REPORTS. "No line" and "nothing to
+        # carry" are the same thing in a log, so silence here made a delivery
+        # tier that never ran look exactly like a villa with nothing to say —
+        # the instrument shape this project has been caught by five times.
+        stage("outbox", "nothing waiting")
         return out
 
     cfg = agent_config.view(config)
@@ -408,8 +416,7 @@ async def sweep(session: Any, *,
         else:
             out.failed += 1
 
-    if out.sent or out.held or out.suppressed:
-        log(f"outbox: {out.line()}")
+    stage("outbox", out.line())
     return out
 
 
@@ -432,6 +439,19 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
 
     plan = route_mod.plan(concern, targets=targets, push_targets=targets,
                           occupied=occupied, quiet_hours=quiet, config=config)
+
+    # ⚠️ THE ROUTING VERDICT IS SAID OUT LOUD, AND `Delivery.reason` IS WHY IT
+    # CAN BE. Every branch below was already decided correctly and reported only
+    # as a tally — `considered 1, sent 0, suppressed 1` — so the two questions an
+    # owner actually asks when nothing arrives ("did it decide not to, or did it
+    # fail?" and "why?") were answered by a number that could not tell them
+    # apart. The reason string has existed on this object since the module was
+    # written and nothing had ever read it.
+    ident = str(concern.get("id") or "?")
+    stage("route", f"{ident} {plan.severity} → "
+                   f"{len(plan.targets)} target(s)"
+                   + (f", {plan.reason}" if plan.reason else ""))
+
     if plan.suppressed:
         return "suppressed"
     if plan.held:
@@ -442,6 +462,14 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
         # ⚠️ NOWHERE TO SEND IS A CONFIGURATION STATE, NOT AN ERROR — and it
         # must NOT mark the concern delivered, or configuring a target later
         # would silently skip everything raised before it.
+        #
+        # ⚠️ IT IS ALSO THE LIKELIEST REASON A FIRST TEST DELIVERS NOTHING, and
+        # it used to be indistinguishable from a Telegram outage: both came back
+        # as `failed`, one word, in a tally. A villa with nobody configured is
+        # fixed on the People tab in a minute; a broken notify platform is not,
+        # and sending somebody to the wrong one of those costs a round.
+        warn(f"concern {ident} has nowhere to go: no destination is configured "
+             f"for the {role!r} profile on the People tab")
         return "failed"
 
     results = await deliver_mod.deliver(session, plan.targets,

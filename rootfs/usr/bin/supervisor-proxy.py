@@ -140,6 +140,7 @@ from reports.analysis import registry as reports_registry  # noqa: E402
 from reports.analysis import modules as _reports_modules  # noqa: E402,F401
 from reports import schedule as reports_schedule    # noqa: E402
 from reports import secrets as reports_secrets      # noqa: E402
+from reports import log as reports_log          # noqa: E402
 from reports import hass as reports_hass          # noqa: E402
 from reports import tasks as reports_tasks        # noqa: E402
 from reports.narrate import providers as reports_narrate_providers  # noqa: E402
@@ -2676,15 +2677,30 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
         # reporting that nothing changed. The reason was in the response body
         # the whole time and the panel showed it; I did not ask for it and read
         # the add-on log instead, which is where the byte count gave it away.
-        reason = await agent_scheduler.run_once(
-            request.app["session"],
-            config=_read_json_store(AGENT_CONFIG_FILE, {}),
-            provider=anthropic_sdk.build(
-                api_key=reports_secrets.get("anthropic") or ""),
-            document=document,
-            # ⚠️ NAMED, so the trace separates a button press from the clock.
-            # "I pressed it and nothing changed" is unanswerable otherwise.
-            trigger="manual")
+        stored = _read_json_store(AGENT_CONFIG_FILE, {})
+        provider = anthropic_sdk.build(
+            api_key=reports_secrets.get("anthropic") or "")
+        # ⚠️ THE SAME SCOPE THE CLOCK USES, so a button press and a scheduled
+        # pass are told apart in the log by the word AND by the id every tier
+        # stamps its line with. Two passes can overlap — the button exists to be
+        # pressed at a moment nobody chose relative to a six-hourly clock.
+        with reports_log.pass_scope("manual"):
+            agent_scheduler.describe_document(document)
+            reason = await agent_scheduler.run_once(
+                request.app["session"], config=stored, provider=provider,
+                document=document,
+                # ⚠️ NAMED, so the trace separates a button press from the clock.
+                # "I pressed it and nothing changed" is unanswerable otherwise.
+                trigger="manual")
+            # ⚠️ THE HALF THIS BUTTON NEVER DID (2.768.0). `run_once` escalates,
+            # investigates and mints a Concern; carrying that Concern to a phone
+            # and onto the facility manager's list is `scheduler.dispatch`, which
+            # was the tail of the SCHEDULED pass and had no other caller. So a
+            # check an owner ran himself recorded a concern, showed it on the
+            # tablet, and told nobody until the clock came round up to six hours
+            # later — both halves correct, nothing joining them.
+            reason += await agent_scheduler.dispatch(
+                request.app["session"], config=stored)
         return web.json_response({"ok": not reason, "status": "triaged",
                                   "reason": reason})
 

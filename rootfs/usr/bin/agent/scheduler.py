@@ -41,7 +41,7 @@ from agent import config as agent_config
 from agent import reason as reason_mod
 from agent import triage as triage_mod
 from reports import store
-from reports.log import log, swallow, warn
+from reports.log import log, pass_scope, stage, swallow, warn
 
 #: How long to wait after a failed pass before trying again. ⚠️ NOT THE
 #: CADENCE: a villa whose provider is down should not retry every fifteen
@@ -258,14 +258,26 @@ async def run_forever(session: Any,
                 # PASS_FILE — a restart used to reset the cadence to zero.
                 remaining = due_in(minutes)
                 if remaining > 0:
-                    log(f"triage: {remaining / 60:.0f} min left of the current "
+                    # ⚠️ `clock:`, NOT `triage:`. This line is about the
+                    # CADENCE and the tier below is about the model; sharing a
+                    # prefix put two unrelated facts in one grep and made the
+                    # trace's own tier names ambiguous.
+                    log(f"clock: {remaining / 60:.0f} min left of the current "
                         f"period, not starting a pass")
                     await asyncio.sleep(remaining)
                     continue
                 _record_pass(time.time())
-                outcome = await _pass(session, config)
-                if outcome:
-                    log(f"triage: {outcome}")
+                # ⚠️ THE SCOPE WRAPS THE WHOLE PASS, NOT `run_once`. Delivery
+                # and escalation happen AFTER the model is done, and a trace
+                # that stopped at the model would cut off exactly the half a
+                # first end-to-end test is run to see.
+                with pass_scope("scheduled"):
+                    outcome = await _pass(session, config)
+                    if outcome:
+                        # ⚠️ `outcome:` — this is the verdict of the WHOLE pass
+                        # (triage, then reasoning, then both delivery sweeps),
+                        # not of the triage tier, which reports itself.
+                        log(f"outcome: {outcome}")
         except asyncio.CancelledError:
             log("triage scheduler stopped")
             raise
@@ -273,6 +285,35 @@ async def run_forever(session: Any,
             swallow("triage pass failed", err)
             wait = RETRY_S
         await asyncio.sleep(wait)
+
+
+#: A document this short cannot be about a villa. ⚠️ THE NUMBER IS A MEASUREMENT,
+#: NOT A TASTE: the empty-property document that stopped TASK-051 for a whole
+#: shadow period was 480 characters, and it was well-formed — which is exactly
+#: why nobody caught it. A profile naming real rooms and devices does not fit in
+#: a kilobyte, so anything under one is a document about nothing.
+THIN_DOCUMENT_CHARS: Final[int] = 1000
+
+
+def describe_document(document: str) -> None:
+    """Say what the model is about to be asked to read.
+
+    ⚠️ THE TIER THAT HAD NO VOICE AT ALL. Its size reached the audit row and
+    nothing else, so the add-on log — the instrument every field diagnosis in
+    this project has actually been made from — could not distinguish a quiet
+    villa from a villa the agent could not see. That is not hypothetical: the
+    agent WAS blind for an entire observation period on `doc=480c/15L`, and the
+    verdict read as a verdict on the agent rather than on its input.
+
+    ⚠️ AND IT JUDGES, IT DOES NOT ONLY MEASURE. A number nobody has a threshold
+    for is a number nobody reads; `WARNING` is what makes a thin document
+    arrive as a fault rather than as a statistic somebody might notice.
+    """
+    chars, lines = len(document), document.count("\n") + 1
+    stage("document", f"{chars} chars, {lines} lines")
+    if chars < THIN_DOCUMENT_CHARS:
+        warn(f"the villa document is {chars} chars — too thin to be about a "
+             "villa; triage is about to run effectively blind")
 
 
 async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
@@ -312,33 +353,49 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     except Exception as err:  # noqa: BLE001
         warn(f"triage could not assemble the villa document: {err}")
         document = f"The villa document could not be assembled: {err}"
+    describe_document(document)
 
     provider = anthropic_sdk.build(
         api_key=reports_secrets.get("anthropic") or "")
     outcome = await run_once(session, config=config, provider=provider,
                              document=document)
+    return outcome + await dispatch(session, config=config)
 
-    # ⚠️ AFTER THE PASS, EVERY PASS, WHETHER OR NOT IT ESCALATED. The outbox is
-    # what carries a Concern to a phone (TASK-106), and it must run on the clock
-    # rather than only after a pass that produced something: a concern HELD for
-    # quiet hours is released by a later sweep finding the window closed, and
-    # that later sweep only exists if this is unconditional. Holding a concern
-    # and then never looking at it again is "held until morning" meaning
-    # "dropped".
-    #
-    # ⚠️ AND IT NEVER RAISES — `sweep` returns a typed result on every path,
-    # because this is a background clock nobody is watching.
+
+async def dispatch(session: Any,
+                   *, config: Optional[Mapping[str, Any]] = None) -> str:
+    """Carry whatever is waiting to the people it is for. Never raises.
+
+    ⚠️ EXTRACTED IN 2.768.0 BECAUSE THE BUTTON DID NOT DO IT. These two sweeps
+    were the tail of `_pass`, so `outbox.sweep` had exactly ONE caller — the
+    scheduled clock. "Check the villa now" calls `run_once` directly, so a pass
+    an owner STARTED HIMSELF could mint a concern, record it, show it on the
+    tablet, and carry it to nobody: no Telegram message and no facility manager
+    job until the six-hourly clock came round. Both halves were correct and
+    nothing joined them, which is this repository's most-repeated defect
+    (`feedback_two-correct-halves`) and was found by asking what a first
+    end-to-end test would actually prove.
+
+    ⚠️ SAFE TO CALL ON A PASS THAT ESCALATED NOTHING, and that is why it is
+    unconditional rather than guarded on the outcome. Both sweeps read the
+    concern store, not the pass — a concern HELD for quiet hours is released by
+    a LATER sweep finding the window closed, and that later sweep only exists
+    if this runs every time. Holding a concern and never looking again is
+    "held until morning" meaning "dropped".
+    """
     from agent import outbox as outbox_mod
-    dispatch = await outbox_mod.sweep(session, config=config)
-    if dispatch.sent or dispatch.held or dispatch.failed:
-        outcome = f"{outcome} | outbox: {dispatch.line()}"
 
-    # ⚠️ A SECOND SWEEP, ON THE SAME CLOCK, AND IT IS NOT THE SAME SWEEP
-    # (TASK-112). The first asks "what has never been sent"; this asks "what was
-    # sent and nobody has picked up", which is the question `route.escalate` was
-    # written for and which nothing asked for the whole of its existence —
-    # REQ-033 was unmet not because escalation was wrong but because it had no
-    # caller, exactly as the degradation ladder did.
+    # ⚠️ NEVER RAISES — `sweep` returns a typed result on every path, because
+    # one of its two callers is a background clock nobody is watching.
+    sent = await outbox_mod.sweep(session, config=config)
+    out = f" | outbox: {sent.line()}" if (sent.sent or sent.held
+                                          or sent.failed) else ""
+
+    # ⚠️ A SECOND SWEEP, AND IT IS NOT THE SAME SWEEP (TASK-112). The first asks
+    # "what has never been sent"; this asks "what was sent and nobody has picked
+    # up", which is the question `route.escalate` was written for and which
+    # nothing asked for the whole of its existence — REQ-033 was unmet not
+    # because escalation was wrong but because it had no caller.
     #
     # ⚠️ RUN AFTER, NEVER MERGED INTO THE FIRST. A concern delivered by the
     # sweep above is zero minutes old and inside the first band, so ordering
@@ -347,5 +404,5 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     # to stand down.
     escalated = await outbox_mod.escalation_sweep(session, config=config)
     if escalated.sent or escalated.failed:
-        outcome = f"{outcome} | escalation: {escalated.line()}"
-    return outcome
+        out += f" | escalation: {escalated.line()}"
+    return out
