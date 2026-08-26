@@ -33,6 +33,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
 import RecentChecks from "@/components/agent/RecentChecks";
+import RunCheckNow from "@/components/agent/RunCheckNow";
 import { loadTriagePasses, type TriagePass } from "@/agent/agentApi";
 import { AgentConfigProvider,
          useAgentConfigDraft } from "@/agent/AgentConfigDraft";
@@ -281,10 +282,19 @@ function AgentDialog(
               <div className="settings-section-title">Recent checks</div>
               <RecentChecks
                 passes={passes}
+                /* ⚠️ THIS SENTENCE POINTED AT A TAB DELETED IN 2.756.0, and
+                   said so for twelve releases. The Handover page held the only
+                   "Check the villa now" button in the app; deleting the page
+                   took the button, and the copy went on naming it. A reader
+                   following it looked for a tab that was not there. */
                 empty={<>No check has run yet. One runs on the schedule above,
-                       or immediately from &ldquo;Check the villa now&rdquo; on
-                       the Handover tab.</>}
+                       or immediately with the button below.</>}
               />
+              {/* ⚠️ OUTSIDE `RecentChecks`, NOT PASSED AS ITS CHILD. That
+                  component renders ONLY the empty sentence when no pass has
+                  run, so a button placed inside it would be missing in exactly
+                  the state whose text tells you to press it. */}
+              <RunCheckNow onDone={() => void loadTriagePasses().then(setPasses)} />
             </div>
           )}
 

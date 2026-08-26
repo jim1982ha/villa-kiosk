@@ -1,3 +1,18 @@
+## 2.769.0
+
+### Fixed — there was no way to run a check on demand
+"Check the villa now" lived on the Handover tab, and 2.756.0 deleted that page
+along with its only button. The `/agent-run-now` route survived with nothing
+calling it, and the Triage tab went on telling readers to press a button on a
+tab that no longer existed. It is back, on Triage, beside the list of checks it
+adds to. Owner-only, and the label says it spends a request.
+
+### Fixed — two calls resolved their URL by luck
+`reports-tasks` and `reports-tasks-complete` were fetched as bare relative
+paths, which match the Home Assistant ingress base only because the SPA is
+served with a trailing slash. Both now go through `ingressPath` like the other
+ten calls beside them.
+
 ## 2.768.0
 
 ### Fixed — "Check the villa now" investigated, concluded, and told nobody

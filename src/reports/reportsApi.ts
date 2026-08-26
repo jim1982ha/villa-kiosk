@@ -364,7 +364,15 @@ export type FacilityTask = {
 };
 
 export async function fetchTasks(): Promise<{ tasks: FacilityTask[]; reachable: boolean }> {
-  const r = await fetch("reports-tasks", { headers: { Accept: "application/json" } });
+  // ⚠️ THROUGH `ingressPath`, LIKE THE OTHER TEN CALLS IN THIS FILE. These two
+  // were bare relative fetches and worked only by accident: a relative URL
+  // resolves against the DOCUMENT's directory, which matches the ingress base
+  // solely because Home Assistant serves the SPA at `.../<token>/` with a
+  // trailing slash. Anything that ever changes the document path — a sub-route,
+  // a deep link — resolves them somewhere else, and they would 404 in the
+  // sidebar while working perfectly on the direct hostname.
+  const r = await fetch(ingressPath("reports-tasks"),
+                        { headers: { Accept: "application/json" } });
   if (!r.ok) return { tasks: [], reachable: false };
   const body = (await r.json()) as { tasks?: unknown; reachable?: unknown };
   const rows = Array.isArray(body.tasks) ? body.tasks : [];
@@ -389,7 +397,7 @@ export async function fetchTasks(): Promise<{ tasks: FacilityTask[]; reachable: 
 export async function completeTask(
   task: FacilityTask,
 ): Promise<{ ok: boolean; error?: string }> {
-  const r = await fetch("reports-tasks-complete", {
+  const r = await fetch(ingressPath("reports-tasks-complete"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ entity_id: task.entityId, uid: task.uid }),

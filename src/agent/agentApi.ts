@@ -545,6 +545,45 @@ const numOr = (v: unknown): number | undefined => {
     ? undefined : n;
 };
 
+/**
+ * Start one triage pass right now, for real. Returns why it stopped.
+ *
+ * ⚠️ THIS FUNCTION HAS NOW BEEN LOST TWICE, WHICH IS WHY THE ROUTE IS PINNED.
+ * `/agent-run-now` shipped on the proxy under TASK-034 with nothing in the SPA
+ * calling it — the third capability in this subsystem to ship without a surface
+ * — and was given one in 2.674.0. Then 2.756.0 deleted the Handover tab, which
+ * was the only page holding the button, and took the client with it: the route
+ * went back to having no caller and the empty-state copy went on pointing at a
+ * tab that no longer existed. Nothing failed, nothing 404'd, and the only way to
+ * run a check was to wait six hours. `test_route_has_a_client.py` now fails when
+ * an owner-facing route has nothing in `src/` that fetches it.
+ *
+ * ⚠️ NOT A PREVIEW AND NOT A CONVERSATION. `{preview: true}` assembles the Villa
+ * Document and calls no provider; a bare run holds one conversation and returns
+ * prose. Neither raises a CONCERN. `{triage: true}` runs the pass the scheduler
+ * runs, with every guard it applies — enabled, the budget, the provider — and
+ * since 2.768.0 with the delivery sweeps that carry a Concern to a phone and
+ * onto the facility manager's list. It returns WHY it stopped rather than a
+ * boolean, because "nothing happened" has five causes and four of them are fine.
+ * This spends real budget.
+ */
+export async function runTriageNow(): Promise<{ ok: boolean; reason: string }> {
+  const r = await fetch(ingressPath("agent-run-now"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ triage: true }),
+  });
+  const d = (await r.json().catch(() => ({}))) as
+    { ok?: boolean; reason?: string; status?: string };
+  if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
+  return {
+    ok: d.ok === true,
+    reason: d.reason || (d.ok === true ? "" : String(d.status || "declined")),
+  };
+}
+
+
 export async function loadTriagePasses(): Promise<TriagePass[]> {
   const r = await fetch(ingressPath("agent-audit"), { credentials: "same-origin" });
   if (!r.ok) return [];
