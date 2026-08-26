@@ -1,3 +1,12 @@
+## 2.779.0
+
+### Fixed — the mode tooltip contradicted the description under it
+The tooltip said your briefing is written either way; the Flag & Ask
+description said nothing reaches the briefing. The briefing is written in every
+mode — what changes is whether the assistant's own findings are in it. The
+tooltip now says only what is true of all three, and each description carries
+only what its label does not already say.
+
 ## 2.778.0
 
 ### Changed — "Worth a closer look" is now "Flagged checks"

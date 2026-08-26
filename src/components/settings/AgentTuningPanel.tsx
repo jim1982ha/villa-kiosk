@@ -354,12 +354,17 @@ export default function AgentTuningPanel() {
            axes — who decides to investigate, and whether you are told at the
            time — and the note now says that instead of implying a ladder. */
         note="Each step does everything the one before it does, and one thing more."
+        /* ⚠️ THE TOOLTIP SAYS ONLY WHAT IS TRUE OF ALL THREE. It used to
+           compare the modes, which the labels now do themselves — and it
+           CONTRADICTED the description below it on the same screen: the tooltip
+           read "your briefing is written either way" while Flag & Ask's own
+           text read "nothing reaches the briefing". Both were reaching for the
+           same fact and only one is right — the briefing is written in every
+           mode; what changes is whether the assistant's own findings are IN it.
+           Reported by the owner, who had both paragraphs on screen at once. */
         more={<>
-          <strong>Flag &amp; Ask</strong> spends almost nothing until you
-          approve a closer look. The other two both investigate everything and
-          cost the same as each other; only the last one interrupts you and
-          chases until someone acknowledges. Whichever you pick, urgent things
-          ignore quiet hours, and your briefing is written either way.
+          Your briefing is written whichever you pick. Urgent things always
+          ignore quiet hours.
         </>}
         value={draft.mode}
         // ⚠️ ONE KEY WRITTEN, NOT TWO (2.756.0). This used to write `shadow`
@@ -398,18 +403,15 @@ export default function AgentTuningPanel() {
              briefing would promise content this mode cannot produce, which is
              the exact defect "Observe only" had. */
           { id: "ask", text: "Flag & Ask",
-            hint: "It flags what looks wrong and stops there. Nothing is "
-                + "investigated until you approve it, so it spends almost "
-                + "nothing on its own. Until you approve something, nothing "
-                + "reaches you and nothing reaches the briefing." },
+            hint: "Spends almost nothing on its own. Approving one runs the "
+                + "full investigation straight away, and that one then behaves "
+                + "like the last step." },
           { id: "observe", text: "Investigate & Log",
-            hint: "It investigates everything by itself and writes what it "
-                + "finds into your briefing. It never messages you, never adds "
-                + "a job, and never chases. It costs the same as the next one." },
+            hint: "Costs the same as the last step. What it finds appears in "
+                + "your briefing and nowhere else." },
           { id: "live", text: "Investigate, Log & Escalate",
-            hint: "Everything above, and it tells you at the time: a message "
-                + "when it concludes something, a job on your to-do list, and "
-                + "it keeps chasing until someone acknowledges it." },
+            hint: "Messages you when it concludes something, adds a job to "
+                + "your to-do list, and chases until someone acknowledges." },
         ]}
       />
 

@@ -73,7 +73,7 @@ export const SOURCES: Record<Source, SourceSpec> = {
   },
   triage: {
     label: "Flagged for a look",
-    hint: "A quick pass thought this was worth examining. It has NOT been "
+    hint: "A quick check thought this was worth examining. It has NOT been "
       + "investigated yet, and carries no severity — that comes later.",
     tone: "triage",
   },
