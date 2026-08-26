@@ -1,3 +1,16 @@
+## 2.766.0
+
+### Changed — the app says Facility Manager everywhere, including the new parts
+Your standing instruction is that this product calls that person the Facility
+Manager. It was applied to the briefing, then missed once, and missed again in
+the task feature shipped three releases ago — a settings field labelled
+"Caretaker to-do list" and a whole module written around the word. The check that
+forbids it only ever scanned the briefing code, which is where the rule was born
+rather than where it applies; it now covers the assistant's own modules and the
+app, and both go red under mutation. The blueprints' `caretaker_todo_list` input
+keeps its name deliberately: renaming it would break every automation already
+built on it.
+
 ## 2.765.0
 
 ### Changed — the actuation switch now sits with the list it depends on
@@ -34,7 +47,7 @@ was not a gate.
 
 ### Added — a finding the villa sends you can become a job somebody ticks off
 Retiring the maintenance, ROI and audit automations kept their detection and
-silently dropped the other half of what they did: raising a caretaker task, then
+silently dropped the other half of what they did: raising a facility manager task, then
 chasing whoever is responsible until somebody answers. The assistant could not
 write a to-do item at all, so a finding was something to read and never something
 anybody was asked to do. Name a to-do list under Act & Tell and every finding the
