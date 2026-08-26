@@ -262,6 +262,11 @@ def test_every_BaseTool_subclass_reaches_ALL_TOOLS_or_is_a_stated_exception() ->
                         "resolve no handle, cite no evidence and write to no "
                         "store, so collecting it would teach every scheduled "
                         "run a verb that always refuses",
+        "AnalysisTool": "the abstract base of the three statistical checks "
+                        "(TASK-070). Its `check` is empty, so it names no "
+                        "module and could only refuse; the three subclasses "
+                        "that DO name one are in ANALYSIS_TOOLS and are "
+                        "collected",
         "BaseTool": "the base class itself",
     }
 

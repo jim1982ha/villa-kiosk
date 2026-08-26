@@ -22,7 +22,8 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from agent import refs as refs_mod  # noqa: E402
-from agent.tools import ALL_TOOLS, ha, ledger, logs, playbook, read  # noqa: E402
+from agent.tools import (ALL_TOOLS, analysis, ha, ledger, logs,  # noqa: E402
+                         playbook, read)
 from observe import salience  # noqa: E402
 
 SHIPPED_PLAYBOOKS = os.path.join(
@@ -343,6 +344,21 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
         playbook.ReadPlaybook(roots=(SHIPPED_PLAYBOOKS,),
                               reads_path=os.path.join(
                                   tempfile.mkdtemp(), "reads.json")),
+        # ⚠️ THE THREE STATISTICAL CHECKS (TASK-070), FED A SOURCE THAT NAMES A
+        # REAL STATISTIC ID. Their findings are computed FROM statistic ids and
+        # they emit the resolved LABEL instead — a `_finding_row` that copied
+        # `ref`, `dedup_key` or the statistic id itself would leak here, which
+        # is the whole reason they are swept rather than trusted. The session
+        # is a sentinel: `_discovery_source` short-circuits the HA call, so no
+        # network is touched and the module still receives a real inventory.
+        *[cls(session_source=lambda: object(),
+              discovery_source=lambda: {
+                  "reachable": True,
+                  "capabilities": ["statistics", "energy_devices",
+                                   "recorder", "history"],
+                  "inventory": {"energy": {
+                      "devices": ["sensor.pool_pump_power"]}}})
+          for cls in analysis.ANALYSIS_TOOLS],
     ]
     assert len(built) == len(ALL_TOOLS), (
         "a tool was added to the registry without being swept here")

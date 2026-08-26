@@ -701,6 +701,13 @@ def build_tools(session: Any = None, *,
             continue
         made.append(tool)
     made.extend(cls() for cls in ledger_tools.LEDGER_TOOLS)
+    # ⚠️ THE THREE STATISTICAL CHECKS (TASK-070). They read long-run statistics
+    # from Home Assistant, so they take the SESSION this builder was handed —
+    # and when there is none they refuse in words rather than reporting a
+    # healthy villa they never looked at, which is the failure mode every other
+    # tool here has already paid for once.
+    from agent.tools import analysis as analysis_tools
+    made.extend(analysis_tools.analysis_tools(session_source=lambda: session))
     # ⚠️ NO SOURCE ARGUMENT: its source is the filesystem the add-on ships, so
     # it is the one tool here that answers correctly on a fresh install with no
     # villa data at all. Every other member of this list is a per-property read

@@ -1,3 +1,14 @@
+## 2.795.0
+
+### Added — the assistant can now run the three statistical checks itself
+TASK-070, the first step of the plan's Phase 5. Standby creep, level anomaly
+and sensor health are exposed as tools the assistant calls when it wants them,
+instead of only running inside the weekly briefing behind a gate. The
+statistics are untouched — the tools call the same modules, and a new test
+runs both over one fixture and asserts identical numbers. Also fixed on the
+way: the registry never passed its Home Assistant session to the tool builder,
+so any tool needing live statistics would have been born disconnected.
+
 ## 2.794.0
 
 ### Fixed — a flag doubled after Investigate, and said only its name

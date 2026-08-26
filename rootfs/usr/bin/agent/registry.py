@@ -151,7 +151,13 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
         # ⚠️ THE TABLE IS BUILT HERE AND PASSED IN, rather than built inside
         # `build_tools` and lost. It is the run's only ref table: the read tools
         # mint handles into it and `raise_concern` resolves them back out of it.
-        built = list(sources.build_tools(config=config, refs=refs))
+        # ⚠️ THE SESSION IS FORWARDED (TASK-070). It was omitted while every
+        # tool here read local state only; the three statistical checks read
+        # long-run statistics from Home Assistant, so a session-less build
+        # would publish three tools that can only ever refuse — the exact
+        # "wired to nothing" shape this function's own docstring records
+        # paying for once already.
+        built = list(sources.build_tools(session, config=config, refs=refs))
         # ⚠️ THE UPSTREAM'S TOOLS JOIN THIS LIST, THEY DO NOT SIT BESIDE IT
         # (ADR-023). Home Assistant's own MCP server is where HA reads come
         # from now, and folding its `tools/list` in here is the whole
