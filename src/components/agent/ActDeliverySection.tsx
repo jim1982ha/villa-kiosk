@@ -112,7 +112,7 @@ export default function ActDeliverySection() {
       </label>
 
       <div className="settings-section-title">
-        What it may do without asking
+        Allow to control devices
       </div>
       {/* ⚠️ THE GATE ON TOUCHING THE VILLA, AND IT SHIPS CLOSED (ADR-023).
           Home Assistant's own MCP add-on is where the villa's readings come
@@ -126,7 +126,7 @@ export default function ActDeliverySection() {
         checked={c.actEnabled === true}
         onChange={(actEnabled: boolean) => edit({ actEnabled })}
         label="Let it operate devices, not just watch them"
-        note="Off, it reads and tells you and cannot change a switch, light or lock."
+        note="Check this option to allow VESTA Agent to control selected devices."
         disabled={ctx.saving}
         more={<>
           <p>
@@ -138,6 +138,14 @@ export default function ActDeliverySection() {
             It only ever touches what you add to the list below. The switch and
             the list must both allow it.
           </p>
+          {/* ⚠️ MOVED HERE FROM THE LIST BELOW, because it qualifies the whole
+              permission rather than the search box it used to sit under — and
+              the list no longer has a heading or a hint of its own. */}
+          <p>
+            Anything that could let somebody in, or silence an alarm, is never
+            done automatically — whatever is on that list. You are asked to
+            confirm it instead.
+          </p>
         </>}
       />
       {/* ⚠️ THE ALLOW-LIST LIVES WITH THE TIER THAT ENFORCES IT. It is only
@@ -146,6 +154,7 @@ export default function ActDeliverySection() {
           and adds nothing has still authorised nothing, which the panel says
           out loud rather than leaving as an empty form. */}
       <ActuableDevicesPanel
+        locked={c.actEnabled !== true}
         value={Array.isArray(c.actuableEntities)
           ? c.actuableEntities.map(String) : []}
         onChange={(actuableEntities) => edit({ actuableEntities })}

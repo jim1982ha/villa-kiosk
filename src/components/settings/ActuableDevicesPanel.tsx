@@ -25,7 +25,6 @@
 // and the keyboard behaviour are the ones already tested.
 
 import { useMemo, useState } from "react";
-import InfoHint from "@/components/common/InfoHint";
 import { Trash2 } from "lucide-react";
 
 import DeviceSearchPicker, { buildDeviceOptions,
@@ -34,13 +33,15 @@ import { useConfig } from "@/config/ConfigContext";
 import { useHA } from "@/ha/HAStateStore";
 
 export default function ActuableDevicesPanel({
-  value, onChange, disabled,
+  value, onChange, disabled, locked,
 }: {
   /** The stored allow-list, as Home Assistant entity ids. */
   value: readonly string[];
   onChange: (next: string[]) => void;
   /** True while the draft is being written. */
   disabled?: boolean;
+  /** True when the master switch is off: the whole group is inert. */
+  locked?: boolean;
 }) {
   const { config, resolvedRooms } = useConfig();
   const { entities } = useHA();
@@ -79,33 +80,39 @@ export default function ActuableDevicesPanel({
     onChange([...value, opt.entityId]);
   };
 
+  // ⚠️ NO TITLE AND NO NOTE OF ITS OWN. This is the SECOND HALF of the control
+  // above it — the switch says "allow it to control devices" and this says
+  // which — so a heading between them announced a new section for something
+  // that is one decision, and the owner reported the pair reading as two. The
+  // safety rule moved into the switch's own hint for the same reason: it
+  // qualifies the whole permission, not this list.
+  //
+  // ⚠️ AND IT GREYS OUT WITH THE SWITCH. An enabled picker under an unticked
+  // box invites an owner to build a list that authorises nothing — the state
+  // 2.718.0 shipped and nobody could see. `pointer-events` plus `disabled` on
+  // every control, so it is unreachable by keyboard too rather than only dim.
   return (
-    <div className="fm-stack" style={{ marginTop: 10 }}>
-      <div className="settings-section-title">
-        Devices it may operate
+    <div className="fm-stack" aria-disabled={locked || undefined}
+         style={{ marginTop: 4, opacity: locked ? 0.45 : undefined,
+                  pointerEvents: locked ? "none" : undefined }}>
+      {/* ⚠️ A `div`, NOT A `label`, AND BOTH EXISTING CALLERS OF THIS PICKER
+          AGREE. `DeviceSearchPicker` is a composite: an input with an absolutely
+          positioned suggestion list beneath it. Wrapping that in a `label`
+          makes every suggestion row part of the label's activation area, so a
+          tap on a row also refocuses the input — on a touch screen that is the
+          difference between choosing a device and reopening the keyboard over
+          the list you were choosing from. The `span` still labels it visually
+          through `.fm-field > span`. */}
+      <div className="fm-field" style={{ marginTop: 0 }}>
+        <DeviceSearchPicker
+          value={text}
+          onChangeText={setText}
+          onSelect={add}
+          onClear={() => setText("")}
+          options={options}
+          placeholder="Search and add devices to allow control"
+        />
       </div>
-      {/* ⚠️ TITLE → ONE-SENTENCE NOTE → CONTROL → SMALL LABEL, the rhythm every
-          other section on this tab uses. This section had the note where the
-          LIST goes and a second paragraph AFTER the small "Add a device" label,
-          so it read as three unrelated blocks and nothing followed the footer
-          anywhere else in the app. The detail moved into the hint; the safety
-          rule moved up here, because it qualifies the whole list rather than
-          the search box it used to sit under. */}
-      <p className="muted body-text">
-        It can only ever change something on this list.
-        <InfoHint label="Devices it may operate">
-          <p>
-            Both are required: the switch above, and a device on this list.
-            With either one missing the villa changes nothing.
-          </p>
-          <p>
-            Anything that could let somebody in, or silence an alarm, is never
-            done automatically — whatever is on this list. You are asked to
-            confirm it instead.
-          </p>
-        </InfoHint>
-      </p>
-
       {value.length === 0 ? (
         // ⚠️ THE EMPTY STATE STATES THE CONSEQUENCE, NOT THE ABSENCE. "No
         // devices selected" would read as a form waiting to be filled; what an
@@ -136,7 +143,7 @@ export default function ActuableDevicesPanel({
                 <button
                   type="button"
                   className="btn danger icon-only"
-                  disabled={disabled}
+                  disabled={disabled || locked}
                   aria-label={`Stop the villa operating ${opt?.label ?? entityId}`}
                   onClick={() => onChange(value.filter((id) => id !== entityId))}
                 >
@@ -148,25 +155,6 @@ export default function ActuableDevicesPanel({
         })
       )}
 
-      {/* ⚠️ A `div`, NOT A `label`, AND BOTH EXISTING CALLERS OF THIS PICKER
-          AGREE. `DeviceSearchPicker` is a composite: an input with an absolutely
-          positioned suggestion list beneath it. Wrapping that in a `label`
-          makes every suggestion row part of the label's activation area, so a
-          tap on a row also refocuses the input — on a touch screen that is the
-          difference between choosing a device and reopening the keyboard over
-          the list you were choosing from. The `span` still labels it visually
-          through `.fm-field > span`. */}
-      <div className="fm-field" style={{ marginTop: 10 }}>
-        <span>Add a device</span>
-        <DeviceSearchPicker
-          value={text}
-          onChangeText={setText}
-          onSelect={add}
-          onClear={() => setText("")}
-          options={options}
-          placeholder="Search the villa's devices…"
-        />
-      </div>
     </div>
   );
 }

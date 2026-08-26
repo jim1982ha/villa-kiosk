@@ -139,6 +139,36 @@ def test_a_flag_with_no_identifiable_check_is_still_RENDERED() -> None:
         "an empty card renders on every villa that has none")
 
 
+def test_the_device_list_is_INERT_when_the_master_switch_is_off() -> None:
+    """⚠️ AN ENABLED PICKER UNDER AN UNTICKED BOX INVITES A LIST THAT AUTHORISES
+    NOTHING. Both are required — the switch AND a device on the list — so an
+    owner who builds the list with the switch off has granted exactly nothing
+    and the screen gave no sign of it. That is the shape 2.718.0 shipped, where
+    `act_enabled` existed and no surface could see it.
+
+    ⚠️ `pointerEvents` ALONE IS NOT ENOUGH. It stops a mouse and leaves the
+    controls reachable by keyboard, so the `disabled` attribute has to follow
+    the lock too — dimming something a Tab key can still operate is the
+    accessible version of a lie.
+    """
+    src = _read(os.path.join(SRC, "components", "settings",
+                             "ActuableDevicesPanel.tsx"))
+    code = "\n".join(l for l in src.splitlines()
+                      if not l.strip().startswith("//"))
+    assert "locked" in code, "the panel cannot be locked at all"
+    assert "pointerEvents: locked" in code, (
+        "the group is not made inert when the switch is off")
+    assert "disabled={disabled || locked}" in code, (
+        "a control inside the group ignores the lock, so it stays operable by "
+        "keyboard while the group looks disabled")
+
+    caller = _read(os.path.join(SRC, "components", "agent",
+                                "ActDeliverySection.tsx"))
+    assert "locked={c.actEnabled !== true}" in caller, (
+        "nothing passes the lock, so the panel is never inert — the helper "
+        "honouring a prop nobody sets is this repository's most repeated defect")
+
+
 # ── one hint, and short descriptions ────────────────────────────────────────
 
 def test_the_shared_controls_all_offer_a_hint() -> None:

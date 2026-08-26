@@ -1,3 +1,13 @@
+## 2.783.0
+
+### Changed — the device permission reads as one decision
+The switch is now "Allow to control devices" and the list under it has no
+heading, no note and no footer label of its own — it is the second half of the
+same control, not a second section. The search box says what it does, the
+chosen devices sit under it, and the whole list greys out and stops responding
+while the switch is off. The Act & Tell tab no longer repeats itself in a
+sentence above the sections.
+
 ## 2.782.0
 
 ### Fixed — flagged items were invisible on the Triage tab

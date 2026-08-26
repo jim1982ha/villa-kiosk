@@ -147,9 +147,11 @@ export const TIERS: Record<string, Tier> = {
   },
   act: {
     n: 4, name: "Act & Tell",
-    what: "Decides who is told, how, and whether the villa may act.",
-    more: "Deliberately a fixed table rather than a judgement, because "
-        + "deciding who to wake at 3am should not be a model's call.",
+    // ⚠️ NO BLURB ON THIS TAB, BY REQUEST. Every section below already names
+    // what it does, so the sentence restated the tab in words the headings use
+    // — and the `<p>` is skipped entirely rather than rendered empty, or its
+    // margin leaves the blank line the removal was asked for.
+    what: "",
     speed: "immediate", model: false, offline: true, source: "agent",
   },
 };
@@ -229,12 +231,14 @@ export function TierIntro({ tier, speed, children }: {
           <dd>{tier.offline ? "Works offline" : "Needs internet"}</dd>
         </div>
       </dl>
-      <p className="muted body-text">
-        {tier.what}
-        {tier.more
-          ? <InfoHint label={tier.name}>{tier.more}</InfoHint>
-          : null}
-      </p>
+      {tier.what ? (
+        <p className="muted body-text">
+          {tier.what}
+          {tier.more
+            ? <InfoHint label={tier.name}>{tier.more}</InfoHint>
+            : null}
+        </p>
+      ) : null}
       {children}
     </div>
   );
