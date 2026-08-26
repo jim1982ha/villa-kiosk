@@ -141,7 +141,7 @@ export default function AgentQueue() {
   if (queue.pending.length === 0) {
     return (
       <>
-        <div className="settings-section-title">Worth a closer look</div>
+        <div className="settings-section-title">Flagged checks</div>
         <p className="muted body-text">
           Nothing is waiting. Checks are flagging subjects for approval rather
           than looking into them by themselves — you can change that under
@@ -158,8 +158,14 @@ export default function AgentQueue() {
           to treat the list as a worklist of findings — but a triage escalation
           is not a finding: it carries NO severity, and its order is not a
           priority. The chip on each row reads "Flagged for a look"; the heading
-          now agrees with it instead of outranking it. */}
-      <div className="settings-section-title">Worth a closer look</div>
+          agrees with it instead of outranking it.
+
+          ⚠️ RENAMED TO "Flagged checks" BY THE OWNER (2.778.0). Stated because
+          it sits directly above "Recent checks" and the two use the same noun
+          for different things: a row HERE is a SUBJECT the villa flagged and is
+          waiting on you for, while a row THERE is one PASS that ran. If the
+          pair ever reads as one list, this heading is the half to change. */}
+      <div className="settings-section-title">Flagged checks</div>
       <p className="muted body-text">
         A check flagged these and stopped. Looking into one costs a full,
         expensive investigation; dismissing settles it without spending.
