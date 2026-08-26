@@ -455,9 +455,10 @@ def test_a_concern_does_not_repeat_a_built_in_finding() -> None:
 # exercises the decision function stays green through exactly that, which is
 # `feedback_pin-the-caller` for the second time in two releases.
 
-def _delivered(minutes_ago: float, *, severity: str = "critical") -> str:
+def _delivered(minutes_ago: float, *, severity: str = "critical",
+               **kw: Any) -> str:
     """A concern sent `minutes_ago` and never acknowledged."""
-    cid = _raise(severity=severity)
+    cid = _raise(severity=severity, **kw)
     outbox._mark_delivered(cid, now=time.time() - minutes_ago * 60)
     return cid
 
@@ -562,6 +563,49 @@ def test_a_MALFORMED_delivery_stamp_never_pages_anyone(
     concerns._write(rows)
     out = asyncio.run(outbox.escalation_sweep(None, config=ON))
     assert out.sent == 0 and sender.calls == []
+
+
+def test_the_sweep_ACCOUNTS_for_every_concern_it_considered(
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str]) -> None:
+    """⚠️ FOUND BY THE OWNER'S FIRST END-TO-END CAPTURE, IN THE TIER BUILT ONE
+    RELEASE EARLIER TO PREVENT EXACTLY THIS. The line read
+    `escalation: considered 2, sent 0, held 0, suppressed 0, stood down 0` —
+    five numbers accounting for NONE of the two concerns it had just looked at.
+
+    Both verdicts were correct: a warning does not escalate at all, and a recent
+    critical is inside the first band. Neither had a counter, so a sweep working
+    perfectly was indistinguishable from one that silently dropped two concerns
+    — `feedback_instruments-never-skip`, occurring inside the instrument.
+
+    ⚠️ FUNCTIONAL, BECAUSE THE FIRST VERSION OF THIS PIN WAS A GREP AND PASSED
+    VACUOUSLY. It asserted `"quiet_reasons" in source`; deleting the increment
+    left the declaration and the render behind, so the mutation stayed GREEN.
+    This drives the real sweep and reads the real line.
+    """
+    _wire(monkeypatch, _Sender())
+    # A warning never escalates; a 1-minute-old critical is inside the first
+    # band. Two different quiet verdicts, so the reasons cannot collapse.
+    # ⚠️ DISTINCT SUBJECTS. `raise_concern` refuses a second open concern about
+    # the same one, which is a real rule and would otherwise make this test read
+    # as a sweep bug.
+    _delivered(200, severity="warning", subject_key="a1b2c3d4a1b2c3d4")
+    _delivered(1, severity="critical", subject_key="ffeeddccbbaa9988")
+
+    out = asyncio.run(outbox.escalation_sweep(None, config=ON))
+    line = capsys.readouterr().out
+
+    assert out.considered == 2, out.line()
+    assert out.sent == 0 and out.failed == 0, "neither should have escalated"
+    # ⚠️ THE RECONCILIATION ITSELF: every considered concern is spoken for.
+    assert "2x" in line or line.count("1x") == 2, (
+        "the escalation line does not account for the concerns it considered — "
+        f"a reader cannot tell a correct quiet sweep from a dropped one: {line}")
+    assert "only a critical escalates" in line, (
+        "the reason a warning was skipped is not on the line, so 'not critical' "
+        "and 'too recent' — which an operator acts on differently — read the same")
+    assert "inside the first band" in line, (
+        "the reason a recent critical was skipped is not on the line")
 
 
 def test_the_scheduler_RUNS_the_escalation_sweep() -> None:

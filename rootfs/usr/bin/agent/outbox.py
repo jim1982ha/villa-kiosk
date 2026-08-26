@@ -157,6 +157,11 @@ async def escalation_sweep(session: Any, *,
 
     occupied = await occupancy_now(session)
     stood_down = 0
+    #: verdict reason -> how many concerns it accounted for. ⚠️ KEYED BY THE
+    #: REASON RATHER THAN COUNTED, because "not critical" and "too recent" are
+    #: different answers to "why did nothing happen" and an operator acts on
+    #: them differently.
+    quiet_reasons: Dict[str, int] = {}
     for row in pending[:MAX_PER_SWEEP]:
         try:
             # ⚠️ SETTLED IS THE CLEARED CONDITION, AND IT IS THE ONE SIGNAL THIS
@@ -180,6 +185,17 @@ async def escalation_sweep(session: Any, *,
                     stage("escalation",
                           f"concern {row.get('id')} stood down — "
                           f"{verdict.reason}")
+                else:
+                    # ⚠️ COUNTED, BECAUSE `considered` MUST RECONCILE. The first
+                    # real capture of this tier read `considered 2, sent 0,
+                    # held 0, suppressed 0, stood down 0` — five numbers
+                    # accounting for none of the two, because a verdict of "only
+                    # a critical escalates" or "inside the first band" fell
+                    # through every bucket. Both are correct decisions and both
+                    # were invisible, so the line could not be told apart from a
+                    # sweep that silently dropped two concerns.
+                    quiet_reasons[verdict.reason] = \
+                        quiet_reasons.get(verdict.reason, 0) + 1
                 continue
             # ⚠️ ONE STEP IS TAKEN ONCE. Without this the same band fires on
             # every sweep, five minutes apart, for as long as nobody answers —
@@ -198,7 +214,9 @@ async def escalation_sweep(session: Any, *,
             swallow(f"could not escalate concern {row.get('id')}", err)
             out.failed += 1
 
-    stage("escalation", f"{out.line()}, stood down {stood_down}")
+    quiet = ", ".join(f"{n}x {why}" for why, n in sorted(quiet_reasons.items()))
+    stage("escalation", f"{out.line()}, stood down {stood_down}"
+                        + (f" ({quiet})" if quiet else ""))
     return out
 
 

@@ -408,16 +408,21 @@ export default function UsagePanel() {
                   {/* ⚠️ THE RANGE IS SPELLED OUT, NOT JUST THE PAGE NUMBER.
                       "2 / 25" tells a reader nothing about what they are
                       looking at; "21–40 of 500" says where they are in the
-                      list and how much of it there is. The export sits here
-                      because THIS is the control that hides rows — a reader
-                      who has just been told they are seeing 20 of 500 is
-                      exactly the reader who wants the other 480. */}
-                  <Pager paged={paged} unit="request">
-                    <button className="btn ghost" onClick={download}
-                            title="Download every request in this window as a CSV">
-                      <Download size={16} aria-hidden /> CSV
-                    </button>
-                  </Pager>
+                      list and how much of it there is.
+
+                      ⚠️ THE CSV BUTTON THAT WAS HERE IS GONE (2.771.0), AND ITS
+                      ARGUMENT IS RECORDED BECAUSE IT WAS A GOOD ONE: the export
+                      sat beside the pager because THIS is the control that
+                      hides rows, and a reader just told they are seeing 20 of
+                      500 is exactly the reader who wants the other 480. It was
+                      still the SAME `download` call as the one in the toolbar
+                      above — one action, two buttons, and the owner reported the
+                      duplication from the screen. A second button does not
+                      become a different feature by being well placed. The
+                      toolbar keeps it, where it sits with the range picker that
+                      decides what would be exported, and it is the copy with the
+                      `disabled` guard for an empty list. */}
+                  <Pager paged={paged} unit="request" />
                 </div>
               )}
             </>
