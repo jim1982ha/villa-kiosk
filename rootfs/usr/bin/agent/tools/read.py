@@ -241,17 +241,36 @@ class ReadCoverage(BaseTool):
     }
     mode = "READ"
 
-    def __init__(self, discovered: Optional[Any] = None) -> None:
+    def __init__(self, discovered: Optional[Any] = None,
+                 absent_source: Optional[Any] = None) -> None:
         self._discovered = discovered
+        # ⚠️ THE WIRED SOURCE (2026-08-28). This tool shipped constructed BARE
+        # (`cls()` in `build_tools`' catch-all), so its structural half was []
+        # on every real call — the model was told "nothing is unmeasured" about
+        # a property nobody had surveyed, which is the exact over-claim the
+        # None-vs-[] distinction below exists to prevent. `absent_source` is
+        # `sources.absent_capability_sentences`: the stored survey OUTPUT,
+        # already prose, already id-free, refreshed at most daily.
+        self._absent_source = absent_source
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
         since = str(args.get("since") or "")
         cov = journal.coverage(since)
         found = self._discovered() if callable(self._discovered) else None
-        absent = snapshot.absent_sentences(found if isinstance(found, Mapping) else None)
+        absent: Optional[List[str]]
+        if isinstance(found, Mapping):
+            absent = snapshot.absent_sentences(found)
+        elif callable(self._absent_source):
+            absent = self._absent_source()
+        else:
+            absent = None
         return [data({
             "temporal": cov,
-            "structural": absent,
+            # ⚠️ `None` IS "NOT SURVEYED", NOT "NOTHING MISSING", and the model
+            # is told which in words — a sentence cannot be misread.
+            "structural": (absent if absent is not None else
+                           "this property's blind spots have not been "
+                           "surveyed yet"),
             # ⚠️ SPELLED OUT RATHER THAN LEFT TO INFERENCE. A model handed
             # `complete: false` may or may not draw the right conclusion from
             # it; a sentence cannot be misread.

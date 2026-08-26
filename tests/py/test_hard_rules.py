@@ -230,6 +230,10 @@ FIXTURES: Set[str] = {
     # a sanitised copy would stop proving the parser handles what it meets.
     # Listed so the decision is visible rather than accidental.
     "sensor.house_pump_power",
+    # The shortened-label identification fixture (test_agent_cost) uses the
+    # exact label shapes the reference villa's 0/5 was logged against.
+    "sensor.jacuzzi_pump_energy", "sensor.jacuzzi_pump_power",
+    "sensor.onsen_pump_power",
     "sensor.jacuzzi_pump_power_factor", "sensor.pool_pump_power",
     "sensor.swimming_pool_massage_jet_pump_power_factor",
     "light.master_bedroom_master_bedroom_light_ceiling",

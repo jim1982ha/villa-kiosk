@@ -467,7 +467,13 @@ async def invoke(registry: Registry, *, policy: policy_mod.RunPolicy,
         # ⚠️ A NON-EMPTY AUDIT MEANS DO NOT SEND — it is not advisory. The
         # result is replaced, and the reason is logged rather than shown, so a
         # leak cannot describe itself to the model.
-        swallow("tool result refused by the redaction audit",
+        #
+        # ⚠️ THE TOOL IS NAMED IN THE LINE (2026-08-28). A live refusal on the
+        # reference villa printed twenty-eight leaked ids and not which of the
+        # eight calls in the run produced them — the one fact that turns a
+        # sighting into a fix. An instrument that reports a leak without its
+        # source is a hunt, not a finding.
+        swallow(f"result of {tool.name} refused by the redaction audit",
                 RuntimeError("; ".join(problems[:3])))
         return Invocation([fail("internal",
                                 "the result could not be shown safely")],

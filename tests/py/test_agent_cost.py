@@ -235,6 +235,38 @@ def test_a_subject_with_no_device_behind_it_stays_a_topic() -> None:
         "a label inside a longer phrase missed — which is how a model writes")
 
 
+def test_a_SHORTENED_label_still_identifies_the_device() -> None:
+    """⚠️ THE 0/5 THE REFERENCE VILLA LOGGED TWICE (2026-08-28). Triage wrote
+    "Jacuzzi Pump" for devices labelled "Jacuzzi Pump Energy" and "Jacuzzi
+    Pump Power"; `label in subject` can never match a subject SHORTER than
+    every label, so every device-shaped flag stayed topic-keyed and the
+    Handover's matched column was 0 by construction. The reverse containment
+    picks the SHORTEST containing label, deterministically.
+
+    ⚠️ AND A SHORT WORD MUST NOT FUZZY-MATCH. "Coverage" is contained in no
+    label here, and a 3-character subject is refused outright — a one-word
+    subject matching half the villa would be worse than a topic key."""
+    class _Refs:
+        _table = {"d1": ("Jacuzzi Pump Energy", "sensor.jacuzzi_pump_energy"),
+                  "d2": ("Jacuzzi Pump Power", "sensor.jacuzzi_pump_power"),
+                  "d3": ("Onsen Pump Power", "sensor.onsen_pump_power")}
+        def known(self): return tuple(self._table)
+        def label(self, ref): return self._table[ref][0]
+        def resolve(self, ref): return self._table[ref][1]
+
+    items = [triage.Escalation(subject="Jacuzzi Pump", reason="r"),
+             triage.Escalation(subject="Onsen Pump", reason="r"),
+             triage.Escalation(subject="Observation coverage gap", reason="r"),
+             triage.Escalation(subject="Pum", reason="r")]
+    triage._identify(items, _Refs())
+    assert items[0].entity_id == "sensor.jacuzzi_pump_power", (
+        "shortest containing label should win, deterministically — "
+        "'Jacuzzi Pump Power' (18) beats 'Jacuzzi Pump Energy' (19)")
+    assert items[1].entity_id == "sensor.onsen_pump_power"
+    assert items[2].entity_id == "", "a topic subject was forced onto a device"
+    assert items[3].entity_id == "", "a 3-character fragment matched"
+
+
 def test_the_ha_tools_copy_states_the_REAL_tool_count() -> None:
     """⚠️ A NUMBER IN PROSE THAT NOBODY CHECKS DRIFTS, AND THIS ONE ALREADY DID.
     The same tooltip shipped "about five times cheaper", which is the PREFIX

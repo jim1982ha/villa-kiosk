@@ -1,3 +1,15 @@
+## 2.798.0
+
+### Fixed — flags now identify their device, and a refused result names its tool
+Two checks logged "0/5 identified": the assistant shortens labels ("Jacuzzi
+Pump" for "Jacuzzi Pump Power"), and the match only worked the other way
+round — the reverse containment now identifies the device, so a concern about
+one carries a real key. A tool result the privacy audit refuses is logged
+WITH the tool's name (twenty-eight leaked ids were reported without their
+source). And read_coverage was built unwired, so it claimed "nothing is
+unmeasured" about a property nobody had surveyed — it now reads the stored
+survey and says "not surveyed yet" when there is none.
+
 ## 2.797.0
 
 ### Changed — the briefing is written by the agent's own plain author now

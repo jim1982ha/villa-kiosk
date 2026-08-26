@@ -674,8 +674,10 @@ def build_tools(session: Any = None, *,
     # source now REFUSES and says so, so an unwired member of this list is
     # loudly missing rather than quietly empty — which is what let the previous
     # gap survive. Adding a source here is the only change needed.
+    made.append(read_tools.ReadCoverage(
+        absent_source=absent_capability_sentences))
     _wired = (read_tools.ReadVilla, read_tools.ReadSalient,
-              read_tools.ReadConcerns)
+              read_tools.ReadConcerns, read_tools.ReadCoverage)
     for cls in read_tools.READ_TOOLS:
         if cls not in _wired:
             made.append(cls())

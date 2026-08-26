@@ -199,6 +199,23 @@ def _identify(items: Sequence[Escalation], refs: Any) -> None:
             if label in subject:
                 hit = known[label]
                 break
+        # ⚠️ AND THE REVERSE, BECAUSE A MODEL SHORTENS AS OFTEN AS IT PADS
+        # (2026-08-28). Two live passes logged `0/5 identified`: triage wrote
+        # "Jacuzzi Pump" for devices labelled "Jacuzzi Pump Energy" and
+        # "Jacuzzi Pump Power", and `label in subject` can never match a
+        # subject SHORTER than every label of the device. So when containment
+        # finds nothing, ask which labels contain the subject instead — the
+        # shortest such label wins, deterministically, because it is the most
+        # general name of the equipment ("Jacuzzi Pump Power" beats "Jacuzzi
+        # Pump Power Factor" as the identity of "Jacuzzi Pump"). A subject
+        # contained in labels of UNRELATED devices cannot happen without those
+        # devices sharing a name prefix, in which case the equipment is the
+        # same and either id gives the handover a real key where it had none.
+        if hit is None and len(subject) >= 4:
+            containing = sorted((l for l in known if subject in l),
+                                key=lambda l: (len(l), l))
+            if containing:
+                hit = known[containing[0]]
         if hit:
             item.entity_id = hit
 
