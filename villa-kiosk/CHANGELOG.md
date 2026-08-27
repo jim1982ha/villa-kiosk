@@ -1,3 +1,13 @@
+## 2.814.0
+
+### Changed — one word for chasing, and the reminder message says which job it is about
+The app used "chased" and "escalated" for the same thing, on screens sitting
+beside a mode called Investigate & Log +Escalation. Every visible mention is
+now "escalated". And the "still open" reminder on Telegram repeated the task
+text without its reference, so two of them on one chat could not be told
+apart — it now carries the same Rule line as the first message.
+⚠️ **Re-import the task blueprint** — it is delivered by hand.
+
 ## 2.813.1
 
 ### Fixed — the no-villa-data gate went red on a Home Assistant service name

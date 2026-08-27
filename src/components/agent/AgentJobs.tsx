@@ -112,7 +112,7 @@ export default function AgentJobs() {
       await acknowledgeConcern(String(job.concern.id));
     }
     setBusy(null);
-    setNote(ok ? "Done. It will not be chased again."
+    setNote(ok ? "Done. It will not be escalated again."
                : "Home Assistant did not accept that — try again in a moment.");
     await load();
   }, [ws, list, load]);
@@ -147,7 +147,7 @@ export default function AgentJobs() {
         <p className="muted body-text">
           Raised by the villa when it told somebody about a finding. Ticking one
           here also records that the concern has been seen, so it stops being
-          chased.
+          escalated.
         </p>
       )}
       {note && <p className="muted body-text" role="status">{note}</p>}
@@ -155,7 +155,7 @@ export default function AgentJobs() {
       <div className="fm-list">
         {jobs.map((job) => {
           const c = job.concern;
-          const chased = String(c?.escalated_step ?? "").trim();
+          const escalated = String(c?.escalated_step ?? "").trim();
           const seen = String(c?.acknowledged_at ?? "").trim();
           return (
             <div key={job.item.uid} className="fm-row">
@@ -179,8 +179,8 @@ export default function AgentJobs() {
                   {c?.delivered_at
                     ? `Told ${whenOf(c.delivered_at)}`
                     : "Raised by the villa"}
-                  {chased && ` · chased${c?.escalated_at
-                    ? ` ${whenOf(c.escalated_at)}` : ""} — ${chased}`}
+                  {escalated && ` · escalated${c?.escalated_at
+                    ? ` ${whenOf(c.escalated_at)}` : ""} — ${escalated}`}
                   {seen && ` · seen by ${c?.acknowledged_by || "somebody"}`}
                   {/* ⚠️ A JOB WHOSE CONCERN CANNOT BE FOUND IS STILL SHOWN. It
                       is real work somebody was asked to do; the concern may
@@ -192,7 +192,7 @@ export default function AgentJobs() {
               {canAct && (
                 <button className="btn ghost" disabled={busy === job.item.uid}
                         onClick={() => void finish(job)}
-                        title="Tick this off. It also records that the concern has been seen, so nobody is chased about it again.">
+                        title="Tick this off. It also records that the concern has been seen, so it is not escalated again.">
                   {busy === job.item.uid
                     ? <Loader2 size={16} className="spin" aria-hidden />
                     : <ClipboardCheck size={16} aria-hidden />}

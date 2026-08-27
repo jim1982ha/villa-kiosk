@@ -414,7 +414,7 @@ export default function AgentTuningPanel() {
           { id: "observe", text: "Investigate & Log Only",
             hint: "Costs the same as the last step. What it concludes appears "
                 + "on the Reason tab, in your briefing, and as a one-off "
-                + "for-your-information message — nothing is chased and "
+                + "for-your-information message — nothing is escalated and "
                 + "nothing is asked of you." },
           { id: "live", text: "Investigate & Log +Escalation",
             hint: "Messages you when it concludes something, adds a job to "

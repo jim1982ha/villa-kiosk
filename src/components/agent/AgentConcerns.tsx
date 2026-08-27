@@ -100,7 +100,7 @@ function chaseLine(c: Concern): string | null {
   if (step) {
     const when = new Date(c.escalated_at ?? "");
     const stamp = Number.isNaN(when.getTime()) ? "" : ` at ${at(when)}`;
-    return `Chased${stamp} — ${step}. No further step is due unless `
+    return `Escalated${stamp} — ${step}. No further step is due unless `
       + "something changes.";
   }
 
@@ -304,9 +304,9 @@ export default function AgentConcerns() {
         Everything the assistant investigated and judged worth telling you
         about, raised during a check. One marked “for your information” asks
         nothing of you; the others wait for you to say you have seen them.
-        <InfoHint label="What gets chased">
+        <InfoHint label="What gets escalated">
           <p>
-            Only a critical concern is chased. If nobody acknowledges one, the
+            Only a critical concern is escalated. If nobody acknowledges one, the
             villa re-sends it, and then brings the owner in.
           </p>
           <p>
@@ -320,7 +320,7 @@ export default function AgentConcerns() {
           </p>
           <p>
             A concern marked &ldquo;for your information&rdquo; was raised in
-            Investigate &amp; Log Only mode: it is never chased at any
+            Investigate &amp; Log Only mode: it is never escalated at any
             severity, and no job is created for it.
           </p>
         </InfoHint>
@@ -391,7 +391,7 @@ export default function AgentConcerns() {
                       title={"Raised while the villa was set to Investigate & "
                              + "Log Only, so this is for your information: it "
                              + "was told to you once, it will not be re-sent "
-                             + "or chased, and no job was added to any to-do "
+                             + "or escalated, and no job was added to any to-do "
                              + "list. Nothing is asked of you. Switch the "
                              + "mode under Settings if you want concerns like "
                              + "this escalated."}>
@@ -476,7 +476,7 @@ export default function AgentConcerns() {
                 <button
                   type="button" className="row-action" disabled={busy === c.id}
                   aria-label={`I have seen this: ${c.title}`}
-                  title="I have seen this — stops it being re-sent and chased"
+                  title="I have seen this — stops it being re-sent and escalated"
                   onClick={() => void acknowledge(c.id)}
                 >
                   <Eye size={16} aria-hidden />
