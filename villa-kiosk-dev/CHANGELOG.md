@@ -1,3 +1,14 @@
+## 2.799.0
+
+### Fixed — settled concerns vanished, new flags needed a reopen, phone cards crushed
+Three screen defects from live use. The Reason tab said "No concerns" whenever
+nothing was OPEN, hiding the settled record the Triage tab still counts — the
+record now shows under "What came of them". A check started from the dialog
+drew its card with no items until the dialog was reopened — the flag list now
+reloads when a new check appears. And on a phone the flag's reason was crushed
+into a narrow column beside the unbreakable status text — the row now wraps by
+content, status on its own line when both no longer fit.
+
 ## 2.798.0
 
 ### Fixed — flags now identify their device, and a refused result names its tool
