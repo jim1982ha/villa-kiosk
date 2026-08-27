@@ -1,3 +1,16 @@
+## 2.816.0
+
+### Fixed — task buttons that stopped working without saying so
+The listener for Done and Need help lives inside the automation run, so once
+a job had been sent, re-asked and escalated the run ended and every button it
+had left went dead — still visible, still pressable, and doing nothing. Found
+on the villa: a Done pressed 37 minutes after the run finished produced no
+tick and no confirmation. Every message that carried buttons is now retired
+when nothing more will listen, and says where to tick the job instead. The
+owner's messages get the same instruction without the "these buttons no
+longer work" line, since buttons only ever go to the facility manager.
+⚠️ **Re-import the task blueprint** — it is delivered by hand.
+
 ## 2.815.1
 
 ### Changed — removed a leftover variable pointing at an input that no longer exists
