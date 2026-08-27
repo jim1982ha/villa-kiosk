@@ -403,22 +403,33 @@ export default function AgentTuningPanel() {
              NOTHING agent-derived reaches the briefing. Naming it after the
              briefing would promise content this mode cannot produce, which is
              the exact defect "Observe only" had. */
-          { id: "ask", text: "Flag & Ask",
-            hint: "Spends almost nothing on its own. Approving one runs the "
-                + "full investigation straight away, and that one then behaves "
-                + "like the last step." },
+          /* ⚠️ THE THREE NAMES LEAD WITH THE DECISION, NOT THE MECHANISM
+             (2026-08-28, owner: "these mode names must be renamed
+             contextually"). They read "Flag & Ask", "Investigate & Log Only"
+             and "Investigate & Log +Escalation" — each describing what the
+             villa DOES, so a person choosing between them could not tell which
+             one they were. And two of the three named machinery that has since
+             gone: nothing is "logged" anywhere a reader sees, and the third
+             said "+Escalation" for a chase that only ever applies to a
+             critical. The axis a person actually picks on is how far the villa
+             may go without them: ask me first, tell me, or tell me and chase. */
+          { id: "ask", text: "Ask first",
+            hint: "Nothing is investigated until you approve it, so it spends "
+                + "almost nothing on its own. Approving one investigates "
+                + "straight away and it then behaves like Alert & chase." },
           /* ⚠️ "and nowhere else" WAS THE SHADOW-STORE ERA and stopped being
              true on 2026-08-28: observe-mode concerns now land on the Reason
              tab and are messaged once as an FYI. What this mode still
              withholds is everything that ASKS: no chase, no to-do job. */
-          { id: "observe", text: "Investigate & Log Only",
-            hint: "Costs the same as the last step. What it concludes appears "
-                + "on the Reason tab, in your briefing, and as a one-off "
-                + "for-your-information message — nothing is escalated and "
-                + "nothing is asked of you." },
-          { id: "live", text: "Investigate & Log +Escalation",
-            hint: "Messages you when it concludes something, adds a job to "
-                + "your to-do list, and chases until someone acknowledges." },
+          { id: "observe", text: "Alert only",
+            hint: "Investigates by itself and tells you what it concludes, "
+                + "once. Nothing is added to the To-Do List and nobody is "
+                + "chased — this is the mode for being told rather than "
+                + "asked." },
+          { id: "live", text: "Alert & chase",
+            hint: "Tells you when it concludes something, adds the work to "
+                + "the To-Do List, and keeps asking until somebody says they "
+                + "have seen it." },
         ]}
       />
 
@@ -676,8 +687,12 @@ export default function AgentTuningPanel() {
           (`ADR-016` and this file's header) and nothing SAID so, so a reader
           met ten similar boxes and no shape. The models come last because they
           are the one group with a sensible blank. */}
+      {/* ⚠️ "does what", NOT "does which job" (2026-08-28). Harmless English
+          until "job" became the name of a thing on a to-do list; a heading
+          using the word in its other sense, three tabs from the To-Do List, is
+          exactly the collision the rename was meant to end. */}
       <div className="settings-section-title">
-        Which AI model does which job
+        Which AI model does what
       </div>
       {/* ⚠️ FREE TEXT WITH SUGGESTIONS, not a picker. Pinning a model list in
           the app would make THIS the thing that has to ship for a new model to

@@ -56,7 +56,7 @@ export default function ActDeliverySection() {
           <dd>{start && end && start !== end ? `${start} – ${end}` : "none"}</dd>
         </div>
         <div>
-          <dt>Jobs</dt>
+          <dt>To-Do List</dt>
           <dd>{list ? "on a list" : "off"}</dd>
         </div>
         <div>
@@ -73,8 +73,8 @@ export default function ActDeliverySection() {
         {" "}
         {list
           ? "Anything it tells you about is also added to your to-do list as a "
-            + "job, and appears under Jobs."
-          : "Findings are never turned into jobs, because no to-do list is "
+            + "to-do item, and appears under To-Do List."
+          : "Findings are never added to a to-do list, because none is "
             + "named."}
         {" "}
         {mayAct

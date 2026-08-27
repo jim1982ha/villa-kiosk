@@ -313,8 +313,8 @@ export default function AgentConcerns() {
           </p>
           <p>
             A concern marked &ldquo;for your information&rdquo; was raised in
-            Investigate &amp; Log Only mode: it is never escalated at any
-            severity, and no job is created for it.
+            Alert only mode: it is never escalated at any
+            severity, and nothing is added to the To-Do List for it.
           </p>
         </InfoHint>
       </p>
@@ -365,11 +365,11 @@ export default function AgentConcerns() {
                 <span className="muted body-text">not sent yet</span>
               )}
               {/* ⚠️ THE FYI MARK (2026-08-28, owner's request). A concern
-                  raised under Investigate & Log Only sits on the same list as
+                  raised under Alert only sits on the same list as
                   one that will chase somebody, and nothing on the card said
                   which kind the reader was looking at — so every row implied
                   a task. The chip states the contract: told once, never
-                  re-sent, no job raised, nothing asked. Stamped at raise
+                  re-sent, nothing added to the To-Do List, nothing asked. Stamped at raise
                   time, so changing the mode later relabels nothing.
 
                   ⚠️ SHORTENED TO FIT (2026-08-27, from a screenshot). It read
@@ -384,7 +384,7 @@ export default function AgentConcerns() {
                       title={"Raised while the villa was set to Investigate & "
                              + "Log Only, so this is for your information: it "
                              + "was told to you once, it will not be re-sent "
-                             + "or escalated, and no job was added to any to-do "
+                             + "or escalated, and nothing was added to any to-do "
                              + "list. Nothing is asked of you. Switch the "
                              + "mode under Settings if you want concerns like "
                              + "this escalated."}>

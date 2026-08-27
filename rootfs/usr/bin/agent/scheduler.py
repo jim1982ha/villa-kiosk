@@ -281,6 +281,16 @@ async def chase_forever(session: Any,
                     carried = await dispatch(session, config=config)
                     if carried:
                         log(f"outcome:{carried}")
+                    # ⚠️ THE DAILY DIGEST RIDES THIS TICK RATHER THAN A FOURTH
+                    # TASK. It is due at most once a local day and decides that
+                    # itself from a stamp on disk, so all this loop provides is
+                    # somewhere to ask often enough that "once a day" lands on
+                    # the right day. A task of its own would be a fifth loop to
+                    # start, stop and forget to cancel.
+                    from agent import digest as digest_mod
+                    said = await digest_mod.send_daily(session, config=config)
+                    if said.startswith("sent "):
+                        log(f"digest: {said}")
         except asyncio.CancelledError:
             log("chase clock stopped")
             raise

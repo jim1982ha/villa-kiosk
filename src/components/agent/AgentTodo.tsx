@@ -1,12 +1,12 @@
-// src/components/agent/AgentJobs.tsx
+// src/components/agent/AgentTodo.tsx
 //
 // The work the villa has asked somebody to do.
 //
 // ⚠️ THESE JOBS HAD NO SURFACE IN THIS APP AT ALL. A delivered concern raises a
 // to-do item (`agent/task.py`), and the ONLY place it appeared was Home
 // Assistant's own To-do panel — outside the kiosk entirely. The Facility
-// manager, whose work these jobs are, could not see one; and once an owner
-// acknowledged the concern the card left the wall, so the job it had created
+// manager, whose work these items are, could not see one; and once an owner
+// acknowledged the concern the card left the wall, so the row it had created
 // was the last trace and it was invisible. Reported exactly that way: "where is
 // it listed?"
 //
@@ -28,7 +28,7 @@
 // chased — the alert-fatigue failure the ladder exists to prevent, arriving
 // through the ladder. Finishing the work implies having seen it, so this route
 // records both. The reverse is deliberately NOT true: acknowledging on the
-// Reason tab leaves the job open, because seeing an alert is not doing it.
+// Reason tab leaves the row open, because seeing an alert is not doing it.
 
 import { useCallback, useEffect, useState } from "react";
 import { ClipboardCheck, Loader2 } from "lucide-react";
@@ -41,8 +41,8 @@ import { useHA } from "@/ha/HAStateStore";
 import { completeTodoItem, fetchTodoItems, referenceOf,
          type TodoItem } from "@/ha/HATodoAPI";
 
-/** A job, and the concern it came from when one can be found. */
-interface Job {
+/** A row, and the concern it came from when one can be found. */
+interface TodoRow {
   item: TodoItem;
   /** Everything after the `[ref]` — what a person actually reads. */
   text: string;
@@ -57,10 +57,10 @@ const whenOf = (iso: string) => {
                                        hour: "2-digit", minute: "2-digit" });
 };
 
-export default function AgentJobs() {
+export default function AgentTodo() {
   const { ws } = useHA();
   const { role } = useProfile();
-  // ⚠️ THE SAME CAPABILITY THE CONCERN CARD'S BUTTONS USE. Ticking a job is a
+  // ⚠️ THE SAME CAPABILITY THE CONCERN CARD'S BUTTONS USE. Ticking a row is a
   // content judgement the Facility manager is meant to make, not a spend or a
   // configuration change — `manageFacility`, which both they and the owner
   // hold. The server refuses anybody else regardless; this only avoids showing
@@ -68,7 +68,7 @@ export default function AgentJobs() {
   const canAct = role != null && hasCapability(role, "manageFacility");
 
   const [list, setList] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<Job[] | null>(null);
+  const [items, setItems] = useState<TodoRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
@@ -76,13 +76,13 @@ export default function AgentJobs() {
     const cfg = await loadAgentConfig().catch(() => null);
     const entity = String(cfg?.config?.taskList ?? "").trim();
     setList(entity);
-    if (!entity) { setJobs([]); return; }
+    if (!entity) { setItems([]); return; }
     const [items, concerns] = await Promise.all([
       fetchTodoItems(ws, entity), loadConcerns().catch(() => [] as Concern[]),
     ]);
     const byId = new Map(concerns.map((c) => [String(c.id), c]));
-    setJobs(items
-      // ⚠️ OUTSTANDING ONLY. A completed job is a record, and Home Assistant's
+    setItems(items
+      // ⚠️ OUTSTANDING ONLY. A completed row is a record, and Home Assistant's
       // own panel keeps every one ever ticked — this tab answers "what is still
       // being asked of somebody", which is a much shorter list and the only one
       // anybody acts on.
@@ -101,15 +101,15 @@ export default function AgentJobs() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const finish = useCallback(async (job: Job) => {
-    setBusy(job.item.uid);
+  const finish = useCallback(async (row: TodoRow) => {
+    setBusy(row.item.uid);
     setNote("");
-    const ok = await completeTodoItem(ws, list ?? "", job.item.summary);
+    const ok = await completeTodoItem(ws, list ?? "", row.item.summary);
     // ⚠️ THE CONCERN IS ACKNOWLEDGED ONLY IF THE TICK LANDED. Recording "seen"
-    // for work that is still outstanding would stop the chase on a job nobody
+    // for work that is still outstanding would stop the chase on a row nobody
     // has done — the one outcome worse than chasing.
-    if (ok && job.concern && !job.concern.acknowledged_at) {
-      await acknowledgeConcern(String(job.concern.id));
+    if (ok && row.concern && !row.concern.acknowledged_at) {
+      await acknowledgeConcern(String(row.concern.id));
     }
     setBusy(null);
     setNote(ok ? "Done. It will not be escalated again."
@@ -117,7 +117,7 @@ export default function AgentJobs() {
     await load();
   }, [ws, list, load]);
 
-  if (jobs === null) {
+  if (items === null) {
     return (
       <p className="muted body-text">
         <Loader2 size={14} className="spin" aria-hidden /> Loading…
@@ -127,19 +127,19 @@ export default function AgentJobs() {
 
   return (
     <>
-      <div className="settings-section-title">Jobs — what somebody is asked to do</div>
-      {/* ⚠️ THE UNCONFIGURED CASE IS NOT AN EMPTY LIST. "No jobs" on a villa
+      <div className="settings-section-title">To-Do List — what somebody is asked to do</div>
+      {/* ⚠️ THE UNCONFIGURED CASE IS NOT AN EMPTY LIST. "No items" on a villa
           that cannot raise one is the silence this project keeps being caught
           by; naming the missing setting is the difference between a quiet villa
           and a broken one. */}
       {!list ? (
         <p className="muted body-text">
-          No to-do list is named yet, so findings are never turned into jobs.
+          No to-do list is named yet, so findings are never turned into items.
           Name one under Settings &amp; others to switch this on.
         </p>
-      ) : jobs.length === 0 ? (
+      ) : items.length === 0 ? (
         <p className="muted body-text">
-          Nothing outstanding. A job appears here when the villa tells somebody
+          Nothing outstanding. A row appears here when the villa tells somebody
           about something, and leaves when it is ticked off — here, on the
           to-do list itself, or with the Done button on the message.
         </p>
@@ -153,15 +153,15 @@ export default function AgentJobs() {
       {note && <p className="muted body-text" role="status">{note}</p>}
 
       <div className="fm-list">
-        {jobs.map((job) => {
-          const c = job.concern;
+        {items.map((row) => {
+          const c = row.concern;
           const escalated = String(c?.escalated_step ?? "").trim();
           const seen = String(c?.acknowledged_at ?? "").trim();
           return (
-            <div key={job.item.uid} className="fm-row">
+            <div key={row.item.uid} className="fm-row">
               <div className="fm-row-main">
                 <div className="fm-row-title">
-                  <strong>{job.text}</strong>
+                  <strong>{row.text}</strong>
                   {/* The severity the investigation gave it — the same word
                       the concern card shows, from the same field. */}
                   {c && (
@@ -173,7 +173,7 @@ export default function AgentJobs() {
                 <div className="fm-row-sub muted">
                   {/* ⚠️ THE WHOLE STORY OF THE JOB, IN ORDER: when it was
                       raised, whether the villa has chased anybody about it, and
-                      whether somebody has said they have seen it. A job card
+                      whether somebody has said they have seen it. A row card
                       that showed only its title would leave a reader unable to
                       tell an urgent unanswered one from a handled one. */}
                   {c?.delivered_at
@@ -190,10 +190,10 @@ export default function AgentJobs() {
                 </div>
               </div>
               {canAct && (
-                <button className="btn ghost" disabled={busy === job.item.uid}
-                        onClick={() => void finish(job)}
+                <button className="btn ghost" disabled={busy === row.item.uid}
+                        onClick={() => void finish(row)}
                         title="Tick this off. It also records that the concern has been seen, so it is not escalated again.">
-                  {busy === job.item.uid
+                  {busy === row.item.uid
                     ? <Loader2 size={16} className="spin" aria-hidden />
                     : <ClipboardCheck size={16} aria-hidden />}
                   {" Done"}

@@ -104,7 +104,7 @@ export const STEPS: Record<string, Tier> = {
   },
   work: {
     n: 5, name: "What it asked for",
-    what: "Jobs your automations raised, on a Home Assistant to-do list.",
+    what: "To-do items your automations raised, on a Home Assistant list.",
     more: "Ticking one here records it as done everywhere.",
     speed: "as raised", model: false, offline: false, source: "reflex",
   },

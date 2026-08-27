@@ -45,13 +45,13 @@ import AgentReview from "@/components/agent/AgentReview";
 import { ReflexTab, ObserveTab } from "./ReflexObserve";
 import { TierIntro, TIERS } from "./tiers";
 import ActDeliverySection from "./ActDeliverySection";
-import AgentJobs from "./AgentJobs";
+import AgentTodo from "./AgentTodo";
 import AgentAdvancedModal from "./AgentAdvancedModal";
 import { loadAgentConfig } from "@/agent/agentApi";
 import { fetchReportsDiagnostics,
          type ReportsDiagnostics } from "@/reports/reportsApi";
 
-type Tab = "reflex" | "observe" | "triage" | "reason" | "act" | "jobs";
+type Tab = "reflex" | "observe" | "triage" | "reason" | "act" | "todo";
 
 /** ⚠️ THE SIX TABS ARE THE HLD'S FIVE TIERS, IN ITS ORDER, PLUS SETTINGS.
  *  §4 orders them by how fast each must answer and how much judgement it is
@@ -86,7 +86,12 @@ const TABS: { id: Tab; label: string; icon: typeof Sparkles; owner?: true }[] = 
   // ⚠️ NOT OWNER-GATED, DELIBERATELY. The work belongs to the Facility manager;
   // gating it to the owner would hide somebody's own job list from them, which
   // is the opposite of why it exists.
-  { id: "jobs", label: "Jobs", icon: ClipboardList },
+  // ⚠️ "To-Do List", NOT "Jobs" (2026-08-28, owner's instruction). Three
+  // words named one thing — the tab said Jobs, the Telegram message said
+  // "task", the setting said "to-do list" — and the owner was shown all
+  // three. This is Home Assistant's own word for the list the items live on,
+  // so the tab, the setting and the panel a reader opens in HA now agree.
+  { id: "todo", label: "To-Do List", icon: ClipboardList },
   // ⚠️ "Settings" MOVED INTO THE ADVANCED DIALOG IN 2.759.0, by request, and
   // that dialog is now "Settings & Others". The five that remain are the five
   // TIERS — one story, read top to bottom, each answering "what happens at this
@@ -353,9 +358,9 @@ function AgentDialog(
           )}
 
           {/* ── The work that came out of it ───────────────────────────── */}
-          {tab === "jobs" && (
+          {tab === "todo" && (
             <div className="reports-pane">
-              <AgentJobs />
+              <AgentTodo />
             </div>
           )}
 

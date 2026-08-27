@@ -32,13 +32,13 @@ about, sitting on a list, with no message to explain it.
      the event, not on the todo item appearing — writing only the item produces
      a job nobody is ever asked about.
 
-⚠️ `vesta_task_event` IS DELIBERATELY NOT A TYPE THE COLLECTOR SUBSCRIBES TO.
-`collect.state()` derives its subscription from installed blueprint STEMS, and
-anything it receives becomes a `Group` and then a finding in the brief — so
-announcing a task on `vesta_maintenance_event` would put the concern in the
-briefing TWICE, once as a Concern and once as a blueprint finding, which is
-exactly the double-reporting the per-device dedupe used to paper over. This is a
-delivery mechanism, not a detection event, and it stays outside that vocabulary.
+⚠️ NOTHING IS FIRED AND NOTHING LISTENS ANY MORE (2026-08-28). This module
+used to fire `vesta_task_event`, which woke `vesta_task_actions.yaml` — the
+blueprint that messaged the facility manager, re-asked at fifteen minutes and
+escalated to the owner at forty-five. The owner's ruling retired all of it: the
+Concern is the alert, and a to-do item is the record of work rather than a
+second announcement of the same finding. `EVENT_TYPE` went with it; the
+blueprint is inert and can be deleted from Home Assistant.
 
 ⚠️ OFF UNTIL A LIST IS NAMED. `task_list` ships empty, like every other
 villa-specific setting here: which to-do list a property uses is a fact about
@@ -58,7 +58,6 @@ CONFIG_KEY: str = "task_list"
 #: What the blueprint listens for. ⚠️ NOT a `vesta_<category>_event` — see the
 #: module docstring. If this name changes, the blueprint instance's "Task events
 #: to watch" must change with it; `test_task_loop.py` pins the pair.
-EVENT_TYPE: str = "vesta_task_event"
 
 #: Home Assistant's `TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM`.
 #:
@@ -241,18 +240,26 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
             await hass.command(
                 "call_service", domain="todo", service="add_item",
                 target={"entity_id": entity_id}, service_data=fields)
-            await hass.command(
-                "fire_event", event_type=EVENT_TYPE,
-                event_data={"rule_id": rule_id,
-                            "task_text": str(concern.get("title") or ""),
-                            # ⚠️ CARRIED FOR THE ROUTING THE BLUEPRINT DOES NOT
-                            # DO. `audience` decides whose Telegram it is in a
-                            # future instance; today the blueprint routes by its
-                            # own inputs and this is inert. Recorded rather than
-                            # omitted because an event shape is a contract and
-                            # adding a field later is the harder change.
-                            "audience": str(concern.get("audience") or "owner"),
-                            "severity": str(concern.get("severity") or "")})
+            # ⚠️ NO EVENT IS FIRED ANY MORE, AND THAT IS THE WHOLE
+            # SIMPLIFICATION (2026-08-28, owner's ruling: "shall we consider
+            # the Concern as an alert, and never send notification on what we
+            # are calling jobs now?"). Firing `vesta_task_event` is what woke
+            # `vesta_task_actions.yaml`, which then messaged the facility
+            # manager, re-asked at 15 minutes and escalated to the owner at 45.
+            # So ONE finding produced TWO notifications on TWO ladders — the
+            # add-on chasing the concern and a blueprint chasing the to-do item
+            # — and acknowledging one did not stop the other.
+            #
+            # ⚠️ IT DISSOLVES THAT DEFECT RATHER THAN FIXING IT. With nothing
+            # fired, the blueprint never triggers: its ladder, its buttons and
+            # its escalation stop existing, and the concern's own ladder is the
+            # only one left. A bug you cannot express is better than a bug you
+            # remembered to handle.
+            #
+            # ⚠️ THE ITEM IS STILL CREATED — the record survives, only the
+            # announcement goes. The concern is the alert; this is the work,
+            # and it is read from the To-Do List tab, from Home Assistant's own
+            # to-do panel, and from the daily digest in `digest.py`.
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow(f"could not raise a facility manager task for {rule_id}", err)
         return "failed"

@@ -39,18 +39,7 @@ import pytest  # noqa: E402
 
 from agent import config as agent_config, outbox, task  # noqa: E402
 
-BLUEPRINT = os.path.join(ROOT, "sources", "files", "blueprint",
-                         "vesta_task_actions.yaml")
 
-
-def _blueprint() -> str:
-    with open(BLUEPRINT, "r", encoding="utf-8") as handle:
-        return handle.read()
-
-
-needs_blueprint = pytest.mark.skipif(
-    not os.path.exists(BLUEPRINT),
-    reason="sources/files/blueprint is gitignored and absent on a fresh clone")
 
 
 def test_the_loop_is_OFF_until_a_list_is_named() -> None:
@@ -98,59 +87,21 @@ def test_a_concern_with_no_ID_is_REFUSED_rather_than_written() -> None:
 
 
 def test_the_summary_carries_the_BRACKETED_id() -> None:
-    """The single most breakable link: the blueprint matches on it."""
+    """The single most breakable link, and its READER CHANGED on 2026-08-28.
+
+    ⚠️ IT USED TO BE THE BLUEPRINT'S Done BUTTON. That button is gone with the
+    rest of the job notifications, and the bracket is now read by
+    `ledger.TASK_PREFIX` — which is what `task.reconcile_done` joins on to mark
+    a concern seen when its item is ticked, and what the To-Do List tab reads.
+    Same string, same fragility, three fewer things depending on it.
+    """
     made = task.summary_for({"id": "c12", "title": "Pool pump drawing more"})
     assert made.startswith("[c12] ")
-    assert re.match(r"\[c12\]", made), "the bracket form the blueprint matches"
-
-
-@needs_blueprint
-def test_the_EVENT_TYPE_matches_what_the_blueprint_listens_for() -> None:
-    """⚠️ AND IT MUST NOT BE ONE THE COLLECTOR SUBSCRIBES TO. `collect.state()`
-    derives its subscription from installed blueprint stems and turns everything
-    it receives into a brief finding — so announcing a task on
-    `vesta_maintenance_event` would put the concern in the briefing twice, once
-    as a Concern and once as a blueprint finding."""
-    from reports import collect
-    assert task.EVENT_TYPE not in collect.FALLBACK_EVENT_TYPES, (
-        f"{task.EVENT_TYPE} is a collected type, so every facility manager task would "
-        "also arrive as a finding and the brief would say it twice")
-    body = _blueprint()
-    default = re.search(r"task_source:[\s\S]*?default:\s*\n((?:\s*-\s*\S+\n)+)",
-                        body)
-    assert default, "the blueprint no longer declares a task_source default"
-    listed = re.findall(r"-\s*(\S+)", default.group(1))
-    assert task.EVENT_TYPE in listed, (
-        f"the blueprint does not listen for {task.EVENT_TYPE}; its default "
-        f"sources are {listed}. A task would be created and nobody asked.")
-
-
-@needs_blueprint
-def test_the_event_carries_the_FIELDS_the_blueprint_reads() -> None:
-    """`task_text` gates the whole automation — its condition refuses an empty
-    one — and `rule_id` becomes the button's callback data."""
-    body = _blueprint()
-    src = inspect.getsource(task.raise_for)
-    for field in ("task_text", "rule_id"):
-        assert f"trigger.event.data.{field}" in body, (
-            f"the blueprint no longer reads {field}")
-        assert f'"{field}"' in src, (
-            f"the agent does not send {field}, so the blueprint refuses or "
-            "builds a dead button")
-
-
-@needs_blueprint
-def test_the_DONE_button_matches_the_summary_this_module_writes() -> None:
-    """⚠️ THE FAILURE THIS CATCHES IS INVISIBLE UNTIL SOMEBODY PRESSES THE
-    BUTTON. Everything upstream works: the job appears, the message arrives, the
-    buttons render — and Done finds nothing to complete."""
-    body = _blueprint()
-    assert "selectattr('summary', 'match'" in body and "rule_id" in body, (
-        "the blueprint no longer completes by matching the summary")
-    made = task.summary_for({"id": "c7", "title": "t"})
-    # the blueprint's own regex, applied to what we actually write
-    assert re.match(r"\[c7\]", made), (
-        f"the blueprint would not find {made!r}")
+    from reports.ledger import TASK_PREFIX
+    matched = TASK_PREFIX.match(made)
+    assert matched and matched.group(1) == "c12", (
+        "the one parser that reads this bracket no longer recognises what we "
+        "write")
 
 
 def test_the_task_is_raised_AFTER_the_send_and_only_on_success() -> None:

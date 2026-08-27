@@ -186,7 +186,7 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
       </div>
 
       {/* ⚠️ THE AFFORDANCE FOLLOWS THE FLAG'S STATE FIRST AND THE MODE SECOND.
-          A villa switched from Flag & Ask to Alert me still has flags that were
+          A villa switched from Ask first to Alert only still has flags that were
           left waiting, and they remain answerable — reading the mode alone
           would strand them with no way to act, which is how the queue reached
           twenty-four items nothing could drain. */}
@@ -475,8 +475,8 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
           and disappears with the villa's mode reads as a broken screen to
           anyone who saw it yesterday; a greyed one with a tooltip says WHY it
           has nothing to do. The tooltip states the mode fact: flags only WAIT
-          in Flag & Ask — the other two modes investigate them on the spot —
-          while flags left waiting from an earlier Flag & Ask period stay
+          in Ask first — the other two modes investigate them on the spot —
+          while flags left waiting from an earlier Ask first period stay
           cancellable in any mode, so `waiting`, not the mode, decides
           disabled. */}
       <Pager paged={paged} unit="check">
@@ -492,7 +492,7 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
                       + "flags will queue here on the next check"
                     : "Nothing is waiting. In the current mode the villa "
                       + "investigates its own flags immediately; flags only "
-                      + "queue up for this button in Flag & Ask"}>
+                      + "queue up for this button in Ask first"}>
             <X size={16} aria-hidden />
             {" Cancel all"}{waiting > 0 ? ` ${waiting}` : ""} flagged item{waiting === 1 ? "" : "s"}
           </button>

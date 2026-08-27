@@ -73,27 +73,35 @@ export default function AgentActSettings() {
       </div>
 
       {/* ⚠️ THE FACILITY MANAGER LIST BELONGS ON THIS TAB, not under Settings. It is
-          not a tuning dial — it decides whether a finding becomes a JOB
+          not a tuning dial — it decides whether a finding becomes a TO-DO ITEM
           somebody is asked to do, which is the same authority question as
           "who is told" and "what may it touch" directly above and below it. */}
-      <h3 className="settings-section-title">Turning findings into jobs</h3>
+      <h3 className="settings-section-title">Turning findings into to-do items</h3>
       <p className="muted body-text">
         Leave empty and nothing is added to a list.
-        <InfoHint label="Turning findings into jobs">
+        <InfoHint label="Turning findings into to-do items">
           <p>
             Name a to-do list and every finding the villa sends you is also
-            added to it as a job.
+            added to it as a to-do item.
           </p>
           <p>
-            The job carries the finding&rsquo;s reference in brackets. That is
+            The item carries the finding&rsquo;s reference in brackets. That is
             what lets one tick count everywhere: the Facility Manager screen on
             the tablet, the to-do list itself, and the acknowledgement count in
             your next briefing all read the same one.
           </p>
+          {/* ⚠️ THIS PARAGRAPH DESCRIBED MACHINERY THAT WAS RETIRED ON
+              2026-08-28 and would have gone on describing it. It read: "If you
+              also install the VESTA task automation in Home Assistant, the job
+              arrives on Telegram with a Done button and chases whoever is
+              responsible." Nothing fires that automation any more — an item is
+              the RECORD of work, and the alert is what announces the finding.
+              A screen still promising a Telegram button is the shape of defect
+              this project keeps paying for. */}
           <p>
-            If you also install the VESTA task automation in Home Assistant, the
-            job arrives on Telegram with a Done button and chases whoever is
-            responsible until somebody answers.
+            Nothing is messaged when an item is added — the alert already told
+            somebody. Once a day, whoever holds the Facility manager role gets
+            one message listing everything still open.
           </p>
           <p>
             {/* ⚠️ NO EXAMPLE ENTITY ID, NOT EVEN AS A PLACEHOLDER. This shipped
