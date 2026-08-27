@@ -1,3 +1,13 @@
+## 2.800.0
+
+### Fixed — the checks total read as the newest check's yield, and Cancel all hid
+"17 looked into, 2 raised as a concern" sat above the newest card, so the 2
+read as that check's result — they were from checks two days earlier, both
+dealt with since. The total now names its window and says where each kind
+lives. And "Cancel all" appeared only when several flags waited: it is now
+always visible, greyed with a tooltip that says why — flags only queue for it
+in Flag & Ask; the other modes investigate them on the spot.
+
 ## 2.799.0
 
 ### Fixed — settled concerns vanished, new flags needed a reopen, phone cards crushed
