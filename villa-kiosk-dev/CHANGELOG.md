@@ -1,3 +1,14 @@
+## 2.823.0
+
+### Changed — a wrong comment was keeping a dead function alive by hiding it
+A comment in the dashboard credited a helper the code beside it does not call.
+The audit probe that looks for functions nobody uses counts a mention as a use,
+so that one sentence hid the real helper — which had never had a caller — from
+the tool built to find exactly that. Both are fixed and the probe now ignores
+comments, which brought six more unused exports into view; all six are the
+documented mirror types and are now marked as such where they are declared. No
+behaviour changes.
+
 ## 2.822.0
 
 ### Changed — saving a file has one owner, and the audit probe that should have caught that was broken
