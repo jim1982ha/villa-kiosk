@@ -1,3 +1,15 @@
+## 2.820.0
+
+### Added — the thumbs now teach the villa what kind of thing to raise
+Their tooltips have promised "the villa raises this kind more readily" since
+they shipped, and nothing implemented it: a verdict only counted toward
+silencing one device after three dismissals. A thumb now also acknowledges the
+concern — so the eye button is gone — and scores its KIND, which is a
+measurement and a direction ("energy above baseline") rather than a device, so
+one press teaches every device that measures the same thing. Settings & others
+lists what you have taught, where a score can be tuned, removed, exported,
+imported or cleared. A minus score re-ranks, it never mutes.
+
 ## 2.819.0
 
 ### Fixed — the Triage summary was hard to read, and finishing a check moved the button
