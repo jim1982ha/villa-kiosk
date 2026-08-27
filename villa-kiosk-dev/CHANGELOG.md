@@ -1,3 +1,10 @@
+## 2.813.1
+
+### Fixed — the no-villa-data gate went red on a Home Assistant service name
+`todo.update_item` is a service call, not a device, but it has the shape of an
+entity id and the scan cannot tell them apart. Classified alongside
+`todo.add_item`, which was already there for the same reason.
+
 ## 2.813.0
 
 ### Added — a Jobs tab, and Act & Tell now reports instead of configuring
