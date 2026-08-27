@@ -34,6 +34,56 @@ import { severityRank, type Concern } from "@/agent/agentTypes";
  *  record, not the state of the villa. */
 const LIVE = new Set(["open", "acted"]);
 
+/** Is this still asking for the reader's attention?
+ *
+ *  ⚠️ ACKNOWLEDGEMENT IS WHAT REMOVES A CARD, AND NOTHING ELSE DOES (owner's
+ *  ruling, 2026-08-27). The thumb UP used to retire it — a compliment paid to
+ *  the supervisor emptied the wall — which is fixed at the source in
+ *  `concerns.feedback`. This is the other half of the same rule: while a
+ *  delivered concern is unacknowledged it STAYS, however many opinions have
+ *  been recorded about it.
+ *
+ *  ⚠️ THE BACKEND STATE IS DELIBERATELY UNTOUCHED BY THIS. `acknowledge`'s own
+ *  docstring is emphatic that acknowledging is not resolving — the villa keeps
+ *  carrying the problem — so this is a question about what the WALL shows,
+ *  answered here, and not a fifth lifecycle state. An acknowledged concern
+ *  that is still open is counted below rather than dropped, or "I have seen
+ *  it" would silently mean "it is gone". */
+const needsAttention = (c: Concern) =>
+  LIVE.has(String(c.state ?? "open")) && !String(c.acknowledged_at ?? "").trim();
+
+/** The escalation bands, from `agent/route.py`'s `BANDS`. ⚠️ MINUTES FROM
+ *  `delivered_at`, NOT from `opened_at` — you cannot acknowledge something you
+ *  were never sent, so the clock starts at delivery (`outbox.escalation_sweep`
+ *  states the same rule). A copy of a backend table is normally this repo's
+ *  cardinal sin; it is tolerated here because it renders a PREDICTION for a
+ *  reader rather than making a routing decision, and `test_ui_consistency`
+ *  pins the two together. */
+const BANDS: Array<[number, string]> = [
+  [15, "re-sent to the same place"],
+  [45, "the owner is brought in"],
+  [90, "everyone configured is told, once"],
+];
+
+/** "If nobody says they have seen it, it is re-sent at 14:20." */
+function chaseLine(c: Concern): string | null {
+  // ⚠️ ONLY A CRITICAL IS EVER CHASED — `route.escalate`'s first line refuses
+  // every other severity. Printing a countdown on a warning would promise a
+  // chase that is never coming, which is the exact misreading the "What gets
+  // chased" hint was written to correct.
+  if (String(c.severity) !== "critical") return null;
+  if (!c.delivered_at || c.acknowledged_at) return null;
+  const sent = new Date(c.delivered_at);
+  if (Number.isNaN(sent.getTime())) return null;
+  const mins = (Date.now() - sent.getTime()) / 60000;
+  const next = BANDS.find(([after]) => mins < after);
+  const at = (m: number) => new Date(sent.getTime() + m * 60000)
+    .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return next
+    ? `Not acknowledged — at ${at(next[0])} it is ${next[1]}.`
+    : "Not acknowledged — every escalation step has been taken.";
+}
+
 /** Profile ids as a person reads them on the People tab. ⚠️ `ops` IS THE
  *  FACILITY MANAGER — the store's word and the screen's word differ, and
  *  showing the store's would name a role nobody has heard of. */
@@ -88,6 +138,7 @@ export default function AgentConcerns() {
   const canJudge = role != null && hasCapability(role, "manageFacility");
   const [rows, setRows] = useState<Concern[] | null>(null);
   const [settled, setSettled] = useState<Concern[]>([]);
+  const [seen, setSeen] = useState<Concern[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -104,7 +155,13 @@ export default function AgentConcerns() {
     // time-to-clear off exactly those rows, so they are summarised below the
     // list instead of being dropped.
     setSettled(found.filter((c) => !LIVE.has(String(c.state ?? "open"))));
-    setRows(found.filter((c) => LIVE.has(String(c.state ?? "open")))
+    // ⚠️ SEEN BUT STILL OPEN IS ITS OWN GROUP, NOT A DELETION. Acknowledging
+    // takes a card off the wall (owner's ruling) and the villa is still
+    // carrying the problem, so these are counted below the list. Dropping them
+    // silently would make "I have seen it" mean "it is gone".
+    setSeen(found.filter((c) => LIVE.has(String(c.state ?? "open"))
+      && String(c.acknowledged_at ?? "").trim()));
+    setRows(found.filter(needsAttention)
       // ⚠️ `severityRank`, NOT A LOCAL MAP. This carried its own copy with an
       // unknown severity defaulting to 9 — LAST, the quietest position — which
       // is the opposite of the project's stated rule. Found by /dry-audit
@@ -317,6 +374,26 @@ export default function AgentConcerns() {
                     {" ("}{sentSummary(c)}{")"}
                   </span>
                 )}
+                {/* ⚠️ WHEN THE CHASE COMES, ON THE CARD ITSELF (owner's
+                    request). The escalation ladder was previously explained
+                    only in the "What gets chased" hint, so a reader looking at
+                    a critical nobody had acknowledged could not tell whether
+                    anything further was coming or when. It renders for a
+                    critical only, because nothing else is ever chased. */}
+                {chaseLine(c) && (
+                  <span className="body-text sev-warning concern-chase">
+                    {chaseLine(c)}
+                  </span>
+                )}
+                {/* ⚠️ THE THUMB UP IS NOW VISIBLE AND HARMLESS. It used to
+                    retire the concern; it now records a verdict and leaves the
+                    card exactly where it was, so the reader needs to see that
+                    the press registered. */}
+                {c.useful && (
+                  <span className="muted concern-chase">
+                    You marked this useful — it stays until acknowledged.
+                  </span>
+                )}
               </span>
             </div>
             {/* ⚠️ ONLY ON WHAT WAS ACTUALLY SENT. Acknowledging something
@@ -378,6 +455,19 @@ export default function AgentConcerns() {
           </div>
         ))}
       </div>
+      {/* ⚠️ ACKNOWLEDGED AND STILL OPEN — counted, never hidden. The card
+          leaves the wall when somebody says they have seen it, and the villa
+          is still carrying the problem, so the number has to be somewhere or
+          "I have seen it" quietly becomes "it is gone". */}
+      {seen.length > 0 && (
+        <p className="muted body-text">
+          {seen.length === 1
+            ? "One concern you have seen is still open"
+            : `${seen.length} concerns you have seen are still open`}
+          {" — off the list above because somebody picked them up, and still "}
+          {"being carried by the villa until the condition stops."}
+        </p>
+      )}
       <SettledSummary concerns={settled} />
     </>
   );

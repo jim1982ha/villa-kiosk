@@ -1002,3 +1002,70 @@ def test_no_screen_points_the_reader_at_a_HEADING_that_was_deleted() -> None:
     assert referenced <= rendered, (
         "RecentChecks sends the reader to a heading ConcernLifecycle no longer "
         "renders — a screen describing another screen that has moved on")
+
+
+def test_only_ACKNOWLEDGING_takes_a_concern_off_the_wall() -> None:
+    """⚠️ THE OWNER'S RULING (2026-08-27), AFTER A THUMB UP EMPTIED THE CARD.
+
+    The backend half is fixed in `concerns.feedback`; this is the screen half.
+    A delivered concern stays on the list until somebody says they have SEEN
+    it — no other verdict, opinion or count may remove it. Pinned on the
+    predicate rather than on the JSX, because the filter is the rule.
+    """
+    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    assert "const needsAttention" in panel, (
+        "the wall no longer has one predicate for 'is this still asking for "
+        "attention', so the rule lives in whichever filter is read next")
+    body = panel[panel.index("const needsAttention"):]
+    body = body[:body.index(";")]
+    assert "acknowledged_at" in body, (
+        "acknowledgement is not what removes a card — some other verdict is")
+    assert "setRows(found.filter(needsAttention)" in panel, (
+        "the list is built from some other filter than the shared predicate")
+
+
+def test_an_acknowledged_but_OPEN_concern_is_counted_not_dropped() -> None:
+    """⚠️ "I HAVE SEEN IT" MUST NOT SILENTLY MEAN "IT IS GONE". Acknowledging
+    is deliberately not resolving — `concerns.acknowledge` is emphatic that the
+    villa keeps carrying the problem — so taking the card off the wall without
+    counting it anywhere would lose it."""
+    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    assert "setSeen(" in panel and "seen.length > 0" in panel, (
+        "acknowledged-but-open concerns are dropped from the screen entirely")
+
+
+def test_the_chase_line_matches_the_bands_the_BACKEND_actually_uses() -> None:
+    """⚠️ A COPY OF A BACKEND TABLE, TOLERATED ONLY BECAUSE IT IS PINNED. The
+    card predicts when an unacknowledged critical will be chased; the routing
+    decision itself stays in `route.escalate`. If the two drift, the screen
+    promises a time nothing will honour — which is worse than saying nothing.
+    """
+    import re as _re
+
+    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+                           "route.py"), encoding="utf-8") as handle:
+        route = handle.read()
+    # ⚠️ `[^"]+`, NOT `[a-z ]+`. The first draft of this scan read only two of
+    # the three bands, because the third's label contains a COMMA ("every
+    # configured target, once") — a pin that silently measured a subset and
+    # reported the code as wrong. The instrument, not the code: this file's own
+    # header records the same mistake being made with an end-marker regex.
+    backend = [int(m) for m in _re.findall(r"\((\d+), \"[^\"]+\"\)", route)]
+    shown = [int(m) for m in _re.findall(r"\[(\d+), \"", panel)]
+    assert backend and shown, (backend, shown)
+    assert shown == backend, (
+        f"the card shows escalation bands {shown} but route.py uses {backend}")
+
+
+def test_only_a_CRITICAL_shows_a_chase_time() -> None:
+    """⚠️ `route.escalate`'s FIRST LINE refuses every severity below critical,
+    so a countdown on a warning promises a chase that is never coming — the
+    exact misreading the "What gets chased" hint had to be written to correct.
+    """
+    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    body = panel[panel.index("function chaseLine"):]
+    body = body[:body.index("\n}")]
+    assert 'severity) !== "critical"' in body and "return null" in body, (
+        "the chase line is rendered for non-critical concerns, which are "
+        "never chased")

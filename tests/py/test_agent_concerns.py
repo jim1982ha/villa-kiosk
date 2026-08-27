@@ -189,12 +189,40 @@ def _dismiss(n: int) -> None:
         concerns.feedback(stored.id, useful=False, reason="gym is closed")
 
 
-def test_marking_a_concern_USEFUL_verifies_it() -> None:
+def test_marking_a_concern_USEFUL_does_NOT_settle_it() -> None:
+    """⚠️ THE THUMB UP USED TO MAKE THE CARD DISAPPEAR, reported by the owner
+    on 2026-08-27 and pinned here in the direction it should always have had.
+
+    It wrote `state = "verified"`, and `verified` is in SETTLED — so paying the
+    supervisor a compliment retired a concern nobody had acted on and nobody
+    had acknowledged. One state had two writers meaning different things: the
+    verification path means "the condition did not recur", a claim about the
+    VILLA; this means "you were right to tell me", a claim about the
+    SUPERVISOR. Only the first is a lifecycle event.
+    """
     stored, _ = concerns.raise_concern(_c())
     assert stored is not None
     ok, why = concerns.feedback(stored.id, useful=True)
     assert ok, why
-    assert concerns.read()[0]["state"] == "verified"
+    row = concerns.read()[0]
+    assert row["state"] == "open", (
+        "a thumb up settled the concern, so the wall empties when somebody "
+        "agrees with it")
+    assert row["state"] not in concerns.SETTLED
+    assert row["useful"] is True, "the verdict was not recorded at all"
+    assert row["useful_at"], "no time was stamped on the verdict"
+
+
+def test_a_USEFUL_verdict_keeps_its_note_out_of_outcome() -> None:
+    """⚠️ `outcome` MEANS "WHY IT LEFT OPEN", and this concern has not left. A
+    note written there would read, on every later render, as the reason a
+    still-open concern was closed."""
+    stored, _ = concerns.raise_concern(_c())
+    assert stored is not None
+    concerns.feedback(stored.id, useful=True, reason="good catch")
+    row = concerns.read()[0]
+    assert row["useful_note"] == "good catch"
+    assert not row["outcome"]
 
 
 def test_NOT_USEFUL_is_dismissed_and_not_closed() -> None:

@@ -1,3 +1,17 @@
+## 2.808.0
+
+### Fixed — a thumbs-up made the concern card disappear
+Marking a concern useful wrote `state: verified`, which is a settled state,
+so agreeing with the assistant retired a concern nobody had acted on or even
+acknowledged. One state had two writers meaning different things: the
+verification path means "the condition did not recur", a claim about the
+villa; a thumbs-up means "you were right to tell me", a claim about the
+supervisor. It is now stamped beside the state, which is untouched — only
+acknowledging takes a card off the wall, and an acknowledged concern that is
+still open is counted below the list rather than dropped. A critical that
+nobody has acknowledged now says on the card when it will be chased, and
+"not useful" still dismisses, because that is the suppression signal.
+
 ## 2.807.0
 
 ### Added — a fire drill for the alerting path, so delivery can be tested on purpose

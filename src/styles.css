@@ -4311,6 +4311,12 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    the one row that asks nothing the loudest row on the list. */
 .concern-fyi { display: inline-flex; align-items: center; gap: 4px; }
 .concern-text { flex: 1 1 220px; min-width: 0; }
+/* The chase line and the "marked useful" note: their OWN line under the
+   title, never trailing it. ⚠️ `display: block` on an inline child of
+   `.concern-text`, which is a flex ITEM and not a flex container — so these
+   cannot be laid out by a gap and would otherwise run on after the sentence
+   they qualify, which is exactly the crush the flag cards were reported for. */
+.concern-chase { display: block; margin-top: 2px; }
 /* ⚠️ ON A PHONE THE TWO COLUMNS BECOME TWO ROWS. At 360 CSS px a 45% meta
    column leaves the sentence ~180px, which wraps every two words. The parent
    already wraps (`.editable-row-fields`), so this only has to release the

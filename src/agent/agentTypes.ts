@@ -155,4 +155,13 @@ export interface Concern {
    *  escalated, never pushed, and no to-do job was raised — nothing is asked
    *  of the reader. Absent on concerns raised before this existed. */
   informational?: boolean;
+  /** "This was worth telling me." ⚠️ NOT A STATE, and it used to be one: the
+   *  thumb up wrote `state: "verified"`, which is SETTLED, so a compliment
+   *  paid to the supervisor made the card disappear (reported 2026-08-27).
+   *  `verified` means "the condition did not recur" — a claim about the
+   *  VILLA — and this is a claim about the SUPERVISOR. Snake_case on the wire
+   *  like every other field the Python store writes verbatim. */
+  useful?: boolean;
+  useful_at?: string;
+  useful_note?: string;
 }

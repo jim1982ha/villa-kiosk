@@ -106,6 +106,13 @@ class Concern:
     #: problem is fixed, and a concern stays `open` until it actually is.
     acknowledged_at: str = ""
     acknowledged_by: str = ""
+    #: "This was worth telling me." ⚠️ NOT A STATE — see `feedback`. It is a
+    #: verdict on the SUPERVISOR, not on the villa, so it leaves the concern
+    #: exactly where it was; the owner reported the thumb up making a card
+    #: disappear, which is what writing `verified` here used to do.
+    useful: bool = False
+    useful_at: str = ""
+    useful_note: str = ""
     #: ⚠️ STAMPED AT RAISE TIME FROM THE VILLA'S MODE, NEVER DERIVED FROM THE
     #: MODE LATER (2026-08-28, owner's ruling). In "Investigate & Log Only" a
     #: concern is still raised into THIS store and still delivered — as an FYI:
@@ -131,6 +138,8 @@ class Concern:
             "acknowledged_at": self.acknowledged_at,
             "acknowledged_by": self.acknowledged_by,
             "informational": self.informational,
+            "useful": self.useful, "useful_at": self.useful_at,
+            "useful_note": self.useful_note,
         }
 
 
@@ -361,12 +370,49 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
     the whole FAMILY of gym concerns, not just this one; PH-7 turns it into a
     memory. Storing only the count would discard exactly the part a person took
     the trouble to type.
+
+    ⚠️ "USEFUL" IS STAMPED BESIDE THE STATE AND DOES NOT TRANSITION (2026-08-27,
+    reported by the owner: pressing the thumb UP made the card vanish). It used
+    to write `state = "verified"`, and `verified` is SETTLED — so saying "good
+    call, thank you" retired a concern nobody had acted on and nobody had even
+    acknowledged. Two writers had been giving one state two meanings: the
+    verification path below writes it for "the condition did not recur", which
+    is a claim about the VILLA, and this wrote it for "you were right to tell
+    me", which is a claim about the SUPERVISOR. The second is not a lifecycle
+    event at all, so it is now recorded the way an acknowledgement is — fields
+    beside an untouched state.
+
+    ⚠️ THE PROSE ABOVE DELIBERATELY DOES NOT WRITE THAT FUNCTION'S NAME WITH
+    PARENTHESES. `test_reachability` skips `#` comments but not docstrings, so
+    a mention shaped like a call reads as a caller — and that function is on
+    the EXEMPT map precisely because it has never had one.
+
+    ⚠️ "NOT USEFUL" STILL TRANSITIONS, AND THE ASYMMETRY IS THE POINT. "Stop
+    telling me this" is a request to retire the concern AND the signal
+    `dismissals_of` counts toward suppressing the subject; "good call" is a
+    compliment that changes nothing about whether the villa still has the
+    problem.
     """
-    state = "verified" if useful else "dismissed"
     note = str(reason or "").strip()
     outcome = (f"marked {'useful' if useful else 'not useful'}"
                + (f": {note}" if note else ""))
-    return transition(concern_id, state, outcome=outcome, now=now)
+    if not useful:
+        return transition(concern_id, "dismissed", outcome=outcome, now=now)
+
+    rows = read()
+    for row in rows:
+        if str(row.get("id")) != str(concern_id):
+            continue
+        row["useful"] = True
+        row["useful_at"] = _now_iso(now)
+        # ⚠️ THE NOTE GOES IN ITS OWN FIELD, NOT IN `outcome`. `outcome` means
+        # "why it left open", and this concern has not left.
+        if note:
+            row["useful_note"] = note
+        row["updated_at"] = _now_iso(now)
+        ok = _write(rows)
+        return ok, "" if ok else "the concern store could not be written"
+    return False, f"no concern {concern_id!r}"
 
 
 def dismissals_of(subject_key: str,
