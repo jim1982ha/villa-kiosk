@@ -1,3 +1,15 @@
+## 2.811.0
+
+### Fixed — a concern card promised a chase that could never arrive
+A critical the villa had already escalated still showed "at 17:38 it is
+re-sent to the same place". Nothing was going to happen at 17:38: the time
+bands are the last question the escalation rule asks, and on a villa with
+nobody in the Facility manager role an occupied property sends to the owner
+immediately instead — a step the sweep then refuses to repeat. The card now
+reports what the villa actually DID once it has chased, and only predicts
+while nothing has been done. The "for your information" mark is shortened to
+"Informational (nothing to do)", which fits its column without wrapping.
+
 ## 2.810.0
 
 ### Fixed — the test drill silenced itself after three runs, and two dead controls left the concern card

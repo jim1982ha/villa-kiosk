@@ -65,7 +65,27 @@ const BANDS: Array<[number, string]> = [
   [90, "everyone configured is told, once"],
 ];
 
-/** "If nobody says they have seen it, it is re-sent at 14:20." */
+/** What the chase has done, or will do next.
+ *
+ *  ⚠️ ONCE A STEP HAS BEEN TAKEN THIS REPORTS A FACT AND STOPS PREDICTING, and
+ *  the first version did not — it printed the next TIME BAND unconditionally
+ *  and was caught on screen promising "at 17:38 it is re-sent" about a concern
+ *  that will never be touched again.
+ *
+ *  The bands are the LAST question `route.escalate` asks. Before them it asks
+ *  whether the condition cleared, whether somebody acknowledged, and whether
+ *  guests are in residence with no Facility manager reachable — and that last
+ *  one returns "add the owner" IMMEDIATELY, skipping the bands entirely. On a
+ *  villa with nobody in the Facility manager role (the reference property) it
+ *  fires on the first sweep, and the delivery sweep then refuses to repeat a
+ *  step it has already taken. So the bands were never going to be reached, and
+ *  a countdown to one was a promise nothing would keep.
+ *
+ *  ⚠️ THE UI CANNOT PREDICT THAT BRANCH — it would need live occupancy and the
+ *  People table — so it must not pretend to. `escalated_step` is the villa's
+ *  own record of what it actually did, and reporting that is always true. The
+ *  un-escalated case keeps a prediction because it is the common one, and it
+ *  is worded as a condition ("if nobody…") rather than a promise. */
 function chaseLine(c: Concern): string | null {
   // ⚠️ ONLY A CRITICAL IS EVER CHASED — `route.escalate`'s first line refuses
   // every other severity. Printing a countdown on a warning would promise a
@@ -73,15 +93,24 @@ function chaseLine(c: Concern): string | null {
   // chased" hint was written to correct.
   if (String(c.severity) !== "critical") return null;
   if (!c.delivered_at || c.acknowledged_at) return null;
+  const at = (d: Date) =>
+    d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+  const step = String(c.escalated_step ?? "").trim();
+  if (step) {
+    const when = new Date(c.escalated_at ?? "");
+    const stamp = Number.isNaN(when.getTime()) ? "" : ` at ${at(when)}`;
+    return `Chased${stamp} — ${step}. No further step is due unless `
+      + "something changes.";
+  }
+
   const sent = new Date(c.delivered_at);
   if (Number.isNaN(sent.getTime())) return null;
   const mins = (Date.now() - sent.getTime()) / 60000;
   const next = BANDS.find(([after]) => mins < after);
-  const at = (m: number) => new Date(sent.getTime() + m * 60000)
-    .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  return next
-    ? `Not acknowledged — at ${at(next[0])} it is ${next[1]}.`
-    : "Not acknowledged — every escalation step has been taken.";
+  if (!next) return "Not acknowledged — every escalation step has been taken.";
+  const due = new Date(sent.getTime() + next[0] * 60000);
+  return `If nobody says they have seen it, by ${at(due)} it is ${next[1]}.`;
 }
 
 /** Profile ids as a person reads them on the People tab. ⚠️ `ops` IS THE
@@ -348,7 +377,15 @@ export default function AgentConcerns() {
                   which kind the reader was looking at — so every row implied
                   a task. The chip states the contract: told once, never
                   re-sent, no job raised, nothing asked. Stamped at raise
-                  time, so changing the mode later relabels nothing. */}
+                  time, so changing the mode later relabels nothing.
+
+                  ⚠️ SHORTENED TO FIT (2026-08-27, from a screenshot). It read
+                  "for your information — nothing to do", which wrapped onto
+                  two lines inside this narrow column and pushed the (i) glyph
+                  away from the words it belongs to. This column is capped at
+                  45% of the row and holds three other chips, so its copy has
+                  to be chip-length; the sentence-length version belongs in
+                  the tooltip, where it already is. */}
               {c.informational && (
                 <span className="muted body-text concern-fyi"
                       title={"Raised while the villa was set to Investigate & "
@@ -358,8 +395,7 @@ export default function AgentConcerns() {
                              + "list. Nothing is asked of you. Switch the "
                              + "mode under Settings if you want concerns like "
                              + "this escalated."}>
-                  <Info size={14} aria-hidden /> for your information — nothing
-                  to do
+                  <Info size={14} aria-hidden /> Informational (nothing to do)
                 </span>
               )}
               </div>

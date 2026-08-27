@@ -164,4 +164,13 @@ export interface Concern {
   useful?: boolean;
   useful_at?: string;
   useful_note?: string;
+  /** Which escalation step the villa has ALREADY taken, and when. ⚠️ THE ONLY
+   *  HONEST INPUT TO "what happens next", because the screen cannot predict
+   *  `route.escalate`'s earlier branches — the guests-present one skips the
+   *  time bands entirely and needs live occupancy plus the People table to
+   *  foresee. A card that predicted a band while this was set promised a
+   *  re-send that could never arrive. Snake_case on the wire, like its
+   *  neighbours. */
+  escalated_step?: string;
+  escalated_at?: string;
 }

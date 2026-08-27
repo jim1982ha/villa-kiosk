@@ -1113,3 +1113,32 @@ def test_an_INFORMATIONAL_concern_can_still_be_cleared_from_the_wall() -> None:
     assert "canJudge && c.delivered_at && !c.informational" not in panel, (
         "the acknowledge button is hidden on informational concerns again, so "
         "they can never be cleared from the wall")
+
+
+def test_a_chased_concern_reports_what_HAPPENED_not_what_might() -> None:
+    """⚠️ CAUGHT ON SCREEN PROMISING AN ESCALATION THAT COULD NOT ARRIVE.
+
+    The card printed the next TIME BAND unconditionally — "at 17:38 it is
+    re-sent to the same place" — for a concern the villa had already chased and
+    would never touch again. The bands are the LAST question `route.escalate`
+    asks; before them it asks whether the condition cleared, whether anybody
+    acknowledged, and whether guests are in residence with no Facility manager
+    reachable. That last branch returns "add the owner" IMMEDIATELY and skips
+    the bands, and `escalation_sweep` then refuses to repeat a step already
+    taken. So on any villa with no Facility manager configured — the reference
+    property — the bands are unreachable and the countdown was fiction.
+
+    ⚠️ THE SCREEN CANNOT PREDICT THAT BRANCH (it needs live occupancy and the
+    People table), so it must not try. `escalated_step` is the villa's own
+    record of what it DID, and reporting a fact is always true.
+    """
+    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    body = panel[panel.index("function chaseLine"):]
+    body = body[:body.index("\n}\n")]
+    assert "escalated_step" in body, (
+        "the chase line ignores the step the villa has already taken, so it "
+        "predicts a band that will never be reached")
+    # The fact-reporting branch must come BEFORE any band arithmetic, or the
+    # prediction wins on exactly the concerns that have already been chased.
+    assert body.index("escalated_step") < body.index("BANDS.find"), (
+        "the band prediction is evaluated before the already-chased check")
