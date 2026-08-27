@@ -55,7 +55,7 @@ NOT_ENTITY_IDS: Set[str] = {
     "camera.camera", "camera.fov", "camera.gate", "camera.radius",
     "light.diffuse", "light.excluded", "light.intensity", "light.range",
     "light.set", "light.specular",
-    "lock.unlock", "todo.add_item",
+    "lock.unlock", "todo.add_item", "todo.update_item",
     # HA SERVICE names used as policy fixtures — `light.turn_off` is a service
     # call, not an entity. Same class as `lock.unlock` directly above.
     "light.turn_off", "light.turn_on", "fan.turn_off", "switch.turn_off",
