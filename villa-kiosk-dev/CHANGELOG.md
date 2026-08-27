@@ -1,3 +1,15 @@
+## 2.827.0
+
+### Changed — an alert tells you, a to-do item records the work, and only one messages
+Every finding used to send twice: once as a Concern from the add-on, and once
+as a task from a Home Assistant automation that re-asked at 15 minutes and
+escalated at 45 — a second chase the first knew nothing about, so saying "seen"
+stopped one and not the other. Nothing fires that automation now, so the second
+chase stops existing rather than being suppressed; `vesta_task_actions.yaml`
+can be deleted. Open work is announced once a day instead, to the Facility
+manager. The Jobs tab is now **To-Do List**, matching Home Assistant's own
+word, and the modes are **Ask first**, **Alert only** and **Alert & chase**.
+
 ## 2.826.0
 
 ### Changed — the settled labels download their group, not the numbers
