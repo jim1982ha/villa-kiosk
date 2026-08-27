@@ -333,8 +333,20 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
   return (
     <>
       {work.looked > 0 && (
+        /* ⚠️ THE TOTAL NAMES ITS WINDOW (2026-08-28). "17 looked into, 2
+            raised as a concern" sat directly above the NEWEST check's card,
+            so the owner read the 2 as that check's yield, went to the Reason
+            tab expecting two open concerns, and found none — the 2 were from
+            checks two days earlier, both since dealt with. Verified against
+            the log before rewording: no run that day called raise_concern and
+            the concern store's response stayed byte-identical throughout. A
+            true sentence bound to the wrong scope is this screen's most
+            expensive kind of defect. */
         <p className="muted body-text">
-          {work.looked} looked into, {work.raised} raised as a concern.
+          Across all {rows.length} check{rows.length === 1 ? "" : "s"} below:{" "}
+          {work.looked} flag{work.looked === 1 ? "" : "s"} investigated,{" "}
+          {work.raised} became concern{work.raised === 1 ? "" : "s"} (open ones
+          are on the Reason tab; dealt-with ones under “What came of them”).
         </p>
       )}
       {note && <p className="muted body-text" role="status">{note}</p>}
@@ -372,15 +384,32 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
           floating in its own row above the list read as belonging to the
           heading rather than to the list it acts on.
 
-          ⚠️ ONLY WHEN MORE THAN ONE IS WAITING. A single flag has its own
-          buttons in the card below; a whole-list control beside it would be two
-          ways to do one thing. */}
+          ⚠️ ALWAYS RENDERED, GREYED WHEN THERE IS NOTHING TO ACT ON — by the
+          owner's explicit request (2026-08-28), reversing the earlier
+          "only when more than one is waiting" rule. A control that appears
+          and disappears with the villa's mode reads as a broken screen to
+          anyone who saw it yesterday; a greyed one with a tooltip says WHY it
+          has nothing to do. The tooltip states the mode fact: flags only WAIT
+          in Flag & Ask — the other two modes investigate them on the spot —
+          while flags left waiting from an earlier Flag & Ask period stay
+          cancellable in any mode, so `waiting`, not the mode, decides
+          disabled. */}
       <Pager paged={paged} unit="check">
-        {canAct && waiting > 1 && (
-          <button className="btn ghost" disabled={busy !== null}
+        {canAct && (
+          <button className="btn ghost"
+                  disabled={busy !== null || waiting === 0}
                   onClick={() => void cancelAll()}
-                  title="Cancel every flag still waiting — spends nothing, and anything still true is flagged again by the next check">
-            <X size={16} aria-hidden /> Cancel all {waiting} flagged item{waiting === 1 ? "" : "s"}
+                  title={waiting > 0
+                    ? "Cancel every flag still waiting — spends nothing, and "
+                      + "anything still true is flagged again by the next check"
+                    : mode === "ask"
+                    ? "Nothing is waiting for your decision right now — new "
+                      + "flags will queue here on the next check"
+                    : "Nothing is waiting. In the current mode the villa "
+                      + "investigates its own flags immediately; flags only "
+                      + "queue up for this button in Flag & Ask"}>
+            <X size={16} aria-hidden />
+            {" Cancel all"}{waiting > 0 ? ` ${waiting}` : ""} flagged item{waiting === 1 ? "" : "s"}
           </button>
         )}
         {children}
