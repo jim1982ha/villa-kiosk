@@ -125,6 +125,14 @@ class Concern:
     #: the diff it fed was deleted in 2.756.0 and the owner has since ruled
     #: that "log only" means "tell me, ask nothing" rather than "tell nobody".
     informational: bool = False
+    #: WHAT KIND this is — a measurement and a direction, never a device. See
+    #: `agent/flagtypes.py`. ⚠️ STAMPED AT RAISE TIME AND FOR ONE REASON: the
+    #: only place that holds the entity id is the tool that raises the concern.
+    #: `subject_key` is a HASH, so a thumb pressed on the Reason tab a week
+    #: later has no way to work out what kind of thing it is judging unless the
+    #: answer was written down when it was known. "" is legitimate — a concern
+    #: about a topic rather than a device has no measurement to name.
+    flag_type: str = ""
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -138,7 +146,7 @@ class Concern:
             "outcome": self.outcome, "delivered_at": self.delivered_at,
             "acknowledged_at": self.acknowledged_at,
             "acknowledged_by": self.acknowledged_by,
-            "informational": self.informational,
+            "informational": self.informational, "flag_type": self.flag_type,
             "useful": self.useful, "useful_at": self.useful_at,
             "useful_note": self.useful_note,
         }

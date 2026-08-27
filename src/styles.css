@@ -4317,6 +4317,12 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    cannot be laid out by a gap and would otherwise run on after the sentence
    they qualify, which is exactly the crush the flag cards were reported for. */
 .concern-chase { display: block; margin-top: 2px; }
+/* Who a concern was sent to, and when — a fact ABOUT it rather than part of its
+   sentence, so it takes its own line (2026-08-28, owner's request). Same shape
+   as `.concern-chase` above it and deliberately not merged with it: that one is
+   a PREDICTION about what happens next and is warning-coloured, this is a
+   receipt for something that already happened. */
+.concern-sent { display: block; margin-top: 2px; }
 /* ⚠️ ON A PHONE THE TWO COLUMNS BECOME TWO ROWS. At 360 CSS px a 45% meta
    column leaves the sentence ~180px, which wraps every two words. The parent
    already wraps (`.editable-row-fields`), so this only has to release the

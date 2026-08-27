@@ -934,3 +934,84 @@ export async function loadUsage(
     truncated: d.truncated === true,
   };
 }
+
+/** One kind of finding the owner has taught this villa about. REQ-038.
+ *
+ *  ⚠️ A KIND, NEVER A DEVICE, and that is the whole design (see
+ *  `agent/flagtypes.py`). "Data rate above baseline" covers the NVR and every
+ *  camera at once, so a preference expressed once does not have to be repeated
+ *  per device and a device installed tomorrow inherits it. */
+export interface FlagTypeWeight {
+  key: string;
+  label: string;
+  /** Negative demerits the kind, positive promotes it. 0 is untouched. */
+  weight: number;
+  up: number;
+  down: number;
+  firstAt: string;
+  lastAt: string;
+}
+
+export interface FlagTypeList {
+  types: FlagTypeWeight[];
+  /** How far a weight may travel either way, from the backend rather than a
+   *  second copy here — the stepper's bounds are the server's rule. */
+  limit: number;
+}
+
+export async function loadFlagTypes(): Promise<FlagTypeList> {
+  const r = await fetch(ingressPath("agent-flag-types"),
+                        { credentials: "same-origin" });
+  if (!r.ok) return { types: [], limit: 5 };
+  const d = (await r.json().catch(() => null)) as
+    { types?: unknown; limit?: unknown } | null;
+  const rows = Array.isArray(d?.types) ? d!.types : [];
+  return {
+    limit: Number(d?.limit ?? 5) || 5,
+    types: rows
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+      .map((x) => ({
+        key: String(x.key ?? ""),
+        label: String(x.label ?? ""),
+        weight: Number(x.weight ?? 0) || 0,
+        up: Number(x.up ?? 0) || 0,
+        down: Number(x.down ?? 0) || 0,
+        firstAt: String(x.first_at ?? ""),
+        lastAt: String(x.last_at ?? ""),
+      }))
+      .filter((t) => t.key !== ""),
+  };
+}
+
+/** Tune, forget, clear or import. ⚠️ ONE FUNCTION FOR FOUR VERBS because they
+ *  edit ONE document and the server refuses a fifth by exclusion — four
+ *  near-identical fetch wrappers is four places for the path to drift. */
+export async function tuneFlagTypes(
+  body: { action: "weight"; key: string; weight: number }
+      | { action: "forget"; key: string }
+      | { action: "clear" }
+      | { action: "import"; document: unknown },
+): Promise<{ ok: boolean; reason: string; types: FlagTypeWeight[] }> {
+  const r = await fetch(ingressPath("agent-flag-types"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const d = (await r.json().catch(() => ({}))) as
+    { ok?: boolean; error?: string; types?: unknown };
+  if (!r.ok) return { ok: false, reason: d.error || `HTTP ${r.status}`, types: [] };
+  const rows = Array.isArray(d.types) ? d.types : [];
+  return {
+    ok: d.ok === true,
+    reason: "",
+    types: rows
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+      .map((x) => ({
+        key: String(x.key ?? ""), label: String(x.label ?? ""),
+        weight: Number(x.weight ?? 0) || 0,
+        up: Number(x.up ?? 0) || 0, down: Number(x.down ?? 0) || 0,
+        firstAt: String(x.first_at ?? ""), lastAt: String(x.last_at ?? ""),
+      })),
+  };
+}

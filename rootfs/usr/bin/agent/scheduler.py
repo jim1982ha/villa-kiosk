@@ -354,6 +354,14 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     # with a light in it. A room list changes when somebody renames a room, so
     # this does nothing on all but one pass a day, exactly like the line above.
     await sources.refresh_layout(session)
+    # ⚠️ AND WHAT EACH ENTITY MEASURES, ON THE SAME CLOCK AND FOR THE SAME
+    # REASON (2026-08-28). `flagtypes` groups a finding by its measurement
+    # and direction rather than by its device, so it needs each entity's
+    # `device_class` and unit — facts that change when somebody
+    # re-configures a device, not every pass. Deliberately NOT in the
+    # journal: that ring is rewritten 96 times a day and its own header
+    # puts the burden of proof on any addition.
+    await sources.refresh_measures(session)
     # ⚠️ AND THE UPSTREAM TOOL CATALOGUE, ON THE SAME CLOCK (ADR-023). Home
     # Assistant's own MCP server is where HA reads come from; its tool list
     # changes when somebody updates that add-on, not every pass, so this does

@@ -297,6 +297,12 @@ async def investigate(*, provider: Provider,
                 refs=getattr(reg, "refs", None),
                 evidence_source=lambda: evidence,
                 sink=concern_mod.writer(policy, config),
+                # ⚠️ THE ONE PLACE THAT CAN ANSWER "what kind is this", because
+                # it is the last point holding an entity id — the stored
+                # concern keeps only a hash. Without it every concern is
+                # untunable, and the thumb tooltips' promise that "the villa
+                # raises this kind more readily" stays the fiction it was.
+                flag_type_of=sources_mod.flag_type_of,
                 run_id=ident))
 
         # ⚠️ THE ACTUATOR, AND UNTIL 2.718.0 NOTHING BUILT ONE. `act.build` had

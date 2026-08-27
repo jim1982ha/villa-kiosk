@@ -20,9 +20,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { Eye, Info, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Info, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 
-import { acknowledgeConcern, loadConcerns,
+import { loadConcerns,
          sendConcernFeedback } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
@@ -213,13 +213,6 @@ export default function AgentConcerns() {
    *  what stops the escalation ladder. Until TASK-112 nothing in this system
    *  could say it, so escalation could only ever run forever — the precise
    *  failure alert fatigue names. */
-  const acknowledge = useCallback(async (id: string) => {
-    setBusy(id);
-    await acknowledgeConcern(id);
-    setBusy(null);
-    void load();
-  }, [load]);
-
   if (rows === null) {
     return (
       <p className="muted body-text">
@@ -416,9 +409,19 @@ export default function AgentConcerns() {
                   audience is the honest fallback — it says who it was FOR. */}
               <span className="body-text concern-text">
                 {c.title}
+                {/* ⚠️ ITS OWN LINE, NOT TRAILING THE TITLE (2026-08-28,
+                    owner's request). Inline, it read as part of the sentence —
+                    "Pipeline drill — this is a test, nothing is wrong (sent to
+                    Owner 27 Aug, 18:58)" — so a fact ABOUT the concern sat
+                    inside the concern's own words and wrapped through them. It
+                    stays in this block: it belongs to the title, it is just
+                    not part of it. `display: block` on the span rather than a
+                    <p>, because the parent is a flex column of inline content
+                    and a paragraph would inherit margins nothing else here
+                    has. */}
                 {c.delivered_at && (
-                  <span className="muted">
-                    {" ("}{sentSummary(c)}{")"}
+                  <span className="muted concern-sent">
+                    {sentSummary(c)}
                   </span>
                 )}
                 {/* ⚠️ WHEN THE CHASE COMES, ON THE CARD ITSELF (owner's
@@ -459,36 +462,35 @@ export default function AgentConcerns() {
                 one action that takes a card off the wall. Hiding it therefore
                 left informational concerns with no way to be cleared at all,
                 which is the opposite of the tidiness it was reaching for. */}
-            {canJudge && c.delivered_at && (
-              c.acknowledged_at ? (
-                <span className="muted body-text"
-                      title={`Acknowledged ${c.acknowledged_at}`}>
-                  seen by {c.acknowledged_by || "somebody"}
-                </span>
-              ) : (
-                /* ⚠️ ICON-ONLY, LIKE THE TWO BUTTONS BESIDE IT, AND THAT IS A
-                   PHONE DECISION. `.editable-row` is `flex-wrap: nowrap`, so a
-                   fourth control carrying a text label does not move to a
-                   second line — it squeezes the title, which is the only part
-                   of the row a reader needs. The label lives in `aria-label`
-                   and `title`, which is how the thumbs beside it already
-                   explain themselves. */
-                <button
-                  type="button" className="row-action" disabled={busy === c.id}
-                  aria-label={`I have seen this: ${c.title}`}
-                  title="I have seen this — stops it being re-sent and escalated"
-                  onClick={() => void acknowledge(c.id)}
-                >
-                  <Eye size={16} aria-hidden />
-                </button>
-              )
+            {/* ⚠️ THE EYE IS GONE, AND THE THUMBS DO ITS JOB (2026-08-28,
+                owner: "i like the fact that clicking on a thumb Up or Down
+                acknowledge the concern: So please do it and remove the
+                redundant eye icon"). Three buttons offered two ACKNOWLEDGE
+                paths and one of them said nothing else — pressing a thumb
+                already meant a person had read the card, so a separate "I have
+                seen this" was a second click for a fact the first one proved.
+                The acknowledgement is written SERVER-SIDE inside
+                `/agent-feedback`, not by a second request from here, so the
+                verdict and the receipt cannot disagree.
+
+                ⚠️ THE ROW STILL SHOWS WHO PICKED IT UP. `needsAttention`
+                excludes acknowledged concerns, so this branch is reached only
+                between a send and the first thumb; it is kept because a
+                concern acknowledged from a PHONE (`/agent-acknowledge` is
+                still a route, and Telegram uses it) must not look unread on
+                the tablet. */}
+            {canJudge && c.delivered_at && c.acknowledged_at && (
+              <span className="muted body-text"
+                    title={`Acknowledged ${c.acknowledged_at}`}>
+                seen by {c.acknowledged_by || "somebody"}
+              </span>
             )}
             {canJudge && (
               <>
                 <button
                   type="button" className="row-action" disabled={busy === c.id}
-                  aria-label={`Useful: ${c.title}`}
-                  title="This was worth telling me — the villa raises this kind more readily"
+                  aria-label={`Useful, and I have seen it: ${c.title}`}
+                  title="Worth telling me — marks it seen, and the villa raises this kind more readily"
                   onClick={() => void judge(c.id, true)}
                 >
                   <ThumbsUp size={16} aria-hidden />
@@ -496,8 +498,8 @@ export default function AgentConcerns() {
                 <button
                   type="button" className="row-action danger"
                   disabled={busy === c.id}
-                  aria-label={`Not useful: ${c.title}`}
-                  title="This was not worth telling me — the villa raises this kind less readily"
+                  aria-label={`Not useful, and I have seen it: ${c.title}`}
+                  title="Not worth telling me — marks it seen, and the villa raises this kind less readily"
                   onClick={() => void judge(c.id, false)}
                 >
                   <ThumbsDown size={16} aria-hidden />

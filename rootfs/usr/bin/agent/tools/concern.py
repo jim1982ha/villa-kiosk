@@ -54,6 +54,7 @@ from agent import contracts, render
 from agent.concerns import Concern
 from agent.refs import RefTable
 from agent.tools.base import BaseTool, fail, text
+from reports.log import swallow
 
 #: Where a concern lands when the model gives no confidence of its own.
 #: ⚠️ THE MIDDLE, NOT THE TOP. An unstated confidence is an unstated confidence.
@@ -137,10 +138,20 @@ class RaiseConcern(BaseTool):
     def __init__(self, *, refs: Optional[RefTable] = None,
                  evidence_source: Optional[Callable[[], Sequence[Mapping[str, Any]]]] = None,
                  sink: Optional[Callable[[Concern], Tuple[bool, str]]] = None,
+                 flag_type_of: Optional[Callable[[str], str]] = None,
                  run_id: str = "") -> None:
         self._refs = refs
         self._evidence_source = evidence_source
         self._sink = sink
+        # ⚠️ INJECTED, AND STAMPED RATHER THAN ACCEPTED — the same rule as
+        # `informational` and `run_id`. What KIND of thing this is decides how
+        # readily its kind is raised in future (`agent/flagtypes.py`), so a
+        # model argument for it would be one hallucination away from retuning
+        # the owner's own preferences. It is computed here because this is the
+        # only place that holds the entity id: the stored concern keeps a HASH
+        # of its subject, so nothing downstream — including the thumb buttons —
+        # could ever work the kind out afterwards.
+        self._flag_type_of = flag_type_of
         # ⚠️ A PER-RUN BINDING LIKE THE OTHER THREE, set at construction rather
         # than read from anywhere later. The model cannot influence it, which is
         # the point: it is the audit's own answer to "which investigation wrote
@@ -169,7 +180,7 @@ class RaiseConcern(BaseTool):
         if not title:
             return [fail("invalid_args", "title is empty")]
 
-        subject_key, label, problem = self._subject(args)
+        subject_key, label, problem, entity_id = self._subject(args)
         if not subject_key:
             return [fail("invalid_args", problem)]
 
@@ -204,6 +215,12 @@ class RaiseConcern(BaseTool):
             supersedes=[str(i).strip() for i in _list(args.get("supersedes"))
                         if str(i).strip()],
             run_id=self._run_id,
+            # ⚠️ NEVER RAISES, AND AN UNKNOWN KIND IS "" RATHER THAN A GUESS.
+            # A concern whose kind could not be worked out simply does not take
+            # part in the weighting — it is still raised, still delivered and
+            # still on the wall. Failing the concern over its own metadata
+            # would trade a real finding for a preference.
+            flag_type=_flag_type(self._flag_type_of, entity_id),
         )
 
         recorded, reason = self._sink(concern)
@@ -223,8 +240,11 @@ class RaiseConcern(BaseTool):
         return [text(note)]
 
     # ── the subject ─────────────────────────────────────────────────────────
-    def _subject(self, args: Mapping[str, Any]) -> Tuple[str, str, str]:
-        """`(subject_key, label, problem)`. The key is computed, never accepted.
+    def _subject(self, args: Mapping[str, Any]) -> Tuple[str, str, str, str]:
+        """`(subject_key, label, problem, entity_id)`. The key is computed,
+        never accepted, and the entity id is returned for the CALLER's use
+        only — see `run`, which turns it into a flag type and drops it. It is
+        never stored on the concern and never shown to a model.
 
         ⚠️ A `ref` THIS RUN DID NOT MINT IS REFUSED RATHER THAN HASHED. A model
         that invents `d47` would otherwise open a concern about a device that
@@ -236,15 +256,16 @@ class RaiseConcern(BaseTool):
             entity_id = self._refs.resolve(ref) if self._refs is not None else None
             if not entity_id:
                 return "", "", (f"{ref!r} is not a device handle from this run. "
-                                f"Use a ref exactly as a tool result gave it.")
+                                f"Use a ref exactly as a tool result gave it."), ""
             return (contracts.subject_key(entity_id),
-                    self._refs.label(ref) or ref if self._refs else ref, "")
+                    self._refs.label(ref) or ref if self._refs else ref, "",
+                    entity_id)
 
         topic = " ".join(str(args.get("subject") or "").split()).lower()
         if not topic:
             return "", "", ("give `ref` when the concern is about one device, "
-                            "or `subject` when it is about something else.")
-        return contracts.subject_key(f"topic:{topic}"), topic, ""
+                            "or `subject` when it is about something else."), ""
+        return contracts.subject_key(f"topic:{topic}"), topic, "", ""
 
     def _evidence(self) -> List[Dict[str, Any]]:
         try:
@@ -321,6 +342,24 @@ def _stored_evidence(rows: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     evidence row upstream cannot reach the store by default."""
     return [{k: row[k] for k in STORED_EVIDENCE_FIELDS if k in row}
             for row in rows]
+
+
+def _flag_type(resolver: Optional[Callable[[str], str]], entity_id: str) -> str:
+    """What KIND this is, or "" when it cannot be said.
+
+    ⚠️ A TOPIC-ONLY CONCERN HAS NO KIND, and that is correct rather than a gap.
+    "Observation coverage is incomplete" is about the villa's own listening, not
+    about a measurement going one way or the other, so there is nothing for a
+    measurement-and-direction key to describe — and inventing a bucket for it
+    would put unrelated findings in one row of the owner's tuning list.
+    """
+    if resolver is None or not entity_id:
+        return ""
+    try:
+        return str(resolver(entity_id) or "")
+    except Exception as err:  # noqa: BLE001
+        swallow("could not work out the flag type of a concern", err)
+        return ""
 
 
 def _confidence(value: Any) -> float:

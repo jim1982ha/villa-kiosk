@@ -45,6 +45,7 @@ import time
 from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
                     Set)
 
+from agent import flagtypes as flagtypes_mod
 from agent.refs import RefTable
 from agent.tools.base import BaseTool
 from reports.log import swallow, warn
@@ -458,6 +459,23 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     except Exception as err:  # noqa: BLE001
         swallow("could not rank the villa's novelty", err)
 
+    # ⚠️ THE OWNER'S TAUGHT PREFERENCES, APPLIED BEFORE THE RANKING AND AFTER
+    # THE SCORING (2026-08-28). This is the one seam where "raise this kind
+    # less readily" can mean anything: `scored` is every entity with its own
+    # novelty, and `rank` then cuts it to what fits the document a check reads.
+    # Weighting after the cut would reorder a list whose contents were already
+    # decided, which is a different and much weaker promise.
+    #
+    # ⚠️ IT RE-RANKS, IT NEVER REFUSES — see `flagtypes`' header. A demerited
+    # kind sinks and may fall off the end of the document; nothing is filtered
+    # for its kind alone, so an extreme reading of an unpopular kind still
+    # reaches the check.
+    try:
+        scored = flagtypes_mod.apply_weights(
+            scored, lambda s: flag_type_of(str(getattr(s, "entity_id", ""))))
+    except Exception as err:  # noqa: BLE001
+        swallow("could not apply the owner's flag-type weights", err)
+
     try:
         ranked = salience_mod.rank(scored, limit=DOCUMENT_SALIENT_LIMIT)
         unscorable = len(salience_mod.unscorable(scored))
@@ -687,6 +705,112 @@ def service_caller(session: Any) -> Optional[Callable[..., Any]]:
                                service_data=dict(params or {}))
 
     return call
+
+
+#: What each entity MEASURES, cached on the daily clock. ⚠️ NOT IN THE JOURNAL,
+#: AND DELIBERATELY SO. `journal.MATERIAL_ATTRIBUTES` is a short allow-list
+#: whose own header says "every addition is volume on every write, and the
+#: burden of proof is on the addition" — and the journal is rewritten 96 times a
+#: day over ~1,250 entities. A device's class and unit change when somebody
+#: re-configures a device, which is monthly at most, so they belong on the same
+#: clock as the room list and the capability survey rather than in the ring.
+MEASURES_FILE: str = "/data/vesta/measures.json"
+
+
+async def refresh_measures(session: Any, *, now: Optional[float] = None,
+                           max_age_h: Optional[int] = None) -> bool:
+    """Re-read what each entity measures, if the stored answer is stale.
+
+    ⚠️ TWO ATTRIBUTES AND NOTHING ELSE. `device_class` and
+    `unit_of_measurement` are what `flagtypes.measurement_of` reads; storing
+    the states themselves would duplicate the journal, at the size of the whole
+    villa, on a file nothing bounds.
+
+    ⚠️ NEVER RAISES, AND A FAILED READ KEEPS THE OLD ANSWER — the same rule as
+    `refresh_layout` and `refresh_capabilities`, for the same reason: a
+    momentarily unreachable Home Assistant must not retune an owner's
+    preferences by making every kind unclassifiable for a day.
+    """
+    if session is None:
+        return False
+    stamp = time.time() if now is None else now
+    hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
+    try:
+        from reports import store
+        raw = store.read_json(MEASURES_FILE, {})
+        at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
+        if stamp - at < max(1, hours) * 3600.0:
+            return False
+        from reports.hass import HassClient
+        async with HassClient(session) as hass:
+            states = await hass.command("get_states")
+        found: Dict[str, Dict[str, str]] = {}
+        for row in (states if isinstance(states, list) else []):
+            if not isinstance(row, Mapping):
+                continue
+            entity_id = str(row.get("entity_id") or "")
+            attrs = row.get("attributes")
+            if not entity_id or not isinstance(attrs, Mapping):
+                continue
+            cls = str(attrs.get("device_class") or "")
+            unit = str(attrs.get("unit_of_measurement") or "")
+            if cls or unit:
+                found[entity_id] = {"c": cls, "u": unit}
+        if not found:
+            # ⚠️ AN EMPTY READ IS NOT AN ANSWER — the same sentence
+            # `refresh_layout` records. Writing it would file every future
+            # concern under "reading", quietly merging kinds an owner has
+            # already tuned apart.
+            return False
+        store.write_json(MEASURES_FILE, {"at": stamp, "measures": found})
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read what the villa's entities measure", err)
+        return False
+    return True
+
+
+def flag_type_of(entity_id: str) -> str:
+    """What KIND a concern about this device is. See `agent/flagtypes.py`.
+
+    ⚠️ IT LIVES HERE BECAUSE THIS MODULE IS "CONNECT A RULE TO THIS VILLA".
+    `flagtypes` owns the vocabulary and the arithmetic and reaches nothing;
+    this is the half that reads the villa's own measurements and journal.
+
+    ⚠️ THE DIRECTION COMES FROM THE SAME SCORER THE DOCUMENT IS RANKED BY, not
+    from a second reading of the numbers. A kind whose direction disagreed with
+    the sentence that flagged it would be untunable: the owner would demerit
+    "above baseline" while the screen said "below".
+    """
+    from agent import flagtypes
+    from reports import store
+    entity = str(entity_id or "")
+    if not entity:
+        return ""
+    raw = store.read_json(MEASURES_FILE, {})
+    measures = raw.get("measures") if isinstance(raw, Mapping) else {}
+    row = measures.get(entity) if isinstance(measures, Mapping) else None
+    row = row if isinstance(row, Mapping) else {}
+    measurement = flagtypes.measurement_of(
+        device_class=str(row.get("c") or ""), unit=str(row.get("u") or ""),
+        domain=entity.split(".", 1)[0])
+
+    observed = baseline = None
+    offline = False
+    try:
+        for scored in build_scorer()():
+            if str(getattr(scored, "entity_id", "")) != entity:
+                continue
+            observed = getattr(scored, "observed", None)
+            baseline = getattr(scored, "baseline", None)
+            offline = str(getattr(scored, "novel_state", "") or "").lower() in (
+                "unavailable", "unknown")
+            break
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read the direction of a flagged reading", err)
+
+    return flagtypes.key_for(measurement,
+                             flagtypes.direction_of(observed, baseline,
+                                                    offline=offline))
 
 
 #: Where Home Assistant serves its own log. ⚠️ CORE'S ENDPOINT, NOT THE

@@ -20,6 +20,7 @@ import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
 import PeoplePanel from "@/components/settings/PeoplePanel";
 import SourceLegend from "@/components/common/SourceLegend";
 import AgentTuningPanel from "@/components/settings/AgentTuningPanel";
+import FlagTypesPanel from "@/components/settings/FlagTypesPanel";
 import UsagePanel from "@/components/settings/UsagePanel";
 import { useState } from "react";
 
@@ -98,8 +99,17 @@ function AdvancedDialog({ onBack }: { onBack: () => void }) {
                    commit={draft}
           label="Advanced assistant sections" />
         <div className="settings-body">
+          {/* ⚠️ THE TAUGHT KINDS SIT ON *SETTINGS*, BENEATH THE DIALS, NOT ON A
+              TAB OF THEIR OWN. It is a tuning surface — the same question as
+              the cadence and the depth, asked about kinds of finding rather
+              than about the clock — and a fifth tab holding one list is a tab
+              nobody opens twice, which is the reasoning already recorded above
+              for the source legend landing on Cost. */}
           {tab === "settings" && (
-            <div className="reports-pane"><AgentTuningPanel /></div>
+            <div className="reports-pane">
+              <AgentTuningPanel />
+              <FlagTypesPanel />
+            </div>
           )}
           {tab === "cost" && (
             <div className="reports-pane">

@@ -2194,15 +2194,109 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
                                  status=400)
 
     from agent import concerns as agent_concerns
+    from agent import flagtypes as agent_flagtypes
+    useful = bool(body["useful"])
     ok, reason = agent_concerns.feedback(
-        concern_id, useful=bool(body["useful"]),
+        concern_id, useful=useful,
         reason=str(body.get("reason") or "")[:500])
     if not ok:
         return web.json_response({"error": reason}, status=400)
+
+    # ⚠️ A THUMB NOW TEACHES THE KIND, WHICH IS WHAT THE BUTTON'S OWN TOOLTIP
+    # HAS PROMISED SINCE IT SHIPPED ("the villa raises this kind more/less
+    # readily") and nothing implemented. Recorded AFTER the verdict is stored,
+    # so a rejected feedback cannot retune anything, and keyed on the type
+    # STAMPED AT RAISE TIME — the stored concern holds only a hash of its
+    # device, so the kind cannot be worked out here and must have been written
+    # down when the entity id was still in hand.
+    #
+    # ⚠️ AND A CONCERN WITH NO KIND IS NOT AN ERROR. One raised about a topic
+    # rather than a device ("observation coverage is incomplete") has no
+    # measurement to name; its verdict still counts, it just teaches nothing.
+    taught = ""
+    for row in agent_concerns.read():
+        if str(row.get("id")) == concern_id:
+            taught = str(row.get("flag_type") or "")
+            break
+    if taught:
+        agent_flagtypes.record(taught, useful=useful)
+
+    # ⚠️ A THUMB ALSO ACKNOWLEDGES (2026-08-28, owner: "i like the fact that
+    # clicking on a thumb Up or Down acknowledge the concern"). Server-side and
+    # in the same request, so the two cannot disagree and the eye button that
+    # used to be the only way to say it is gone from the card. The NAME comes
+    # from the session exactly as `/agent-acknowledge` insists, never the body.
+    #
+    # ⚠️ ITS FAILURE IS NOT THIS REQUEST'S FAILURE. Acknowledging an
+    # already-acknowledged concern is reported ok-with-a-reason by design
+    # ("first one wins"), and a concern nobody was ever told about cannot be
+    # acknowledged at all — neither is a reason to reject a verdict a person
+    # just gave.
+    agent_concerns.acknowledge(concern_id, by=str(_role_for(request) or ""))
     return web.json_response({
         "ok": True,
         "suppressed": agent_concerns.suppressed_subjects(),
+        "flagType": taught,
     })
+
+
+async def agent_flag_types_get_handler(request: web.Request) -> web.Response:
+    """The kinds a person has taught this villa, and how strongly. REQ-038.
+
+    Open to any authorized session, like the other agent reads — it names no
+    device and no room, only measurements and the owner's own weights.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    from agent import flagtypes as agent_flagtypes
+    return web.json_response({"types": agent_flagtypes.listing(),
+                              "limit": agent_flagtypes.WEIGHT_LIMIT})
+
+
+async def agent_flag_types_post_handler(request: web.Request) -> web.Response:
+    """Tune, forget, import or clear the taught kinds. Owner-only.
+
+    ⚠️ ONE ROUTE, FOUR VERBS, BECAUSE THEY EDIT ONE DOCUMENT. A store with a
+    handler per verb is four places for the permission to drift; `action` is
+    read here and refused by exclusion, so a fifth verb is a 400 rather than a
+    silent success.
+
+    ⚠️ OWNER-ONLY, AND NOT `TASK_ACK_ROLES`. Acknowledging a concern is a
+    facility manager's job; deciding what the villa may stop telling anybody
+    about is the owner's, and an imported list can silence a whole class of
+    finding on every future check.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only an owner may change what the villa "
+                          "prioritises.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "expected an object"}, status=400)
+
+    from agent import flagtypes as agent_flagtypes
+    action = str(body.get("action") or "").strip().lower()
+    key = str(body.get("key") or "").strip()
+    if action == "weight":
+        ok, reason = agent_flagtypes.set_weight(key, body.get("weight"))
+    elif action == "forget":
+        ok, reason = agent_flagtypes.forget(key)
+    elif action == "clear":
+        ok, reason = agent_flagtypes.clear()
+    elif action == "import":
+        ok, reason = agent_flagtypes.replace(body.get("document"))
+    else:
+        return web.json_response(
+            {"error": "action must be weight, forget, clear or import"},
+            status=400)
+    if not ok:
+        return web.json_response({"error": reason}, status=400)
+    return web.json_response({"ok": True,
+                              "types": agent_flagtypes.listing()})
 
 
 async def agent_acknowledge_handler(request: web.Request) -> web.Response:
@@ -3571,6 +3665,8 @@ def main() -> None:
     app.router.add_get("/agent-concerns", agent_concerns_get_handler)
     app.router.add_get("/agent-chats", agent_chats_handler)
     app.router.add_post("/agent-feedback", agent_feedback_handler)
+    app.router.add_get("/agent-flag-types", agent_flag_types_get_handler)
+    app.router.add_post("/agent-flag-types", agent_flag_types_post_handler)
     app.router.add_post("/agent-acknowledge", agent_acknowledge_handler)
     app.router.add_get("/agent-runs", agent_runs_handler)
     app.router.add_get("/agent-usage", agent_usage_handler)
