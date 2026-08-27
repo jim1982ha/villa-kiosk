@@ -156,6 +156,11 @@ from agent import scheduler as agent_scheduler      # noqa: E402
 # an import deferred to that moment would be a new failure mode on the one path
 # that exists to have none.
 from agent import fallback as agent_fallback        # noqa: E402
+# ⚠️ AT MODULE SCOPE FOR ONE REASON: `TASK_ACK_ROLES` is an ALIAS of
+# `actions.MAY_ACT` evaluated when this module loads, and a deferred import
+# cannot be aliased. Every other use of `actions` below is deferred as usual.
+from agent import actions as agent_actions          # noqa: E402
+from agent import config as agent_config            # noqa: E402
 from observe import cycle as observe_cycle          # noqa: E402
 
 SUPERVISOR = "supervisor"
@@ -2207,51 +2212,79 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "useful must be true or false"},
                                  status=400)
 
+    # ⚠️ THE VERDICT, THE KIND IT TEACHES AND THE ACKNOWLEDGEMENT ARE ONE ACT,
+    # AND IT LIVES IN `agent/actions.py` (2026-08-28). This handler used to
+    # assemble the three itself, which was correct and was also the only copy —
+    # so when the phone's buttons arrived they would have had to assemble them
+    # again, and the owner's requirement is that the two surfaces cannot fall
+    # out of step BY DESIGN. Every reason the order matters is recorded there,
+    # beside the code, rather than here beside one of its callers.
+    from agent import actions as agent_actions
     from agent import concerns as agent_concerns
-    from agent import flagtypes as agent_flagtypes
     useful = bool(body["useful"])
-    ok, reason = agent_concerns.feedback(
-        concern_id, useful=useful,
+    outcome = await agent_actions.apply(
+        request.app.get("session"),
+        "useful" if useful else "not_useful", concern_id,
+        by=str(_role_for(request) or ""),
+        config=agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {})),
         reason=str(body.get("reason") or "")[:500])
-    if not ok:
-        return web.json_response({"error": reason}, status=400)
+    if not outcome.ok:
+        return web.json_response({"error": outcome.note}, status=400)
 
-    # ⚠️ A THUMB NOW TEACHES THE KIND, WHICH IS WHAT THE BUTTON'S OWN TOOLTIP
-    # HAS PROMISED SINCE IT SHIPPED ("the villa raises this kind more/less
-    # readily") and nothing implemented. Recorded AFTER the verdict is stored,
-    # so a rejected feedback cannot retune anything, and keyed on the type
-    # STAMPED AT RAISE TIME — the stored concern holds only a hash of its
-    # device, so the kind cannot be worked out here and must have been written
-    # down when the entity id was still in hand.
-    #
-    # ⚠️ AND A CONCERN WITH NO KIND IS NOT AN ERROR. One raised about a topic
-    # rather than a device ("observation coverage is incomplete") has no
-    # measurement to name; its verdict still counts, it just teaches nothing.
     taught = ""
     for row in agent_concerns.read():
         if str(row.get("id")) == concern_id:
             taught = str(row.get("flag_type") or "")
             break
-    if taught:
-        agent_flagtypes.record(taught, useful=useful)
-
-    # ⚠️ A THUMB ALSO ACKNOWLEDGES (2026-08-28, owner: "i like the fact that
-    # clicking on a thumb Up or Down acknowledge the concern"). Server-side and
-    # in the same request, so the two cannot disagree and the eye button that
-    # used to be the only way to say it is gone from the card. The NAME comes
-    # from the session exactly as `/agent-acknowledge` insists, never the body.
-    #
-    # ⚠️ ITS FAILURE IS NOT THIS REQUEST'S FAILURE. Acknowledging an
-    # already-acknowledged concern is reported ok-with-a-reason by design
-    # ("first one wins"), and a concern nobody was ever told about cannot be
-    # acknowledged at all — neither is a reason to reject a verdict a person
-    # just gave.
-    agent_concerns.acknowledge(concern_id, by=str(_role_for(request) or ""))
     return web.json_response({
         "ok": True,
         "suppressed": agent_concerns.suppressed_subjects(),
         "flagType": taught,
+        "note": outcome.note,
     })
+
+
+async def agent_action_handler(request: web.Request) -> web.Response:
+    """Any act on an alert, from the tablet. The phone's buttons call the same
+    function through `agent/buttons.py`, which is the whole point of both.
+
+    ⚠️ IT EXISTS BECAUSE "DONE" WAS TWO BROWSER CALLS WITH NOTHING JOINING THEM.
+    `AgentTodo.finish` completed the to-do item over Home Assistant's websocket
+    and then acknowledged the alert through this add-on; the first succeeding
+    and the second failing leaves a ticked job beside an alert still being
+    chased. One request, one server-side act, and the browser can no longer
+    perform half of it.
+
+    ⚠️ THE SAME GATE AS ITS NEIGHBOURS, AND FROM THE SAME TUPLE. `actions.MAY_ACT`
+    is imported rather than restated so that widening it on one surface cannot
+    widen it on only one surface.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    from agent import actions as agent_actions
+    if _role_for(request) not in agent_actions.MAY_ACT:
+        return _forbidden("Only an owner or facility manager may act on an "
+                          "alert.")
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "expected an object"}, status=400)
+    concern_id = str(body.get("id") or "").strip()
+    action_id = str(body.get("action") or "").strip()
+    if not concern_id or not action_id:
+        return web.json_response({"error": "an id and an action are required"},
+                                 status=400)
+
+    outcome = await agent_actions.apply(
+        request.app.get("session"), action_id, concern_id,
+        by=str(_role_for(request) or ""),
+        config=agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {})),
+        reason=str(body.get("reason") or "")[:500])
+    if not outcome.ok:
+        return web.json_response({"error": outcome.note}, status=400)
+    return web.json_response({"ok": True, "note": outcome.note})
 
 
 async def agent_flag_types_get_handler(request: web.Request) -> web.Response:
@@ -3045,11 +3078,25 @@ def _chat_dispatch(app: Any) -> Any:
     restart — a kill switch you have to reboot to use is not one.
     """
     async def dispatch(event: Dict[str, Any]) -> None:
+        from agent import buttons as agent_buttons
         from agent import chat as agent_chat
         from agent import config as agent_config
         from agent.llm import anthropic_sdk
 
-        if str(event.get("event_type") or "") != agent_chat.EVENT_TYPE:
+        kind = str(event.get("event_type") or "")
+        # ⚠️ A BUTTON PRESS IS ANSWERED BEFORE A MESSAGE IS, AND IT NEVER REACHES
+        # A MODEL. It carries no text to interpret — it is one of a fixed set of
+        # acts, decoded and handed to `actions.apply`, the same function the
+        # tablet calls. Routing it through the chat path instead would spend a
+        # model turn deciding what "vd:c7" means.
+        if kind == agent_buttons.EVENT_TYPE:
+            config = agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {}))
+            outcome = await agent_buttons.handle(
+                event, session=app["session"], config=config)
+            if outcome:
+                print(f"[supervisor-proxy] button: {outcome}", flush=True)
+            return
+        if kind != agent_chat.EVENT_TYPE:
             return
         # ⚠️ THE STORED DOCUMENT, NOT AN ENVELOPE. `_read_json_store` returns
         # what is ON DISK; the `{"config": …}` wrapper is added by the HTTP
@@ -3413,7 +3460,13 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
 #: loop only the owner can close is not an acknowledgement loop. Guests are
 #: excluded: they can raise a fault report (see `_fm_write_guard`) and must not
 #: be able to declare one finished.
-TASK_ACK_ROLES = ("owner", "ops")
+#:
+#: ⚠️ AN ALIAS SINCE 2026-08-28, NOT A SECOND DECLARATION. The phone's buttons
+#: check the role `policy.sender_role` resolved from the People table, and a
+#: villa where a facility manager may act on the tablet and not on their phone
+#: — or the reverse — is the desynchronised state `agent/actions.py` exists to
+#: make unreachable. One tuple, both surfaces.
+TASK_ACK_ROLES = agent_actions.MAY_ACT
 
 
 async def reports_tasks_get_handler(request: web.Request) -> web.Response:
@@ -3702,6 +3755,7 @@ def main() -> None:
     app.router.add_get("/agent-concerns", agent_concerns_get_handler)
     app.router.add_get("/agent-chats", agent_chats_handler)
     app.router.add_post("/agent-feedback", agent_feedback_handler)
+    app.router.add_post("/agent-action", agent_action_handler)
     app.router.add_get("/agent-flag-types", agent_flag_types_get_handler)
     app.router.add_post("/agent-flag-types", agent_flag_types_post_handler)
     app.router.add_post("/agent-acknowledge", agent_acknowledge_handler)

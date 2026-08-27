@@ -330,7 +330,8 @@ def test_no_vesta_blueprints_falls_back_rather_than_going_deaf() -> None:
     # blueprints, or one whose core is unreachable, must still be able to
     # answer a question — the conversation has nothing to do with the detection
     # layer and must not degrade with it.
-    assert types == list(collect.FALLBACK_EVENT_TYPES) + ["telegram_text"]
+    assert types == (list(collect.FALLBACK_EVENT_TYPES)
+                     + list(collect.CHAT_EVENT_TYPES))
     assert categories == [], (
         "a fallback must not claim a blueprint layer — that decides whether the "
         "built-in modules stand down")
@@ -351,7 +352,8 @@ def test_an_unreachable_core_falls_back_rather_than_going_deaf() -> None:
     # blueprints, or one whose core is unreachable, must still be able to
     # answer a question — the conversation has nothing to do with the detection
     # layer and must not degrade with it.
-    assert types == list(collect.FALLBACK_EVENT_TYPES) + ["telegram_text"]
+    assert types == (list(collect.FALLBACK_EVENT_TYPES)
+                     + list(collect.CHAT_EVENT_TYPES))
     assert categories == [], "an unreachable Core proves nothing about the property"
 
 
@@ -422,7 +424,14 @@ def test_subscribe_is_chat_only_and_keeps_the_established_record() -> None:
     finally:
         module.HassClient = original_client  # type: ignore[assignment]
 
-    assert fake.subscribed == ["telegram_text"], (
+    # ⚠️ DERIVED FROM `CHAT_EVENT_TYPES`, NOT SPELLED OUT, AND THAT KEEPS THE
+    # TEETH WHERE THEY WERE. What this refuses is a subscription to a `vesta_*`
+    # name nothing emits any more; which PERSON-DRIVEN events ride the socket is
+    # a decision that tuple owns, and re-typing its contents here made adding
+    # the button press look like the failure this guards against. The assertion
+    # below is what actually bites.
+    assert fake.subscribed == list(collect.CHAT_EVENT_TYPES)
+    assert not [t for t in fake.subscribed if t.startswith("vesta_")], (
         "the collector subscribed to something the villa can no longer emit")
     after = collect.read_buffer()
     assert after["blueprint_categories"] == ["roi"], "the record was erased"

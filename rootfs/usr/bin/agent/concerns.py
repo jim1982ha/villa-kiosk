@@ -44,6 +44,10 @@ CONCERNS_FILE: str = f"{store.DATA_DIR}/vesta/concerns.json"
 #: the disk on a villa nobody visits.
 MAX_CONCERNS: int = 2_000
 
+#: Chat messages remembered per alert. ⚠️ BOUNDED FOR THE SAME REASON THE STORE
+#: IS: an alert escalated repeatedly would otherwise grow one row without limit.
+MAX_MESSAGE_REFS: int = 6
+
 #: Terminal states. ⚠️ A concern in one of these is no longer "open" for
 #: deduplication, so tonight's pump noise may legitimately open a NEW concern
 #: after last month's was closed — recurrence is a finding, not a duplicate.
@@ -134,6 +138,18 @@ class Concern:
     #: answer was written down when it was known. "" is legitimate — a concern
     #: about a topic rather than a device has no measurement to name.
     flag_type: str = ""
+    #: Chat messages that carry this alert's buttons: `{entity_id, message_id}`.
+    #: ⚠️ HERE RATHER THAN IN A SIDE TABLE, for the reason `deliveries` is: the
+    #: store is already the record of what the villa said and to whom, and a
+    #: second file listing live messages is a second thing to keep in step — the
+    #: first time the two disagree, a button is retired on an alert still open
+    #: or left live on one already closed. See `agent/buttons.py`.
+    #:
+    #: ⚠️ A LIST, BECAUSE ESCALATION SENDS AGAIN TO SOMEBODY ELSE. Retiring only
+    #: the first would leave the owner's copy live after the facility manager's
+    #: had been answered — exactly what `deliveries` records for the same shape
+    #: of mistake.
+    messages: List[Dict[str, str]] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -150,6 +166,7 @@ class Concern:
             "informational": self.informational, "flag_type": self.flag_type,
             "useful": self.useful, "useful_at": self.useful_at,
             "useful_note": self.useful_note,
+            "messages": [dict(m) for m in self.messages],
         }
 
 
@@ -346,6 +363,57 @@ def acknowledge(concern_id: str, *, by: str,
         ok = _write(rows)
         return ok, "" if ok else "the concern store could not be written"
     return False, f"no concern {concern_id!r}"
+
+
+def note_message(concern_id: str, entity_id: str, message_id: str) -> bool:
+    """Remember a chat message carrying this alert's buttons. See `messages`.
+
+    ⚠️ IT REFUSES A MESSAGE WITH NO ID, because the only thing a ref is FOR is
+    editing that message later and an unidentified one can never be edited.
+    Storing it anyway would grow a list of things that look retirable and are
+    not, and `buttons.reconcile` would walk them on every tick forever.
+    """
+    if not str(message_id or "").strip() or not str(entity_id or "").strip():
+        return False
+    rows = read()
+    for row in rows:
+        if str(row.get("id")) != str(concern_id):
+            continue
+        refs = row.get("messages")
+        if not isinstance(refs, list):
+            refs = []
+        refs.append({"entity_id": str(entity_id),
+                     "message_id": str(message_id)})
+        # ⚠️ BOUNDED, like every list in this store. A villa escalating the same
+        # alert repeatedly must not grow one row without limit.
+        row["messages"] = refs[-MAX_MESSAGE_REFS:]
+        return _write(rows)
+    return False
+
+
+def set_messages(concern_id: str,
+                 refs: Sequence[Mapping[str, str]]) -> bool:
+    """Replace the remembered messages — how `buttons.reconcile` forgets one.
+
+    ⚠️ REPLACE RATHER THAN CLEAR, because a reconciliation that could not reach
+    Telegram must KEEP the messages it failed to retire and try again. A `clear`
+    verb would make "I gave up" the easy call to write.
+    """
+    rows = read()
+    for row in rows:
+        if str(row.get("id")) != str(concern_id):
+            continue
+        kept = [{"entity_id": str(r.get("entity_id") or ""),
+                 "message_id": str(r.get("message_id") or "")}
+                for r in refs if isinstance(r, Mapping)]
+        if kept == (row.get("messages") or []):
+            # ⚠️ NO WRITE WHEN NOTHING MOVED. This runs on the chase clock over
+            # every alert, and rewriting the store each tick would churn the
+            # disk on a villa where nothing is happening.
+            return True
+        row["messages"] = kept
+        return _write(rows)
+    return False
 
 
 # ── verification ────────────────────────────────────────────────────────────

@@ -525,8 +525,21 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
              f"for the {role!r} profile on the People tab")
         return "failed"
 
-    results = await deliver_mod.deliver(session, plan.targets,
-                                        plan.title, plan.body)
+    # ⚠️ BUTTONS FIRST, AND EVERYTHING THEY DECLINE FALLS THROUGH UNCHANGED.
+    # `deliver.py` is deliberately the INTERSECTION of what every notify
+    # platform accepts, so an inline keyboard cannot go through it without
+    # putting a platform branch in the one file that must not have one. So the
+    # branch lives in `buttons.py`, is asked first, and answers `skipped` for
+    # every target it cannot serve — which is all of them on a villa that does
+    # not use a chat platform. That villa's delivery is byte-identical to what
+    # it was before this existed.
+    results = await _send_with_buttons(session, concern, plan, config=config)
+    plain = [t for t in plan.targets
+             if not any(str(r.get("target")) == t
+                        and str(r.get("status")) == "sent" for r in results)]
+    if plain:
+        results += await deliver_mod.deliver(session, plain,
+                                             plan.title, plan.body)
     landed = [str(r.get("target")) for r in results
               if isinstance(r, Mapping) and str(r.get("status")) == "sent"]
     if not landed:
@@ -555,6 +568,41 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
         from agent import task as task_mod
         await task_mod.raise_for(session, concern, config=config)
     return "sent"
+
+
+async def _send_with_buttons(session: Any, concern: Mapping[str, Any],
+                             plan: Any, *,
+                             config: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Try to send this alert with its buttons. Never raises, never blocks a send.
+
+    ⚠️ EVERY FAILURE HERE IS A `skipped`, WHICH THE CALLER THEN SENDS PLAINLY.
+    The message is the alert; the buttons are an affordance on top of it. A
+    Telegram that refused a keyboard, a registry that could not be read, or an
+    alert that wants no buttons at all must all end with the owner still being
+    told — so this returns an empty list rather than propagating anything.
+
+    ⚠️ AND THE MESSAGE ID IS REMEMBERED ON THE CONCERN, not here. It is what
+    lets the buttons be retired when the alert is dealt with on the tablet
+    instead; a ref that is not stored is a button that can never be corrected.
+    """
+    from agent import buttons as buttons_mod
+    from agent import concerns as concerns_mod
+
+    try:
+        keyboard = buttons_mod.keyboard_for(concern, config)
+        if not keyboard:
+            return []
+        results = await buttons_mod.send(session, plan.targets,
+                                         plan.title, plan.body, keyboard)
+    except Exception as err:  # noqa: BLE001 - an affordance never costs a send
+        swallow("could not send the alert with buttons", err)
+        return []
+    ident = str(concern.get("id") or "")
+    for row in results:
+        ref = row.get("ref")
+        if str(row.get("status")) == "sent" and ref is not None:
+            concerns_mod.note_message(ident, ref.entity_id, ref.message_id)
+    return results
 
 
 def _record_send(row: Dict[str, Any], profile: str, stamp: str) -> None:

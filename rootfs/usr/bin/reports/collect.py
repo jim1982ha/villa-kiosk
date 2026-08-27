@@ -215,7 +215,13 @@ async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
 #: type on a websocket already held: no webhook, no public URL, no inbound
 #: firewall hole. It is low-volume by nature — a person typing — so it cannot
 #: put the loop behind the villa's own state traffic.
-CHAT_EVENT_TYPES = ("telegram_text",)
+#: ⚠️ AND THE BUTTON PRESS RIDES IT TOO (2026-08-28). `telegram_callback` is the
+#: same argument one step further: a press is a person acting, so it is
+#: low-volume by nature, and putting it on this socket is what let button
+#: HANDLING move into the add-on. The retired blueprint had to wait for its own
+#: press inside a `wait_for_trigger`, so its buttons expired with the
+#: automation's timeout and a restart lost the wait entirely.
+CHAT_EVENT_TYPES = ("telegram_text", "telegram_callback")
 
 
 def _with_chat(types: Sequence[str]) -> List[str]:

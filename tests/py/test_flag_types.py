@@ -364,10 +364,23 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
     body = src.split("async def agent_feedback_handler")[1].split(
         "\nasync def ")[0]
     code = re.sub(r"#[^\n]*", "", body)
-    assert "agent_flagtypes.record(" in code, (
+    # ⚠️ TWO HALVES SINCE 2026-08-28, BECAUSE THE ACT MOVED AND A PIN THAT
+    # FOLLOWED IT BLINDLY WOULD MEASURE LESS THAN IT DID. The handler used to
+    # assemble verdict + kind + acknowledgement itself; `agent/actions.py` now
+    # owns that compound so the phone's buttons run the same one. So this pins
+    # that the handler DELEGATES (below) and that the thing it delegates to
+    # still does both (further down) — asserting only the first would go green
+    # on an `apply` that had quietly stopped teaching anything.
+    assert "actions" in code and "apply(" in code, (
+        "the thumb handler no longer delegates to the one place an act is "
+        "defined, so the tablet and the phone can drift apart")
+    import inspect
+    from agent import actions as actions_mod
+    judge = re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._judge))
+    assert "flagtypes_mod.record(" in judge, (
         "pressing a thumb records a verdict and teaches nothing — the button's "
         "own tooltip promises otherwise")
-    assert "agent_concerns.acknowledge(" in code, (
+    assert "concerns_mod.acknowledge(" in judge, (
         "a thumb no longer acknowledges, so the eye button that was removed "
         "was the only way to say it")
 

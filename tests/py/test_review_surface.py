@@ -174,10 +174,17 @@ def test_the_ROLES_the_server_permits_can_REACH_the_surface() -> None:
     it will 403.
     """
     proxy = _read(PROXY)
-    match = re.search(r"TASK_ACK_ROLES\s*=\s*\(([^)]*)\)", proxy)
-    assert match, "TASK_ACK_ROLES not found; this test is checking nothing"
-    permitted = set(re.findall(r'"([a-z]+)"', match.group(1)))
-    assert permitted, "TASK_ACK_ROLES parsed empty"
+    # ⚠️ RESOLVED BY IMPORT, NOT BY REGEX (2026-08-28). `TASK_ACK_ROLES` is now
+    # an ALIAS of `actions.MAY_ACT` — one tuple for the tablet, the phone's
+    # buttons and every handler — and a pattern matching `= (…)` read that as
+    # "not found" and said so, which is this file's own vacuous-pass guard doing
+    # its job. Importing follows the alias wherever it points and cannot go
+    # blind the next time the declaration moves.
+    from agent import actions as actions_mod
+    assert "TASK_ACK_ROLES" in proxy, (
+        "TASK_ACK_ROLES not found; this test is checking nothing")
+    permitted = set(actions_mod.MAY_ACT)
+    assert permitted, "the permitted-roles tuple is empty"
 
     # ⚠️ THE HANDLERS MUST ACTUALLY USE IT. A route that checked a different
     # list would make everything below a comparison against the wrong constant.

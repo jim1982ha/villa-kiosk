@@ -1219,17 +1219,36 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
     The reverse must NOT hold: acknowledging on the Reason tab leaves the job
     open, because seeing an alert is not doing it.
     """
+    # ⚠️ THE ACT MOVED SERVER-SIDE ON 2026-08-28 AND THIS PIN FOLLOWED IT IN
+    # BOTH HALVES. The tablet used to tick over Home Assistant's websocket and
+    # acknowledge through the add-on as two browser calls, with an `if (ok …)`
+    # joining them; `agent/actions.py` now performs the pair so the phone's Done
+    # button runs the same one. Pinning only that the button calls `actOnAlert`
+    # would go green on an `apply` that had stopped acknowledging — which is
+    # `feedback_pin-the-caller` inverted, and just as blind.
     jobs = _read(os.path.join(SRC, "components", "agent", "AgentTodo.tsx"))
-    assert "acknowledgeConcern(" in jobs, (
+    assert "actOnAlert(" in jobs and '"done"' in jobs, (
+        "ticking a job no longer goes through the one place an act is defined, "
+        "so the tablet and the phone can drift apart")
+
+    import inspect
+    import re as _re
+    from agent import actions as actions_mod
+    done = _re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._done))
+    assert "acknowledge(" in done, (
         "ticking a job does not record that the concern was seen, so the villa "
         "keeps chasing work that is already done")
-    # ⚠️ ONLY IF THE TICK LANDED. Recording "seen" for work still outstanding
-    # would stop the chase on a job nobody has done.
-    body = jobs[jobs.index("const finish"):]
-    body = body[:body.index("}, [ws")]
-    assert body.index("if (ok") < body.index("acknowledgeConcern("), (
-        "the concern is acknowledged before the tick is known to have "
-        "succeeded")
+    # ⚠️ AND NOT WHEN THE TICK WAS REFUSED. Recording "seen" for work still
+    # visibly outstanding would stop the chase on a job nobody has done — the
+    # rule the browser's `if (ok …)` used to carry. "Nothing to tick" is a
+    # DIFFERENT outcome and must still acknowledge, or Done is dead on every
+    # villa with no to-do list configured.
+    assert done.index('== "failed"') < done.index("acknowledge("), (
+        "the alert is acknowledged before a failed tick is ruled out")
+    assert '"none"' in _re.sub(r"#[^\n]*", "",
+                               inspect.getsource(actions_mod._complete_item)), (
+        "the tick reports one value for 'nothing to tick' and 'the tick was "
+        "refused', which are opposite outcomes")
 
     concerns = _read(os.path.join(SRC, "components", "agent",
                                   "AgentConcerns.tsx"))

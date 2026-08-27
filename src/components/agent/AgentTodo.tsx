@@ -33,7 +33,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ClipboardCheck, Loader2 } from "lucide-react";
 
-import { acknowledgeConcern, loadAgentConfig, loadConcerns } from "@/agent/agentApi";
+import { actOnAlert, loadAgentConfig, loadConcerns } from "@/agent/agentApi";
 import type { Concern } from "@/agent/agentTypes";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
@@ -101,19 +101,29 @@ export default function AgentTodo() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // ⚠️ ONE SERVER-SIDE ACT, NOT TWO BROWSER CALLS (2026-08-28). This used to
+  // complete the item over Home Assistant's websocket and then acknowledge the
+  // alert through the add-on, with nothing joining them: the tick landing and
+  // the acknowledgement failing leaves a ticked job beside an alert still being
+  // chased. `agent/actions.py` does both or reports why not — and it is the
+  // same function the phone's Done button reaches, which is what makes the two
+  // surfaces incapable of disagreeing rather than merely expected to agree.
+  //
+  // ⚠️ A ROW WITH NO ALERT BEHIND IT STILL TICKS. Somebody may have written the
+  // item by hand on the list this villa shares; refusing it would make the
+  // button dead on rows a person can plainly see.
   const finish = useCallback(async (row: TodoRow) => {
     setBusy(row.item.uid);
     setNote("");
-    const ok = await completeTodoItem(ws, list ?? "", row.item.summary);
-    // ⚠️ THE CONCERN IS ACKNOWLEDGED ONLY IF THE TICK LANDED. Recording "seen"
-    // for work that is still outstanding would stop the chase on a row nobody
-    // has done — the one outcome worse than chasing.
-    if (ok && row.concern && !row.concern.acknowledged_at) {
-      await acknowledgeConcern(String(row.concern.id));
-    }
+    const id = row.concern ? String(row.concern.id) : "";
+    const result = id
+      ? await actOnAlert(id, "done")
+      : { ok: await completeTodoItem(ws, list ?? "", row.item.summary),
+          note: "" };
     setBusy(null);
-    setNote(ok ? "Done. It will not be escalated again."
-               : "Home Assistant did not accept that — try again in a moment.");
+    setNote(result.ok
+      ? (result.note || "Done") + ". It will not be chased again."
+      : result.note || "That did not work — try again in a moment.");
     await load();
   }, [ws, list, load]);
 

@@ -1,3 +1,15 @@
+## 2.831.0
+
+### Added — buttons on an alert in the chat, and one definition of what each does
+Retiring the task blueprint took the phone's buttons with it, so an alert could
+only be acted on by walking to the tablet. They are back, sent by the add-on
+and — this is the change that matters — handled by it: Done, Need help, Seen,
+the thumbs, and Add to the To-Do List all call `agent/actions.py`, the same
+function the tablet calls. Done used to be two browser requests with nothing
+joining them, so a ticked job could sit beside an alert still being chased; it
+is now one act. A press is checked against the store as it arrives, and a
+message whose alert was dealt with elsewhere has its buttons removed.
+
 ## 2.830.0
 
 ### Fixed — the To-Do List promised a button that no longer exists

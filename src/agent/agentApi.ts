@@ -405,6 +405,35 @@ export async function acknowledgeConcern(id: string): Promise<boolean> {
   return r.ok;
 }
 
+/**
+ * Any act on an alert, performed server-side in ONE call.
+ *
+ * ⚠️ IT REPLACED A PAIR OF BROWSER CALLS WITH NOTHING JOINING THEM. "Done" on
+ * the To-Do List used to complete the item over Home Assistant's websocket and
+ * then acknowledge the alert here; the first succeeding and the second failing
+ * left a ticked job beside an alert still being chased — the exact state
+ * `reconcile_done` exists to repair after the fact. The browser can no longer
+ * perform half of an act.
+ *
+ * ⚠️ AND IT IS THE SAME ENTRY POINT THE PHONE'S BUTTONS USE. `agent/actions.py`
+ * is reached from here and from `agent/buttons.py`, so the tablet and the chat
+ * cannot fall out of step: there is only one implementation to be in step with.
+ *
+ * Returns the server's note — written for a person, and shown to one on both
+ * surfaces — or "" when the act was refused.
+ */
+export async function actOnAlert(id: string, action: string,
+                                 reason = ""): Promise<{ ok: boolean; note: string }> {
+  const r = await fetch(ingressPath("agent-action"), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, action, reason }),
+  });
+  const body = await r.json().catch(() => ({}));
+  return { ok: r.ok, note: String(body?.note ?? body?.error ?? "") };
+}
+
 /** A procedure the agent has proposed and nobody has yet judged. TASK-094. */
 export interface ReviewDraft {
   slug: string;

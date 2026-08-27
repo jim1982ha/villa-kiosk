@@ -497,6 +497,14 @@ async def dispatch(session: Any,
     from agent import task as task_mod
     await task_mod.reconcile_done(session, config=config)
 
+    # ⚠️ THE SAME KIND OF RECONCILIATION ONE SURFACE FURTHER OUT, and it belongs
+    # beside that one rather than anywhere else: both exist because an alert can
+    # be dealt with somewhere this add-on cannot be told about. A ticked job is
+    # read back from the list; a message whose buttons are now stale is rewritten
+    # in the chat. Neither can be an event, because neither surface offers one.
+    from agent import buttons as buttons_mod
+    await buttons_mod.reconcile(session, config=config)
+
     # ⚠️ NEVER RAISES — `sweep` returns a typed result on every path, because
     # one of its two callers is a background clock nobody is watching.
     sent = await outbox_mod.sweep(session, config=config)

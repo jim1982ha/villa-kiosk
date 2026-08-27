@@ -121,6 +121,9 @@ EXEMPT: Dict[str, str] = {
                     "prompt path uses `catalogue()`",
     "forget_targets": "clears the chat target cache. Kept for an operator and "
                       "for the tests that must not leak state between cases",
+    "forget_entities": "clears the cached set of chat-platform notify entities. "
+                       "The exact twin of `forget_targets` beside it, for the "
+                       "same two readers and the same reason",
 }
 
 
