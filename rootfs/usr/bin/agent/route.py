@@ -195,7 +195,8 @@ def plan(concern: Mapping[str, Any], *, targets: Sequence[str],
     # for a severity the matrix would push), always respects quiet hours, and
     # says in its own body that nothing is asked of the reader. The old shadow
     # branch here ("recorded, delivered to nobody") is gone by the owner's
-    # ruling: Investigate & Log Only tells you once instead of telling nobody.
+    # ruling: Alert only (then called Investigate & Log Only) tells you once
+    # instead of telling nobody.
     informational = bool(concern.get("informational"))
     if informational:
         row = Row(thread=True, push=False, quiet_hours_apply=True,

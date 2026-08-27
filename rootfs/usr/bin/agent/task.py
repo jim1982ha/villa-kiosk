@@ -21,13 +21,16 @@ something Tier 4 already decided.
 task raised for a concern whose delivery then failed is a job nobody was told
 about, sitting on a list, with no message to explain it.
 
-⚠️ TWO WRITES, AND BOTH ARE NEEDED — this is the contract with
-`vesta_task_actions.yaml` and it is easy to half-implement:
+⚠️ ONE WRITE, AND THE BRACKET IS WHAT MAKES IT USABLE:
 
-  1. The TODO ITEM, whose summary must contain `[<rule_id>]`. The blueprint's
-     "Done" button completes the item it finds with `selectattr('summary',
-     'match', '\\[' ~ rule_id ~ '\\]')`, so an item without the bracketed id can
-     never be completed by a button press.
+  1. The TODO ITEM, whose summary must contain `[<rule_id>]`. That bracket is
+     parsed by `ledger.TASK_PREFIX` and is the join everything downstream uses
+     — the To-Do List tab, the daily digest, and `reconcile_done`, which marks
+     the alert seen when the item is ticked from ANY surface. An item without
+     it is work nothing can trace back to its alert.
+     ⚠️ It used to be the string `vesta_task_actions.yaml`'s "Done" button
+     matched on. That blueprint is inert since 2026-08-28; the bracket's reader
+     changed, the bracket did not.
   2. The EVENT, carrying `task_text` and `rule_id`. The blueprint triggers on
      the event, not on the todo item appearing — writing only the item produces
      a job nobody is ever asked about.
@@ -134,10 +137,14 @@ async def reconcile_done(session: Any, *,
     ⚠️ TWO "DONE" BUTTONS DID TWO DIFFERENT THINGS, AND THE PHONE'S DID LESS
     (2026-08-28, reported: "Can you confirm that if i click on Done, it will do
     exactly the same as if i click on Done in the Jobs tab?"). It did not.
-    `AgentJobs.finish` completes the item AND acknowledges the concern, which is
+    `AgentTodo.finish` completes the item AND acknowledges the alert, which is
     what takes the card off the Reason tab and stops the chase. The Telegram
     button — `vesta_task_actions.yaml`'s "Done - complete the item the tablet
-    ticks" — only sets the item to `completed`. So a facility manager who did
+    ticks" — only set the item to `completed`. ⚠️ THAT BUTTON NO LONGER EXISTS:
+    the blueprint went inert hours later when job notifications were removed.
+    This function outlived its original cause and is MORE needed without it —
+    it is now the only thing that marks an alert seen when somebody ticks the
+    item in Home Assistant's own panel, or by voice. So a facility manager who did
     the work and pressed Done on their phone left the concern unacknowledged:
     still on the wall, still counted as awaiting a person, and if it were
     critical, still being chased for work already finished. That is the exact
@@ -172,8 +179,8 @@ async def reconcile_done(session: Any, *,
         swallow("could not read which jobs have been ticked", err)
         return 0
 
-    # ⚠️ THE BRACKET IS THE JOIN, and it is the same one the blueprint's Done
-    # matches on and the same one `summary_for` writes. `todo_tasks` has already
+    # ⚠️ THE BRACKET IS THE JOIN, and it is the same one `summary_for` writes.
+    # (It was also what the blueprint's Done matched on, until that went inert.) `todo_tasks` has already
     # parsed it into `rule_id`, so nothing here re-implements the parse.
     ticked = {str(t.get("rule_id") or "") for t in done}
     ticked.discard("")
@@ -226,7 +233,7 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
             # ⚠️ THE BODY GOES IN THE DESCRIPTION, NOT THE SUMMARY. A todo
             # summary is one line on a phone and in the Facility Manager list;
             # the evidence belongs where it can be read without truncating the
-            # thing the Done button matches on.
+            # bracket every reader of this item joins on.
             #
             # ⚠️ BUT ONLY WHERE THE LIST ACCEPTS ONE — see DESCRIPTION_FEATURE.
             # The ITEM is what the loop needs; the description is what makes it

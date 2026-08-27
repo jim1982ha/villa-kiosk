@@ -140,8 +140,8 @@ export default function AgentTodo() {
       ) : items.length === 0 ? (
         <p className="muted body-text">
           Nothing outstanding. A row appears here when the villa tells somebody
-          about something, and leaves when it is ticked off — here, on the
-          to-do list itself, or with the Done button on the message.
+          about something, and leaves when it is ticked off — here, or on the
+          to-do list itself.
         </p>
       ) : (
         <p className="muted body-text">

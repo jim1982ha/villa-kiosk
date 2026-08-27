@@ -421,7 +421,8 @@ async def investigate(*, provider: Provider,
 
 # ⚠️ `is_shadow` LIVED HERE AND IS GONE, and so — since 2026-08-28 — is the
 # module that superseded it. `agent/shadow.py` held "run everything, deliver
-# nothing"; the owner ruled that Investigate & Log Only delivers an FYI
+# nothing"; the owner ruled that Alert only (then "Investigate & Log Only")
+# delivers an FYI
 # instead of nothing, so the delivery class is now a stamp on the concern
 # (`Concern.informational`, set in `tools/concern.writer`) and there is no
 # suppression predicate left to own.

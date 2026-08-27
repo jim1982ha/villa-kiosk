@@ -1,3 +1,14 @@
+## 2.830.0
+
+### Fixed — the To-Do List promised a button that no longer exists
+Its empty state told the reader an item leaves "with the Done button on the
+message". Yesterday's change stopped the add-on firing the event that put that
+button there, so the sentence described machinery retired hours earlier — the
+one visible case of six. The others were comments: four still credited the
+blueprint's Done button for work `task.reconcile_done` now does, and one
+described the three modes by names the same day renamed. Each was true when
+written and nothing checks a sentence, so none of them could go red.
+
 ## 2.829.0
 
 ### Fixed — a check said "5 items flagged" above two cards and explained neither

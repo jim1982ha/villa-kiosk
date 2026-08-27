@@ -289,7 +289,8 @@ def writer(policy: Any, config: Optional[Mapping[str, Any]] = None
     ⚠️ THE SHADOW STORE IS GONE FROM THIS PATH (2026-08-28, owner's ruling).
     Observe-mode concerns used to land in a separate file and be delivered to
     nobody — the cutover-measurement design. The owner has since ruled that
-    "Investigate & Log Only" means the concern is visible on the Reason tab
+    "Alert only" — named "Investigate & Log Only" at the time — means the
+    concern is visible on the Reason tab
     and told once as an FYI; what the mode withholds is ESCALATION and the
     to-do job, and `informational` below is how the outbox knows.
 

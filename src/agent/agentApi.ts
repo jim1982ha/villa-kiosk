@@ -71,10 +71,15 @@ const AGENT_WIRE_KEYS = {
    *  `allowed_senders`, which is kept and still read when this is empty so an
    *  existing villa's bot does not go deaf on upgrade. */
   people: "people",
-  /** ⚠️ THE FACILITY MANAGER LIST. Empty means the loop is off: a delivered concern
-   *  reaches a person and becomes nothing anybody is asked to DO. Naming a list
-   *  turns each delivered concern into a job with the rule id in its summary,
-   *  which is what `vesta_task_actions.yaml`'s "Done" button completes. */
+  /** ⚠️ THE FACILITY MANAGER LIST. Empty means the loop is off: a delivered
+   *  alert reaches a person and becomes nothing anybody is asked to DO. Naming
+   *  a list turns each delivered alert into a to-do item with the rule id in
+   *  its summary — which is what `ledger.TASK_PREFIX` parses, what the To-Do
+   *  List tab ticks, and what `task.reconcile_done` joins on to mark the alert
+   *  seen however the item was ticked.
+   *  ⚠️ IT USED TO SAY "which is what `vesta_task_actions.yaml`'s Done button
+   *  completes". That blueprint is inert since 2026-08-28 — nothing fires it —
+   *  so the bracket's reader changed while the bracket did not. */
   task_list: "taskList",
   actuable_entities: "actuableEntities",
   allowed_services: "allowedServices",

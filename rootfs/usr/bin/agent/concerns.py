@@ -115,7 +115,8 @@ class Concern:
     useful_at: str = ""
     useful_note: str = ""
     #: ⚠️ STAMPED AT RAISE TIME FROM THE VILLA'S MODE, NEVER DERIVED FROM THE
-    #: MODE LATER (2026-08-28, owner's ruling). In "Investigate & Log Only" a
+    #: MODE LATER (2026-08-28, owner's ruling). In "Alert only" (the mode was
+    #: called "Investigate & Log Only" when this was written) a
     #: concern is still raised into THIS store and still delivered — as an FYI:
     #: told once, never escalated, never turned into a to-do job, nothing asked
     #: of anybody. Reading the villa's CURRENT mode instead would relabel every

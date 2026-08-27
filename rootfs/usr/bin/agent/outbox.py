@@ -544,11 +544,13 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     # answered, and the first villa where the two disagreed would have a job
     # nobody was told about or a message with no job behind it.
     #
-    # ⚠️ EXCEPT AN FYI, WHICH RAISES NO JOB BY DEFINITION (2026-08-28, owner's
-    # ruling). "Investigate & Log Only" means nothing is asked of anybody — a
-    # to-do item with a Done button IS asking — so the informational stamp is
-    # the one thing that stands between a concern and the task loop. This is
-    # not a severity threshold: it is the same mode decision the stamp records.
+    # ⚠️ EXCEPT AN FYI, WHICH RAISES NO TO-DO ITEM BY DEFINITION (2026-08-28,
+    # owner's ruling). "Alert only" — the mode was called "Investigate & Log
+    # Only" when this was written — means nothing is asked of anybody, and an
+    # item on somebody's list IS asking, whether or not anything announces it.
+    # So the informational stamp is the one thing standing between an alert and
+    # the to-do loop. Not a severity threshold: the same mode decision the
+    # stamp records.
     if not bool(concern.get("informational")):
         from agent import task as task_mod
         await task_mod.raise_for(session, concern, config=config)

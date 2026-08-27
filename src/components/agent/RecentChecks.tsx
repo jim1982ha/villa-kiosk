@@ -18,12 +18,13 @@
 //
 // ⚠️ THE THREE MODES DRAW THE SAME CARD WITH A DIFFERENT AFFORDANCE, because
 // what a flag CAN become differs by mode and nothing on screen used to say so:
-//   Flag & Ask                   → Investigate / Cancel. It is waiting for you.
-//   Investigate & Log Only       → whether a Concern came out of it — since
-//                                  2026-08-28 those land on the Reason tab
-//                                  too, marked "for your information".
-//   Investigate & Log +Escalation → whether a Concern came out of it, and
-//                                  concerns live on the Reason tab.
+//   Ask first     → Investigate / Cancel. It is waiting for you.
+//   Alert only    → whether an Alert came out of it; those land on the Reason
+//                   tab too, marked "for your information".
+//   Alert & chase → whether an Alert came out of it, and Alerts live on the
+//                   Reason tab.
+// (Renamed 2026-08-28 from Flag & Ask / Investigate & Log Only / Investigate &
+//  Log +Escalation. The STORED ids — ask, observe, live — are unchanged.)
 //
 // ⚠️ THE PASS→OUTCOME RULES LIVE HERE (2.756.0). They parse literals that
 // `agent/scheduler.py` and `agent/audit.py` produce, in two languages, with
