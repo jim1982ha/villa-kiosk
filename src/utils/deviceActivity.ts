@@ -86,11 +86,15 @@ export function badgeFaceAndRing(
   return { face, ring: linkedOn ? "alert" : face };
 }
 
-/** `badgeKindFor` resolved straight to the surface row, for the callers that
- *  only ever want the painted state. */
-export function badgeSurfaceFor(type: EntityType, s: HassEntity, linkedOn: boolean): DeviceSurfaceState {
-  return SURFACE_STATE[badgeKindFor(type, s, linkedOn)];
-}
+/* ⚠️ `badgeSurfaceFor` WAS DELETED HERE (2026-08-28), and how it survived is
+ * the point. It resolved `badgeKindFor` straight to the surface row "for the
+ * callers that only ever want the painted state" — there were none, and there
+ * never had been. It stayed invisible to /dry-audit's unused-export probe
+ * because `Dashboard.tsx` carried a comment crediting "the ONE shared rule
+ * (deviceActivity.badgeSurfaceFor)" beside code that calls `badgeFaceAndRing`,
+ * and the probe counted that prose as a consumer. A wrong sentence kept a dead
+ * function alive by hiding it from the tool that looks for dead functions.
+ * Both are fixed; the probe now strips comments. Git has the body. */
 
 // A known-bad enum/status reading — the value stays shown and the badge
 // rings red/alerts, so a real change is never silently swallowed. An

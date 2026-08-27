@@ -1,3 +1,12 @@
+// src/main.tsx — the app's entry point.
+//
+// ⚠️ NOTHING IN `src/` IMPORTS THIS, AND THAT IS WHAT AN ENTRY POINT IS.
+// `index.html` loads it with a <script type="module">, so /dry-audit's
+// unimported-module probe reports it every run. The verdict is written here
+// rather than re-derived: this file and `App.tsx` are the only two directly in
+// `src/`, which is also why the probe's old `src/**/*.tsx` glob never saw
+// either of them — that form misses the top level. Recorded 2026-08-28, the
+// first run whose glob could reach this file.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";

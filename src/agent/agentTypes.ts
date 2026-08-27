@@ -16,6 +16,17 @@
  * threshold. Vocabulary only.
  */
 
+/* ⚠️ THE `export type X = (typeof ARR)[number]` ALIASES BELOW HAVE NO
+ * CONSUMER IN `src/`, AND THAT IS CORRECT. Each one names a set the BACKEND
+ * owns; this file is the mirror, and a mirror with holes in it is what lets a
+ * value arrive here and render as the set's first member. They are used by
+ * type position in the interfaces further down and by anything importing this
+ * vocabulary later — /dry-audit's unused-export probe cannot see either, so it
+ * reports all nine every run. Verdict recorded once, here, rather than
+ * re-adjudicated: the same treatment `AGENT_CONTRACT_VERSION` below and
+ * `isTicketOpen` in fmEngine already carry. Deleting one to quiet the probe
+ * would be deleting half a contract. */
+
 /** Bumped when a value's MEANING changes; never for an addition.
  *
  *  ⚠️ NOTHING IN THIS APP IMPORTS THIS, AND DELETING IT BREAKS A TEST — the

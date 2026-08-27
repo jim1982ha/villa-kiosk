@@ -914,7 +914,7 @@ export default function Dashboard() {
                 iconKey: iconKeyFor(mapping.type, ent),
                 color: liveMapping.badgeColor,
                 categoryColor: categoryColor(category),
-                // The ONE shared rule (deviceActivity.badgeSurfaceFor), same as
+                // The ONE shared rule (deviceActivity.badgeFaceAndRing), same as
                 // the map badge and the device lists — it already folds in the
                 // unavailable check every status pill uses and the linked-entity
                 // alert, both of which were hand-written here.
