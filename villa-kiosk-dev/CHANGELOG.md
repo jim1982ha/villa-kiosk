@@ -1,3 +1,14 @@
+## 2.802.0
+
+### Changed — "Investigate & Log Only" now shows and tells: its concerns reach the Reason tab and arrive once as an FYI
+Observe mode hid concerns in a shadow store and delivered nothing — the
+retired cutover-measurement design, which read as "the agent found nothing".
+By the owner's ruling a concern raised there is now stamped informational: on
+the Reason tab marked "for your information — nothing to do", sent once with
+an FYI title, never pushed, escalated or turned into a to-do job;
+`agent/shadow.py` is deleted. "Check the villa now" also moved onto the
+summary line above "Cancel all", beside the totals its checks change.
+
 ## 2.801.0
 
 ### Changed — the flag card is one column, and the old record style is gone
