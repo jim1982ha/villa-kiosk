@@ -1073,3 +1073,130 @@ def test_the_scheduler_READS_the_layout() -> None:
                      if not l.strip().startswith("#"))
     assert "refresh_layout(" in code, (
         "nothing refreshes the villa's layout, so the document names no room")
+
+
+# ── the offline block, wired (2026-08-27) ───────────────────────────────────
+def test_build_document_NAMES_the_devices_that_are_not_reporting(
+        monkeypatch: Any, tmp_path: Any) -> None:
+    """⚠️ THE WIRING, WHICH IS WHERE THIS DEFECT LIVED. `snapshot.delta` renders
+    an offline block correctly the moment it is handed one; the bug was that
+    nothing ever handed it one, so a device going offline had NO channel into
+    the document and triage answered "nothing to escalate" on a healthy 4,874
+    character document. A pin on the renderer alone stays green through exactly
+    that — `feedback_pin-the-caller`, for the fifteenth time here.
+
+    ⚠️ AND THE STATES COME FROM THE JOURNAL, so this test writes one rather than
+    faking a `get_states`: `build_document`'s contract is that every source is
+    LOCAL, which is what keeps a triage pass cheap on a clock and what lets the
+    proxy's document preview render with no session at all.
+    """
+    from observe import journal
+    from reports import devices as devices_mod
+    from reports import model as model_mod
+
+    monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "j.json"))
+    journal.append([{"event_type": "state_changed",
+                     "time_fired": "2026-08-27T09:00:00+00:00",
+                     "data": {"entity_id": "lock.side_gate",
+                              "old_state": {"state": "locked", "attributes": {}},
+                              "new_state": {"state": "unavailable",
+                                            "attributes": {}}}},
+                    {"event_type": "state_changed",
+                     "time_fired": "2026-08-27T09:00:01+00:00",
+                     "data": {"entity_id": "lock.front_gate",
+                              "old_state": {"state": "unlocked", "attributes": {}},
+                              "new_state": {"state": "locked", "attributes": {}}}}],
+                   now_iso="2026-08-27T09:00:01+00:00")
+
+    monkeypatch.setattr(devices_mod, "read_config", lambda *a, **k: {
+        "entityMap": {"lock.side_gate": {"label": "Side Gate"},
+                      "lock.front_gate": {"label": "Front Gate"}}})
+    monkeypatch.setattr(model_mod, "mesh_entity_ids", lambda *a, **k: [])
+
+    document = sources.build_document()
+    assert "Not reporting right now" in document
+    assert "Side Gate" in document, (
+        "a device whose last observed state is `unavailable` never reached the "
+        "document, so triage cannot see an offline device at all")
+    # ⚠️ THE OTHER DIRECTION. A block that listed everything would be as
+    # useless as one that listed nothing — a healthy device must not appear.
+    offline_block = document[document.index("Not reporting right now"):]
+    offline_block = offline_block[:offline_block.index("\n\n")]
+    assert "Front Gate" not in offline_block, offline_block
+
+
+def test_the_offline_list_uses_the_SHARED_predicate_not_a_fourth_copy() -> None:
+    """⚠️ "WHAT COUNTS AS A DEVICE OF THIS VILLA" HAS ONE ANSWER, and this repo
+    has paid for re-deriving it twice (`readiness.ts` had two definitions on one
+    screen; `standing.build` had `filter_unavailable`'s body inlined). The kiosk
+    is pinned against `reports.devices` by `test_consistency_parity`, so the
+    agent joining that agreement is what keeps the tablet, the brief and the
+    assistant from disagreeing about which devices are down."""
+    import inspect
+
+    source = inspect.getsource(sources._offline_devices)
+    assert "unavailable_device_ids" in source, (
+        "the offline list is derived some other way, so the agent can now "
+        "disagree with the kiosk and the brief about what is offline")
+    assert "last_states" in source, (
+        "the states no longer come from the journal, so build_document has "
+        "acquired a network call and is no longer renderable without a session")
+
+
+def test_the_offline_list_is_SORTED_so_the_cached_prefix_survives(
+        monkeypatch: Any, tmp_path: Any) -> None:
+    """⚠️ `selectable_device_ids` WALKS A SET, so its order is not stable between
+    runs. An unsorted list would reshuffle the delta on every pass over an
+    unchanged villa — not wrong on screen, and it quietly quadruples the bill,
+    which is the failure mode TEST-005 exists for one section higher."""
+    from observe import journal
+    from reports import devices as devices_mod
+    from reports import model as model_mod
+
+    monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "j.json"))
+    events = [{"event_type": "state_changed",
+               "time_fired": "2026-08-27T09:00:00+00:00",
+               "data": {"entity_id": f"lock.gate_{n}",
+                        "old_state": {"state": "locked", "attributes": {}},
+                        "new_state": {"state": "unavailable", "attributes": {}}}}
+              for n in ("c", "a", "b")]
+    journal.append(events, now_iso="2026-08-27T09:00:00+00:00")
+    monkeypatch.setattr(devices_mod, "read_config", lambda *a, **k: {
+        "entityMap": {f"lock.gate_{n}": {} for n in ("c", "a", "b")}})
+    monkeypatch.setattr(model_mod, "mesh_entity_ids", lambda *a, **k: [])
+
+    named, total = sources._offline_devices()
+    assert named == sorted(named) and total == 3, (named, total)
+
+
+def test_an_empty_journal_does_not_report_the_WHOLE_VILLA_as_offline(
+        monkeypatch: Any, tmp_path: Any) -> None:
+    """⚠️ THE COLD-START FALSE ALARM, AND IT IS THE REASON FOR THE EARLY RETURN.
+
+    `is_unavailable(None)` is TRUE — "absent counts, and that is load-bearing"
+    — because on the kiosk a device the entity map names and Home Assistant has
+    never heard of really is not reporting. Here the map of states is the
+    JOURNAL, so before the first observe cycle EVERY device is absent from it,
+    and the shared rule would correctly conclude that all of them are offline.
+    The first brief after every restart would open by naming the whole villa as
+    down.
+
+    ⚠️ THE FIRST VERSION OF THIS TEST PASSED THE MUTATION THAT DELETES THE
+    GUARD, because it used an empty entity map and no meshes — so the answer
+    was `([], 0)` either way and the pin measured nothing. It needs a villa with
+    devices in it to be able to fail, which is `feedback_mutation-testing`'s
+    whole point: a test is unproven until it has gone red.
+    """
+    from observe import journal
+    from reports import devices as devices_mod
+    from reports import model as model_mod
+
+    monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "empty.json"))
+    monkeypatch.setattr(devices_mod, "read_config", lambda *a, **k: {
+        "entityMap": {"lock.front_gate": {}, "light.hall": {}}})
+    monkeypatch.setattr(model_mod, "mesh_entity_ids",
+                        lambda *a, **k: ["lock.front_gate", "light.hall"])
+
+    assert sources._offline_devices() == ([], 0), (
+        "with no observations yet, the villa was reported as entirely offline "
+        "— a cold start would alarm about every device it has")

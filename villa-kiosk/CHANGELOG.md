@@ -1,3 +1,16 @@
+## 2.805.0
+
+### Fixed — the assistant could not see a device that had gone offline
+Found by taking a critical device offline: triage answered "nothing to
+escalate" on a healthy 4,874-character document, because the document had
+nowhere for it to appear. Everything in the delta is scored by salience,
+which reads numbers and deliberately refuses `unavailable`, so an offline
+device had no channel at all — while the kiosk, Readiness and the briefing
+all showed it. The delta now carries a "Not reporting right now" block from
+the same shared predicate those three use, built from the journal so a pass
+stays local and cheap. It speaks when empty, names its truncation, and is
+silent on a cold start rather than reporting the whole villa as down.
+
 ## 2.804.0
 
 ### Fixed — a check card and its own flags showed times eight hours apart

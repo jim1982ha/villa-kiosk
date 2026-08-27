@@ -341,3 +341,64 @@ def test_the_rendered_document_carries_no_entity_id() -> None:
         r"(?:^|[\s(])((?:sensor|switch|light|binary_sensor|climate|fan|cover|"
         r"lock|todo|automation|person|device_tracker|input_\w+)\.\w+)", text)
     assert not ids, f"entity id(s) in the profile: {ids}"
+
+
+# ── the offline block (2026-08-27) ──────────────────────────────────────────
+def test_a_device_that_is_OFFLINE_reaches_the_document_at_all() -> None:
+    """⚠️ THE BLIND SPOT THIS BLOCK EXISTS TO CLOSE, MEASURED END TO END.
+
+    Everything else in the delta is scored by `salience`, which reads NUMBERS —
+    `_numeric()` refuses `unavailable`/`unknown` deliberately, because a
+    previous system read unavailable as -999999 and fired every low-battery
+    alert. Correct, and it left a device going OFFLINE with no channel into
+    this document: no score, no row, nothing. On the reference villa a critical
+    entity was taken offline, the document rendered HEALTHY at 4,874 characters,
+    and triage answered "nothing to escalate" — because it was never told.
+
+    The kiosk shows offline devices, Readiness shows them, and the brief's
+    standing section shows them; the tier that SUPERVISES could not see them.
+    Two correct halves with nothing joining them.
+    """
+    body = snapshot.delta(offline=["lock.front"], offline_total=1,
+                          label_of=lambda i: "Entrance Lock")
+    assert "Entrance Lock" in body
+    assert "Not reporting right now" in body
+
+
+def test_the_offline_block_SPEAKS_WHEN_EMPTY() -> None:
+    """⚠️ A SECTION THAT VANISHES WHEN ALL IS WELL IS INDISTINGUISHABLE FROM A
+    BROKEN ONE — the instrument shape this project has been caught by five
+    times. "Everything is reporting" is a finding and has to be stated, exactly
+    as the ranked excerpt states "Nothing is behaving unusually for itself"."""
+    body = snapshot.delta()
+    assert "Not reporting right now" in body
+    assert "every device this villa knows about is reporting" in body
+
+
+def test_a_truncated_offline_list_SAYS_it_was_truncated() -> None:
+    """⚠️ A CAPPED LIST THAT GOES SILENT ABOUT THE CAP IS A CLAIM THAT THE VILLA
+    HAS EXACTLY THIS MANY OFFLINE DEVICES, and the reader acts on it. The cap
+    itself is a cost bound — the document is the prefix and the prefix is the
+    bill — never a judgement about which devices matter."""
+    body = snapshot.delta(offline=["a.b", "c.d"], offline_total=9)
+    assert "and 7 more" in body, body
+
+
+def test_the_offline_block_uses_LABELS_and_falls_back_to_the_id() -> None:
+    """⚠️ Same ladder as the ranked excerpt: labels never ids, and the id rather
+    than nothing when no label exists — a row nobody can name is still worth
+    more than a row that is not there."""
+    body = snapshot.delta(offline=["lock.front", "sensor.odd"], offline_total=2,
+                          label_of=lambda i: "Entrance Lock" if i == "lock.front" else "")
+    assert "Entrance Lock" in body
+    assert "sensor.odd" in body
+
+
+def test_the_offline_block_is_in_the_DELTA_and_never_the_profile() -> None:
+    """⚠️ IT IS A STATE, NOT STRUCTURE. `profile()` sits above the cache
+    breakpoint, so anything there that changes with the clock silently ends
+    prefix caching and multiplies the bill — its own comment defers "devices
+    currently unavailable" to the delta for exactly this reason."""
+    profile_text = snapshot.profile(**dict(VILLA))
+    assert "Not reporting right now" not in profile_text
+    assert "Not reporting right now" in snapshot.delta()

@@ -42,7 +42,7 @@ import calendar
 import time
 
 from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
-                    Set)
+                    Set, Tuple)
 
 from agent.refs import RefTable
 from agent.tools.base import BaseTool
@@ -464,13 +464,86 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
         swallow("could not rank the villa's novelty", err)
         ranked, unscorable = [], 0
 
+    offline, offline_total = _offline_devices()
+
     delta_text = snapshot_mod.delta(
         salient=ranked, unscorable=unscorable,
+        offline=offline, offline_total=offline_total,
         concerns=_open_concerns(), ledger=_facility_record(),
         coverage=_coverage(now=now, window_hours=window_hours),
         label_of=labeller())
     return snapshot_mod.villa_document(profile_text=profile_text,
                                        delta_text=delta_text)
+
+
+#: How many offline devices the document names before it summarises the rest.
+#: ⚠️ A COST BOUND, NOT A JUDGEMENT ABOUT WHICH MATTER. The document is the
+#: prefix and the prefix IS the bill; a villa whose mesh drops overnight would
+#: otherwise put two hundred names into every pass. The REST ARE COUNTED, never
+#: dropped silently — see `snapshot.delta`.
+DOCUMENT_OFFLINE_LIMIT: int = 15
+
+
+def _offline_devices() -> Tuple[List[str], int]:
+    """Devices not reporting right now: `(named, total)`. Never raises.
+
+    ⚠️ THE SHARED PREDICATE, NOT A FOURTH DEFINITION OF "A DEVICE OF THIS
+    VILLA". `reports.devices.selectable_device_ids` + `filter_unavailable` are
+    what the kiosk's `deviceGroups.unavailableDeviceIds` is pinned against by
+    `test_consistency_parity`, and what the brief's `standing.build` already
+    calls — so the agent joins that agreement rather than deciding for itself
+    what counts as offline. `filter_unavailable`'s own docstring asks callers to
+    do exactly this; the release that inlined those three lines instead is
+    recorded there.
+
+    ⚠️ THE STATES COME FROM THE JOURNAL, NOT FROM A `get_states` CALL, AND THAT
+    IS DELIBERATE. `build_document`'s contract is that every source is LOCAL —
+    it is what keeps a triage pass cheap enough to run on a clock, and it is
+    also what lets the proxy's document preview render with no session at all.
+    `journal.last_states()` already exists for the restart baseline and holds
+    each entity's most recently observed state, so the answer is at most one
+    observe cycle old (15 minutes by default). A device that dropped in the last
+    few minutes is therefore absent from this list, which is the same latency
+    every other line of the delta carries.
+
+    ⚠️ `is_unavailable` READS ONLY `state`, so the journal's `id -> state` map is
+    reshaped into the `{id: {"state": s}}` the shared rule expects rather than
+    the rule being loosened to accept two shapes. The synthesised map is also
+    what `dismissed_set` and the config-debris rule test membership against,
+    which is correct: an entity the journal has never seen is one this villa has
+    no evidence about, and claiming it is offline would be inventing a fact.
+    """
+    try:
+        from observe import journal as journal_mod
+        from reports import devices as devices_mod
+        from reports import model as model_mod
+
+        states = journal_mod.last_states()
+        if not states:
+            # ⚠️ AN EMPTY JOURNAL IS NOT AN EMPTY VILLA. On a cold start there
+            # is no evidence either way, and "everything is reporting" is a
+            # claim; returning nothing lets the section say so honestly.
+            return [], 0
+        entities = {entity_id: {"state": state}
+                    for entity_id, state in states.items()}
+        config = devices_mod.read_config()
+        entity_map = config.get("entityMap") or {}
+        device_groups = config.get("deviceGroups") or []
+        dismissed = config.get("dismissedEntityIds") or []
+        unavailable = devices_mod.unavailable_device_ids(
+            entity_map if isinstance(entity_map, dict) else {},
+            device_groups if isinstance(device_groups, list) else [],
+            model_mod.mesh_entity_ids(),
+            entities,
+            dismissed if isinstance(dismissed, list) else [])
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not list the devices that are not reporting", err)
+        return [], 0
+    # ⚠️ SORTED, BECAUSE THE DOCUMENT IS CACHED. `selectable_device_ids` walks a
+    # SET of mesh ids, so its order is not stable between runs — an unsorted
+    # list would reshuffle the delta on every pass for no change in the villa.
+    ordered = sorted(unavailable)
+    return ordered[:DOCUMENT_OFFLINE_LIMIT], len(ordered)
 
 
 def _coverage(*, now: Optional[float] = None,
