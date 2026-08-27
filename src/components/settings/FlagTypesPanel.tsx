@@ -38,19 +38,14 @@ import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import { downloadFile } from "@/utils/download";
 
-/** The multiplier as a percentage, for the reader who wants it in words.
- *
- *  ⚠️ THE NUMBER ITSELF IS THE CONTROL AND THIS IS ONLY A GLOSS (owner's
- *  design, 2026-08-28). An earlier cut stored an integer score and printed a
- *  sentence explaining what it meant, because the number meant nothing alone;
- *  `1.1` and `0.8` need no explanation, so this sits beside the value in muted
- *  text rather than standing in for it. */
-function effectOf(factor: number): string {
-  const pct = Math.round((factor - 1) * 100);
-  if (pct === 0) return "raised as it comes";
-  return pct > 0 ? `raised ${pct}% more readily`
-                 : `raised ${Math.abs(pct)}% less readily`;
-}
+/* ⚠️ `effectOf` WAS DELETED HERE (2026-08-28, owner: "I feel this is redundant
+ * information and confusing the user"). It rendered "raised 20% less readily"
+ * beside 0.8 — a sentence restating the number it sat next to. It was written
+ * one release after the same owner replaced an integer score WITH that number
+ * precisely so no sentence would be needed, so it re-created the problem the
+ * redesign removed, in smaller type. The percentage still exists where it
+ * belongs: in the (i), which explains the scale once instead of on every
+ * row. */
 
 export default function FlagTypesPanel() {
   const { role } = useProfile();
@@ -178,10 +173,25 @@ export default function FlagTypesPanel() {
         <ul className="fm-list">
           {rows.map((r) => (
             <li className="editable-row" key={r.key}>
+              {/* ⚠️ THE LABEL AND THE NUMBER, AND NOTHING ELSE (owner,
+                  2026-08-28). This row carried two extra things and both were
+                  wrong to be here. "raised 20% less readily" TRANSLATED 0.8
+                  into words — but the whole reason the store holds a
+                  multiplier rather than a score is that the number needs no
+                  translation, so the gloss argued against its own design.
+                  "0 useful, 2 not" was the thumb tally, kept on the reasoning
+                  that a neutral value is reached both by never judging and by
+                  judging once each way; under a multiplier a row only EXISTS
+                  once judged, so the row's presence already says it.
+
+                  ⚠️ THE TALLY IS NOT DELETED, IT IS MOVED. It is real stored
+                  data and it rides the export; it sits in the row's tooltip,
+                  where a reader who wants it can find it and a reader
+                  scanning the list is not charged for it. */}
               <div className="editable-row-fields">
-                <span className="body-text">{r.label}</span>
-                <span className="muted body-text">
-                  {effectOf(r.factor)} · {r.up} useful, {r.down} not
+                <span className="body-text"
+                      title={`${r.up} useful, ${r.down} not useful`}>
+                  {r.label}
                 </span>
               </div>
               {mayEdit && (

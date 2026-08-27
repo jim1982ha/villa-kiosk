@@ -1,3 +1,13 @@
+## 2.824.0
+
+### Changed — a tuned kind shows its name and its number, and nothing else
+Each row also carried "raised 20% less readily" beside 0.8 — a sentence
+restating the number next to it — and a running tally of thumbs. The sentence
+undid the point of holding a multiplier at all: the number needs no
+translation, and the scale is explained once in the (i) rather than on every
+row. The tally moves to the row's tooltip, where it is still readable and no
+longer competes with the two things a reader came for.
+
 ## 2.823.0
 
 ### Changed — a wrong comment was keeping a dead function alive by hiding it
