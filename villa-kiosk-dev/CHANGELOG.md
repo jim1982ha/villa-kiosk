@@ -1,3 +1,16 @@
+## 2.803.0
+
+### Fixed — a critical alert that never named the device it was about
+`critical_watchdog` delivered `has been "unavailable" for over 0.2 minutes`
+with no device in it, on a list where any of ten entities could be the one
+that failed. The cause was `entity_name(...)`, which is not a Home Assistant
+template function: it renders EMPTY instead of raising, so the automation
+succeeded and the sentence had a hole in it. The same call sat at four more
+sites in `critical_schedule`, whose rarer alerts were nameless too and had
+never been reported. Both now use `state_attr` with the entity_id as a
+fallback, and `test_blueprint_templates.py` scans for the call form.
+⚠️ **Re-import both blueprints** — they are delivered by hand.
+
 ## 2.802.0
 
 ### Changed — "Investigate & Log Only" now shows and tells: its concerns reach the Reason tab and arrive once as an FYI
