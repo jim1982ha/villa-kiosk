@@ -937,3 +937,34 @@ def test_the_observe_tab_reads_the_JOURNAL_not_the_event_collector() -> None:
     assert "buffered" not in head, (
         "the collector's event buffer is back under a heading about what the "
         "checks read — those are different subsystems")
+
+
+def test_the_triage_card_and_its_flags_share_ONE_clock() -> None:
+    """⚠️ ONE CARD SHOWED TWO CLOCKS EIGHT HOURS APART (2026-08-27).
+
+    `audit._now_iso` stamps every row in UTC (`%Y-%m-%dT%H:%M:%SZ`), which is
+    the only sane thing to store. The FLAG rows rendered it through `whenOf`,
+    so they read the viewer's local time; the CHECK heading printed the raw
+    string with `T` swapped for a space. On a villa at UTC+8 that put
+    `2026-08-27 03:35` as the heading of a card whose own flags said
+    `27 Aug, 11:34`, and the owner reasonably reported the list as being out
+    of ORDER. It was not — the checks were correctly newest-first, in UTC,
+    which is invisible when half the card is in local time.
+
+    ⚠️ PINNED AS "NO RAW STAMP REACHES THE SCREEN", NOT AS "whenOf IS CALLED".
+    A test asserting the call site would pass the moment somebody added a
+    second raw render elsewhere in the file, which is exactly how this arrived.
+    """
+    panel = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    # The fallback INSIDE whenOf is the one legitimate raw slice: an
+    # unparseable stamp is better shown as itself than as "Invalid Date".
+    body = panel[panel.index("const whenOf"):]
+    body = body[body.index("\n};"):]
+    offenders = re.findall(r'\breplace\("T", " "\)', body)
+    assert not offenders, (
+        "a timestamp is rendered raw (UTC) outside `whenOf`, so it will "
+        "disagree with every other time on the same card by the viewer's "
+        "UTC offset")
+    assert "whenOf(pass.at)" in panel, (
+        "the check heading no longer renders its time through the shared "
+        "formatter, so it is back on a different clock from its flags")

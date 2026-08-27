@@ -73,7 +73,20 @@ export function yieldOf(reason: string): { looked: number; raised: number } {
 // longer listed at all, so nothing needs names a card cannot carry.
 
 
-/** `2026-08-26T19:09:12` → `26 Aug 19:09` — short enough for a status line. */
+/** `2026-08-26T19:09:12Z` → `26 Aug 19:09` IN THE READER'S OWN TIME ZONE.
+ *
+ *  ⚠️ THE ONE CLOCK ON THIS SCREEN, AND IT USED TO BE TWO (2026-08-27).
+ *  `audit._now_iso` stamps every row in UTC (`%Y-%m-%dT%H:%M:%SZ`) — correct,
+ *  and the only sane thing to store. The flag rows rendered it through here,
+ *  so they read local time; the CHECK heading printed the raw string with the
+ *  `T` swapped for a space. On a villa at UTC+8 that put `2026-08-27 03:35`
+ *  as the heading of a card whose own flags said `27 Aug, 11:34` — one card,
+ *  two clocks, eight hours apart, and the owner reasonably read it as the
+ *  list being out of order. It was not: the checks were correctly newest-first
+ *  in UTC, which is invisible when half the card is in local time.
+ *
+ *  The fallback still slices the raw string, because an unparseable stamp is
+ *  better shown as itself than as "Invalid Date". */
 const whenOf = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.replace("T", " ").slice(0, 16);
@@ -472,9 +485,10 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
               <div className="editable-row">
                 <div className="editable-row-fields editable-row-tight">
                   <div className="body-text">
-                    <span className="muted">
-                      {pass.at.replace("T", " ").slice(0, 16)}
-                    </span>{" · "}
+                    {/* ⚠️ `whenOf`, NOT THE RAW STRING. See its header: this
+                        printed UTC beside flag rows printing local time, so a
+                        card read 03:35 over items stamped 11:34. */}
+                    <span className="muted">{whenOf(pass.at)}</span>{" · "}
                     {outcome === "raised" ? (
                       <>
                         <strong>

@@ -14,10 +14,10 @@ only thing that can catch it is a scan.
 A critical notification that never names the device it is about, on a villa
 where the whole point of the list is that any one of ten entities might be the
 one that failed. The cause was `entity_name(trigger.entity_id)`. Verified
-against the live template engine: `entity_name('lock.test_lock')` renders ``
-while `state_attr('lock.test_lock','friendly_name')` renders `Test Lock` —
-including while the entity is unavailable, which is the only state this
-blueprint ever renders in.
+against a live template engine: for the same entity, `entity_name(...)`
+renders the empty string while `state_attr(..., 'friendly_name')` renders its
+name — including while that entity is UNAVAILABLE, which is the only state
+this blueprint ever renders in.
 
 ⚠️ AND THE GREP FOUND A SECOND FILE THE REPORT DID NOT MENTION.
 `critical_schedule.yaml` had the same call at FOUR sites, so all four of its
