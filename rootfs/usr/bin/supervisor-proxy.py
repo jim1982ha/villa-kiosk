@@ -2621,6 +2621,94 @@ async def agent_audit_handler(request: web.Request) -> web.Response:
     })
 
 
+async def _agent_drill(request: web.Request,
+                       body: Dict[str, Any]) -> web.Response:
+    """Raise ONE synthetic concern and carry it, with no model in the path.
+
+    ⚠️ THIS EXISTS BECAUSE THE DELIVERY HALF COULD NOT BE TESTED ON PURPOSE.
+    Tiers 1–3 end in two model judgements — triage decides whether to escalate,
+    the investigation decides whether to raise — and both are instructed to
+    conclude NOTHING rather than speak weakly. So "does a concern actually
+    reach my phone and my to-do list?" was answerable only by waiting for the
+    villa to genuinely go wrong. A fire alarm you cannot test is not a fire
+    alarm. This is the test button: deterministic, because no model is asked.
+
+    ⚠️ IT IS THE REAL PATH, NOT A REHEARSAL OF ONE. The concern goes through
+    `tools.concern.writer` — the same sink the model's tool uses, so it
+    inherits suppression and the `informational` stamp for the villa's mode —
+    and then through `scheduler.dispatch`, which is the same routing, delivery,
+    to-do and escalation sweep a scheduled pass runs. Nothing here duplicates a
+    rule; if it passes, the real thing works.
+
+    ⚠️ WHAT IT DOES NOT PROVE, SAID OUT LOUD SO NO REPORT CAN IMPLY IT: the
+    document, triage and the investigation are NOT exercised. This starts at
+    the concern. A drill that claimed to prove the whole pipeline would be a
+    green light nobody had earned.
+
+    ⚠️ THE MESSAGE ANNOUNCES ITSELF AS A DRILL, in the title, so a person
+    reading it on a phone at 3am is never frightened by our test. And it is
+    `topic:`-keyed, so it can never collide with a real device's subject.
+    """
+    from agent import concerns as agent_concerns
+    from agent import contracts as agent_contracts
+    from agent import policy as agent_policy
+    from agent import scheduler as agent_scheduler
+    from agent.tools import concern as concern_tool
+
+    stored = _read_json_store(AGENT_CONFIG_FILE, {})
+    # ⚠️ THE OWNER CHOOSES THE SEVERITY, because it selects which downstream
+    # rules run: only a `critical` pushes and only a `critical` is ever chased
+    # by the escalation ladder. Defaulting to `warning` keeps the common drill
+    # quiet-hours-respecting and un-chased; passing `critical` is how the
+    # ladder itself gets tested.
+    severity = str(body.get("severity") or "warning").lower()
+    if severity not in agent_contracts.SEVERITY:
+        return web.json_response(
+            {"error": f"severity must be one of "
+                      f"{sorted(agent_contracts.SEVERITY)}"}, status=400)
+
+    subject = "vesta pipeline drill"
+    concern = agent_concerns.Concern(
+        subject_key=agent_contracts.subject_key(f"topic:{subject}"),
+        title="Pipeline drill — this is a test, nothing is wrong",
+        body=("This message was produced by the villa's own end-to-end test. "
+              "No equipment is affected and nothing needs doing. It exists to "
+              "prove that a concern reaches you, and it can be dismissed."),
+        severity=severity, audience="owner", confidence=1.0,
+        # ⚠️ EVIDENCE IS REQUIRED BY `contracts.concern_errors` — "every claim
+        # must cite a tool result" — and a drill's honest citation is itself.
+        evidence=[{"tool": "drill", "args_digest": "-",
+                   "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                   "summary": "synthetic concern raised by the pipeline test"}])
+
+    with reports_log.pass_scope("drill"):
+        reports_log.log("── drill begins ──")
+        snapshot = agent_policy.for_run(stored, tool_names=[])
+        raised, why = concern_tool.writer(snapshot, stored)(concern)
+        carried = ""
+        if raised:
+            carried = await agent_scheduler.dispatch(
+                request.app["session"], config=stored)
+        reports_log.log("── drill ends ──")
+
+    rows = [r for r in agent_concerns.read()
+            if str(r.get("subject_key")) == concern.subject_key]
+    latest = rows[-1] if rows else {}
+    return web.json_response({
+        "ok": bool(raised), "status": "drill",
+        # ⚠️ THE REFUSAL REASON IS RETURNED VERBATIM. The likeliest one is that
+        # a previous drill is still open — `raise_concern` refuses a second
+        # concern on an open subject — which is the dedupe rule working, not a
+        # failure, and the caller must be able to tell the two apart.
+        "reason": why,
+        "concern_id": str(latest.get("id") or ""),
+        "severity": severity,
+        "informational": bool(latest.get("informational")),
+        "delivered_at": str(latest.get("delivered_at") or ""),
+        "dispatch": carried.strip(" |") or "nothing was carried",
+    })
+
+
 async def agent_run_now_handler(request: web.Request) -> web.Response:
     """Start one run immediately. Owner-only, because it spends the budget.
 
@@ -2668,6 +2756,9 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
     # trigger and the budget, and returns WHY it stopped
     # rather than a boolean — five causes that look identical from outside and
     # four of which are fine. That reason is handed straight back.
+    if body.get("drill"):
+        return await _agent_drill(request, body)
+
     if body.get("triage"):
         from agent import scheduler as agent_scheduler
         from agent.llm import anthropic_sdk
