@@ -1,3 +1,13 @@
+## 2.817.0
+
+### Changed — the working documents were reorganised so the current state is one file
+`docs/` had twenty top-level markdown files, seven of them finished checkpoint
+records of the same kind, plus a nested folder of audit output. A new reader
+had to open several to find out which were true today. There is now a single
+`STATUS.md` that outranks the rest, live documents beside it, generated output
+labelled as such, and finished records merged or moved to `archive/`. Nothing
+was deleted but macOS junk files. No add-on behaviour changes.
+
 ## 2.816.0
 
 ### Fixed — task buttons that stopped working without saying so

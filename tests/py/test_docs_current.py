@@ -47,15 +47,28 @@ pytestmark = pytest.mark.skipif(
 #: never existed is as misleading as a live document doing it — but they are
 #: exempt from the "no stale version" rule, because naming the release they were
 #: written against is the whole point of an archive.
+#: ⚠️ REWRITTEN WHEN `docs/` WAS REORGANISED (2026-08-27), AND THIS TEST IS
+#: WHAT CAUGHT THE REORGANISATION GOING STALE. It named five files that had
+#: just been merged or moved, which is precisely the rot it exists to find —
+#: turned on the list itself rather than on a document.
+#:
+#: The seven PH1–PH5 checkpoints are now one merged record, and the finished
+#: compliance/validation/rollback documents moved to `docs/archive/`. That
+#: folder needs no entry here: `_docs()` lists the TOP LEVEL only, so anything
+#: moved into it leaves this check's scope entirely — which is the point of
+#: moving it.
 ARCHIVES: Set[str] = {
-    "BASELINE.md", "CHECKPOINT-PH1.md", "CHECKPOINT-PH2.md",
-    "CHECKPOINT-PH3.md", "CHECKPOINT-PH3-coverage.md",
+    "CHECKPOINTS.md",
 }
 
 #: Ids a document may name BECAUSE they do not exist — the finding IS that they
 #: do not. ⚠️ Without this, recording a ghost-id defect would fail the very
 #: check that found it.
 NAMED_GHOSTS: Dict[str, Set[str]] = {
+    # ⚠️ VALIDATION.md moved to `docs/archive/` on 2026-08-27 and is no longer
+    # scanned, so this entry is inert. Kept rather than deleted: if the file is
+    # ever brought back the exemption must come with it, and a dead key here
+    # costs nothing — unlike ARCHIVES above, nothing asserts this list is live.
     "VALIDATION.md": {"TASK-086", "TASK-087"},
     "README.md": {"TASK-086", "TASK-087"},
 }
