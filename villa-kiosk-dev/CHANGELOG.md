@@ -1,3 +1,15 @@
+## 2.821.0
+
+### Changed — the score is now the multiplier itself, nudged by 0.1
+2.820.0 stored a whole-number score and printed a sentence translating it
+("ranked at a third of its novelty"), so the number on screen meant nothing on
+its own. It is now the multiplier: 1.0 untouched, 1.1 raised 10% more readily,
+0.8 raised 20% less, with + and − moving it by 0.1 and a thumb doing the same.
+The dial stops at 0.1 and never reaches zero, so turning a kind down still
+cannot mute it. And the empty list now says WHY it is empty — a kind is
+recorded when a concern is raised, so judging one raised before this feature
+existed records the verdict and teaches nothing.
+
 ## 2.820.0
 
 ### Added — the thumbs now teach the villa what kind of thing to raise
