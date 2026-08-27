@@ -1,3 +1,14 @@
+## 2.806.0
+
+### Changed — the Reason tab loses a redundant heading, and the assistant counts offline devices instead of naming them
+"What came of them" announced a second section where there is only a footer
+of counts, and its explanation became an inline (i) on the count it explains.
+The offline block added in 2.805.0 is reverted to a single line — a count,
+never names: naming them invited a paid investigation of devices the reflex
+blueprints already alert on in real time and the briefing already lists, a
+third message about one fact. It costs 8 tokens on a healthy villa. The
+Triage summary no longer points at the deleted heading by name.
+
 ## 2.805.0
 
 ### Fixed — the assistant could not see a device that had gone offline

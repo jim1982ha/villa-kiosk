@@ -345,56 +345,77 @@ def test_the_rendered_document_carries_no_entity_id() -> None:
 
 # ── the offline block (2026-08-27) ──────────────────────────────────────────
 def test_a_device_that_is_OFFLINE_reaches_the_document_at_all() -> None:
-    """⚠️ THE BLIND SPOT THIS BLOCK EXISTS TO CLOSE, MEASURED END TO END.
+    """⚠️ THE BLIND SPOT THIS LINE CLOSES, MEASURED END TO END.
 
     Everything else in the delta is scored by `salience`, which reads NUMBERS —
     `_numeric()` refuses `unavailable`/`unknown` deliberately, because a
     previous system read unavailable as -999999 and fired every low-battery
     alert. Correct, and it left a device going OFFLINE with no channel into
     this document: no score, no row, nothing. On the reference villa a critical
-    entity was taken offline, the document rendered HEALTHY at 4,874 characters,
-    and triage answered "nothing to escalate" — because it was never told.
+    entity was taken offline, the document rendered HEALTHY at 4,874
+    characters, and triage answered "nothing to escalate" — it was never told.
 
-    The kiosk shows offline devices, Readiness shows them, and the brief's
-    standing section shows them; the tier that SUPERVISES could not see them.
-    Two correct halves with nothing joining them.
+    ⚠️ A COUNT, NEVER NAMES (owner's decision; the named version shipped in
+    2.805.0 and was reverted). Naming them invited this pass to act on the
+    REFLEX layer's territory — `architecture.TGT-001` gives Tier 0 "critical
+    unavailable", sub-second and offline — and the briefing already reports
+    every unavailable device. This exists so the pass does not assert a silent
+    device is healthy; it is context, not detection.
     """
-    body = snapshot.delta(offline=["lock.front"], offline_total=1,
-                          label_of=lambda i: "Entrance Lock")
-    assert "Entrance Lock" in body
-    assert "Not reporting right now" in body
+    body = snapshot.delta(offline_total=2)
+    assert "Not reporting right now: 2 devices" in body
+    assert "not by this pass" in body, (
+        "the line no longer says whose job these are, so a pass can read it as "
+        "work to do and raise a third message about one fact")
 
 
-def test_the_offline_block_SPEAKS_WHEN_EMPTY() -> None:
+def test_the_offline_line_NAMES_NO_DEVICE() -> None:
+    """⚠️ THE REVERT, PINNED SO IT CANNOT COME BACK BY DEGREES. `delta` must not
+    even accept a list of names: a keyword that exists is a keyword a future
+    caller fills in, and the boundary this protects is architectural rather
+    than cosmetic."""
+    import inspect
+
+    assert "offline" not in [
+        p for p in inspect.signature(snapshot.delta).parameters
+        if p != "offline_total"], "delta takes device names again"
+    body = snapshot.delta(offline_total=3)
+    line = [l for l in body.splitlines() if l.startswith("Not reporting")][0]
+    assert "." not in line.split("—")[0].replace("Not reporting right now:", ""), (
+        f"an entity id reached the offline line: {line}")
+
+
+def test_the_offline_line_SPEAKS_WHEN_EMPTY() -> None:
     """⚠️ A SECTION THAT VANISHES WHEN ALL IS WELL IS INDISTINGUISHABLE FROM A
     BROKEN ONE — the instrument shape this project has been caught by five
-    times. "Everything is reporting" is a finding and has to be stated, exactly
-    as the ranked excerpt states "Nothing is behaving unusually for itself"."""
+    times. "None" is a finding and costs eight tokens."""
     body = snapshot.delta()
-    assert "Not reporting right now" in body
-    assert "every device this villa knows about is reporting" in body
+    assert "Not reporting right now: none." in body
 
 
-def test_a_truncated_offline_list_SAYS_it_was_truncated() -> None:
-    """⚠️ A CAPPED LIST THAT GOES SILENT ABOUT THE CAP IS A CLAIM THAT THE VILLA
-    HAS EXACTLY THIS MANY OFFLINE DEVICES, and the reader acts on it. The cap
-    itself is a cost bound — the document is the prefix and the prefix is the
-    bill — never a judgement about which devices matter."""
-    body = snapshot.delta(offline=["a.b", "c.d"], offline_total=9)
-    assert "and 7 more" in body, body
+def test_the_offline_line_STAYS_CHEAP() -> None:
+    """⚠️ IT IS BILLED ON EVERY PASS, ~96 A DAY. An earlier draft explained its
+    own reasoning in the prompt and ran to 228 characters; the reasoning moved
+    into a comment, which is free. This pins the budget rather than trusting
+    that nobody will grow it back one clause at a time."""
+    quiet = [l for l in snapshot.delta().splitlines()
+             if l.startswith("Not reporting")][0]
+    loud = [l for l in snapshot.delta(offline_total=9).splitlines()
+            if l.startswith("Not reporting")][0]
+    assert len(quiet) <= 40, f"{len(quiet)} chars on a healthy villa: {quiet}"
+    assert len(loud) <= 170, f"{len(loud)} chars: {loud}"
 
 
-def test_the_offline_block_uses_LABELS_and_falls_back_to_the_id() -> None:
-    """⚠️ Same ladder as the ranked excerpt: labels never ids, and the id rather
-    than nothing when no label exists — a row nobody can name is still worth
-    more than a row that is not there."""
-    body = snapshot.delta(offline=["lock.front", "sensor.odd"], offline_total=2,
-                          label_of=lambda i: "Entrance Lock" if i == "lock.front" else "")
-    assert "Entrance Lock" in body
-    assert "sensor.odd" in body
+def test_the_offline_line_agrees_with_ITSELF_about_one_device() -> None:
+    """⚠️ "1 devices offline" is the shape no assertion sees and every reader
+    does, in a generated document whose authority rests on reading as though
+    somebody wrote it — the same defect the PH-1 checkpoint found as "1 climate
+    units"."""
+    body = snapshot.delta(offline_total=1)
+    assert "1 device offline" in body and "1 devices" not in body
 
 
-def test_the_offline_block_is_in_the_DELTA_and_never_the_profile() -> None:
+def test_the_offline_line_is_in_the_DELTA_and_never_the_profile() -> None:
     """⚠️ IT IS A STATE, NOT STRUCTURE. `profile()` sits above the cache
     breakpoint, so anything there that changes with the clock silently ends
     prefix caching and multiplies the bill — its own comment defers "devices

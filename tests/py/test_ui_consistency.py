@@ -968,3 +968,37 @@ def test_the_triage_card_and_its_flags_share_ONE_clock() -> None:
     assert "whenOf(pass.at)" in panel, (
         "the check heading no longer renders its time through the shared "
         "formatter, so it is back on a different clock from its flags")
+
+
+def test_no_screen_points_the_reader_at_a_HEADING_that_was_deleted() -> None:
+    """⚠️ A CROSS-SCREEN REFERENCE BY TITLE IS A PROMISE THE OTHER SCREEN KEEPS.
+
+    The Triage summary told the reader that dealt-with concerns live "under
+    'What came of them'" — a heading on the Reason tab. That heading was
+    deleted on 2026-08-27 (it announced a second section where there is only a
+    footer of counts), and nothing but a grep could have noticed the sentence
+    on the OTHER tab going stale. Type-checking cannot see it; both files
+    compile perfectly with one naming a heading the other no longer renders.
+
+    Pinned as an equivalence, not as "the string is absent": if the heading
+    ever comes back, pointing at it again is correct and this test says so.
+    """
+    def without_comments(src: str) -> str:
+        """JSX `{/* … */}` blocks and `//` lines. ⚠️ BOTH, because the note
+        RECORDING this deletion quotes the heading — a scan that read only one
+        comment style would call the record itself a violation."""
+        src = re.sub(r"\{/\*.*?\*/\}", "", src, flags=re.DOTALL)
+        src = re.sub(r"/\*.*?\*/", "", src, flags=re.DOTALL)
+        return "\n".join(l for l in src.splitlines()
+                         if not l.lstrip().startswith("//"))
+
+    lifecycle = _read(os.path.join(SRC, "components", "agent",
+                                   "ConcernLifecycle.tsx"))
+    checks = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    # The heading is RENDERED only if it appears outside a comment.
+    rendered = re.search(r'settings-section-title">\s*What came of them',
+                         without_comments(lifecycle)) is not None
+    referenced = "What came of them" in without_comments(checks)
+    assert referenced <= rendered, (
+        "RecentChecks sends the reader to a heading ConcernLifecycle no longer "
+        "renders — a screen describing another screen that has moved on")

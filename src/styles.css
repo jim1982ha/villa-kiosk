@@ -4940,8 +4940,17 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    reads as three unrelated statements. */
 .tier-facts {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 14px;
+  /* ⚠️ `wrap`, AND IT IS CONTENT-DRIVEN RATHER THAN A BREAKPOINT (2026-08-27).
+     This was `nowrap`, which is right for the shape it was written for —
+     `tiers.tsx` puts a 14px GLYPH in each `dt` and one or two words in each
+     `dd`, so three facts never threaten a phone's width. `SettledSummary` uses
+     the same class with TEXT terms ("Fixed and confirmed", "Judged not
+     useful", "Closed"), which is ~350px of non-shrinking `dt` before anything
+     else — `dt` is `flex: 0 0 auto`, so on a 360px phone `nowrap` cannot
+     compress it and the row overflows its dialog. Wrapping engages only when
+     the content does not fit, so the icon row above is unaffected. */
+  flex-wrap: wrap;
+  gap: 4px 14px;
   margin: 2px 0 0;
   font-size: var(--text-sm);
 }
@@ -4951,7 +4960,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   gap: 5px;
   min-width: 0;
 }
-.tier-facts > div > dt { display: flex; color: var(--text-secondary); flex: 0 0 auto; }
+/* ⚠️ `align-items`, BECAUSE A `dt` MAY NOW CARRY AN (i). It is a flex container
+   (for the struck-through "not this" case below), so an InfoHint added as a
+   second child becomes a flex ITEM and would stretch to the line box instead
+   of sitting on the text's centre line.
+   ⚠️ AND DELIBERATELY NO `gap`: `.info-hint-btn` already carries
+   `margin-inline-start: 4px`, so adding one here spaces the icon TWICE — the
+   double-spacing this file keeps correcting, arriving through a second
+   mechanism for one gap. One owner for that space, and it is the button. */
+.tier-facts > div > dt {
+  display: flex; align-items: center;
+  color: var(--text-secondary); flex: 0 0 auto;
+}
 /* ⚠️ "NOT THIS", DRAWN ONCE FOR ANY FACT. lucide ships `WifiOff` but no
    `SparklesOff`, and `Sparkles` is this app's AI mark everywhere else — so the
    negative case cannot be a different GLYPH without meaning two metaphors for

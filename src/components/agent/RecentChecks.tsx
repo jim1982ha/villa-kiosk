@@ -399,8 +399,13 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
           <p className="muted body-text">
             Across all {rows.length} check{rows.length === 1 ? "" : "s"} below:{" "}
             {work.looked} flag{work.looked === 1 ? "" : "s"} investigated,{" "}
-            {work.raised} became concern{work.raised === 1 ? "" : "s"} (open ones
-            are on the Reason tab; dealt-with ones under “What came of them”).
+            {/* ⚠️ IT NO LONGER NAMES A HEADING. This used to send the reader to
+                "What came of them", which was deleted on 2026-08-27 — a
+                cross-screen reference by TITLE is a promise the other screen
+                has to keep, and nothing but a grep could have caught it going
+                stale. The Reason tab is where both live; that is enough. */}
+            {work.raised} became concern{work.raised === 1 ? "" : "s"} — open
+            ones and the record of the settled ones are both on the Reason tab.
           </p>
         )}
         {action}

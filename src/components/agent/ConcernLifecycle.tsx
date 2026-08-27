@@ -111,10 +111,35 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
 
   return (
     <>
-      <div className="settings-section-title">What came of them</div>
+      {/* ⚠️ NO SECTION TITLE (2026-08-27, owner's request). "What came of them"
+          sat directly under "Concerns — what the villa concluded" on the same
+          tab, so it announced a second section where there is only a footer of
+          counts — a heading that costs a line and says nothing the counts do
+          not. The counts themselves are the label.
+
+          ⚠️ AND THE PROSE BECAME THE (i), which is this app's settled rule: at
+          most two lines of description on screen and everything else inside an
+          InfoHint (see its header — the panes had grown a paragraph per
+          control and nobody read them). It hangs off "Fixed and confirmed"
+          because that count is what the whole explanation is ABOUT, so the
+          reader meets the icon exactly where the question occurs to them,
+          rather than after the numbers have already been read. */}
       <dl className="tier-facts">
         <div>
-          <dt>Fixed and confirmed</dt>
+          <dt>
+            Fixed and confirmed
+            <InfoHint label="Reading these counts">
+              <p>
+                It is the only count that says something actually worked: the
+                condition stopped after somebody did something. Every other
+                count says what was SAID, not what changed.
+              </p>
+              <p>
+                Dismissals are just as useful in the other direction — they are
+                how the villa learns what you do not want to hear about.
+              </p>
+            </InfoHint>
+          </dt>
           <dd>{verified}</dd>
         </div>
         <div>
@@ -135,16 +160,6 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
           you say otherwise.
         </p>
       )}
-      <p className="muted body-text">
-        “Fixed and confirmed” is the only count that says something actually
-        worked.
-        <InfoHint label="Reading these counts">
-          It means the condition stopped after somebody did something — every
-          other count says only what was said, not what changed. Dismissals are
-          just as useful in the other direction: they are how the villa learns
-          what you do not want to hear about.
-        </InfoHint>
-      </p>
     </>
   );
 }

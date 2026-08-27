@@ -42,7 +42,7 @@ import calendar
 import time
 
 from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
-                    Set, Tuple)
+                    Set)
 
 from agent.refs import RefTable
 from agent.tools.base import BaseTool
@@ -464,11 +464,9 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
         swallow("could not rank the villa's novelty", err)
         ranked, unscorable = [], 0
 
-    offline, offline_total = _offline_devices()
-
     delta_text = snapshot_mod.delta(
         salient=ranked, unscorable=unscorable,
-        offline=offline, offline_total=offline_total,
+        offline_total=_offline_count(),
         concerns=_open_concerns(), ledger=_facility_record(),
         coverage=_coverage(now=now, window_hours=window_hours),
         label_of=labeller())
@@ -476,16 +474,19 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
                                        delta_text=delta_text)
 
 
-#: How many offline devices the document names before it summarises the rest.
-#: ⚠️ A COST BOUND, NOT A JUDGEMENT ABOUT WHICH MATTER. The document is the
-#: prefix and the prefix IS the bill; a villa whose mesh drops overnight would
-#: otherwise put two hundred names into every pass. The REST ARE COUNTED, never
-#: dropped silently — see `snapshot.delta`.
-DOCUMENT_OFFLINE_LIMIT: int = 15
+def _offline_count() -> int:
+    """HOW MANY devices are not reporting right now. Never raises.
 
-
-def _offline_devices() -> Tuple[List[str], int]:
-    """Devices not reporting right now: `(named, total)`. Never raises.
+    ⚠️ A COUNT, AND THE NAMES ARE DELIBERATELY NOT RETURNED (2026-08-27,
+    owner's decision — this replaced a named list that shipped in 2.805.0 and
+    crossed a boundary the architecture draws on purpose). `architecture.
+    TGT-001` gives Tier 0 "critical unavailable": a reflex blueprint acts on it
+    in under a second, offline, with no model in the path, and the briefing's
+    standing section already reports every unavailable device to the owner.
+    Handing this pass the names invited a Concern — a third message about one
+    fact, and a paid investigation of a device that by definition has no data
+    left to read. The number alone stops the pass asserting that a silent
+    device is healthy, which is all it was ever needed for.
 
     ⚠️ THE SHARED PREDICATE, NOT A FOURTH DEFINITION OF "A DEVICE OF THIS
     VILLA". `reports.devices.selectable_device_ids` + `filter_unavailable` are
@@ -520,10 +521,13 @@ def _offline_devices() -> Tuple[List[str], int]:
 
         states = journal_mod.last_states()
         if not states:
-            # ⚠️ AN EMPTY JOURNAL IS NOT AN EMPTY VILLA. On a cold start there
-            # is no evidence either way, and "everything is reporting" is a
-            # claim; returning nothing lets the section say so honestly.
-            return [], 0
+            # ⚠️ AN EMPTY JOURNAL IS NOT AN EMPTY VILLA, AND THIS GUARD IS THE
+            # SHARP EDGE. `is_unavailable(None)` is True by design ("absent
+            # counts"), so before the first observe cycle EVERY device is
+            # absent from the journal and the shared rule would conclude the
+            # whole property is down — the first pass after every restart
+            # opening with "412 devices offline".
+            return 0
         entities = {entity_id: {"state": state}
                     for entity_id, state in states.items()}
         config = devices_mod.read_config()
@@ -537,13 +541,14 @@ def _offline_devices() -> Tuple[List[str], int]:
             entities,
             dismissed if isinstance(dismissed, list) else [])
     except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow("could not list the devices that are not reporting", err)
-        return [], 0
-    # ⚠️ SORTED, BECAUSE THE DOCUMENT IS CACHED. `selectable_device_ids` walks a
-    # SET of mesh ids, so its order is not stable between runs — an unsorted
-    # list would reshuffle the delta on every pass for no change in the villa.
-    ordered = sorted(unavailable)
-    return ordered[:DOCUMENT_OFFLINE_LIMIT], len(ordered)
+        swallow("could not count the devices that are not reporting", err)
+        return 0
+    # ⚠️ A COUNT IS ORDER-INDEPENDENT, which incidentally removes the cached-
+    # prefix hazard the named version had to sort around: `selectable_device_ids`
+    # walks a SET, so its order is not stable between runs and an unsorted list
+    # reshuffled the delta on every pass over an unchanged villa — TEST-005's
+    # failure mode, silent and four times the bill.
+    return len(unavailable)
 
 
 def _coverage(*, now: Optional[float] = None,

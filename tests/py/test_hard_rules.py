@@ -223,9 +223,8 @@ FIXTURES: Set[str] = {
     "climate.living", "cover.blind", "cover.blind__open",
     "light.bedroom_lamp", "light.hall", "light.kitchen", "light.terrace_string",
     "lock.front", "sensor.bedroom_window",
-    # The offline-block fixtures (2026-08-27). `lock.gate_` is the stem of
-    # `lock.gate_a/b/c`, built by an f-string so the scan sees the prefix.
-    "lock.front_gate", "lock.side_gate", "lock.gate_",
+    # The offline-count fixtures (2026-08-27).
+    "lock.front_gate", "lock.side_gate",
     "sensor.pump", "sensor.pump_power",
     "switch.pool_pump", "switch.pump_relay",
     # ⚠️ REAL, AND KEPT BECAUSE THE TEST IS ABOUT THE REAL SHAPE. The todo

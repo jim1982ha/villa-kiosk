@@ -195,7 +195,6 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
           ledger: Optional[Mapping[str, Any]] = None,
           coverage: Optional[Mapping[str, Any]] = None,
           unscorable: int = 0,
-          offline: Sequence[str] = (),
           offline_total: int = 0,
           label_of: Optional[Callable[[str], str]] = None) -> str:
     """The fresh half. Everything here is allowed — required — to change.
@@ -281,25 +280,38 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
     # anything above the cache breakpoint that changes with the clock silently
     # ends prefix caching and multiplies the bill.
     #
+    # ⚠️ A COUNT, DELIBERATELY WITHOUT NAMES (2026-08-27, owner's decision, and
+    # it REPLACED a named list that shipped in 2.805.0 and was wrong). Naming
+    # them invited this pass to act on devices the REFLEX layer owns:
+    # `architecture.TGT-001` gives Tier 0 "critical unavailable" — sub-second,
+    # offline, no model in the path — and the briefing's standing section
+    # already reports every unavailable device to the owner. A concern raised
+    # here would be a THIRD message about one fact, which is the alert fatigue
+    # this whole system is built to avoid.
+    #
+    # ⚠️ SO IT IS CONTEXT, NOT DETECTION, AND THE SENTENCE SAYS SO. Its only job
+    # is to stop the pass asserting that a silent device is healthy — the
+    # failure REQ-055 describes ("'The Onsen pump is unavailable', true in
+    # March, must not still be asserted in December"). Without names it cannot
+    # be acted on, which is the point rather than a limitation.
+    #
     # ⚠️ AND IT PRINTS WHEN EMPTY, like the excerpt above it. "Everything is
     # reporting" is a FINDING; a section that vanishes when all is well is
     # indistinguishable from one that is broken, which is the instrument shape
-    # this project has been caught by five times.
-    lines.append("Not reporting right now (offline or unknown — a device in "
-                 "this list is not answering, so nothing else in this document "
-                 "can be evidence about it):")
-    if offline:
-        for entity_id in offline:
-            lines.append(f"  {_label_of_id(entity_id, label_of)}")
-        # ⚠️ THE TRUNCATION SAYS SO. A capped list that goes silent about the
-        # cap is a claim that the villa has exactly this many offline devices,
-        # and the reader acts on it.
-        if offline_total > len(offline):
-            lines.append(f"  … and {offline_total - len(offline)} more not "
-                         f"listed here.")
+    # this project has been caught by five times. Both branches are one short
+    # line, so the whole block costs well under 1% of the document.
+    # ⚠️ EVERY WORD IS PAID FOR ON EVERY PASS, so this says the three things it
+    # must and stops: how many, whose job they are (not this pass's), and that
+    # nothing above describes them. An earlier draft ran to 228 characters by
+    # explaining the reasoning; the reasoning belongs in this comment, which is
+    # free, rather than in the prompt, which is billed ~96 times a day.
+    if offline_total > 0:
+        lines.append(
+            f"Not reporting right now: {_plural(offline_total, 'device')} "
+            f"offline or unknown — covered by the villa's own alerting, not by "
+            f"this pass, and nothing above is evidence about them.")
     else:
-        lines.append("  Nothing — every device this villa knows about is "
-                     "reporting.")
+        lines.append("Not reporting right now: none.")
     lines.append("")
 
     if unscorable:
@@ -355,23 +367,10 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _label_of_id(entity_id: str,
-                 label_of: Optional[Callable[[str], str]] = None) -> str:
-    """A readable name for a bare entity id.
-
-    ⚠️ THE SAME LADDER AS `_label_of`, WHICH TAKES A `Salience` AND SO COULD NOT
-    BE REUSED FOR A LIST OF PLAIN IDS. Both end at the id rather than at
-    nothing, for the same reason: a row nobody can name is still worth more than
-    a row that is not there. Kept beside its twin so the two cannot drift.
-    """
-    if callable(label_of):
-        try:
-            named = str(label_of(entity_id) or "").strip()
-        except Exception:  # noqa: BLE001 - a naming failure is not a lost row
-            named = ""
-        if named:
-            return named
-    return entity_id
+# ⚠️ `_label_of_id` WENT WITH THE NAMED LIST (2026-08-27). The offline block is
+# a COUNT now, so nothing resolves a bare entity id to a label any more and a
+# second naming ladder beside `_label_of` would be dead code drifting from its
+# twin. Deleting it also deletes the label lookups it performed on every pass.
 
 
 def _label_of(item: salience_mod.Salience,
