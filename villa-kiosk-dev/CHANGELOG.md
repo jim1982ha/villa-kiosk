@@ -1,3 +1,15 @@
+## 2.825.0
+
+### Fixed — the chase never had a clock, and a job finished on your phone did not stop it
+The escalation steps are 15, 45 and 90 minutes, but the rule applying them ran
+only at the end of a check — every six hours here — while the card promised a
+time. It now has its own clock, set to the first step. Pressing Done in Telegram
+also only ticked the job; the alert stayed on the wall and kept being chased, so
+a ticked job now counts as seen however it was ticked. The Reflex tab's control
+row said "nothing yet" for a family that emits nothing to count, and now reports
+what those automations actually did. The settled counts on the Reason tab
+download that group as a spreadsheet.
+
 ## 2.824.0
 
 ### Changed — a tuned kind shows its name and its number, and nothing else
