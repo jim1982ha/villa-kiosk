@@ -412,15 +412,17 @@ def test_the_reason_tab_can_say_a_fix_FAILED_not_only_that_one_worked() -> None:
     `feedback_mutation-testing` calls it "anchor on the DECLARATION, not the
     token", and it is why that rule exists.
 
-    ⚠️ AND THE `<dd>` ANCHOR MOVED WHEN THE COUNTS BECAME DOWNLOAD BUTTONS
-    (2026-08-28). The pin caught that, which is it working — it was anchored on
-    the exact declaration rather than on the word. Re-anchored on the pair that
-    still has to exist: the label, and the number rendered inside it.
+    ⚠️ THE ANCHOR HAS MOVED TWICE IN ONE DAY AND BOTH TIMES THE PIN CAUGHT IT
+    — first when the counts became download buttons, then when the owner moved
+    the press from the NUMBER onto the LABEL. That is it working: it was
+    anchored on the exact declaration each time rather than on a loose word.
+    It now holds the two things that must be true whatever wraps them — the
+    label is on screen, and the number is rendered in its own `<dd>` — because
+    those survive any further re-arrangement of the control around them.
     """
     code = _tsx()
-    assert "<dt>Came back</dt>" in code, "the failed-fix count has no surface"
-    came = code.split("<dt>Came back</dt>")[1].split("</dd>")[0]
-    assert "{cameBack}" in came, "the label renders no number beside it"
+    assert "Came back" in code, "the failed-fix count has no surface"
+    assert "<dd>{cameBack}</dd>" in code, "the label renders no number beside it"
 
 
 def test_the_settled_counts_ADD_UP_to_what_was_settled() -> None:

@@ -1,3 +1,14 @@
+## 2.826.0
+
+### Changed — the settled labels download their group, not the numbers
+The press sat on the count, so the target was one or two characters wide on a
+wall tablet and read as decoration. It is now the label. That also settles the
+(i) beside "Fixed and confirmed": it used to sit inside the same element, so
+making the label pressable would have nested one button in another — browsers
+resolve that by giving the outer one the click. They are siblings now, so which
+one you pressed is a fact of the markup rather than something a handler has to
+work out.
+
 ## 2.825.0
 
 ### Fixed — the chase never had a clock, and a job finished on your phone did not stop it

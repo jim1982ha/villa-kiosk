@@ -210,8 +210,26 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
           rather than after the numbers have already been read. */}
       <dl className="tier-facts">
         <div>
+          {/* ⚠️ THE LABEL IS THE CONTROL AND THE (i) IS ITS SIBLING, NOT ITS
+              CHILD (2026-08-28, owner: "don't make the number clickable but
+              the text… handle properly the click on the (i) icon not to take
+              precedence"). Two things were wrong. The NUMBER carried the
+              press, so the target was one or two characters wide on a wall
+              tablet and read as decoration rather than a control. And the (i)
+              sat INSIDE the `<dt>` beside the label — so making the label
+              clickable naively would have nested `InfoHint`'s own button
+              inside this one, which is invalid HTML and which browsers resolve
+              by giving the outer element the click. Rendering them as
+              siblings makes the precedence a fact of the markup rather than
+              something an event handler has to unpick. */}
           <dt>
-            Fixed and confirmed
+            <button type="button" className="link-count"
+                    disabled={verified === 0}
+                    title="Download these as a spreadsheet"
+                    onClick={() => save("Fixed and confirmed",
+                      concerns.filter((c) => String(c.state ?? "") === "verified"))}>
+              Fixed and confirmed
+            </button>
             <InfoHint label="Reading these counts">
               <p>
                 It is the only count that says something actually worked: the
@@ -232,47 +250,40 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
               </p>
             </InfoHint>
           </dt>
-          <dd>
-            <button type="button" className="link-count"
-                    disabled={verified === 0}
-                    title="Download these as a spreadsheet"
-                    onClick={() => save("Fixed and confirmed", concerns.filter((c) => String(c.state ?? "") === "verified"))}>
-              {verified}
-            </button>
-          </dd>
+          <dd>{verified}</dd>
         </div>
         <div>
-          <dt>Came back</dt>
-          <dd>
+          <dt>
             <button type="button" className="link-count"
                     disabled={cameBack === 0}
                     title="Download these as a spreadsheet"
                     onClick={() => save("Came back", concerns.filter(isCameBack))}>
-              {cameBack}
+              Came back
             </button>
-          </dd>
+          </dt>
+          <dd>{cameBack}</dd>
         </div>
         <div>
-          <dt>Judged not useful</dt>
-          <dd>
+          <dt>
             <button type="button" className="link-count"
                     disabled={dismissed === 0}
                     title="Download these as a spreadsheet"
                     onClick={() => save("Judged not useful", concerns.filter((c) => String(c.state ?? "") === "dismissed"))}>
-              {dismissed}
+              Judged not useful
             </button>
-          </dd>
+          </dt>
+          <dd>{dismissed}</dd>
         </div>
         <div>
-          <dt>Closed</dt>
-          <dd>
+          <dt>
             <button type="button" className="link-count"
                     disabled={closed === 0}
                     title="Download these as a spreadsheet"
                     onClick={() => save("Closed", concerns.filter((c) => String(c.state ?? "") === "closed" && !isCameBack(c)))}>
-              {closed}
+              Closed
             </button>
-          </dd>
+          </dt>
+          <dd>{closed}</dd>
         </div>
       </dl>
       {silenced > 0 && (
