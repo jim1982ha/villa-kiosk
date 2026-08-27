@@ -275,7 +275,8 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
         return False
 
     plan = route_mod.plan(concern, targets=targets, push_targets=targets,
-                          occupied=None, quiet_hours=False, config=config)
+                          occupied=None, quiet_hours=False, profile=role,
+                          config=config)
     if not plan.targets:
         return False
     # ⚠️ NOT HELD. `quiet_hours=False` is passed deliberately: an escalation is
@@ -490,7 +491,8 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
                  f"falling back to the shared notify list for concern {concern.get('id')}")
 
     plan = route_mod.plan(concern, targets=targets, push_targets=targets,
-                          occupied=occupied, quiet_hours=quiet, config=config)
+                          occupied=occupied, quiet_hours=quiet, profile=role,
+                          config=config)
 
     # ⚠️ THE ROUTING VERDICT IS SAID OUT LOUD, AND `Delivery.reason` IS WHY IT
     # CAN BE. Every branch below was already decided correctly and reported only

@@ -1142,3 +1142,26 @@ def test_a_chased_concern_reports_what_HAPPENED_not_what_might() -> None:
     # prediction wins on exactly the concerns that have already been chased.
     assert body.index("escalated_step") < body.index("BANDS.find"), (
         "the band prediction is evaluated before the already-chased check")
+
+
+def test_a_villa_with_no_FACILITY_MANAGER_is_told_the_ladder_has_one_rung() -> None:
+    """⚠️ THE RULE WORKING AGAINST A TABLE WITH A HOLE IN IT LOOKS LIKE A BUG.
+
+    An urgent problem is meant to reach the Facility manager first and the
+    Owner only if nobody answers. When no row holds that profile,
+    `route.escalate` correctly jumps straight to the Owner with no delay —
+    observed live, and the owner reasonably read the instant second message as
+    the chasing rule misfiring. Nothing on the People tab said the first rung
+    was empty.
+
+    ⚠️ AND NOT ON AN EMPTY TABLE. With no people at all the panel already says
+    the villa can reach nobody; adding this under it would scold somebody for
+    not finishing a form they have not started.
+    """
+    panel = _read(os.path.join(SRC, "components", "settings", "PeoplePanel.tsx"))
+    assert 'r.role === "ops"' in panel, (
+        "the People tab never checks whether anybody is the Facility manager, "
+        "so a villa cannot be told its escalation ladder has one rung")
+    assert "rows.length > 0 &&" in panel, (
+        "the missing-Facility-manager warning is not gated on the table having "
+        "somebody in it, so an empty table gets scolded twice")

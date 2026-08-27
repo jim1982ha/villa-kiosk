@@ -1,3 +1,14 @@
+## 2.812.0
+
+### Added — every message says who it is for, and the People tab warns when the escalation ladder has one rung
+One chat can carry both the household's alerts and the Facility manager's
+work, and the chasing rule deliberately sends the same concern on to a second
+person — so two messages arrived looking identical. Each now ends with a short
+line naming the profile it was written for. And when nobody holds the Facility
+manager profile, anything urgent goes straight to the Owner with no delay:
+correct, but it looked like the chasing rule misfiring, so the People tab now
+says so and explains what adding one would change.
+
 ## 2.811.0
 
 ### Fixed — a concern card promised a chase that could never arrive

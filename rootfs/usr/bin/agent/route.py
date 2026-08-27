@@ -148,9 +148,20 @@ def occupancy(states: Sequence[Mapping[str, Any]]) -> Optional[bool]:
     return False if seen else None
 
 
+#: Profile id -> what a PERSON calls it. ⚠️ THE SCREEN'S WORDS, NOT THE
+#: STORE'S. `ops` is the Facility manager everywhere a human can see, and a
+#: message signed "ops" would name a role nobody has heard of — the same
+#: mapping `AgentConcerns` keeps for the concern card, for the same reason.
+PROFILE_NAME: Dict[str, str] = {
+    "owner": "Owner",
+    "ops": "Facility manager",
+    "guest": "Guest",
+}
+
+
 def plan(concern: Mapping[str, Any], *, targets: Sequence[str],
          push_targets: Sequence[str] = (), occupied: Optional[bool] = None,
-         quiet_hours: bool = False,
+         quiet_hours: bool = False, profile: str = "",
          config: Optional[Mapping[str, Any]] = None) -> Delivery:
     """One concern, routed. ⚠️ EVERYTHING DELIVERED IS MADE INERT HERE.
 
@@ -194,6 +205,24 @@ def plan(concern: Mapping[str, Any], *, targets: Sequence[str],
         body = (f"{body}\n\nFor your information only — the villa is set to "
                 f"Investigate and Log Only, so nothing is asked of you. This "
                 f"will not be re-sent or chased.")
+
+    # ⚠️ THE MESSAGE SAYS WHO IT IS FOR (2026-08-27, owner's request). One
+    # Telegram chat can carry both the household's alerts and the Facility
+    # manager's work, and a reader had no way to tell which of them a given
+    # message was written for — the audience decides the wording, the
+    # escalation ladder sends the SAME concern to a second profile, and both
+    # arrive looking identical. The footer is the last line, after everything
+    # else, so it reads as a signature rather than as part of the finding.
+    #
+    # ⚠️ PLAIN TEXT, NO MARKUP, AND THAT IS NOT A STYLE CHOICE. `style.inert`
+    # strips every character a notify platform could parse — underscore,
+    # asterisk, backtick, brackets — because the add-on does not choose the
+    # parse mode and a stray one cost a day of failed deliveries. So "small"
+    # is expressed by brevity and position, the only typography a plain-text
+    # channel has.
+    who = PROFILE_NAME.get(str(profile or "").strip())
+    if who:
+        body = f"{body}\n\n— for the {who}"
 
     return Delivery(
         concern_id=str(concern.get("id") or ""),

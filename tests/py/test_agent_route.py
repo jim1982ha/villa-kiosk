@@ -239,3 +239,92 @@ def test_a_NORMAL_concern_routes_unchanged() -> None:
     assert out.push is True
     assert not out.title.startswith("FYI"), (
         "a concern that will be chased must not announce itself as ignorable")
+
+
+# ── who the message is for (2026-08-27) ─────────────────────────────────────
+def test_a_delivered_message_says_which_PROFILE_it_is_for() -> None:
+    """⚠️ ONE CHAT CAN CARRY BOTH PEOPLE'S POST. A villa may route the
+    household's alerts and the Facility manager's work to the same Telegram
+    chat, and the escalation ladder deliberately sends the SAME concern on to a
+    second profile — so two messages arrive looking identical with nothing
+    saying which was written for whom. The footer is the signature.
+
+    ⚠️ THE SCREEN'S WORDS, NOT THE STORE'S: `ops` is the Facility manager
+    everywhere a person can see, and signing a message "ops" names a role
+    nobody has heard of.
+    """
+    owner = route.plan(_c(), targets=OWNER, profile="owner", config=LIVE)
+    ops = route.plan(_c(), targets=OWNER, profile="ops", config=LIVE)
+    assert owner.body.rstrip().endswith("— for the Owner"), owner.body
+    assert ops.body.rstrip().endswith("— for the Facility manager"), ops.body
+    assert "ops" not in ops.body.split("—")[-1]
+
+
+def test_the_footer_is_LAST_even_when_the_FYI_block_is_added() -> None:
+    """⚠️ IT IS A SIGNATURE, SO IT SIGNS EVERYTHING ABOVE IT. An informational
+    concern appends its own "nothing is asked of you" paragraph; a footer
+    written before that would sit in the middle of the message and read as part
+    of the finding."""
+    out = route.plan(_c(informational=True), targets=OWNER, profile="owner",
+                     config=LIVE)
+    assert out.body.rstrip().endswith("— for the Owner")
+    assert "nothing is asked of you" in out.body
+    assert out.body.index("nothing is asked of you") < out.body.index("— for the")
+
+
+def test_the_footer_carries_NO_MARKUP_a_platform_could_parse() -> None:
+    """⚠️ `style.inert` STRIPS EVERY CHARACTER A NOTIFY PLATFORM MIGHT READ —
+    underscore, asterisk, backtick, brackets, angle brackets — because the
+    add-on does not choose the parse mode, and one stray underscore in a real
+    device name once cost a day of failed deliveries (2.573.0). "Small" on a
+    plain-text channel is brevity and position, never typography."""
+    body = route.plan(_c(), targets=OWNER, profile="ops", config=LIVE).body
+    footer = body.rsplit("\n\n", 1)[-1]
+    for banned in ("_", "*", "`", "~", "[", "]", "<", ">"):
+        assert banned not in footer, f"{banned!r} survived into {footer!r}"
+
+
+def test_an_unknown_or_absent_profile_adds_NOTHING() -> None:
+    """⚠️ SILENCE RATHER THAN A GUESS. A caller that does not know the profile
+    must not produce "— for the " or invent one; an unsigned message is honest,
+    a wrongly-signed one sends somebody else's work to the household."""
+    for profile in ("", "   ", "nobody"):
+        body = route.plan(_c(), targets=OWNER, profile=profile,
+                          config=LIVE).body
+        assert "— for the" not in body, (profile, body)
+
+
+def test_BOTH_delivery_paths_tell_route_which_profile_they_used() -> None:
+    """⚠️ `feedback_pin-the-caller`. `plan` signs whatever it is told, so a
+    caller that forgets the argument produces an unsigned message and this
+    file's other pins stay green — the defect lives in the wiring, twice over:
+    the first delivery and the escalation send to DIFFERENT profiles, and the
+    second is the one whose whole point is that the audience changed.
+
+    ⚠️ SCOPED TO THE `route.plan` CALL, AND THE FIRST VERSION WAS NOT — it
+    asserted `"profile=role" in source`, which is ALSO true of
+    `_mark_delivered(..., profile=role)` a few lines below. Deleting the
+    argument from the routing call left the pin green: it was matching a
+    different call the whole time. Caught by mutation testing, which is the
+    only thing that could have caught it.
+    """
+    import inspect
+
+    from agent import outbox as outbox_mod
+
+    for fn in (outbox_mod._deliver_one, outbox_mod._escalate_one):
+        source = inspect.getsource(fn)
+        start = source.index("route_mod.plan(")
+        depth, end = 0, start
+        for i in range(start, len(source)):
+            if source[i] == "(":
+                depth += 1
+            elif source[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        call = source[start:end + 1]
+        assert "profile=" in call, (
+            f"{fn.__name__} calls route.plan without naming the profile, so "
+            f"its message arrives unsigned:\n{call}")

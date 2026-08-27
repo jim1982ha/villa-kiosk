@@ -250,6 +250,26 @@ export default function PeoplePanel() {
         </p>
       )}
 
+      {/* ⚠️ A LADDER WITH NOBODY ON THE FIRST RUNG (2026-08-27, owner's
+          request after seeing it happen). An urgent problem is meant to reach
+          the Facility manager first and the owner only if it goes
+          unanswered — but when no row holds that profile the villa correctly
+          jumps straight to the owner, immediately, and NOTHING said so. It
+          reads as the chasing rule being broken; it is the rule working
+          against a table with a hole in it.
+
+          ⚠️ IT IS SHOWN ONLY WHEN SOMEBODY EXISTS. On an empty table the
+          sentence above already says the villa can reach nobody at all, and a
+          second warning under it would be scolding a person for not having
+          finished a form they have not started. */}
+      {rows.length > 0 && !rows.some((r) => r.role === "ops") && (
+        <p className="body-text sev-warning">
+          No Facility manager yet, so anything urgent comes straight to the
+          Owner with no delay. Give somebody that profile and the villa tries
+          them first, bringing the Owner in only if nobody answers.
+        </p>
+      )}
+
       {rows.map((row, i) => (
         <div key={i} className="editable-row-card">
           <div className="editable-row" style={{ marginTop: 8 }}>
