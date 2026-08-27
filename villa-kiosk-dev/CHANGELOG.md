@@ -1,3 +1,14 @@
+## 2.828.0
+
+### Changed — what the villa concludes is called an Alert, everywhere you read it
+The screen said "Concern" while the thing it named was the one message that
+reaches your phone, sitting beside a To-Do List that names the work. One word
+for each half, consistently: the Reason tab heading and empty state, the
+escalation and for-your-information notes, the settled counts, the flag row on
+Triage, the tuning list, the To-Do List tooltips, and the prose in your briefing
+and in the pipeline-test message. Nothing behind the screen moved — the stored
+record, its states and every setting are untouched.
+
 ## 2.827.0
 
 ### Changed — an alert tells you, a to-do item records the work, and only one messages
