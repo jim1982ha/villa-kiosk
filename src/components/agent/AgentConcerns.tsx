@@ -174,10 +174,24 @@ export default function AgentConcerns() {
             Concerns — what the villa concluded
           </div>
           <p className="muted body-text">
-            No concerns right now. When an investigation decides something
-            needs your attention, it appears here — an investigation that
-            finds nothing raises nothing, and that is a complete answer.
+            {settled.length > 0
+              ? "Nothing is open right now. Everything the villa has raised "
+                + "has been dealt with — the record is below."
+              : "No concerns right now. When an investigation decides "
+                + "something needs your attention, it appears here — an "
+                + "investigation that finds nothing raises nothing, and that "
+                + "is a complete answer."}
           </p>
+          {/* ⚠️ THE SETTLED RECORD IS SHOWN WHEN NOTHING IS OPEN, AND IT WAS
+              THE ONE CASE THAT DROPPED IT (2026-08-28). This block returned
+              early, so `SettledSummary` — which only renders from the main
+              return below — was unreachable exactly when it was the only
+              thing left to say. The owner met the contradiction it creates:
+              the Triage tab totals "N raised as a concern" from the checks'
+              own records while this tab said "No concerns", which reads as
+              one screen disagreeing with the other about the same villa.
+              Both were true; only one was complete. */}
+          <SettledSummary concerns={settled} />
         </>
       );
     }

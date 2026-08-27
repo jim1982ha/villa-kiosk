@@ -820,6 +820,51 @@ def test_the_concerns_list_says_WHAT_GETS_CHASED() -> None:
             "longer works that way")
 
 
+def test_the_settled_record_survives_an_empty_OPEN_list() -> None:
+    """⚠️ TWO TABS DISAGREEING ABOUT ONE VILLA, which is this subsystem's
+    cardinal sin (2026-08-28). Triage totals "N raised as a concern" from the
+    checks' own records; the Reason tab said "No concerns right now" whenever
+    nothing was OPEN — because the early return for an empty list skipped the
+    `SettledSummary` that only the main return rendered. Both sentences were
+    true and only one was complete, so the owner reasonably read it as a
+    concern that had gone missing.
+
+    Pinned by SHAPE rather than by wording: the settled summary must be
+    reachable from EVERY return path that renders the section, so a future
+    early return cannot silently drop the record again.
+    """
+    src = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    body = src[src.index("if (rows.length === 0)"):]
+    empty_branch = body[:body.index("return (\n    <>")] if "return (\n    <>" in body else body
+    assert "<SettledSummary" in empty_branch, (
+        "the empty-open branch drops the settled record, so a villa whose "
+        "concerns have all been dealt with reads as a villa that never "
+        "raised one — while the Triage tab still counts them")
+    # ⚠️ AND THE COMPONENT MUST STILL RENDER IT ON THE POPULATED PATH, or this
+    # pin would pass on a build that moved it and lost the other half.
+    assert src.count("<SettledSummary") >= 2, (
+        "the settled record no longer reaches both return paths")
+
+
+def test_recent_checks_reloads_its_flags_when_a_new_check_arrives() -> None:
+    """⚠️ "4 items flagged in this check" ABOVE AN EMPTY CARD (2026-08-28).
+    The parent refetches `passes` when "Check the villa now" finishes, but
+    `RecentChecks` fetched its flags, its pending queue and its concerns once,
+    on mount — so every manual check drew a card whose own items were missing
+    until the dialog was closed and reopened.
+
+    The effect must therefore depend on something that CHANGES when a new
+    check exists, not on the mount alone."""
+    src = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    effect = re.search(r"useEffect\(\(\)\s*=>\s*\{\s*void load\(\);\s*\},\s*"
+                        r"\[([^\]]*)\]\)", src)
+    assert effect, "the flag-loading effect moved; this pin is blind"
+    deps = effect.group(1)
+    assert deps.strip() not in ("", "load"), (
+        "RecentChecks still loads its flags on mount alone, so a check "
+        "started from this dialog renders with no items under it")
+
+
 def test_the_APP_never_shows_the_word_caretaker_either() -> None:
     """⚠️ THE THIRD TIME THIS RULE WAS BROKEN, AND THE FIRST IN THE UI. The
     owner's standing instruction is that this product says **Facility Manager**,

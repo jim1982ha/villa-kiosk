@@ -3745,6 +3745,31 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-row-title-action { margin-left: auto; }
 .fm-row-sub { font-size: var(--text-xs); }
 
+/* One flagged item inside a check card (Triage tab).
+   ⚠️ THE BASIS IS THE WHOLE FIX, AND ITS ABSENCE WAS THE BUG (2026-08-28).
+   The text block carried `flex: 1; min-width: 0` inline, so it was free to
+   shrink to nothing while the status beside it — a long, unbreakable string
+   ("Looked into — all clear · 27 Aug, 11:34") — kept its full width. On a
+   phone the reason was crushed into a ~35% column and ran to eleven lines
+   beside one line of status, reported from the handset exactly that way.
+   A basis of 260px means the row can only stay two-up while BOTH fit;
+   otherwise `.fm-row`'s existing `flex-wrap: wrap` drops the status onto its
+   own line. No breakpoint decides that — the content does, so it is right at
+   every width rather than at the two somebody tested. */
+.flag-row-main { flex: 1 1 260px; min-width: 0; display: flex;
+                 flex-direction: column; gap: 2px; }
+.flag-row-reason { font-size: var(--text-sm); }
+/* ⚠️ `nowrap` SO IT BREAKS AS A BLOCK, NOT MID-PHRASE. "27 Aug, 11:34" split
+   across two lines reads as two facts. It shrinks by wrapping the whole
+   element, which is what the basis above arranges. */
+.flag-row-status { flex: 0 0 auto; display: inline-flex; align-items: center;
+                   gap: 6px; white-space: nowrap; }
+@media (max-width: 560px) {
+  /* Full width once wrapped, so the status aligns with the text above it
+     rather than floating in the middle of the card. */
+  .flag-row-status { width: 100%; }
+}
+
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status
    action already in these rows, and on a phone there is no width for both. */

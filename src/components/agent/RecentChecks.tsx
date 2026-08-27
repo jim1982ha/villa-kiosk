@@ -110,20 +110,20 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
 
   return (
     <li className="fm-row body-text">
-      <div style={{ flex: 1, minWidth: 0 }}>
+      {/* ⚠️ A CLASS, NOT INLINE FLEX. `flex: 1` with no basis let this column
+          shrink to nothing beside an unbreakable status string — eleven lines
+          of reason in a 35% column on a phone. `.flag-row-main` carries a
+          260px basis so the row wraps instead of crushing. */}
+      <div className="flag-row-main">
         <div>{flag.subject}</div>
         {/* Triage's reason: why this earned a closer look. Older audit rows
             carry none, and an absent reason renders nothing rather than a
             placeholder pretending one was recorded. */}
         {flag.reason && (
-          <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
-            {flag.reason}
-          </div>
+          <div className="muted flag-row-reason">{flag.reason}</div>
         )}
         {flag.dismissNote && (
-          <div className="muted" style={{ fontSize: "var(--text-sm)" }}>
-            Note: {flag.dismissNote}
-          </div>
+          <div className="muted flag-row-reason">Note: {flag.dismissNote}</div>
         )}
       </div>
 
@@ -153,15 +153,15 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
            (2.780.0). Before that a concern named its subject as a HASH of an
            entity id the flag usually does not carry, so this could only ever
            have said "no concern" — including when there was one. */
-        <span className="sev-warning" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}, and it found something: “${concern.title}”. Read it on the Reason tab.`}>
+        <span className="sev-warning flag-row-status" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}, and it found something: “${concern.title}”. Read it on the Reason tab.`}>
           <AlertCircle size={16} aria-hidden /> Concern{at}
         </span>
       ) : flag.verdict === "dismissed" ? (
-        <span className="muted" title={`Skipped${byWhom}, without spending anything. If it is still true, a later check flags it again.`}>
+        <span className="muted flag-row-status" title={`Skipped${byWhom}, without spending anything. If it is still true, a later check flags it again.`}>
           <MinusCircle size={16} aria-hidden /> Skipped{at}
         </span>
       ) : flag.runStatus === "failed" || flag.runStatus === "declined" ? (
-        <span className="sev-warning" title={`The investigation started${byWhom} but could not finish (${flag.runStatus}). Nothing was concluded — flag it again or check Spend & people for a budget stop.`}>
+        <span className="sev-warning flag-row-status" title={`The investigation started${byWhom} but could not finish (${flag.runStatus}). Nothing was concluded — flag it again or check Spend & people for a budget stop.`}>
           <AlertCircle size={16} aria-hidden /> Did not finish{at}
         </span>
       ) : flag.verdict === "escalated" || mode === "live" ? (
@@ -169,11 +169,11 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
            an investigation RAN (`escalated`), and the concern store says
            nothing came of it — so "looked at, found nothing to raise" is a
            statement about THIS flag, not a guess from the villa's mode. */
-        <span className="muted" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}. It looked at the evidence and concluded nothing needs your attention — a complete answer, not a failure.`}>
+        <span className="muted flag-row-status" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}. It looked at the evidence and concluded nothing needs your attention — a complete answer, not a failure.`}>
           <MinusCircle size={16} aria-hidden /> Looked into — all clear{at}
         </span>
       ) : mode === "observe" ? (
-        <span className="muted" title="Investigated quietly. Whatever it concluded is written into your next briefing rather than sent as an alert.">
+        <span className="muted flag-row-status" title="Investigated quietly. Whatever it concluded is written into your next briefing rather than sent as an alert.">
           <FileText size={16} aria-hidden /> In your next briefing{at}
         </span>
       ) : (
@@ -181,7 +181,7 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
            Claiming "in the briefing" would be a claim about a setting nobody
            stored, and it is FALSE in Flag & Ask. "Settled" is the most this
            row can honestly say. */
-        <span className="muted" title="This flag was dealt with, but the check that raised it predates the record of how.">
+        <span className="muted flag-row-status" title="This flag was dealt with, but the check that raised it predates the record of how.">
           <MinusCircle size={16} aria-hidden /> Settled{at}
         </span>
       )}
@@ -223,7 +223,19 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
     setConcerns(c);
     setPending(new Set((q?.pending ?? []).map((p) => p.runId)));
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  // ⚠️ RELOADED WHEN THE CHECKS CHANGE, NOT ONLY ON MOUNT (2026-08-28). The
+  // parent refetches `passes` when "Check the villa now" finishes, so a new
+  // card appeared — with NO items under it, because the flags, the pending
+  // queue and the concerns were all still the ones fetched when the dialog
+  // opened. A check that says "4 items flagged" above an empty card is the
+  // screen contradicting itself, and it is what an owner sees every time they
+  // press the button without closing and reopening the dialog.
+  //
+  // ⚠️ KEYED ON THE LATEST CHECK'S ID, NOT ON THE ARRAY. `passes` is a fresh
+  // array on every parent render, so depending on it directly would refetch
+  // three stores on each one; the id changes exactly when a new check exists.
+  const newest = passes.length ? (passes[passes.length - 1].runId || "") : "";
+  useEffect(() => { void load(); }, [load, newest]);
 
   const decide = useCallback(async (runId: string, action: "approve" | "dismiss") => {
     setBusy(runId);
