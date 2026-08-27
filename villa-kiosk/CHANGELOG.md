@@ -1,3 +1,12 @@
+## 2.815.1
+
+### Changed — removed a leftover variable pointing at an input that no longer exists
+The two critical blueprints still declared a `bucket` variable reading a
+`bucket_input` that was deleted when their reporting fields were stripped.
+Nothing read it and an undefined name is harmless, but it reads as a missing
+input to anybody opening the file. No re-import needed — it changes nothing
+observable.
+
 ## 2.815.0
 
 ### Changed — only the newest task message keeps its buttons
