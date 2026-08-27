@@ -1,3 +1,14 @@
+## 2.829.0
+
+### Fixed — a check said "5 items flagged" above two cards and explained neither
+The heading counted what the check FLAGGED; the cards below showed only what it
+LOOKED INTO. The rest were not lost — a check investigates at most two things,
+to cap what it spends, and the others wait for the next one. Both numbers were
+right and nothing on screen joined them, so the heading read as a miscount. It
+now says "5 items flagged in this check — 2 looked into, 3 waiting for the next
+check", read from the figure the check already recorded rather than worked out
+by subtraction, so a check stopped for any other reason is not mislabelled.
+
 ## 2.828.0
 
 ### Changed — what the villa concludes is called an Alert, everywhere you read it

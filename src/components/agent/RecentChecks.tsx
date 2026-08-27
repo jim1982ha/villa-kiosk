@@ -61,6 +61,25 @@ export const reasonOf = (p: TriagePass) => (p.detail || "").split(" | ")[0].trim
  *  MONEY GOES AND THE PAGE WAS BLIND TO IT: "reached 0 of 24" cannot be told
  *  apart from an assistant that looked twenty times and correctly concluded
  *  nothing, which `reason.SYSTEM` instructs outright. */
+/** How many of a check's flags are still WAITING, out of `Followup.clause`'s
+ *  "3 left for next pass".
+ *
+ *  ⚠️ THE HEADING SAID "5 items flagged" OVER TWO CARDS AND EXPLAINED NOTHING
+ *  (2026-08-28, reported). Both halves were true and nothing joined them:
+ *  `pass.escalated` is what TRIAGE flagged, while a card is drawn per audit row
+ *  carrying a subject — and only an INVESTIGATED flag gets one. The other three
+ *  were deferred by `max_investigations_per_pass` (2, the cost cap), so they
+ *  exist, are named in the pass record, and had nowhere on screen to be.
+ *
+ *  ⚠️ THE NUMBER WAS ALREADY ON THE ROW. `reason.py` writes "escalated 5
+ *  (investigated 2, 3 left for next pass)" — this reads the third figure rather
+ *  than deriving it by subtraction, so a check that stopped for a DIFFERENT
+ *  reason (budget, a provider outage) does not get counted as deferred. */
+export function deferredOf(reason: string): number {
+  const m = /(\d+) left for next pass/.exec(reason);
+  return m ? Number(m[1]) : 0;
+}
+
 export function yieldOf(reason: string): { looked: number; raised: number } {
   const looked = /investigated (\d+)/.exec(reason);
   const raised = /(\d+) concerns?/.exec(reason);
@@ -524,6 +543,17 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
                           {pass.escalated ?? 0} item{pass.escalated === 1 ? "" : "s"}
                           {" flagged in this check"}
                         </strong>
+                        {/* ⚠️ AND WHY THE CARDS BELOW MAY BE FEWER. Without
+                            this the heading counted what was FLAGGED while the
+                            cards showed what was LOOKED INTO, with nothing
+                            saying the rest are queued rather than lost. */}
+                        {deferredOf(reasonOf(pass)) > 0 && (
+                          <span className="muted">
+                            {" — "}{yieldOf(reasonOf(pass)).looked} looked into,{" "}
+                            {deferredOf(reasonOf(pass))} waiting for the next
+                            check
+                          </span>
+                        )}
                         {/* ⚠️ THE INLINE-NAMES FALLBACK IS GONE (2026-08-28,
                             owner's request). It printed the flag names in the
                             heading sentence whenever pairing failed — the OLD

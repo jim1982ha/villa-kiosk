@@ -1262,3 +1262,33 @@ def test_the_ACT_tab_reports_its_permissions_rather_than_editing_them() -> None:
         assert shown in code, (
             f"the tab no longer reports {shown}, so an owner cannot see what "
             f"the villa is permitted to do without opening Settings")
+
+
+def test_a_check_SAYS_when_its_flags_are_still_WAITING() -> None:
+    """⚠️ "5 items flagged in this check" OVER TWO CARDS, reported 2026-08-28.
+
+    Both halves were true and nothing joined them. `pass.escalated` is what
+    TRIAGE flagged; a card is drawn per audit row carrying a SUBJECT, and only
+    an INVESTIGATED flag ever gets one. The rest were deferred by
+    `max_investigations_per_pass` — the cost cap, 2 — so three real, named
+    flags existed with nowhere on screen to be, and the heading read as a
+    miscount rather than a queue.
+
+    ⚠️ THE FIGURE WAS ALREADY ON THE ROW. `reason.Followup.clause` writes
+    "investigated 2, 3 left for next pass"; the screen simply never read the
+    third number. This pins that it does, and that it READS it rather than
+    subtracting — a check stopped for a different reason (budget, a provider
+    outage) must not be reported as deferred.
+    """
+    checks = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    assert "deferredOf" in checks, (
+        "nothing reads how many flags are waiting, so a check can show five "
+        "flagged over two cards and explain neither")
+    assert "left for next pass" in checks, (
+        "the deferred count is not read from the phrase the backend writes")
+    assert "waiting for the next" in checks, (
+        "the heading never tells the reader the remainder is queued")
+    # ⚠️ NOT DERIVED BY SUBTRACTION — see the docstring.
+    assert "escalated - " not in checks and "escalated -" not in checks, (
+        "the waiting count is computed by subtraction, so a check that "
+        "stopped for any other reason is mislabelled as deferred")
