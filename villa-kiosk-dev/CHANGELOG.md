@@ -1,3 +1,14 @@
+## 2.804.0
+
+### Fixed — a check card and its own flags showed times eight hours apart
+The Triage tab printed each check's heading in UTC (the raw stored stamp)
+while the flag rows under it went through the local-time formatter, so on a
+villa at UTC+8 a card headed `2026-08-27 03:35` carried items stamped
+`27 Aug, 11:34`. Reported as the list being out of ORDER; it was not — the
+checks were correctly newest-first, which is impossible to see when half a
+card is on a different clock. Both now use the one formatter, pinned as "no
+raw stamp reaches the screen" so a second raw render cannot reintroduce it.
+
 ## 2.803.0
 
 ### Fixed — a critical alert that never named the device it was about
