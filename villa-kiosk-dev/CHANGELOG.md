@@ -1,3 +1,17 @@
+## 2.807.0
+
+### Added — a fire drill for the alerting path, so delivery can be tested on purpose
+"Does a concern actually reach my phone and my to-do list?" was answerable
+only by waiting for the villa to genuinely go wrong: triage and the
+investigation both end in a model judgement, and both are told to conclude
+nothing rather than speak weakly. `POST /agent-run-now {"drill": true}`
+(owner-only) now raises one synthetic concern through the same sink the
+model's own tool uses and runs the same routing, delivery, to-do and
+escalation sweep a scheduled pass runs — no model, so it cannot decline and
+costs nothing. Its title announces it as a test; it is topic-keyed so it can
+never collide with a real device, and `severity: critical` is what exercises
+the push and the escalation ladder.
+
 ## 2.806.0
 
 ### Changed — the Reason tab loses a redundant heading, and the assistant counts offline devices instead of naming them
