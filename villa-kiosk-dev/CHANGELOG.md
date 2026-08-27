@@ -1,3 +1,14 @@
+## 2.801.0
+
+### Changed — the flag card is one column, and the old record style is gone
+The outcome line ("Looked into — all clear · date") now renders inside the
+card's text, on its own line under the reason it concludes — only a waiting
+flag's two action buttons stay on the right. And the old record form is fully
+retired: checks recorded before flags carried an id are no longer listed, and
+the fallback that printed flag names inline in the heading sentence is
+deleted, so no check can render in the old layout again. Waiting flags from
+that era stay actionable in their own card.
+
 ## 2.800.0
 
 ### Fixed — the checks total read as the newest check's yield, and Cancel all hid
