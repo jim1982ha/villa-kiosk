@@ -1,3 +1,14 @@
+## 2.815.0
+
+### Changed — only the newest task message keeps its buttons
+A job that went unanswered produced a second Telegram with its own Done and
+Need help, leaving two live pairs for one job and no way to tell which was
+current. The reminder now strips the buttons from the message it supersedes,
+so exactly one pair is ever pressable. It is best-effort: if the id cannot be
+learned the tidy-up is skipped and the job behaves as before, because losing
+a reminder would cost the job while losing the tidy-up costs nothing.
+⚠️ **Re-import the task blueprint** — it is delivered by hand.
+
 ## 2.814.0
 
 ### Changed — one word for chasing, and the reminder message says which job it is about
