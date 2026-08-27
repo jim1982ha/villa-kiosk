@@ -3670,10 +3670,21 @@ def main() -> None:
         # start-up, so an operator's change takes effect on the next cycle.
         a["agent_triage"] = asyncio.create_task(
             agent_scheduler.run_forever(a["session"], _agent_config_now))
+        # ⚠️ A SECOND CLOCK, AND IT IS NOT THE SAME CLOCK. The triage loop above
+        # sleeps out the villa's cadence — 360 minutes here — and the escalation
+        # ladder's bands are 15/45/90 MINUTES. Sharing the loop is what made a
+        # timed promise on a concern card up to six hours late. This one asks no
+        # model and spends nothing.
+        a["agent_chase"] = asyncio.create_task(
+            agent_scheduler.chase_forever(a["session"], _agent_config_now))
 
     async def on_cleanup(a: web.Application) -> None:
+        # ⚠️ EVERY BACKGROUND TASK MUST BE NAMED HERE. The list is hand-kept,
+        # so a task started above and not added holds the whole shutdown open
+        # until aiohttp's timeout — the trap `run_forever`'s own docstring
+        # describes about re-raising CancelledError, one level up.
         for key in ("reports_task", "reports_collector", "observe_cycle",
-                    "agent_triage"):
+                    "agent_triage", "agent_chase"):
             task = a.get(key)
             if task is not None:
                 task.cancel()

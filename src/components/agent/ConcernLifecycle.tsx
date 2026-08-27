@@ -26,6 +26,51 @@
 
 import type { Concern, ConcernState } from "@/agent/agentTypes";
 import InfoHint from "@/components/common/InfoHint";
+import { downloadFile, filenameSlug } from "@/utils/download";
+
+/** One settled group, as a spreadsheet.
+ *
+ *  ⚠️ THE COUNTS WERE THE ONLY RECORD AND THEY ARE NOT READABLE (2026-08-28,
+ *  owner's request). "Closed 3" is the end of the trail: the wall lists live
+ *  concerns only, so what those three WERE — what was raised, when, who was
+ *  told, how it ended — existed on the tablet and nowhere a person could take
+ *  away. Pressing a count now downloads exactly that group.
+ *
+ *  ⚠️ CSV, AND `\r\n` ENDINGS, BECAUSE THE DESTINATION IS A SPREADSHEET. RFC
+ *  4180 is what Excel and Numbers expect; a bare \n opens as one long row in
+ *  older Excel on Windows, which is precisely the reader who asked for a file
+ *  rather than a screen.
+ *
+ *  ⚠️ EVERY FIELD IS QUOTED AND EVERY QUOTE DOUBLED. A concern title is model
+ *  prose and routinely contains a comma; one unquoted comma shifts every later
+ *  column of that row silently, which is a spreadsheet that looks fine and is
+ *  wrong. */
+const CSV_COLUMNS = ["Raised", "Severity", "What it said", "Outcome",
+                     "Told", "Told to", "Seen by"] as const;
+
+function toCsv(rows: Concern[]): string {
+  const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const when = (iso: unknown) => {
+    const d = new Date(String(iso ?? ""));
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
+  };
+  const lines = [CSV_COLUMNS.map(cell).join(",")];
+  for (const c of rows) {
+    lines.push([
+      when(c.openedAt), c.severity, c.title,
+      // The settled record's whole point: closed, dismissed and "the fix did
+      // not hold" are three different endings and the count cannot say which.
+      c.outcome ?? "",
+      when(c.delivered_at),
+      (c.deliveries ?? []).map((d) => d.profile).join(" then ")
+        || (c.audience === "facility" ? "Facility manager" : "Owner"),
+      c.acknowledged_by ?? "",
+    ].map(cell).join(","));
+  }
+  // ⚠️ A TRAILING NEWLINE. POSIX tools treat a file without one as truncated,
+  // and this is a file somebody may pipe as well as open.
+  return lines.join("\r\n") + "\r\n";
+}
 
 /** ⚠️ ONE TABLE, AND IT IS THE ONLY PLACE A STATE IS NAMED OR EXPLAINED. Five
  *  states rendered ad hoc across a list and a history view is five chances to
@@ -117,11 +162,23 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
   // that can say a fix WORKED while having no way to say one FAILED reports a
   // success rate of 100% by construction. The two are produced by the same
   // sweep, in the same pass, from the same evidence.
-  const cameBack = concerns.filter(
-    (c) => String(c.state ?? "") === "closed"
-        && String(c.outcome ?? "").startsWith("the fix did not hold")).length;
+  const isCameBack = (c: Concern) =>
+    String(c.state ?? "") === "closed"
+    && String(c.outcome ?? "").startsWith("the fix did not hold");
+  const cameBack = concerns.filter(isCameBack).length;
   const closed = by("closed") - cameBack;
   if (verified + dismissed + closed + cameBack === 0) return null;
+
+  /** ⚠️ THE GROUP IS DERIVED THE SAME WAY IT IS COUNTED, from one predicate
+   *  each, so a file can never disagree with the number that opened it. The
+   *  first cut filtered again inside the handler and `Closed` exported the
+   *  came-back rows too — the number said 3 and the file held 4. */
+  const save = (label: string, rows: Concern[]) => {
+    if (rows.length === 0) return;
+    downloadFile(`vesta-${filenameSlug(label)}-${
+      new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows),
+      "text/csv;charset=utf-8");
+  };
 
   // ⚠️ SUBJECTS AT OR PAST THE THRESHOLD, computed the same way the backend
   // counts them: dismissals grouped by `subjectKey`. A subject here is one the
@@ -175,19 +232,47 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
               </p>
             </InfoHint>
           </dt>
-          <dd>{verified}</dd>
+          <dd>
+            <button type="button" className="link-count"
+                    disabled={verified === 0}
+                    title="Download these as a spreadsheet"
+                    onClick={() => save("Fixed and confirmed", concerns.filter((c) => String(c.state ?? "") === "verified"))}>
+              {verified}
+            </button>
+          </dd>
         </div>
         <div>
           <dt>Came back</dt>
-          <dd>{cameBack}</dd>
+          <dd>
+            <button type="button" className="link-count"
+                    disabled={cameBack === 0}
+                    title="Download these as a spreadsheet"
+                    onClick={() => save("Came back", concerns.filter(isCameBack))}>
+              {cameBack}
+            </button>
+          </dd>
         </div>
         <div>
           <dt>Judged not useful</dt>
-          <dd>{dismissed}</dd>
+          <dd>
+            <button type="button" className="link-count"
+                    disabled={dismissed === 0}
+                    title="Download these as a spreadsheet"
+                    onClick={() => save("Judged not useful", concerns.filter((c) => String(c.state ?? "") === "dismissed"))}>
+              {dismissed}
+            </button>
+          </dd>
         </div>
         <div>
           <dt>Closed</dt>
-          <dd>{closed}</dd>
+          <dd>
+            <button type="button" className="link-count"
+                    disabled={closed === 0}
+                    title="Download these as a spreadsheet"
+                    onClick={() => save("Closed", concerns.filter((c) => String(c.state ?? "") === "closed" && !isCameBack(c)))}>
+              {closed}
+            </button>
+          </dd>
         </div>
       </dl>
       {silenced > 0 && (

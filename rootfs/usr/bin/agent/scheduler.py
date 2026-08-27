@@ -40,6 +40,7 @@ from agent import audit
 from agent import budget as budget_mod
 from agent import config as agent_config
 from agent import reason as reason_mod
+from agent import route as route_mod
 from agent import triage as triage_mod
 from reports import store
 from reports.log import log, pass_scope, stage, swallow, warn
@@ -242,6 +243,52 @@ def due_in(minutes: float, now: Optional[float] = None,
     return max(0.0, min(period, period - elapsed))
 
 
+async def chase_forever(session: Any,
+                        config_source: Optional[Callable[[], Mapping[str, Any]]]
+                        = None) -> None:
+    """The chase clock. Never exits except on cancellation.
+
+    ⚠️ THE LADDER HAD NO CLOCK OF ITS OWN AND ITS BANDS ARE IN MINUTES. The
+    escalation sweep's only caller was the tail of a triage pass, so on this
+    property — checking every 360 minutes — a 15-minute band was evaluated up to
+    six hours late, while the concern card promised a time. It went unnoticed
+    because the reference villa had nobody in the facility manager role, and
+    that branch skips the bands entirely and escalates at once; adding one is
+    what makes the clock start mattering, and the owner adding one is what
+    surfaced this.
+
+    ⚠️ IT RUNS `dispatch`, NOT JUST THE ESCALATION SWEEP, and that is a feature
+    rather than a shortcut. `dispatch` also releases concerns HELD for quiet
+    hours and reconciles jobs somebody has ticked — both are time-sensitive in
+    exactly the same way and both were waiting on the same six-hour clock. It
+    asks no model and spends nothing; the whole function is store reads plus a
+    notify call when something is genuinely due.
+
+    ⚠️ SEPARATE TASK, NOT FOLDED INTO `run_forever`. That loop deliberately
+    sleeps out the remainder of a cadence period and `continue`s, so anything
+    sharing it inherits the triage cadence — which is the bug. Two rhythms, two
+    tasks, and the master switch is read per tick by both.
+    """
+    log(f"chase clock started ({route_mod.SWEEP_MINUTES} min)")
+    while True:
+        try:
+            config = config_source() if config_source else None
+            # ⚠️ THE MASTER SWITCH IS ASKED HERE TOO. A villa with supervision
+            # off must not have its concerns chased by a second loop that never
+            # heard about it.
+            if agent_config.view(config).get("enabled"):
+                with pass_scope("chase"):
+                    carried = await dispatch(session, config=config)
+                    if carried:
+                        log(f"outcome:{carried}")
+        except asyncio.CancelledError:
+            log("chase clock stopped")
+            raise
+        except Exception as err:  # noqa: BLE001 - degrade, never fail
+            swallow("chase sweep failed", err)
+        await asyncio.sleep(max(1.0, route_mod.SWEEP_MINUTES * 60.0))
+
+
 async def run_forever(session: Any,
                       config_source: Optional[Callable[[], Mapping[str, Any]]]
                       = None) -> None:
@@ -432,6 +479,13 @@ async def dispatch(session: Any,
     # tonight's pass concluded anything has no bearing on it.
     held = concerns_mod.verification_sweep()
     out_verify = (f" | verify: {held.line()}" if held.changed() else "")
+
+    # ⚠️ A TICKED JOB COUNTS AS "SOMEBODY HAS THIS", HOWEVER IT WAS TICKED, and
+    # it runs BEFORE the escalation sweep below so a job finished on a phone
+    # stops the chase in the same pass rather than the next one. See
+    # `task.reconcile_done` for why this is not a blueprint change.
+    from agent import task as task_mod
+    await task_mod.reconcile_done(session, config=config)
 
     # ⚠️ NEVER RAISES — `sweep` returns a typed result on every path, because
     # one of its two callers is a background clock nobody is watching.

@@ -126,6 +126,80 @@ async def _accepts_description(hass: Any, entity_id: str) -> bool:
     return False
 
 
+async def reconcile_done(session: Any, *,
+                         config: Optional[Mapping[str, Any]] = None,
+                         now: Optional[float] = None) -> int:
+    """Tick the concern for every job somebody has already ticked. Returns how
+    many were marked seen. NEVER RAISES.
+
+    ⚠️ TWO "DONE" BUTTONS DID TWO DIFFERENT THINGS, AND THE PHONE'S DID LESS
+    (2026-08-28, reported: "Can you confirm that if i click on Done, it will do
+    exactly the same as if i click on Done in the Jobs tab?"). It did not.
+    `AgentJobs.finish` completes the item AND acknowledges the concern, which is
+    what takes the card off the Reason tab and stops the chase. The Telegram
+    button — `vesta_task_actions.yaml`'s "Done - complete the item the tablet
+    ticks" — only sets the item to `completed`. So a facility manager who did
+    the work and pressed Done on their phone left the concern unacknowledged:
+    still on the wall, still counted as awaiting a person, and if it were
+    critical, still being chased for work already finished. That is the exact
+    failure the Jobs tab was built to remove, reachable from the other end.
+
+    ⚠️ FIXED HERE RATHER THAN IN THE BLUEPRINT, AND THAT IS THE WHOLE DESIGN
+    CHOICE. The blueprint is hand-delivered and needs re-importing to change, so
+    a fix there reaches only a villa whose owner remembers to do it. More
+    importantly, it would fix ONE button: ticking the item in Home Assistant's
+    own to-do panel, or from a voice assistant, or from any other client, would
+    still leave the concern standing. "The job is done" is a fact about the
+    LIST, so it is read from the list — one rule, however the tick arrived.
+
+    ⚠️ IT ACKNOWLEDGES, IT DOES NOT CLOSE. Acknowledging says a person has this;
+    closing says the villa's problem is over, and only the condition clearing
+    can say that (`concerns.acknowledge`'s own docstring is emphatic). A ticked
+    job means somebody dealt with the work, not that the pump stopped
+    misbehaving.
+    """
+    from agent import concerns as concerns_mod
+    from reports import ledger as ledger_mod
+    from reports.hass import HassClient
+
+    entity_id = list_for(config)
+    if not entity_id or session is None:
+        return 0
+    try:
+        async with HassClient(session) as hass:
+            done = await ledger_mod.todo_tasks(hass, [entity_id],
+                                               status="completed")
+    except Exception as err:  # noqa: BLE001 - a reconciliation is not worth a pass
+        swallow("could not read which jobs have been ticked", err)
+        return 0
+
+    # ⚠️ THE BRACKET IS THE JOIN, and it is the same one the blueprint's Done
+    # matches on and the same one `summary_for` writes. `todo_tasks` has already
+    # parsed it into `rule_id`, so nothing here re-implements the parse.
+    ticked = {str(t.get("rule_id") or "") for t in done}
+    ticked.discard("")
+    if not ticked:
+        return 0
+
+    marked = 0
+    for row in concerns_mod.read():
+        if str(row.get("id")) not in ticked:
+            continue
+        if str(row.get("acknowledged_at") or "").strip():
+            continue
+        if not str(row.get("delivered_at") or "").strip():
+            # Nobody was told, so there is nothing to acknowledge — and
+            # `acknowledge` would happily stamp it, which would stop a chase
+            # that was never going to start and hide the row from the wall.
+            continue
+        ok, _ = concerns_mod.acknowledge(str(row.get("id")),
+                                         by="the job was ticked", now=now)
+        marked += 1 if ok else 0
+    if marked:
+        stage("task", f"{marked} concern(s) marked seen — their job was ticked")
+    return marked
+
+
 async def raise_for(session: Any, concern: Mapping[str, Any], *,
                     config: Optional[Mapping[str, Any]] = None) -> str:
     """Create the facility manager job and announce it. `raised | off | failed`.

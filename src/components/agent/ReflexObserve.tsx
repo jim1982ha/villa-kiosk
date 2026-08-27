@@ -11,7 +11,50 @@
 
 import InfoHint from "@/components/common/InfoHint";
 import { TierIntro, TIERS, FAMILIES } from "./tiers";
+import { useHA } from "@/ha/HAStateStore";
 import type { ReportsDiagnostics } from "@/reports/reportsApi";
+
+/** What a family that emits NO events has actually been doing, read from Home
+ *  Assistant's own automations.
+ *
+ *  ⚠️ THE COUNT BESIDE `control` COULD ONLY EVER SAY "nothing yet", AND DID
+ *  (2026-08-28, reported: "i am surprise to see that Control is not reporting
+ *  anything… how can you factually prove me that it's working"). Every count on
+ *  this tab came from the collector's tally of `vesta_<family>_event`, and a
+ *  control automation ACTS — it turns the fan on — and emits nothing. So the
+ *  cell was structurally pinned at zero while four of these ran that same day.
+ *  A number with one possible value is not a status, it is decoration; this app
+ *  removed a lifecycle chip for exactly that reason.
+ *
+ *  ⚠️ SO IT ASKS A DIFFERENT SOURCE, WHICH IS THE ONLY HONEST ONE AVAILABLE.
+ *  Home Assistant stamps `last_triggered` on every automation, so "did this
+ *  fire, and when" is a fact already on the wire — no new plumbing, no event
+ *  the blueprints would have to start emitting, and it keeps working for
+ *  automations an owner wrote themselves as long as they follow the naming.
+ *
+ *  ⚠️ MATCHED ON THE FAMILY PREFIX, which is the SAME convention the event
+ *  names use (`vesta_<family>_event` is derived from the blueprint's filename
+ *  stem). Nothing villa-specific: `control` is this project's own stem, and the
+ *  friendly name is whatever the owner's instance carries after it. */
+function actedFrom(entities: Record<string, { state?: string; attributes?: Record<string, unknown> }>,
+                   family: string): { configured: number; on: number; fired: number; today: number } {
+  const out = { configured: 0, on: 0, fired: 0, today: 0 };
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  for (const [id, e] of Object.entries(entities ?? {})) {
+    if (!id.startsWith("automation.")) continue;
+    const name = String(e?.attributes?.friendly_name ?? "");
+    if (!name.startsWith(`${family}_`)) continue;
+    out.configured += 1;
+    if (String(e?.state ?? "") === "on") out.on += 1;
+    const last = String(e?.attributes?.last_triggered ?? "");
+    const at = last ? Date.parse(last) : NaN;
+    if (Number.isFinite(at)) {
+      out.fired += 1;
+      if (at >= dayAgo) out.today += 1;
+    }
+  }
+  return out;
+}
 
 /** ⚠️ ONE FORMATTER, BOTH TABS. A count rendered "1,284" in one place and
  *  "1284" three lines below reads as two different systems reporting. */
@@ -36,6 +79,7 @@ export function ReflexTab({ diagnostics }: {
   diagnostics: ReportsDiagnostics | null;
 }) {
   const c = diagnostics?.collector;
+  const { entities } = useHA();
   // ⚠️ ONLY WHAT ACTS BY ITSELF. This listed EVERY blueprint family the
   // collector knows about — including `maintenance` and `roi`, which are
   // retired detection the assistant replaced, and `audit`, which is a channel
@@ -84,15 +128,38 @@ export function ReflexTab({ diagnostics }: {
         {families.map((cat) => {
           const seen = c?.seenTypes[`vesta_${cat}_event`] ?? 0;
           const fam = FAMILIES[cat];
+          // ⚠️ A FAMILY THAT REPORTS NOTHING IS COUNTED FROM ITS AUTOMATIONS
+          // INSTEAD, not left at zero. See `actedFrom`. `acted` is null for
+          // every family that DOES emit events, so their cells are unchanged
+          // byte for byte and the collector stays their one source.
+          const acted = fam?.silent ? actedFrom(entities, cat) : null;
+          const live = acted ? acted.today || acted.fired || acted.configured : seen;
           return (
-            <div key={cat} className={`reflex-row${seen ? "" : " muted"}`}>
+            <div key={cat} className={`reflex-row${live ? "" : " muted"}`}>
               <dt>{cat}</dt>
               {/* ⚠️ NEVER BLANK. An unlisted family rendered an empty cell, which
                   reads as "this family does nothing" rather than "nobody has
                   described it" — `control` and `vesta` both showed that way. */}
               <dd className="reflex-role">{fam?.role ?? "not yet described"}</dd>
-              <dd className="reflex-count">
-                {seen ? `${num(seen)} so far` : "nothing yet"}
+              {/* ⚠️ THE MOST RECENT TRUE THING, not a running total. For a
+                  reporting family the total IS the answer; for an acting one
+                  "4 acted today" answers "is this alive", which is the question
+                  a reader opens this tab with. The full breakdown is the
+                  tooltip, so the column stays one short phrase wide. */}
+              <dd className="reflex-count"
+                  title={acted
+                    ? `${acted.configured} set up, ${acted.on} switched on, `
+                      + `${acted.fired} have ever fired, ${acted.today} in the `
+                      + `last 24 hours. Counted from Home Assistant's own `
+                      + `automations, because this family acts rather than `
+                      + `reports and so emits nothing to count.`
+                    : undefined}>
+                {acted
+                  ? (acted.today ? `${num(acted.today)} acted today`
+                    : acted.fired ? `${num(acted.fired)} have fired`
+                    : acted.configured ? `${num(acted.configured)} set up`
+                    : "none installed")
+                  : (seen ? `${num(seen)} so far` : "nothing yet")}
               </dd>
             </div>
           );

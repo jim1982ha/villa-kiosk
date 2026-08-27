@@ -5716,3 +5716,17 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* A count that downloads its own group (2026-08-28, owner's request). It must
+   still READ as the number it replaced — the settled row is a breakdown, and a
+   button styled like a button would turn four figures into four controls and
+   bury the figures. So: the number's own type, an underline on hover to say it
+   is pressable, and the disabled state simply looks like the plain count it is
+   when there is nothing to download. */
+.link-count {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: inherit; cursor: pointer;
+}
+.link-count:hover:not(:disabled),
+.link-count:focus-visible { text-decoration: underline; }
+.link-count:disabled { cursor: default; }

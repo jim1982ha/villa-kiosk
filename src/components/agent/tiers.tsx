@@ -256,7 +256,14 @@ export function TierIntro({ tier, speed, children }: {
  *  `audit_notification_path`. `critical_*` was never on that list: the HLD §5
  *  keeps ~6 as reflexes because "a model in the path of a leak sensor is a
  *  design error. This is physics, not preference." */
-export const FAMILIES: Record<string, { role: string; reflex?: true }> = {
+export const FAMILIES: Record<string, {
+  role: string;
+  reflex?: true;
+  /** ⚠️ ACTS RATHER THAN REPORTS, so the collector's event tally is
+   *  structurally zero for it and the count must come from Home Assistant's
+   *  automations instead — see `ReflexObserve.actedFrom`. */
+  silent?: true;
+}> = {
   critical: {
     role: "acts in under a second, on this property, with no AI involved",
     reflex: true,
@@ -303,8 +310,16 @@ export const FAMILIES: Record<string, { role: string; reflex?: true }> = {
   // the Reflex tab was indistinguishable from the retired detection families
   // listed beside it.
   control: {
-    role: "turns things on and off by itself; reports nothing, so it has no count",
+    role: "turns things on and off by itself",
     reflex: true,
+    // ⚠️ `silent` MEANS "COUNT IT FROM SOMEWHERE ELSE", NOT "HAS NO COUNT"
+    // (2026-08-28, reported). The role used to end "reports nothing, so it has
+    // no count", which was true of the COLLECTOR and read to the owner as "this
+    // does nothing" — while four of these automations had run that same day.
+    // `ReflexObserve.actedFrom` now counts them from Home Assistant's own
+    // `last_triggered`, so the row proves itself instead of explaining why it
+    // cannot.
+    silent: true,
   },
   vesta: { role: "handles the to-do actions in a brief; emits nothing itself" },
 };

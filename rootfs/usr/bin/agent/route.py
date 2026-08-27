@@ -69,7 +69,21 @@ BANDS: Tuple[Tuple[int, str], ...] = (
 )
 
 #: How often the escalation sweep re-evaluates.
-SWEEP_MINUTES: int = 5
+#:
+#: ⚠️ DERIVED FROM THE FIRST BAND, NOT DECLARED (2026-08-28, owner: "make the
+#: `how often the escalation sweep re-evaluates` the same duration as the first
+#: escalation duration, for consistency"). Two independent numbers for one
+#: rhythm is how a 15-minute promise comes to be checked on a 5-minute clock —
+#: or, as it actually shipped, on no clock at all.
+#:
+#: ⚠️ AND IT WAS DEAD FOR ITS WHOLE EXISTENCE. `SWEEP_MINUTES` was declared,
+#: documented as the sweep's cadence, and READ BY NOTHING; the sweep's only
+#: caller was the end of a triage pass, so on a villa checking every 360 minutes
+#: the first band was evaluated up to 6 hours late while the concern card
+#: printed "by 14:32 it is re-sent to the same place". Found by /dry-audit's
+#: claim audit after the owner asked how to test the ladder — a promise on a
+#: screen, a constant nobody read, and no clock between them.
+SWEEP_MINUTES: int = BANDS[0][0]
 
 
 @dataclass
