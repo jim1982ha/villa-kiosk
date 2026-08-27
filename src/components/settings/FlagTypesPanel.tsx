@@ -15,13 +15,21 @@
 // teaches every camera in the villa and every camera installed after it.
 //
 // ⚠️ AND IT IS A RE-RANKING, NOT A MUTE, WHICH THE COPY HAS TO SAY OUT LOUD.
-// An owner reading "raise this less readily" beside a minus number will
-// reasonably assume they have switched something off; they have not, and a
-// screen that let them believe it would be the one that hides a frozen pipe
-// behind a summer nuisance. The hint states it in the words of the mechanism.
+// An owner turning a kind down to 0.1 will reasonably assume they have
+// switched something off; they have not, and a screen that let them believe it
+// would be the one that hides a frozen pipe behind a summer nuisance. The hint
+// says the floor is 0.1 and never zero, which is the mechanism rather than a
+// reassurance.
+//
+// ⚠️ THE NUMBER ON SCREEN **IS** THE MULTIPLIER (owner's design, and it
+// replaced my first cut). That version stored an integer score and printed a
+// sentence translating it — "ranked at a third of its novelty" — which is a
+// number that cannot be read without a gloss. Theirs: "1.1 is promoted by 10%,
+// 0.8 is demoted by 20%, and each click on the +/- button increases the weight
+// index by 0.1". Nothing is derived, so nothing can drift.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Loader2, Trash2, Upload } from "lucide-react";
+import { Download, Loader2, Minus, Plus, Trash2, Upload } from "lucide-react";
 
 import InfoHint from "@/components/common/InfoHint";
 import { loadFlagTypes, tuneFlagTypes,
@@ -29,22 +37,25 @@ import { loadFlagTypes, tuneFlagTypes,
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 
-/** ⚠️ THE MULTIPLIER IS RESTATED FOR A READER, NOT RE-DECIDED. The arithmetic
- *  lives in `flagtypes.multiplier`; this only words it, the same way the
- *  escalation bands are mirrored on a concern card. A number with no meaning
- *  beside it ("weight -2") is an assertion; "ranked at a third of its novelty"
- *  is a sentence somebody can disagree with. */
-function effectOf(weight: number): string {
-  if (weight === 0) return "ranked as it comes";
-  if (weight > 0) return `ranked ${weight + 1}× higher`;
-  return `ranked at 1⁄${1 - weight} of its novelty`;
+/** The multiplier as a percentage, for the reader who wants it in words.
+ *
+ *  ⚠️ THE NUMBER ITSELF IS THE CONTROL AND THIS IS ONLY A GLOSS (owner's
+ *  design, 2026-08-28). An earlier cut stored an integer score and printed a
+ *  sentence explaining what it meant, because the number meant nothing alone;
+ *  `1.1` and `0.8` need no explanation, so this sits beside the value in muted
+ *  text rather than standing in for it. */
+function effectOf(factor: number): string {
+  const pct = Math.round((factor - 1) * 100);
+  if (pct === 0) return "raised as it comes";
+  return pct > 0 ? `raised ${pct}% more readily`
+                 : `raised ${Math.abs(pct)}% less readily`;
 }
 
 export default function FlagTypesPanel() {
   const { role } = useProfile();
   const mayEdit = role != null && hasCapability(role, "editConfig");
   const [rows, setRows] = useState<FlagTypeWeight[] | null>(null);
-  const [limit, setLimit] = useState(5);
+  const [bounds, setBounds] = useState({ min: 0.1, max: 3, step: 0.1 });
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -52,7 +63,7 @@ export default function FlagTypesPanel() {
   const load = useCallback(async () => {
     const out = await loadFlagTypes();
     setRows(out.types);
-    setLimit(out.limit);
+    setBounds({ min: out.min, max: out.max, step: out.step });
   }, []);
   useEffect(() => { void load(); }, [load]);
 
@@ -74,7 +85,7 @@ export default function FlagTypesPanel() {
   const exportList = useCallback(() => {
     const doc = {
       types: Object.fromEntries((rows ?? []).map((r) => [r.key, {
-        weight: r.weight, up: r.up, down: r.down,
+        factor: r.factor, up: r.up, down: r.down,
         label: r.label, first_at: r.firstAt, last_at: r.lastAt,
       }])),
     };
@@ -124,15 +135,28 @@ export default function FlagTypesPanel() {
             that measures the same thing, including ones installed later.
           </p>
           <p>
-            A minus score does not switch a kind off. It moves that kind down
-            the list each check reads, so an ordinary day’s example may not
-            reach you while an extreme one still will. Nothing here can hide an
-            emergency.
+            The number is a <strong>multiplier</strong>. 1.0 is untouched, 1.1
+            raises that kind 10% more readily, 0.8 raises it 20% less. Each
+            press of + or − moves it by 0.1, and a thumb on a concern moves it
+            by the same step.
           </p>
           <p>
-            Removing a row is not the same as setting it to zero: zero means
+            Turning a kind down never switches it off. It moves that kind down
+            the list each check reads, so an ordinary day’s example may not
+            reach you while an extreme one still will — the dial stops at 0.1
+            and never reaches zero, so nothing here can hide an emergency.
+          </p>
+          <p>
+            Removing a row is not the same as setting it back to 1.0: 1.0 means
             you have judged this kind and found it neutral, removed means the
             villa has never been told anything about it.
+          </p>
+          <p>
+            A kind is recorded when a concern is <strong>raised</strong>, not
+            when you judge it — the villa keeps only an anonymous reference to
+            the device afterwards, so there is nothing left to work the kind
+            out from. Concerns raised before this feature existed carry no
+            kind, so judging one records your verdict and teaches nothing.
           </p>
         </InfoHint>
       </p>
@@ -141,9 +165,18 @@ export default function FlagTypesPanel() {
         /* ⚠️ AN EMPTY LIST IS A STATE, NOT A FAULT, AND SAYS WHICH. A blank
            panel here reads as broken; the villa simply has not been taught
            anything yet, and the sentence says exactly how to teach it. */
+        /* ⚠️ IT SAYS WHY IT IS EMPTY, AND THE SECOND SENTENCE IS THE ONE
+           THAT MATTERS (reported: "i don't see anything in this section: is
+           that expected?"). A kind is stamped when a concern is RAISED,
+           because a stored concern keeps only a hash of its device — so
+           thumbing a concern that predates this feature records the verdict
+           and teaches nothing, and the list stays empty in a way that looks
+           exactly like a broken screen. Saying so is the whole fix; the
+           alternative was inventing a kind from a hash, which cannot be
+           done. */
         <p className="muted body-text">
-          Nothing has been judged yet. Press a thumb on a concern in the Reason
-          tab and the kind of finding it was appears here.
+          Nothing judged yet. Press a thumb on a concern raised{" "}
+          <strong>after this update</strong> and its kind appears here.
         </p>
       ) : (
         <ul className="fm-list">
@@ -152,26 +185,49 @@ export default function FlagTypesPanel() {
               <div className="editable-row-fields">
                 <span className="body-text">{r.label}</span>
                 <span className="muted body-text">
-                  {effectOf(r.weight)} · {r.up} useful, {r.down} not
+                  {effectOf(r.factor)} · {r.up} useful, {r.down} not
                 </span>
               </div>
               {mayEdit && (
                 <>
-                  {/* ⚠️ A NUMBER FIELD, NOT A PAIR OF ARROWS. The owner asked to
-                      "edit the weightage in + or in -", and a stepper walks one
-                      step per press — five presses to reach the floor, on a
-                      wall tablet. The bounds come from the SERVER's own limit
-                      rather than a literal here, so the two cannot disagree. */}
-                  <input
-                    type="number" inputMode="numeric" style={{ width: 76 }}
-                    value={r.weight} min={-limit} max={limit} step={1}
-                    disabled={busy !== ""}
-                    aria-label={`Score for ${r.label}`}
-                    onChange={(e) => void send(
-                      { action: "weight", key: r.key,
-                        weight: Number(e.target.value) },
-                      r.key)}
-                  />
+                  {/* ⚠️ THE VALUE IS TEXT AND THE CONTROLS ARE TWO BUTTONS —
+                      the owner's own sketch, and it replaced a number field.
+                      A typed field on a wall-mounted tablet raises the
+                      keyboard over the list you are editing, and it accepts
+                      1.15 and 40 and "abc", each of which then has to be
+                      argued with. Two buttons can only ever produce a value
+                      the store already allows.
+
+                      ⚠️ AND THE BUTTONS SEND A DIRECTION, NOT A NUMBER. The
+                      step lives in `flagtypes.STEP` alone; a client computing
+                      `factor + 0.1` would be a second implementation of the
+                      arithmetic, and 0.1 is exactly the value that does not
+                      survive binary floating point unrounded. */}
+                  <span className="body-text flag-factor"
+                        aria-label={`Multiplier for ${r.label}`}>
+                    {r.factor.toFixed(1)}
+                  </span>
+                  <button
+                    type="button" className="icon-btn" disabled={busy !== ""}
+                    aria-label={`Raise ${r.label} more readily`}
+                    title={`Raise this kind more readily (+${bounds.step
+                      .toFixed(1)}, up to ${bounds.max.toFixed(1)})`}
+                    onClick={() => void send(
+                      { action: "nudge", key: r.key, direction: "up" }, r.key)}
+                  >
+                    <Plus size={16} aria-hidden />
+                  </button>
+                  <button
+                    type="button" className="icon-btn" disabled={busy !== ""}
+                    aria-label={`Raise ${r.label} less readily`}
+                    title={`Raise this kind less readily (−${bounds.step
+                      .toFixed(1)}, down to ${bounds.min.toFixed(1)} — it is `
+                      + `never switched off entirely)`}
+                    onClick={() => void send(
+                      { action: "nudge", key: r.key, direction: "down" }, r.key)}
+                  >
+                    <Minus size={16} aria-hidden />
+                  </button>
                   {/* ⚠️ `btn danger icon-only`, NOT `.icon-btn`, AND THE PIN
                       CAUGHT THIS ONE. Removing a row here discards a
                       preference a person expressed by hand and cannot be

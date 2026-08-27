@@ -100,42 +100,71 @@ def test_the_label_is_derived_from_the_key_not_stored_beside_it() -> None:
 
 
 # ── the arithmetic ──────────────────────────────────────────────────────────
-def test_the_multiplier_matches_what_the_owner_was_SHOWN() -> None:
-    """⚠️ THIS SHAPE WAS PUT ON SCREEN BEFORE IT WAS WRITTEN — `+1` doubles,
-    `-2` is a third — so these three numbers are an agreement, not a choice
-    this file may revisit."""
-    assert flagtypes.multiplier(0) == 1.0
-    assert flagtypes.multiplier(1) == 2.0
-    assert abs(flagtypes.multiplier(-2) - (1.0 / 3.0)) < 1e-9
+def test_the_STORED_NUMBER_IS_THE_MULTIPLIER_with_nothing_derived() -> None:
+    """⚠️ THE OWNER'S DESIGN, IN ONE ASSERTION. "1.1 is promoted by 10%, 0.8 is
+    demoted by 20%." There is no second function turning a score into an
+    effect — the value on screen is the value that multiplies — which is why
+    the settings row needs no sentence explaining its own number."""
+    flagtypes.record("energy:above", useful=True)
+    assert flagtypes.factor_of("energy:above") == 1.1
+    rows = [_Row("sensor.a", 10.0)]
+    out = flagtypes.apply_weights(rows, lambda r: "energy:above")
+    assert out[0].score == pytest.approx(11.0)
 
 
-def test_a_demerit_can_never_INVERT_the_ranking() -> None:
-    """⚠️ A LINEAR `1 + w` GOES NEGATIVE AT -2, which is not "less readily" but
-    "in reverse" — the most novel reading would sort last."""
-    for weight in range(-flagtypes.WEIGHT_LIMIT, flagtypes.WEIGHT_LIMIT + 1):
-        assert flagtypes.multiplier(weight) > 0
+def test_ONE_PRESS_IS_A_TENTH_in_both_directions() -> None:
+    """⚠️ THE STEP IS THE SERVER'S, AND IT IS SMALL ON PURPOSE. The first cut
+    doubled the ranking on the first press, which makes a control feel unsafe
+    to try."""
+    flagtypes.record("energy:above", useful=True)
+    flagtypes.record("energy:above", useful=True)
+    assert flagtypes.factor_of("energy:above") == 1.2
+    flagtypes.record("energy:above", useful=False)
+    assert flagtypes.factor_of("energy:above") == 1.1
 
 
-def test_the_weight_is_BOUNDED_in_both_directions() -> None:
+def test_TEN_PRESSES_DO_NOT_DRIFT_off_the_tenths() -> None:
+    """⚠️ `1.1 + 0.1` IS `1.2000000000000002` IN BINARY FLOATING POINT. Without
+    rounding at the write, ten presses produce a number no screen can print and
+    no export can round-trip — and the drift is invisible until an owner's list
+    stops matching what they pressed."""
+    for _ in range(10):
+        flagtypes.record("energy:above", useful=True)
+    factor = flagtypes.factor_of("energy:above")
+    assert factor == 2.0, factor
+    assert str(factor) == "2.0"
+
+
+def test_the_dial_NEVER_REACHES_ZERO() -> None:
+    """⚠️ THE FLOOR IS THE "re-rank, never mute" RULE AS A NUMBER. At 0.0 a
+    kind's novelty is annihilated whatever it reads, which is the hard gate the
+    owner declined; at 0.1 an extreme reading still outranks an ordinary one of
+    a kind nobody demerited."""
+    for _ in range(200):
+        flagtypes.record("energy:above", useful=False)
+    assert flagtypes.factor_of("energy:above") == flagtypes.MIN_FACTOR
+    assert flagtypes.MIN_FACTOR > 0
+
+
+def test_the_factor_is_BOUNDED_in_both_directions() -> None:
     """A run of irritated thumbs must not become the hard gate the owner
     declined.
 
-    ⚠️ THE ASSERTION IS ON THE STORED ROW, NOT ON `weight_of`. That reader
+    ⚠️ THE ASSERTION IS ON THE STORED ROW, NOT ON `factor_of`. That reader
     clamps too, so a test written through it passes with the write-side clamp
     deleted — the value on disk would then be unbounded and travel out through
     an export. Found by mutation, which is the only thing that could find it.
     """
     for _ in range(50):
         flagtypes.record("energy:above", useful=False)
-    assert flagtypes.read()["energy:above"]["weight"] == -flagtypes.WEIGHT_LIMIT
+    assert flagtypes.read()["energy:above"]["factor"] == flagtypes.MIN_FACTOR
     for _ in range(200):
         flagtypes.record("energy:above", useful=True)
-    assert flagtypes.read()["energy:above"]["weight"] == flagtypes.WEIGHT_LIMIT
+    assert flagtypes.read()["energy:above"]["factor"] == flagtypes.MAX_FACTOR
 
 
 def test_an_UNJUDGED_kind_weighs_nothing() -> None:
-    assert flagtypes.weight_of("never:above") == 0
-    assert flagtypes.multiplier(flagtypes.weight_of("never:above")) == 1.0
+    assert flagtypes.factor_of("never:above") == flagtypes.NEUTRAL
 
 
 def test_the_COUNTS_survive_beside_the_weight() -> None:
@@ -144,17 +173,17 @@ def test_the_COUNTS_survive_beside_the_weight() -> None:
     flagtypes.record("energy:above", useful=True)
     flagtypes.record("energy:above", useful=False)
     row = flagtypes.read()["energy:above"]
-    assert (row["weight"], row["up"], row["down"]) == (0, 1, 1)
+    assert (row["factor"], row["up"], row["down"]) == (1.0, 1, 1)
 
 
 # ── what it does to a check ─────────────────────────────────────────────────
 def test_a_DEMERITED_kind_sinks_and_a_PROMOTED_one_rises() -> None:
-    flagtypes.record("energy:above", useful=False)
-    flagtypes.record("energy:above", useful=False)
-    rows = [_Row("sensor.a", 6.0), _Row("sensor.b", 3.0)]
+    for _ in range(2):
+        flagtypes.record("energy:above", useful=False)
+    rows = [_Row("sensor.a", 10.0), _Row("sensor.b", 3.0)]
     out = flagtypes.apply_weights(
         rows, lambda r: "energy:above" if r.entity_id == "sensor.a" else "")
-    assert out[0].score == pytest.approx(2.0), "a demerited kind did not sink"
+    assert out[0].score == pytest.approx(8.0), "a demerited kind did not sink"
     assert out[1].score == 3.0, "an unjudged kind was moved"
 
 
@@ -227,22 +256,38 @@ def test_the_listing_puts_what_you_SILENCED_first() -> None:
     assert [r["key"] for r in flagtypes.listing()][0] == "data rate:above"
 
 
-def test_setting_a_weight_by_hand_is_CLAMPED_like_a_thumb() -> None:
+def test_a_PRESS_of_plus_or_minus_moves_it_by_the_step() -> None:
+    """⚠️ THE BUTTON SENDS A DIRECTION, NEVER A NUMBER, so the step is stated
+    once. A client computing `factor + 0.1` would be a second implementation of
+    the arithmetic — of the one value that does not survive binary floating
+    point unrounded."""
     flagtypes.record("energy:above", useful=True)
-    assert flagtypes.set_weight("energy:above", 9999)[0]
-    assert flagtypes.weight_of("energy:above") == flagtypes.WEIGHT_LIMIT
+    assert flagtypes.nudge("energy:above", 1)[0]
+    assert flagtypes.factor_of("energy:above") == 1.2
+    assert flagtypes.nudge("energy:above", -1)[0]
+    assert flagtypes.factor_of("energy:above") == 1.1
 
 
-def test_setting_a_weight_on_a_kind_that_does_not_exist_is_REFUSED() -> None:
-    ok, reason = flagtypes.set_weight("nope:above", 1)
-    assert not ok and "nope:above" in reason
-
-
-def test_FORGETTING_a_kind_is_not_the_same_as_zeroing_it() -> None:
-    """⚠️ ZERO MEANS JUDGED AND NEUTRAL; FORGOTTEN MEANS NEVER JUDGED. The
-    counts are the difference, and the settings copy states it."""
+def test_setting_a_factor_by_hand_is_CLAMPED_like_a_press() -> None:
     flagtypes.record("energy:above", useful=True)
-    flagtypes.set_weight("energy:above", 0)
+    assert flagtypes.set_factor("energy:above", 9999)[0]
+    assert flagtypes.factor_of("energy:above") == flagtypes.MAX_FACTOR
+    assert flagtypes.set_factor("energy:above", "nonsense")[0]
+    assert flagtypes.factor_of("energy:above") == flagtypes.NEUTRAL
+
+
+def test_tuning_a_kind_that_does_not_exist_is_REFUSED() -> None:
+    for call in (lambda: flagtypes.nudge("nope:above", 1),
+                 lambda: flagtypes.set_factor("nope:above", 1.2)):
+        ok, reason = call()
+        assert not ok and "nope:above" in reason
+
+
+def test_FORGETTING_a_kind_is_not_the_same_as_returning_it_to_1() -> None:
+    """⚠️ 1.0 MEANS JUDGED AND NEUTRAL; FORGOTTEN MEANS NEVER JUDGED. The counts
+    are the difference, and the settings copy states it."""
+    flagtypes.record("energy:above", useful=True)
+    flagtypes.set_factor("energy:above", flagtypes.NEUTRAL)
     assert flagtypes.read()["energy:above"]["up"] == 1
     assert flagtypes.forget("energy:above")[0]
     assert "energy:above" not in flagtypes.read()
@@ -261,19 +306,20 @@ def test_an_import_REBUILDS_each_row_rather_than_storing_what_it_was_given() -> 
     property. A weight past the limit, an unknown direction and a label
     disagreeing with its key would otherwise become the store's own state."""
     ok, _ = flagtypes.replace({"types": {
-        "energy:above": {"weight": 999, "label": "Something else entirely"},
-        "battery:sideways": {"weight": -1},
+        "energy:above": {"factor": 999, "label": "Something else entirely"},
+        "battery:sideways": {"factor": "nonsense"},
     }})
     assert ok
     rows = flagtypes.read()
-    assert rows["energy:above"]["weight"] == flagtypes.WEIGHT_LIMIT
+    assert rows["energy:above"]["factor"] == flagtypes.MAX_FACTOR
+    assert rows["battery:changed"]["factor"] == flagtypes.NEUTRAL
     assert rows["energy:above"]["label"] == "Energy above baseline"
     assert "battery:changed" in rows, "an unknown direction was not normalised"
 
 
 def test_an_import_REPLACES_rather_than_merging() -> None:
     flagtypes.record("energy:above", useful=True)
-    flagtypes.replace({"types": {"battery:below": {"weight": -1}}})
+    flagtypes.replace({"types": {"battery:below": {"factor": 0.5}}})
     assert "energy:above" not in flagtypes.read()
 
 
@@ -293,8 +339,8 @@ def test_an_exported_list_can_be_imported_again_unchanged() -> None:
     before = flagtypes.read()
     assert flagtypes.replace({"types": before})[0]
     after = flagtypes.read()
-    assert {k: v["weight"] for k, v in after.items()} == \
-           {k: v["weight"] for k, v in before.items()}
+    assert {k: v["factor"] for k, v in after.items()} == \
+           {k: v["factor"] for k, v in before.items()}
 
 
 # ── the assertions that would catch a vocabulary nothing calls ──────────────

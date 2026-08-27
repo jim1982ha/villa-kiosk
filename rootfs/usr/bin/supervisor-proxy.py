@@ -2249,8 +2249,14 @@ async def agent_flag_types_get_handler(request: web.Request) -> web.Response:
     if not _authorized(request):
         return _unauthorized()
     from agent import flagtypes as agent_flagtypes
-    return web.json_response({"types": agent_flagtypes.listing(),
-                              "limit": agent_flagtypes.WEIGHT_LIMIT})
+    return web.json_response({
+        "types": agent_flagtypes.listing(),
+        # ⚠️ THE BOUNDS AND THE STEP COME FROM THE SERVER, so the
+        # buttons cannot disagree with the store about what a press
+        # is worth or where the dial stops.
+        "min": agent_flagtypes.MIN_FACTOR,
+        "max": agent_flagtypes.MAX_FACTOR,
+        "step": agent_flagtypes.STEP})
 
 
 async def agent_flag_types_post_handler(request: web.Request) -> web.Response:
@@ -2281,8 +2287,14 @@ async def agent_flag_types_post_handler(request: web.Request) -> web.Response:
     from agent import flagtypes as agent_flagtypes
     action = str(body.get("action") or "").strip().lower()
     key = str(body.get("key") or "").strip()
-    if action == "weight":
-        ok, reason = agent_flagtypes.set_weight(key, body.get("weight"))
+    if action == "nudge":
+        # ⚠️ A DIRECTION, NEVER A COMPUTED NUMBER. The step lives in
+        # `flagtypes.STEP` alone, so the button cannot disagree with the store
+        # about what one press is worth.
+        ok, reason = agent_flagtypes.nudge(
+            key, 1 if str(body.get("direction") or "") == "up" else -1)
+    elif action == "factor":
+        ok, reason = agent_flagtypes.set_factor(key, body.get("factor"))
     elif action == "forget":
         ok, reason = agent_flagtypes.forget(key)
     elif action == "clear":
@@ -2291,7 +2303,7 @@ async def agent_flag_types_post_handler(request: web.Request) -> web.Response:
         ok, reason = agent_flagtypes.replace(body.get("document"))
     else:
         return web.json_response(
-            {"error": "action must be weight, forget, clear or import"},
+            {"error": "action must be nudge, factor, forget, clear or import"},
             status=400)
     if not ok:
         return web.json_response({"error": reason}, status=400)

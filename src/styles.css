@@ -5712,3 +5712,12 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    does the real work — it blocks pointer AND keyboard AND removes the subtree
    from the tab order — so this rule only has to say what that looks like. */
 .pane-inert > *:not(.fm-banner) { opacity: 0.45; filter: saturate(0.6); }
+
+/* The multiplier on a taught-kind row: a VALUE, read beside its two buttons,
+   so it wants the tabular figures and the fixed width that stop the +/- pair
+   shifting as it crosses 1.0 → 0.9 (owner's design, 2026-08-28). */
+.flag-factor {
+  min-width: 2.6em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

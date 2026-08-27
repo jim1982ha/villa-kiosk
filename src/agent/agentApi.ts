@@ -944,8 +944,11 @@ export async function loadUsage(
 export interface FlagTypeWeight {
   key: string;
   label: string;
-  /** Negative demerits the kind, positive promotes it. 0 is untouched. */
-  weight: number;
+  /** ⚠️ THE MULTIPLIER ITSELF, NOT A SCORE TO BE TRANSLATED. 1.0 is untouched,
+   *  1.1 raises this kind 10% more readily, 0.8 raises it 20% less. The screen
+   *  prints it as it stands, which is why there is no second function turning
+   *  it into an effect. */
+  factor: number;
   up: number;
   down: number;
   firstAt: string;
@@ -954,26 +957,32 @@ export interface FlagTypeWeight {
 
 export interface FlagTypeList {
   types: FlagTypeWeight[];
-  /** How far a weight may travel either way, from the backend rather than a
-   *  second copy here — the stepper's bounds are the server's rule. */
-  limit: number;
+  /** ⚠️ THE DIAL'S BOUNDS AND ITS STEP, FROM THE SERVER. A literal here would
+   *  be a second copy of a rule the store owns, and the first rounding
+   *  difference between the two would be invisible until an owner's list
+   *  stopped matching what they had pressed. */
+  min: number;
+  max: number;
+  step: number;
 }
 
 export async function loadFlagTypes(): Promise<FlagTypeList> {
   const r = await fetch(ingressPath("agent-flag-types"),
                         { credentials: "same-origin" });
-  if (!r.ok) return { types: [], limit: 5 };
+  if (!r.ok) return { types: [], min: 0.1, max: 3, step: 0.1 };
   const d = (await r.json().catch(() => null)) as
-    { types?: unknown; limit?: unknown } | null;
+    { types?: unknown; min?: unknown; max?: unknown; step?: unknown } | null;
   const rows = Array.isArray(d?.types) ? d!.types : [];
   return {
-    limit: Number(d?.limit ?? 5) || 5,
+    min: Number(d?.min ?? 0.1) || 0.1,
+    max: Number(d?.max ?? 3) || 3,
+    step: Number(d?.step ?? 0.1) || 0.1,
     types: rows
       .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
       .map((x) => ({
         key: String(x.key ?? ""),
         label: String(x.label ?? ""),
-        weight: Number(x.weight ?? 0) || 0,
+        factor: Number(x.factor ?? 1) || 1,
         up: Number(x.up ?? 0) || 0,
         down: Number(x.down ?? 0) || 0,
         firstAt: String(x.first_at ?? ""),
@@ -987,7 +996,8 @@ export async function loadFlagTypes(): Promise<FlagTypeList> {
  *  edit ONE document and the server refuses a fifth by exclusion — four
  *  near-identical fetch wrappers is four places for the path to drift. */
 export async function tuneFlagTypes(
-  body: { action: "weight"; key: string; weight: number }
+  body: { action: "nudge"; key: string; direction: "up" | "down" }
+      | { action: "factor"; key: string; factor: number }
       | { action: "forget"; key: string }
       | { action: "clear" }
       | { action: "import"; document: unknown },
@@ -1009,7 +1019,7 @@ export async function tuneFlagTypes(
       .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
       .map((x) => ({
         key: String(x.key ?? ""), label: String(x.label ?? ""),
-        weight: Number(x.weight ?? 0) || 0,
+        factor: Number(x.factor ?? 1) || 1,
         up: Number(x.up ?? 0) || 0, down: Number(x.down ?? 0) || 0,
         firstAt: String(x.first_at ?? ""), lastAt: String(x.last_at ?? ""),
       })),

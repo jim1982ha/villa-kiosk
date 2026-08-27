@@ -49,18 +49,47 @@ FLAG_TYPES_FILE: str = f"{store.DATA_DIR}/vesta/flag-types.json"
 #: not hundreds; this is a stop against a malformed import filling the disk.
 MAX_TYPES: int = 500
 
-#: How far a weight may travel in either direction. ⚠️ SYMMETRIC, AND THE
-#: NEGATIVE END IS THE ONE THAT MATTERS: at -5 a kind is ranked at one sixth of
-#: its true novelty, which is far enough to fall off the document on any
-#: ordinary day and not far enough to hide an emergency. An unbounded weight
-#: would let a run of irritated thumbs silence a kind permanently, which is the
-#: hard gate the owner declined.
-WEIGHT_LIMIT: int = 5
+#: ⚠️ THE STORED NUMBER **IS** THE MULTIPLIER, AND THAT IS THE OWNER'S DESIGN
+#: (2026-08-28). The first cut stored an integer score and derived a factor from
+#: it — `+1` meaning "doubled", `-2` meaning "a third" — so the screen had to
+#: print a sentence translating a number that meant nothing on its own. Their
+#: correction: "1.1 is promoted by 10%, 0.8 is demoted by 20%, and each click on
+#: the +/- button increases the weight index by 0.1". One number, no
+#: translation, and the arithmetic is legible at a glance.
+NEUTRAL: float = 1.0
 
-#: What one press is worth. ⚠️ ONE, NOT A CURVE. A person pressing a thumb is
-#: expressing a preference, not calibrating a filter, and a first press that
-#: moved the ranking by a factor of two would make the control feel unsafe.
-STEP: int = 1
+#: What one press is worth. ⚠️ A TENTH, WHICH IS DELIBERATELY SMALL. A thumb
+#: expresses a preference, not a calibration; the previous design moved the
+#: ranking by a factor of two on the FIRST press, which makes a control feel
+#: unsafe to try. Ten presses to halve a kind is a dial rather than a switch.
+STEP: float = 0.1
+
+#: ⚠️ THE FLOOR IS NOT ZERO, AND THAT IS THE WHOLE "RE-RANK, NEVER MUTE" RULE
+#: EXPRESSED AS A NUMBER. At 0.0 a kind's novelty is annihilated whatever it
+#: reads, which is the hard gate the owner declined; at 0.1 an extreme reading
+#: still outranks an ordinary one of a kind nobody demerited. The ceiling is 3.0
+#: because promotion only has to lift a kind past the document's cut, and
+#: anything beyond that is just reordering the top of a list.
+MIN_FACTOR: float = 0.1
+MAX_FACTOR: float = 3.0
+
+
+def clamp(value: Any) -> float:
+    """A factor, bounded and rounded to one decimal. Never raises.
+
+    ⚠️ THE ROUNDING IS NOT COSMETIC. `1.1 + 0.1` is `1.2000000000000002` in
+    binary floating point, so ten presses of `+` without it produce a number no
+    screen can print and no export can round-trip — and the store would slowly
+    fill with values that differ from the ones an owner set. Rounded at the one
+    place that writes, so every reader sees the same number.
+    """
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return NEUTRAL
+    if out != out:                                    # NaN, which no bound catches
+        return NEUTRAL
+    return round(max(MIN_FACTOR, min(MAX_FACTOR, out)), 1)
 
 #: The directions a flag can carry, and the only ones.
 ABOVE: str = "above"
@@ -202,9 +231,8 @@ def record(key: str, *, useful: bool, now: Optional[float] = None
         return False, "a flag type is needed"
     rows = read()
     row = dict(rows.get(key) or {})
-    step = STEP if useful else -STEP
-    weight = int(row.get("weight") or 0) + step
-    row["weight"] = max(-WEIGHT_LIMIT, min(WEIGHT_LIMIT, weight))
+    current = float(row.get("factor", NEUTRAL) or NEUTRAL)
+    row["factor"] = clamp(current + (STEP if useful else -STEP))
     row["up"] = int(row.get("up") or 0) + (1 if useful else 0)
     row["down"] = int(row.get("down") or 0) + (0 if useful else 1)
     row["label"] = label_of(key)
@@ -215,27 +243,18 @@ def record(key: str, *, useful: bool, now: Optional[float] = None
     return ok, "" if ok else "the flag-type store could not be written"
 
 
-def weight_of(key: str, rows: Optional[Mapping[str, Any]] = None) -> int:
+def factor_of(key: str, rows: Optional[Mapping[str, Any]] = None) -> float:
+    """This kind's multiplier, or 1.0 when nobody has judged it.
+
+    ⚠️ THERE IS NO SECOND FUNCTION TURNING THIS INTO SOMETHING ELSE. The stored
+    number IS what multiplies the score — that is the owner's design, and the
+    reason the settings screen can show the value with no sentence beside it.
+    """
     source = read() if rows is None else rows
     row = source.get(str(key))
     if not isinstance(row, Mapping):
-        return 0
-    try:
-        return max(-WEIGHT_LIMIT, min(WEIGHT_LIMIT, int(row.get("weight") or 0)))
-    except (TypeError, ValueError):
-        return 0
-
-
-def multiplier(weight: int) -> float:
-    """How much a weight moves a salience score.
-
-    ⚠️ SYMMETRIC IN EFFECT, NOT IN ARITHMETIC, and this shape was shown to the
-    owner before it was written: `+1` doubles, `-1` halves, `-2` is a third.
-    A linear `1 + w` would go NEGATIVE at -2 and invert the ranking, which is
-    not "less readily" but "in reverse".
-    """
-    w = max(-WEIGHT_LIMIT, min(WEIGHT_LIMIT, int(weight)))
-    return float(1 + w) if w >= 0 else 1.0 / float(1 - w)
+        return NEUTRAL
+    return clamp(row.get("factor", NEUTRAL))
 
 
 def apply_weights(scored: Sequence[Any],
@@ -266,8 +285,8 @@ def apply_weights(scored: Sequence[Any],
                 out.append(item)
                 continue
             key = type_of(item)
-            factor = multiplier(weight_of(key, weights)) if key else 1.0
-            if factor != 1.0:
+            factor = factor_of(key, weights) if key else NEUTRAL
+            if factor != NEUTRAL:
                 item.score = float(item.score) * factor
         except Exception as err:  # noqa: BLE001
             swallow("could not weight a salience row", err)
@@ -283,20 +302,39 @@ def listing() -> List[Dict[str, Any]]:
     rather than following dictionary insertion."""
     rows = read()
     out = [{"key": k, **v} for k, v in rows.items()]
-    out.sort(key=lambda r: (int(r.get("weight") or 0), str(r.get("label") or "")))
+    out.sort(key=lambda r: (clamp(r.get("factor", NEUTRAL)),
+                            str(r.get("label") or "")))
     return out
 
 
-def set_weight(key: str, weight: int) -> Tuple[bool, str]:
-    """Type the number in directly. Returns `(ok, reason)`."""
+def nudge(key: str, direction: int) -> Tuple[bool, str]:
+    """One press of `+` or `-`. Returns `(ok, reason)`.
+
+    ⚠️ THE SERVER OWNS THE STEP, NOT THE BUTTON. The screen sends "up" or
+    "down" and never a computed number, so the tenth is stated once — a client
+    that sent `factor + 0.1` would be a second implementation of the arithmetic,
+    and the first rounding difference between the two would be invisible until
+    an owner's list stopped matching what they had pressed.
+    """
     rows = read()
     if str(key) not in rows:
         return False, f"no flag type {key!r}"
     row = dict(rows[str(key)])
-    try:
-        row["weight"] = max(-WEIGHT_LIMIT, min(WEIGHT_LIMIT, int(weight)))
-    except (TypeError, ValueError):
-        return False, "the weight must be a whole number"
+    current = float(row.get("factor", NEUTRAL) or NEUTRAL)
+    row["factor"] = clamp(current + (STEP if direction >= 0 else -STEP))
+    row["label"] = label_of(str(key))
+    rows[str(key)] = row
+    ok = _write(rows)
+    return ok, "" if ok else "the flag-type store could not be written"
+
+
+def set_factor(key: str, factor: Any) -> Tuple[bool, str]:
+    """Set the multiplier outright — used by an import and by a typed edit."""
+    rows = read()
+    if str(key) not in rows:
+        return False, f"no flag type {key!r}"
+    row = dict(rows[str(key)])
+    row["factor"] = clamp(factor)
     row["label"] = label_of(str(key))
     rows[str(key)] = row
     ok = _write(rows)
@@ -343,12 +381,11 @@ def replace(document: Any) -> Tuple[bool, str]:
             continue
         key = key_for(measurement, direction)
         row = raw if isinstance(raw, Mapping) else {}
-        try:
-            weight = int(row.get("weight") or 0)
-        except (TypeError, ValueError):
-            weight = 0
         clean[key] = {
-            "weight": max(-WEIGHT_LIMIT, min(WEIGHT_LIMIT, weight)),
+            # ⚠️ `clamp` HANDLES EVERY BAD SHAPE — a string, a null, a NaN, a
+            # number past either bound — so this path needs no validation of
+            # its own and cannot drift from the one the thumb uses.
+            "factor": clamp(row.get("factor", NEUTRAL)),
             "up": max(0, int(row.get("up") or 0) if str(
                 row.get("up") or 0).lstrip("-").isdigit() else 0),
             "down": max(0, int(row.get("down") or 0) if str(
