@@ -1,3 +1,15 @@
+## 2.822.0
+
+### Changed — saving a file has one owner, and the audit probe that should have caught that was broken
+Five screens each hand-rolled the same seven lines to save an export, and the
+reason it matters was written as a comment at exactly one of them: this add-on
+must work with no internet, so an export cannot go through a service. That rule
+now lives in the code every caller calls. It should have been caught by the
+audit probe built to find duplication, which counted words where it meant
+characters and so had reported "nothing found" since it was written. The taught
+flag types also gained a test holding their two halves together, and two dead
+CSS rules are gone.
+
 ## 2.821.0
 
 ### Changed — the score is now the multiplier itself, nudged by 0.1
