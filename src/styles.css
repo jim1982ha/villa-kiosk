@@ -4634,9 +4634,14 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    (2026-08-28, owner's request): one flex row, text first, control last,
    directly above the Pager row that carries "Cancel all". Wraps by CONTENT —
    the paragraph keeps a readable minimum and the button drops under it on a
-   phone — no breakpoint, per the flag-card rule two sections up. The
-   RunCheckNow status note is a second <p> in the same row and inherits the
-   same wrapping. */
+   phone — no breakpoint, per the flag-card rule two sections up.
+   ⚠️ EXACTLY ONE <p> LIVES HERE, AND THAT IS A LAYOUT CONSTRAINT RATHER THAN A
+   COINCIDENCE (2026-08-28, reported). RunCheckNow used to render its status
+   note as a SECOND <p> in this row; both carry `flex: 1 1 260px`, so finishing
+   a check re-divided the row and moved "Check the villa now" out from under
+   the reader's finger. A status message now renders below this row instead —
+   see RecentChecks' `notice` prop. Do not add a second child that can appear
+   and disappear. */
 .triage-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: 6px 12px; flex-wrap: wrap;

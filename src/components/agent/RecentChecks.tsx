@@ -213,7 +213,7 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
 
 
 export default function RecentChecks({ passes, empty, mode, canAct, action,
-                                       children }: {
+                                       notice, children }: {
   passes: TriagePass[];
   /** What to say when nothing has run. */
   empty: React.ReactNode;
@@ -232,6 +232,12 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
    *  hardcoded import so this component stays renderable without the button
    *  (non-owners, tests). */
   action?: React.ReactNode;
+  /** ⚠️ RENDERED BELOW THE TOOLBAR, NEVER INSIDE IT. `action`'s component used
+   *  to return its own status paragraph, which landed as a SECOND item in the
+   *  toolbar's flex row and moved the button every time a check finished.
+   *  Anything that needs saying about a check goes here instead, where the row
+   *  above it cannot reflow. */
+  notice?: string;
   children?: React.ReactNode;
 }) {
   const [flags, setFlags] = useState<CheckFlag[]>([]);
@@ -396,21 +402,39 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
               the concern store's response stayed byte-identical throughout. A
               true sentence bound to the wrong scope is this screen's most
               expensive kind of defect. */
+          /* ⚠️ ONE VOCABULARY, AND IT IS THE TABS' OWN (2026-08-28, owner:
+              "make sure you use the same terminology consistently"). A CHECK
+              runs on the schedule; it FLAGS items; a flag that is INVESTIGATED
+              may raise a CONCERN; only a concern is ever ESCALATED. The old
+              wording said "N became concerns", which named no actor, and
+              trailed "open ones and the record of the settled ones" — a clause
+              whose subject was the concerns it had just reported as zero, so on
+              the common reading it described nothing that existed.
+
+              ⚠️ AND A FLAG THAT RAISED NOTHING IS NOT LOST, WHICH IS THE HALF
+              THE SCREEN NEVER SAID (owner's request). Reading "0 concerns"
+              beside a flagged Jacuzzi pump invites the conclusion that the
+              finding was thrown away. It was not — the analysis that builds the
+              briefing reads the same measurements, so the reading behind the
+              flag is assessed again there. Worded as the READING rather than
+              the flag record, because there is no code path carrying a triage
+              flag into the report: the two agree because they read the villa,
+              not because one hands the other anything. */
           <p className="muted body-text">
-            Across all {rows.length} check{rows.length === 1 ? "" : "s"} below:{" "}
-            {work.looked} flag{work.looked === 1 ? "" : "s"} investigated,{" "}
-            {/* ⚠️ IT NO LONGER NAMES A HEADING. This used to send the reader to
-                "What came of them", which was deleted on 2026-08-27 — a
-                cross-screen reference by TITLE is a promise the other screen
-                has to keep, and nothing but a grep could have caught it going
-                stale. The Reason tab is where both live; that is enough. */}
-            {work.raised} became concern{work.raised === 1 ? "" : "s"} — open
-            ones and the record of the settled ones are both on the Reason tab.
+            The {rows.length} check{rows.length === 1 ? "" : "s"} below
+            investigated {work.looked} flag{work.looked === 1 ? "" : "s"} and
+            raised {work.raised} concern{work.raised === 1 ? "" : "s"}
+            {work.raised > 0
+              ? ", open and settled alike on the Reason tab." : "."}{" "}
+            A flag that raises no concern is not discarded — the reading behind
+            it is assessed again in the next briefing.
           </p>
         )}
         {action}
       </div>
-      {note && <p className="muted body-text" role="status">{note}</p>}
+      {(note || notice) && (
+        <p className="muted body-text" role="status">{note || notice}</p>
+      )}
       {/* ⚠️ THE UNATTACHED FLAGS, IN ONE CARD THAT EXPLAINS ITSELF. These are
           real and answerable — they are what "Cancel all N" acts on — and the
           merge made them invisible because a flag was only ever drawn inside a

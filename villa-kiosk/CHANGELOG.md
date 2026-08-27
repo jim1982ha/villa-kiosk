@@ -1,3 +1,16 @@
+## 2.819.0
+
+### Fixed — the Triage summary was hard to read, and finishing a check moved the button
+Pressing "Check the villa now" added a second paragraph inside the summary's own
+row, which re-divided the row and moved the button. It also quoted the scheduler
+verbatim — "escalated 1 (investigated 1)" — where on this screen "escalated"
+means chasing an unacknowledged concern, so it used the tab's most loaded word
+to mean the opposite thing. A check that runs now says nothing extra: the
+summary refreshes in place and the check appears in the list. That sentence is
+rewritten in one vocabulary (check, flag, concern, escalation) and says a flag
+raising no concern is not discarded — the reading behind it is assessed again in
+the next briefing.
+
 ## 2.818.0
 
 ### Fixed — nothing could ever tell you whether a fix had worked

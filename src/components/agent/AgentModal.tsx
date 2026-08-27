@@ -168,6 +168,13 @@ function AgentDialog(
    *  alongside its diff and would otherwise be fetching them twice, once
    *  itself and once through its child. */
   const [passes, setPasses] = useState<TriagePass[]>([]);
+  // ⚠️ HELD HERE BECAUSE IT IS RENDERED IN A DIFFERENT PLACE FROM THE BUTTON
+  // THAT PRODUCES IT. "Check the villa now" sits inside the summary's flex row
+  // and anything it renders itself becomes a second item in that row, which is
+  // what moved the button; the message belongs below the row, which only this
+  // parent can address. Empty on every check that actually ran — the summary
+  // sentence and the new card in the list are the result.
+  const [checkNotice, setCheckNotice] = useState("");
   useEffect(() => { void loadTriagePasses().then(setPasses); }, []);
 
   return (
@@ -297,8 +304,10 @@ function AgentDialog(
                 passes={passes}
                 mode={String(draft.config.mode || "")}
                 canAct={canConfigure}
+                notice={checkNotice}
                 action={<RunCheckNow
-                  onDone={() => void loadTriagePasses().then(setPasses)} />}
+                  onDone={() => void loadTriagePasses().then(setPasses)}
+                  onNote={setCheckNotice} />}
                 empty={<>No check has run yet. One runs on the schedule above,
                        or immediately with “Check the villa now”.</>}
               />
