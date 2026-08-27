@@ -413,8 +413,9 @@ async def investigate(*, provider: Provider,
     return out
 
 
-# ⚠️ `is_shadow` LIVED HERE AND IS GONE. It was a second predicate for the
-# question `shadow.suppressed` already answers, written because this module
-# needed the answer and the other module was not in view — the same shape as
-# every duplication /dry-audit exists to find, and nothing ever called it.
-# `agent/shadow.py` owns the question and carries the reasoning.
+# ⚠️ `is_shadow` LIVED HERE AND IS GONE, and so — since 2026-08-28 — is the
+# module that superseded it. `agent/shadow.py` held "run everything, deliver
+# nothing"; the owner ruled that Investigate & Log Only delivers an FYI
+# instead of nothing, so the delivery class is now a stamp on the concern
+# (`Concern.informational`, set in `tools/concern.writer`) and there is no
+# suppression predicate left to own.

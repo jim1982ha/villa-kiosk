@@ -115,20 +115,45 @@ def test_a_concern_reaches_a_target(monkeypatch: pytest.MonkeyPatch) -> None:
     assert concerns.read()[0]["delivered_at"], "nothing was stamped"
 
 
-def test_shadow_mode_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """⚠️ ASKED BY `route.plan`, NOT HERE — the path runs THROUGH the module
-    that consults shadow rather than around it, which is what keeps
-    `test_shadow`'s rule true as paths are added."""
+def test_an_INFORMATIONAL_concern_is_sent_once_and_raises_no_job(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠️ THE STAMP DECIDES, NOT TODAY'S MODE (2026-08-28, owner's ruling —
+    this replaced `test_shadow_mode_sends_nothing`). An observe-mode concern
+    is DELIVERED, as an FYI whose copy says nothing is asked; what the stamp
+    withholds is the to-do job and the chase. Both directions are pinned here
+    because the job call is a caller-wiring fact a test of `task.raise_for`
+    alone stays green through — `feedback_pin-the-caller`, again."""
+    from agent import task as task_mod
+    jobs: List[Any] = []
+
+    async def _record_job(session: Any, concern: Any, *, config: Any = None
+                          ) -> None:
+        jobs.append(dict(concern))
+
+    monkeypatch.setattr(task_mod, "raise_for", _record_job)
     sender = _Sender()
     _wire(monkeypatch, sender)
-    _raise()
-    result = asyncio.run(outbox.sweep(None, config={**ON, "shadow": True}))
+    _raise(informational=True)
+    result = asyncio.run(outbox.sweep(None, config=dict(ON)))
 
-    assert result.suppressed == 1 and result.sent == 0
-    assert sender.calls == []
-    assert not concerns.read()[0]["delivered_at"], (
-        "a suppressed concern was stamped as delivered; turning shadow off "
-        "would then never send it")
+    assert result.sent == 1, result.line()
+    assert sender.calls[0]["title"].startswith("FYI: ")
+    assert "nothing is asked of you" in sender.calls[0]["message"]
+    assert jobs == [], "an FYI raised a to-do job — the mode promised not to"
+    row = concerns.read()[0]
+    assert row["delivered_at"], "an FYI must still be stamped as sent"
+    # ⚠️ AND IT NEVER ENTERS THE ESCALATION QUEUE. Nobody acknowledges an FYI,
+    # so a permanent resident here would crowd real criticals out of the
+    # sweep's first-five window.
+    assert outbox.awaiting_acknowledgement() == []
+
+    # The other direction: an ordinary concern still raises the job.
+    concerns._write([])
+    _raise(severity="critical", subject_key="b2b2b2b2b2b2b2b2")
+    result = asyncio.run(outbox.sweep(None, config=dict(ON)))
+    assert result.sent == 1 and len(jobs) == 1, result.line()
+    assert not sender.calls[-1]["title"].startswith("FYI")
+    assert outbox.awaiting_acknowledgement() != []
 
 
 def test_the_agent_being_off_sends_nothing(monkeypatch: pytest.MonkeyPatch) -> None:

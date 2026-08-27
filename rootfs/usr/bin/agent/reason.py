@@ -136,9 +136,10 @@ def auto(config: Optional[Mapping[str, Any]] = None) -> bool:
 
     ⚠️ ONE KEY SINCE 2.756.0 — `mode`, not `investigate_mode` beside `shadow`.
     ⚠️ AND "observe" INVESTIGATES. That is the whole point of the mode: run
-    everything, deliver nothing. `shadow.suppressed` is what holds the delivery
-    back; refusing to investigate here would make an observe period a record of
-    nothing having been looked at.
+    everything, tell once, ask nothing — a concern raised there is stamped
+    informational (`tools/concern.writer`), delivered as an FYI, and never
+    escalated. Refusing to investigate here would make an observe period a
+    record of nothing having been looked at.
     """
     return str(agent_config.view(config).get("mode")) in ("live", "observe")
 

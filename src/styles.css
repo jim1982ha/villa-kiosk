@@ -4306,6 +4306,10 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   display: flex; flex-direction: column; align-items: flex-start;
   gap: 4px; flex: 0 0 auto; max-width: 45%;
 }
+/* The FYI mark on an observe-mode concern: icon and words on one baseline.
+   Muted on purpose — it says "nothing to do", and a loud treatment would make
+   the one row that asks nothing the loudest row on the list. */
+.concern-fyi { display: inline-flex; align-items: center; gap: 4px; }
 .concern-text { flex: 1 1 220px; min-width: 0; }
 /* ⚠️ ON A PHONE THE TWO COLUMNS BECOME TWO ROWS. At 360 CSS px a 45% meta
    column leaves the sentence ~180px, which wraps every two words. The parent
@@ -4619,6 +4623,19 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   gap: 12px; flex-wrap: wrap;
 }
 .section-head-row > .settings-section-title { margin-bottom: 0; }
+
+/* The Triage tab's summary line with "Check the villa now" beside it
+   (2026-08-28, owner's request): one flex row, text first, control last,
+   directly above the Pager row that carries "Cancel all". Wraps by CONTENT —
+   the paragraph keeps a readable minimum and the button drops under it on a
+   phone — no breakpoint, per the flag-card rule two sections up. The
+   RunCheckNow status note is a second <p> in the same row and inherits the
+   same wrapping. */
+.triage-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px 12px; flex-wrap: wrap;
+}
+.triage-toolbar > p { flex: 1 1 260px; min-width: 0; margin: 0; }
 
 /* ⚠️ `.reports-h3` IS DELETED, NOT RESTYLED. It was a SECOND DEFINITION of the
    uppercase section eyebrow — same role as `.settings-section-title`, at

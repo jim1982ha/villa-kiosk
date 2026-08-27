@@ -19,8 +19,9 @@
 // ⚠️ THE THREE MODES DRAW THE SAME CARD WITH A DIFFERENT AFFORDANCE, because
 // what a flag CAN become differs by mode and nothing on screen used to say so:
 //   Flag & Ask                   → Investigate / Cancel. It is waiting for you.
-//   Investigate & Log Only       → a briefing mark. Already looked at; the
-//                                  finding is in your next briefing.
+//   Investigate & Log Only       → whether a Concern came out of it — since
+//                                  2026-08-28 those land on the Reason tab
+//                                  too, marked "for your information".
 //   Investigate & Log +Escalation → whether a Concern came out of it, and
 //                                  concerns live on the Reason tab.
 //
@@ -29,7 +30,7 @@
 // `test_pass_reason_contract.py` as the only thing holding them together.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Search, X, FileText, AlertCircle, MinusCircle } from "lucide-react";
+import { Loader2, Search, X, AlertCircle, MinusCircle } from "lucide-react";
 
 import { PAGE_CARDS, Pager, usePaged } from "@/components/common/Paged";
 import {
@@ -122,17 +123,22 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
         <span className="sev-warning flag-row-status" title={`The investigation started${byWhom} but could not finish (${flag.runStatus}). Nothing was concluded — flag it again or check Spend & people for a budget stop.`}>
           <AlertCircle size={16} aria-hidden /> Did not finish{at}
         </span>
-      ) : flag.verdict === "escalated" || mode === "live" ? (
+      ) : flag.verdict === "escalated" || mode === "live" || mode === "observe" ? (
         /* ⚠️ AN HONEST CLAIM, NOW PROVABLE PER FLAG. The merged audit rows say
            an investigation RAN (`escalated`), and the concern store says
            nothing came of it — so "looked at, found nothing to raise" is a
-           statement about THIS flag, not a guess from the villa's mode. */
+           statement about THIS flag, not a guess from the villa's mode.
+
+           ⚠️ `observe` JOINED THIS BRANCH ON 2026-08-28: its concerns now land
+           in the live store too, so the lookup above catches them and "all
+           clear" is as provable there as in live mode. The old "In your next
+           briefing" wording described the shadow-store era, when a concern
+           existed but this row could not see it. Residual: an observe flag
+           settled BEFORE the change whose concern went to the old shadow file
+           reads "all clear" here — rare, historical, and the briefing that
+           carried it already said what it concluded. */
         <span className="muted flag-row-status" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}. It looked at the evidence and concluded nothing needs your attention — a complete answer, not a failure.`}>
           <MinusCircle size={16} aria-hidden /> Looked into — all clear{at}
-        </span>
-      ) : mode === "observe" ? (
-        <span className="muted flag-row-status" title="Investigated quietly. Whatever it concluded is written into your next briefing rather than sent as an alert.">
-          <FileText size={16} aria-hidden /> In your next briefing{at}
         </span>
       ) : (
         /* ⚠️ NO MODE AND NO RUN RECORDED — a check written before 2.785.0.
@@ -193,7 +199,8 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
 }
 
 
-export default function RecentChecks({ passes, empty, mode, canAct, children }: {
+export default function RecentChecks({ passes, empty, mode, canAct, action,
+                                       children }: {
   passes: TriagePass[];
   /** What to say when nothing has run. */
   empty: React.ReactNode;
@@ -203,6 +210,15 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
    *  for anybody else regardless. Hidden rather than disabled, so a reader is
    *  never shown a control that could only ever 403. */
   canAct?: boolean;
+  /** ⚠️ THE "CHECK THE VILLA NOW" BUTTON, RENDERED ON THE SUMMARY LINE
+   *  (2026-08-28, owner's request). It sat on the section heading's row, two
+   *  visual tiers away from the totals it changes; the owner asked for it
+   *  beside "Across all N checks below …", directly above the Pager row that
+   *  carries "Cancel all" — and explicitly NOT in the same row as Cancel all,
+   *  which acts on flags rather than starting checks. A slot rather than a
+   *  hardcoded import so this component stays renderable without the button
+   *  (non-owners, tests). */
+  action?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   const [flags, setFlags] = useState<CheckFlag[]>([]);
@@ -331,7 +347,18 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
   // literal: the rule is one owner for pagination, not one number.
   const paged = usePaged(rows, PAGE_CARDS);
 
-  if (rows.length === 0) return <p className="muted body-text">{empty}</p>;
+  if (rows.length === 0) {
+    // ⚠️ THE ACTION RENDERS HERE TOO. "Check the villa now" is most needed
+    // exactly when nothing has run yet, and hanging it off the summary line
+    // alone would make the one control that fixes an empty list disappear
+    // with the list.
+    return (
+      <div className="triage-toolbar">
+        <p className="muted body-text">{empty}</p>
+        {action}
+      </div>
+    );
+  }
 
   const work = rows.reduce((acc, r) => {
     const y = yieldOf(r.reason);
@@ -340,23 +367,31 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
 
   return (
     <>
-      {work.looked > 0 && (
-        /* ⚠️ THE TOTAL NAMES ITS WINDOW (2026-08-28). "17 looked into, 2
-            raised as a concern" sat directly above the NEWEST check's card,
-            so the owner read the 2 as that check's yield, went to the Reason
-            tab expecting two open concerns, and found none — the 2 were from
-            checks two days earlier, both since dealt with. Verified against
-            the log before rewording: no run that day called raise_concern and
-            the concern store's response stayed byte-identical throughout. A
-            true sentence bound to the wrong scope is this screen's most
-            expensive kind of defect. */
-        <p className="muted body-text">
-          Across all {rows.length} check{rows.length === 1 ? "" : "s"} below:{" "}
-          {work.looked} flag{work.looked === 1 ? "" : "s"} investigated,{" "}
-          {work.raised} became concern{work.raised === 1 ? "" : "s"} (open ones
-          are on the Reason tab; dealt-with ones under “What came of them”).
-        </p>
-      )}
+      {/* ⚠️ ONE ROW: THE WINDOW TOTALS AND THE BUTTON THAT EXTENDS THEM
+          (2026-08-28, owner's request). The summary and "Check the villa now"
+          share a flex row directly above the Pager row that carries "Cancel
+          all" — and Cancel all is deliberately NOT in this row: it answers
+          waiting flags, this row is about checks. */}
+      <div className="triage-toolbar">
+        {work.looked > 0 && (
+          /* ⚠️ THE TOTAL NAMES ITS WINDOW (2026-08-28). "17 looked into, 2
+              raised as a concern" sat directly above the NEWEST check's card,
+              so the owner read the 2 as that check's yield, went to the Reason
+              tab expecting two open concerns, and found none — the 2 were from
+              checks two days earlier, both since dealt with. Verified against
+              the log before rewording: no run that day called raise_concern and
+              the concern store's response stayed byte-identical throughout. A
+              true sentence bound to the wrong scope is this screen's most
+              expensive kind of defect. */
+          <p className="muted body-text">
+            Across all {rows.length} check{rows.length === 1 ? "" : "s"} below:{" "}
+            {work.looked} flag{work.looked === 1 ? "" : "s"} investigated,{" "}
+            {work.raised} became concern{work.raised === 1 ? "" : "s"} (open ones
+            are on the Reason tab; dealt-with ones under “What came of them”).
+          </p>
+        )}
+        {action}
+      </div>
       {note && <p className="muted body-text" role="status">{note}</p>}
       {/* ⚠️ THE UNATTACHED FLAGS, IN ONE CARD THAT EXPLAINS ITSELF. These are
           real and answerable — they are what "Cancel all N" acts on — and the

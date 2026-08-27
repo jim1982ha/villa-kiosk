@@ -32,12 +32,13 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import config as agent_config, policy, reason, shadow  # noqa: E402
+from agent import config as agent_config, policy, reason  # noqa: E402
 
 
 def test_the_dead_COMBINATION_cannot_be_expressed_at_all() -> None:
@@ -52,27 +53,54 @@ def test_the_dead_COMBINATION_cannot_be_expressed_at_all() -> None:
     assert agent_config.DEFAULTS["depth"] in agent_config.DEPTH
 
 
-def test_every_mode_is_one_a_person_would_ACTUALLY_want() -> None:
-    """The three, and what each means to the two predicates that read it."""
+def _stamped_informational(mode: str, tmp_path: Any) -> bool:
+    """What `tools/concern.writer` stamps for a concern raised under `mode` —
+    the predicate that replaced `shadow.suppressed` on 2026-08-28."""
+    from agent import concerns as concerns_mod
+    from agent.tools import concern as concern_tool
+
+    original = concerns_mod.CONCERNS_FILE
+    concerns_mod.CONCERNS_FILE = str(tmp_path / f"c-{mode}.json")
+    try:
+        snap = policy.for_run({"mode": mode}, tool_names=[])
+        ok, why = concern_tool.writer(snap, {"mode": mode})(
+            concerns_mod.Concern(subject_key="a1b2c3d4a1b2c3d4", title="t",
+                                 body="b", severity="warning",
+                                 evidence=[{"tool": "x", "args_digest": "d",
+                                            "at": "2026-08-27T00:00:00Z",
+                                            "summary": "s"}]))
+        assert ok, why
+        return bool(concerns_mod.read()[0]["informational"])
+    finally:
+        concerns_mod.CONCERNS_FILE = original
+
+
+def test_every_mode_is_one_a_person_would_ACTUALLY_want(tmp_path: Any) -> None:
+    """The three, and what each means to the two predicates that read it.
+
+    ⚠️ THE SECOND COLUMN CHANGED MEANING ON 2026-08-28 (owner's ruling): it was
+    "delivery held?" (`shadow.suppressed`), and observe-mode concerns are now
+    DELIVERED — once, as an FYI that asks nothing. What observe withholds is
+    the chase and the to-do job, and the stamp below is how the outbox knows."""
     cases = {
-        # mode:        (investigates?, delivery held?)
-        "observe":     (True,  True),   # run everything, deliver nothing
+        # mode:        (investigates?, concerns stamped informational?)
+        "observe":     (True,  True),   # run everything, tell once, ask nothing
         "ask":         (False, False),  # wait for a person, then deliver
         "live":        (True,  False),  # the normal way to run it
     }
-    for mode, (investigates, held) in cases.items():
+    for mode, (investigates, informational) in cases.items():
         assert reason.auto({"mode": mode}) is investigates, mode
-        assert shadow.suppressed({"mode": mode}) is held, mode
+        assert _stamped_informational(mode, tmp_path) is informational, mode
 
 
-def test_observe_INVESTIGATES_and_that_is_the_whole_point() -> None:
-    """⚠️ THE ONE COMBINATION THAT LOOKS WRONG AND IS RIGHT. "Investigate & Log Only" (stored `observe`) must
-    still investigate — running everything and delivering nothing is what makes
-    the period readable. Refusing to investigate would make it a record of
-    nothing having been looked at, which is the defect this whole file is
-    about, reintroduced from the other side."""
+def test_observe_INVESTIGATES_and_that_is_the_whole_point(tmp_path: Any) -> None:
+    """⚠️ THE ONE COMBINATION THAT LOOKS WRONG AND IS RIGHT. "Investigate & Log
+    Only" (stored `observe`) must still investigate — running everything and
+    asking nothing is what makes the mode readable. Refusing to investigate
+    would make it a record of nothing having been looked at, which is the
+    defect this whole file is about, reintroduced from the other side."""
     assert reason.auto({"mode": "observe"}) is True
-    assert shadow.suppressed({"mode": "observe"}) is True
+    assert _stamped_informational("observe", tmp_path) is True
 
 
 def test_depth_is_ONE_key_and_both_bounds_come_from_it() -> None:

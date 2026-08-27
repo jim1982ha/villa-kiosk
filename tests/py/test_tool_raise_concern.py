@@ -2,7 +2,7 @@
 
 ⚠️ HALF OF THIS FILE PINS THE CALLER, NOT THE TOOL, AND THAT IS DELIBERATE. The
 defect TASK-053 exists to fix was never inside a function — every piece worked.
-`concerns.raise_concern`, `shadow.record`, `render.enforce`, `policy.may_use_tool`
+`concerns.raise_concern`, `render.enforce`, `policy.may_use_tool`
 and `contracts.subject_key` were all correct, tested, and reachable by nobody.
 A suite that exercised only this tool would have been green on the day the villa
 produced zero concerns, which is exactly the shape `feedback_pin-the-caller`
@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agent import audit, budget, concerns, contracts, policy  # noqa: E402
-from agent import runtime, shadow, triage  # noqa: E402
+from agent import runtime, triage  # noqa: E402
 from agent.concerns import Concern  # noqa: E402
 from agent.refs import RefTable  # noqa: E402
 from agent.registry import Registry  # noqa: E402
@@ -289,23 +289,32 @@ def test_the_whole_tool_result_is_not_stored_with_the_concern() -> None:
     assert stored["summary"] == "short"
 
 
-# ── which store ─────────────────────────────────────────────────────────────
-def test_in_shadow_mode_the_concern_lands_in_the_shadow_store() -> None:
-    blocks = _call(_tool(cfg={"shadow": True}))
+# ── the delivery class ──────────────────────────────────────────────────────
+def test_in_observe_mode_the_concern_is_live_and_INFORMATIONAL() -> None:
+    """⚠️ ONE STORE SINCE 2026-08-28 (owner's ruling): observe-mode concerns
+    land LIVE — visible on the Reason tab — stamped `informational`, which is
+    what the outbox reads to deliver once and raise no job."""
+    blocks = _call(_tool(cfg={"mode": "observe"}))
     assert "error" not in blocks[0], blocks
-    assert not concerns.read(), "the LIVE store must be untouched"
-    recorded = shadow.recorded()
-    assert len(recorded) == 1
-    assert recorded[0]["title"] == "Pool pump drawing more than usual"
+    rows = concerns.read()
+    assert len(rows) == 1
+    assert rows[0]["title"] == "Pool pump drawing more than usual"
+    assert rows[0]["informational"] is True
 
 
-def test_the_model_cannot_choose_the_store() -> None:
-    """⚠️ THERE IS NO ARGUMENT FOR IT — a `shadow: false` the model could send
-    would be one hallucination away from a shadow period delivering."""
+def test_the_model_cannot_choose_the_delivery_class() -> None:
+    """⚠️ THERE IS NO ARGUMENT FOR IT — an `informational: false` the model
+    could send would be one hallucination away from an observe-mode villa
+    chasing somebody. The stamp is wiring, read from config at the writer."""
+    assert "informational" not in RaiseConcern.inputSchema["properties"]
     assert "shadow" not in RaiseConcern.inputSchema["properties"]
-    _call(_tool(cfg={"shadow": True}), shadow=False)
-    assert not concerns.read()
-    assert len(shadow.recorded()) == 1
+    _call(_tool(cfg={"mode": "observe"}), informational=False)
+    rows = concerns.read()
+    assert len(rows) == 1 and rows[0]["informational"] is True
+
+    concerns._write([])
+    _call(_tool(cfg={"mode": "live"}))
+    assert concerns.read()[0]["informational"] is False
 
 
 # ── the caller ──────────────────────────────────────────────────────────────
@@ -477,19 +486,18 @@ def test_read_concerns_is_wired_to_the_store_the_writes_go_to() -> None:
     assert payload["concerns"][0]["title"] == "already open"
 
 
-def test_read_concerns_follows_shadow_mode() -> None:
-    """Reading the live store during a shadow period would show the model an
-    empty villa while its own concerns piled up next door."""
+def test_read_concerns_reads_the_ONE_live_store_in_every_mode() -> None:
+    """⚠️ ONE STORE SINCE 2026-08-28. A concern raised in observe mode lands
+    LIVE (stamped informational), so the model's dedupe read must see it from
+    every mode — the shadow-aware split this test used to pin is gone, and a
+    reader that filtered by mode would re-open the refused-supersede loop."""
     from agent import sources
 
-    _call(_tool(cfg={"shadow": True}))
-    tools = {t.name: t for t in sources.build_tools(config={"shadow": True})}
-    payload = asyncio.run(tools["read_concerns"].call({}))[0].get("json") or {}
-    assert payload.get("count") == 1, payload
-
-    live = {t.name: t for t in sources.build_tools(config={"shadow": False})}
-    empty = asyncio.run(live["read_concerns"].call({}))[0].get("json") or {}
-    assert empty.get("count") == 0, empty
+    _call(_tool(cfg={"mode": "observe"}))
+    for mode in ("observe", "live", "ask"):
+        tools = {t.name: t for t in sources.build_tools(config={"mode": mode})}
+        payload = asyncio.run(tools["read_concerns"].call({}))[0].get("json") or {}
+        assert payload.get("count") == 1, (mode, payload)
 
 
 def test_a_concern_records_WHICH_investigation_produced_it() -> None:

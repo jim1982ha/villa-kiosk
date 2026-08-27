@@ -22,11 +22,11 @@ from agent import route                                        # noqa: E402
 OWNER = ["entity:notify.owner_chat"]
 PHONE = ["notify.owner_phone"]
 
-#: ⚠️ SHADOW SHIPS **ON**, so every routing test must opt OUT of it explicitly
-#: or it is testing suppression rather than routing. That default is deliberate
-#: — see `agent/shadow.py` — and this constant is what keeps the two questions
-#: apart in this file.
-LIVE = {"shadow": False}
+#: ⚠️ ROUTING NO LONGER READS THE MODE AT ALL (2026-08-28): the delivery class
+#: rides the CONCERN (`informational`, stamped at raise time), so this constant
+#: is only the config the callers pass through. It stays named so the tests
+#: below read as "a live villa" where that is what they mean.
+LIVE: Dict[str, Any] = {}
 
 
 def _c(**over: Any) -> Dict[str, Any]:
@@ -201,36 +201,41 @@ def test_route_contains_NO_MODEL_CALL() -> None:
         assert banned not in imported, f"route.py imports {banned}"
 
 
-def test_SHADOW_MODE_delivers_to_nobody() -> None:
-    """⚠️ THE PIN FIRED ON THIS FILE THE MOMENT IT EXISTED.
+def test_an_INFORMATIONAL_concern_is_an_FYI_not_a_request() -> None:
+    """⚠️ THE STAMP TRAVELS ON THE CONCERN, NOT ON TODAY'S CONFIG (2026-08-28,
+    owner's ruling — this replaced the shadow suppression branch). Raised in
+    "Investigate & Log Only", a concern is DELIVERED — once, to the thread —
+    and everything that ASKS is withheld: no push even at critical, and the
+    message says out loud that nothing is asked of the reader."""
+    out = route.plan(_c(severity="critical", informational=True),
+                     targets=OWNER, push_targets=PHONE, config={})
+    assert out.informational is True
+    assert out.targets == OWNER, "an FYI must still reach the thread"
+    assert out.push is False, "an FYI pushed to a phone is a request"
+    assert out.title.startswith("FYI: ")
+    assert "nothing is asked of you" in out.body
+    assert out.sends is True
 
-    `test_every_UNSOLICITED_delivery_path_asks_suppressed` was written one
-    release before `route.py`, and failed the first time both were in the tree
-    — which is the whole reason to pin a rule BEFORE the code it governs is
-    written rather than after the field report.
 
-    Routing a concern to a phone is the villa ORIGINATING a message. Answering
-    a question somebody typed is not, and stays deliverable.
-    """
+def test_an_informational_CRITICAL_still_waits_out_quiet_hours() -> None:
+    """⚠️ SEVERITY IS NOT CONSULTED FOR AN FYI's HOLD. `holds_until_morning`
+    exempts a critical from quiet hours — right for a message that wakes
+    somebody to act, wrong for one whose own body says nothing is asked.
+    Occupancy still overrides, exactly as for every other severity."""
+    night = route.plan(_c(severity="critical", informational=True),
+                       targets=OWNER, occupied=False, quiet_hours=True,
+                       config={})
+    assert night.held is True and "held until morning" in night.reason
+    occupied = route.plan(_c(severity="critical", informational=True),
+                          targets=OWNER, occupied=True, quiet_hours=True,
+                          config={})
+    assert occupied.held is False
+
+
+def test_a_NORMAL_concern_routes_unchanged() -> None:
     out = route.plan(_c(severity="critical"), targets=OWNER,
-                     push_targets=PHONE, config={"shadow": True})
-    assert out.suppressed is True
-    assert out.targets == [] and out.sends is False
-    assert "recorded, delivered to nobody" in out.reason
-
-
-def test_shadow_is_distinct_from_HELD() -> None:
-    """⚠️ `held` is a TIMING decision that resolves at 07:00; shadow means the
-    villa is not speaking at all and nothing resolves it but an operator.
-    Collapsing them would make a shadow period look like a long night."""
-    shadowed = route.plan(_c(), targets=OWNER, config={"shadow": True})
-    night = route.plan(_c(), targets=OWNER, occupied=False, quiet_hours=True,
-                       config={"shadow": False})
-    assert shadowed.suppressed and not shadowed.held
-    assert night.held and not night.suppressed
-
-
-def test_with_shadow_OFF_routing_is_unchanged() -> None:
-    out = route.plan(_c(severity="critical"), targets=OWNER,
-                     push_targets=PHONE, config={"shadow": False})
-    assert out.suppressed is False and out.sends is True
+                     push_targets=PHONE, config={})
+    assert out.informational is False and out.sends is True
+    assert out.push is True
+    assert not out.title.startswith("FYI"), (
+        "a concern that will be chased must not announce itself as ignorable")

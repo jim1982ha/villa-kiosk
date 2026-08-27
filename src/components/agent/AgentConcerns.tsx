@@ -20,9 +20,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { Eye, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Eye, Info, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
 
-import { acknowledgeConcern, loadAgentConfig, loadConcerns,
+import { acknowledgeConcern, loadConcerns,
          sendConcernFeedback } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
@@ -88,23 +88,14 @@ export default function AgentConcerns() {
   const canJudge = role != null && hasCapability(role, "manageFacility");
   const [rows, setRows] = useState<Concern[] | null>(null);
   const [settled, setSettled] = useState<Concern[]>([]);
-  const [shadow, setShadow] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    // ⚠️ THE SHADOW FLAG IS READ WITH THE CONCERNS, because an empty list means
-    // two completely different things depending on it. During a shadow period
-    // `concerns.raise_concern` writes to a SEPARATE store — `sources.concern_rows`
-    // is shadow-aware and says so at its own docstring — and this endpoint
-    // serves the LIVE one. So the wall showed nothing while the shadow store
-    // filled, which is exactly the failure the proxy already documents for
-    // briefings: "indistinguishable from an agent that found nothing". The
-    // owner hit it, having just been told an investigation had concluded.
-    const cfg = await loadAgentConfig().catch(() => null);
-    // ⚠️ `mode`, ONE KEY SINCE 2.756.0 — and anything unrecognised reads as
-    // "observe", the direction that says "you are being told nothing" rather
-    // than implying delivery on a villa that is in fact silent.
-    setShadow(cfg?.config?.mode !== "live" && cfg?.config?.mode !== "ask");
+    // ⚠️ NO MODE FLAG ANY MORE (2026-08-28, owner's ruling). Every mode now
+    // writes the ONE live store this endpoint serves — an observe-mode concern
+    // arrives stamped `informational` instead of being hidden in a separate
+    // shadow file — so an empty list means exactly one thing: nothing was
+    // raised. The whole "stay silent" empty-state branch left with it.
     const found = await loadConcerns();
     // ⚠️ THE SETTLED ONES ARE KEPT NOW, NOT DISCARDED. They were filtered out
     // at the door on the reasoning that "closed, verified and dismissed are the
@@ -167,48 +158,34 @@ export default function AgentConcerns() {
     // over an empty pane — the exact "broken tier" read this file's own
     // sibling comment warns about — and the owner asked whether an empty tab
     // after an investigation was expected. One sentence answers it.
-    if (!shadow) {
-      return (
-        <>
-          <div className="settings-section-title">
-            Concerns — what the villa concluded
-          </div>
-          <p className="muted body-text">
-            {settled.length > 0
-              ? "Nothing is open right now. Everything the villa has raised "
-                + "has been dealt with — the record is below."
-              : "No concerns right now. When an investigation decides "
-                + "something needs your attention, it appears here — an "
-                + "investigation that finds nothing raises nothing, and that "
-                + "is a complete answer."}
-          </p>
-          {/* ⚠️ THE SETTLED RECORD IS SHOWN WHEN NOTHING IS OPEN, AND IT WAS
-              THE ONE CASE THAT DROPPED IT (2026-08-28). This block returned
-              early, so `SettledSummary` — which only renders from the main
-              return below — was unreachable exactly when it was the only
-              thing left to say. The owner met the contradiction it creates:
-              the Triage tab totals "N raised as a concern" from the checks'
-              own records while this tab said "No concerns", which reads as
-              one screen disagreeing with the other about the same villa.
-              Both were true; only one was complete. */}
-          <SettledSummary concerns={settled} />
-        </>
-      );
-    }
+    //
+    // ⚠️ THE "STAY SILENT" BRANCH IS GONE WITH THE SHADOW STORE (2026-08-28).
+    // Concerns land here in every mode now, so an empty list has one meaning
+    // and needs one sentence.
     return (
       <>
         <div className="settings-section-title">
           Concerns — what the villa concluded
         </div>
         <p className="muted body-text">
-          Nothing is shown here while “stay silent” is switched on.
-          <InfoHint label="Why this is empty">
-            Findings are still being written down, separately, so you can review
-            a whole period before anything is sent. Turn “stay silent” off under
-            Settings to see them here as they are raised; the comparison against
-            your old automations is under Cost, people and advanced.
-          </InfoHint>
+          {settled.length > 0
+            ? "Nothing is open right now. Everything the villa has raised "
+              + "has been dealt with — the record is below."
+            : "No concerns right now. When an investigation decides "
+              + "something needs your attention, it appears here — an "
+              + "investigation that finds nothing raises nothing, and that "
+              + "is a complete answer."}
         </p>
+        {/* ⚠️ THE SETTLED RECORD IS SHOWN WHEN NOTHING IS OPEN, AND IT WAS
+            THE ONE CASE THAT DROPPED IT (2026-08-28). This block returned
+            early, so `SettledSummary` — which only renders from the main
+            return below — was unreachable exactly when it was the only
+            thing left to say. The owner met the contradiction it creates:
+            the Triage tab totals "N raised as a concern" from the checks'
+            own records while this tab said "No concerns", which reads as
+            one screen disagreeing with the other about the same villa.
+            Both were true; only one was complete. */}
+        <SettledSummary concerns={settled} />
       </>
     );
   }
@@ -239,8 +216,8 @@ export default function AgentConcerns() {
           and it is the first thing a tier tab should say. */}
       <p className="muted body-text">
         Everything the assistant investigated and judged worth telling you
-        about. Each one was raised during a check and is waiting for you to say
-        you have seen it.
+        about, raised during a check. One marked “for your information” asks
+        nothing of you; the others wait for you to say you have seen them.
         <InfoHint label="What gets chased">
           <p>
             Only a critical concern is chased. If nobody acknowledges one, the
@@ -254,6 +231,11 @@ export default function AgentConcerns() {
           <p>
             So a warning sitting here is the system working, not a chase that
             failed.
+          </p>
+          <p>
+            A concern marked &ldquo;for your information&rdquo; was raised in
+            Investigate &amp; Log Only mode: it is never chased at any
+            severity, and no job is created for it.
           </p>
         </InfoHint>
       </p>
@@ -286,11 +268,31 @@ export default function AgentConcerns() {
                   one that is still standing. */}
               <LifecycleChip state={c.state} />
               {/* ⚠️ WHETHER ANYONE WAS TOLD IS A DIFFERENT FACT FROM WHETHER IT
-                  MATTERS, and the wall showed only the second. During a shadow
-                  period nothing is sent at all, so a list of concerns with no
-                  indication of that reads as "everyone has been notified". */}
+                  MATTERS, and the wall showed only the second. A list of
+                  concerns with no indication of that reads as "everyone has
+                  been notified". */}
               {!c.delivered_at && (
                 <span className="muted body-text">not sent yet</span>
+              )}
+              {/* ⚠️ THE FYI MARK (2026-08-28, owner's request). A concern
+                  raised under Investigate & Log Only sits on the same list as
+                  one that will chase somebody, and nothing on the card said
+                  which kind the reader was looking at — so every row implied
+                  a task. The chip states the contract: told once, never
+                  re-sent, no job raised, nothing asked. Stamped at raise
+                  time, so changing the mode later relabels nothing. */}
+              {c.informational && (
+                <span className="muted body-text concern-fyi"
+                      title={"Raised while the villa was set to Investigate & "
+                             + "Log Only, so this is for your information: it "
+                             + "was told to you once, it will not be re-sent "
+                             + "or chased, and no job was added to any to-do "
+                             + "list. Nothing is asked of you. Switch the "
+                             + "mode under Settings if you want concerns like "
+                             + "this escalated."}>
+                  <Info size={14} aria-hidden /> for your information — nothing
+                  to do
+                </span>
               )}
               </div>
               {/* ⚠️ INLINE AND IN PARENTHESES, at the owner's request — a
@@ -322,8 +324,13 @@ export default function AgentConcerns() {
                 to happen, and puts a button on every row for a state most rows
                 are not in. A concern already acknowledged says WHO — the first
                 acknowledgement wins, and hiding that would make a second reader
-                think nobody had picked it up. */}
-            {canJudge && c.delivered_at && (
+                think nobody had picked it up.
+
+                ⚠️ AND NEVER ON AN FYI. Acknowledgement exists to stop the
+                chase, and an informational concern is never chased — the
+                button would be a control whose only effect is recording that
+                it was pressed. */}
+            {canJudge && c.delivered_at && !c.informational && (
               c.acknowledged_at ? (
                 <span className="muted body-text"
                       title={`Acknowledged ${c.acknowledged_at}`}>

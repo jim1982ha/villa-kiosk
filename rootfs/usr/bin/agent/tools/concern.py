@@ -17,9 +17,9 @@ states. Whether this run may write at all is `policy.may_use_tool` (already
 asked by `registry.invoke` before `run` is reached). Whether a person has
 silenced this subject is `policy.is_suppressed`. Whether the concern is
 well formed is `contracts.concern_errors`, run by the store. Whether a second
-concern on an open subject is a duplicate is `concerns.raise_concern`. Which
-STORE it lands in is `shadow.suppressed`. This file turns tool arguments into a
-`Concern` and hands it to a sink.
+concern on an open subject is a duplicate is `concerns.raise_concern`. Whether
+it is an FYI is the villa's mode at raise time, stamped in `writer`. This file
+turns tool arguments into a `Concern` and hands it to a sink.
 
 ⚠️ `subject_key` IS COMPUTED HERE AND IS NOT IN `inputSchema` (ARCH-011,
 CTR-004). The model holds a `ref` — an opaque per-run handle — and never an
@@ -256,13 +256,21 @@ class RaiseConcern(BaseTool):
 
 def writer(policy: Any, config: Optional[Mapping[str, Any]] = None
            ) -> Callable[[Concern], Tuple[bool, str]]:
-    """The sink: suppression, then the store this deployment is writing to.
+    """The sink: suppression, then the one live store — with the delivery
+    class stamped from the villa's mode.
 
-    ⚠️ THE MODEL CANNOT CHOOSE THE STORE, AND HAS NO ARGUMENT FOR IT. Shadow is
-    read from config HERE, at the call site, so "in shadow mode a concern lands
-    in the shadow store" is a property of the wiring rather than of the model's
-    behaviour. A `shadow: true` tool argument would have been one hallucination
-    away from a shadow period silently delivering.
+    ⚠️ THE MODEL CANNOT CHOOSE THE DELIVERY CLASS, AND HAS NO ARGUMENT FOR IT.
+    The mode is read from config HERE, at the call site, so "in Investigate &
+    Log Only a concern is informational" is a property of the wiring rather
+    than of the model's behaviour — an `informational: true` tool argument
+    would be one hallucination away from a mode that never chases anything.
+
+    ⚠️ THE SHADOW STORE IS GONE FROM THIS PATH (2026-08-28, owner's ruling).
+    Observe-mode concerns used to land in a separate file and be delivered to
+    nobody — the cutover-measurement design. The owner has since ruled that
+    "Investigate & Log Only" means the concern is visible on the Reason tab
+    and told once as an FYI; what the mode withholds is ESCALATION and the
+    to-do job, and `informational` below is how the outbox knows.
 
     ⚠️ SUPPRESSION IS CHECKED BEFORE THE WRITE, AND IT IS `policy`'s ANSWER.
     `is_suppressed` reads the frozen run snapshot, so a subject silenced by a
@@ -278,15 +286,18 @@ def writer(policy: Any, config: Optional[Mapping[str, Any]] = None
     each can be answered: suppression here, validity in the store.
     """
     from agent import concerns as concerns_mod
+    from agent import config as agent_config
     from agent import policy as policy_mod
-    from agent import shadow as shadow_mod
 
     def record(concern: Concern) -> Tuple[bool, str]:
         if policy_mod.is_suppressed(policy, concern.subject_key):
             return False, ("a person has asked this villa to stop raising this "
                            "subject, so it was not recorded.")
-        if shadow_mod.suppressed(config):
-            return shadow_mod.record(concern, config=config)
+        # ⚠️ STAMPED, NEVER CLEARED: a concern raised informational stays so
+        # after a mode change, exactly as `TriagePass.mode` records the mode
+        # the check RAN under rather than the villa's setting today.
+        if str(agent_config.view(config).get("mode")) == "observe":
+            concern.informational = True
         stored, reason = concerns_mod.raise_concern(concern)
         return bool(stored), reason
 

@@ -552,16 +552,14 @@ def concern_rows(config: Optional[Mapping[str, Any]] = None
     supersedes — so an unwired reader means the model is told to check, sees
     nothing, writes, and is refused with no way to comply.
 
-    ⚠️ IT FOLLOWS SHADOW MODE, because the writes do. Reading the live store
-    during a shadow period would show the model an empty villa while its own
-    concerns piled up next door, and it would supersede nothing and be refused
-    on every repeat.
+    ⚠️ ONE STORE SINCE 2026-08-28. This used to follow shadow mode into a
+    separate file, because the writes went there; the owner's ruling made
+    observe-mode concerns land in the live store (informational, delivered
+    once), so the store the writes go to is the live one in every mode and a
+    second branch here would read a file nothing writes any more.
     """
     def rows() -> List[Dict[str, Any]]:
         try:
-            from agent import shadow as shadow_mod
-            if shadow_mod.suppressed(config):
-                return list(shadow_mod.recorded())
             from agent import concerns as concerns_mod
             return list(concerns_mod.read())
         except Exception as err:  # noqa: BLE001 - degrade, never fail

@@ -83,15 +83,18 @@ class Delivery:
     body: str = ""
     push: bool = False
     held: bool = False
-    #: ⚠️ SHADOW MODE. Distinct from `held`, which is a TIMING decision that
-    #: resolves at 07:00; this one means the villa is recording and not
-    #: speaking at all, and nothing resolves it but an operator.
-    suppressed: bool = False
+    #: ⚠️ AN FYI, NOT A REQUEST (2026-08-28, owner's ruling). True when the
+    #: concern was raised in "Investigate & Log Only": told once, in the
+    #: thread only, never pushed, never escalated, no job raised. This
+    #: REPLACES the old `suppressed` shadow flag — observe mode used to mean
+    #: "recorded, delivered to nobody", and the owner has ruled it means
+    #: "delivered for information, nothing asked of you" instead.
+    informational: bool = False
     reason: str = ""
 
     @property
     def sends(self) -> bool:
-        return bool(self.targets) and not self.held and not self.suppressed
+        return bool(self.targets) and not self.held
 
 
 def row_for(severity: str) -> Row:
@@ -159,38 +162,72 @@ def plan(concern: Mapping[str, Any], *, targets: Sequence[str],
     severity = str(concern.get("severity") or "notice").lower()
     row = row_for(severity)
 
-    # ⚠️ SHADOW FIRST, AND THIS MODULE IS EXACTLY WHAT THAT RULE COVERS. A
-    # concern being routed to a phone is the villa ORIGINATING a message —
-    # the thing a shadow period must not do — as against answering a question
-    # somebody typed, which it must. `test_every_UNSOLICITED_delivery_path_asks_
-    # suppressed` was written one release before this file existed and FIRED ON
-    # IT the first time both were in the tree, which is the whole point of
-    # pinning a rule before the code it governs is written.
-    from agent import shadow
-    if shadow.suppressed(config):
-        return Delivery(
-            concern_id=str(concern.get("id") or ""), severity=severity,
-            targets=[], title=inert(str(concern.get("title") or "")),
-            body=inert(str(concern.get("body") or "")), push=False,
-            suppressed=True,
-            reason="shadow mode: recorded, delivered to nobody")
+    # ⚠️ INFORMATIONAL IS A PROPERTY OF THE CONCERN, NOT OF TODAY'S CONFIG.
+    # `tools/concern.writer` stamped it at raise time from the mode the villa
+    # was in, so a mode change cannot re-route history — and this routing
+    # decision survives a restart, because it is read from the store rather
+    # than from a setting. An FYI goes to the thread only (never a push, even
+    # for a severity the matrix would push), always respects quiet hours, and
+    # says in its own body that nothing is asked of the reader. The old shadow
+    # branch here ("recorded, delivered to nobody") is gone by the owner's
+    # ruling: Investigate & Log Only tells you once instead of telling nobody.
+    informational = bool(concern.get("informational"))
+    if informational:
+        row = Row(thread=True, push=False, quiet_hours_apply=True,
+                  acknowledgement="none")
     held, why = holds_until_morning(severity, occupied=occupied,
-                                    quiet_hours=quiet_hours)
+                                    quiet_hours=quiet_hours) if not informational \
+        else _held_informational(occupied=occupied, quiet_hours=quiet_hours)
 
     chosen: List[str] = list(targets) if row.thread else []
     if row.push:
         chosen = chosen + [t for t in push_targets if t not in chosen]
 
+    title = inert(str(concern.get("title") or ""))
+    body = inert(str(concern.get("body") or ""))
+    if informational:
+        # ⚠️ THE MESSAGE SAYS WHAT IT IS. A concern arriving on the same chat
+        # as the escalating kind must announce that nothing is asked, or the
+        # reader learns to ignore the ones that do ask. `inert()` has already
+        # run; this suffix contains nothing a notify platform parses as markup.
+        title = f"FYI: {title}"
+        body = (f"{body}\n\nFor your information only — the villa is set to "
+                f"Investigate and Log Only, so nothing is asked of you. This "
+                f"will not be re-sent or chased.")
+
     return Delivery(
         concern_id=str(concern.get("id") or ""),
         severity=severity,
         targets=chosen,
-        title=inert(str(concern.get("title") or "")),
-        body=inert(str(concern.get("body") or "")),
+        title=title,
+        body=body,
         push=row.push,
         held=held,
+        informational=informational,
         reason=why,
     )
+
+
+def _held_informational(*, occupied: Optional[bool], quiet_hours: bool
+                        ) -> Tuple[bool, str]:
+    """Quiet-hours hold for an FYI, whatever its severity says.
+
+    ⚠️ SEVERITY IS NOT CONSULTED, ON PURPOSE. `holds_until_morning` exempts a
+    critical from quiet hours — right for a message that wakes somebody to
+    act, and wrong for one whose own body says nothing is asked of them. An
+    informational critical still exists (the severity is the model's honest
+    judgement and the card shows it); it just waits for morning like every
+    other FYI. Occupancy still overrides: people in the house are experiencing
+    whatever it describes.
+    """
+    if not quiet_hours:
+        return False, "informational: not quiet hours"
+    if occupied is None:
+        return False, ("informational, occupancy unknown: not held — an "
+                       "assumption is not a reason to delay")
+    if occupied:
+        return False, "informational, but the villa is occupied"
+    return True, "informational: held until morning through quiet hours"
 
 
 @dataclass

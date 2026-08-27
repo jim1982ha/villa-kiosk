@@ -406,9 +406,15 @@ export default function AgentTuningPanel() {
             hint: "Spends almost nothing on its own. Approving one runs the "
                 + "full investigation straight away, and that one then behaves "
                 + "like the last step." },
+          /* ⚠️ "and nowhere else" WAS THE SHADOW-STORE ERA and stopped being
+             true on 2026-08-28: observe-mode concerns now land on the Reason
+             tab and are messaged once as an FYI. What this mode still
+             withholds is everything that ASKS: no chase, no to-do job. */
           { id: "observe", text: "Investigate & Log Only",
-            hint: "Costs the same as the last step. What it finds appears in "
-                + "your briefing and nowhere else." },
+            hint: "Costs the same as the last step. What it concludes appears "
+                + "on the Reason tab, in your briefing, and as a one-off "
+                + "for-your-information message — nothing is chased and "
+                + "nothing is asked of you." },
           { id: "live", text: "Investigate & Log +Escalation",
             hint: "Messages you when it concludes something, adds a job to "
                 + "your to-do list, and chases until someone acknowledges." },

@@ -161,7 +161,11 @@ def test_the_task_is_raised_AFTER_the_send_and_only_on_success() -> None:
     assert "task_mod.raise_for" in src, "delivery no longer raises a task"
     assert src.index("_mark_delivered") < src.index("task_mod.raise_for"), (
         "the task is raised before the concern is marked delivered")
-    for early in ('return "held"', 'return "suppressed"', 'return "failed"'):
+    # ⚠️ `return "suppressed"` left with shadow delivery (2026-08-28):
+    # observe-mode concerns are delivered as FYIs now, so that early return no
+    # longer exists to order against. The FYI's own no-job rule is pinned in
+    # `test_agent_outbox`.
+    for early in ('return "held"', 'return "failed"'):
         assert src.index(early) < src.index("task_mod.raise_for"), (
             f"a concern that returns {early} would still raise a job")
 

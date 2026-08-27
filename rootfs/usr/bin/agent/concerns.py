@@ -106,6 +106,17 @@ class Concern:
     #: problem is fixed, and a concern stays `open` until it actually is.
     acknowledged_at: str = ""
     acknowledged_by: str = ""
+    #: ⚠️ STAMPED AT RAISE TIME FROM THE VILLA'S MODE, NEVER DERIVED FROM THE
+    #: MODE LATER (2026-08-28, owner's ruling). In "Investigate & Log Only" a
+    #: concern is still raised into THIS store and still delivered — as an FYI:
+    #: told once, never escalated, never turned into a to-do job, nothing asked
+    #: of anybody. Reading the villa's CURRENT mode instead would relabel every
+    #: past concern the moment the owner changes the setting — the same trap
+    #: `TriagePass.mode` exists to avoid. The old design (a separate shadow
+    #: store, delivery suppressed entirely) was the cutover-measurement era;
+    #: the diff it fed was deleted in 2.756.0 and the owner has since ruled
+    #: that "log only" means "tell me, ask nothing" rather than "tell nobody".
+    informational: bool = False
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -119,6 +130,7 @@ class Concern:
             "outcome": self.outcome, "delivered_at": self.delivered_at,
             "acknowledged_at": self.acknowledged_at,
             "acknowledged_by": self.acknowledged_by,
+            "informational": self.informational,
         }
 
 

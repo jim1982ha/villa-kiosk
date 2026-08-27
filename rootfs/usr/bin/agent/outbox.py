@@ -10,7 +10,7 @@ silence, read as success, and been cited as the evidence for retiring 71 working
 blueprint instances.
 
 ⚠️ THIS MODULE DECIDES NOTHING. `route.plan` decides the channel, the hold and
-the targets; `shadow.suppressed` decides whether anything may be sent at all;
+the delivery class (an informational concern is told once and asks nothing);
 `reports.deliver` does the sending. What lives here is the SWEEP — which
 concerns are still owed a delivery, and what to record once one is made. A
 second copy of the matrix here would be the routing table nobody tests.
@@ -54,16 +54,19 @@ class Dispatch:
     considered: int = 0
     sent: int = 0
     held: int = 0
-    suppressed: int = 0
     failed: int = 0
     reason: str = ""
     delivered_ids: List[str] = field(default_factory=list)
 
+    # ⚠️ `suppressed` LEFT WITH SHADOW DELIVERY (2026-08-28). Observe mode now
+    # delivers informationally instead of suppressing, so the counter could
+    # only ever read 0 — the exact "instrument that lies" shape this project
+    # has been caught by five times. Deleted rather than left to be misread.
     def line(self) -> str:
         if self.reason:
             return self.reason
         return (f"considered {self.considered}, sent {self.sent}, "
-                f"held {self.held}, suppressed {self.suppressed}"
+                f"held {self.held}"
                 + (f", failed {self.failed}" if self.failed else ""))
 
 
@@ -96,11 +99,19 @@ def awaiting_acknowledgement(rows: Optional[Sequence[Mapping[str, Any]]] = None
     the sweep needs to tell those apart — a settled one is what `route.escalate`
     calls a cleared condition and it must be allowed to stand down out loud
     rather than simply disappearing from the list.
+
+    ⚠️ AN INFORMATIONAL CONCERN IS NEVER IN THIS LIST. An FYI asks for no
+    acknowledgement, so nobody ever gives one — and since this list feeds the
+    escalation sweep's `pending[:MAX_PER_SWEEP]` window, permanent residents
+    would eventually crowd every real critical out of the first five slots.
+    Excluded at the source rather than skipped in the loop, so the starvation
+    is impossible by construction.
     """
     source = list(rows) if rows is not None else concerns_mod.read()
     return [dict(r) for r in source
             if str(r.get("delivered_at") or "").strip()
-            and not str(r.get("acknowledged_at") or "").strip()]
+            and not str(r.get("acknowledged_at") or "").strip()
+            and not bool(r.get("informational"))]
 
 
 def _minutes_since(stamp: str, now: Optional[float] = None) -> float:
@@ -242,11 +253,11 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
                         now: Optional[float]) -> bool:
     """Send one escalation and record which step was taken.
 
-    ⚠️ IT GOES THROUGH `route.plan` LIKE EVERY OTHER DELIVERY. Shadow mode and
-    quiet hours are asked there, and `test_shadow` pins that every unsolicited
-    delivery path consults `shadow.suppressed` — the way to keep that true is to
-    run THROUGH the module that asks rather than around it. An escalation that
-    bypassed it would be the one message a silent villa still sent.
+    ⚠️ IT GOES THROUGH `route.plan` LIKE EVERY OTHER DELIVERY. The delivery
+    class and quiet hours are decided there — the way to keep every rule true
+    is for the path to run THROUGH the module that decides rather than around
+    it. An escalation that bypassed it would be the one message that dodged
+    the routing table.
     """
     from reports import people as people_mod
 
@@ -265,7 +276,7 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
 
     plan = route_mod.plan(concern, targets=targets, push_targets=targets,
                           occupied=None, quiet_hours=False, config=config)
-    if plan.suppressed or not plan.targets:
+    if not plan.targets:
         return False
     # ⚠️ NOT HELD. `quiet_hours=False` is passed deliberately: an escalation is
     # by definition a critical nobody has picked up, and `route.escalate` has
@@ -397,11 +408,11 @@ async def sweep(session: Any, *,
                 now: Optional[float] = None) -> Dispatch:
     """Deliver what is owed. NEVER RAISES — the caller is a background clock.
 
-    ⚠️ SHADOW IS ASKED BY `route.plan`, NOT HERE, and that is deliberate:
-    `test_shadow` pins that every unsolicited delivery path consults
-    `shadow.suppressed`, and the way to keep that true is for the path to run
-    THROUGH the module that asks rather than around it. A suppressed plan
-    returns with no targets and this records it as suppressed.
+    ⚠️ THE DELIVERY CLASS IS DECIDED BY `route.plan`, NOT HERE, and that is
+    deliberate: an informational concern's FYI copy, its no-push rule and its
+    quiet-hours hold all live in the routing table, and the way to keep that
+    true is for this sweep to run THROUGH the module that decides rather than
+    around it.
     """
     out = Dispatch()
     pending = undelivered()
@@ -435,8 +446,6 @@ async def sweep(session: Any, *,
             out.delivered_ids.append(str(row.get("id") or ""))
         elif sent == "held":
             out.held += 1
-        elif sent == "suppressed":
-            out.suppressed += 1
         else:
             out.failed += 1
 
@@ -448,7 +457,7 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
                        config: Optional[Mapping[str, Any]],
                        quiet: bool, occupied: Optional[bool],
                        now: Optional[float]) -> str:
-    """One concern, routed and sent. Returns sent | held | suppressed | failed."""
+    """One concern, routed and sent. Returns sent | held | failed."""
     from reports import deliver as deliver_mod
     from reports import people as people_mod
 
@@ -495,8 +504,6 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
                    f"{len(plan.targets)} target(s)"
                    + (f", {plan.reason}" if plan.reason else ""))
 
-    if plan.suppressed:
-        return "suppressed"
     if plan.held:
         # ⚠️ NOT MARKED. The next sweep re-evaluates it, and the moment the
         # window has passed it goes. This is the whole release mechanism.
@@ -533,8 +540,15 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     # threshold here would be a second opinion about a question that was just
     # answered, and the first villa where the two disagreed would have a job
     # nobody was told about or a message with no job behind it.
-    from agent import task as task_mod
-    await task_mod.raise_for(session, concern, config=config)
+    #
+    # ⚠️ EXCEPT AN FYI, WHICH RAISES NO JOB BY DEFINITION (2026-08-28, owner's
+    # ruling). "Investigate & Log Only" means nothing is asked of anybody — a
+    # to-do item with a Done button IS asking — so the informational stamp is
+    # the one thing that stands between a concern and the task loop. This is
+    # not a severity threshold: it is the same mode decision the stamp records.
+    if not bool(concern.get("informational")):
+        from agent import task as task_mod
+        await task_mod.raise_for(session, concern, config=config)
     return "sent"
 
 

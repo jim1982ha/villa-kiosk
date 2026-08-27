@@ -148,4 +148,11 @@ export interface Concern {
    *  what a person recognises from the People tab. Absent on concerns raised
    *  before 2.782.0, where the audience is the honest fallback. */
   deliveries?: Array<{ profile: string; at: string }>;
+  /** ⚠️ STAMPED AT RAISE TIME FROM THE MODE THE VILLA WAS IN (2026-08-28,
+   *  owner's ruling), never derived from today's setting — the same trap
+   *  `TriagePass.mode` avoids. True means the concern was raised under
+   *  "Investigate & Log Only": shown here and told once as an FYI, but never
+   *  escalated, never pushed, and no to-do job was raised — nothing is asked
+   *  of the reader. Absent on concerns raised before this existed. */
+  informational?: boolean;
 }

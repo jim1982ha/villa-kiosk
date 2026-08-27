@@ -1,10 +1,10 @@
-"""The triage clock. What makes an unattended shadow period possible at all.
+"""The triage clock. What makes unattended supervision possible at all.
 
-⚠️ WITHOUT THIS, SHADOW MODE FILLS ONLY WHEN SOMEBODY ASKS. The whole point of
-a shadow period is that it accumulates evidence while nobody is watching — and
-the PH-3 checkpoint cannot happen until it has. Triage existed and nothing
-called it, so the store stayed empty and the emptiness looked like a quiet
-villa, which is the failure this subsystem keeps rediscovering in new places.
+⚠️ WITHOUT THIS, THE CONCERN STORE FILLS ONLY WHEN SOMEBODY ASKS. The whole
+point of supervision is that it accumulates evidence while nobody is watching.
+Triage existed and nothing called it, so the store stayed empty and the
+emptiness looked like a quiet villa, which is the failure this subsystem keeps
+rediscovering in new places.
 
 ⚠️ IT IS A FOURTH TASK IN THE SAME LOOP, not a fourth s6 service. The reports
 scheduler, the collector and the observation cycle already prove the pattern; a
@@ -20,12 +20,13 @@ trigger, then the budget, then the provider — each refusing before the next
 costs anything. A scheduler that checked the budget after calling the model
 would discover it was over the limit by going over it.
 
-⚠️ SHADOW IS **NOT** ONE OF THOSE GUARDS, AND THIS DOCSTRING LISTED IT AS ONE
-UNTIL /dry-audit CHECKED. Triage running during a shadow period is the entire
-point — the evidence has to accumulate somehow — and a guard here would have
-made the shadow store fill only when somebody asked, which is the defect this
-module was written to fix. Shadow suppresses DELIVERY, in `route.plan`, and
-nowhere else.
+⚠️ THE MODE IS **NOT** ONE OF THOSE GUARDS, AND THIS DOCSTRING ONCE LISTED IT
+AS ONE UNTIL /dry-audit CHECKED. Triage runs in every mode — the evidence has
+to accumulate somehow. What the mode decides happens LATER: "ask" holds the
+investigation for approval (`reason.follow_up`), and "observe" stamps any
+concern informational so it is told once and never chased (`tools/concern`).
+A guard here would make the store fill only when somebody asked, which is the
+defect this module was written to fix.
 """
 
 from __future__ import annotations
@@ -76,8 +77,8 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
 
     ⚠️ IT RETURNS A REASON RATHER THAN A BOOLEAN. "Nothing happened" has five
     causes here and they need different responses from an operator — switched
-    off, shadowed, over budget, no provider, and nothing to escalate all look
-    identical from outside, and four of them are fine.
+    off, trigger disabled, over budget, no provider, and nothing to escalate
+    all look identical from outside, and four of them are fine.
 
     ⚠️ AND EVERY ONE OF THOSE OUTCOMES IS NOW WRITTEN DOWN, BY CONSTRUCTION.
     The reason was precise from the day this was written and went only to the

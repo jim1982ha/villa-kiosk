@@ -2291,10 +2291,10 @@ def _agent_concerns_for_reports() -> List[Dict[str, Any]]:
     it; `agent.sources` already knows how old a concern is, so the row arrives
     ready to print.
 
-    ⚠️ SHADOW-AWARE THROUGH `sources.concern_rows`, WHICH IS THE ONE READER. In
-    an observe-only period the concerns live in a separate store, and a briefing
-    reading the live one would print nothing while the shadow store filled —
-    indistinguishable from an agent that found nothing.
+    ⚠️ THROUGH `sources.concern_rows`, WHICH IS THE ONE READER. Since
+    2026-08-28 every mode writes the LIVE store (observe-mode concerns are
+    stamped informational rather than hidden), so there is one store to read
+    and this cannot silently print nothing during an observe period.
     """
     try:
         from agent import concerns as agent_concerns
@@ -2659,14 +2659,13 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
     # `scheduler.run_once` is the pass that escalates. The prose variant that
     # used to live here as `_agent_run` was deleted in 2.717.0 — it had been
     # unreachable since this line was written and was the last session-less
-    # `build_registry()` in the tree. The button on the shadow
-    # page is labelled "Check the villa now" and its whole purpose is to put
-    # evidence into the cutover diff — so pointing it at the conversation meant
-    # it could never do that, and the owner pressed it twice and correctly
-    # reported that nothing changed.
+    # `build_registry()` in the tree. The button labelled "Check the villa
+    # now" exists to put evidence into the record — so pointing it at the
+    # conversation meant it could never do that, and the owner pressed it
+    # twice and correctly reported that nothing changed.
     #
     # ⚠️ IT KEEPS EVERY GUARD. `run_once` re-checks enabled, the scheduled
-    # trigger, the budget and shadow mode itself, and returns WHY it stopped
+    # trigger and the budget, and returns WHY it stopped
     # rather than a boolean — five causes that look identical from outside and
     # four of which are fine. That reason is handed straight back.
     if body.get("triage"):
@@ -3432,11 +3431,11 @@ def main() -> None:
         # PH-2 it only fills the journal.
         a["observe_cycle"] = asyncio.create_task(
             observe_cycle.run_forever(a["session"]))
-        # ⚠️ THE TRIAGE CLOCK, AND WITHOUT IT SHADOW MODE NEVER FILLS. Triage
-        # existed and nothing called it, so the store stayed empty and the
-        # emptiness looked like a quiet villa — the failure this subsystem
-        # keeps rediscovering. A shadow period has to accumulate while nobody
-        # is watching or the PH-3 checkpoint can never happen.
+        # ⚠️ THE TRIAGE CLOCK, AND WITHOUT IT THE CONCERN STORE NEVER FILLS.
+        # Triage existed and nothing called it, so the store stayed empty and
+        # the emptiness looked like a quiet villa — the failure this subsystem
+        # keeps rediscovering. Supervision has to accumulate evidence while
+        # nobody is watching or it is not supervision.
         #
         # ⚠️ A FOURTH TASK IN THE SAME LOOP, not a fourth s6 service: the three
         # above already prove the pattern, and every guard it needs — the kill

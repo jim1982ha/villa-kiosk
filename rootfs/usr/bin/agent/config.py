@@ -97,23 +97,23 @@ DEFAULTS: Final[Dict[str, Any]] = {
     # no add-on and no internet. The agent's job is finding what nobody alarmed
     # on; paying it to react to things that already alarmed is the opposite.
     "triggers": {"scheduled": True, "chat": False},
-    #: ⚠️ WHAT HAPPENS WHEN TRIAGE ESCALATES (ADR-021, owner decision
-    #: 2026-08-23). "auto" investigates; "approve" records the escalation and
-    #: waits for a person. AUTO IS THE DEFAULT, and it is safe as a default only
-    #: because `shadow` below suppresses delivery — auto-in-shadow is exactly
-    #: PH-3's "run everything, deliver nothing": the concerns accumulate for the
-    #: diff and reach nobody. If shadow is ever turned off while this is auto,
-    #: findings start messaging people, which is the cutover and is meant to be.
     # ⚠️ ONE KEY FOR WHAT WAS TWO (2.756.0). `shadow` (bool) and
     # `investigate_mode` ("auto"/"approve") were two stored booleans-in-disguise
     # for ONE three-position choice, and the UI had already merged them into one
     # control that wrote both — so two keys could disagree and nothing could say
-    # which the villa was actually in. "observe" runs everything and delivers
-    # nothing; "ask" investigates only what a person approves; "live" is normal.
+    # which the villa was actually in. "ask" investigates only what a person
+    # approves; "live" is normal.
     #
-    # ⚠️ "observe" IS THE SHIPPED DEFAULT, exactly as `shadow: true` was: a
-    # villa that has just switched supervision on gets a period it can read
-    # before anything reaches a phone.
+    # ⚠️ "observe" DELIVERS SINCE 2026-08-28, BY THE OWNER'S RULING. It used to
+    # mean "run everything, deliver nothing" (the shadow-store era, whose diff
+    # died in 2.756.0). It now means: investigate everything, raise concerns
+    # into the LIVE store, tell people ONCE as an FYI — and never escalate,
+    # never raise a to-do job, never push. The stamp is
+    # `Concern.informational`, set at raise time in `tools/concern.writer`.
+    #
+    # ⚠️ "observe" IS STILL THE SHIPPED DEFAULT: a villa that has just switched
+    # supervision on is informed without being chased, which is the polite
+    # first period — and with no notify target configured yet, nothing sends.
     "mode": "observe",
     #: ⚠️ HOW MANY INVESTIGATIONS ONE PASS MAY START. A bound on the worst case
     #: rather than a judgement about which findings matter: a pass escalating

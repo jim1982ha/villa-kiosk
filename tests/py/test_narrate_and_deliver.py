@@ -507,3 +507,34 @@ def test_an_entity_target_cannot_be_told_not_to_parse_and_says_so() -> None:
 # Their subjects were sentences of `deterministic.py`'s document. The DELIVERY
 # half of this file — service paths, target records, idempotency keys, history
 # entries, the no-parse option — kept its subject and stays in full.
+
+
+def test_a_history_ENTRY_carries_its_findings_not_just_a_count() -> None:
+    """⚠️ MOVED FROM `test_shadow.py` WHEN THAT FILE LEFT WITH THE SHADOW STORE
+    (2026-08-28) — the pin outlives the diff that first needed it, because the
+    History tab and any later reader still depend on the entry's SHAPE.
+
+    `store.py` has claimed since it was written that "a report entry is
+    metadata plus findings, not the rendered prose, so entries are small".
+    Only `findingCount` was ever stored, and the row that once decided the
+    cutover was structurally always empty. Pinned on the RECORD BUILDER rather
+    than on a live run, because the defect is the shape of the dict.
+    """
+    import inspect
+
+    from reports import pipeline as pipeline_mod
+
+    source = inspect.getsource(pipeline_mod.run_report)
+    entry = source[source.index("entry: Dict[str, Any] = {"):]
+    entry = entry[:entry.index("\n    }")]
+    assert '"findings"' in entry, (
+        "a history entry stores only a COUNT again — nothing downstream can "
+        "read what a period actually found")
+    assert "subject_key" in entry, (
+        "the stored findings carry no subject_key, so nothing can join them "
+        "to the agent's concerns")
+    # ⚠️ AND NOT THE WHOLE FINDING. The ring is bounded at 200 entries; storing
+    # detail and baselines is how "entries are small" stops being true.
+    assert '"detail"' not in entry, (
+        "the stored findings carry prose — the history ring is bounded and "
+        "this is what makes it expensive")

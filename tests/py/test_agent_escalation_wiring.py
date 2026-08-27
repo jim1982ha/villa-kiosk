@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from agent import audit, budget, concerns, config as agent_config  # noqa: E402
 from agent import reason, registry as reg_mod, runtime  # noqa: E402
-from agent import scheduler, shadow, triage  # noqa: E402
+from agent import scheduler, triage  # noqa: E402
 from agent.refs import RefTable  # noqa: E402
 from agent.registry import Registry  # noqa: E402
 from agent.tools.base import BaseTool, data  # noqa: E402
@@ -303,15 +303,26 @@ def test_the_pass_row_still_reports_the_count_and_the_subjects() -> None:
     assert "| Subject 1, Subject 2 |" in row["detail"], row
 
 
-# ── shadow, and what the trigger is filed as ────────────────────────────────
-def test_in_shadow_mode_the_concern_lands_in_the_shadow_store() -> None:
+# ── observe mode, and what the trigger is filed as ──────────────────────────
+def test_in_observe_mode_the_concern_is_LIVE_and_informational() -> None:
+    """⚠️ THE SHADOW STORE IS GONE FROM THIS PATH (2026-08-28, owner's ruling).
+    An observe-mode concern lands in the ONE live store — visible on the
+    Reason tab — stamped `informational` so the outbox tells people once and
+    asks nothing. This is the end-to-end wiring pin: mode → writer → store."""
     provider = _Provider([
         says(_escalating(1)), asks("read_villa", {}, "tu_1"),
         _concern_call(), says("done")])
     _run({**ON, "mode": "observe"}, provider)
 
-    assert not concerns.read(), "the live store must be untouched"
-    assert len(shadow.recorded()) == 1
+    rows = concerns.read()
+    assert len(rows) == 1, "the concern must reach the LIVE store"
+    assert rows[0]["informational"] is True
+
+    concerns._write([])
+    _run({**ON, "mode": "live"}, _Provider([
+        says(_escalating(1)), asks("read_villa", {}, "tu_1"),
+        _concern_call(), says("done")]))
+    assert concerns.read()[0]["informational"] is False
 
 
 def test_the_trigger_survives_into_the_investigation_and_its_spend() -> None:
