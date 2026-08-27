@@ -36,6 +36,7 @@ import { loadFlagTypes, tuneFlagTypes,
          type FlagTypeWeight } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
+import { downloadFile } from "@/utils/download";
 
 /** The multiplier as a percentage, for the reader who wants it in words.
  *
@@ -89,13 +90,8 @@ export default function FlagTypesPanel() {
         label: r.label, first_at: r.firstAt, last_at: r.lastAt,
       }])),
     };
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "vesta-priorities.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile("vesta-priorities.json", JSON.stringify(doc, null, 2),
+                 "application/json");
   }, [rows]);
 
   const importList = useCallback(async (file: File) => {

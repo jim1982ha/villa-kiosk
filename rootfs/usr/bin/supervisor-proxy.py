@@ -1786,6 +1786,20 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         revision/409 conflict machinery below has nothing to conflict over.
       * EVIDENCE PHOTOS are binary blobs on their own POST/GET pair, streamed
         and content-checked rather than parsed as JSON.
+      * TAUGHT FLAG TYPES (`/agent-flag-types`, 2026-08-28) are a THIRD, and
+        the reason is the shape of the write rather than the permission. This
+        factory REPLACES a whole document under optimistic concurrency; that
+        route takes four verbs which each mutate one row — nudge, set, forget,
+        clear — plus an import that does replace wholesale. Routing the four
+        through a whole-document PUT would make the browser send back rows it
+        never edited, which is how a stale tab silently reverts somebody
+        else's tuning. Its GET is open like this one's and its POST is
+        owner-only, so nothing about the permission model differs.
+        ⚠️ AND IT THEREFORE HAS NO ENVELOPE-KEY PIN FROM `test_store_envelope`,
+        which derives its set from THIS factory's call sites. Its own contract
+        is pinned by `test_flag_type_wire.py` instead — added one release late,
+        by /dry-audit Part 5, which is the gap this note exists to stop
+        recurring for a fourth store.
 
     Everything that IS a whole-document JSON store belongs here.
 

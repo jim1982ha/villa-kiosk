@@ -16,6 +16,7 @@ import CollapsibleSection from "@/components/common/CollapsibleSection";
 import { buildReport, captureError } from "@/utils/diagnostics";
 import { runRegisteredProbe, probeAvailable, formatProbe } from "@/babylon/perfProbe";
 import type { TelemetryKind } from "@/utils/telemetry";
+import { downloadFile } from "@/utils/download";
 
 interface TelemetryEvent {
   // ⚠️ `string`, not TelemetryKind, and deliberately (2.427.0): these events are
@@ -355,12 +356,9 @@ export default function TelemetryPanel() {
   /** Save to a file — for a log too big to paste comfortably, and so it can be
    *  attached/forwarded as-is. */
   const downloadAll = useCallback(() => {
-    const url = URL.createObjectURL(new Blob([asJson()], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `villa-kiosk-telemetry-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(
+      `villa-kiosk-telemetry-${new Date().toISOString().slice(0, 10)}.json`,
+      asJson(), "application/json");
   }, [asJson]);
 
   // The probe writes its own telemetry record, so the result is recoverable

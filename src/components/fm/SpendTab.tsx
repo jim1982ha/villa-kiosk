@@ -17,6 +17,7 @@ import { budgetStatus, formatIdr, monthKey, localStamp } from "@/fm/fmEngine";
 import { buildSpendStatement } from "@/fm/fmReport";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
+import { downloadFile, filenameSlug } from "@/utils/download";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
 import ErasableRow from "./ErasableRow";
@@ -84,12 +85,8 @@ export default function SpendTab(
   };
   const downloadStatement = () => {
     if (!statement) return;
-    const url = URL.createObjectURL(new Blob([statement], { type: "text/markdown" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${villaName.replace(/\s+/g, "-").toLowerCase()}-spend-${month}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`${filenameSlug(villaName)}-spend-${month}.md`,
+                 statement, "text/markdown");
   };
   const saveStatement = async () => {
     if (!statement) return;

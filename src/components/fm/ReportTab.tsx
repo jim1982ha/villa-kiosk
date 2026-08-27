@@ -27,6 +27,7 @@ import { buildMonthlyReport } from "@/fm/fmReport";
 import { monthKey } from "@/fm/fmEngine";
 import type { ReadinessReport } from "@/fm/readiness";
 import type { FmSavedDocument } from "@/fm/fmTypes";
+import { downloadFile, filenameSlug } from "@/utils/download";
 import ReportPreview from "./ReportPreview";
 import SavedDocumentsList from "./SavedDocumentsList";
 
@@ -74,12 +75,8 @@ export default function ReportTab({
 
   const download = () => {
     if (!markdown) return;
-    const url = URL.createObjectURL(new Blob([markdown], { type: "text/markdown" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${villaName.replace(/\s+/g, "-").toLowerCase()}-operations-${month}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`${filenameSlug(villaName)}-operations-${month}.md`,
+                 markdown, "text/markdown");
   };
 
   const save = async () => {

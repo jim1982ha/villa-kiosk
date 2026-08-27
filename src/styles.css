@@ -4630,11 +4630,6 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    carries `margin: 20px 0 0`, so putting it in a flex row and giving the ROW a
    margin too would be the double-spacing this file keeps correcting. The row is
    transparent; only the heading inside it is positioned. */
-.section-head-row {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 12px; flex-wrap: wrap;
-}
-.section-head-row > .settings-section-title { margin-bottom: 0; }
 
 /* The Triage tab's summary line with "Check the villa now" beside it
    (2026-08-28, owner's request): one flex row, text first, control last,

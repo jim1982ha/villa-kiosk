@@ -41,6 +41,7 @@ import { Download, Loader2, RefreshCw } from "lucide-react";
 import { usePaged, Pager } from "@/components/common/Paged";
 
 import { loadUsage, type UsageBucket, type UsageRow, type UsageSummary } from "@/agent/agentApi";
+import { downloadFile } from "@/utils/download";
 
 /** ⚠️ FOUR DECIMALS, NOT TWO. The question is "where did a few cents go", and
  *  rounding a fifteen-minute triage call to $0.00 would hide the line item that
@@ -249,18 +250,14 @@ export default function UsagePanel() {
   const paged = usePaged(recent);
   const page = paged.page;
 
-  /** ⚠️ A BLOB AND AN OBJECT URL, revoked immediately — the same idiom
-   *  `TelemetryPanel.downloadAll` uses, and for the same reason: this add-on
-   *  must work with no internet, so an export cannot go through a service. */
-  const download = () => {
-    const url = URL.createObjectURL(
-      new Blob([toCsv(recent)], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `vesta-usage-${since.replace(/[:T]/g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  /** ⚠️ THE OFFLINE CONSTRAINT THAT USED TO BE STATED HERE NOW LIVES IN
+   *  `utils/download.ts`, WHICH IS THE POINT. This comment said "an export
+   *  cannot go through a service" and was the ONLY statement of it across five
+   *  hand-rolled exports — so a sixth author who did not open this file got
+   *  none of it. Encoded in the helper, a caller obeys it by calling. */
+  const download = () =>
+    downloadFile(`vesta-usage-${since.replace(/[:T]/g, "-")}.csv`,
+                 toCsv(recent), "text/csv;charset=utf-8");
 
   if (summary === null && busy) {
     return (

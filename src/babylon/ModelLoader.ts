@@ -310,6 +310,11 @@ export async function loadModelInto(
     ...GLASS_NAME_HINTS,
     ...extraGlassHints.map((h) => h.toLowerCase()).filter(Boolean),
   ];
+  // ⚠️ NOT `utils/download.ts`, AND DELIBERATELY SO. That helper SAVES a file
+  // to the reader's device; this hands Babylon a URL to READ the bytes we
+  // already hold. Same two API calls, opposite purposes — converging them
+  // would give the download helper a caller that never downloads. Recorded
+  // here so /dry-audit reads the verdict rather than re-deriving it.
   const blob = new Blob([data], { type: "model/gltf-binary" });
   const url = URL.createObjectURL(blob);
   try {

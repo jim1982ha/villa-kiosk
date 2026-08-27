@@ -66,6 +66,19 @@ export const STATE_COPY: Record<ConcernState, { label: string; hint: string }> =
  *  together rather than in the component that renders them. */
 export const SUPPRESS_AFTER = 3;
 
+/** Where a concern is in its life, as a chip.
+ *
+ *  ⚠️ NOTHING RENDERS THIS TODAY, AND THAT IS A RECORDED DECISION RATHER THAN
+ *  DEAD CODE. `AgentConcerns` dropped it on 2026-08-27 at the owner's
+ *  instruction because it could only ever say one thing: the wall lists LIVE
+ *  concerns, nothing in the backend has ever written `acted`, so every card
+ *  read "Nothing done yet" whatever anybody did. The moment a transition to
+ *  `acted` exists, the chip comes back with it — and `STATE_COPY` above is
+ *  used by the settled record regardless.
+ *
+ *  ⚠️ THE VERDICT IS WRITTEN HERE, NOT WHERE IT WAS REMOVED. It lived only in
+ *  a comment in `AgentConcerns.tsx`, so /dry-audit's unused-export probe
+ *  re-adjudicated this every run by opening the wrong file. */
 export function LifecycleChip({ state }: { state: ConcernState }) {
   const copy = STATE_COPY[state];
   // ⚠️ AN UNKNOWN STATE RENDERS NOTHING rather than an empty pill. The store is
