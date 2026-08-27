@@ -2809,7 +2809,7 @@ async def _agent_drill(request: web.Request,
         title="Pipeline drill — this is a test, nothing is wrong",
         body=("This message was produced by the villa's own end-to-end test. "
               "No equipment is affected and nothing needs doing. It exists to "
-              "prove that a concern reaches you, and it can be dismissed."),
+              "prove that an alert reaches you, and it can be dismissed."),
         severity=severity, audience="owner", confidence=1.0,
         # ⚠️ EVIDENCE IS REQUIRED BY `contracts.concern_errors` — "every claim
         # must cite a tool result" — and a drill's honest citation is itself.

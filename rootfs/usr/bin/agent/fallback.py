@@ -85,7 +85,7 @@ def from_concerns(concerns: Sequence[Mapping[str, Any]], *,
                        str(c.get("title") or "")))
     out = _lines(title, "concerns")
     if not rows:
-        out.append("No concerns were open.")
+        out.append("No alerts were open.")
     for row in rows:
         sev = str(row.get("severity") or "notice").upper()
         # ⚠️ NO BRACKETS. `style.inert()` strips `[` and `]` on the way out —
@@ -184,7 +184,7 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
     elif stand:
         out += [f"{len(stand)} thing(s) need attention right now.", ""]
     elif rows:
-        out += [f"{len(rows)} concern(s) are open.", ""]
+        out += [f"{len(rows)} alert(s) are open.", ""]
     elif found:
         out += [f"{len(found)} thing(s) stood out in this period's checks.", ""]
     elif jobs:
@@ -192,8 +192,8 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
         # this chain broke it within the hour: "Nothing needs your attention"
         # rendered directly above a list of outstanding facility work, caught
         # by the pin that was being re-pointed at this file.
-        out += [f"{len(jobs)} job(s) are still open with the facility "
-                "manager.", ""]
+        out += [f"{len(jobs)} to-do item(s) are still open with the "
+                "facility manager.", ""]
     else:
         out += ["Nothing needs your attention.", ""]
 

@@ -126,7 +126,7 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
            entity id the flag usually does not carry, so this could only ever
            have said "no concern" — including when there was one. */
         <span className="sev-warning flag-row-status" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}, and it found something: “${concern.title}”. Read it on the Reason tab.`}>
-          <AlertCircle size={16} aria-hidden /> Concern{at}
+          <AlertCircle size={16} aria-hidden /> Alert{at}
         </span>
       ) : flag.verdict === "dismissed" ? (
         <span className="muted flag-row-status" title={`Skipped${byWhom}, without spending anything. If it is still true, a later check flags it again.`}>
@@ -423,10 +423,10 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
           <p className="muted body-text">
             The {rows.length} check{rows.length === 1 ? "" : "s"} below
             investigated {work.looked} flag{work.looked === 1 ? "" : "s"} and
-            raised {work.raised} concern{work.raised === 1 ? "" : "s"}
+            raised {work.raised} alert{work.raised === 1 ? "" : "s"}
             {work.raised > 0
               ? ", open and settled alike on the Reason tab." : "."}{" "}
-            A flag that raises no concern is not discarded — the reading behind
+            A flag that raises no alert is not discarded — the reading behind
             it is assessed again in the next briefing.
           </p>
         )}

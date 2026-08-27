@@ -146,7 +146,7 @@ export default function AgentTodo() {
       ) : (
         <p className="muted body-text">
           Raised by the villa when it told somebody about a finding. Ticking one
-          here also records that the concern has been seen, so it stops being
+          here also records that the alert has been seen, so it stops being
           escalated.
         </p>
       )}
@@ -186,13 +186,13 @@ export default function AgentTodo() {
                       is real work somebody was asked to do; the concern may
                       have been settled and pruned, or the item written by an
                       older release. Saying less about it beats hiding it. */}
-                  {!c && " · no matching concern on record"}
+                  {!c && " · no matching alert on record"}
                 </div>
               </div>
               {canAct && (
                 <button className="btn ghost" disabled={busy === row.item.uid}
                         onClick={() => void finish(row)}
-                        title="Tick this off. It also records that the concern has been seen, so it is not escalated again.">
+                        title="Tick this off. It also records that the alert has been seen, so it is not escalated again.">
                   {busy === row.item.uid
                     ? <Loader2 size={16} className="spin" aria-hidden />
                     : <ClipboardCheck size={16} aria-hidden />}

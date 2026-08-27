@@ -240,7 +240,7 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
                 &ldquo;Came back&rdquo; is the same check answering the other
                 way: the villa raised the same thing again after it had been
                 closed, so whatever was done did not hold. Both are decided a
-                week after a concern is closed, and only when the villa was
+                week after an alert is closed, and only when the villa was
                 listening for that whole week — otherwise it says nothing
                 rather than guessing.
               </p>

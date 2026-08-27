@@ -244,13 +244,13 @@ export default function AgentConcerns() {
     return (
       <>
         <div className="settings-section-title">
-          Concerns — what the villa concluded
+          Alerts — what the villa concluded
         </div>
         <p className="muted body-text">
           {settled.length > 0
             ? "Nothing is open right now. Everything the villa has raised "
               + "has been dealt with — the record is below."
-            : "No concerns right now. When an investigation decides "
+            : "No alerts right now. When an investigation decides "
               + "something needs your attention, it appears here — an "
               + "investigation that finds nothing raises nothing, and that "
               + "is a complete answer."}
@@ -278,7 +278,7 @@ export default function AgentConcerns() {
           screen for the word found nothing. Plain language is right for the
           explanation, not for the noun somebody is searching for — so the
           section carries both. */}
-      <div className="settings-section-title">Concerns — what the villa concluded</div>
+      <div className="settings-section-title">Alerts — what the villa concluded</div>
       {/* ⚠️ "Nothing done yet" READS AS "SOMETHING IS STILL COMING" AND IT IS
           NOT. Reported: two delivered warnings sitting at that state, and
           "I didn't click to stop escalating, though I don't see any escalation
@@ -299,7 +299,7 @@ export default function AgentConcerns() {
         nothing of you; the others wait for you to say you have seen them.
         <InfoHint label="What gets escalated">
           <p>
-            Only a critical concern is escalated. If nobody acknowledges one, the
+            Only a critical alert is escalated. If nobody acknowledges one, the
             villa re-sends it, and then brings the owner in.
           </p>
           <p>
@@ -312,7 +312,7 @@ export default function AgentConcerns() {
             failed.
           </p>
           <p>
-            A concern marked &ldquo;for your information&rdquo; was raised in
+            An alert marked &ldquo;for your information&rdquo; was raised in
             Alert only mode: it is never escalated at any
             severity, and nothing is added to the To-Do List for it.
           </p>
@@ -516,7 +516,7 @@ export default function AgentConcerns() {
       {seen.length > 0 && (
         <p className="muted body-text">
           {seen.length === 1
-            ? "One concern you have seen is still open"
+            ? "One alert you have seen is still open"
             : `${seen.length} concerns you have seen are still open`}
           {" — off the list above because somebody picked them up, and still "}
           {"being carried by the villa until the condition stops."}

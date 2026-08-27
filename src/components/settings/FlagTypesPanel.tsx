@@ -122,13 +122,13 @@ export default function FlagTypesPanel() {
           <p>
             A kind is a <strong>measurement and a direction</strong> — “energy
             above baseline”, “temperature below baseline” — never a particular
-            device. So judging one concern teaches the villa about every device
+            device. So judging one alert teaches the villa about every device
             that measures the same thing, including ones installed later.
           </p>
           <p>
             The number is a <strong>multiplier</strong>. 1.0 is untouched, 1.1
             raises that kind 10% more readily, 0.8 raises it 20% less. Each
-            press of + or − moves it by 0.1, and a thumb on a concern moves it
+            press of + or − moves it by 0.1, and a thumb on an alert moves it
             by the same step.
           </p>
           <p>
@@ -143,10 +143,10 @@ export default function FlagTypesPanel() {
             villa has never been told anything about it.
           </p>
           <p>
-            A kind is recorded when a concern is <strong>raised</strong>, not
+            A kind is recorded when an alert is <strong>raised</strong>, not
             when you judge it — the villa keeps only an anonymous reference to
             the device afterwards, so there is nothing left to work the kind
-            out from. Concerns raised before this feature existed carry no
+            out from. Alerts raised before this feature existed carry no
             kind, so judging one records your verdict and teaches nothing.
           </p>
         </InfoHint>
@@ -166,7 +166,7 @@ export default function FlagTypesPanel() {
            alternative was inventing a kind from a hash, which cannot be
            done. */
         <p className="muted body-text">
-          Nothing judged yet. Press a thumb on a concern raised{" "}
+          Nothing judged yet. Press a thumb on an alert raised{" "}
           <strong>after this update</strong> and its kind appears here.
         </p>
       ) : (
