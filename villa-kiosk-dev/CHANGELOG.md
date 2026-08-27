@@ -1,3 +1,15 @@
+## 2.818.0
+
+### Fixed — nothing could ever tell you whether a fix had worked
+"Fixed and confirmed" on the Reason tab could only ever read zero: the check
+behind it was written years ago and nothing ever ran it. It runs now, a week
+after a concern is closed, and says one of three things — the fix held, it came
+back (naming the concern it came back as), or the villa was not listening for
+that week so it will not claim either. "Came back" is a new count beside it,
+because a screen that can report success and not failure reports every fix as a
+success. The agent can also read Home Assistant's log again; that tool shipped
+finished and unconnected, so it had been withheld rather than left to refuse.
+
 ## 2.817.0
 
 ### Changed — the working documents were reorganised so the current state is one file
