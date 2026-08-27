@@ -723,3 +723,35 @@ def test_a_dialog_that_holds_a_DRAFT_can_actually_COMMIT_it() -> None:
         f"{offenders_nested} wrap AgentConfigProvider inside a tab. It must wrap "
         f"the DIALOG: the footer that commits lives outside every tab, and a "
         f"per-tab provider gives each tab its own draft.")
+
+
+def test_a_tabbed_dialog_opens_on_the_tab_its_STRIP_shows_first() -> None:
+    """⚠️ THE ORDER AND THE OPENING PANE ARE ONE FACT, WRITTEN TWICE.
+
+    `AgentAdvancedModal` shipped with `useState<Tab>("cost")` beside a `TABS`
+    list whose first entry was `settings` — 2.759.0 moved Settings to the front
+    of the strip and left the literal behind. The dialog then opened with the
+    FIRST tab highlighted in the strip and the SECOND tab's pane below it: one
+    screen disagreeing with itself, invisible to `tsc` because both halves are
+    valid `Tab` values. Reported from the screen.
+
+    Its two siblings had it right all along (`tabs[0]?.id ?? …`), which is what
+    makes this the applicable-set shape: the rule existed, and one of the three
+    places it applies to never joined — `feedback_audit-applicable-set`.
+
+    ⚠️ PINNED AS "DERIVED", NOT AS A NAMED TAB. Asserting the default is
+    `settings` would fail the day the owner reorders the strip again, which is
+    a legitimate change; asserting that it comes FROM the list cannot.
+    """
+    import re as _re
+
+    for name in ("agent/AgentAdvancedModal.tsx", "agent/AgentModal.tsx",
+                 "reports/ReportsModal.tsx"):
+        src = _read(f"src/components/{name}")
+        opens = _re.search(r"useState<[A-Za-z]+>\(([^)]*)\)", src)
+        assert opens is not None, f"{name} has no tab state to check"
+        initial = opens.group(1)
+        assert _re.search(r"\b[Tt][Aa][Bb][Ss]\[0\]", initial), (
+            f"{name} opens on a hard-coded tab ({initial.strip()}) rather than "
+            f"on whichever its strip lists first — reorder the strip and the "
+            f"opening pane silently stays behind")

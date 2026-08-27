@@ -41,28 +41,31 @@ needs_skill = pytest.mark.skipif(
 #: wording change that the skill's own regex would still match, which is a pin
 #: that cries wolf; pinning only the stage name would pass while the sentence
 #: the skill greps for disappeared.
+#: ⚠️ THE DRILL'S TIERS ONLY, SINCE 2026-08-27. The skill used to fire a real
+#: check as well and its table covered every tier of a pass; the owner removed
+#: that — a real check has two triggers of its own, costs money, and ends in a
+#: model judgement that proves nothing repeatable. So the skill now starts at
+#: the concern, and this list shrank with it rather than pinning coverage the
+#: skill no longer claims.
 SIGNATURES: List[tuple] = [
-    ("pass start", 'pass begins'),
-    ("pass end", 'pass ends after'),
-    ("document", 'stage("document"'),
-    ("document size", 'chars, {lines} lines'),
-    ("triage", 'stage("triage"'),
-    ("triage escalations", 'escalation(s) from'),
-    ("approval queue", 'escalation(s) queued for approval'),
-    ("investigation", 'stage("reason"'),
-    ("tools used", 'tools used:'),
+    ("drill start", 'pass begins'),
+    ("drill end", 'pass ends after'),
     ("concern", 'stage("concern"'),
     ("concern opened", 'opened: {out.severity}'),
     ("routing", 'stage("route"'),
     ("routing targets", 'target(s)'),
     ("delivery", 'stage("outbox"'),
-    ("delivery idle", 'nothing waiting'),
     ("to-do job", 'stage("task"'),
     ("to-do raised", 'raised {summary!r} on'),
     ("escalation sweep", 'stage("escalation"'),
     ("escalation idle", 'nothing awaiting acknowledgement'),
-    ("cost", 'prefix '),
 ]
+
+#: Stages a real CHECK emits and the drill never reaches. ⚠️ THE SKILL MUST
+#: STILL NAME THEM — as what it does NOT prove. A report that quietly omitted
+#: them would read as a whole-pipeline pass, which is the one claim this drill
+#: is not entitled to make.
+NOT_REACHED_BY_THE_DRILL: List[str] = ["document", "triage", "reason"]
 
 
 def _backend_source() -> str:
@@ -92,21 +95,37 @@ def test_every_log_line_the_skill_greps_for_is_still_EMITTED() -> None:
 
 
 @needs_skill
-def test_the_skill_quotes_the_tiers_it_claims_to_cover() -> None:
-    """⚠️ THE OTHER DIRECTION: a tier added to the pipeline with no row in the
-    skill's table is a tier the report will silently omit, and the report's
-    whole promise is that it is EXHAUSTIVE. Checked by stage name, which is the
-    one token both sides share."""
+def test_the_skill_is_HONEST_about_the_tiers_it_does_not_reach() -> None:
+    """⚠️ THE DRILL STARTS AT THE CONCERN, AND SAYING SO IS THE WHOLE OF ITS
+    HONESTY. It deterministically proves routing, delivery, the to-do job and
+    the escalation sweep — and proves NOTHING about the document, triage or the
+    investigation, which is exactly the half a reader assumes when they hear
+    "end-to-end". A report that omitted the distinction would be a green light
+    nobody had earned."""
     with open(SKILL, encoding="utf-8") as handle:
         skill = handle.read()
-    emitted = set(re.findall(r'stage\("([a-z]+)"', _backend_source()))
-    #: Stages that are deliberately NOT pass tiers: `collect`/`brief` belong to
-    #: the briefing pipeline, which this skill does not drive.
-    NOT_A_PASS_TIER = {"collect", "brief", "narration", "delivery", "schedule"}
-    for name in sorted(emitted - NOT_A_PASS_TIER):
-        assert name in skill, (
-            f"the pipeline emits a `{name}:` stage that the skill's tier table "
-            f"does not mention, so its 'exhaustive' report would omit it")
+    assert "DOES NOT PROVE" in skill.upper(), (
+        "the skill no longer states what the drill leaves untested")
+    for name in NOT_REACHED_BY_THE_DRILL:
+        assert name in skill.lower(), (
+            f"the skill never mentions `{name}`, so a reader cannot tell that "
+            f"the drill does not exercise it")
+
+
+@needs_skill
+def test_the_skill_does_NOT_fire_a_real_check() -> None:
+    """⚠️ THE OWNER REMOVED IT (2026-08-27), and the reasons are worth keeping:
+    a real check already has two triggers of its own (the cadence and the
+    button), it spends ~$0.01 plus ~$0.37 per investigation, and it ends in a
+    model judgement — so firing one here duplicates something that happens
+    anyway and adds an outcome that cannot be repeated. The drill is the
+    simulation; the check is the product."""
+    with open(SKILL, encoding="utf-8") as handle:
+        skill = handle.read()
+    assert '"triage": true' not in skill and "'triage': true" not in skill, (
+        "the skill fires a real triage pass again — that is the owner's "
+        "'redundant spec', and it costs money to prove nothing repeatable")
+    assert '"drill": true' in skill, "the skill no longer fires the drill"
 
 
 @needs_skill

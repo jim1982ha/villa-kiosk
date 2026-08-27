@@ -34,7 +34,6 @@ import {
   TriangleAlert, CheckCircle2, AlertOctagon, MapPin, Building2, LayoutGrid,
   Activity, Zap, RefreshCw, ChevronRight,
 } from "lucide-react";
-import SourceChip from "@/components/common/SourceChip";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -193,18 +192,22 @@ export default function CockpitTab({
       {/* ── Needs attention ────────────────────────────────────── */}
       {attentionItems.length > 0 && (
         <>
-          {/* ⚠️ THIS BLOCK IS THE ONLY ONE ON THE WALL WITH NO INTERPRETATION
-              IN IT, AND IT SITS DIRECTLY ABOVE TWO THAT ARE ALL
-              INTERPRETATION. Everything here is a reading Home Assistant
-              reported — unavailable, triggered, overdue — while `Concerns`
-              below is a model's judgement and the approval queue is a guess
-              about what to look at. Three lists, one visual treatment, and
-              until this chip nothing told the reader that the first is simply
-              true while the others are opinions of different strengths. */}
-          <div className="reports-title-row">
-            <div className="settings-section-title">Needs attention</div>
-            <SourceChip source="ha" />
-          </div>
+          {/* ⚠️ THE "Home Assistant" CHIP IS GONE (2026-08-27, owner's
+              request), AND ITS OWN JUSTIFICATION HAD ALREADY EXPIRED. It was
+              added because this block — pure readings, no interpretation —
+              "sits directly above two that are all interpretation": Concerns,
+              a model's judgement, and the approval queue, a guess about what
+              to look at. Three lists, one visual treatment, and the chip was
+              what told them apart. All five agent blocks MOVED OUT to the
+              Supervision tab in 2.724.0, so the contrast it drew has not been
+              on this screen since; what remained was a label on the only list
+              of its kind, answering a question nothing else here raises.
+
+              ⚠️ SO THIS IS A DELETION, NOT A HIDE. If an interpreted list ever
+              returns to this tab, the chip comes back WITH it — the rule is
+              that a source label earns its place by contrast, never by being
+              generally informative. */}
+          <div className="settings-section-title">Needs attention</div>
           <div className="cockpit-attention-list">
             {attentionItems.map((item) => (
               <CockpitAttentionRow key={item.id} item={item}

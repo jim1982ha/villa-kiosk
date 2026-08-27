@@ -1,3 +1,14 @@
+## 2.809.0
+
+### Changed — the Cockpit drops a source badge, and Settings & others opens on Settings
+The "Home Assistant" chip beside "Needs attention" was added to separate that
+list from the agent lists below it; those all moved to the Supervision tab in
+2.724.0, so it had been labelling a contrast that is no longer on screen.
+Settings & others opened on Cost because 2.759.0 moved Settings to the front
+of the tab strip and left the opening tab behind — the strip highlighted one
+tab and showed another's pane. It now derives from the strip, as its two
+sibling dialogs already did, so reordering cannot desynchronise them again.
+
 ## 2.808.0
 
 ### Fixed — a thumbs-up made the concern card disappear

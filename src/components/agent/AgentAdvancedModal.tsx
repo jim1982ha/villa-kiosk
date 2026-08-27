@@ -65,7 +65,13 @@ export default function AgentAdvancedModal({ onBack }: { onBack: () => void }) {
 function AdvancedDialog({ onBack }: { onBack: () => void }) {
   const draft = useAgentConfigDraft();
   const dialogRef = useModalA11y(onBack);
-  const [tab, setTab] = useState<Tab>("cost");
+  // ⚠️ THE FIRST TAB, DERIVED — NOT A SECOND COPY OF WHICH ONE THAT IS
+  // (2026-08-27). 2.759.0 moved Settings to the front of `TABS` and left this
+  // literal reading "cost", so the dialog opened on the SECOND tab: the strip
+  // said Settings led and the pane showed Cost, which is the screen
+  // contradicting itself. Reading `TABS[0]` makes the order the single source
+  // of truth, so reordering the strip cannot leave the opening pane behind.
+  const [tab, setTab] = useState<Tab>(TABS[0].id);
   return (
     <div className="modal-backdrop" onClick={onBack}>
       <div
