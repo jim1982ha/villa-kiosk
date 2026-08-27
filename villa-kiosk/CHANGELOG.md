@@ -1,3 +1,16 @@
+## 2.813.0
+
+### Added — a Jobs tab, and Act & Tell now reports instead of configuring
+A job the villa raised existed only on Home Assistant's own to-do panel, so
+the Facility manager — whose work it is — had no view of it, and once the
+concern was acknowledged the job was its last invisible trace. Jobs now have
+their own tab in VESTA Agent, showing what was told, whether anybody has been
+chased about it and whether it has been seen. Ticking one there also records
+that the concern was seen, so nothing is chased about work already done.
+And Act & Tell's three settings moved to Settings & others: the tab now
+states what the villa is permitted to do rather than editing it, like the
+four reporting tabs beside it.
+
 ## 2.812.0
 
 ### Added — every message says who it is for, and the People tab warns when the escalation ladder has one rung

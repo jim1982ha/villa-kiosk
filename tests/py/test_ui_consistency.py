@@ -176,8 +176,12 @@ def test_the_device_list_is_INERT_when_the_master_switch_is_off() -> None:
         "a control inside the group ignores the lock, so it stays operable by "
         "keyboard while the group looks disabled")
 
-    caller = _read(os.path.join(SRC, "components", "agent",
-                                "ActDeliverySection.tsx"))
+    # ⚠️ THE CALLER MOVED (2026-08-27) and the property did not. The switch and
+    # its allow-list left the "Act & Tell" TAB for the Settings dialog, because
+    # that tab reports and these edit; they moved TOGETHER, which is the thing
+    # this test actually guards.
+    caller = _read(os.path.join(SRC, "components", "settings",
+                                "AgentActSettings.tsx"))
     assert "locked={c.actEnabled !== true}" in caller, (
         "nothing passes the lock, so the panel is never inert — the helper "
         "honouring a prop nobody sets is this repository's most repeated defect")
@@ -775,13 +779,18 @@ def test_the_actuation_SWITCH_sits_with_the_LIST_it_is_anded_with() -> None:
     The fix was not better wording. Two halves of one authority decision on two
     screens is what the sentence existed to paper over.
     """
-    act = _read(os.path.join(SRC, "components", "agent",
-                             "ActDeliverySection.tsx"))
+    # ⚠️ RE-POINTED, NOT RELAXED (2026-08-27). The pair moved out of the
+    # "Act & Tell" tab into the Settings dialog — the tab reports, the dialog
+    # edits — and what this test has always guarded is that they stay on ONE
+    # screen, because they are AND-ed and splitting them was the reported
+    # defect. The file name was never the property.
+    act = _read(os.path.join(SRC, "components", "settings",
+                             "AgentActSettings.tsx"))
     tuning = _read(os.path.join(SRC, "components", "settings",
                                 "AgentTuningPanel.tsx"))
-    assert "draft.actEnabled" not in tuning and "actEnabled: c." not in tuning, (
-        "the actuation switch is back on the tuning panel, away from the list "
-        "it is AND-ed with")
+    assert "draft.actEnabled" not in tuning, (
+        "the actuation switch is edited directly on the tuning panel, away "
+        "from the list it is AND-ed with")
     assert "actEnabled" in act and "ActuableDevicesPanel" in act, (
         "the switch and its allow-list are no longer on the same screen")
     assert act.index("actEnabled") < act.index("<ActuableDevicesPanel"), (
@@ -1165,3 +1174,87 @@ def test_a_villa_with_no_FACILITY_MANAGER_is_told_the_ladder_has_one_rung() -> N
     assert "rows.length > 0 &&" in panel, (
         "the missing-Facility-manager warning is not gated on the table having "
         "somebody in it, so an empty table gets scolded twice")
+
+
+def test_the_JOBS_the_villa_raises_have_a_surface_in_this_APP() -> None:
+    """⚠️ THEY HAD NONE, AND THE OWNER FOUND IT BY LOOKING FOR ONE.
+
+    A delivered concern raises a to-do item (`agent/task.py`), and the only
+    place it appeared was Home Assistant's own To-do panel — outside the kiosk
+    entirely. The Facility manager, whose work those jobs ARE, could not see
+    one; and once the concern was acknowledged its card left the wall, so the
+    job was the last trace of it and was invisible. "Where is it listed?"
+
+    ⚠️ ITEMS ARE NOT IN THE STATE MACHINE, which is why this needs a fetch at
+    all: a `todo.*` entity's state is a COUNT, and the rows live behind a
+    websocket command. A surface built from `useHA().entities` alone could only
+    ever show a number.
+    """
+    jobs = _read(os.path.join(SRC, "components", "agent", "AgentJobs.tsx"))
+    assert "fetchTodoItems" in jobs, (
+        "the Jobs tab does not read the to-do list, so it can only show a "
+        "count of work it cannot describe")
+    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    assert "<AgentJobs />" in modal, "the Jobs tab is built and never rendered"
+    assert '{ id: "jobs"' in modal, "there is no Jobs tab in the strip"
+    # ⚠️ NOT OWNER-GATED: the work belongs to the Facility manager, and gating
+    # it to the owner hides somebody's own job list from them.
+    tab_row = modal[modal.index('{ id: "jobs"'):]
+    assert "owner: true" not in tab_row[:tab_row.index("\n")], (
+        "the Jobs tab is owner-only, so the Facility manager cannot see the "
+        "work they are being asked to do")
+
+
+def test_ticking_a_JOB_also_acknowledges_its_concern() -> None:
+    """⚠️ ONE DIRECTION ONLY, AND THE ASYMMETRY IS THE DESIGN. Finishing the
+    work implies having seen it, so ticking a job records both — which closes a
+    real gap: pressing Done in Telegram completed the item and left the concern
+    unacknowledged, so a critical somebody had already dealt with went on being
+    chased, the alert-fatigue failure the ladder exists to prevent.
+
+    The reverse must NOT hold: acknowledging on the Reason tab leaves the job
+    open, because seeing an alert is not doing it.
+    """
+    jobs = _read(os.path.join(SRC, "components", "agent", "AgentJobs.tsx"))
+    assert "acknowledgeConcern(" in jobs, (
+        "ticking a job does not record that the concern was seen, so the villa "
+        "keeps chasing work that is already done")
+    # ⚠️ ONLY IF THE TICK LANDED. Recording "seen" for work still outstanding
+    # would stop the chase on a job nobody has done.
+    body = jobs[jobs.index("const finish"):]
+    body = body[:body.index("}, [ws")]
+    assert body.index("if (ok") < body.index("acknowledgeConcern("), (
+        "the concern is acknowledged before the tick is known to have "
+        "succeeded")
+
+    concerns = _read(os.path.join(SRC, "components", "agent",
+                                  "AgentConcerns.tsx"))
+    assert "completeTodoItem" not in concerns, (
+        "acknowledging on the Reason tab now ticks the job too — seeing an "
+        "alert is not doing the work")
+
+
+def test_the_ACT_tab_reports_its_permissions_rather_than_editing_them() -> None:
+    """⚠️ THE OTHER FOUR TIER TABS REPORT AND THIS ONE HELD THREE EDITABLE
+    FIELDS (owner, 2026-08-27), so the one tab about the authority boundary was
+    the only one showing no evidence. The controls moved to Settings.
+
+    ⚠️ AND THE BLOCK WAS NOT SIMPLY DELETED. §4.1 calls that line "the authority
+    boundary, and the most important one", and the old code argued an owner
+    should see the whole of what the villa may do without opening a settings
+    dialog — a guarantee nobody can check is not a guarantee. So the tab still
+    states the permissions; it just no longer edits them.
+    """
+    act = _read(os.path.join(SRC, "components", "agent",
+                             "ActDeliverySection.tsx"))
+    code = re.sub(r"/\*[\s\S]*?\*/", "", act)
+    code = "\n".join(l for l in code.splitlines()
+                     if not l.strip().startswith("//"))
+    for control in ("<input", "<ToggleField", "ActuableDevicesPanel", "edit("):
+        assert control not in code, (
+            f"the Act & Tell tab still edits its settings ({control}), so it "
+            f"is a settings pane among four reporting tabs")
+    for shown in ("quietHours", "taskList", "actEnabled"):
+        assert shown in code, (
+            f"the tab no longer reports {shown}, so an owner cannot see what "
+            f"the villa is permitted to do without opening Settings")

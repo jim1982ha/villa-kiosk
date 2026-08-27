@@ -26,7 +26,8 @@
 
 import { useEffect, useState } from "react";
 import {
-  Activity, Brain, Search, Send, SlidersHorizontal, Sparkles, Zap, Eye, EyeOff,
+  Activity, Brain, ClipboardList, Search, Send, SlidersHorizontal, Sparkles,
+  Zap, Eye, EyeOff,
 } from "lucide-react";
 
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -44,12 +45,13 @@ import AgentReview from "@/components/agent/AgentReview";
 import { ReflexTab, ObserveTab } from "./ReflexObserve";
 import { TierIntro, TIERS } from "./tiers";
 import ActDeliverySection from "./ActDeliverySection";
+import AgentJobs from "./AgentJobs";
 import AgentAdvancedModal from "./AgentAdvancedModal";
 import { loadAgentConfig } from "@/agent/agentApi";
 import { fetchReportsDiagnostics,
          type ReportsDiagnostics } from "@/reports/reportsApi";
 
-type Tab = "reflex" | "observe" | "triage" | "reason" | "act";
+type Tab = "reflex" | "observe" | "triage" | "reason" | "act" | "jobs";
 
 /** ⚠️ THE SIX TABS ARE THE HLD'S FIVE TIERS, IN ITS ORDER, PLUS SETTINGS.
  *  §4 orders them by how fast each must answer and how much judgement it is
@@ -75,6 +77,16 @@ const TABS: { id: Tab; label: string; icon: typeof Sparkles; owner?: true }[] = 
   { id: "triage", label: "Triage", icon: Search, owner: true },
   { id: "reason", label: "Reason", icon: Brain },
   { id: "act", label: "Act & Tell", icon: Send, owner: true },
+  // ⚠️ A SIXTH TAB THAT IS NOT A TIER, AND IT CARRIES NO STEP BADGE FOR THAT
+  // REASON (owner's decision, 2026-08-27). The five above are the HLD's five
+  // tiers in the villa's signal path; this is what the last of them PRODUCED,
+  // and it had no surface anywhere in this app — a delivered concern raises a
+  // to-do item and the only place it appeared was Home Assistant's own panel.
+  //
+  // ⚠️ NOT OWNER-GATED, DELIBERATELY. The work belongs to the Facility manager;
+  // gating it to the owner would hide somebody's own job list from them, which
+  // is the opposite of why it exists.
+  { id: "jobs", label: "Jobs", icon: ClipboardList },
   // ⚠️ "Settings" MOVED INTO THE ADVANCED DIALOG IN 2.759.0, by request, and
   // that dialog is now "Settings & Others". The five that remain are the five
   // TIERS — one story, read top to bottom, each answering "what happens at this
@@ -328,6 +340,13 @@ function AgentDialog(
                   sources appear together, not where one does. */}
               <AgentProposals />
               <ActDeliverySection />
+            </div>
+          )}
+
+          {/* ── The work that came out of it ───────────────────────────── */}
+          {tab === "jobs" && (
+            <div className="reports-pane">
+              <AgentJobs />
             </div>
           )}
 

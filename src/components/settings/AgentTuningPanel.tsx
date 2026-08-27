@@ -31,6 +31,7 @@ import { Loader2 } from "lucide-react";
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import type { AgentConfig } from "@/agent/agentApi";
+import AgentActSettings from "./AgentActSettings";
 
 /** ⚠️ A FLOOR THE BACKEND ALSO ENFORCES (`scheduler.MIN_MINUTES`). Stated here
  *  so the field cannot offer a value the server will silently raise — a control
@@ -718,6 +719,18 @@ export default function AgentTuningPanel() {
         more="It runs once per briefing, so this choice barely moves the bill."
         onChange={(v) => edit({ modelBrief: v })} />
 
+      {/* ⚠️ MOVED HERE FROM THE "Act & Tell" TAB (2026-08-27, owner's
+          judgement: "the content of Act & Tell seems more relevant for
+          Settings rather than a visible reporting Tab"). They are right, and
+          the tab's own header had argued the other way — that these belong
+          beside the tier they govern "so an owner can see the whole of what
+          the villa is permitted to do without opening a settings dialog".
+          That goal survives; what changes is HOW. Act & Tell now REPORTS those
+          permissions in a sentence anybody can read, and editing them happens
+          here with every other setting — so the reporting tabs report and the
+          settings dialog configures, which is what the other four tiers
+          already do. */}
+      <AgentActSettings />
     </div>
   );
 }

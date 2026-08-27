@@ -1,166 +1,91 @@
 // src/components/agent/ActDeliverySection.tsx
 //
-// The two controls that belong to Tier 4: when the villa may interrupt you, and
-// which devices it may operate.
+// What the villa is permitted to do, stated rather than edited.
 //
-// ⚠️ THEY SIT WITH THE TIER THEY GOVERN, NOT WITH THE OTHER SETTINGS. §4.1
-// calls the reason/act line "the authority boundary, and the most important
-// one" — the model decides what matters and never decides who is told or
-// whether an action is permitted. Both of those are decided HERE, by a fixed
-// table and an allow-list, so an owner reading this tab can see the whole of
-// what the villa is permitted to do without opening a settings dialog.
+// ⚠️ IT USED TO BE THE CONTROLS THEMSELVES, AND THAT MADE THIS TAB A SETTINGS
+// PANE (2026-08-27, owner: its content "seems more relevant for Settings rather
+// than a visible reporting Tab"). They were right. Reflex, Observe, Triage and
+// Reason all REPORT — what fired, what was recorded, what was checked, what was
+// concluded — and Act & Tell held three editable fields, so the one tab about
+// the authority boundary was the one tab that showed no evidence.
 //
-// ⚠️ AND THEY ARE THE SAME CONTROLS AS BEFORE, NOT COPIES. `AgentTuningPanel`
-// no longer renders them; this does. Two panels editing one document through
-// two drafts is a lost update, so both read the one `AgentConfigDraft` the tab
-// already wraps them in.
+// ⚠️ THE REASON THEY WERE PUT HERE SURVIVES, WHICH IS WHY THIS EXISTS AT ALL.
+// §4.1 calls the reason/act line "the authority boundary, and the most
+// important one", and the old header argued an owner should be able to see the
+// whole of what the villa may do "without opening a settings dialog". Deleting
+// the block outright would have lost that; a guarantee nobody can check is not
+// a guarantee. So the permissions are still on this tab — as a SENTENCE, read
+// from the same draft the settings write to, so the two cannot disagree.
+//
+// ⚠️ IT READS THE DRAFT, NOT THE SAVED DOCUMENT, and that is deliberate: an
+// owner who has just changed a permission in Settings and come back to look
+// should see what they chose, not what was stored before it.
 
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
-import InfoHint from "@/components/common/InfoHint";
-import ActuableDevicesPanel from "@/components/settings/ActuableDevicesPanel";
-import ToggleField from "@/components/common/ToggleField";
+
+/** `""` → a sentence that says so. ⚠️ AN UNSET WINDOW MEANS NEVER QUIET, NOT
+ *  ALWAYS — the same rule `outbox.quiet_now` states, and the opposite reading
+ *  would have this tab claim a silent villa. */
+function quietText(start: string, end: string): string {
+  if (!start || !end || start === end) {
+    return "It may interrupt you at any hour — no quiet window is set.";
+  }
+  return `Anything that can wait is held between ${start} and ${end}. `
+    + "Something urgent ignores the window.";
+}
 
 export default function ActDeliverySection() {
-  const ctx = useAgentConfigDraft();
-  const c = ctx.config;
-  const edit = ctx.edit;
-  // ⚠️ EMPTY MEANS NEVER QUIET, NOT ALWAYS. A property that has not set a
-  // window wants its warnings; defaulting the other way silences a villa
-  // nobody configured.
-  const start = String(c.quietHoursStart ?? "");
-  const end = String(c.quietHoursEnd ?? "");
+  const { config } = useAgentConfigDraft();
+  const start = String(config.quietHoursStart ?? "").trim();
+  const end = String(config.quietHoursEnd ?? "").trim();
+  const list = String(config.taskList ?? "").trim();
+  const mayAct = config.actEnabled === true;
+  const devices = Array.isArray(config.actuableEntities)
+    ? config.actuableEntities.length : 0;
 
   return (
     <>
-      {/* ⚠️ "WHO DECIDES WHAT IS WORTH SAYING" WAS DELETED IN 2.755.0, AND
-          THE ANSWER IS NOW THE HEADER SWITCH. It held one toggle,
-          `agent_owns_analysis`, whose only job was to override a stand-down
-          that no longer exists — a second master switch beside the real one,
-          which is how an owner ends up with supervision ON and detection OFF
-          and no screen able to say so. Supervision on means the assistant
-          supersedes the automations; off means they do the job. One control,
-          in the header, visible from every tab. */}
-      <h3 className="settings-section-title">When it may interrupt you</h3>
+      <div className="settings-section-title">What it is allowed to do</div>
       <p className="muted body-text">
-        Inside this window the villa holds anything that can wait until morning.
-        <InfoHint label="When it may interrupt you">
-          Leave both empty and it never holds anything back. Something urgent
-          ignores the window entirely — that is what makes it urgent.
-        </InfoHint>
+        Set under Settings &amp; others; shown here because this is the step
+        that acts on it.
       </p>
-      {/* ⚠️ `.row` + `.settings-row-half`, THE PAIR SETTINGS ALREADY USES.
-          A first draft invented `.settings-row`, which is not a class this
-          stylesheet defines — the two fields would have had no layout at all
-          and `test_every_class_in_the_markup_exists_in_the_stylesheet` caught
-          it before the commit. The half's flex-basis is what keeps them on one
-          line on a phone as well as on a roomy screen. */}
-      <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-        <label className="fm-field settings-row-half">
-          <span>Quiet from</span>
-          <input type="time" value={start}
-                 onChange={(e) => edit({ quietHoursStart: e.target.value })} />
-        </label>
-        <label className="fm-field settings-row-half">
-          <span>Quiet until</span>
-          <input type="time" value={end}
-                 onChange={(e) => edit({ quietHoursEnd: e.target.value })} />
-        </label>
-      </div>
-
-      {/* ⚠️ THE FACILITY MANAGER LIST BELONGS ON THIS TAB, not under Settings. It is
-          not a tuning dial — it decides whether a finding becomes a JOB
-          somebody is asked to do, which is the same authority question as
-          "who is told" and "what may it touch" directly above and below it. */}
-      <h3 className="settings-section-title">Turning findings into jobs</h3>
+      <dl className="tier-facts">
+        <div>
+          <dt>Quiet hours</dt>
+          <dd>{start && end && start !== end ? `${start} – ${end}` : "none"}</dd>
+        </div>
+        <div>
+          <dt>Jobs</dt>
+          <dd>{list ? "on a list" : "off"}</dd>
+        </div>
+        <div>
+          <dt>May operate devices</dt>
+          {/* ⚠️ THE SWITCH AND THE LIST ARE BOTH REQUIRED, so reporting only
+              the switch would overstate the permission — an owner who turned it
+              on and added nothing has authorised exactly nothing, and the
+              number is what says so. */}
+          <dd>{mayAct ? (devices > 0 ? `${devices} allowed` : "none chosen") : "no"}</dd>
+        </div>
+      </dl>
       <p className="muted body-text">
-        Leave empty and nothing is added to a list.
-        <InfoHint label="Turning findings into jobs">
-          <p>
-            Name a to-do list and every finding the villa sends you is also
-            added to it as a job.
-          </p>
-          <p>
-            The job carries the finding&rsquo;s reference in brackets. That is
-            what lets one tick count everywhere: the Facility Manager screen on
-            the tablet, the to-do list itself, and the acknowledgement count in
-            your next briefing all read the same one.
-          </p>
-          <p>
-            If you also install the VESTA task automation in Home Assistant, the
-            job arrives on Telegram with a Done button and chases whoever is
-            responsible until somebody answers.
-          </p>
-          <p>
-            {/* ⚠️ NO EXAMPLE ENTITY ID, NOT EVEN AS A PLACEHOLDER. This shipped
-                one and `test_hard_rules` caught it twice over: an id-shaped
-                string in rendered TSX reaches every install, and a placeholder
-                is rendered. The shape is described instead. */}
-            You will find the reference in Home Assistant under Settings,
-            Devices &amp; services, Helpers. It begins with the word todo and a
-            dot.
-          </p>
-        </InfoHint>
+        {quietText(start, end)}
+        {" "}
+        {list
+          ? "Anything it tells you about is also added to your to-do list as a "
+            + "job, and appears under Jobs."
+          : "Findings are never turned into jobs, because no to-do list is "
+            + "named."}
+        {" "}
+        {mayAct
+          ? (devices > 0
+            ? "It may operate the devices you chose, and nothing else. Anything "
+              + "that could let somebody in or silence an alarm is offered to "
+              + "you rather than done."
+            : "It is allowed to operate devices but none have been chosen, so "
+              + "it can still touch nothing.")
+          : "It can watch and tell, and touch nothing at all."}
       </p>
-      <label className="fm-field">
-        <input
-          type="text"
-          value={String(c.taskList ?? "")}
-          onChange={(e) => edit({ taskList: e.target.value.trim() })}
-          disabled={ctx.saving}
-        />
-        <span>Facility manager to-do list</span>
-      </label>
-
-      <div className="settings-section-title">
-        Allow to control devices
-      </div>
-      {/* ⚠️ THE GATE ON TOUCHING THE VILLA, AND IT SHIPS CLOSED (ADR-023).
-          Home Assistant's own MCP add-on is where the villa's readings come
-          from, and its tool surface includes calling services, deleting
-          entities and restarting Home Assistant. `act_enabled` is the switch
-          that decides whether any of that is reachable — it has existed and
-          defaulted to false since the agent was written, and nothing in
-          Settings could see it, so an owner had no way to know the promise was
-          being kept. A guarantee nobody can check is not a guarantee. */}
-      <ToggleField
-        checked={c.actEnabled === true}
-        onChange={(actEnabled: boolean) => edit({ actEnabled })}
-        label="Let it operate devices, not just watch them"
-        note="Check this option to allow VESTA Agent to control selected devices."
-        disabled={ctx.saving}
-        more={<>
-          <p>
-            Every other setting decides how much it looks and who it tells.
-            This one decides whether it may touch anything at all.
-          </p>
-          <p>Leave it off unless you have a reason.</p>
-          <p>
-            It only ever touches what you add to the list below. The switch and
-            the list must both allow it.
-          </p>
-          {/* ⚠️ MOVED HERE FROM THE LIST BELOW, because it qualifies the whole
-              permission rather than the search box it used to sit under — and
-              the list no longer has a heading or a hint of its own. */}
-          <p>
-            Anything that could let somebody in, or silence an alarm, is never
-            done automatically — whatever is on that list. You are asked to
-            confirm it instead.
-          </p>
-        </>}
-      />
-      {/* ⚠️ THE ALLOW-LIST LIVES WITH THE TIER THAT ENFORCES IT. It is only
-          consulted here, at the authority boundary, and it is AND-ed with the
-          master switch on the Settings tab — so an owner who turns actuation on
-          and adds nothing has still authorised nothing, which the panel says
-          out loud rather than leaving as an empty form. */}
-      <ActuableDevicesPanel
-        locked={c.actEnabled !== true}
-        value={Array.isArray(c.actuableEntities)
-          ? c.actuableEntities.map(String) : []}
-        onChange={(actuableEntities) => edit({ actuableEntities })}
-        disabled={ctx.saving}
-      />
-
     </>
   );
 }
