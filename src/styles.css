@@ -3759,16 +3759,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .flag-row-main { flex: 1 1 260px; min-width: 0; display: flex;
                  flex-direction: column; gap: 2px; }
 .flag-row-reason { font-size: var(--text-sm); }
-/* ⚠️ `nowrap` SO IT BREAKS AS A BLOCK, NOT MID-PHRASE. "27 Aug, 11:34" split
-   across two lines reads as two facts. It shrinks by wrapping the whole
-   element, which is what the basis above arranges. */
-.flag-row-status { flex: 0 0 auto; display: inline-flex; align-items: center;
-                   gap: 6px; white-space: nowrap; }
-@media (max-width: 560px) {
-  /* Full width once wrapped, so the status aligns with the text above it
-     rather than floating in the middle of the card. */
-  .flag-row-status { width: 100%; }
-}
+/* ⚠️ A LINE IN THE COLUMN NOW, NOT A RIGHT-HAND CELL (2026-08-28, owner's
+   second pass on this card: the side-by-side form read badly beside any long
+   reason at any width). It renders as the column's last line, under the
+   reason it concludes; only a waiting flag's two action BUTTONS remain on
+   the row's right. Normal wrapping — at full column width the line rarely
+   wraps, and when it must, wrapping beats overflow. */
+.flag-row-status { display: inline-flex; align-items: center; gap: 6px;
+                   margin-top: 2px; font-size: var(--text-sm); }
 
 /* A record that opens for editing when tapped. The cursor and hover lift are
    the whole affordance — a per-row "Edit" button would compete with the status

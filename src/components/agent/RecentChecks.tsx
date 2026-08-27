@@ -67,13 +67,9 @@ export function yieldOf(reason: string): { looked: number; raised: number } {
            raised: raised ? Number(raised[1]) : 0 };
 }
 
-/** `escalated 2 (investigated 2): A, B` → `A, B`. ⚠️ THE FALLBACK ONLY. The
- *  audit carries the flags as rows with their own ids; this recovers the NAMES
- *  from the sentence for checks written before 2.780.0, which have no key. */
-export const subjectsOf = (reason: string) => {
-  const i = reason.indexOf(": ");
-  return i < 0 ? "" : reason.slice(i + 2).trim();
-};
+// ⚠️ `subjectsOf` — the recover-names-from-the-sentence fallback — was DELETED
+// with its render site (2026-08-28, owner's request): pre-id checks are no
+// longer listed at all, so nothing needs names a card cannot carry.
 
 
 /** `2026-08-26T19:09:12` → `26 Aug 19:09` — short enough for a status line. */
@@ -108,47 +104,9 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
                : flag.settledBy === "villa" ? " by the villa itself" : "";
   const at = flag.settledAt ? ` · ${whenOf(flag.settledAt)}` : "";
 
-  return (
-    <li className="fm-row body-text">
-      {/* ⚠️ A CLASS, NOT INLINE FLEX. `flex: 1` with no basis let this column
-          shrink to nothing beside an unbreakable status string — eleven lines
-          of reason in a 35% column on a phone. `.flag-row-main` carries a
-          260px basis so the row wraps instead of crushing. */}
-      <div className="flag-row-main">
-        <div>{flag.subject}</div>
-        {/* Triage's reason: why this earned a closer look. Older audit rows
-            carry none, and an absent reason renders nothing rather than a
-            placeholder pretending one was recorded. */}
-        {flag.reason && (
-          <div className="muted flag-row-reason">{flag.reason}</div>
-        )}
-        {flag.dismissNote && (
-          <div className="muted flag-row-reason">Note: {flag.dismissNote}</div>
-        )}
-      </div>
-
-      {/* ⚠️ THE AFFORDANCE FOLLOWS THE FLAG'S STATE FIRST AND THE MODE SECOND.
-          A villa switched from Flag & Ask to Alert me still has flags that were
-          left waiting, and they remain answerable — reading the mode alone
-          would strand them with no way to act, which is how the queue reached
-          twenty-four items nothing could drain. */}
-      {waiting ? (
-        <>
-          <button className="icon-btn" disabled={busy}
-                  aria-label={`Investigate ${flag.subject}`}
-                  title="Look into this now — one AI investigation, a few cents. The result lands on the Reason tab if anything is wrong."
-                  onClick={() => onDecide(flag.runId, "approve")}>
-            {busy ? <Loader2 size={16} className="spin" aria-hidden />
-                  : <Search size={16} aria-hidden />}
-          </button>
-          <button className="icon-btn" disabled={busy}
-                  aria-label={`Cancel ${flag.subject}`}
-                  title="Skip it — nothing is spent. If it is still true, the next check flags it again."
-                  onClick={() => onDecide(flag.runId, "dismiss")}>
-            <X size={16} aria-hidden />
-          </button>
-        </>
-      ) : concern ? (
+  // The outcome line, rendered inside the text column. Built here so the
+  // column stays readable; `waiting` renders buttons instead.
+  const status = concern ? (
         /* ⚠️ ONLY REACHABLE BECAUSE A CONCERN NOW RECORDS ITS `run_id`
            (2.780.0). Before that a concern named its subject as a HASH of an
            entity id the flag usually does not carry, so this could only ever
@@ -184,6 +142,51 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
         <span className="muted flag-row-status" title="This flag was dealt with, but the check that raised it predates the record of how.">
           <MinusCircle size={16} aria-hidden /> Settled{at}
         </span>
+      );
+
+  return (
+    <li className="fm-row body-text">
+      {/* ⚠️ ONE COLUMN, STATUS LAST (2026-08-28, owner's request after the
+          wrap fix still read badly beside long reasons): the outcome line
+          ("Looked into — all clear · 27 Aug, 04:43") renders INSIDE the text
+          column as its own final line, under the reason it concludes. Only
+          the two ACTION buttons of a waiting flag stay on the right — they
+          are things to press, not things to read. */}
+      <div className="flag-row-main">
+        <div>{flag.subject}</div>
+        {/* Triage's reason: why this earned a closer look. Older audit rows
+            carry none, and an absent reason renders nothing rather than a
+            placeholder pretending one was recorded. */}
+        {flag.reason && (
+          <div className="muted flag-row-reason">{flag.reason}</div>
+        )}
+        {flag.dismissNote && (
+          <div className="muted flag-row-reason">Note: {flag.dismissNote}</div>
+        )}
+        {!waiting && status}
+      </div>
+
+      {/* ⚠️ THE AFFORDANCE FOLLOWS THE FLAG'S STATE FIRST AND THE MODE SECOND.
+          A villa switched from Flag & Ask to Alert me still has flags that were
+          left waiting, and they remain answerable — reading the mode alone
+          would strand them with no way to act, which is how the queue reached
+          twenty-four items nothing could drain. */}
+      {waiting && (
+        <>
+          <button className="icon-btn" disabled={busy}
+                  aria-label={`Investigate ${flag.subject}`}
+                  title="Look into this now — one AI investigation, a few cents. The result lands on the Reason tab if anything is wrong."
+                  onClick={() => onDecide(flag.runId, "approve")}>
+            {busy ? <Loader2 size={16} className="spin" aria-hidden />
+                  : <Search size={16} aria-hidden />}
+          </button>
+          <button className="icon-btn" disabled={busy}
+                  aria-label={`Cancel ${flag.subject}`}
+                  title="Skip it — nothing is spent. If it is still true, the next check flags it again."
+                  onClick={() => onDecide(flag.runId, "dismiss")}>
+            <X size={16} aria-hidden />
+          </button>
+        </>
       )}
     </li>
   );
@@ -283,16 +286,21 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
 
   const waiting = pending.size;
 
-  const rows = [...passes].reverse().map((p) => {
-    const reason = reasonOf(p);
-    const id = p.runId || "";
-    // ⚠️ A CHECK WITH NO ID KEEPS NO FLAGS RATHER THAN BORROWING SOMEBODY
-    // ELSE'S. Rows written before 2.780.0 have `run_id: ""`, and an empty
-    // prefix matches every flag — so the guard is the empty check, not the
-    // match. Their subject names still show, from the sentence.
-    const mine = id ? flags.filter((f) => checkIdOf(f.runId) === id) : [];
-    return { pass: p, reason, outcome: outcomeOf(reason), flags: mine };
-  });
+  // ⚠️ PRE-ID CHECKS ARE NO LONGER LISTED (2026-08-28, owner's request).
+  // Rows written before 2.780.0 carry `run_id: ""`, so their flags can never
+  // be paired and they rendered in the OLD form — subject names inline in the
+  // heading sentence. Beside the current cards that read as a second, broken
+  // layout, and the records decay rather than improve (the note the status
+  // memory has carried since 2.780.0). Their WAITING flags are not lost: the
+  // orphans card below is keyed on the pending list, not on the checks.
+  const rows = [...passes].reverse()
+    .filter((p) => (p.runId || "") !== "")
+    .map((p) => {
+      const reason = reasonOf(p);
+      const id = p.runId || "";
+      const mine = flags.filter((f) => checkIdOf(f.runId) === id);
+      return { pass: p, reason, outcome: outcomeOf(reason), flags: mine };
+    });
 
   // ⚠️ A FLAG WHOSE CHECK CANNOT BE IDENTIFIED IS STILL SHOWN, and the first cut
   // of this hid fourteen of them. Checks written before 2.780.0 carry
@@ -419,7 +427,6 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
           row drew a marker; reported as clutter. */}
       <ul className="fm-list">
         {paged.page.map(({ pass, reason, outcome, flags: mine }, i) => {
-          const named = subjectsOf(reason);
           return (
             /* ⚠️ A CARD PER CHECK, NOT A LINE. The list was a wall of
                 timestamps with the flags somewhere else entirely; the owner
@@ -439,8 +446,13 @@ export default function RecentChecks({ passes, empty, mode, canAct, children }: 
                           {pass.escalated ?? 0} item{pass.escalated === 1 ? "" : "s"}
                           {" flagged in this check"}
                         </strong>
-                        {/* Names only where the items are not drawn below. */}
-                        {mine.length === 0 && named ? <> — {named}</> : null}
+                        {/* ⚠️ THE INLINE-NAMES FALLBACK IS GONE (2026-08-28,
+                            owner's request). It printed the flag names in the
+                            heading sentence whenever pairing failed — the OLD
+                            layout, which beside the nested cards read as a
+                            second, broken one. A check whose items cannot be
+                            drawn now shows its count alone; the names live in
+                            the cards or nowhere. */}
                       </>
                     ) : outcome === "quiet" ? (
                       <>Nothing to flag in this check</>
