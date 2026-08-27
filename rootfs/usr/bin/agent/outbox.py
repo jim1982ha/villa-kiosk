@@ -30,7 +30,6 @@ no timer, no queue and no scheduled release to get wrong.
 
 from __future__ import annotations
 
-import calendar
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence
@@ -120,13 +119,15 @@ def _minutes_since(stamp: str, now: Optional[float] = None) -> float:
     ⚠️ NEVER RAISES ON A MALFORMED STAMP — it returns 0, which puts the concern
     inside the first band and escalates NOTHING. A parse failure must not be
     able to page the owner at three in the morning.
+
+    ⚠️ THE PARSE ITSELF MOVED TO `concerns.seconds_since` (2026-08-28), beside
+    the `_now_iso` that WROTE the stamp. It was a second implementation of one
+    format in a second module, which is how the two come to disagree the day
+    the format moves. The 0-on-failure contract above is unchanged and is
+    restated at the shared owner, together with the reason it is also the safe
+    direction for the verification sweep — the second caller.
     """
-    try:
-        parsed = time.strptime(str(stamp).strip(), "%Y-%m-%dT%H:%M:%SZ")
-    except (ValueError, TypeError):
-        return 0.0
-    seconds = (now if now is not None else time.time()) - calendar.timegm(parsed)
-    return max(0.0, seconds / 60.0)
+    return concerns_mod.seconds_since(stamp, now) / 60.0
 
 
 async def escalation_sweep(session: Any, *,

@@ -141,6 +141,14 @@ export interface Concern {
    *  reports `0/3 identified`. Snake_case for the same reason as the two above:
    *  the store is written by Python and served verbatim. */
   run_id?: string;
+  /** Why it left `open`, in a person's words where a person set it.
+   *  ⚠️ IT REACHED THE BROWSER FOR THE FIRST TIME IN 2026-08-28, and the reason
+   *  it was needed is that the verification sweep finally had a caller. "The
+   *  fix did not hold — it came back as c9" is the only record joining a failed
+   *  fix to the concern that disproved it; without this field the store held
+   *  the answer to "did the fix work" and no screen could ask. Snake_case for
+   *  the same reason as the fields above: served verbatim from Python. */
+  outcome?: string;
   /** One entry per send. ⚠️ A LIST BECAUSE ESCALATION SENDS AGAIN, to a profile
    *  the first send may not have reached — "add the owner" is the whole point
    *  of the second band, and a single field would be overwritten by it. The

@@ -23,6 +23,7 @@ with every appearance of rigour.
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Dict, List, Mapping, Sequence
 
 from agent.tools.base import BaseTool, data, fail, text, truncate
@@ -113,7 +114,14 @@ class ReadLogs(BaseTool):
                          f"level must be one of {', '.join(LOG_LEVELS)}")]
 
         try:
-            lines = self._source(hours) if callable(self._source) else []
+            lines = self._source(hours)
+            # ⚠️ AWAITED WHEN IT IS AWAITABLE, because reading Home Assistant's
+            # log is an HTTP round trip while every earlier stand-in for this
+            # source was a plain list. Testing the RESULT rather than declaring
+            # the source async keeps a synchronous fixture — a list of lines —
+            # a legal source, which is what the tests here use.
+            if inspect.isawaitable(lines):
+                lines = await lines
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"the log is unreadable: {err}")]
         if not isinstance(lines, Sequence):
@@ -135,7 +143,27 @@ class ReadLogs(BaseTool):
                          "concluding anything."),
             })]
 
+        # ⚠️ PSEUDONYMISED HERE, AND THIS TOOL CANNOT SKIP IT. Every other tool
+        # of ours calls `RefTable.describe` and never holds an entity id in the
+        # first place; a log line is written by Home Assistant and its
+        # integrations, and it is FULL of them. `redact.audit` refuses any
+        # payload containing one — so without this line every log answer would
+        # have been replaced by "the result could not be shown safely", which is
+        # precisely what happened to the upstream tools from 2.705.0 to 2.710.0
+        # and cost that whole integration five releases.
+        #
+        # ⚠️ AFTER THE MATCHING, NEVER BEFORE IT. `_matches` compares against the
+        # real entity id resolved from `subject_ref`; pseudonymising first would
+        # leave the filter hunting for an id that is no longer in the text, and
+        # every subject-scoped search would return nothing.
+        #
+        # ⚠️ AND BEFORE `truncate`, so the cap counts the characters that will
+        # actually be sent. A handle is not the same length as the id it
+        # replaces, so capping first would report a size nobody receives.
         body = "\n".join(window)
+        if self._refs is not None:
+            from agent.refs import pseudonymise
+            body = pseudonymise(body, self._refs)
         more = max(0, len(matched) - (offset + len(window)))
         return [
             text(truncate(body)),

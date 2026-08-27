@@ -334,7 +334,18 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
         ha.ReadHistory(source=lambda e, h: [1, 2, 3], refs=table),
         ha.ReadAutomationTrace(source=lambda e, n: [{"at": "x", "outcome": "ok"}],
                                refs=table),
-        logs.ReadLogs(source=lambda h: ["2026 INFO nothing here"], refs=table),
+        # ⚠️ A LINE WITH A REAL ENTITY ID IN IT, for the reason stated eight
+        # lines above about `read_salient`: this fixture read
+        # `["2026 INFO nothing here"]`, so the one tool whose source is written
+        # by OTHER PEOPLE'S code contributed nothing to the sweep and the
+        # assertion passed over an empty room. A log line is the most id-dense
+        # text this add-on handles and it was the one input here that could not
+        # leak. `read_logs` had no source at all when this was written, which is
+        # how a fixture came to be chosen for a tool nobody could run.
+        logs.ReadLogs(source=lambda h: [
+            "2026-08-22 03:14:01 WARNING (MainThread) "
+            "[homeassistant.components.zha] sensor.probe_temperature is "
+            "unavailable"], refs=table),
         ledger.ReadLedger(source=lambda: {}),
         # ⚠️ POINTED AT THE REAL SHIPPED TREE, not a stub. This tool's "source"
         # is the content the add-on ships, so sweeping it here scans all 25

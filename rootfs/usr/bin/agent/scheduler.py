@@ -396,7 +396,34 @@ async def dispatch(session: Any,
     if this runs every time. Holding a concern and never looking again is
     "held until morning" meaning "dropped".
     """
+    from agent import concerns as concerns_mod
     from agent import outbox as outbox_mod
+
+    # ⚠️ A THIRD SWEEP, AND IT RUNS FIRST BECAUSE IT IS THE ONLY ONE THAT CAN
+    # CHANGE WHAT THE OTHER TWO SEE. A closed concern whose condition came back
+    # returns to `open`, and a delivery sweep that had already passed over it
+    # would not look again until the next clock. Ordering it here costs
+    # nothing: it writes at most a handful of rows and asks no model.
+    #
+    # ⚠️ IT LIVES ON THIS CLOCK RATHER THAN A NEW ONE FOR THE REASON THIS
+    # FUNCTION EXISTS AT ALL — `dispatch` is the one place reached by ALL THREE
+    # entry points: the scheduled clock (`_pass`), the owner's own "Check the
+    # villa now", and the pipeline drill. A sweep wired into `_pass` instead
+    # would be a verification an owner could never trigger, which is the exact
+    # shape of the defect that produced this function in 2.768.0.
+    #
+    # ⚠️ THE DRILL REACHING IT IS WHAT MAKES THIS OBSERVABLE ON A LIVE VILLA,
+    # and it is the only thing that does. The watch window is a week, so a
+    # freshly-installed build has nothing to judge for seven days; firing a
+    # drill runs the sweep on demand and prints its line if anything was due.
+    # Without that, the first evidence this ever ran would arrive a week after
+    # release, which is not a test — it is a wait.
+    #
+    # ⚠️ AND IT IS DELIBERATELY NOT GATED ON THE PASS HAVING FOUND ANYTHING.
+    # Verification is a question about concerns closed a WEEK ago; whether
+    # tonight's pass concluded anything has no bearing on it.
+    held = concerns_mod.verification_sweep()
+    out_verify = (f" | verify: {held.line()}" if held.changed() else "")
 
     # ⚠️ NEVER RAISES — `sweep` returns a typed result on every path, because
     # one of its two callers is a background clock nobody is watching.
@@ -418,4 +445,4 @@ async def dispatch(session: Any,
     escalated = await outbox_mod.escalation_sweep(session, config=config)
     if escalated.sent or escalated.failed:
         out += f" | escalation: {escalated.line()}"
-    return out
+    return out_verify + out

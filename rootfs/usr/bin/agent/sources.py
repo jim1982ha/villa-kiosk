@@ -39,6 +39,7 @@ An empty result from a WIRED source means the villa really has nothing to say.
 from __future__ import annotations
 
 import calendar
+import re as _re
 import time
 
 from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
@@ -688,6 +689,81 @@ def service_caller(session: Any) -> Optional[Callable[..., Any]]:
     return call
 
 
+#: Where Home Assistant serves its own log. ⚠️ CORE'S ENDPOINT, NOT THE
+#: SUPERVISOR'S. `/core/logs` would need `hassio_role: manager`, and config.yaml
+#: records why this add-on refuses that role: it also grants starting, stopping
+#: and INSTALLING add-ons. `homeassistant_api: true` already grants this one.
+LOG_PATH: str = "error_log"
+
+#: A log line's leading timestamp, e.g. `2026-08-27 20:45:03.123 WARNING ...`.
+#: ⚠️ ANCHORED AT THE START, because a traceback's own frames contain dates and
+#: an unanchored match would read one of those as the line's time.
+_LOG_STAMP = _re.compile(r"^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})")
+
+
+def log_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`reader(window_hours) -> [str]` for `read_logs`, or None. TOOL-007.
+
+    ⚠️ THE TOOL WAS BUILT BY TASK-022 AND NEVER GIVEN A SOURCE, so from the day
+    it shipped it could only refuse. Since 2.744.0 that refusal has been loud in
+    the add-on log and the tool withheld from the model — which was the right
+    call for an owner (an investigation once told somebody on their phone that
+    "log access is also down", a fault on the property that did not exist) and
+    left the model with no way to read a log at all. This is the missing half.
+
+    ⚠️ NONE WHEN THERE IS NO SESSION, never a reader that returns `[]`. Zero
+    matching lines and "nobody connected me to the log" are the same answer to a
+    reader and opposite facts — the sentence this module keeps paying for.
+    `build_tools` withholds the tool when this returns None, so the model is
+    never offered a schema that cannot answer.
+
+    ⚠️ THE WINDOW IS APPLIED HERE, NOT IN THE TOOL. Filtering beside Home
+    Assistant is free; every line that reaches the tool is a line that may reach
+    the transcript, and a transcript line is re-sent on every later turn. The
+    tool's own docstring is the cost argument in full.
+
+    ⚠️ A CONTINUATION LINE INHERITS THE TIME ABOVE IT. A Python traceback is
+    twenty lines with no timestamp of their own, and dropping them because they
+    carry no date would hand the model an exception's first line and none of the
+    stack under it — the half that says what actually failed.
+    """
+    if session is None:
+        return None
+
+    async def read(window_hours: int = 24) -> List[str]:
+        from reports.hass import rest_get_text
+        text = await rest_get_text(session, LOG_PATH)
+        cutoff = _stamp_of(time.time() - max(1, int(window_hours)) * 3600)
+        kept: List[str] = []
+        inside = False
+        for line in text.splitlines():
+            match = _LOG_STAMP.match(line)
+            if match:
+                # ⚠️ STRING COMPARISON, WHICH IS WHY THE CUTOFF IS FORMATTED THE
+                # SAME WAY. Both sides are `YYYY-MM-DD HH:MM:SS`, where
+                # lexicographic order IS chronological order — and parsing every
+                # line of a two-megabyte log to compare datetimes would cost far
+                # more than the filter saves.
+                inside = match.group(1).replace("T", " ") >= cutoff
+            if inside:
+                kept.append(line)
+        return kept
+
+    return read
+
+
+def _stamp_of(at: float) -> str:
+    """A local-clock stamp in Home Assistant's own log format.
+
+    ⚠️ LOCAL, NOT UTC. Home Assistant writes its log in the villa's configured
+    timezone while everything else in this package speaks UTC, so this is the
+    one stamp here that must not use `gmtime` — on the reference property that
+    is an eight-hour error, i.e. a "last 24 hours" window either returning most
+    of two days or nothing at all.
+    """
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(at))
+
+
 #: Names already reported, so the warning is once per process rather than once
 #: per run. ⚠️ A per-run warning would print the same line eight times an hour
 #: and train a reader to skip it.
@@ -771,10 +847,20 @@ def build_tools(session: Any = None, *,
     #
     # ⚠️ SO THE GAP IS MADE LOUD TO THE OPERATOR INSTEAD — once, in the add-on
     # log, which is where the previous design wanted it — never to a household.
-    for cls in log_tools.LOG_TOOLS:
-        tool = cls(refs=refs)
+    # ⚠️ AND SINCE 2026-08-28 THERE IS A SOURCE TO GIVE IT. `log_reader` returns
+    # None only when this builder has no Home Assistant session — the document
+    # preview and the MCP server both build tools that way — so the withholding
+    # below is now about a session rather than about a half-built feature.
+    # ⚠️ ITS OWN LOOP VARIABLE, NOT `cls` AGAIN. Rebinding the name from the
+    # READ_TOOLS loop above gives it that loop's inferred union type, so
+    # `cls(source=...)` type-checks against every read tool rather than against
+    # ReadLogs — four spurious `Unexpected keyword argument` errors that say
+    # nothing about this call.
+    reader = log_reader(session)
+    for log_cls in log_tools.LOG_TOOLS:
+        tool = log_cls(source=reader, refs=refs)
         if getattr(tool, "_source", None) is None:
-            _warn_unwired(cls.__name__)
+            _warn_unwired(log_cls.__name__)
             _UNWIRED_SEEN_NAMES.add(tool.name)
             continue
         made.append(tool)

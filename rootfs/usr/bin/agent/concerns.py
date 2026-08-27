@@ -28,9 +28,10 @@ signal alert-fatigue measurement has.
 
 from __future__ import annotations
 
+import calendar
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import (Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple)
 
 from agent import contracts
 from reports import store
@@ -145,6 +146,31 @@ class Concern:
 
 def _now_iso(now: Optional[float] = None) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
+
+
+def seconds_since(stamp: str, now: Optional[float] = None) -> float:
+    """Seconds between one of THIS module's stamps and now. Never raises.
+
+    ⚠️ IT LIVES BESIDE `_now_iso` BECAUSE THAT IS WHAT WROTE THE STAMP. The
+    reader and the writer of a format belong in one file, or the day the format
+    moves only one of them follows. `outbox._minutes_since` was a second parse
+    of the same string in another module and now calls this.
+
+    ⚠️ A MALFORMED STAMP READS AS 0, AND THE SAFE DIRECTION HAPPENS TO BE THE
+    SAME FOR BOTH CALLERS — which is luck worth stating rather than relying on.
+    For escalation, 0 puts the concern inside the first band and escalates
+    nothing: a parse failure must not be able to page somebody at three in the
+    morning. For verification, 0 is younger than the watch window, so the
+    concern is skipped and looked at again next pass: a parse failure must not
+    be able to certify a fix nobody checked. A future caller for whom 0 is the
+    DANGEROUS direction must say so at its own call site, not change this.
+    """
+    try:
+        parsed = time.strptime(str(stamp).strip(), "%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, TypeError):
+        return 0.0
+    seconds = (now if now is not None else time.time()) - calendar.timegm(parsed)
+    return max(0.0, seconds)
 
 
 def read() -> List[Dict[str, Any]]:
@@ -322,7 +348,7 @@ class Verification:
 
 
 def verify(concern_id: str, *, recurred: bool, coverage_complete: bool,
-           now: Optional[float] = None) -> Verification:
+           recurred_as: str = "", now: Optional[float] = None) -> Verification:
     """Did the fix hold? TASK-046.
 
     ⚠️ COVERAGE FIRST, AND IT IS NOT A DETAIL. "It did not recur" and "I was not
@@ -332,9 +358,28 @@ def verify(concern_id: str, *, recurred: bool, coverage_complete: bool,
     checked BEFORE `recurred`, because a recurrence seen during partial coverage
     is still a real recurrence while an absence during partial coverage is
     nothing at all.
+
+    ⚠️ A RECURRENCE RECORDS, IT DOES NOT RESURRECT (2026-08-28). This used to
+    write `state = "open"`, and it was written before anything called it — when
+    it was finally given a caller, that transition turned out to produce a state
+    the store's own write path REFUSES. `raise_concern` rejects a second open
+    concern about a subject that already has one, deliberately; a recurrence is
+    detected precisely BECAUSE a successor concern exists, so re-opening the old
+    one puts two open cards on one subject behind the back of the rule that
+    forbids exactly that. And if the successor has itself since been settled,
+    re-opening leaves a card standing for a problem nobody has.
+
+    ⚠️ THE LIVE PROBLEM IS THE SUCCESSOR, WHICH WAS INVESTIGATED AND DELIVERED
+    ON ITS OWN MERITS. What the old concern is for is the RECORD — this fix did
+    not hold — and that is what `outcome` now carries, naming the concern that
+    came back so the two are joined rather than merely adjacent. Telling anybody
+    again would be a third message about one fact.
     """
     if recurred:
-        transition(concern_id, "open", outcome="recurred", now=now)
+        transition(concern_id, "closed", now=now,
+                   outcome=("the fix did not hold" +
+                            (f" — it came back as {recurred_as}"
+                             if recurred_as else "")))
         return Verification(concern_id, "recurred",
                             "the condition returned after being addressed")
     if not coverage_complete:
@@ -345,6 +390,204 @@ def verify(concern_id: str, *, recurred: bool, coverage_complete: bool,
     transition(concern_id, "verified", outcome="did not recur", now=now)
     return Verification(concern_id, "verified",
                         "the condition did not return while being watched")
+
+
+#: How long a closed concern is watched before its fix is judged.
+#: ⚠️ SEVEN DAYS, AND BOTH BOUNDS ARE REASONED. Long enough that a recurrence
+#: would plausibly have happened: a villa's rhythm is weekly (weekday against
+#: weekend occupancy, a cleaning visit, a pool cycle), so a shorter window
+#: certifies a fix that has not yet met the conditions that broke it. Short
+#: enough to sit well inside the observation journal, which the heartbeat
+#: measured at ~14 days on the reference property — a window LONGER than the
+#: ring would ask `coverage` about a period the journal no longer holds, and
+#: every verdict would be `cannot_verify` forever.
+VERIFY_AFTER_HOURS: int = 168
+
+#: What a concern's `outcome` reads once the sweep has given up on it.
+#: ⚠️ A `cannot_verify` VERDICT IS PERMANENT, AND THAT IS A FACT ABOUT COVERAGE
+#: RATHER THAN A CONVENIENCE. `coverage(settled_at)` compares the collector's
+#: persisted `online_since` against a moment in the PAST, and `online_since` is
+#: written once at the first successful subscribe and never cleared — so the
+#: answer for a fixed window can never improve. It can only get worse (a wiped
+#: `/data` re-dates it LATER, i.e. less coverage), and no re-examination could
+#: ever turn this verdict into `verified`.
+#:
+#: ⚠️ SO IT IS RECORDED, WHICH TAKES THE ROW OUT OF THE CANDIDATE SET. Without
+#: it the sweep re-asked an unanswerable question about the same rows four
+#: times a day forever, and its log line had to be suppressed to stop it
+#: printing an identical sentence into the add-on log — an instrument silenced
+#: because of what it was measuring, which is how a subsystem goes quiet
+#: without going away.
+UNVERIFIABLE: str = "could not verify"
+
+
+@dataclass
+class VerificationSweep:
+    """What one pass of `verification_sweep` decided."""
+
+    verified: int = 0
+    recurred: int = 0
+    cannot_verify: int = 0
+    considered: int = 0
+
+    def line(self) -> str:
+        return (f"considered {self.considered}, verified {self.verified}, "
+                f"recurred {self.recurred}, could not verify "
+                f"{self.cannot_verify}")
+
+    def changed(self) -> bool:
+        """Did anything move? ⚠️ ALL THREE VERDICTS COUNT, because each is
+        written down exactly once — see `UNVERIFIABLE`. An earlier cut excluded
+        `cannot_verify` on the grounds that it "recurs on every pass by
+        design"; that was true of that cut and is what made this sweep
+        unobservable on a live villa, which is the shape of instrument this
+        repository has been caught by five times."""
+        return bool(self.verified or self.recurred or self.cannot_verify)
+
+
+def _superseded_ids(rows: Sequence[Mapping[str, Any]]) -> Set[str]:
+    """Ids that were closed by being REPLACED rather than by being dealt with.
+
+    ⚠️ STRUCTURAL, NOT A STRING MATCH ON `outcome`. `_supersede_rows` writes
+    "superseded by cN" there, and reading that back would make the rule depend
+    on prose a future edit is free to rephrase. The successor's `supersedes`
+    list is the record, and it is the same field the card renders.
+    """
+    out: Set[str] = set()
+    for row in rows:
+        for victim in (row.get("supersedes") or []):
+            out.add(str(victim))
+    return out
+
+
+def verification_sweep(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
+                       coverage_of: Optional[Any] = None,
+                       now: Optional[float] = None) -> VerificationSweep:
+    """Did the fixes hold? The caller TASK-046 specified and never wrote.
+
+    ⚠️ THE FUNCTION BELOW IT HAD NO CALLER FOR ITS WHOLE EXISTENCE, which
+    `test_reachability` recorded as BLOCKED rather than exempt — a finding, not
+    a decision. The consequence was visible on the Reason tab the entire time:
+    "Fixed and confirmed" is the one count on that screen that says something
+    actually WORKED, and nothing could ever make it anything but zero.
+
+    ⚠️ ONLY `closed` IS A CANDIDATE, and each exclusion is a different claim.
+    `dismissed` means a person said it did not matter — re-examining it could
+    only re-open something they asked to be rid of, which is the alert fatigue
+    this whole system exists to remove. `verified` has already been judged.
+    `open` and `acted` have not been settled, so there is no fix to hold.
+
+    ⚠️ AND AN INFORMATIONAL CONCERN IS NOT VERIFIED EITHER. Nothing was asked of
+    anybody, so there was no action whose success could be in question; a
+    "fixed and confirmed" count inflated by FYIs would say work was done that
+    nobody did.
+
+    ⚠️ A SUPERSEDED CONCERN IS NOT A FIXED ONE. It was closed because the model
+    judged a later concern to be the same standing condition — the problem was
+    never resolved, it was re-described. Counting those as verified would put
+    the villa's worst-behaved subjects at the top of the one count that is
+    supposed to mean something improved.
+
+    ⚠️ RECURRENCE IS READ FROM THE STORE, NOT RE-DETECTED. A later concern about
+    the same subject IS the recurrence, and it arrived through the ordinary
+    path — investigated, judged and delivered on its own merits. Asking the
+    villa a second time would be a second opinion on a question already
+    answered, and telling anybody would be a third message about one fact.
+    """
+    source = list(read() if rows is None else rows)
+    coverage = coverage_of if coverage_of is not None else _coverage
+    superseded = _superseded_ids(source)
+    out = VerificationSweep()
+
+    for row in source:
+        if str(row.get("state") or "") != "closed":
+            continue
+        if bool(row.get("informational")):
+            continue
+        if str(row.get("id")) in superseded:
+            continue
+        # ⚠️ ALREADY GIVEN UP ON. See `UNVERIFIABLE` — the answer cannot change,
+        # so asking again is cost with no possible new information.
+        if str(row.get("outcome") or "").startswith(UNVERIFIABLE):
+            continue
+        settled_at = str(row.get("updated_at") or "")
+        age_h = seconds_since(settled_at, now) / 3600.0
+        if age_h < VERIFY_AFTER_HOURS:
+            continue
+
+        out.considered += 1
+        came_back_as = _recurred_after(str(row.get("subject_key") or ""),
+                                       settled_at, str(row.get("id")), source)
+        # ⚠️ COVERAGE IS ASKED ABOUT THE WATCH WINDOW, WHICH STARTS WHEN THE
+        # CONCERN WAS CLOSED — not about the last seven days. Those differ for
+        # every concern the sweep is late to, and the window that matters is
+        # the one the claim is about.
+        try:
+            complete = bool(coverage(settled_at).get("complete"))
+        except Exception:  # noqa: BLE001
+            # ⚠️ AN UNREADABLE COVERAGE ANSWER IS `cannot_verify`, NEVER
+            # `verified`. "I could not find out whether I was listening" and "I
+            # was listening" are the same empty result and opposite facts —
+            # this module's founding sentence, applied to its own dependency.
+            complete = False
+        verdict = verify(str(row.get("id")), recurred=bool(came_back_as),
+                         coverage_complete=complete,
+                         recurred_as=came_back_as, now=now)
+        if verdict.verdict == "verified":
+            out.verified += 1
+        elif verdict.verdict == "recurred":
+            out.recurred += 1
+        else:
+            # ⚠️ WRITTEN DOWN SO IT IS NOT ASKED AGAIN, and `verify` is left
+            # alone: its contract is that an unverifiable concern does not move
+            # STATE, which is right and is separately pinned. This records the
+            # attempt beside the state, the way an acknowledgement does.
+            transition(str(row.get("id")), str(row.get("state")), now=now,
+                       outcome=f"{UNVERIFIABLE} — {verdict.reason}")
+            out.cannot_verify += 1
+
+    if out.changed():
+        stage("verify", out.line())
+    return out
+
+
+def _coverage(since_iso: str) -> Mapping[str, Any]:
+    """The observation floor's own coverage gate. ⚠️ IMPORTED AT CALL TIME so
+    that a test can hand `verification_sweep` a stand-in without patching a
+    module attribute, and so this module keeps no import-time dependency on the
+    collector."""
+    from reports import collect
+    return collect.coverage(since_iso)
+
+
+def _recurred_after(subject_key: str, settled_at: str, own_id: str,
+                    rows: Sequence[Mapping[str, Any]]) -> str:
+    """The id of the concern that came back, or "" if none did.
+
+    ⚠️ IT RETURNS THE ID RATHER THAN A BOOLEAN because the record is the whole
+    point: "the fix did not hold" is worth much less to a reader than "the fix
+    did not hold — it came back as c9", which is the difference between a
+    verdict and a thread they can follow.
+
+    ⚠️ AN EMPTY SUBJECT KEY CAN NEVER RECUR. `subject_key` is a hash of an
+    entity id where the investigation identified one and a topic hash where it
+    did not, so two topic-keyed concerns about "coverage incomplete" share a
+    key legitimately — but a concern with NO key at all would match every other
+    keyless one, and a whole class of findings would certify each other as
+    recurrences. Absent means unknown, and unknown is not a match.
+
+    ⚠️ THE EARLIEST SUCCESSOR, NOT THE LATEST. If a subject failed three times,
+    the fix under judgement is the one that the FIRST return disproved; naming
+    the most recent would credit this concern's fix with holding through
+    failures it did not survive.
+    """
+    if not subject_key:
+        return ""
+    after = sorted(str(r.get("id")) for r in rows
+                   if str(r.get("subject_key") or "") == subject_key
+                   and str(r.get("id")) != own_id
+                   and str(r.get("opened_at") or "") > settled_at)
+    return after[0] if after else ""
 
 
 #: How many dismissals of one subject suppress it, and over what window.

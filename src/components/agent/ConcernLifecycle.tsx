@@ -93,8 +93,22 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
     concerns.filter((c) => String(c.state ?? "open") === s).length;
   const verified = by("verified");
   const dismissed = by("dismissed");
-  const closed = by("closed");
-  if (verified + dismissed + closed === 0) return null;
+  // ⚠️ "CAME BACK" IS A SLICE OF `closed`, NOT A SIXTH STATE, and it is
+  // subtracted from the Closed count rather than double-counted — the three
+  // numbers under a heading that reads as a breakdown must add up to what was
+  // settled, or a reader totals them and gets more concerns than the villa
+  // ever had.
+  //
+  // ⚠️ AND IT IS THE OTHER HALF OF "Fixed and confirmed". That count could
+  // only ever be zero until the verification sweep was wired, and a screen
+  // that can say a fix WORKED while having no way to say one FAILED reports a
+  // success rate of 100% by construction. The two are produced by the same
+  // sweep, in the same pass, from the same evidence.
+  const cameBack = concerns.filter(
+    (c) => String(c.state ?? "") === "closed"
+        && String(c.outcome ?? "").startsWith("the fix did not hold")).length;
+  const closed = by("closed") - cameBack;
+  if (verified + dismissed + closed + cameBack === 0) return null;
 
   // ⚠️ SUBJECTS AT OR PAST THE THRESHOLD, computed the same way the backend
   // counts them: dismissals grouped by `subjectKey`. A subject here is one the
@@ -135,12 +149,24 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
                 count says what was SAID, not what changed.
               </p>
               <p>
+                &ldquo;Came back&rdquo; is the same check answering the other
+                way: the villa raised the same thing again after it had been
+                closed, so whatever was done did not hold. Both are decided a
+                week after a concern is closed, and only when the villa was
+                listening for that whole week — otherwise it says nothing
+                rather than guessing.
+              </p>
+              <p>
                 Dismissals are just as useful in the other direction — they are
                 how the villa learns what you do not want to hear about.
               </p>
             </InfoHint>
           </dt>
           <dd>{verified}</dd>
+        </div>
+        <div>
+          <dt>Came back</dt>
+          <dd>{cameBack}</dd>
         </div>
         <div>
           <dt>Judged not useful</dt>

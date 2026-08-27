@@ -72,14 +72,14 @@ EXEMPT: Dict[str, str] = {
              "registration is a reference, not a call, and renaming pipeline "
              "locals to satisfy a scanner would be gaming the instrument",
 
-    # ── a FINDING this scan could not see until TASK-074 (2026-08-27) ──
-    "verify": "BLOCKED — TASK-046 built the did-the-fix-hold verdict and "
-              "NOTHING has ever called it. Invisible until today because "
-              "reports/verify.py's identically named function matched the "
-              "name-based caller scan; deleting that file exposed this one. "
-              "The ninth instance of the two-correct-halves defect, found by "
-              "the pin built after the eighth. Wiring it belongs to the "
-              "escalation/acknowledgement work (REQ-033/034)",
+    # ⚠️ `verify` WAS HERE AND IS NOT ANY MORE (2026-08-28), the same way
+    # `escalate` left above it. It was BLOCKED rather than exempt — the ninth
+    # instance of the two-correct-halves defect, found by the pin built after
+    # the eighth — and TASK-046 had specified its caller from the beginning:
+    # "verification sweep: did it recur while the collector was listening
+    # throughout?". `concerns.verification_sweep` is that sweep,
+    # `scheduler.dispatch` is where it runs, and the Reason tab's "Fixed and
+    # confirmed" count can finally be something other than zero.
 
     # ── deliberately not called, with the reason at the code ──
     "concern_admissible": "bundles suppression with contracts.concern_errors, "

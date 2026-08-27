@@ -450,8 +450,23 @@ def test_an_unlisted_sender_gets_no_run_and_no_reply() -> None:
         f"expected one audit row, got {len(rows)}: "
         f"{[r.get('tool') for r in rows]}")
     assert rows[0]["verdict"] == "refused"
-    assert "222" not in str(rows[0]), (
-        "the row must not record the prober's id verbatim")
+    # ⚠️ THE FIELDS, NOT THE ROW'S REPR — AND THIS IS THE 2026-08-26 FLAKE,
+    # FOUND 2026-08-28 AFTER 250 RUNS. The comment above blamed a freshness or
+    # trigger guard and added diagnostics to the wrong assertion; the failure
+    # was here. `run_id` is `chat<epoch seconds>`, so on roughly one run in a
+    # thousand the CLOCK ends in the same three digits as the fixture's sender
+    # id and a substring search over the whole row matched a timestamp. The
+    # test then reported that a prober's id had been recorded verbatim, which
+    # is a security claim, about a number that came from `time.time()`.
+    #
+    # ⚠️ IT IS THE SAME DEFECT `_matches` WAS FIXED FOR ONE FILE OVER: an
+    # unanchored substring search over text that legitimately contains digits.
+    # Naming the fields also makes the assertion say what it means — a NEW
+    # field carrying the sender would be missed by a whole-row search that
+    # happened to match the run id anyway.
+    leaky = {k: v for k, v in rows[0].items() if k != "run_id"}
+    assert "222" not in str(leaky), (
+        f"the row must not record the prober's id verbatim: {leaky}")
 
 
 def test_a_replayed_backlog_message_is_refused_before_the_model() -> None:

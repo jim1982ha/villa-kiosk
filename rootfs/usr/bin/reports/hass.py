@@ -301,6 +301,39 @@ async def rest_get(session: ClientSession, path: str) -> Any:
         raise HassUnavailable(f"GET {path}: {err}") from err
 
 
+#: The most of Home Assistant's log this add-on will ever hold in memory at
+#: once. ⚠️ A CEILING ON THE FETCH, NOT ON THE ANSWER. `/api/error_log` returns
+#: the whole file and has no range parameter, so the only place a bound can be
+#: applied is here — and an unbounded read is a busy villa's multi-megabyte log
+#: resident in a process that also holds the observation journal. The TAIL is
+#: kept rather than the head, because a log question is always about what
+#: happened recently.
+MAX_LOG_BYTES: int = 2 * 1024 * 1024
+
+
+async def rest_get_text(session: ClientSession, path: str) -> str:
+    """One authenticated REST GET against Core, for an endpoint returning text.
+
+    ⚠️ IT IS A SIBLING OF `rest_get`, NOT A FLAG ON IT. That one ends in
+    `.json()` and would raise on `text/plain`; threading a `as_text=True`
+    parameter through would give one function two return types and every caller
+    a cast. Home Assistant's log endpoint is the only text one this add-on
+    reads, and it is worth six lines of its own.
+
+    ⚠️ THE READ IS CAPPED AND THE TAIL IS WHAT SURVIVES. See `MAX_LOG_BYTES`.
+    """
+    try:
+        async with session.get(f"{REST_ROOT}/{path.lstrip('/')}",
+                               headers=AUTH_HEADERS,
+                               timeout=None) as response:
+            if response.status != 200:
+                raise HassUnavailable(f"GET {path} -> HTTP {response.status}")
+            raw = await response.content.read(MAX_LOG_BYTES + 1)
+    except (ClientError, asyncio.TimeoutError, OSError) as err:
+        raise HassUnavailable(f"GET {path}: {err}") from err
+    return raw[-MAX_LOG_BYTES:].decode("utf-8", "replace")
+
+
 async def fetch_timezone(session: ClientSession) -> Optional[str]:
     """Home Assistant's own timezone, or None if it cannot be asked.
 

@@ -151,15 +151,32 @@ def test_complete_coverage_and_no_recurrence_VERIFIES() -> None:
     assert concerns.read()[0]["state"] == "verified"
 
 
-def test_a_RECURRENCE_reopens_even_when_coverage_was_partial() -> None:
+def test_a_RECURRENCE_is_judged_even_when_coverage_was_partial() -> None:
     """⚠️ COVERAGE GATES THE ABSENCE, NOT THE OBSERVATION. A recurrence SEEN
     during partial coverage is still a real recurrence; only the silence is
-    worthless. Checking coverage first would discard a fact that was observed."""
+    worthless. Checking coverage first would discard a fact that was observed.
+
+    ⚠️ THE VERDICT IS THE SUBJECT OF THIS TEST; THE STATE IT WRITES IS NOT.
+    This asserted `state == "open"` until 2026-08-28, incidentally pinning a
+    transition that had never run — `verify` had no caller for its whole
+    existence. Giving it one showed the re-open to be wrong (see `verify`), and
+    the coverage-ordering rule this test is actually about is unchanged.
+    """
     stored, _ = concerns.raise_concern(_c())
     assert stored is not None
     out = concerns.verify(stored.id, recurred=True, coverage_complete=False)
-    assert out.verdict == "recurred"
-    assert concerns.read()[0]["state"] == "open"
+    assert out.verdict == "recurred", "partial coverage discarded an observation"
+    assert concerns.read()[0]["state"] == "closed"
+
+
+def test_a_RECURRENCE_NAMES_the_concern_it_came_back_as() -> None:
+    """⚠️ "The fix did not hold" is a verdict; "it came back as c9" is a thread
+    a reader can follow. The outcome is the only record joining the two."""
+    stored, _ = concerns.raise_concern(_c())
+    assert stored is not None
+    concerns.verify(stored.id, recurred=True, coverage_complete=True,
+                    recurred_as="c9")
+    assert "c9" in concerns.read()[0]["outcome"]
 
 
 # ── the store ───────────────────────────────────────────────────────────────

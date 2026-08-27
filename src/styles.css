@@ -4950,11 +4950,14 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
      This was `nowrap`, which is right for the shape it was written for —
      `tiers.tsx` puts a 14px GLYPH in each `dt` and one or two words in each
      `dd`, so three facts never threaten a phone's width. `SettledSummary` uses
-     the same class with TEXT terms ("Fixed and confirmed", "Judged not
-     useful", "Closed"), which is ~350px of non-shrinking `dt` before anything
-     else — `dt` is `flex: 0 0 auto`, so on a 360px phone `nowrap` cannot
-     compress it and the row overflows its dialog. Wrapping engages only when
-     the content does not fit, so the icon row above is unaffected. */
+     the same class with TEXT terms — four of them since 2026-08-28, when the
+     verification sweep gained a caller and "Came back" joined "Fixed and
+     confirmed", "Judged not useful" and "Closed" — which is well over a 360px
+     phone's width of non-shrinking `dt`. `dt` is `flex: 0 0 auto`, so `nowrap`
+     cannot compress it and the row overflowed its dialog. Wrapping engages
+     only when the content does not fit, so the icon row above is unaffected,
+     and a FIFTH term would cost another wrapped row rather than an overflow.
+     ⚠️ Count the terms in `SettledSummary`, not in this sentence. */
   flex-wrap: wrap;
   gap: 4px 14px;
   margin: 2px 0 0;

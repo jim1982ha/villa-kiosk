@@ -116,6 +116,15 @@ ILLUSTRATIVE: Set[str] = {
     "switch.example_intercom", "switch.example_thing",
     "light.example_outdoor_path",
     "lock.side_gate",
+    # `test_read_logs_source.py`. ⚠️ CLASSIFIED IN THE SAME CHANGE THAT WROTE
+    # THE FILE, which is what the two notes above ask for and which had not yet
+    # happened once. It went red at the release gate exactly as they describe —
+    # the file was untracked, so `git add -f` before running the suite is what
+    # made it visible, and the pin then did its job on the first try.
+    # A SECOND id is what a log line looks like when an integration names a
+    # device it could not reach, which is the most id-dense text this add-on
+    # handles and the reason `read_logs` has to pseudonymise at all.
+    "light.example_patio_string",
     # `test_agent_mcp.py`. A deliberately fictional id, and the test's whole
     # point is that a tool result carrying ANY raw id is refused — so the id
     # must be a real-SHAPED one and must not be a real device.
