@@ -213,3 +213,30 @@ def test_the_drill_is_behind_the_SAME_owner_check_as_the_button() -> None:
         handler.index('body.get("drill")'), (
         "the drill branch is reachable before the owner check — anyone with a "
         "session could message the owner's phone")
+
+
+def test_the_drill_SUPERSEDES_its_own_previous_run() -> None:
+    """⚠️ WITHOUT THIS THE FEATURE EATS ITSELF, and the owner found it by
+    asking the obvious question: "we will do a lot of tests — do you see the
+    contradiction?"
+
+    `raise_concern` refuses a second concern on an open subject, so every
+    re-run needed the previous drill SETTLED first. Of the three buttons on a
+    concern card only "not useful" settles anything — and that is the
+    DISMISSAL `suppressed_subjects` counts. `DISMISSALS_TO_SUPPRESS` is 3 and
+    every drill shares one fixed `topic:` key, so on the third tidy-up the
+    drill would have been refused for ever, silently, by the mechanism built to
+    silence noisy rules. A test rig that destroys itself after three uses is
+    worse than none, because the third failure looks like the thing under test.
+
+    Superseding is the escape `raise_concern` itself offers, it is the honest
+    description of what a re-run IS, and it needs no dismissal — so the
+    counter never advances.
+    """
+    source = _proxy_source()
+    drill = source[source.index("async def _agent_drill"):]
+    drill = drill[:drill.index("\nasync def agent_run_now_handler")]
+    assert "open_for(" in drill and "supersedes=" in drill, (
+        "the drill no longer supersedes its predecessor, so a re-run is "
+        "refused until somebody dismisses the last one — and three dismissals "
+        "suppress the drill subject permanently")

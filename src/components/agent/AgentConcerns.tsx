@@ -27,7 +27,7 @@ import { acknowledgeConcern, loadConcerns,
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import SourceChip from "@/components/common/SourceChip";
-import { LifecycleChip, SettledSummary } from "@/components/agent/ConcernLifecycle";
+import { SettledSummary } from "@/components/agent/ConcernLifecycle";
 import { severityRank, type Concern } from "@/agent/agentTypes";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
@@ -319,11 +319,22 @@ export default function AgentConcerns() {
                   of the kind, and until this chip the only way to tell them
                   apart was to know which list you were reading. */}
               <SourceChip source="agent" />
-              {/* ⚠️ `open` AND `acted` RENDERED IDENTICALLY UNTIL NOW, which
-                  meant a reader could not tell whether anything had been DONE
-                  about a concern — the single most useful thing to know about
-                  one that is still standing. */}
-              <LifecycleChip state={c.state} />
+              {/* ⚠️ THE LIFECYCLE CHIP IS GONE (2026-08-27, owner's
+                  instruction), AND IT COULD ONLY EVER SAY ONE THING. It was
+                  added to separate `open` from `acted` — "the single most
+                  useful thing to know about a concern that is still
+                  standing" — and NOTHING IN THE BACKEND HAS EVER WRITTEN
+                  `acted`: `grep '"acted"' rootfs/` finds only the enum that
+                  lists it. This list shows live concerns only, so every card
+                  on it read "Nothing done yet", always, whatever anyone did.
+                  A chip with one possible value is not a status, it is
+                  decoration — and on an informational row it actively
+                  contradicted the "nothing to do" mark beside it.
+
+                  If a transition to `acted` is ever implemented, the chip
+                  comes back with it; the component and its copy are kept for
+                  that reason and because the settled record still uses the
+                  module. */}
               {/* ⚠️ WHETHER ANYONE WAS TOLD IS A DIFFERENT FACT FROM WHETHER IT
                   MATTERS, and the wall showed only the second. A list of
                   concerns with no indication of that reads as "everyone has
@@ -403,11 +414,16 @@ export default function AgentConcerns() {
                 acknowledgement wins, and hiding that would make a second reader
                 think nobody had picked it up.
 
-                ⚠️ AND NEVER ON AN FYI. Acknowledgement exists to stop the
-                chase, and an informational concern is never chased — the
-                button would be a control whose only effect is recording that
-                it was pressed. */}
-            {canJudge && c.delivered_at && !c.informational && (
+                ⚠️ IT IS SHOWN ON AN FYI TOO, AND THE GATE THAT HID IT WAS
+                REMOVED (2026-08-27, owner's instruction). The argument for
+                hiding it was that acknowledgement exists to stop a chase and
+                an FYI is never chased, so the button "only records that it
+                was pressed" — true of the ESCALATION, and it ignored what the
+                press now does on screen: since 2.808.0 acknowledging is the
+                one action that takes a card off the wall. Hiding it therefore
+                left informational concerns with no way to be cleared at all,
+                which is the opposite of the tidiness it was reaching for. */}
+            {canJudge && c.delivered_at && (
               c.acknowledged_at ? (
                 <span className="muted body-text"
                       title={`Acknowledged ${c.acknowledged_at}`}>

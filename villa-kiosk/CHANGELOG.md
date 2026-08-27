@@ -1,3 +1,16 @@
+## 2.810.0
+
+### Fixed — the test drill silenced itself after three runs, and two dead controls left the concern card
+Re-running the drill needed the previous one settled, and the only button that
+settles one is "not useful" — which is the dismissal that suppresses a subject
+after three. The rig would have refused for ever on the third tidy-up, through
+the mechanism built to silence noisy rules. A drill now replaces its own
+previous run, so no dismissal is ever needed. The acknowledge button is back on
+"for your information" concerns: hiding it was argued from escalation, but
+acknowledging is what takes a card off the wall, so those had no way off it.
+And the lifecycle chip is gone — nothing has ever moved a concern off "open",
+so it read "Nothing done yet" on every card, contradicting "nothing to do".
+
 ## 2.809.0
 
 ### Changed — the Cockpit drops a source badge, and Settings & others opens on Settings

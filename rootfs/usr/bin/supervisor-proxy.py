@@ -2668,8 +2668,24 @@ async def _agent_drill(request: web.Request,
                       f"{sorted(agent_contracts.SEVERITY)}"}, status=400)
 
     subject = "vesta pipeline drill"
+    subject_key = agent_contracts.subject_key(f"topic:{subject}")
+    # ⚠️ A DRILL REPLACES THE LAST DRILL, AND WITHOUT THIS THE FEATURE EATS
+    # ITSELF (2026-08-27, owner's finding). `raise_concern` refuses a second
+    # concern on an open subject, so every re-run needed the previous one
+    # settled first — and of the three buttons on the card only "not useful"
+    # settles anything, which is also the DISMISSAL that `suppressed_subjects`
+    # counts. Three dismissals suppress a subject permanently, and every drill
+    # shares one key: on the third tidy-up the drill would have refused for
+    # ever, silently, through the mechanism meant to silence noisy rules.
+    #
+    # Superseding is the escape `raise_concern` itself names ("either supersede
+    # one, or say why this is a different condition"), it is the honest
+    # description of what a re-run IS, and it needs no dismissal at all — so
+    # the counter never advances and the drill stays repeatable indefinitely.
+    supersedes = [str(r.get("id") or "")
+                  for r in agent_concerns.open_for(subject_key)]
     concern = agent_concerns.Concern(
-        subject_key=agent_contracts.subject_key(f"topic:{subject}"),
+        subject_key=subject_key, supersedes=[s for s in supersedes if s],
         title="Pipeline drill — this is a test, nothing is wrong",
         body=("This message was produced by the villa's own end-to-end test. "
               "No equipment is affected and nothing needs doing. It exists to "

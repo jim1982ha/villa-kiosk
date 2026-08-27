@@ -1069,3 +1069,47 @@ def test_only_a_CRITICAL_shows_a_chase_time() -> None:
     assert 'severity) !== "critical"' in body and "return null" in body, (
         "the chase line is rendered for non-critical concerns, which are "
         "never chased")
+
+
+def test_no_card_carries_a_chip_that_can_only_say_ONE_thing() -> None:
+    """⚠️ A STATUS WITH ONE POSSIBLE VALUE IS DECORATION, NOT INFORMATION.
+
+    The concern card showed a lifecycle chip to separate `open` from `acted` —
+    "the single most useful thing to know about a concern that is still
+    standing". Nothing in the backend has ever written `acted`: the string
+    appears only in the enum that lists it. The wall shows live concerns only,
+    so every card read "Nothing done yet", always, whatever anybody did — and
+    on an informational row it contradicted the "nothing to do" mark beside it.
+
+    ⚠️ PINNED ON THE PRODUCER, NOT ON THE JSX. The chip may legitimately return
+    the day a transition to `acted` is implemented; what may not return is a
+    chip rendering a state nothing can produce. So this fails if the card
+    renders it WHILE the backend still writes only one live state.
+    """
+    import re as _re
+
+    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    backend = ""
+    for name in ("concerns.py", "outbox.py", "runtime.py"):
+        with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+                               name), encoding="utf-8") as handle:
+            backend += handle.read()
+    writes_acted = _re.search(r'transition\([^)]*"acted"', backend) is not None
+    code = _re.sub(r"\{/\*[\s\S]*?\*/\}", "", panel)
+    renders_chip = "<LifecycleChip" in code
+    assert renders_chip <= writes_acted, (
+        "the card renders a lifecycle chip, but nothing ever moves a concern "
+        "off `open` — so it can only ever display one value")
+
+
+def test_an_INFORMATIONAL_concern_can_still_be_cleared_from_the_wall() -> None:
+    """⚠️ THE GATE THAT HID THE EYE ICON LEFT FYIs UNCLEARABLE (owner's
+    instruction, 2026-08-27). It was justified by escalation — an FYI is never
+    chased, so acknowledging "only records that it was pressed" — which was
+    true of the CHASE and ignored what the press does on screen: since 2.808.0
+    acknowledging is the one action that takes a card off the wall. Hiding it
+    left informational concerns with no way off it at all."""
+    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    assert "canJudge && c.delivered_at && !c.informational" not in panel, (
+        "the acknowledge button is hidden on informational concerns again, so "
+        "they can never be cleared from the wall")
