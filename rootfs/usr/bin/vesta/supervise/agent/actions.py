@@ -20,10 +20,18 @@ alert still being chased, which is precisely the state `reconcile_done` was
 written to repair after the fact. `done` below is that pair, server-side, in one
 call: the browser can no longer perform half of it.
 
-⚠️ AN ACT IS NOT A STORE WRITE. Three of the five below are COMPOUND — a thumb
-records a verdict AND teaches the flag type AND acknowledges; Done ticks AND
-acknowledges — and every one of those compounds was previously assembled at a
-call site. A caller that assembles is a caller that can assemble differently.
+⚠️ AN ACT IS NOT A STORE WRITE. Several below are COMPOUND — a thumb records a
+verdict AND teaches the flag type; ✅ and 🚫 each tick the job AND acknowledge
+AND settle the alert — and every one of those compounds was previously assembled
+at a call site. A caller that assembles is a caller that can assemble
+differently.
+
+⚠️ AND THERE IS NO CENSUS IN THAT SENTENCE, DELIBERATELY. It read "Three of the
+five below" and was wrong on all three numbers inside a day: `dismiss` made the
+table SIX, which made the compounds FOUR, while a thumb had stopped
+acknowledging (the owner's reversal, recorded at `_judge`) and ✅ had gained the
+settle. Nothing checks a count in prose, so it goes stale in silence while
+reading as authority — `ACTS` is the census, and it is the only one.
 
 ⚠️ WHAT IS DELIBERATELY NOT HERE: the decision about WHICH acts to offer lives
 in `available_for`, and the decision about how to DRAW them lives with whoever
@@ -291,7 +299,9 @@ async def apply(session: Any, action_id: str, concern_id: str, *,
 async def _judge(session: Any, row: Mapping[str, Any], *, useful: bool,
                  by: str, config: Optional[Mapping[str, Any]],
                  reason: str, now: Optional[float]) -> Outcome:
-    """A thumb. Verdict, then the kind it teaches, then the acknowledgement.
+    """A thumb. The verdict, then the kind it teaches. It does NOT acknowledge
+    — see the reversal three paragraphs down; this line said it did for a day
+    after the code stopped, which is a docstring contradicting its own body.
 
     ⚠️ MOVED HERE VERBATIM FROM `/agent-feedback`, WHICH IS NOW ITS CALLER. The
     ORDER is load-bearing and was already reasoned there: the kind is recorded

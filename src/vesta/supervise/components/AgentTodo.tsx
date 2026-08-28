@@ -158,7 +158,7 @@ export default function AgentTodo() {
                 that assumes this tab is the only place the work exists. */}
             The list is a Home Assistant to-do list, so the same items appear in
             Home Assistant itself and can be ticked off there. Either way counts:
-            the alert behind the row is marked seen and stops being chased.
+            the alert behind the row is closed and stops being chased.
           </p>
         </InfoHint>
       </div>

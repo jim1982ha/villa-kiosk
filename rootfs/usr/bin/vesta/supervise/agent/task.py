@@ -215,8 +215,8 @@ async def reconcile_settled(session: Any, *,
 async def reconcile_done(session: Any, *,
                          config: Optional[Mapping[str, Any]] = None,
                          now: Optional[float] = None) -> int:
-    """Tick the concern for every job somebody has already ticked. Returns how
-    many were marked seen. NEVER RAISES.
+    """Close the alert behind every job somebody has already ticked. Returns
+    how many were closed. NEVER RAISES.
 
     ⚠️ TWO "DONE" BUTTONS DID TWO DIFFERENT THINGS, AND THE PHONE'S DID LESS
     (2026-08-28, reported: "Can you confirm that if i click on Done, it will do
@@ -227,8 +227,8 @@ async def reconcile_done(session: Any, *,
     ticks" — only set the item to `completed`. ⚠️ THAT BUTTON NO LONGER EXISTS:
     the blueprint went inert hours later when job notifications were removed.
     This function outlived its original cause and is MORE needed without it —
-    it is now the only thing that marks an alert seen when somebody ticks the
-    item in Home Assistant's own panel, or by voice. So a facility manager who did
+    it is now the only thing that ENDS an alert when somebody ticks the item in
+    Home Assistant's own panel, or by voice. So a facility manager who did
     the work and pressed Done on their phone left the concern unacknowledged:
     still on the wall, still counted as awaiting a person, and if it were
     critical, still being chased for work already finished. That is the exact

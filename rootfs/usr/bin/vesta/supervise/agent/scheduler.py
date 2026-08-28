@@ -498,7 +498,8 @@ async def dispatch(session: Any,
     await task_mod.reconcile_done(session, config=config)
 
     # ⚠️ AND THE SAME RECONCILIATION IN THE OTHER DIRECTION, which was missing
-    # until it was reported (2026-08-28). A ticked job marked its alert seen;
+    # until it was reported (2026-08-28). A ticked job already reconciled back
+    # to its alert (it acknowledged then; it CLOSES it since 2.865.0);
     # a SETTLED alert did nothing to its job, so a thumbs-down left work on the
     # facility manager's list for ever with no alert behind it. It sweeps the
     # store rather than being called from each of the five places that settle an

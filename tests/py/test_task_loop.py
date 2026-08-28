@@ -93,8 +93,8 @@ def test_the_summary_carries_the_BRACKETED_id() -> None:
 
     ⚠️ IT USED TO BE THE BLUEPRINT'S Done BUTTON. That button is gone with the
     rest of the job notifications, and the bracket is now read by
-    `ledger.TASK_PREFIX` — which is what `task.reconcile_done` joins on to mark
-    a concern seen when its item is ticked, and what the To-Do List tab reads.
+    `ledger.TASK_PREFIX` — which is what `task.reconcile_done` joins on to CLOSE
+    an alert when its item is ticked, and what the To-Do List tab reads.
     Same string, same fragility, three fewer things depending on it.
     """
     made = task.summary_for({"id": "c12", "title": "Pool pump drawing more"})
@@ -308,7 +308,8 @@ def _sweep(monkeypatch, rows: list, open_items: list) -> _Hass:
 
 def test_a_SETTLED_alert_has_its_job_TICKED_OFF(monkeypatch: Any) -> None:
     """⚠️ THE LOOP HAD ONE DIRECTION ONLY, AND THE OWNER RULED ON THE OTHER
-    (2026-08-28). A ticked job marked its alert seen (`reconcile_done`); a
+    (2026-08-28). A ticked job reconciled back to its alert (`reconcile_done`,
+    which acknowledged then and CLOSES since 2.865.0); a
     settled alert did nothing to its job, and `actions._done` was the only thing
     in the tree that ever ticked one. So a thumbs-down — which DISMISSES the
     alert — left work on the facility manager's list for ever, with no alert
