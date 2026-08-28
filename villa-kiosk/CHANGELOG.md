@@ -1,3 +1,15 @@
+## 2.840.0
+
+### Added — the dependency layers, named and enforced before anything moves
+Groundwork for reorganising the tree so that the old briefing half can one day
+be deleted wholesale and the assistant can one day run on an external server.
+Nothing moves yet: this release writes the layer model into the project's
+specification and adds a test that derives every backend module's layer and
+fails on any import pointing the wrong way — including the rule that the
+assistant never imports the briefing. The one known violation is named with the
+task that removes it, so anything else crossing that line fails today. The
+boundary is now checked on every test run instead of remembered.
+
 ## 2.839.0
 
 ### Added — the items a check ran out of budget for are now listed, not just counted
