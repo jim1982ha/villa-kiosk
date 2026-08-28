@@ -74,9 +74,16 @@ def test_the_KEYBOARD_pairs_the_two_discharging_acts_and_the_thumbs() -> None:
     """⚠️ TELEGRAM GIVES EVERY BUTTON IN A ROW AN EQUAL SHARE OF THE WIDTH, so
     five in a line is five unreadable slivers on a phone."""
     rows = buttons.keyboard_for({"id": "c1", "state": "open"})
-    assert [len(r) for r in rows] == [2, 1, 2]
+    # ⚠️ FOUR ROWS SINCE `Dismiss` BECAME ITS OWN ACT (2026-08-28): the two that
+    # discharge the alert share the top row, `Seen` and `Dismiss` take one each
+    # because both are consequential and neither should be a half-width target,
+    # and the rating pair sits last where a verdict belongs.
+    assert [len(r) for r in rows] == [2, 1, 1, 2]
     assert [b[0] for b in rows[0]] == ["Done", "Need help"]
     assert rows[-1][0][1] == "vu:c1" and rows[-1][1][1] == "vn:c1"
+    # ⚠️ THE WIRE CODES ARE UNCHANGED THOUGH THE LABELS ARE NOT, which is what
+    # keeps a button already sitting in somebody's chat meaning what it meant.
+    assert rows[2][0][1] == "vx:c1", "dismiss is not on its own row"
 
 
 def test_a_SETTLED_alert_gets_NO_keyboard_and_that_is_a_real_answer() -> None:

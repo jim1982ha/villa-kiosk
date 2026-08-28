@@ -119,7 +119,7 @@ def test_an_FYI_offers_only_the_JOB_and_the_thumbs() -> None:
     one act that makes sense — and it is exactly the act the mode withheld."""
     ids = [a.id for a in actions.available_for(
         {"id": "c1", "state": "open", "informational": True})]
-    assert ids == ["job", "useful", "not_useful"]
+    assert ids == ["job", "dismiss", "useful", "not_useful"]
 
 
 def test_an_ACKNOWLEDGED_alert_stops_offering_to_be_acknowledged() -> None:
@@ -132,8 +132,11 @@ def test_an_ACKNOWLEDGED_alert_stops_offering_to_be_acknowledged() -> None:
 
 
 def test_an_OPEN_alert_offers_the_full_set() -> None:
+    """⚠️ TWO GROUPS, LIFECYCLE THEN RATING, AND THE ORDER IS THE READING ORDER.
+    A rating is a comment on the supervisor rather than on the villa, so it is
+    never the first thing offered."""
     ids = [a.id for a in actions.available_for({"id": "c1", "state": "open"})]
-    assert ids == ["done", "help", "seen", "useful", "not_useful"]
+    assert ids == ["done", "help", "seen", "dismiss", "useful", "not_useful"]
 
 
 # ── applying one ────────────────────────────────────────────────────────────
@@ -223,20 +226,39 @@ def test_SEEN_acknowledges_and_claims_nothing_else() -> None:
     assert row["state"] == "open", "acknowledging closed the alert"
 
 
-def test_a_THUMB_records_the_verdict_AND_acknowledges() -> None:
-    """The compound the feedback handler used to assemble at its call site."""
-    _put()
-    assert asyncio.run(actions.apply(None, "useful", "c1", by="Jim")).ok
-    row = concerns.read()[0]
-    assert row["useful"] is True and row["acknowledged_at"]
+def test_a_RATING_RECORDS_A_RATING_AND_NOTHING_ELSE() -> None:
+    """⚠️ THE OWNER'S RULING, AND IT REVERSES ONE MADE EARLIER THE SAME DAY WITH
+    THE CONSEQUENCE IN VIEW (2026-08-28). The morning's was "i like the fact
+    that clicking on a thumb Up or Down acknowledge the concern"; the evening's,
+    after using it, was "don't make pressing it disappear the alert
+    notification" — and acknowledging is exactly what takes a card off the
+    tablet's wall. So `+1` must not acknowledge and `-1` must not dismiss:
+    rating the SUPERVISOR's judgement may not dispose of the VILLA's problem.
+
+    Both directions, because the asymmetry is what made the old pair confusing.
+    """
+    for act_id, verdict in (("useful", True), ("not_useful", False)):
+        _put()
+        assert asyncio.run(actions.apply(None, act_id, "c1", by="Jim")).ok
+        row = concerns.read()[0]
+        assert row["useful"] is verdict, "the verdict was not recorded"
+        assert not str(row.get("acknowledged_at") or ""), \
+            f"{act_id} acknowledged, so rating an alert takes it off the wall"
+        assert row["state"] == "open", \
+            f"{act_id} moved the alert out of open"
 
 
-def test_a_THUMB_DOWN_dismisses_rather_than_closing() -> None:
+def test_DISMISS_settles_the_alert_as_dismissed_not_closed() -> None:
     """⚠️ `dismissed` IS NOT `closed`, and collapsing them loses the only signal
-    alert-fatigue measurement has."""
+    alert-fatigue measurement has. It is its own act since 2026-08-28 — the only
+    irreversible one on the list, which is why its label is the only one that
+    says "completely"."""
     _put()
-    assert asyncio.run(actions.apply(None, "not_useful", "c1", by="Jim")).ok
-    assert concerns.read()[0]["state"] == "dismissed"
+    assert asyncio.run(actions.apply(None, "dismiss", "c1", by="Jim")).ok
+    row = concerns.read()[0]
+    assert row["state"] == "dismissed"
+    assert "dismissed by Jim" in str(row.get("outcome") or ""), \
+        "the dismissal does not record who threw the alert away"
 
 
 def test_HELP_does_NOT_acknowledge() -> None:
@@ -322,6 +344,6 @@ def test_the_ACT_reports_whether_the_alert_is_now_SPENT() -> None:
     """It is what tells a chat to take the buttons off the message, and it is
     computed from the store after the act rather than predicted before it."""
     _put()
-    out = asyncio.run(actions.apply(None, "not_useful", "c1", by="Jim"))
+    out = asyncio.run(actions.apply(None, "dismiss", "c1", by="Jim"))
     assert out.ok and out.spent, \
         "dismissing an alert left its buttons claiming to be live"

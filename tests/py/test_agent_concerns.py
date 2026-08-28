@@ -203,7 +203,12 @@ def _dismiss(n: int) -> None:
     for i in range(n):
         stored, reason = concerns.raise_concern(_c(title=f"gym lights {i}"))
         assert stored is not None, reason
-        concerns.feedback(stored.id, useful=False, reason="gym is closed")
+        # ⚠️ THE `dismiss` ACT'S TRANSITION, NOT A RATING (2026-08-28). What
+        # counts toward silencing a subject is a DELIBERATE dismissal — which
+        # makes this signal stronger than it was, when it could be produced as a
+        # by-product of somebody rating the alert's quality.
+        concerns.transition(stored.id, "dismissed",
+                            outcome="dismissed by owner: gym is closed")
 
 
 def test_marking_a_concern_USEFUL_does_NOT_settle_it() -> None:
@@ -242,15 +247,45 @@ def test_a_USEFUL_verdict_keeps_its_note_out_of_outcome() -> None:
     assert not row["outcome"]
 
 
-def test_NOT_USEFUL_is_dismissed_and_not_closed() -> None:
+def test_DISMISSED_is_not_CLOSED() -> None:
     """⚠️ Closed means dealt with; dismissed means somebody said it did not
-    matter. Collapsing them loses the only signal alert fatigue has."""
+    matter. Collapsing them loses the only signal alert fatigue has.
+
+    ⚠️ IT IS REACHED BY THE `dismiss` ACT NOW, NOT BY A RATING (2026-08-28,
+    owner's ruling). "-1 Less like this" tunes how often this KIND is raised and
+    leaves the alert exactly where it was; throwing an alert away is its own
+    control, and its label is the only one that says "completely"."""
     stored, _ = concerns.raise_concern(_c())
     assert stored is not None
-    concerns.feedback(stored.id, useful=False, reason="the gym is closed")
+    concerns.transition(stored.id, "dismissed",
+                        outcome="dismissed by owner: the gym is closed")
     row = concerns.read()[0]
     assert row["state"] == "dismissed"
-    assert "not useful" in row["outcome"]
+    assert "dismissed by" in row["outcome"]
+
+
+def test_A_RATING_LEAVES_THE_ALERT_EXACTLY_WHERE_IT_WAS() -> None:
+    """⚠️ NEITHER DIRECTION IS A LIFECYCLE EVENT, and the down one used to be
+    (2026-08-28). Rating the SUPERVISOR's judgement disposed of the VILLA's
+    problem — the same defect the up side was fixed for on 2026-08-27, when a
+    thumb up wrote `verified` and the card vanished, one day before the mirror
+    image of it was noticed."""
+    for verdict in (True, False):
+        # ⚠️ A DISTINCT SUBJECT EACH TIME — `raise_concern` refuses a second
+        # concern on a subject that is already open, which is the dedupe rule
+        # working and would otherwise silently make this a one-case test.
+        stored, _ = concerns.raise_concern(
+            _c(subject_key=subject_key(f"rating {verdict}"),
+               title=f"t{verdict}"))
+        assert stored is not None
+        concerns.feedback(stored.id, useful=verdict, reason="a note")
+        row = [r for r in concerns.read() if r["id"] == stored.id][0]
+        assert row["state"] == "open", \
+            f"a {'+1' if verdict else '-1'} moved the alert out of open"
+        assert row["useful"] is verdict and row["useful_at"], \
+            "the verdict was not recorded"
+        assert not str(row.get("outcome") or ""), \
+            "a rating wrote an outcome, which means 'why it left open'"
 
 
 def test_the_REASON_is_kept_verbatim() -> None:
@@ -259,8 +294,18 @@ def test_the_REASON_is_kept_verbatim() -> None:
     turns it into a memory. A count alone discards what a person typed."""
     stored, _ = concerns.raise_concern(_c())
     assert stored is not None
-    concerns.feedback(stored.id, useful=False, reason="closed for renovation")
+    # ⚠️ ON THE DISMISSAL, WHICH IS WHERE IT NOW LANDS. A rating keeps its note
+    # in `useful_note`; `outcome` means "why it left open" and a rating does not
+    # take it out of open at all.
+    concerns.transition(stored.id, "dismissed",
+                        outcome="dismissed by owner: closed for renovation")
     assert "closed for renovation" in concerns.read()[0]["outcome"]
+    stored2, _ = concerns.raise_concern(_c(title="another"))
+    assert stored2 is not None
+    concerns.feedback(stored2.id, useful=False, reason="closed for renovation")
+    kept = [r for r in concerns.read() if r["id"] == stored2.id][0]
+    assert kept["useful_note"] == "closed for renovation", \
+        "a rating discarded the words somebody took the trouble to type"
 
 
 def test_THREE_dismissals_suppress_the_subject() -> None:
@@ -297,5 +342,5 @@ def test_a_dismissal_of_ANOTHER_subject_does_not_count() -> None:
     other, _ = concerns.raise_concern(
         _c(subject_key=subject_key("gate"), title="gate"))
     assert other is not None
-    concerns.feedback(other.id, useful=False)
+    concerns.transition(other.id, "dismissed", outcome="dismissed by owner")
     assert concerns.suppressed_subjects() == []

@@ -20,9 +20,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { Info, ThumbsDown, ThumbsUp } from "lucide-react";
+import { CircleSlash, Eye, Info } from "lucide-react";
 
-import { loadConcerns,
+import { actOnAlert, loadConcerns,
          sendConcernFeedback } from "@/vesta/supervise/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
@@ -205,6 +205,18 @@ export default function AgentConcerns() {
   const judge = useCallback(async (id: string, useful: boolean) => {
     setBusy(id);
     await sendConcernFeedback(id, useful);
+    setBusy(null);
+    void load();
+  }, [load]);
+
+  /** ⚠️ THE LIFECYCLE ACTS GO THROUGH THE SAME ENTRY POINT THE PHONE'S BUTTONS
+   *  USE. `actOnAlert` reaches `agent/actions.py`, so `Seen` and `Dismiss` here
+   *  and in a chat are one implementation — there is nothing for the two
+   *  surfaces to fall out of step with. Doing it in the browser instead is how
+   *  the tablet's old two-call "Done" came to do less than the phone's. */
+  const act = useCallback(async (id: string, action: string) => {
+    setBusy(id);
+    await actOnAlert(id, action);
     setBusy(null);
     void load();
   }, [load]);
@@ -434,13 +446,20 @@ export default function AgentConcerns() {
                     {chaseLine(c)}
                   </span>
                 )}
-                {/* ⚠️ THE THUMB UP IS NOW VISIBLE AND HARMLESS. It used to
-                    retire the concern; it now records a verdict and leaves the
-                    card exactly where it was, so the reader needs to see that
-                    the press registered. */}
-                {c.useful && (
+                {/* ⚠️ BOTH DIRECTIONS, AND KEYED ON `useful_at` RATHER THAN ON
+                    `useful` (2026-08-28). A rating now deliberately changes
+                    nothing about the alert, which makes the receipt the ONLY
+                    evidence the press landed — and reading the boolean showed a
+                    receipt for `+1` and nothing at all for `-1`, because
+                    `useful` is `false` both when somebody said "less like this"
+                    and when nobody has said anything. The timestamp is the only
+                    field that separates "judged" from "not judged". */}
+                {String(c.useful_at ?? "").trim() && (
                   <span className="muted concern-chase">
-                    You marked this useful — it stays until acknowledged.
+                    {c.useful
+                      ? "You asked for more like this."
+                      : "You asked for less like this."}
+                    {" The alert itself is unchanged."}
                   </span>
                 )}
               </span>
@@ -486,34 +505,75 @@ export default function AgentConcerns() {
             )}
             {canJudge && (
               <>
-                {/* ⚠️ A `title` IS NOT AN EXPLANATION ON A TABLET. These two
-                    said what they do only on hover, and the screen this is
-                    written for is operated by finger — so on the device that
-                    matters they were two unlabelled icons beside a To-Do List,
-                    and were read as filing something there. They do not touch
-                    it (2026-08-28, owner: "it's currently not clear from the UI
-                    that clicking on the Thumbs will create a ToDo item"). The
-                    words are visible now, and `title` keeps the longer sentence
-                    for a mouse. */}
+                {/* ⚠️ TWO QUESTIONS, TWO GROUPS, AND THE SPLIT IS THE WHOLE
+                    POINT (2026-08-28, owner's ruling). The rating pair says how
+                    good the alert was and LEAVES IT ALONE; `Seen` and `Dismiss`
+                    say what happens to it. Until now a thumb up acknowledged —
+                    which is what takes a card off this wall — and a thumb down
+                    dismissed outright, so rating the villa's judgement quietly
+                    disposed of the villa's problem.
+
+                    ⚠️ `+1` / `-1` RATHER THAN THUMBS, ALSO ASKED FOR, AND NOT
+                    COSMETIC: a thumb reads as approving or rejecting the alert
+                    itself, which is exactly the confusion that made a thumb
+                    down dismissing feel natural. A tally reads as a tally.
+
+                    ⚠️ AND A `title` IS NOT AN EXPLANATION ON A TABLET. The
+                    screen this is written for is operated by finger, so every
+                    one of these carries its word visibly; `title` keeps the
+                    longer sentence for a mouse. */}
                 <button
                   type="button" className="row-action concern-judge"
                   disabled={busy === c.id}
-                  aria-label={`Useful, and I have seen it: ${c.title}`}
-                  title="Worth telling me — marks it seen, and the villa raises this kind more readily. Your To-Do List is not changed."
+                  aria-label={`Raise this kind of alert more often: ${c.title}`}
+                  title="Worth telling me — the villa raises this kind more readily. The alert itself is not changed."
                   onClick={() => void judge(c.id, true)}
                 >
-                  <ThumbsUp size={16} aria-hidden />
-                  <span className="body-text">Useful</span>
+                  <span className="concern-tally" aria-hidden>+1</span>
+                  <span className="body-text">More like this</span>
                 </button>
+                <button
+                  type="button" className="row-action concern-judge"
+                  disabled={busy === c.id}
+                  aria-label={`Raise this kind of alert less often: ${c.title}`}
+                  title="Not worth telling me — the villa raises this kind less readily. The alert itself is not changed."
+                  onClick={() => void judge(c.id, false)}
+                >
+                  <span className="concern-tally" aria-hidden>-1</span>
+                  <span className="body-text">Less like this</span>
+                </button>
+                {/* ⚠️ THE EYE IS BACK, AND THAT FOLLOWS FROM THE RULING RATHER
+                    THAN REVERSING THE ONE THAT REMOVED IT. It went on
+                    2026-08-28 because the thumbs acknowledged and two paths to
+                    one act is one too many; the thumbs no longer do, so its job
+                    is unfilled again and this wall would have no way to clear a
+                    card at all. */}
+                {!String(c.acknowledged_at ?? "").trim() && (
+                  <button
+                    type="button" className="row-action concern-judge"
+                    disabled={busy === c.id}
+                    aria-label={`I have seen it, stop chasing: ${c.title}`}
+                    title="Somebody has this. It stops the chasing and leaves the problem standing."
+                    onClick={() => void act(c.id, "seen")}
+                  >
+                    <Eye size={16} aria-hidden />
+                    <span className="body-text">Seen</span>
+                  </button>
+                )}
+                {/* ⚠️ THE ONLY IRREVERSIBLE ONE, SO IT IS THE ONLY ONE THAT
+                    LOOKS IT. It settles the alert, takes it out of the next
+                    briefing, ticks its job off and counts toward silencing this
+                    subject in future — everything the other controls
+                    deliberately do not do. */}
                 <button
                   type="button" className="row-action danger concern-judge"
                   disabled={busy === c.id}
-                  aria-label={`Not useful, and I have seen it: ${c.title}`}
-                  title="Not worth telling me — marks it seen, and the villa raises this kind less readily. Your To-Do List is not changed."
-                  onClick={() => void judge(c.id, false)}
+                  aria-label={`Dismiss completely, no action needed: ${c.title}`}
+                  title="Throw this alert away: it did not need raising, or no longer matters. It leaves this list and the next briefing, and the villa raises this subject less."
+                  onClick={() => void act(c.id, "dismiss")}
                 >
-                  <ThumbsDown size={16} aria-hidden />
-                  <span className="body-text">Not useful</span>
+                  <CircleSlash size={16} aria-hidden />
+                  <span className="body-text">Dismiss</span>
                 </button>
               </>
             )}

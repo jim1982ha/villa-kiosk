@@ -62,24 +62,47 @@ class Act:
     label: str
 
 
+#: ⚠️ TWO QUESTIONS, AND THEY ARE NOT THE SAME QUESTION (2026-08-28, owner's
+#: ruling). A person looking at an alert is answering either:
+#:
+#:    WHAT HAPPENS TO IT   Done · Need help · Seen · Dismiss   — lifecycle
+#:    HOW GOOD WAS IT      +1 · -1                             — tuning
+#:
+#: and until now the second decided the first. A thumb up ACKNOWLEDGED, which
+#: takes the card off the tablet's wall; a thumb down DISMISSED, which settles
+#: the alert outright. So rating the supervisor's judgement quietly disposed of
+#: the villa's problem — "don't make pressing it disappear the alert
+#: notification", and dismissal now has its own control that says the word.
+#:
 #: ⚠️ THE ORDER IS THE READING ORDER on a phone, and it is not arbitrary: the
-#: two acts that DISCHARGE the alert come first, the one that stops the chase
-#: without claiming the work is done comes next, and the verdict on the villa's
-#: judgement comes last. A thumb is a comment on the supervisor, not on the
-#: villa, so it must never be the first thing offered.
+#: acts that DISCHARGE the alert come first, the one that stops the chase
+#: without claiming the work is done comes next, then the one that throws it
+#: away, and the rating LAST. A rating is a comment on the supervisor, not on
+#: the villa, so it must never be the first thing offered.
 ACTS: Tuple[Act, ...] = (
     Act("done", "d", "Done"),
     Act("help", "h", "Need help"),
     Act("seen", "s", "Seen — stop chasing"),
+    # ⚠️ ITS LABEL SAYS "COMPLETELY" BECAUSE THAT IS WHAT IT DOES AND WHAT THE
+    # OTHERS DO NOT. `Seen` stops the chasing and leaves the problem standing;
+    # this one settles the alert, takes it out of the briefing, ticks its job
+    # off and counts toward silencing that subject in future. It is the only
+    # irreversible act on the list, so it is the only one that has to be
+    # unmistakable.
+    Act("dismiss", "x", "Dismiss completely — no action needed"),
     Act("job", "j", "Add to the To-Do List"),
-    # ⚠️ THE THUMBS CARRY WORDS, AND THE WORDS SAY WHAT THEY DO NOT TOUCH
-    # (2026-08-28). A bare 👍 beside `Done` and `Add to the To-Do List` was read
-    # as a third thing that files something — the owner reported believing a
-    # thumb created a job. It does not: it records a verdict and marks the alert
-    # seen. Every other label here already states its effect ("Seen — stop
-    # chasing"), and these two were the only ones saying nothing at all.
-    Act("useful", "u", "👍 Useful"),
-    Act("not_useful", "n", "👎 Not useful"),
+    # ⚠️ `+1` AND `-1`, NOT THUMBS, AND THE CHANGE IS NOT COSMETIC. A thumb is a
+    # verdict on a THING — people read it as approving or rejecting the alert
+    # itself, which is why the down one dismissing felt natural enough to ship.
+    # `+1 / -1` reads as a tally, which is exactly what it is: a nudge to the
+    # rate at which this KIND of finding is raised in future. The words say
+    # "like this" rather than "this", for the same reason.
+    #
+    # ⚠️ AND NEITHER TOUCHES THE ALERT. That is the whole point of the split, and
+    # the wire codes `u`/`n` are deliberately unchanged so a button already
+    # sitting in somebody's chat keeps meaning what it meant.
+    Act("useful", "u", "+1 More like this"),
+    Act("not_useful", "n", "-1 Less like this"),
 )
 
 _BY_ID = {a.id: a for a in ACTS}
@@ -144,17 +167,25 @@ def available_for(concern: Mapping[str, Any],
     if state in concerns_mod.SETTLED:
         return []
 
-    thumbs = [_BY_ID["useful"], _BY_ID["not_useful"]]
+    # ⚠️ THE RATING PAIR IS OFFERED IN EVERY LIVE STATE, because it is not part
+    # of the lifecycle at all — it says how good the alert was, which is as
+    # answerable after somebody has picked the work up as before.
+    rating = [_BY_ID["useful"], _BY_ID["not_useful"]]
     if bool(concern.get("informational")):
-        return [_BY_ID["job"]] + thumbs
+        # ⚠️ AN FYI CAN BE DISMISSED TOO. Nothing is asked of the reader, but
+        # "I have read this and it can go" is still an act somebody needs, and
+        # without it an alert-only notice could only be cleared by turning it
+        # into a job — which is the one thing the mode exists not to do.
+        return [_BY_ID["job"], _BY_ID["dismiss"]] + rating
 
     # ⚠️ ACKNOWLEDGED IS NOT SETTLED. Somebody has it; the villa still has the
     # problem. So the acts that only say "I have seen this" are spent, and the
-    # ones that change something — finishing the work, asking for help, judging
-    # — are all still live.
+    # ones that change something — finishing the work, asking for help, throwing
+    # it away, rating it — are all still live.
     if str(concern.get("acknowledged_at") or "").strip():
-        return [_BY_ID["done"], _BY_ID["help"]] + thumbs
-    return [_BY_ID["done"], _BY_ID["help"], _BY_ID["seen"]] + thumbs
+        return [_BY_ID["done"], _BY_ID["help"], _BY_ID["dismiss"]] + rating
+    return [_BY_ID["done"], _BY_ID["help"], _BY_ID["seen"],
+            _BY_ID["dismiss"]] + rating
 
 
 def _spent(concern_id: str, config: Optional[Mapping[str, Any]]) -> bool:
@@ -220,10 +251,21 @@ async def _judge(session: Any, row: Mapping[str, Any], *, useful: bool,
     the entity id was still in hand. An alert about a topic rather than a device
     has none, its verdict still counts, and it teaches nothing.
 
-    ⚠️ AND A THUMB ACKNOWLEDGES (owner, 2026-08-28: "i like the fact that
-    clicking on a thumb Up or Down acknowledge the concern"). Its failure is not
-    this act's failure: a second acknowledgement is reported ok-with-a-reason by
-    design, and an alert nobody was told about cannot be acknowledged at all.
+    ⚠️ IT NO LONGER ACKNOWLEDGES, AND THAT REVERSES A DECISION MADE EARLIER THE
+    SAME DAY — deliberately, by the owner, after using it. The morning's ruling
+    was "i like the fact that clicking on a thumb Up or Down acknowledge the
+    concern"; the evening's is "don't make pressing it disappear the alert
+    notification". Both are the same person describing the same press, and the
+    second is the one made with the consequence in front of them: acknowledging
+    is what removes a card from the tablet's wall, so rating an alert filed it
+    away. A rating now records a rating. Nothing else.
+
+    ⚠️ THE CONSEQUENCE, STATED SO IT IS NOT REDISCOVERED AS A BUG: the tablet's
+    Reason tab had no acknowledge control of its own, because this act was doing
+    it — the "eye" was removed on 2026-08-28 as redundant, and the redundancy is
+    now gone with it. `AgentConcerns` offers `Seen` and `Dismiss` explicitly, so
+    the act of clearing a card is a thing somebody chooses rather than a side
+    effect of praising the villa.
     """
     from vesta.supervise.agent import concerns as concerns_mod
     from vesta.supervise.agent import flagtypes as flagtypes_mod
@@ -237,9 +279,12 @@ async def _judge(session: Any, row: Mapping[str, Any], *, useful: bool,
     kind = str(row.get("flag_type") or "")
     if kind:
         flagtypes_mod.record(kind, useful=useful)
-    concerns_mod.acknowledge(concern_id, by=by, now=now)
-    return Outcome(True, "Noted — thank you" if useful
-                   else "Noted — you will hear less of this")
+    # ⚠️ THE ALERT IS LEFT EXACTLY WHERE IT WAS — no acknowledgement, no
+    # transition. The notes say so out loud, because a press that changes
+    # nothing visible reads as a press that did not register.
+    return Outcome(True, "Noted — more like this. The alert is still open."
+                   if useful else
+                   "Noted — less like this. The alert is still open.")
 
 
 async def _useful(session, row, **kw) -> Outcome:      # type: ignore[no-untyped-def]
@@ -371,10 +416,42 @@ async def _help(session: Any, row: Mapping[str, Any], *, by: str,
         Outcome(False, "there is nobody else configured to tell")
 
 
+async def _dismiss(session: Any, row: Mapping[str, Any], *, by: str,
+                   config: Optional[Mapping[str, Any]], reason: str,
+                   now: Optional[float]) -> Outcome:
+    """Throw this alert away: it did not need raising, or no longer matters.
+
+    ⚠️ THE ONLY IRREVERSIBLE ACT ON THE LIST, which is why it is the only one
+    whose label says "completely". It settles the alert, so the alert leaves the
+    Reason tab and the next briefing, `reconcile_settled` ticks its job off the
+    facility manager's list, and `dismissals_of` counts it toward silencing this
+    subject in future. Every other act leaves the villa's problem standing.
+
+    ⚠️ IT WAS THE THUMB DOWN UNTIL 2026-08-28, which is how a rating came to
+    dispose of an alert. Splitting them makes the dismissal DELIBERATE, and that
+    strengthens the suppression signal rather than weakening it: three presses
+    of a button that says "dismiss completely" is evidence about a subject in a
+    way that three presses of a thumb never was.
+
+    ⚠️ THE REASON IS KEPT AND IS THE VALUABLE HALF — `concerns.transition`
+    records it verbatim, and "the gym is closed for renovation" is a fact about
+    the villa that should quiet a whole family of alerts rather than this one.
+    """
+    from vesta.supervise.agent import concerns as concerns_mod
+
+    note = str(reason or "").strip()
+    outcome = f"dismissed by {by}" + (f": {note}" if note else "")
+    ok, why = concerns_mod.transition(str(row.get("id") or ""), "dismissed",
+                                      outcome=outcome, now=now)
+    return Outcome(True, "Dismissed — you will not hear about this one again") \
+        if ok else Outcome(False, why)
+
+
 _HANDLERS = {
     "done": _done,
     "help": _help,
     "seen": _seen,
+    "dismiss": _dismiss,
     "job": _job,
     "useful": _useful,
     "not_useful": _not_useful,

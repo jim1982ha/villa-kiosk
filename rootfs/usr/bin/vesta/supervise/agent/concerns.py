@@ -777,26 +777,35 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
     a mention shaped like a call reads as a caller — and that function is on
     the EXEMPT map precisely because it has never had one.
 
-    ⚠️ "NOT USEFUL" STILL TRANSITIONS, AND THE ASYMMETRY IS THE POINT. "Stop
-    telling me this" is a request to retire the concern AND the signal
-    `dismissals_of` counts toward suppressing the subject; "good call" is a
-    compliment that changes nothing about whether the villa still has the
-    problem.
+    ⚠️ NEITHER DIRECTION TRANSITIONS ANY MORE (2026-08-28, owner's ruling:
+    "don't use the thumb down icon to dismiss an alert and use another icon that
+    will explicitly mention that this icon is about dismissing the alert
+    completely"). "Not useful" used to write `dismissed`, which is SETTLED — so
+    rating an alert decided its fate, and the two questions a person is really
+    answering had been folded into one control:
+
+        how good was this alert?   +1 / -1   teaches the villa, changes nothing
+        what happens to it now?    Done, Need help, Seen, Dismiss
+
+    The asymmetry that used to be "the point" — up records, down retires — was
+    the same defect the up side had already been fixed for on 2026-08-27, when
+    a thumb up wrote `verified` and made the card vanish. The reasoning given
+    then applies verbatim in the other direction: a verdict on the SUPERVISOR is
+    not a lifecycle event on the VILLA. Dismissal is now `actions._dismiss`,
+    which says what it is, and it is still what `dismissals_of` counts toward
+    suppressing a subject — a deliberate press rather than a by-product of a
+    rating, which makes that signal stronger rather than weaker.
     """
     note = str(reason or "").strip()
-    outcome = (f"marked {'useful' if useful else 'not useful'}"
-               + (f": {note}" if note else ""))
-    if not useful:
-        return transition(concern_id, "dismissed", outcome=outcome, now=now)
-
     rows = read()
     for row in rows:
         if str(row.get("id")) != str(concern_id):
             continue
-        row["useful"] = True
+        row["useful"] = bool(useful)
         row["useful_at"] = _now_iso(now)
         # ⚠️ THE NOTE GOES IN ITS OWN FIELD, NOT IN `outcome`. `outcome` means
-        # "why it left open", and this concern has not left.
+        # "why it left open", and this concern has not left — now true of BOTH
+        # verdicts, which is what makes the pair symmetric at last.
         if note:
             row["useful_note"] = note
         row["updated_at"] = _now_iso(now)

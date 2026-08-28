@@ -114,5 +114,41 @@ def test_an_act_NAME_and_its_WIRE_CODE_are_separate_on_purpose() -> None:
     for act in actions.ACTS:
         assert len(act.code) == 1, f"{act.id}'s wire code is not one character"
         assert act.label, f"{act.id} has no label for a person to read"
+        # ⚠️ EVERY LABEL CARRIES WORDS, NOT ONLY A GLYPH (2026-08-28). Two of
+        # them were bare thumbs, and a picture with no word beside it is read
+        # from its NEIGHBOURS: sitting between "Done" and "Add to the To-Do
+        # List", they were taken for a third thing that files something.
+        assert any(ch.isalpha() for ch in act.label), (
+            f"{act.id} is drawn as a bare glyph, so what it does can only be "
+            f"guessed from the buttons either side of it")
     # ⚠️ THE GUARD THAT KEEPS THIS FROM PASSING VACUOUSLY on an empty table.
     assert len(actions.ACTS) >= 5
+
+
+def test_the_ONE_IRREVERSIBLE_ACT_NAMES_ITSELF() -> None:
+    """⚠️ THE OWNER'S REQUIREMENT, IN THE ONE PLACE IT IS CHECKABLE: "use another
+    icon that will explicitly mention that this icon is about dismissing the
+    alert completely" (2026-08-28). Dismissal used to ride the thumb down, so
+    the control that throws an alert away — out of the Reason tab, out of the
+    briefing, its job ticked off, its subject quieted in future — was the one
+    control that never said so.
+
+    Every other act leaves the villa's problem standing and is undoable by
+    acting again; this one is not, so it is the one that has to be unmistakable.
+    """
+    dismiss = actions.act_by_id("dismiss")
+    assert dismiss is not None, (
+        "dismissal has no act of its own again, so it is riding another "
+        "button's meaning")
+    assert "dismiss" in dismiss.label.lower(), \
+        "the dismiss button does not say the word 'dismiss'"
+    # ⚠️ AND IT SAYS HOW FAR IT GOES. "Dismiss" alone reads like closing a card;
+    # this one ends the alert everywhere it appears.
+    assert "complete" in dismiss.label.lower(), (
+        "the label does not distinguish throwing the alert away from merely "
+        "clearing it off a screen")
+    # ⚠️ NO OTHER ACT MAY CLAIM THE WORD, or two buttons say "dismiss" and the
+    # irreversible one stops standing out.
+    others = [a.id for a in actions.ACTS
+              if a.id != "dismiss" and "dismiss" in a.label.lower()]
+    assert not others, f"{others} also say 'dismiss', so neither one stands out"

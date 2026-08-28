@@ -370,7 +370,12 @@ def test_three_dismissals_reach_the_gate_without_anyone_editing_config() -> None
             subject_key=key, title="Gym lights left on", severity="notice",
             audience="owner", evidence=[{"tool": "read_state", "summary": "on"}]))
         assert stored is not None, why
-        concerns_mod.feedback(stored.id, useful=False, reason="the gym is shut")
+        # ⚠️ THE `dismiss` ACT'S TRANSITION, NOT A RATING (2026-08-28). A "-1"
+        # tunes how often this KIND is raised and leaves the alert open; what
+        # silences a SUBJECT is somebody deliberately throwing three of them
+        # away, which is a stronger signal than the by-product it replaced.
+        concerns_mod.transition(stored.id, "dismissed",
+                                outcome="dismissed by owner: the gym is shut")
 
     snap = policy.for_run({}, tier="reason", tool_names=[])
     assert policy.is_suppressed(snap, key), (
@@ -390,7 +395,8 @@ def test_two_dismissals_are_not_enough() -> None:
             subject_key=key, title="Hall lamp", severity="notice",
             audience="owner", evidence=[{"tool": "read_state", "summary": "on"}]))
         assert stored is not None
-        concerns_mod.feedback(stored.id, useful=False)
+        concerns_mod.transition(stored.id, "dismissed",
+                                outcome="dismissed by owner")
 
     snap = policy.for_run({}, tier="reason", tool_names=[])
     assert not policy.is_suppressed(snap, key)

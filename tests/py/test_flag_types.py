@@ -380,9 +380,27 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
     assert "flagtypes_mod.record(" in judge, (
         "pressing a thumb records a verdict and teaches nothing — the button's "
         "own tooltip promises otherwise")
-    assert "concerns_mod.acknowledge(" in judge, (
-        "a thumb no longer acknowledges, so the eye button that was removed "
-        "was the only way to say it")
+    # ⚠️ AND IT MUST NOT ACKNOWLEDGE — THE REVERSE OF WHAT THIS PIN ASSERTED
+    # UNTIL 2026-08-28, changed on the owner's ruling with the consequence in
+    # front of them: acknowledging is what takes a card off the tablet's wall,
+    # so a rating filed the alert away ("don't make pressing it disappear the
+    # alert notification"). Rating and lifecycle are two questions now.
+    assert "acknowledge(" not in judge, (
+        "a rating acknowledges again, so pressing +1 clears the alert off the "
+        "Reason tab — the behaviour the owner asked to be removed")
+    # ⚠️ THE CONSEQUENCE THIS PIN'S OLD MESSAGE WARNED ABOUT IS REAL, AND IS
+    # ANSWERED IN THE UI RATHER THAN LEFT. Its words were "the eye button that
+    # was removed was the only way to say it" — true, so the eye came back with
+    # the ruling that made it necessary. Without this the wall has no way to
+    # clear a card at all.
+    concerns_tsx = os.path.join(root, "src", "vesta", "supervise",
+                                "components", "AgentConcerns.tsx")
+    with open(concerns_tsx, encoding="utf-8") as handle:
+        wall = handle.read()
+    for act_id in ('"seen"', '"dismiss"'):
+        assert f"act(c.id, {act_id})" in wall, (
+            f"the Reason tab offers no {act_id} control, so a rating is the "
+            f"only thing a reader can press and it no longer clears anything")
 
 
 def test_the_kind_is_STAMPED_when_the_concern_is_raised() -> None:

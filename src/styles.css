@@ -5038,6 +5038,16 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   width: auto; padding: 0 12px; gap: 6px;
   border-radius: var(--radius-pill); white-space: nowrap;
 }
+/* ⚠️ `+1` / `-1` IS TYPESET, NOT AN ICON, because it is a number and the
+   glyphs beside it are 16px lucide strokes. Tabular figures keep the two the
+   same width so the pair does not shift as a row re-renders. It is `aria-hidden`
+   in the markup — the button's own label says what it does — so this is
+   decoration and may be sized for the eye. */
+.concern-tally {
+  font-variant-numeric: tabular-nums; font-weight: 600;
+  font-size: var(--text-sm); line-height: 1; min-width: 16px;
+  text-align: center;
+}
 /* ⚠️ THIS ROW WRAPS AND `.editable-row` MUST NOT LEARN TO — five components
    share that class and a settings control belongs beside its label. Here the
    pair of pills is ~200 CSS px, so on a phone the alert's own title would be
