@@ -32,7 +32,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Minus, Plus, Trash2, Upload } from "lucide-react";
 
 import InfoHint from "@/components/common/InfoHint";
-import { loadFlagTypes, tuneFlagTypes,
+import { loadConcerns, loadFlagTypes, tuneFlagTypes,
          type FlagTypeWeight } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
@@ -55,7 +55,27 @@ export default function FlagTypesPanel() {
   const [bounds, setBounds] = useState({ min: 0.1, max: 3, step: 0.1 });
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
+  // ⚠️ HOW MANY ALERTS HAVE BEEN JUDGED THAT COULD NOT TEACH ANYTHING. The
+  // empty state named ONE reason for a blank list — "raised before this update"
+  // — and the owner hit the OTHER one: they pressed a thumb, the verdict was
+  // recorded, and the list stayed empty because the alert was a pipeline drill.
+  // A drill's subject is a TOPIC, not a device, so it carries no measurement to
+  // name and no thumb on one will ever teach anything, however new it is. The
+  // screen said "Nothing judged yet", which was simply false, and blamed a
+  // cause that did not apply — `feedback_screen-describes-the-wrong-thing`.
+  const [judgedButSilent, setJudgedButSilent] = useState(0);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // ⚠️ READ FROM THE ALERTS THEMSELVES, because the flag-type store cannot
+  // answer it: a verdict that taught nothing leaves no row behind, so the
+  // absence is only explicable from the other side. Failure is silent — this
+  // decides a sentence, never a control.
+  const countSilentVerdicts = useCallback(async () => {
+    const concerns = await loadConcerns().catch(() => []);
+    setJudgedButSilent(concerns.filter(
+      (c) => String(c.useful_at ?? "").trim() && !String(c.flag_type ?? "").trim()
+    ).length);
+  }, []);
 
   const load = useCallback(async () => {
     const out = await loadFlagTypes();
@@ -63,6 +83,11 @@ export default function FlagTypesPanel() {
     setBounds({ min: out.min, max: out.max, step: out.step });
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // ⚠️ ONLY WHEN THE LIST IS EMPTY. It costs a fetch and it decides one
+  // sentence nobody sees while there are rows to read.
+  useEffect(() => {
+    if (rows !== null && rows.length === 0) void countSilentVerdicts();
+  }, [rows, countSilentVerdicts]);
 
   const send = useCallback(async (
     body: Parameters<typeof tuneFlagTypes>[0], working: string,
@@ -145,8 +170,11 @@ export default function FlagTypesPanel() {
             A kind is recorded when an alert is <strong>raised</strong>, not
             when you judge it — the villa keeps only an anonymous reference to
             the device afterwards, so there is nothing left to work the kind
-            out from. Alerts raised before this feature existed carry no
-            kind, so judging one records your verdict and teaches nothing.
+            out from. Two kinds of alert therefore teach nothing however you
+            judge them: any raised before this feature existed, and any about
+            a <strong>topic rather than a device</strong> — a pipeline drill,
+            or a gap in what the villa can see, which have no measurement
+            behind them. Your verdict is still recorded in both cases.
           </p>
         </InfoHint>
       </p>
@@ -165,8 +193,20 @@ export default function FlagTypesPanel() {
            alternative was inventing a kind from a hash, which cannot be
            done. */
         <p className="muted body-text">
-          Nothing judged yet. Press a thumb on an alert raised{" "}
-          <strong>after this update</strong> and its kind appears here.
+          {/* ⚠️ THE REST OF THE EXPLANATION IS IN THE (i) ABOVE, which is
+              where this app's rule puts it — prose beside a control is capped
+              at two lines and the first draft of this ran to 378 characters.
+              What must survive the cut is that the verdict WAS recorded, since
+              the owner's report was that pressing the thumb appeared to do
+              nothing at all. */}
+          {judgedButSilent > 0
+            ? <>
+                Nothing to tune yet. Your verdict was recorded, but{" "}
+                <strong>a drill has no device behind it</strong> to learn from.
+              </>
+            : <>
+                Nothing judged yet. Press a thumb on an alert about a device.
+              </>}
         </p>
       ) : (
         <ul className="fm-list">

@@ -147,6 +147,31 @@ def test_the_TAB_a_message_points_at_is_one_that_EXISTS() -> None:
         f"agent dialog. Its tabs are {sorted(labels)}.")
 
 
+def test_the_TUNING_PANEL_can_SEE_why_it_is_empty() -> None:
+    """⚠️ A SCREEN THAT GUESSES AT ITS OWN EMPTY STATE WILL GUESS WRONG. The
+    tuning list said "Nothing judged yet. Press a thumb on an alert raised
+    after this update" — and the owner had just pressed one, on an alert raised
+    that same day. The real cause was that a pipeline drill's subject is a
+    TOPIC, so it carries no measurement, and no thumb on one will ever teach
+    anything however new it is. The panel could not tell the two apart because
+    `flag_type` was never mirrored into the SPA's `Concern`.
+
+    ⚠️ THE FIELD IS THE FIX, NOT THE SENTENCE. Rewording alone would have left
+    the screen unable to distinguish them, so the next reword would guess too.
+    """
+    types = _tsx()["src/agent/agentTypes.ts"]
+    assert re.search(r"^  flag_type\?: string;$", types, re.M), (
+        "`flag_type` is not mirrored, so no screen can explain why judging an "
+        "alert taught the villa nothing")
+    panel = _tsx()["src/components/settings/FlagTypesPanel.tsx"]
+    assert "flag_type" in panel, (
+        "the tuning panel no longer reads the kind, so its empty state is "
+        "guessing at its own cause again")
+    assert "after this update" not in panel, (
+        "the empty state names 'raised before this feature' as the only reason "
+        "a verdict teaches nothing; a topic-level alert is the other one")
+
+
 def test_the_RETIRED_tab_is_gone_rather_than_emptied() -> None:
     """⚠️ ITS PRODUCER WAS RETIRED BEFORE IT WAS, AND IT DID NOT GO BLANK —
     which is why nobody noticed. "What it asked for" listed to-do items the

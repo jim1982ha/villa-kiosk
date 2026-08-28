@@ -1,3 +1,15 @@
+## 2.834.0
+
+### Fixed — "Nothing judged yet" after judging something
+Pressing a thumb on the drill alert recorded the verdict correctly and left
+"What to raise more, or less" empty, saying nothing had been judged and blaming
+alerts raised before the feature existed. Both wrong: the verdict was stored,
+and the real reason is that a drill is about a topic rather than a device, so
+there is no measurement to learn from — no thumb on one will ever teach
+anything. The screen could not tell the two apart because the alert's kind was
+never sent to it. It is now, so the panel says which case it is in, and the
+tooltip names both.
+
 ## 2.833.0
 
 ### Fixed — a reference like "c7" on screen, and a tab listing the same work twice

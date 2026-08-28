@@ -197,6 +197,22 @@ export interface Concern {
   useful?: boolean;
   useful_at?: string;
   useful_note?: string;
+  /** WHAT KIND this is — a measurement and a direction, never a device. Stamped
+   *  at raise time by the backend (`concerns.Concern.flag_type`), because the
+   *  stored alert keeps only a hash of its subject and the kind cannot be
+   *  worked out afterwards.
+   *
+   *  ⚠️ MIRRORED SO A SCREEN CAN EXPLAIN ITSELF (2026-08-28). It was absent,
+   *  and the tuning panel's empty state therefore guessed at why it was empty:
+   *  it said "nothing judged yet, press a thumb on an alert raised after this
+   *  update" — while the owner had just judged one, and the real reason was
+   *  that a pipeline drill is about a TOPIC and carries no measurement. The
+   *  panel could not tell those apart because this field never reached it.
+   *  `""` is legitimate and is exactly the case that needed explaining.
+   *
+   *  ⚠️ CONTRAST `messages`, WHICH IS DELIBERATELY NOT MIRRORED. That one is
+   *  plumbing no screen reads; this one changes what a screen says. */
+  flag_type?: string;
   /** Which escalation step the villa has ALREADY taken, and when. ⚠️ THE ONLY
    *  HONEST INPUT TO "what happens next", because the screen cannot predict
    *  `route.escalate`'s earlier branches — the guests-present one skips the
