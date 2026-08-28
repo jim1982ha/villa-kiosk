@@ -65,10 +65,10 @@ class Act:
 #: ⚠️ TWO QUESTIONS, AND THEY ARE NOT THE SAME QUESTION (2026-08-28, owner's
 #: ruling). A person looking at an alert is answering either:
 #:
-#:    WHAT HAPPENS TO IT   Done · Need help · Seen · Dismiss   — lifecycle
-#:    HOW GOOD WAS IT      +1 · -1                             — tuning
+#:    WHAT HAPPENS TO IT   Done · Need help · Nothing more   — lifecycle
+#:    HOW GOOD WAS IT      +1 · -1                          — tuning
 #:
-#: and until now the second decided the first. A thumb up ACKNOWLEDGED, which
+#: and until 2.854.0 the second decided the first. A thumb up ACKNOWLEDGED, which
 #: takes the card off the tablet's wall; a thumb down DISMISSED, which settles
 #: the alert outright. So rating the supervisor's judgement quietly disposed of
 #: the villa's problem — "don't make pressing it disappear the alert
@@ -161,10 +161,13 @@ def available_for(concern: Mapping[str, Any],
     closed, dismissed or verified — and every act here would either contradict
     that or be a no-op wearing a button.
 
-    ⚠️ AN FYI OFFERS `job` AND NOTHING ELSE BUT THE THUMBS, because "Alert only"
-    means nothing is asked of anybody. `Done`, `Need help` and `Seen` all
-    presume somebody was asked. Turning the FYI into work is the one act that
-    makes sense on it, and it is exactly the act the mode withheld.
+    ⚠️ AN FYI OFFERS `job`, THE CLOSER AND THE RATING — NOT `done` OR `help`,
+    because "Alert only" means nothing is asked of anybody and both of those
+    presume somebody was. Turning the FYI into work is the one act that makes
+    sense on it, and it is exactly the act the mode withheld; closing it is the
+    other, because "I have read this and it can go" is still something a reader
+    needs, and without it an alert-only notice could only be cleared by turning
+    it into a job.
     """
     from vesta.supervise.agent import concerns as concerns_mod
 
@@ -275,9 +278,9 @@ async def _judge(session: Any, row: Mapping[str, Any], *, useful: bool,
     ⚠️ THE CONSEQUENCE, STATED SO IT IS NOT REDISCOVERED AS A BUG: the tablet's
     Reason tab had no acknowledge control of its own, because this act was doing
     it — the "eye" was removed on 2026-08-28 as redundant, and the redundancy is
-    now gone with it. `AgentConcerns` offers `Seen` and `Dismiss` explicitly, so
-    the act of clearing a card is a thing somebody chooses rather than a side
-    effect of praising the villa.
+    now gone with it. `AgentConcerns` offers the closer explicitly — one control
+    since `Seen` merged into it — so clearing a card is a thing somebody chooses
+    rather than a side effect of praising the villa.
     """
     from vesta.supervise.agent import concerns as concerns_mod
     from vesta.supervise.agent import flagtypes as flagtypes_mod

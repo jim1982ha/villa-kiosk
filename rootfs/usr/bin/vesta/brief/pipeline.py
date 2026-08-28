@@ -623,7 +623,7 @@ async def run_report(
         # the default this code now states. What replaces them is not code:
         # recurrence is the agent's question now (the concern lifecycle keys
         # on subject_key precisely so a re-raised subject is the SAME concern),
-        # and alert fatigue is what the thumbs on every concern feed.
+        # and alert fatigue is what the +1/-1 rating on every concern feeds.
     except Exception as err:  # noqa: BLE001 - a report must still go out
         swallow("could not read the facility manager list", err)
 

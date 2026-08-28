@@ -40,10 +40,13 @@ subscribe to "this message is now wrong".
 ⚠️ AN ALERT HAS THREE STATES, NOT TWO, AND RECONCILE MISSED THE MIDDLE ONE
 (2026-08-28). It asked one question — is this alert SETTLED? — and read every
 other answer as "still live: its buttons are correct". But acknowledging an
-alert does not settle it: it withdraws exactly ONE act (`Seen — stop chasing`,
-now spent) and leaves the other four live. So the set CHANGED without EMPTYING,
+alert does not settle it: it withdrew exactly ONE act (`Seen — stop chasing`,
+now spent) and left the other four live. So the set CHANGED without EMPTYING,
 which was the one transition nothing handled, and a message drawn with five
-buttons kept offering a fifth the store would refuse. Found on the owner's phone
+buttons kept offering a fifth the store would refuse. ⚠️ THAT EXAMPLE IS
+HISTORY — `Seen` merged into the closer the same day — and the RULE it bought is
+not: the set still changes without emptying every time somebody rates an alert,
+because a rating may be given once and its pair withdraws. Found on the owner's phone
 after they pressed the thumb and Done on the tablet; the log had said `with 5
 button(s)` while the store offered four, and both numbers were on screen at once
 without being subtracted. **The question is now "do the drawn buttons still
@@ -200,9 +203,10 @@ def keyboard_for(concern: Mapping[str, Any],
 
     ⚠️ ROWS ARE CHOSEN FOR A PHONE, NOT FOR THE MODEL. Telegram gives every
     button in a row an equal share of the width, so five in a line is five
-    unreadable slivers; the two acts that discharge the alert share the top row,
-    anything else gets its own, and the thumbs pair at the bottom where a
-    verdict belongs. `[[label, data], …]` per row is the structure the service
+    unreadable slivers. Three groups: everything that leaves the villa's problem
+    STANDING shares the top row, the one irreversible act gets a row to itself so
+    it cannot be hit while aiming at a neighbour, and the rating pair sits last
+    where a verdict belongs. `[[label, data], …]` per row is the structure the service
     documents and the retired blueprint sent.
 
     ⚠️ AN EMPTY LIST IS A REAL ANSWER and means "this alert wants no buttons" —
@@ -420,9 +424,10 @@ async def handle(event: Mapping[str, Any], *, session: Any,
         # OFFERS — the SAME three-way question `reconcile` asks, because it is
         # the same question. This path retired the whole keyboard after ANY
         # press, which is right only for an act that DISCHARGES the alert.
-        # `Seen — stop chasing` withdraws itself and leaves Done, Need help and
-        # the thumbs live; the tablet went on offering all four while the phone
-        # offered none, so the two surfaces disagreed again — the mirror image
+        # `Seen — stop chasing` withdrew itself and left the other acts live
+        # (it has since merged into the closer, and a RATING is what withdraws a
+        # pair today); the tablet went on offering them while the phone offered
+        # none, so the two surfaces disagreed again — the mirror image
         # of the defect fixed hours earlier, and the THIRD time in one day that
         # one rule was applied at one of its two call sites. The owner asked the
         # question that found it: "if I click stop chasing, I should still see
@@ -634,9 +639,10 @@ async def reconcile(session: Any, *,
 
     ⚠️ THE QUESTION IS "DO THE DRAWN BUTTONS STILL MATCH", NOT "IS THIS SETTLED"
     — see the module docstring. Asking the second read an alert whose act set
-    had merely CHANGED as one whose buttons were correct, and acknowledgement is
-    exactly that case: `Seen` goes, four acts stay. Three outcomes now, and the
-    middle one is the one that was missing:
+    had merely CHANGED as one whose buttons were correct. Acknowledgement was
+    that case when it withdrew `Seen`; today it is a RATING, which may be given
+    once and takes its own pair away. Three outcomes, and the middle one is the
+    one that was missing:
 
         no acts at all   → retire: buttons gone, text says what became of it
         acts differ      → redraw: same text, the buttons it now offers
@@ -665,7 +671,7 @@ async def reconcile(session: Any, *,
         want = actions_mod.available_for(row, config)
         keyboard = keyboard_for(row, config) if want else []
         # ⚠️ FROM THE KEYBOARD, NOT FROM `want`. The two agree today — the
-        # thumbs are last in both — but that agreement is nobody's contract:
+        # rating pair is last in both — but that agreement is nobody's contract:
         # the row layout is a decision about phones and `available_for` is a
         # decision about acts, and the day one is reordered a stamp would
         # describe an order that was never drawn, or match nothing and redraw

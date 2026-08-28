@@ -133,7 +133,7 @@ class Concern:
     #: WHAT KIND this is — a measurement and a direction, never a device. See
     #: `agent/flagtypes.py`. ⚠️ STAMPED AT RAISE TIME AND FOR ONE REASON: the
     #: only place that holds the entity id is the tool that raises the concern.
-    #: `subject_key` is a HASH, so a thumb pressed on the Reason tab a week
+    #: `subject_key` is a HASH, so a rating given on the Reason tab a week
     #: later has no way to work out what kind of thing it is judging unless the
     #: answer was written down when it was known. "" is legitimate — a concern
     #: about a topic rather than a device has no measurement to name.
@@ -787,7 +787,7 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
     answering had been folded into one control:
 
         how good was this alert?   +1 / -1   teaches the villa, changes nothing
-        what happens to it now?    Done, Need help, Seen, Dismiss
+        what happens to it now?    Done, Need help, Nothing more
 
     The asymmetry that used to be "the point" — up records, down retires — was
     the same defect the up side had already been fixed for on 2026-08-27, when
