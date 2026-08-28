@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from vesta.shared.style import inert
+from vesta.shared.style import SEVERITY_WORD, inert, severity_line
 
 #: Severity -> (thread, push, holds-until-morning). The matrix, as a table.
 #: ⚠️ `push` IS OWNER **AND** FACILITY FOR A CRITICAL, which the villa cannot
@@ -211,15 +211,23 @@ def plan(concern: Mapping[str, Any], *, targets: Sequence[str],
 
     title = inert(str(concern.get("title") or ""))
     body = inert(str(concern.get("body") or ""))
+    # ⚠️ ONE HEADER SHAPE FOR EVERY NOTIFICATION (owner, 2026-08-29, from ten
+    # rendered candidates): `<mark> WORD · subject`. The mark is how bad it is,
+    # the word is what is being asked — so an alert-only notice keeps its real
+    # severity mark and swaps the word for FYI, rather than having to choose
+    # between the two. `style.severity_line` holds the shape; a brief and an
+    # escalation call the same function with their own word.
     if informational:
         # ⚠️ THE MESSAGE SAYS WHAT IT IS. A concern arriving on the same chat
         # as the escalating kind must announce that nothing is asked, or the
         # reader learns to ignore the ones that do ask. `inert()` has already
-        # run; this suffix contains nothing a notify platform parses as markup.
-        title = f"FYI: {title}"
+        # run; the header contains nothing a notify platform parses as markup.
+        title = severity_line(severity, "FYI", title)
         body = (f"{body}\n\nFor your information only — the villa is set to "
                 f"Investigate and Log Only, so nothing is asked of you. This "
                 f"will not be re-sent or chased.")
+    else:
+        title = severity_line(severity, SEVERITY_WORD.get(severity, ""), title)
 
     # ⚠️ AND IT SAYS THE ALERT HAS A JOB, BECAUSE OTHERWISE NOTHING DOES
     # (2026-08-28, owner: "it's currently not clear from the UI that clicking

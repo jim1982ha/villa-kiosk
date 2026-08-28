@@ -139,7 +139,7 @@ def test_an_INFORMATIONAL_concern_is_sent_once_and_raises_no_job(
     result = asyncio.run(outbox.sweep(None, config=dict(ON)))
 
     assert result.sent == 1, result.line()
-    assert sender.calls[0]["title"].startswith("FYI: ")
+    assert sender.calls[0]["title"].startswith("\U0001F7E0 FYI \u00b7") or out.title.startswith("\U0001F534 FYI \u00b7")
     assert "nothing is asked of you" in sender.calls[0]["message"]
     assert jobs == [], "an FYI raised a to-do job — the mode promised not to"
     row = concerns.read()[0]
@@ -484,7 +484,17 @@ def test_an_UNACKNOWLEDGED_concern_escalates_on_the_band(
     out = asyncio.run(outbox.escalation_sweep(None, config=ON))
     assert out.sent == 1, out.line()
     assert sender.calls, "nothing was actually sent"
-    assert sender.calls[0]["title"].startswith("Still open:")
+    # ⚠️ REBUILT FROM THE CONCERN, NOT PREFIXED ONTO THE ALERT'S HEADER — which
+    # already carries one, so a prefix would stack two (2026-08-29). Same
+    # severity mark as the alert it chases, different word: what changed is the
+    # ask, not the seriousness.
+    from vesta.shared import style
+    sent_title = sender.calls[0]["title"]
+    assert "STILL OPEN" in sent_title, sent_title
+    assert style.SEVERITY_MARK["critical"] in sent_title, (
+        "the escalation dropped the severity mark of the alert it is chasing")
+    assert "Still open:" not in sent_title, (
+        "the old prefix is back on top of the header line — two headers")
 
 
 def test_an_ACKNOWLEDGED_concern_does_not(

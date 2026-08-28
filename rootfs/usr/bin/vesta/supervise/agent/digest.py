@@ -39,8 +39,10 @@ from typing import Any, Dict, List, Mapping, Optional
 from vesta.supervise.agent import budget as budget_mod
 from vesta.supervise.agent import config as agent_config
 from vesta.adapters import people as people_mod
+from vesta.supervise.agent import outbox as outbox_mod
 from vesta.supervise.agent import task as task_mod
 from vesta.adapters import store
+from vesta.shared.style import severity_line
 from vesta.adapters.log import stage, swallow
 
 #: Where the last send is recorded. ⚠️ ON DISK, because the alternative is an
@@ -84,6 +86,27 @@ def due(now: Optional[float] = None,
     stamp = time.time() if now is None else now
     return _last_sent(raw if isinstance(raw, Mapping) else {}) < \
         budget_mod._day_start(stamp)
+
+
+def _title(count: int) -> str:
+    """`🔵 OPEN JOBS · 2 still to do` — the same header every message opens with.
+
+    ⚠️ THIS WAS THE FIFTH KIND OF NOTIFICATION AND IT WAS MISSED (2026-08-29).
+    The owner asked for one header shape "for every notification, including
+    briefing reports"; I applied it to the alert, the alert-only notice, the
+    escalation and the brief — the four I had in mind — and the pin I wrote to
+    prove it walked those same three files. The digest titles itself here, so
+    both the change and its test were blind to it. That is `grep -l` instead of
+    `grep -L`, in the very release whose subject was consistency, and it was
+    found by the owner receiving one.
+
+    ⚠️ `notice`, NOT A COMPUTED SEVERITY. A digest is a reminder about work
+    somebody already agreed to; the jobs it lists have no severity of their own
+    on the list, and inventing one from the concerns behind them would make a
+    reminder louder than the alert that raised it.
+    """
+    what = "1 still to do" if count == 1 else f"{count} still to do"
+    return severity_line("notice", "OPEN JOBS", what)
 
 
 def _line(item: Mapping[str, Any]) -> str:
@@ -133,6 +156,27 @@ async def send_daily(session: Any, *,
         return "agent disabled"
     if not task_mod.list_for(config):
         return "no to-do list named"
+    # ⚠️ NOT WHILE THE HOUSEHOLD IS ASLEEP — AND "A NEW DAY" STARTS AT MIDNIGHT,
+    # WHICH IS THE WHOLE PROBLEM (2026-08-29, reported: "I suddenly received
+    # this… is it expected at this time?"). `due` asks whether a local day has
+    # passed, so the digest fired on the FIRST chase tick after 00:00 and landed
+    # at 00:08. Correct by its own rule and wrong for a person: nobody wants a
+    # list of outstanding jobs eight minutes into the night.
+    #
+    # ⚠️ IT REUSES THE OWNER'S QUIET HOURS RATHER THAN ADDING A DIAL. They have
+    # already said when the villa may not disturb them; a second setting for the
+    # same question is one more thing to configure and one more way for the two
+    # to disagree. Held, never dropped — the stamp is only written on a send, so
+    # the next tick after the window reconsiders it, exactly as a held alert is
+    # released. A villa with no quiet hours configured keeps today's behaviour.
+    if outbox_mod.quiet_now(config, now=now):
+        return "quiet hours"
+    # ⚠️ AND NOT BEFORE THE DAY HAS BEGUN — "not quiet" is not the same as
+    # "awake". The owner's window is 03:00–08:00, so the 00:08 delivery that
+    # started this was never inside it; the gap between midnight and the start
+    # of quiet hours is where a once-a-day message lands if nothing holds it.
+    if not outbox_mod.day_has_begun(config, now=now):
+        return "before the day has begun"
     if not due(now):
         return "not due"
 
@@ -163,7 +207,7 @@ async def send_daily(session: Any, *,
         from vesta.adapters import deliver as deliver_mod
         results = await deliver_mod.deliver(
             session, list(targets),
-            f"VESTA — {len(items)} job(s) still open", compose(items))
+            _title(len(items)), compose(items))
     except Exception as err:  # noqa: BLE001
         swallow("could not deliver the daily to-do digest", err)
         return "delivery failed"

@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from vesta.supervise.agent import concerns as concerns_mod
 from vesta.supervise.agent import config as agent_config
 from vesta.supervise.agent import route as route_mod
+from vesta.shared import style as style_mod
 from vesta.adapters.log import stage, swallow, warn
 
 #: How many concerns one sweep may deliver. ⚠️ A BURST GUARD, NOT A POLICY. A
@@ -297,9 +298,15 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # one most worth acting on, so it must not be the plain one.
     rich_body = (f"{links_mod.html_escape(plan.body)}\n\n{html_line}"
                  if html_line else plan.body)
+    # ⚠️ REBUILT, NOT PREFIXED. `plan.title` is ALREADY a header line, so
+    # "Still open: 🟠 WARNING · …" would stack two of them. The escalation keeps
+    # the alert's severity MARK — it is the same problem — and replaces the WORD,
+    # because what has changed is the ask, not the seriousness.
+    escalated = style_mod.severity_line(
+        str(concern.get("severity") or "notice"), "STILL OPEN",
+        str(concern.get("title") or ""))
     plan2 = dataclasses.replace(
-        plan, title=links_mod.html_escape(f"Still open: {plan.title}"),
-        body=rich_body)
+        plan, title=f"<b>{links_mod.html_escape(escalated)}</b>", body=rich_body)
     results = await _send_with_buttons(session, concern, plan2, config=config)
     plain = [r.get("target") for r in results
              if isinstance(r, Mapping) and str(r.get("status")) != "sent"]
@@ -307,7 +314,7 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
         from vesta.adapters import deliver as deliver_mod
         results += await deliver_mod.deliver(
             session, [str(t) for t in plain if t],
-            f"Still open: {plan.title}",
+            escalated,
             f"{plan.body}\n\n{plain_line}" if plain_line else plan.body)
     if not any(str(r.get("status")) == "sent" for r in results
                if isinstance(r, Mapping)):
@@ -382,6 +389,44 @@ def quiet_now(config: Optional[Mapping[str, Any]] = None,
     # Wraps midnight: quiet from `start` to the end of the day, and from
     # midnight to `end`.
     return minutes >= start or minutes < end
+
+
+def day_has_begun(config: Optional[Mapping[str, Any]] = None,
+                  now: Optional[float] = None) -> bool:
+    """Has the household's waking day started? True when nothing says otherwise.
+
+    ⚠️ "NOT QUIET" IS NOT THE SAME AS "AWAKE", AND THE DIFFERENCE ARRIVED ON
+    SOMEBODY'S PHONE AT 00:08 (2026-08-29). The daily digest fires when a local
+    DAY has passed, so it went out on the first chase tick after midnight. My
+    first fix gated it on `quiet_now` — and the owner spotted immediately that
+    it would have changed nothing: their quiet hours are 03:00–08:00, so 00:08
+    is not quiet. Midnight to the start of quiet hours is a gap in which the
+    villa is technically permitted to speak and nobody wants it to.
+
+    ⚠️ THE END OF QUIET HOURS IS WHEN THE DAY BEGINS, and it is already
+    configured. So a message that can wait is held until then rather than sent
+    into the small hours, and there is no second setting to keep in step with
+    the first. A wrapping window (22:00–07:00) is covered by `quiet_now` for
+    the evening half and by this for the morning half.
+
+    ⚠️ TRUE WHEN NO WINDOW IS SET, deliberately: a villa that has configured no
+    quiet hours has told us nothing about its day, and inventing an hour for it
+    is the seeded default this project refuses everywhere else. Its behaviour is
+    unchanged.
+    """
+    cfg = agent_config.view(config)
+    start = _hhmm(cfg.get("quiet_hours_start"))
+    end = _hhmm(cfg.get("quiet_hours_end"))
+    if start is None or end is None or start == end:
+        return True
+
+    from datetime import datetime
+
+    from vesta.adapters.schedule import resolve_timezone
+
+    tz = resolve_timezone(str(cfg.get("timezone") or ""))
+    stamp = datetime.fromtimestamp(now if now is not None else time.time(), tz)
+    return stamp.hour * 60 + stamp.minute >= end
 
 
 def _hhmm(value: Any) -> Optional[int]:
@@ -573,9 +618,13 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
         # catches an `&` it does not touch, and covers anything a later renderer
         # adds. Escaping AFTER appending would eat our own link.
         from vesta.adapters import links as links_mod
+        # ⚠️ THE HEADER IS BOLDED WHOLE, AFTER ESCAPING. `severity_line` returns
+        # plain text on purpose: markup returned from there would be escaped by
+        # the very call that protects the villa's half of the line. Escape
+        # first, wrap second — and the emoji is unaffected by the weight.
         rich = dataclasses.replace(
             plan,
-            title=links_mod.html_escape(plan.title),
+            title=f"<b>{links_mod.html_escape(plan.title)}</b>",
             body=f"{links_mod.html_escape(plan.body)}\n\n{html_line}")
     if plain_line:
         plan = dataclasses.replace(plan, body=f"{plan.body}\n\n{plain_line}")

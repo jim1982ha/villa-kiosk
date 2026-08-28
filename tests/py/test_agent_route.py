@@ -212,7 +212,17 @@ def test_an_INFORMATIONAL_concern_is_an_FYI_not_a_request() -> None:
     assert out.informational is True
     assert out.targets == OWNER, "an FYI must still reach the thread"
     assert out.push is False, "an FYI pushed to a phone is a request"
-    assert out.title.startswith("FYI: ")
+    # ⚠️ THE MARK IS THE SEVERITY AND THE WORD IS THE ASK (2026-08-29). An FYI
+    # about a CRITICAL keeps the critical mark — it is exactly as serious — and
+    # only the word changes, because what differs is that nothing is asked.
+    # Derived from `style.severity_line` rather than transcribed, so the header
+    # shape has one owner and this cannot drift from it.
+    from vesta.shared import style
+    assert out.title == style.severity_line("critical", "FYI",
+                                            _c()["title"]), out.title
+    assert style.SEVERITY_MARK["critical"] in out.title, (
+        "an alert-only notice lost its severity mark; a critical FYI reads as "
+        "routine")
     assert "nothing is asked of you" in out.body
     assert out.sends is True
 
@@ -388,3 +398,133 @@ def test_the_RATING_pair_is_directional_and_touches_no_list() -> None:
     for act in actions.ACTS:
         if act.id in ("useful", "not_useful"):
             assert "To-Do" not in act.label and "job" not in act.label.lower()
+
+
+def test_EVERY_NOTIFICATION_OPENS_WITH_THE_SAME_HEADER() -> None:
+    """⚠️ THE OWNER PICKED THIS SHAPE FROM TEN RENDERED CANDIDATES (2026-08-29,
+    option 02): `<mark> WORD · subject`, "consistently for every notification,
+    including briefing reports". The mark is how bad it is, the word is what is
+    being asked, and it needs no markup — which is why it can be universal: bold
+    exists only where we set the parse mode, and the briefing path has none.
+
+    ⚠️ THE APPLICABLE SET IS DERIVED, BECAUSE LISTING IT ALREADY FAILED ONCE.
+    The first version of this test walked the three files I had in mind and
+    passed while the DAILY DIGEST still titled itself `VESTA — 1 job(s) still
+    open`. The owner found it by receiving one. So the senders are now computed
+    from the tree — any module that calls a delivery function — and a new one
+    fails here until somebody decides what its header says. `grep -L`, not
+    `grep -l`, in the release whose whole subject was consistency.
+    """
+    import os as _os
+    import re as _re
+    from vesta.shared import style
+
+    root = _os.path.join(
+        _os.path.dirname(_os.path.dirname(_os.path.dirname(
+            _os.path.abspath(__file__)))), "rootfs", "usr", "bin", "vesta")
+
+    senders, sources = set(), {}
+    for folder, _dirs, files in _os.walk(root):
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = _os.path.join(folder, name)
+            with open(path, encoding="utf-8") as handle:
+                raw = handle.read()
+            code = _re.sub(r'"""(?:.|\n)*?"""', "", raw)
+            code = _re.sub(r"#[^\n]*", "", code)
+            rel = _os.path.relpath(path, root)
+            sources[rel] = code
+            # A module that hands a TITLE and a BODY to something that sends.
+            if _re.search(r"(deliver_mod\.deliver|buttons_mod\.send|"
+                          r"await deliver)\(", code):
+                senders.add(rel)
+
+    assert len(senders) >= 3, (
+        f"only {senders} look like senders — this test's detector has gone "
+        f"blind and is about to pass vacuously")
+
+    # ⚠️ `route.py` BUILDS TITLES WITHOUT SENDING, so it is required too.
+    must_head = senders | {_os.path.join("supervise", "agent", "route.py")}
+    missing = [rel for rel in sorted(must_head)
+               if "severity_line(" not in sources.get(rel, "")]
+    assert not missing, (
+        f"{missing} send or title a notification without the shared header. "
+        f"Every message the villa sends opens the same way; add the header or "
+        f"say at the code why this one is exempt.")
+
+    # ⚠️ AND THE SHAPES IT REPLACED MAY NOT COME BACK anywhere in the tree.
+    for gone in ("FYI: ", "Still open: ", "job(s) still open"):
+        guilty = [rel for rel, code in sources.items() if gone in code]
+        assert not guilty, f"{guilty} rebuilt the old title shape {gone!r}"
+
+    # ⚠️ THE SHAPE ITSELF, checked on the function so every caller inherits it.
+    for severity in ("critical", "warning", "notice", "info"):
+        line = style.severity_line(severity, "WORD", "Subject here")
+        assert line.startswith(style.SEVERITY_MARK[severity]), line
+        assert " WORD · Subject here" in line, line
+    # ⚠️ NO MARKUP, EVER, from this function — a caller that can parse bolds the
+    # whole line AFTER escaping its villa-derived half; markup returned here
+    # would be escaped by that very call and arrive as literal tags.
+    for ch in "<>[]*_`":
+        assert ch not in style.severity_line("warning", "W", "S"), ch
+
+
+def test_an_ORDINARY_ALERT_carries_its_severity_word() -> None:
+    """⚠️ THE CASE THE FIRST MUTATION ROUND LEFT UNPINNED. Deleting the header
+    from the ordinary (non-FYI) branch of `route.plan` — by far the commonest
+    message the villa sends — went unnoticed, because every assertion nearby
+    was about the FYI branch or about the shared function in isolation."""
+    from vesta.shared import style
+    for severity in ("critical", "warning", "notice"):
+        out = route.plan(_c(severity=severity), targets=OWNER, config=LIVE)
+        assert out.title == style.severity_line(
+            severity, style.SEVERITY_WORD[severity], _c()["title"]), out.title
+        assert style.SEVERITY_MARK[severity] in out.title, (
+            f"a {severity} alert has no severity mark, so the one thing a "
+            f"lock-screen glance carries is missing")
+
+
+def test_the_DIGEST_waits_for_the_DAY_TO_BEGIN() -> None:
+    """⚠️ IT ARRIVED AT 00:08 (2026-08-29, reported: "I suddenly received
+    this"). `due()` asks whether a local DAY has passed, so the digest fired on
+    the first chase tick after midnight.
+
+    ⚠️ MY FIRST FIX WOULD HAVE CHANGED NOTHING, AND THE OWNER SAW IT BEFORE I
+    DID: "but we are not in the quiet hour period now, right?" Their window is
+    03:00–08:00, so 00:08 was never inside it — gating on `quiet_now` alone
+    leaves the whole midnight-to-quiet gap open. "Not quiet" is not "awake".
+    The end of quiet hours is when the day begins, and it is already configured.
+
+    ⚠️ THIS TEST RUNS THE CLOCK RATHER THAN READING THE SOURCE. The version it
+    replaces asserted `quiet_now(` appeared in the function — which was true of
+    a call that would have raised `TypeError` at midnight, because `now` is
+    keyword-only there. A source-reading pin cannot see a signature.
+    """
+    import asyncio as _asyncio
+    import datetime as _dt
+    from vesta.supervise.agent import digest as digest_mod
+
+    tz = _dt.timezone(_dt.timedelta(hours=8))
+    cfg = {"enabled": True, "task_list": "todo.shopping_list",
+           "quiet_hours_start": "03:00", "quiet_hours_end": "08:00",
+           "timezone": "Asia/Singapore"}
+
+    def at(hour: int, minute: int) -> str:
+        stamp = _dt.datetime(2026, 8, 29, hour, minute, tzinfo=tz).timestamp()
+        return _asyncio.run(digest_mod.send_daily(object(), config=cfg,
+                                                  now=stamp))
+
+    # ⚠️ THE REPORTED HOUR ITSELF, and the gap either side of it.
+    assert at(0, 8) == "before the day has begun", at(0, 8)
+    assert at(2, 59) == "before the day has begun", at(2, 59)
+    # Inside the window the older rule already held it.
+    assert at(4, 0) == "quiet hours", at(4, 0)
+    # ⚠️ AND IT IS HELD, NOT DROPPED: at the hour the day begins it proceeds
+    # past both gates. It stops later for a reason of its own (nothing due, or
+    # no store here) — what matters is that neither night gate is what stopped
+    # it, or a held digest would never be released.
+    for hour in (8, 14):
+        verdict = at(hour, 0)
+        assert verdict not in ("quiet hours", "before the day has begun"), (
+            f"the digest is still held at {hour:02d}:00 — it would never go out")

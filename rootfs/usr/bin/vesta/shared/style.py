@@ -51,6 +51,54 @@ SEVERITY_MARK: Dict[str, str] = {
     "info": "✅",           # check mark
 }
 
+#: The word beside the mark, for an ALERT. A brief supplies its own ("DAILY
+#: REPORT"), and an FYI or an escalation replaces it with what is being asked
+#: rather than how bad it is — see `severity_line`.
+SEVERITY_WORD: Dict[str, str] = {
+    "critical": "CRITICAL",
+    "warning": "WARNING",
+    "notice": "NOTICE",
+    "info": "INFO",
+}
+
+
+def severity_line(severity: str, word: str, subject: str) -> str:
+    """`\U0001F7E0 WARNING · Pool pump` — the first line of EVERY notification.
+
+    ⚠️ ONE SHAPE FOR ALERTS, ESCALATIONS, ALERT-ONLY NOTICES AND BRIEFS (owner,
+    2026-08-29, choosing from ten rendered candidates). The reason it is a glyph
+    and a WORD rather than styling: a notify platform gives us no colour, and
+    the reader's light or dark theme is theirs — so the one thing that must
+    survive a lock-screen glance has to be legible on white and on near-black
+    alike. Bold is a bonus where the transport can parse it; the line works
+    without it, which is why the plain briefing path can use the same shape.
+
+    ⚠️ THE MARK IS THE SEVERITY AND THE WORD IS THE ASK, and they are separate
+    on purpose. An alert-only notice about a genuine warning is still a warning
+    (mark) while nothing is asked of the reader (word: "FYI"); an escalation is
+    the same severity as the alert it chases (mark) with a different demand
+    (word: "STILL OPEN"). Collapsing them would force a choice between telling
+    the reader how bad it is and telling them what to do.
+
+    ⚠️ CIRCLES, NOT `⚠`, AND THE COLLISION IS ALREADY REASONED ABOUT ABOVE.
+    `SECTION_MARK` spends the warning sign on the brief's `critical` SECTION,
+    and its own comment says a reader distinguishes a section from a severity by
+    that glyph. `SEVERITY_MARK` was written for exactly this line — "the title
+    is often all that is read" — and had no caller until now.
+
+    ⚠️ PLAIN TEXT, ALWAYS. A caller that can parse markup bolds the WHOLE line
+    afterwards, once its villa-derived half has been escaped; returning markup
+    from here would have to be escaped by that caller and destroyed.
+    """
+    mark = SEVERITY_MARK.get(str(severity or "").strip().lower(),
+                             SEVERITY_MARK["info"])
+    label = " ".join(str(word or "").split()).upper()
+    topic = " ".join(str(subject or "").split())
+    if not label:
+        return topic
+    return f"{mark} {label} · {topic}" if topic else f"{mark} {label}"
+
+
 #: One marker per section of the brief, keyed by `SECTIONS_FOR`'s own names so
 #: a section cannot gain a heading here and be absent there.
 SECTION_MARK: Dict[str, str] = {

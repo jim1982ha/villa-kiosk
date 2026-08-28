@@ -46,6 +46,7 @@ from .registry import describe_skips, registered, run_all
 from vesta.shared.analysis.series import hourly_by_day, parse_day
 from vesta.shared.contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
                         severity_rank)
+from vesta.shared.style import severity_line
 # ⚠️ THE REGISTRY REGISTERS ITS OWN MODULES since TASK-115 — importing it is
 # what populates it. This line used to import `modules` for the side effect.
 from . import registry as _registry  # noqa: F401  (importing registers)
@@ -684,7 +685,24 @@ async def run_report(
     # measured and what jobs are open; `agent/fallback.brief` says exactly
     # that, plainly, through the SAME boot-registered hook the rungs use
     # (reports/ may not import agent/ — ARCH-003, pinned).
-    title = f"{cadence.title()} report — {period}"
+    # ⚠️ THE SEVERITY IS COMPUTED BEFORE THE TITLE NOW, AND THAT IS THE WHOLE
+    # REASON IT MOVED. It used to be worked out after the brief had already been
+    # SENT, purely for the history row; the title carries it since 2026-08-29,
+    # so a figure computed after delivery would be a figure the reader never
+    # saw. Pure — no I/O — so moving it up changes nothing else.
+    severity = "info"
+    for candidate in ([str(i.get("severity", "info")) for i in
+                       list(found.get("preflight") or []) + findings
+                       if isinstance(i, dict)]):
+        if severity_rank(candidate) > severity_rank(severity):
+            severity = candidate
+
+    # ⚠️ THE SAME HEADER SHAPE AS EVERY ALERT (owner, 2026-08-29). The word is
+    # the cadence rather than a severity word — a reader needs to know it is the
+    # daily report, and the MARK already says how bad it is. A brief with
+    # nothing wrong opens ✅, which is the one case where the mark alone carries
+    # the whole message.
+    title = severity_line(severity, f"{cadence} report", period)
     #: Which rung produced this brief, "" on the happy path. ⚠️ IT REACHES THE
     #: HISTORY ENTRY, because a record saying `deterministic` about a brief the
     #: composer failed to write is the instrument describing the one case it
@@ -760,13 +778,6 @@ async def run_report(
     # subsystem was rebuilt around the blueprint layer being the primary
     # detector, omitting it made the audit trail wrong in the common case.
     grouped: List[Dict[str, Any]] = []  # no event groups since TASK-071
-    severity = "info"
-    for candidate in ([str(i.get("severity", "info")) for i in
-                       list(found.get("preflight") or []) + findings
-                       if isinstance(i, dict)]
-                      + [str(getattr(g, "severity", "info")) for g in grouped]):
-        if severity_rank(candidate) > severity_rank(severity):
-            severity = candidate
 
     entry: Dict[str, Any] = {
         "id": entry_id or f"manual:{period}:{now_local.strftime('%H%M%S')}",
