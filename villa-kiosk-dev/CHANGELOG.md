@@ -1,3 +1,15 @@
+## 2.848.0
+
+### Changed — the app's screens follow the same layers, completing the reorganisation
+The browser half now mirrors the backend: the assistant's screens and client in
+one folder, the briefing's in another, the shared vocabulary between them —
+while the 3D kiosk, untouched by any of this, stays exactly where it was.
+Thirty-three files moved with their history; the diff beyond the moves is
+import paths only, and no screen changes by a pixel. This is the last step of
+the reorganisation the owner asked for: what a future cutover deletes and what
+a future export ships are now folders on both sides of the app, with the
+backend boundary enforced by a test on every run.
+
 ## 2.847.0
 
 ### Changed — the assistant's web endpoints become its own, completing its independence
