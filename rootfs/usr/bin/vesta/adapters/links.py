@@ -167,6 +167,39 @@ def kiosk_url(page: str, ha_config: Any, ingress_entry: str) -> str:
     return _safe_url(f"{base}/{path.lstrip('/')}" if path else base)
 
 
+def line(prompt: str, ha_config: Any, ingress_entry: str) -> str:
+    """`<prompt> VESTA: <url>` — the ONE shape every notification uses, or "".
+
+    ⚠️ ONE RULE FOR EVERY MESSAGE (owner, 2026-08-28: "make sure all the
+    notification uses this same rule"). A brief said "Open VESTA Kiosk:" and an
+    alert said something else; two shapes for one destination is two things to
+    keep in step and two ways for a reader to learn the same tap.
+
+    ⚠️ THE WORD "VESTA" IS NOT A HYPERLINK, AND CANNOT BE HERE. The owner asked
+    for one — "do the hyperlink on VESTA" — and it needs `[VESTA](url)` or an
+    `<a href>`, which needs the message PARSED. Two rules paid for with real
+    field failures stand against it, and both are in this repository's history:
+
+      * `deliver` sets `parse_mode` to each service's NO-PARSING option, because
+        the reference villa's Telegram defaults to markdown and silently ate the
+        underscores out of delivered device names (`criticalschedule---poolpump`
+        for `critical_schedule---pool_pump`). Turning parsing back on to gain a
+        link re-opens that for every villa-derived word in the same message.
+      * `style.inert` STRIPS `[ ] < >` from the body for the same reason, after
+        a real friendly name opened an italic that never closed and cost a day
+        of failed deliveries (HTTP 500 from the notify platform).
+
+    Escaping instead would mean a per-dialect table (markdown / markdownv2 /
+    html), which `discovery._plain_mode`'s own comment names as the platform
+    table this design exists to avoid. So the URL travels as itself — Telegram
+    auto-links a bare URL with parsing OFF, which is why the current one is
+    tappable — and the sentence in front of it is as short as it can be.
+    """
+    url = kiosk_url("cockpit", ha_config, ingress_entry)
+    text = " ".join(str(prompt or "").split())
+    return f"{text} VESTA: {url}" if url and text else ""
+
+
 def footer(ha_config: Any, ingress_entry: str) -> str:
     """The one line a brief appends, or "" when no safe link exists.
 
@@ -176,5 +209,4 @@ def footer(ha_config: Any, ingress_entry: str) -> str:
     kiosk opens on the villa and its tabs are one tap away, so one address does
     the job of nine.
     """
-    url = kiosk_url("cockpit", ha_config, ingress_entry)
-    return f"Open VESTA Kiosk: {url}" if url else ""
+    return line("Open", ha_config, ingress_entry)

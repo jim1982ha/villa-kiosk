@@ -497,9 +497,12 @@ async def _rating_link(session: Any) -> str:
         return ""
     urls = {"external_url": str((ha_config or {}).get("external_url") or "")} \
         if isinstance(ha_config, dict) else {}
-    url = links_mod.kiosk_url("cockpit", urls,
-                              os.environ.get("VK_INGRESS_ENTRY", ""))
-    return f"Rate it ⬆️/⬇️ on the Reason tab: {url}" if url else ""
+    # ⚠️ `links.line` IS THE ONE SHAPE EVERY NOTIFICATION USES (owner,
+    # 2026-08-28) — a brief and an alert must not teach the same tap two ways.
+    # The word VESTA is not a hyperlink and cannot be: see that function for
+    # the two delivery rules that forbid it, both paid for in the field.
+    return links_mod.line("Rate this alert in", urls,
+                          os.environ.get("VK_INGRESS_ENTRY", ""))
 
 
 async def _deliver_one(session: Any, concern: Mapping[str, Any], *,

@@ -1,3 +1,15 @@
+## 2.862.0
+
+### Changed — every notification links to VESTA the same way
+An alert now ends "Rate this alert in VESTA:" and a briefing "Open VESTA:",
+both built by one function, so the same tap is never taught two ways. The word
+VESTA is not a clickable link and cannot be: messages are sent with the
+platform's parsing switched OFF — added because the villa's Telegram was
+silently eating the underscores out of device names — and the characters a link
+needs are stripped for the same reason, after a real name once cost a day of
+failed deliveries. The address stays visible and stays tappable, which is what
+makes it work at all with parsing off.
+
 ## 2.861.0
 
 ### Changed — one row of buttons, and the rating becomes a link in the message

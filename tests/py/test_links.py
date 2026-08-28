@@ -209,3 +209,51 @@ def test_links_reads_the_keys_discovery_actually_writes() -> None:
         f"discovery writes {sorted(written)} and links reads neither — the "
         f"link is withheld for a reason nobody can see")
     assert links.footer(config, ENTRY)
+
+
+def test_EVERY_notification_uses_the_SAME_link_shape() -> None:
+    """⚠️ ONE RULE FOR ALL OF THEM (owner, 2026-08-28: "make sure all the
+    notification uses this same rule"). A brief said "Open VESTA Kiosk:" and the
+    alert's rating line was written separately — two shapes for one destination,
+    which is two things to keep in step and two ways for a reader to learn the
+    same tap. `links.line` is now the only builder; `footer` is one of its
+    callers, not a second implementation.
+    """
+    cfg = {"external_url": "https://example.invalid"}
+    entry = "/api/hassio_ingress/tok"
+    brief = links.footer(cfg, entry)
+    alert = links.line("Rate this alert in", cfg, entry)
+    assert brief and alert, "the fixture produced no link; the reader is blind"
+    for text in (brief, alert):
+        assert " VESTA: https://" in text, (
+            f"{text!r} does not use the shared `<prompt> VESTA: <url>` shape")
+    # ⚠️ SAME DESTINATION, DIFFERENT PROMPT — the prompt is the only variable.
+    assert brief.split(" VESTA: ")[1] == alert.split(" VESTA: ")[1]
+
+    import inspect
+    import re as _re
+    body = _re.sub(r"#[^\n]*", "", inspect.getsource(links.footer))
+    assert "line(" in body and "kiosk_url(" not in body, (
+        "footer builds its own line again, so the two shapes can drift apart")
+
+
+def test_the_LINK_LINE_carries_NO_MARKUP() -> None:
+    """⚠️ THE HYPERLINK THE OWNER ASKED FOR IS NOT AVAILABLE, and this pin is
+    where that is enforced rather than merely explained. `deliver` sends with
+    each service's NO-PARSING option (the villa's Telegram defaults to markdown
+    and ate the underscores out of delivered device names), and `style.inert`
+    strips `[ ] < >` after a real friendly name opened an italic that never
+    closed and cost a day of failed deliveries. So `[VESTA](url)` would arrive
+    verbatim as those characters — worse than the bare URL it replaced.
+
+    If a future change turns parsing back on, this test fails and points at the
+    two rules that have to be answered first.
+    """
+    text = links.line("Rate this alert in", {"external_url": "https://x.invalid"},
+                      "/api/hassio_ingress/tok")
+    assert text, "the fixture produced nothing to check"
+    for ch in "[]<>*_`~":
+        assert ch not in text, (
+            f"the link line contains {ch!r}, which either arrives literally "
+            f"(parsing is off) or is stripped by `style.inert` — see "
+            f"`links.line`'s docstring for the two failures behind that")

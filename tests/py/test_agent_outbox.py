@@ -738,9 +738,10 @@ def test_the_RATING_LINK_is_appended_after_plan_and_fails_closed(
 
     helper = _re.sub(r"#[^\n]*", "",
                      inspect.getsource(outbox_mod._rating_link))
-    assert "kiosk_url(" in helper, (
-        "the URL is built by hand instead of by links.py, which owns the "
-        "https-only / closed-page-set / no-secret rules")
+    assert "links_mod.line(" in helper, (
+        "the line is built by hand instead of by `links.line`, which owns the "
+        "https-only / closed-page-set / no-secret rules AND the one shape every "
+        "notification shares")
 
     # ⚠️ AND THE FAIL-CLOSED HALF RUNS RATHER THAN BEING READ: no reachable
     # Home Assistant → "" — never a placeholder, never an exception.
