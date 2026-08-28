@@ -341,11 +341,14 @@ def test_a_DELIVERED_ALERT_says_it_is_on_the_TO_DO_LIST() -> None:
     out = route.plan(_c(), targets=OWNER,
                      config={"task_list": "todo.shopping_list"})
     assert "To-Do List" in out.body
-    # ⚠️ IT SAYS WHAT `Done` DOES, NOT THAT AN ITEM IS ALREADY THERE. The job is
-    # raised AFTER the send, deliberately, so a message that failed to leave
-    # never puts work on anybody's list — a body claiming otherwise would be
-    # ahead of the fact it describes.
-    assert "Done" in out.body
+    # ⚠️ IT SAYS WHAT PRESSING ✅ DOES, NOT THAT AN ITEM IS ALREADY THERE. The
+    # job is raised AFTER the send, deliberately, so a message that failed to
+    # leave never puts work on anybody's list. And it names the button AS THE
+    # READER SEES IT: since the labels became glyphs (2026-08-28), "Press Done"
+    # would point at a word that appears nowhere on the keyboard below it.
+    assert "\u2705" in out.body, (
+        "the delivered body no longer names the ✅ button, so the instruction "
+        "points at nothing the reader can see")
 
 
 def test_it_CLAIMS_NO_JOB_on_a_villa_that_has_configured_no_list() -> None:
@@ -368,18 +371,20 @@ def test_an_FYI_claims_no_job_either_because_it_RAISES_none() -> None:
     assert "To-Do List" not in out.body
 
 
-def test_the_THUMBS_say_what_they_are_in_WORDS() -> None:
-    """⚠️ A BARE EMOJI SAYS NOTHING, AND IT WAS READ AS FILING SOMETHING. Beside
-    `Done` and `Add to the To-Do List`, two unlabelled thumbs were taken for a
-    third thing that touches the list. Every other label already states its
-    effect ("Seen — stop chasing"); these two stated nothing."""
+def test_the_RATING_pair_is_directional_and_touches_no_list() -> None:
+    """⚠️ THIS PIN DEMANDED WORDS FOR HALF A DAY AND NOW PINS GLYPHS — both by
+    the owner, both from screenshots (2026-08-28). The words were the cure for
+    two bare THUMBS being read as filing something into the To-Do List; ⬆️/⬇️
+    say "more/less" on their face, which a thumb never did. What survives both
+    rulings: the pair must be an OPPOSITE-DIRECTION pair (one glyph cannot be
+    read as approving the alert itself, which is how 👎 came to dismiss), and
+    neither may promise anything about the list."""
     from vesta.supervise.agent import actions
-    for act_id in ("useful", "not_useful"):
-        label = actions.act_by_id(act_id).label          # type: ignore[union-attr]
-        assert any(ch.isalpha() for ch in label), \
-            f"{act_id} is drawn as a bare glyph, so it explains nothing"
-    # ⚠️ AND NEITHER PROMISES ANYTHING ABOUT THE LIST, which is the belief that
-    # started this: a thumb records a verdict and marks the alert seen.
+    up = actions.act_by_id("useful").label               # type: ignore[union-attr]
+    down = actions.act_by_id("not_useful").label         # type: ignore[union-attr]
+    assert (up, down) == ("⬆️", "⬇️"), (
+        f"the rating pair is {up!r}/{down!r}; the owner chose ⬆️/⬇️, and a "
+        f"drive-by change would desync the phone from the outcome notes")
     for act in actions.ACTS:
         if act.id in ("useful", "not_useful"):
             assert "To-Do" not in act.label and "job" not in act.label.lower()

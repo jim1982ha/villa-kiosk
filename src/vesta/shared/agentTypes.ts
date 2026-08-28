@@ -40,6 +40,25 @@
  *  vacuous pass, exactly as its twin in reportsTypes.ts records. */
 export const AGENT_CONTRACT_VERSION = 1;
 
+/** The glyph on each act's button, mirroring `agent/actions.py`'s `ACTS`.
+ *
+ *  ⚠️ A MIRROR, LIKE EVERYTHING ELSE IN THIS FILE — not a second decision. The
+ *  backend owns the labels because it builds the phone's keyboard from them;
+ *  the tablet draws the same act and must not invent its own symbol, or one
+ *  glyph means two things depending on which screen you are looking at. That
+ *  is the two-surfaces bug this subsystem has now paid for four times in one
+ *  day. `test_action_vocabulary` reads BOTH sides and fails on any drift.
+ *
+ *  ⚠️ ONLY THE ACTS THE TABLET DRAWS. `help` and `job` are phone-only (the
+ *  Reason tab has no "ask the owner" button and an alert-only notice is not
+ *  actionable there), so listing them here would be a mirror of something this
+ *  side never renders — a value nothing can check against a screen. */
+export const ACT_GLYPH: Record<"dismiss" | "useful" | "not_useful", string> = {
+  dismiss: "\u2705",
+  useful: "\u2B06\uFE0F",
+  not_useful: "\u2B07\uFE0F",
+};
+
 /** What caused a run. `chat` is a first-class trigger, not a special case. */
 export const TRIGGER = ["manual", "scheduled", "chat"] as const;
 /* dry-audit:ok — mirror alias; see this file's header. */

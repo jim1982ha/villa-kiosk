@@ -1282,23 +1282,26 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
     # button runs the same one. Pinning only that the button calls `actOnAlert`
     # would go green on an `apply` that had stopped acknowledging — which is
     # `feedback_pin-the-caller` inverted, and just as blind.
+    # ⚠️ THE ACT IS `dismiss` SINCE `done` MERGED INTO THE CLOSER (2026-08-28,
+    # the owner's third merge of the day) — the pin follows the act, and every
+    # rule below now guards the MERGED handler, which inherited them all.
     jobs = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentTodo.tsx"))
-    assert "actOnAlert(" in jobs and '"done"' in jobs, (
+    assert "actOnAlert(" in jobs and '"dismiss"' in jobs, (
         "ticking a job no longer goes through the one place an act is defined, "
         "so the tablet and the phone can drift apart")
 
     import inspect
     import re as _re
     from vesta.supervise.agent import actions as actions_mod
-    done = _re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._done))
+    done = _re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._dismiss))
     assert "acknowledge(" in done, (
-        "ticking a job does not record that the concern was seen, so the villa "
+        "closing a job does not record that the concern was seen, so the villa "
         "keeps chasing work that is already done")
     # ⚠️ AND NOT WHEN THE TICK WAS REFUSED. Recording "seen" for work still
     # visibly outstanding would stop the chase on a job nobody has done — the
-    # rule the browser's `if (ok …)` used to carry. "Nothing to tick" is a
-    # DIFFERENT outcome and must still acknowledge, or Done is dead on every
-    # villa with no to-do list configured.
+    # rule the browser's `if (ok …)` used to carry, kept through TWO merges.
+    # "Nothing to tick" is a DIFFERENT outcome and must still close, or the
+    # button is dead on every villa with no to-do list configured.
     assert done.index('== "failed"') < done.index("acknowledge("), (
         "the alert is acknowledged before a failed tick is ruled out")
     assert '"none"' in _re.sub(r"#[^\n]*", "",

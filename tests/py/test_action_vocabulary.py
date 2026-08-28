@@ -114,13 +114,27 @@ def test_an_act_NAME_and_its_WIRE_CODE_are_separate_on_purpose() -> None:
     for act in actions.ACTS:
         assert len(act.code) == 1, f"{act.id}'s wire code is not one character"
         assert act.label, f"{act.id} has no label for a person to read"
-        # ⚠️ EVERY LABEL CARRIES WORDS, NOT ONLY A GLYPH (2026-08-28). Two of
-        # them were bare thumbs, and a picture with no word beside it is read
-        # from its NEIGHBOURS: sitting between "Done" and "Add to the To-Do
-        # List", they were taken for a third thing that files something.
-        assert any(ch.isalpha() for ch in act.label), (
-            f"{act.id} is drawn as a bare glyph, so what it does can only be "
-            f"guessed from the buttons either side of it")
+    # ⚠️ THE LABELS ARE EMOJI, AND THIS PIN SAID THE OPPOSITE FOR HALF A DAY
+    # (2026-08-28, both by the owner, both from screenshots). Words went ON
+    # against two bare THUMBS — a glyph that says nothing is read from its
+    # neighbours — and came OFF once the glyphs said what they are (✅ 🆘 🚫
+    # ⬆️ ⬇️) and the row was ruled a single line, where five worded buttons
+    # are five slivers. What the pin now holds is the RULE under both rulings:
+    # a single-glyph label must be one everyone recognises, so every act the
+    # keyboard draws is either WORDS or a NON-ASCII glyph — a bare ASCII "+1"
+    # is neither, and was the confusing middle state.
+    for act in actions.ACTS:
+        wordy = any(ch.isalpha() for ch in act.label)
+        glyphy = any(ord(ch) > 0x2000 for ch in act.label)
+        assert wordy or glyphy, (
+            f"{act.id}'s label {act.label!r} is neither words nor a real "
+            f"glyph, so it explains nothing on any surface")
+    # ⚠️ `job` KEEPS ITS WORDS — it appears ALONE on an alert-only notice,
+    # with no neighbouring set to teach a reader what a glyph means there.
+    job = actions.act_by_id("job")
+    assert job is not None and any(ch.isalpha() for ch in job.label), (
+        "the To-Do act lost its words; on an FYI it is the only button, and "
+        "an unexplained glyph standing alone is the thumbs bug again")
     # ⚠️ THE GUARD THAT KEEPS THIS FROM PASSING VACUOUSLY on an empty table.
     assert len(actions.ACTS) >= 5
 
@@ -144,17 +158,23 @@ def test_the_ONE_IRREVERSIBLE_ACT_NAMES_ITSELF() -> None:
     # has already moved once — "Dismiss completely" while `Seen` sat beside it,
     # "Nothing more is needed — close this" now that it has absorbed it — so
     # this asks for the MEANING rather than a phrase.
-    ends = ("close", "nothing more", "dismiss", "done with")
-    assert any(w in dismiss.label.lower() for w in ends), (
-        f"{dismiss.label!r} does not say the alert ENDS, so the one "
-        f"irreversible act reads like the reversible ones")
-    # ⚠️ NO OTHER ACT MAY READ AS FINAL, or two buttons look like the end and
-    # the irreversible one stops standing out. `done` is exempt: it ends the
-    # WORK, a different claim, which is why it has its own button.
+    # ⚠️ THE LABEL IS `🚫` BY THE OWNER'S RULING (2026-08-28), which replaces
+    # this pin's earlier demand for a WORD like "close". What survives the
+    # ruling is the distinctiveness half: the ending glyph must appear on
+    # exactly ONE act, or the irreversible button stops standing out — the
+    # property both versions of this pin existed to hold.
+    # ⚠️ ✅, NOT 🚫, AND THE CHANGE WITHIN THE HOUR WAS THE OWNER'S THIRD MERGE
+    # (2026-08-28): once `Done` folded into the closer, the survivor means
+    # "handled" at least as often as "not needed", and a red prohibition sign
+    # on the button most presses reach for reads as a warning. ✅ was already
+    # the owner's chosen glyph for Done; the meaning moved onto it.
+    assert dismiss.label == "\u2705", (
+        f"the closer is {dismiss.label!r}; the owner's rulings put ✅ on it, "
+        f"and a drive-by rename would desync the phone from what the outcome "
+        f"notes and the tablet's title describe")
     others = [a.id for a in actions.ACTS
-              if a.id not in ("dismiss", "done")
-              and any(w in a.label.lower() for w in ends)]
-    assert not others, f"{others} also read as final, so neither stands out"
+              if a.id != "dismiss" and "\u2705" in a.label]
+    assert not others, f"{others} also carry ✅, so the closer stops standing out"
 
 
 def test_the_TABLET_OFFERS_THE_ACTS_IN_THE_SAME_ORDER_AS_THE_PHONE() -> None:
@@ -192,3 +212,52 @@ def test_the_TABLET_OFFERS_THE_ACTS_IN_THE_SAME_ORDER_AS_THE_PHONE() -> None:
     assert act_at < rating_at, (
         "the Reason tab offers the rating before the act, which is the order "
         "`ACTS` forbids and the phone does not use")
+
+
+def test_the_TABLET_DRAWS_THE_PHONE_S_GLYPHS() -> None:
+    """⚠️ ONE VOCABULARY, TWO RENDERERS (owner, 2026-08-28: "edit everything
+    that needs to be updated to be consistent with this, also in the VESTA
+    Addon UI"). The backend owns the labels because it builds the phone's
+    keyboard from them; the tablet mirrors them in `ACT_GLYPH`. A symbol that
+    means one thing on the phone and another on the tablet is this subsystem's
+    signature bug, and it happened WITHIN this change: the closer was 🚫 on the
+    card and ✅ on the keyboard for an hour, because the merge moved one and
+    not the other.
+
+    ⚠️ ONLY THE ACTS THE TABLET DRAWS. `help` and `job` are phone-only, so the
+    mirror is deliberately partial — and the direction that matters is checked
+    both ways: every mirrored id must exist in `ACTS` with the same label, and
+    every act the tablet RENDERS must be mirrored.
+    """
+    with open(os.path.join(REPO, "src", "vesta", "shared",
+                           "agentTypes.ts"), encoding="utf-8") as handle:
+        mirror_src = handle.read()
+    block = mirror_src.split("export const ACT_GLYPH")[1].split("};")[0]
+    mirrored = dict(re.findall(r'(\w+):\s*"([^"]+)"', block))
+    # ⚠️ THE GUARD. TS escapes are written `\uXXXX`, so a parse that silently
+    # yields nothing would compare two empty sets and report health for ever.
+    assert len(mirrored) >= 3, (
+        f"ACT_GLYPH parsed to {mirrored} — this test's reader has gone blind "
+        f"and is about to pass vacuously")
+
+    known = {a.id: a.label for a in actions.ACTS}
+    for act_id, raw in mirrored.items():
+        glyph = raw.encode("ascii", "backslashreplace").decode("unicode_escape") \
+            if "\\u" in raw else raw
+        assert act_id in known, (
+            f"the tablet mirrors an act {act_id!r} the server does not define")
+        assert glyph == known[act_id], (
+            f"{act_id} is {known[act_id]!r} on the phone and {glyph!r} on the "
+            f"tablet — one symbol, two meanings, depending on the screen")
+
+    # ⚠️ AND THE OTHER DIRECTION: an act the CARD renders must be mirrored, or
+    # somebody hard-codes a glyph beside the ones that are checked.
+    with open(os.path.join(REPO, "src", "vesta", "supervise", "components",
+                           "AgentConcerns.tsx"), encoding="utf-8") as handle:
+        card = handle.read()
+    drawn = set(re.findall(r"ACT_GLYPH\.(\w+)", card))
+    assert drawn, "the card draws no mirrored glyph; the anchor has moved"
+    assert drawn <= set(mirrored), f"{drawn - set(mirrored)} is drawn but not mirrored"
+    assert 'aria-hidden>✅' not in card and 'aria-hidden>🚫' not in card, (
+        "a glyph is hard-coded on the card beside the mirrored ones, so it "
+        "can drift from the phone without anything noticing")

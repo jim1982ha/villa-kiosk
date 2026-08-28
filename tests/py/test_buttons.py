@@ -70,25 +70,31 @@ def test_SOMEBODY_ELSE_S_BUTTON_is_ignored_rather_than_misread() -> None:
         assert buttons.decode(foreign) == ("", "")
 
 
-def test_the_KEYBOARD_GROUPS_BY_WHAT_AN_ACT_DOES() -> None:
-    """⚠️ THE GROUPING IS WHAT A READER LEARNS THE MEANING FROM, and it is three
-    rows (2026-08-28, owner: "show the stop chasing button on the same line as
-    the done and need help button"). Everything that leaves the villa's problem
-    STANDING shares the top row; the one irreversible act has a row to itself so
-    it cannot be hit while aiming at a neighbour; the rating sits last, where a
-    verdict belongs and furthest from the acts.
-
-    ⚠️ Telegram gives every button in a row an equal share of the width, so the
-    top row is capped at the three that belong there — five in a line would be
-    five unreadable slivers on a phone."""
+def test_the_KEYBOARD_is_ONE_ROW_of_GLYPHS_in_ACTS_order() -> None:
+    """⚠️ ONE ROW SINCE THE LABELS BECAME EMOJI — one ruling for both
+    (2026-08-28: "rename all icon on the same row/line"). Three rows existed
+    because five WORDED buttons in one line are five unreadable slivers on a
+    phone; five glyphs fit. The two decisions travel together, and this pin is
+    the tripwire: a label growing words again must bring the rows back with it.
+    """
     rows = buttons.keyboard_for({"id": "c1", "state": "open"})
-    assert [b[0] for b in rows[0]] == ["Done", "Need help"]
-    assert [len(r) for r in rows] == [2, 1, 2]
-    assert rows[-1][0][1] == "vu:c1" and rows[-1][1][1] == "vn:c1"
+    # ⚠️ FOUR since `done` merged into the closer, minutes after the ruling
+    # that made it five — the count follows ACTS and is not itself the rule.
+    assert len(rows) == 1 and len(rows[0]) == 4, (
+        f"the keyboard is {[len(r) for r in rows]}; one row, one button per "
+        f"live act, legible only because every label is a single glyph")
     # ⚠️ THE WIRE CODES ARE UNCHANGED THOUGH THE LABELS AND ROWS ARE NOT, which
     # is what keeps a button already sitting in somebody's chat meaning what it
-    # meant.
-    assert rows[1][0][1] == "vx:c1", "dismiss is not alone on its own row"
+    # meant. Order is ACTS order: acts first, the rating pair last (the
+    # act-before-rating rule has its own derivational pin).
+    assert [b[1] for b in rows[0]] == \
+        ["vx:c1", "vh:c1", "vu:c1", "vn:c1"]
+    # ⚠️ `vd` STILL DECODES — to the closer, which does everything Done did.
+    # A button lives in chat history for ever; `vs` (Seen) is deliberately
+    # dead instead, because closing on a press that promised "keep it open"
+    # would betray it.
+    assert buttons.decode("vd:c9") == ("dismiss", "c9")
+    assert buttons.decode("vs:c9") == ("", "")
 
 
 def test_a_RATING_IS_OFFERED_ONCE_and_the_STAMP_is_what_says_so() -> None:
@@ -106,8 +112,9 @@ def test_a_RATING_IS_OFFERED_ONCE_and_the_STAMP_is_what_says_so() -> None:
         assert "useful" not in ids and "not_useful" not in ids, \
             f"a {'+1' if verdict else '-1'} can be pressed again"
         # ⚠️ AND THE LIFECYCLE IS UNTOUCHED BY IT — withdrawing the rating must
-        # not withdraw the acts, which is the whole separation.
-        assert "done" in ids and "dismiss" in ids
+        # not withdraw the acts, which is the whole separation. (`done` merged
+        # into the closer on 2026-08-28; the surviving acts are these two.)
+        assert "dismiss" in ids and "help" in ids
     unrated = [a.id for a in actions.available_for(
         {"id": "c1", "state": "open", "delivered_at": "x", "useful": False})]
     assert "useful" in unrated and "not_useful" in unrated, \

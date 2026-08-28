@@ -239,8 +239,12 @@ def plan(concern: Mapping[str, Any], *, targets: Sequence[str],
     if not informational:
         from vesta.supervise.agent import task as task_mod
         if task_mod.list_for(config):
-            body = (f"{body}\n\nThis is on the To-Do List. Press Done when it "
-                    f"is finished and it is ticked off there too.")
+            # ⚠️ THE BODY NAMES THE BUTTON AS THE READER SEES IT — ✅, since the
+            # labels became glyphs (2026-08-28). "Press Done" above a row that
+            # shows no word "Done" is an instruction pointing at nothing; the
+            # emoji is also the one decoration style.inert never strips.
+            body = (f"{body}\n\nThis is on the To-Do List. Press \u2705 when "
+                    f"it is finished and it is ticked off there too.")
 
     # ⚠️ THE MESSAGE SAYS WHO IT IS FOR (2026-08-27, owner's request). One
     # Telegram chat can carry both the household's alerts and the Facility

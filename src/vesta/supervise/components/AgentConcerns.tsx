@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { CircleSlash, Info } from "lucide-react";
+import { Info } from "lucide-react";
 
 import { actOnAlert, loadConcerns,
          sendConcernFeedback } from "@/vesta/supervise/agentApi";
@@ -28,7 +28,7 @@ import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import SourceChip from "@/components/common/SourceChip";
 import { SettledSummary } from "@/vesta/supervise/components/ConcernLifecycle";
-import { severityRank, type Concern } from "@/vesta/shared/agentTypes";
+import { ACT_GLYPH, severityRank, type Concern } from "@/vesta/shared/agentTypes";
 import Loading from "@/components/common/Loading";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
@@ -549,14 +549,36 @@ export default function AgentConcerns() {
                     mouse does); a finger gets the glyph, which is the trade the
                     owner chose looking at the rendered screen — the one measure
                     nobody else in this file has. */}
+                {/* ⚠️ THE GLYPHS ARE THE PHONE'S GLYPHS (owner, 2026-08-28:
+                    "edit everything that needs to be updated to be consistent
+                    with this, also in the VESTA Addon UI"). One vocabulary,
+                    two renderers: ✅ closes, ⬆️/⬇️ rate, on the keyboard and
+                    on this card alike — a symbol that means one thing on the
+                    phone and another on the tablet is the two-surfaces bug in
+                    miniature. Emoji rather than lucide strokes for exactly
+                    that reason: Telegram cannot draw lucide, so the shared
+                    form is the emoji.
+
+                    ⚠️ IT WAS 🚫 FOR ONE HOUR, and the merge is why it is not.
+                    While `Done` existed beside it this button meant "not
+                    needed" and a prohibition sign fitted; it now also carries
+                    "the work is finished — tick the job" (owner: "`Done` and
+                    `Nothing more is needed` should imply the same effect"), so
+                    the glyph most presses reach for must not read as a refusal.
+                    And it is no longer `danger`-coloured for the same reason.
+
+                    ⚠️ THE GLYPH COMES FROM `ACT_GLYPH`, THE MIRROR OF THE
+                    BACKEND'S ACT TABLE — the same arrangement the rest of this
+                    vocabulary uses, and pinned in both directions, so an edit
+                    to one surface cannot silently leave the other behind. */}
                 <button
-                  type="button" className="row-action danger"
+                  type="button" className="row-action"
                   disabled={busy === c.id}
                   aria-label={`Nothing more is needed, close this: ${c.title}`}
-                  title="Nothing more is needed. Nobody will chase you about this again — it leaves this list and the next briefing, and its job is ticked off. Use -1 if you also want fewer alerts like it."
+                  title="Nothing more is needed. The job is ticked off, nobody will chase you about this again, and it leaves this list and the next briefing. Use ⬇️ if you also want fewer alerts like it."
                   onClick={() => void act(c.id, "dismiss")}
                 >
-                  <CircleSlash size={16} aria-hidden />
+                  <span className="concern-tally" aria-hidden>{ACT_GLYPH.dismiss}</span>
                 </button>
                 {/* ⚠️ TWO QUESTIONS, TWO GROUPS, AND THE SPLIT IS THE WHOLE
                     POINT (2026-08-28, owner's ruling). The rating says how good
@@ -587,7 +609,7 @@ export default function AgentConcerns() {
                       title="More like this — the villa raises this kind more readily. The alert itself is not changed."
                       onClick={() => void judge(c.id, true)}
                     >
-                      <span className="concern-tally" aria-hidden>+1</span>
+                      <span className="concern-tally" aria-hidden>{ACT_GLYPH.useful}</span>
                     </button>
                     <button
                       type="button" className="row-action"
@@ -596,7 +618,7 @@ export default function AgentConcerns() {
                       title="Less like this — the villa raises this kind less readily. The alert itself is not changed."
                       onClick={() => void judge(c.id, false)}
                     >
-                      <span className="concern-tally" aria-hidden>-1</span>
+                      <span className="concern-tally" aria-hidden>{ACT_GLYPH.not_useful}</span>
                     </button>
                   </span>
                 )}

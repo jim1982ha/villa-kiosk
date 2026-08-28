@@ -221,22 +221,18 @@ def keyboard_for(concern: Mapping[str, Any],
     button = [[a.label, encode(a.code, ident)] for a in acts]
     by_id = {a.id: b for a, b in zip(acts, button)}
 
-    # ⚠️ THREE GROUPS, AND THE GROUPING IS WHAT A READER LEARNS THE MEANING
-    # FROM. Everything that leaves the villa's problem standing shares the top
-    # row (2026-08-28, owner: "show the stop chasing button on the same line as
-    # the done and need help button"); the one irreversible act gets a row to
-    # itself so it cannot be hit while aiming at a neighbour; the rating pair
-    # sits last, where a verdict belongs and where it is furthest from the acts.
-    rows: List[List[List[str]]] = []
-    top = [by_id[i] for i in ("done", "help", "seen", "job") if i in by_id]
-    if top:
-        rows.append(top)
-    if "dismiss" in by_id:
-        rows.append([by_id["dismiss"]])
-    rating = [by_id[i] for i in ("useful", "not_useful") if i in by_id]
-    if rating:
-        rows.append(rating)
-    return rows
+    # ⚠️ ONE ROW, BY THE OWNER'S RULING (2026-08-28: "rename all icon on the
+    # same row/line"), AND IT IS ONLY SOUND BECAUSE THE LABELS BECAME EMOJI IN
+    # THE SAME RULING. Telegram gives every button in a row an equal share of
+    # the width, so five WORDED buttons in one line were five unreadable
+    # slivers — the reason this was three rows until today. Five single glyphs
+    # fit. The two decisions travel together: if the labels ever grow words
+    # again, the rows must come back with them.
+    #
+    # ⚠️ THE ORDER IS `ACTS` ORDER AND STILL CARRIES THE RULE — acts first, the
+    # rating pair last, never a rating before an act (pinned). One row makes
+    # the order the ONLY remaining geometry.
+    return [[[a.label, encode(a.code, ident)] for a in acts]]
 
 
 # ── which targets can carry a button ────────────────────────────────────────

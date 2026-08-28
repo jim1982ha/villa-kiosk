@@ -140,7 +140,9 @@ def test_an_OPEN_alert_offers_the_full_set() -> None:
     A rating is a comment on the supervisor rather than on the villa, so it is
     never the first thing offered."""
     ids = [a.id for a in actions.available_for({"id": "c1", "state": "open"})]
-    assert ids == ["done", "help", "dismiss", "useful", "not_useful"]
+    # ⚠️ FOUR, AFTER THE THIRD MERGE (2026-08-28): `done` folded into the
+    # closer, which now ticks the job AND settles. Acts first, rating last.
+    assert ids == ["dismiss", "help", "useful", "not_useful"]
 
 
 # ── applying one ────────────────────────────────────────────────────────────
@@ -151,7 +153,7 @@ def test_a_STALE_press_is_refused_against_the_STORE_not_the_message() -> None:
     ARRIVES. Otherwise scrolling back a week and pressing Done acts on an alert
     settled six days ago."""
     _put(state="closed")
-    out = asyncio.run(actions.apply(None, "done", "c1", by="owner"))
+    out = asyncio.run(actions.apply(None, "dismiss", "c1", by="owner"))
     assert not out.ok and out.spent, \
         "a press on a settled alert was accepted"
 
@@ -285,7 +287,7 @@ def test_JOB_does_not_rewrite_the_alert_as_non_informational() -> None:
         "asking for a job rewrites what the villa's mode was at the time"
 
 
-def test_DONE_refuses_to_acknowledge_when_the_TICK_FAILED() -> None:
+def test_the_CLOSER_refuses_when_the_TICK_FAILED() -> None:
     """⚠️ AND STILL ACKNOWLEDGES WHEN THERE WAS NOTHING TO TICK. Opposite
     outcomes: a refused tick leaves the job visibly outstanding, so stamping it
     seen stops the chase on work nobody can see was done; nothing to tick means
@@ -301,7 +303,7 @@ def test_DONE_refuses_to_acknowledge_when_the_TICK_FAILED() -> None:
     original = actions._complete_item
     actions._complete_item = fake                     # type: ignore[assignment]
     try:
-        out = asyncio.run(actions.apply(None, "done", "c1", by="Jim"))
+        out = asyncio.run(actions.apply(None, "dismiss", "c1", by="Jim"))
     finally:
         actions._complete_item = original             # type: ignore[assignment]
     assert calls == ["c1"]
@@ -309,7 +311,7 @@ def test_DONE_refuses_to_acknowledge_when_the_TICK_FAILED() -> None:
     assert not concerns.read()[0]["acknowledged_at"]
 
 
-def test_DONE_acknowledges_when_there_is_NOTHING_to_tick() -> None:
+def test_the_CLOSER_closes_when_there_is_NOTHING_to_tick() -> None:
     _put()
 
     async def fake(session: Any, concern_id: str, *, config: Any) -> str:
@@ -318,7 +320,7 @@ def test_DONE_acknowledges_when_there_is_NOTHING_to_tick() -> None:
     original = actions._complete_item
     actions._complete_item = fake                     # type: ignore[assignment]
     try:
-        out = asyncio.run(actions.apply(None, "done", "c1", by="Jim"))
+        out = asyncio.run(actions.apply(None, "dismiss", "c1", by="Jim"))
     finally:
         actions._complete_item = original             # type: ignore[assignment]
     assert out.ok and concerns.read()[0]["acknowledged_at"]

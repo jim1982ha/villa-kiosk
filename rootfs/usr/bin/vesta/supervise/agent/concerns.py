@@ -859,7 +859,7 @@ def suppressed_subjects(rows: Optional[Sequence[Mapping[str, Any]]] = None
     somebody kept clearing their list, which is the opposite of deliberate — and
     silently, since suppression never expires.
 
-    `-1 Less like this` is now the only control that says "raise this less", so
+    the ⬇️ rating is now the only control that says "raise this less", so
     it is the only one that should be able to stop a subject. REQ-038 already
     specifies the verdict is recorded against the `subject_key`.
 

@@ -104,7 +104,7 @@ export const STATE_COPY: Record<ConcernState, { label: string; hint: string }> =
     // is needed", which is also pressed by somebody who has the work in hand —
     // so this state means "a person ended it", and what stops a subject being
     // raised again is the -1 rating, counted separately.
-    hint: "A person said nothing more was needed. Rate an alert -1 if you also "
+    hint: "A person said nothing more was needed. Rate an alert ⬇️ if you also "
         + "want fewer like it.",
   },
 };

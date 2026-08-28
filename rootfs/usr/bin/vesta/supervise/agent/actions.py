@@ -33,7 +33,7 @@ is drawing. This module answers "what does this act do", once.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.adapters.log import stage, swallow
 
@@ -79,9 +79,27 @@ class Act:
 #: without claiming the work is done comes next, then the one that throws it
 #: away, and the rating LAST. A rating is a comment on the supervisor, not on
 #: the villa, so it must never be the first thing offered.
+#: ⚠️ THE LABELS ARE EMOJI, BY THE OWNER'S RULING FROM A SCREENSHOT OF THE
+#: WORDED SET (2026-08-28, same day the words were added — and the same shape
+#: of ruling that took them off the tablet an hour earlier). Emoji are also the
+#: one decoration `style.py` says survives every notify platform, so nothing
+#: here can trip a parse mode. The MEANING stays in `Outcome.note`, which is
+#: what a presser is shown the moment they press; the tablet's `title`/`aria`
+#: sentences are its own. ⚠️ `job` KEEPS ITS WORDS deliberately: it appears
+#: alone on an alert-only notice, where there is no neighbouring set to teach a
+#: reader what an unexplained glyph means — the exact reason the thumbs got
+#: words this morning.
+#: ⚠️ `done` IS GONE, MERGED INTO THE CLOSER (owner, 2026-08-28: "`Done` and
+#: `Nothing more is needed — close this` should imply the same effect, hence
+#: the same button"). The third merge of the day, and the residue of the first
+#: two: once `Seen` folded in and suppression moved to the ⬇️ rating, both
+#: remaining buttons ended in "handled, stop showing it" — the work-finished /
+#: not-needed distinction lived only in the store, at the price of a choice the
+#: reader had to make on every press. The merged act does EVERYTHING either
+#: did: tick the job, record who, settle the alert.
 ACTS: Tuple[Act, ...] = (
-    Act("done", "d", "Done"),
-    Act("help", "h", "Need help"),
+    Act("dismiss", "x", "\u2705"),
+    Act("help", "h", "🆘"),
     # ⚠️ ONE ACT, NOT TWO (2026-08-28, owner: "I want the dismiss and seen
     # button to be merged in the same function, so it achieves the same, ie:
     # cancel the task"). `Seen — stop chasing` stopped the chase and left the
@@ -94,7 +112,6 @@ ACTS: Tuple[Act, ...] = (
     # says WHO) and then settles. Acknowledging first is what makes the merge a
     # merge rather than a replacement — dropping it would lose the name of the
     # person who dealt with it, which is the whole content of `Seen`.
-    Act("dismiss", "x", "Nothing more is needed — close this"),
     Act("job", "j", "Add to the To-Do List"),
     # ⚠️ `+1` AND `-1`, NOT THUMBS, AND THE CHANGE IS NOT COSMETIC. A thumb is a
     # verdict on a THING — people read it as approving or rejecting the alert
@@ -106,8 +123,8 @@ ACTS: Tuple[Act, ...] = (
     # ⚠️ AND NEITHER TOUCHES THE ALERT. That is the whole point of the split, and
     # the wire codes `u`/`n` are deliberately unchanged so a button already
     # sitting in somebody's chat keeps meaning what it meant.
-    Act("useful", "u", "+1 More like this"),
-    Act("not_useful", "n", "-1 Less like this"),
+    Act("useful", "u", "⬆️"),
+    Act("not_useful", "n", "⬇️"),
 )
 
 _BY_ID = {a.id: a for a in ACTS}
@@ -118,8 +135,20 @@ def act_by_id(action_id: str) -> Optional[Act]:
     return _BY_ID.get(str(action_id or "").strip())
 
 
+#: ⚠️ WIRE CODES THAT USED TO MEAN SOMETHING ELSE. A button sits in chat
+#: history for ever, so a retired code must either keep meaning what its
+#: presser will expect or be ignored — never re-issued. `d` (the old `Done`)
+#: maps to the closer because the closer now does everything Done did, plus the
+#: settle its presser always wanted. `s` (the old `Seen`) is deliberately NOT
+#: mapped: Seen meant "keep it open, I have it", and closing on that press
+#: would do the OPPOSITE of what the button in an old message promises — an
+#: ignored press beats a betrayed one.
+LEGACY_CODES: Dict[str, str] = {"d": "dismiss"}
+
+
 def act_by_code(code: str) -> Optional[Act]:
-    return _BY_CODE.get(str(code or "").strip())
+    clean = str(code or "").strip()
+    return _BY_CODE.get(clean) or _BY_ID.get(LEGACY_CODES.get(clean, ""))
 
 
 @dataclass
@@ -195,12 +224,11 @@ def available_for(concern: Mapping[str, Any],
         # into a job — which is the one thing the mode exists not to do.
         return [_BY_ID["job"], _BY_ID["dismiss"]] + rating
 
-    # ⚠️ ONE SET NOW, WHATEVER THE ACKNOWLEDGEMENT SAYS. The branch existed to
-    # withdraw `Seen` once somebody had said it; with the merge there is nothing
-    # to withdraw, because the remaining acts all still make sense on an alert
-    # somebody has picked up — finishing it, asking for help, closing it, rating
-    # it. A branch that can no longer differ is a branch to delete.
-    return [_BY_ID["done"], _BY_ID["help"], _BY_ID["dismiss"]] + rating
+    # ⚠️ ONE SET NOW, WHATEVER THE ACKNOWLEDGEMENT SAYS. The branch that
+    # differed per state withdrew `Seen`; with the merges there is nothing left
+    # to withdraw — closing, asking for help and rating all still make sense on
+    # an alert somebody has picked up. A branch that cannot differ is deleted.
+    return [_BY_ID["dismiss"], _BY_ID["help"]] + rating
 
 
 def _spent(concern_id: str, config: Optional[Mapping[str, Any]]) -> bool:
@@ -310,42 +338,6 @@ async def _not_useful(session, row, **kw) -> Outcome:  # type: ignore[no-untyped
     return await _judge(session, row, useful=False, **kw)
 
 
-async def _done(session: Any, row: Mapping[str, Any], *, by: str,
-                config: Optional[Mapping[str, Any]], reason: str,
-                now: Optional[float]) -> Outcome:
-    """The work is finished: tick the to-do item, then acknowledge the alert.
-
-    ⚠️ BOTH HALVES, OR THE HALF THAT MATTERS IS THE ONE THAT GOES MISSING. The
-    tablet's Done did these as two browser calls and the phone's old Telegram
-    button did only the first — so a facility manager who finished the job left
-    the alert unacknowledged: still on the wall, still counted as awaiting a
-    person, and if it were critical, still being chased for work already done.
-
-    ⚠️ A TICK THAT FAILED REFUSES THE ACKNOWLEDGEMENT; A TICK WITH NOTHING TO
-    TICK DOES NOT. Those are opposite outcomes and the first cut of this
-    returned one value for both — `feedback_instruments-never-skip` inside a
-    writer. "No list configured, or no item for this alert" means Done is
-    simply a person saying they have dealt with it, and refusing would make the
-    button dead on every villa that has not finished setting up. "Home
-    Assistant would not accept the tick" means the job is still visibly
-    outstanding, and stamping it seen would stop the chase on work that still
-    looks undone — the exact rule the tablet's two-call version enforced with
-    `if (ok …)` and the reason it is preserved here rather than dropped as a
-    consequence of moving server-side.
-    """
-    from vesta.supervise.agent import concerns as concerns_mod
-
-    concern_id = str(row.get("id") or "")
-    ticked = await _complete_item(session, concern_id, config=config)
-    if ticked == "failed":
-        return Outcome(False, "the job could not be ticked — nothing changed")
-    ok, why = concerns_mod.acknowledge(concern_id, by=by, now=now)
-    if not ok:
-        return Outcome(False, why)
-    return Outcome(True, "Marked done" if ticked == "ticked"
-                   else "Marked done — there was no job to tick")
-
-
 async def _complete_item(session: Any, concern_id: str, *,
                          config: Optional[Mapping[str, Any]]) -> str:
     """Complete this alert's row on the configured to-do list. Never raises.
@@ -445,23 +437,33 @@ async def _dismiss(session: Any, row: Mapping[str, Any], *, by: str,
     from vesta.supervise.agent import concerns as concerns_mod
 
     concern_id = str(row.get("id") or "")
-    # ⚠️ ACKNOWLEDGE FIRST, THEN SETTLE — the two halves of the buttons this
-    # merged, in that order. The acknowledgement is what records WHO dealt with
-    # it, and it must be written while the alert is still live: `acknowledge`
-    # has nothing to say about a settled one. Its failure is not this act's
-    # failure (an alert nobody was told about cannot be acknowledged at all), so
-    # it is not checked — the settle below is the act that has to succeed.
+    # ⚠️ TICK FIRST, AND A TICK HOME ASSISTANT REFUSED REFUSES THE WHOLE ACT — the rule the
+    # old `Done` carried (`feedback_instruments-never-skip` inside a writer):
+    # settling an alert whose job still looks undone stops the chase on work
+    # nobody did. "Nothing to tick" is the opposite outcome and proceeds — an
+    # FYI has no job, and a villa with no list configured must not have a dead
+    # close button. `reconcile_settled` remains the net for ticks this misses.
+    ticked = await _complete_item(session, concern_id, config=config)
+    if ticked == "failed":
+        return Outcome(False, "the job could not be ticked — nothing changed")
+    # ⚠️ ACKNOWLEDGE, THEN SETTLE — in that order. The acknowledgement records
+    # WHO dealt with it and must be written while the alert is still live:
+    # `acknowledge` has nothing to say about a settled one. Its failure is not
+    # this act's failure (an alert nobody was told about cannot be acknowledged
+    # at all), so it is not checked — the settle is the act that must succeed.
     concerns_mod.acknowledge(concern_id, by=by, now=now)
     note = str(reason or "").strip()
     outcome = f"closed by {by}" + (f": {note}" if note else "")
     ok, why = concerns_mod.transition(concern_id, "dismissed",
                                       outcome=outcome, now=now)
-    return Outcome(True, "Closed — nobody will chase you about this again") \
-        if ok else Outcome(False, why)
+    if not ok:
+        return Outcome(False, why)
+    return Outcome(True, "Closed — the job is ticked off, and nobody will "
+                         "chase you about this again" if ticked == "ticked"
+                   else "Closed — nobody will chase you about this again")
 
 
 _HANDLERS = {
-    "done": _done,
     "help": _help,
     "dismiss": _dismiss,
     "job": _job,
