@@ -184,9 +184,11 @@ async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
     function of the deployment.
 
     ⚠️ RETURNS THE INSTALLED BLUEPRINTS TOO, and that second value is not
-    decoration. It is what tells the rest of the subsystem that this property
-    HAS a detection layer — see `blueprint_layer_present` — and, per blueprint,
-    which event types it emits.
+    decoration: it is what the Briefings tab lists this villa's reflex families
+    from, and, per blueprint, which event types each emits. (It also fed
+    `blueprint_layer_present`, deleted 2026-08-28 — that predicate read this
+    list as "does this property have a detection layer", which a cumulative
+    record cannot answer once a family is retired.)
     An empty list means the fallback was used, so nothing may be concluded
     from it.
     """
@@ -603,25 +605,18 @@ def connected_seconds() -> float:
     return started.timestamp()
 
 
-def blueprint_layer_present(within_days: int = 30) -> bool:
-    """Has the automation layer emitted anything recently?
-
-    ⚠️ THIS IS WHAT DECIDES WHETHER THE BUILT-IN MODULES RUN. On a property with
-    a blueprint layer they would duplicate it — worse, since they cannot see
-    occupancy or tariffs. On a fresh install with no blueprints they are the
-    only analysis there is. Detected rather than configured, so neither
-    deployment needs to be told which kind it is.
-    """
-    # ⚠️ INSTALLED BEATS FIRED. A property whose blueprints exist but have not
-    # tripped recently still HAS a detection layer, and the built-in modules
-    # would duplicate it. Waiting for an event meant a freshly installed add-on
-    # duplicated the automation layer until something went wrong — worst on a
-    # well-run villa, where nothing does.
-    if read_buffer()["blueprint_categories"]:
-        return True
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=within_days)
-              ).isoformat(timespec="seconds")
-    return bool(events_since(cutoff))
+# ⚠️ `blueprint_layer_present()` WAS DELETED HERE (2026-08-28). It answered "has
+# the automation layer emitted anything recently", and its docstring said it "is
+# what decides whether the built-in modules run" — TRUE when written and false
+# from 2.755.0, when the owner's ruling made `supervision_enabled` the only
+# input to that decision. After that it kept exactly one consumer: a sentence on
+# the "What is watched" tab, which it made inverted.
+#
+# ⚠️ AND ITS "INSTALLED BEATS FIRED" RULE IS WHY IT COULD NOT SIMPLY BE LEFT. It
+# returned True whenever `blueprint_categories` was non-empty — a PERSISTED,
+# CUMULATIVE list — so on the reference villa it still reported `maintenance`
+# and `roi` weeks after both were retired, and no passage of time could clear
+# it. A value that can only ever say yes is the `online_since` lie again.
 
 
 async def run_forever(session: ClientSession,

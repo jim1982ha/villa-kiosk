@@ -180,33 +180,36 @@ def test_events_are_filtered_by_period() -> None:
     assert collect.events_since(future) == []
 
 
-# ── the capability that decides duplication ──────────────────────────────────
+# ── the capability that used to decide duplication ──────────────────────────
 
-def test_no_events_means_no_blueprint_layer() -> None:
-    """A fresh install elsewhere: the built-in modules must run, or that
-    property gets a report with nothing in it."""
-    assert collect.blueprint_layer_present() is False
+def test_the_BLUEPRINT_LAYER_capability_is_GONE_and_stays_gone() -> None:
+    """⚠️ THREE TESTS OF `blueprint_layer_present` LIVED HERE AND THE PREDICATE
+    IS DELETED (2026-08-28). It answered "does this property have an automation
+    layer", and its docstring said it "is what decides whether the built-in
+    modules run" — true when written, false from 2.755.0, when the owner's
+    ruling made `supervision_enabled` the only input to that decision.
 
+    After that it had ONE consumer anywhere: a sentence on the "What is
+    watched" tab claiming the automations "win", which was inverted and
+    contradicted the paragraph above it on the same tab.
 
-def test_recent_events_mean_a_blueprint_layer_is_present() -> None:
-    """⚠️ THIS IS WHAT STOPS THE ADD-ON DUPLICATING THE VILLA'S OWN
-    AUTOMATIONS. Detected, never configured — neither deployment has to be told
-    which kind it is."""
-    _collect([_event()])
-    assert collect.blueprint_layer_present() is True
+    ⚠️ IT COULD NOT BE LEFT EVEN AS A DISPLAY FACT, because "installed beats
+    fired" made it read `blueprint_categories` — a PERSISTED, CUMULATIVE list.
+    The reference villa still recorded `maintenance` and `roi` weeks after both
+    were retired, and no passage of time could clear it: a value that can only
+    ever answer yes, which is the `online_since` lie this module already
+    replaced once.
 
-
-def test_only_RECENT_events_count() -> None:
-    """A property whose automations were removed months ago should fall back to
-    the built-in modules rather than staying silent forever on the strength of
-    stale evidence."""
-    _collect([_event()])
-    buffer = collect.read_buffer()
-    old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat(timespec="seconds")
-    buffer["events"][0]["at"] = old
-    store.write_json(store.REPORTS_EVENTS_FILE, buffer)
-    assert collect.blueprint_layer_present(within_days=30) is False
-    assert collect.blueprint_layer_present(within_days=365) is True
+    ⚠️ THE PRECONDITION IS ASSERTED, NOT ASSUMED. If the `vesta_*` subscription
+    ever returns, the question becomes measurable again and this pin is the
+    wrong shape — it should fail loudly then rather than keep forbidding
+    something that would once more be honest."""
+    assert not hasattr(collect, "blueprint_layer_present"), (
+        "the predicate is back. It can only mean something if the collector "
+        "SUBSCRIBES to vesta_* and the gate consults it — check both.")
+    from reports import discovery
+    assert "blueprint_layer" not in discovery.ALL_CAPABILITIES
+    assert not [t for t in collect.CHAT_EVENT_TYPES if t.startswith("vesta_")]
 
 
 # ── the gate ─────────────────────────────────────────────────────────────────
@@ -386,23 +389,6 @@ def test_no_automation_instance_name_appears_in_the_collector() -> None:
 # five subscriptions and then produced five duplicate findings, because nothing
 # had tripped yet. A quiet villa is when duplicate findings are least wanted.
 
-def test_installed_blueprints_are_enough_to_report_the_layer_present() -> None:
-    """⚠️ RENAMED IN 2.755.0 — it no longer stands anything down. The capability
-    survives because "does this property have an automation layer" is a real
-    question the Briefings tab asks; what went is the gate that consulted it."""
-    buffer = collect.read_buffer()
-    store.write_json(store.REPORTS_EVENTS_FILE,
-                     {**buffer, "blueprint_categories": ["roi", "critical"]})
-    assert collect.blueprint_layer_present() is True, (
-        "installed blueprints must count even before anything fires")
-
-
-def test_a_property_with_no_blueprints_still_runs_the_modules() -> None:
-    buffer = collect.read_buffer()
-    store.write_json(store.REPORTS_EVENTS_FILE, {**buffer, "blueprint_categories": []})
-    assert collect.blueprint_layer_present() is False
-
-
 def test_subscribe_is_chat_only_and_keeps_the_established_record() -> None:
     """⚠️ REWRITTEN FOR TASK-074. The subscription no longer derives a vesta_*
     list from the installed blueprints — every producer is retired — so what
@@ -451,15 +437,17 @@ def test_an_unreachable_pass_does_not_erase_what_was_established() -> None:
 
 def test_flushing_events_does_not_erase_the_blueprint_record() -> None:
     """⚠️ `_flush` rewrites the whole document, so a key it forgets is a key it
-    DELETES. Dropping the categories here would make the built-in modules
-    resume duplicating the automation layer on the first flush after
-    connecting — a bug with a delay fuse, invisible until the first event."""
+    DELETES. The categories are still what the Briefings tab lists the villa's
+    reflex families from, so losing them on the first flush after connecting
+    would empty that list — a bug with a delay fuse, invisible until the first
+    event. (It used to matter more: the deleted `blueprint_layer_present` read
+    this key, and dropping it made the built-in modules resume duplicating the
+    automation layer.)"""
     buffer = collect.read_buffer()
     store.write_json(store.REPORTS_EVENTS_FILE,
                      {**buffer, "blueprint_categories": ["roi", "critical"]})
     _collect([_event()])
     assert collect.read_buffer()["blueprint_categories"] == ["roi", "critical"]
-    assert collect.blueprint_layer_present() is True
 
 
 # ── the diagnostic surface ───────────────────────────────────────────────────

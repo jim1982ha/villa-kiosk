@@ -121,8 +121,11 @@ class ModuleContext:
     labels: Dict[str, str] = field(default_factory=dict)
     #: Installed VESTA blueprints that have never produced an event, by stem.
     #: ⚠️ THE GATE USES THIS TO QUALIFY A STAND-DOWN, NEVER TO REVERSE ONE.
-    #: "Installed beats fired" stays the rule — see `collect.blueprint_layer_present`
-    #: for why a quiet, well-run villa must not get duplicate findings. What
+    #: ⚠️ THIS USED TO CITE `collect.blueprint_layer_present` for why a quiet,
+    #: well-run villa must not get duplicate findings. That predicate is
+    #: deleted (2026-08-28): the rule became `supervision_enabled` and nothing
+    #: else in 2.755.0, and the predicate's "installed beats fired" reading of
+    #: a PERSISTED CUMULATIVE list meant it could only ever answer yes. What
     #: this adds is honesty about the claim: a check that stood down for a
     #: blueprint which has never reported is covered in theory only, and the
     #: Is the villa's supervision switched on?

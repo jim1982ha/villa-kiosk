@@ -48,14 +48,31 @@ CAP_ENERGY_WATER = "energy_water"
 CAP_LEDGER = "ledger"
 CAP_NOTIFY = "notify"
 CAP_AREAS = "areas"
-CAP_BLUEPRINTS = "blueprint_layer"
+# ⚠️ `CAP_BLUEPRINTS` WAS DELETED HERE (2026-08-28). It meant "this property has
+# its own automation layer", and it decided whether the built-in analysis
+# modules stood aside — a real question while `maintenance_*` and `roi_*`
+# existed, because a statistic cannot see occupancy or tariffs and the
+# blueprint could.
+#
+# THE CUTOVER RETIRED THOSE BLUEPRINTS AND 2.755.0 REPLACED THE RULE: the ONLY
+# thing that decides now is `context.supervision_enabled` — supervision on, the
+# assistant supersedes and every check runs; supervision off, an automation
+# takes the job back. `registry.gate` reads that and nothing else.
+#
+# So this capability had one consumer left in the whole system: a sentence on
+# the "What is watched" tab claiming the automations "win". It was inverted, and
+# it could never be anything else — the flag is derived from
+# `blueprint_categories`, a PERSISTED CUMULATIVE list that still records
+# `maintenance` and `roi` on a villa where both were retired weeks ago. Same
+# class of lie as the `online_since` flag that `connected` was added to replace:
+# a value that can only ever say yes.
 
 # How many absent statistics are named individually before the rest are summed.
 MAX_LISTED_STATISTICS = 10
 
 ALL_CAPABILITIES = (
     CAP_STATISTICS, CAP_ENERGY_GRID, CAP_ENERGY_DEVICES, CAP_ENERGY_COST,
-    CAP_ENERGY_WATER, CAP_LEDGER, CAP_NOTIFY, CAP_AREAS, CAP_BLUEPRINTS,
+    CAP_ENERGY_WATER, CAP_LEDGER, CAP_NOTIFY, CAP_AREAS,
 )
 
 # Why each capability matters, in the operator's terms. Shown in the UI beside
@@ -70,8 +87,6 @@ CAPABILITY_MEANING: Dict[str, str] = {
     CAP_LEDGER: "Maintenance and cost records exist, so findings can cite work done.",
     CAP_NOTIFY: "At least one delivery target exists, so a report can be sent.",
     CAP_AREAS: "Devices are assigned to areas, so findings can name a room.",
-    CAP_BLUEPRINTS: "This property has its own automation layer, whose findings "
-                    "carry room, occupancy and cost context.",
 }
 
 # ⚠️ THE SAME FACTS IN THE ABSENT VOICE, AND THE TWO TABLES ARE NOT
@@ -96,8 +111,6 @@ CAPABILITY_ABSENT: Dict[str, str] = {
     CAP_NOTIFY: "No delivery target is configured.",
     CAP_AREAS: "Devices are not assigned to areas, so findings cannot name a "
                "room.",
-    CAP_BLUEPRINTS: "No automation layer is reporting, so analysis falls back to "
-                    "this add-on's own checks.",
 }
 
 
@@ -499,12 +512,6 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
     preflight: List[Dict[str, str]] = []
     inventory: Dict[str, Any] = {}
     currency: Optional[str] = None
-
-    # ⚠️ Detected, not configured. A property with a blueprint layer gets its
-    # findings from there; one without falls back to the built-in modules. The
-    # deployment does not have to be told which kind it is.
-    if collect.blueprint_layer_present():
-        capabilities.add(CAP_BLUEPRINTS)
 
     fm = ledger.read()
     fm_summary = ledger.summarise(fm)

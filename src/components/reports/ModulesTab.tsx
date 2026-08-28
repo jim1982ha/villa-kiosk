@@ -82,13 +82,36 @@ function when(iso: string): string {
  *  can fire a `vesta_<something>_event` from their own automation — that is the
  *  documented extension point, stated at the bottom of this very tab — so a
  *  category we have no opinion about is the SUPPORTED case, not a fault. */
-const FAMILIES: Record<string, { role: string; reflex?: true }> = {
+/** The automation families that can still put something on this list.
+ *
+ *  ⚠️ MEMBERSHIP IS THE FILTER, AND `maintenance` / `roi` WERE REMOVED FROM IT
+ *  (2026-08-28). The collector's `blueprintCategories` is a PERSISTED,
+ *  CUMULATIVE record of everything it has ever heard from, so the reference
+ *  villa still reports both weeks after the cutover retired them — rendered as
+ *  `maintenance 100 received`, which reads as live status and is frozen
+ *  history. Worse, no count on this list can ever rise again for any family:
+ *  TASK-074 dropped the `vesta_*` subscription entirely.
+ *
+ *  ⚠️ `control` AND `vesta` WERE NEVER HERE AND THAT IS WHY THE FILTER IS
+ *  MEMBERSHIP RATHER THAN A FLAG. A `control` automation ACTS and emits
+ *  nothing, so its cell could only ever read "nothing yet" — the structural
+ *  zero the Reflex tab was corrected for — and `vesta` is not a family at all,
+ *  just the filename stem of the retired task blueprint. Both rendered with a
+ *  BLANK description, because the lookup missed and the fallback is `""`.
+ *
+ *  ⚠️ `audit` STAYS, AND IT IS NOT AN OVERSIGHT: the cutover retired
+ *  `audit_*` EXCEPT `audit_notification_path`, which proves the delivery
+ *  channel still works and is the one thing here a brief cannot self-report.
+ *
+ *  ⚠️ THIS IS A SECOND TABLE — `tiers.tsx` has one too, and they disagreed: it
+ *  called maintenance "superseded — the assistant now spots this itself" while
+ *  this one said "being replaced by the built-in checks below", which is a
+ *  different claim and the wrong one. Both strings are now unreachable from
+ *  here; converging the two tables is a separate job. */
+const FAMILIES: Record<string, { role: string }> = {
   critical: {
     role: "acts in under a second, on this property, with no AI involved",
-    reflex: true,
   },
-  maintenance: { role: "being replaced by the built-in checks below" },
-  roi: { role: "being replaced by the built-in checks below" },
   audit: { role: "proves the alert channel still works" },
 };
 
@@ -150,9 +173,19 @@ export default function ModulesTab({
         </span>
       </div>
 
+      {/* ⚠️ "Alerts held" AND "Last alert" WERE DELETED HERE (2026-08-28), and
+          they are the Observe tab's defect in a second dialog. Both read the
+          COLLECTOR — the blueprint/chat event stream — and since the cutover it
+          carries chat only, so "Last alert" was the last Telegram message and
+          "Alerts held" was a buffer that can no longer grow from anything
+          else. The owner caught the same pair on Observe ("last change seen 34h
+          ago … I can't be true, right?"); I fixed the element that was reported
+          and not its twin, which is this file's own lesson about rolling a fix
+          out by call site.
+          ⚠️ `onlineSince` STAYS, and is the one of the three that was always
+          honest: it answers "how much of the reporting period can this add-on
+          speak for", which is a real precondition for reading any brief. */}
       <dl className="reports-facts">
-        <div><dt>Alerts held</dt><dd>{c.buffered}</dd></div>
-        <div><dt>Last alert</dt><dd>{when(c.lastEventAt)}</dd></div>
         <div><dt>Listening since first ever</dt><dd>{when(c.onlineSince)}</dd></div>
       </dl>
 
@@ -171,8 +204,21 @@ export default function ModulesTab({
           shape, so a fix to the readable version lands on both.
           ⚠️ AND THE PER-ROW CHIP IS GONE for the same reason it went there: it
           repeated what the row's own sentence already says. */}
+      {/* ⚠️ ONLY THE FAMILIES THAT CAN STILL REPORT (2026-08-28). This listed
+          every category the collector had EVER heard from — a persisted,
+          cumulative list — so the reference villa showed `maintenance 100
+          received` and `roi 87 received` weeks after both were retired, framed
+          as live status. Worse, no count on the list can increase again for any
+          row: TASK-074 dropped the `vesta_*` subscription entirely, so these
+          are frozen history presented as a running total.
+          ⚠️ TWO OF THE SIX WERE NEVER MEANINGFUL HERE EITHER. `control`
+          automations ACT and emit nothing, so their cell could only ever read
+          "nothing yet" — the same structural zero the Reflex tab was corrected
+          for — and `vesta` is not a family at all: it is the filename stem of
+          the retired task blueprint, and it rendered with a blank description
+          because `FAMILIES` has no such entry — see its comment. */}
       <dl className="reflex-table">
-        {c.blueprintCategories.map((cat) => {
+        {c.blueprintCategories.filter((cat) => FAMILIES[cat]).map((cat) => {
           const seen = c.seenTypes[`vesta_${cat}_event`] ?? 0;
           const family = FAMILIES[cat];
           return (
@@ -185,29 +231,24 @@ export default function ModulesTab({
             </div>
           );
         })}
-        {c.blueprintCategories.length === 0 && (
+        {!c.blueprintCategories.some((cat) => FAMILIES[cat]) && (
           <p className="muted body-text">
             No automations of this kind are installed. That changes nothing
             here — while supervision is on, the checks below run either way.
           </p>
         )}
       </dl>
-      {diagnostics.capabilities.includes("blueprint_layer") ? (
-        <p className="reports-item">
-          <Check size={14} aria-hidden="true" />
-          <span>
-            Your automations are reporting, and they win: a built-in check below
-            steps aside where one covers the same ground, because your
-            automation knows about occupancy, schedules and tariffs and a
-            statistic does not.
-          </span>
-        </p>
-      ) : (
-        <p className="reports-item muted">
-          Nothing has reported yet, so the checks below are the only analysis
-          running.
-        </p>
-      )}
+      {/* ⚠️ A CLAIM WAS DELETED HERE AND IT WAS BACKWARDS (2026-08-28). It
+          read "Your automations are reporting, and they win: a built-in check
+          steps aside where one covers the same ground" — true while
+          `maintenance_*` and `roi_*` existed, and inverted since 2.755.0: with
+          supervision ON the assistant supersedes and EVERY check runs. It also
+          contradicted the paragraph at the top of this same tab.
+          ⚠️ THE CAPABILITY BEHIND IT WENT TOO, because this sentence was its
+          only consumer anywhere — no module requires `blueprint_layer` and
+          `registry.gate` does not read it — and it was computed from the same
+          persisted cumulative list, so it could only ever answer yes. See
+          `discovery.py`, where the constant used to be. */}
 
       {/* ── 3. Built-in checks ──────────────────────────────────────────── */}
       <h3 className="settings-section-title">Built-in checks</h3>

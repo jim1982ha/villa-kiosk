@@ -1448,3 +1448,44 @@ def test_the_JOURNAL_reports_its_OWN_clock() -> None:
     assert 'current.get("last_seen")' in src, (
         "the journal's last-seen is computed rather than read, so it cannot "
         "report a journal that has stopped being written")
+
+def test_the_BRIEFINGS_tab_lists_only_families_that_can_STILL_report() -> None:
+    """⚠️ THE COUNTS BESIDE THESE ROWS ARE FROZEN HISTORY (2026-08-28). The
+    collector's `blueprint_categories` is a PERSISTED, CUMULATIVE record of
+    everything it has ever heard from, so the reference villa still listed
+    `maintenance 100 received` and `roi 87 received` weeks after the cutover
+    retired both — rendered as live status. And no count on that list can rise
+    again for ANY family, because TASK-074 dropped the `vesta_*` subscription:
+    what is drawn is a running total that stopped running.
+
+    So the tab's own `FAMILIES` table is the filter, and this pins it against
+    the blueprints actually SHIPPED rather than against a list somebody has to
+    remember to prune. Add a family back and it must be one that exists.
+
+    ⚠️ `control` AND `vesta` ARE ABSENT ON PURPOSE and are not oversights: a
+    control automation ACTS and emits nothing, so its cell could only ever read
+    "nothing yet", and `vesta` is the filename stem of the retired task
+    blueprint rather than a family at all. Both used to render with a BLANK
+    description because the lookup missed.
+    """
+    tab = _read(os.path.join(SRC, "components", "reports", "ModulesTab.tsx"))
+    block = tab[tab.index("const FAMILIES"):]
+    block = block[:block.index("\n};")]
+    listed = set(re.findall(r"^  ([a-z_]+): ", block, re.M))
+    assert listed, "no families parsed — this test is checking nothing"
+
+    for retired in ("maintenance", "roi"):
+        assert retired not in listed, (
+            f"`{retired}` is listed again. Its blueprints were retired at the "
+            f"cutover, so its count can only ever be the frozen total from "
+            f"before — shown to a reader as though it were live.")
+
+    tree = os.path.join(REPO_ROOT, "sources", "files", "blueprint")
+    if not os.path.isdir(tree):
+        return   # gitignored on a fresh clone; the pin above still holds
+    stems = {f.split("_", 1)[0] for f in os.listdir(tree)
+             if f.endswith(".yaml") and not f.startswith("._")}
+    unshipped = listed - stems
+    assert not unshipped, (
+        f"the tab lists {sorted(unshipped)}, for which no blueprint ships. A "
+        f"family with no producer can only ever show a stale count or a zero.")

@@ -1,3 +1,15 @@
+## 2.837.0
+
+### Changed — "What is watched" now shows only what can still change
+The tab listed six automation families with a count beside each, from a record
+of everything ever heard. Two of those families were retired weeks ago, so
+their totals were frozen history shown as live status; one acts and never
+reports, so its cell could only read "nothing yet"; and one was not a family at
+all. None of the six could rise again. Only the two that still fire remain. The
+line claiming your automations take priority over the built-in checks was
+backwards — supervision decides that, and while it is on all three checks run —
+so it is gone, with the setting behind it that could only ever answer yes.
+
 ## 2.836.0
 
 ### Fixed — Observe said "nothing written down yet" above 51,579 changes
