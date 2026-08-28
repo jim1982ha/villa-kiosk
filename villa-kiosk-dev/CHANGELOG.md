@@ -1,3 +1,14 @@
+## 2.859.0
+
+### Changed — one row of symbols on the phone, and Done merged into the closer
+An alert's buttons are ✅ 🆘 ⬆️ ⬇️ on a single line. "Done" and "Nothing more is
+needed" both meant handled-and-stop-showing-it, so they are one button: it ticks
+the job off, records who dealt with it, and closes the alert. The tablet's card
+draws the same symbols from the same table, so neither screen can drift from the
+other. A Done button in an older message still works; an older "Seen" is ignored
+rather than repurposed, because closing on a press that promised to keep the
+alert open would be worse than doing nothing.
+
 ## 2.858.0
 
 ### Changed — the alert's buttons are compact glyphs again
