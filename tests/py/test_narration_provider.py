@@ -275,7 +275,7 @@ def test_markdown_is_flattened_however_nicely_the_prompt_asked() -> None:
     # ⚠️ `•`, NOT `- `. The old normalisation turned a provider's `* item` into
     # `- item` — a LIST MARKER in every markdown dialect — so the flattener's
     # own output could be re-parsed by the destination it was protecting.
-    from reports.narrate.style import BULLET
+    from vesta.shared.style import BULLET
     assert f"{BULLET}item one" in out
 
 

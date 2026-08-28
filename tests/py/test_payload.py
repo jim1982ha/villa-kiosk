@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from reports.contracts import PAYLOAD_ALLOWED_FIELDS
+from vesta.shared.contracts import PAYLOAD_ALLOWED_FIELDS
 from reports.narrate import payload as P
 
 
@@ -180,7 +180,7 @@ def test_a_real_module_finding_passes_the_audit() -> None:
     ⚠️ THE PRODUCER CHANGED WITH TASK-071: the aggregator is gone, and the
     real findings a payload now carries are the analysis modules' — so the
     fixture is `Finding.as_dict()`, the exact type they emit."""
-    from reports.analysis.base import Finding
+    from vesta.shared.analysis.base import Finding
     findings = [Finding(
         ref="f1", kind="ANOMALY", severity="warning",
         label="Living room AC", detail="idle draw rising against its own "
@@ -260,7 +260,7 @@ def test_withheld_means_the_policy_dropped_it_not_that_it_was_empty() -> None:
     """
     from reports.narrate.base import ReportContext
     from reports.pipeline import _withheld_fields
-    from reports.contracts import PAYLOAD_ALLOWED_FIELDS
+    from vesta.shared.contracts import PAYLOAD_ALLOWED_FIELDS
 
     # `area` is allow-listed and empty here; `detail` is allow-listed nowhere.
     context = ReportContext(

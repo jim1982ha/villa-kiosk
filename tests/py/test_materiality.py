@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import List
 
-from reports.analysis.materiality import (
+from vesta.shared.analysis.materiality import (
     active_level,
     has_stable_baseline,
     is_material,
@@ -106,7 +106,7 @@ def test_every_analysis_module_imports_the_shared_rule() -> None:
     import ast
     import inspect
 
-    from reports.analysis.modules import level_anomaly, standby_creep
+    from vesta.shared.analysis.modules import level_anomaly, standby_creep
 
     for module in (level_anomaly, standby_creep):
         source = inspect.getsource(module)

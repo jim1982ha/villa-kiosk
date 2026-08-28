@@ -86,10 +86,10 @@ def test_subject_key_is_the_SAME_EXPRESSION_as_the_report_pipeline_s() -> None:
     This asserts DELEGATION, not equality of output — two independent copies
     that happen to agree today pass an equality test and drift the moment
     either is touched."""
-    from reports.analysis import base as canonical
+    from vesta.shared.analysis import base as canonical
     import inspect
     source = inspect.getsource(contracts.subject_key)
-    assert "from reports.analysis.base import subject_key" in source, (
+    assert "from vesta.shared.analysis.base import subject_key" in source, (
         "agent.subject_key must delegate to the canonical implementation, not "
         "restate the hash")
     for probe in ("sensor.x", "House pump", "", "a" * 200):

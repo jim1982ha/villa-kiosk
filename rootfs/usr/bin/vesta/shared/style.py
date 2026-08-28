@@ -31,7 +31,7 @@ from __future__ import annotations
 
 # Re-exported, not defined here: `discovery` needs it too and may not
 # import upward into the renderer. See `reports.text`.
-from ..text import name_of as name_of
+from .text import name_of as name_of
 
 from typing import Dict
 

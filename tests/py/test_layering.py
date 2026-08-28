@@ -63,20 +63,12 @@ LAYER_OF: Tuple[Tuple[str, str], ...] = (
     # import `reports.analysis.base` directly, never the package.
     ("reports/analysis/__init__", "brief"),
     ("reports/narrate/__init__", "brief"),
-    # ── shared: pure, exportable ────────────────────────────────────────────
-    ("reports/contracts", "shared"),
-    ("reports/text", "shared"),
-    ("reports/narrate/style", "shared"),
-    ("reports/analysis/base", "shared"),
-    ("reports/analysis/robust", "shared"),
-    # ⚠️ RECLASSIFIED shared DURING THE FIRST RED RUN. The plan put materiality
-    # in brief because agent/ never imports it directly — but level_anomaly (a
-    # shared module) does, and "shared" is defined by what the exportable set
-    # NEEDS, not by who calls it today. It is pure (imports only robust), so
-    # the purity pin holds it to that.
-    ("reports/analysis/materiality", "shared"),
-    ("reports/analysis/series", "shared"),
-    ("reports/analysis/modules/", "shared"),
+    # ── shared: pure, exportable — MOVED to vesta/shared in the 3a release ──
+    # ⚠️ materiality was RECLASSIFIED shared during the pin's first red run:
+    # the plan put it in brief because agent/ never imports it directly, but
+    # level_anomaly (shared) does, and "shared" is defined by what the
+    # exportable set NEEDS, not by who calls it today.
+    ("vesta/shared/", "shared"),
     # ── brief: the deletable half ───────────────────────────────────────────
     ("reports/pipeline", "brief"),
     ("reports/standing", "brief"),
@@ -179,7 +171,7 @@ def _imports(source: str, path: str) -> List[Tuple[str, int]]:
             names = [mod] + [f"{mod}.{a.name}" for a in node.names]
         for name in names:
             top = name.split(".")[0]
-            if top not in ("reports", "observe", "agent"):
+            if top not in ("reports", "observe", "agent", "vesta"):
                 continue
             found.append((name.replace(".", "/"), node.lineno))
     return found

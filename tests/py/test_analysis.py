@@ -20,8 +20,8 @@ from typing import Any, Dict, List, Sequence
 import pytest
 
 from reports.analysis import ModuleContext, gate, run_all
-from reports.analysis.base import Finding, label_for, resolve_threshold
-from reports.analysis.modules.standby_creep import (
+from vesta.shared.analysis.base import Finding, label_for, resolve_threshold
+from vesta.shared.analysis.modules.standby_creep import (
     DEFAULT_RISE_FRACTION,
     StandbyCreep,
     _daily_idle_floors,
@@ -385,7 +385,7 @@ def test_the_dedup_key_carries_no_identifier_but_is_stable() -> None:
     """⚠️ Caught by `test_a_finding_carries_no_entity_id` on its first run: the
     key was `module:entity_id`, so every Finding carried an entity id in plain
     text. A dedup key only needs to be stable and unique, never readable."""
-    from reports.analysis.base import dedup_key
+    from vesta.shared.analysis.base import dedup_key
 
     key = dedup_key("standby_creep", "sensor.bedroom_window")
     assert "bedroom" not in key and "bedroom" not in key and "sensor." not in key
@@ -414,8 +414,9 @@ def test_no_analysis_module_contains_a_physical_constant() -> None:
     import ast
     import inspect
 
-    from reports.analysis import base, registry, robust
-    from reports.analysis.modules import standby_creep
+    from reports.analysis import registry
+    from vesta.shared.analysis import base, robust
+    from vesta.shared.analysis.modules import standby_creep
 
     for module in (base, registry, robust, standby_creep):
         tree = ast.parse(inspect.getsource(module))
@@ -437,7 +438,7 @@ def test_the_stripper_still_sees_real_code() -> None:
     import ast
     import inspect
 
-    from reports.analysis.modules import standby_creep
+    from vesta.shared.analysis.modules import standby_creep
 
     code = ast.unparse(ast.parse(inspect.getsource(standby_creep)))
     assert "IDLE_PERCENTILE" in code
@@ -446,7 +447,7 @@ def test_the_stripper_still_sees_real_code() -> None:
 def test_every_module_threshold_is_dimensionless() -> None:
     """The defaults themselves, checked as values: a fraction or a count of
     sigmas, never a quantity with a unit."""
-    from reports.analysis.modules import standby_creep as sc
+    from vesta.shared.analysis.modules import standby_creep as sc
 
     assert 0.0 < sc.DEFAULT_RISE_FRACTION < 10.0, "a ratio, not a quantity"
     assert 0.0 < sc.IDLE_PERCENTILE < 1.0, "a percentile"
@@ -463,7 +464,7 @@ def test_every_module_threshold_is_dimensionless() -> None:
 # rows produced zero findings at every threshold down to 3%.
 
 def test_epoch_milliseconds_bucket_by_day() -> None:
-    from reports.analysis.series import day_key as _day_key
+    from vesta.shared.analysis.series import day_key as _day_key
 
     same_day = {_day_key(_epoch_ms("2026-07-01", h), timezone.utc)
                 for h in range(24)}
@@ -473,20 +474,20 @@ def test_epoch_milliseconds_bucket_by_day() -> None:
 def test_epoch_seconds_are_understood_too() -> None:
     """HA changed this format once and may again; a module that only knows the
     current wire format breaks on upgrade."""
-    from reports.analysis.series import day_key as _day_key
+    from vesta.shared.analysis.series import day_key as _day_key
 
     ms = _epoch_ms("2026-07-01", 12)
     assert _day_key(ms // 1000, timezone.utc) == _day_key(ms, timezone.utc)
 
 
 def test_iso_strings_are_still_accepted() -> None:
-    from reports.analysis.series import day_key as _day_key
+    from vesta.shared.analysis.series import day_key as _day_key
 
     assert _day_key("2026-07-01T13:00:00", timezone.utc) == "2026-07-01"
 
 
 def test_junk_produces_no_day_rather_than_a_wrong_one() -> None:
-    from reports.analysis.series import day_key as _day_key
+    from vesta.shared.analysis.series import day_key as _day_key
 
     for junk in (None, True, "", "short", float("nan")):
         assert _day_key(junk, timezone.utc) == "", junk
@@ -498,7 +499,7 @@ def test_days_are_bucketed_in_LOCAL_time() -> None:
     exactly when a device is idle — in the wrong one."""
     from zoneinfo import ZoneInfo
 
-    from reports.analysis.series import day_key as _day_key
+    from vesta.shared.analysis.series import day_key as _day_key
 
     # 20:00 UTC on the 1st is 04:00 on the 2nd in Singapore.
     stamp = _epoch_ms("2026-07-01", 20)
@@ -636,7 +637,7 @@ def test_a_module_is_switched_off_by_a_SLICE_not_by_a_bare_boolean() -> None:
     """
     import asyncio
     from reports.analysis.registry import register, run_all
-    from reports.analysis.base import AnalysisModule, Finding, ModuleContext
+    from vesta.shared.analysis.base import AnalysisModule, Finding, ModuleContext
 
     class _Probe:
         name = "probe_module"
@@ -677,13 +678,13 @@ def _gated_module():
 
     ⚠️ THE CLASS, NOT THE PACKAGE MODULE. `gate` reads `requires`,
     `superseded_by` and `min_days` off the check itself."""
-    from reports.analysis.modules.sensor_health import SensorHealth
+    from vesta.shared.analysis.modules.sensor_health import SensorHealth
     return SensorHealth()
 
 
 def _ctx(**kw):
     """A context whose only interesting axis is the blueprint layer."""
-    from reports.analysis.base import ModuleContext
+    from vesta.shared.analysis.base import ModuleContext
 
     base: Dict[str, Any] = {
         "audience": "owner", "cadence": "weekly", "now_local": NOW,

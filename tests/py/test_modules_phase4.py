@@ -13,9 +13,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Sequence
 
 from reports.analysis import ModuleContext
-from reports.analysis.base import Finding
-from reports.analysis.modules.level_anomaly import WEEKDAY_NAME, LevelAnomaly
-from reports.analysis.modules.sensor_health import SensorHealth
+from vesta.shared.analysis.base import Finding
+from vesta.shared.analysis.modules.level_anomaly import WEEKDAY_NAME, LevelAnomaly
+from vesta.shared.analysis.modules.sensor_health import SensorHealth
 
 NOW = datetime(2026, 8, 20, 7, 0, tzinfo=timezone.utc)
 #: 2026-06-01 is a Monday, so weekday arithmetic in these fixtures is readable.

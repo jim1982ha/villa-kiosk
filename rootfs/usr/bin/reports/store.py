@@ -50,7 +50,7 @@ import os
 import tempfile
 from typing import Any, Dict, Final, List
 
-from .contracts import CADENCE, CONTRACT_VERSION, NARRATION_MODE, PROFILE
+from vesta.shared.contracts import CADENCE, CONTRACT_VERSION, NARRATION_MODE, PROFILE
 from .log import warn
 
 DATA_DIR: Final[str] = "/data"

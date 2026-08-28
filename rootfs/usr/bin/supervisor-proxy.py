@@ -124,7 +124,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.append(_HERE)
 
-from reports import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
+from vesta.shared import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
 from reports import collect as reports_collect      # noqa: E402
 from reports import discovery as reports_discovery  # noqa: E402
 from reports import pipeline as reports_pipeline    # noqa: E402

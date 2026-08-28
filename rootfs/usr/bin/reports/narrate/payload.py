@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Sequence
 
-from ..contracts import (
+from vesta.shared.contracts import (
     AUDIENCE, CADENCE, FINDING_KIND, PAYLOAD_ALLOWED_FIELDS, SEVERITY,
     TREND_DIRECTION, ZONE,
 )

@@ -112,7 +112,7 @@ def test_the_footer_would_be_destroyed_by_inert_which_is_why_it_is_appended() ->
     This test asserts the DAMAGE, so if someone ever routes the footer through
     `inert` it fails with the reason written down.
     """
-    from reports.narrate.style import _MARKUP_ACTIVE, inert
+    from vesta.shared.style import _MARKUP_ACTIVE, inert
     url = links.kiosk_url("cockpit", EXTERNAL, ENTRY)
 
     # ⚠️ THE INVARIANT GOT STRONGER AFTER A DELIVERED BRIEF PROVED THE OLD ONE
@@ -146,7 +146,7 @@ def test_no_url_can_enter_the_provider_payload() -> None:
     there. It must not be: the provider writes prose about numbers, and a URL
     would hand an external service the address of the owner's home instance for
     no benefit whatsoever."""
-    from reports.contracts import PAYLOAD_ALLOWED_FIELDS
+    from vesta.shared.contracts import PAYLOAD_ALLOWED_FIELDS
     for field in PAYLOAD_ALLOWED_FIELDS:
         assert "url" not in field.lower() and "link" not in field.lower()
 

@@ -221,7 +221,7 @@ def test_the_schedules_PROFILE_KEY_crosses_every_boundary_intact() -> None:
     """
     import re
 
-    from reports import contracts as reports_contracts
+    from vesta.shared import contracts as reports_contracts
 
     def read(rel: str) -> str:
         with open(os.path.join(REPO_ROOT, rel), encoding="utf-8") as handle:
@@ -280,7 +280,7 @@ def test_the_profile_vocabulary_is_the_APPS_OWN() -> None:
     is how `facility` and `ops` once appeared in one picker."""
     import re
 
-    from reports import contracts as reports_contracts
+    from vesta.shared import contracts as reports_contracts
 
     proxy_path = os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
                               "supervisor-proxy.py")

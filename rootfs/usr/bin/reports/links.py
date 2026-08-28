@@ -149,7 +149,7 @@ def _safe_url(url: str) -> str:
     produce something no client resolves; those cannot contain a markup-active
     character in a valid URL anyway.
     """
-    from .narrate.style import _MARKUP_ACTIVE
+    from vesta.shared.style import _MARKUP_ACTIVE
     parts = urlsplit(url)
     tail = "".join(f"%{ord(c):02X}" if c in _MARKUP_ACTIVE else c
                    for c in parts.path)

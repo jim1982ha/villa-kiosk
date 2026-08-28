@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from reports.log import log
-from reports.narrate.style import inert
+from vesta.shared.style import inert
 
 #: The HA event this listens for. ⚠️ LOW-VOLUME BY NATURE — a person typing.
 #: Subscribing to a high-volume type here would put the loop behind the villa's

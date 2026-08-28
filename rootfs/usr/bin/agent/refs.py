@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Tuple
 
-from reports.text import readable_label
+from vesta.shared.text import readable_label
 
 
 class RefTable:

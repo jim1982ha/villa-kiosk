@@ -36,8 +36,8 @@ from . import (collect, devices as devices_mod,
                schedule as schedule_mod, standing as standing_mod,
                stats as stats_mod, store, trend as trend_mod)
 from .analysis import ModuleContext, describe_skips, registered, run_all
-from .analysis.series import hourly_by_day, parse_day
-from .contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
+from vesta.shared.analysis.series import hourly_by_day, parse_day
+from vesta.shared.contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
                         severity_rank)
 # ⚠️ THE REGISTRY REGISTERS ITS OWN MODULES since TASK-115 — importing it is
 # what populates it. This line used to import `modules` for the side effect.
@@ -48,7 +48,7 @@ from .hass import fetch_timezone
 from .log import log, swallow, warn
 from .narrate import ReportContext
 from .narrate import payload as payload_mod, providers as providers_mod
-from .narrate import style as style_mod
+from vesta.shared import style as style_mod
 from .schedule import period_key, period_start
 
 

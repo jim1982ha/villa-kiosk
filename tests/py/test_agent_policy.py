@@ -361,7 +361,7 @@ def test_three_dismissals_reach_the_gate_without_anyone_editing_config() -> None
     here is deliberately EMPTY so only the earned path can satisfy it.
     """
     from agent import concerns as concerns_mod
-    from reports.analysis.base import subject_key
+    from vesta.shared.analysis.base import subject_key
 
     key = subject_key("gym lights")
     for _ in range(concerns_mod.DISMISSALS_TO_SUPPRESS):
@@ -381,7 +381,7 @@ def test_two_dismissals_are_not_enough() -> None:
     """⚠️ THE COMPANION THAT MAKES THE ONE ABOVE MEAN SOMETHING. Without it, a
     mutation suppressing EVERY subject would pass the first test."""
     from agent import concerns as concerns_mod
-    from reports.analysis.base import subject_key
+    from vesta.shared.analysis.base import subject_key
 
     key = subject_key("hall lamp")
     for _ in range(concerns_mod.DISMISSALS_TO_SUPPRESS - 1):

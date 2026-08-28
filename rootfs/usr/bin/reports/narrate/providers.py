@@ -41,10 +41,10 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from aiohttp import ClientSession
 from .. import secrets, usage
-from ..contracts import NARRATION_MODE
+from vesta.shared.contracts import NARRATION_MODE
 from ..log import log, swallow, warn
 from . import payload as payload_mod
-from .style import BULLET
+from vesta.shared.style import BULLET
 
 #: One request's ceiling. ⚠️ SHORT ON PURPOSE. A scheduled report is composed
 #: inside a 60-second tick; a provider that takes longer than this has already

@@ -57,7 +57,7 @@ from dataclasses import dataclass, field
 from typing import (Any, Dict, Final, List, Mapping, Optional, Sequence,
                     Tuple)
 
-from reports.analysis import robust, series
+from vesta.shared.analysis import robust, series
 
 # ── the three constants, each a validity requirement rather than a threshold ─
 

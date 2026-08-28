@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import List
 
-from reports.analysis.robust import (
+from vesta.shared.analysis.robust import (
     MAD_TO_SIGMA,
     mad,
     median,

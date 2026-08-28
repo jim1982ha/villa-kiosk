@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from reports.narrate.style import inert
+from vesta.shared.style import inert
 
 #: Severity -> (thread, push, holds-until-morning). The matrix, as a table.
 #: ⚠️ `push` IS OWNER **AND** FACILITY FOR A CRITICAL, which the villa cannot

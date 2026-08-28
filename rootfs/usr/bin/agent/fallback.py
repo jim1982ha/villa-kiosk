@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from reports.narrate.style import inert
+from vesta.shared.style import inert
 
 #: The rungs, worst-informed last. ⚠️ NAMED, because "which rung produced this"
 #: is the question a reader has and the one an operator debugs from.

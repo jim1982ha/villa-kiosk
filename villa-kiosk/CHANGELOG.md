@@ -1,3 +1,15 @@
+## 2.842.0
+
+### Changed — the pure layer moves to its own home, first of the layer moves
+The nine modules that touch no disk, no network and no Home Assistant — the
+contracts, the text helpers, the message sanitiser and the three statistical
+checks with their maths — now live under a folder that states exactly that, the
+first of the layers from the reorganisation the owner asked for. Nothing
+behaves differently: the same code runs from a new address, the boundary test
+covers the new tree, and the purity rule is enforced where the files now sit.
+Five test files that read the old paths were re-pointed; one wording file is
+excluded from a renderer check by name now that its folder no longer hides it.
+
 ## 2.841.0
 
 ### Fixed — the layer check could not see relative imports, and the tree hid one

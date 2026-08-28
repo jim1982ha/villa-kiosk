@@ -27,8 +27,8 @@ from reports import model as model_mod                      # noqa: E402
 from reports import standing as standing_mod                 # noqa: E402
 from agent import fallback as agent_fallback  # noqa: E402
 from reports.narrate import ReportContext  # noqa: E402
-from reports.narrate.style import BULLET                    # noqa: E402
-from reports.narrate.style import SECTION_MARK               # noqa: E402
+from vesta.shared.style import BULLET                    # noqa: E402
+from vesta.shared.style import SECTION_MARK               # noqa: E402
 
 FIXTURES = os.path.join(REPO_ROOT, "tests", "consistency", "fixtures")
 

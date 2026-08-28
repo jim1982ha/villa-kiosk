@@ -25,9 +25,13 @@ from typing import Dict, List, Tuple
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODULE_DIR = os.path.join(
-    REPO_ROOT, "rootfs", "usr", "bin", "reports", "analysis", "modules")
+# ⚠️ TWO ROOTS WHILE TASK-115 IS IN FLIGHT. The shared layer moved to
+# vesta/ and the rest has not yet; every walker here must cover BOTH or the
+# moved half silently leaves the applicable set — the exact under-roll this
+# suite exists to catch. Collapses to one root when the move completes.
 PACKAGE_DIR = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports")
+VESTA_DIR = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")
+MODULE_DIR = os.path.join(VESTA_DIR, "shared", "analysis", "modules")
 
 
 def _package_sources() -> List[Tuple[str, str]]:
@@ -37,7 +41,8 @@ def _package_sources() -> List[Tuple[str, str]]:
     PACKAGE, and both were broken outside `analysis/modules/`.
     """
     out: List[Tuple[str, str]] = []
-    for root, _dirs, files in os.walk(PACKAGE_DIR):
+    for pkg_root in (PACKAGE_DIR, VESTA_DIR):
+      for root, _dirs, files in os.walk(pkg_root):
         if "__pycache__" in root:
             continue
         for name in sorted(files):

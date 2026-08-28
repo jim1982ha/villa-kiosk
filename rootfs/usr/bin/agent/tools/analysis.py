@@ -55,7 +55,7 @@ MAX_HISTORY_DAYS: int = 90
 
 def _module(name: str) -> Any:
     """The module class for a check name, or None."""
-    from reports.analysis.modules import (level_anomaly, sensor_health,
+    from vesta.shared.analysis.modules import (level_anomaly, sensor_health,
                                           standby_creep)
     return {
         "standby_creep": standby_creep.StandbyCreep,
@@ -221,7 +221,7 @@ class AnalysisTool(BaseTool):
         at all (see the module docstring); the field is set so that anything
         reading it downstream sees the truth about who is asking.
         """
-        from reports.analysis.base import ModuleContext
+        from vesta.shared.analysis.base import ModuleContext
         from reports.pipeline import _statistics_fetcher
         return ModuleContext(
             audience="owner", cadence="on demand",

@@ -37,16 +37,26 @@ import re
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 REPORTS = os.path.join(ROOT, "rootfs", "usr", "bin", "reports")
+VESTA = os.path.join(ROOT, "rootfs", "usr", "bin", "vesta")
 
 #: Files that decide WHAT to say. None of them may decide HOW it reads.
 #: ⚠️ DERIVED, NOT LISTED — every module in the package except the renderer's
 #: own directory and the two files whose job IS wording. A new synthesis module
 #: is covered on the day it is written.
 def _synthesis_files():
-    for base, dirs, files in os.walk(REPORTS):
+    for walk_root in (REPORTS, VESTA):
+      for base, dirs, files in os.walk(walk_root):
         dirs[:] = [d for d in dirs if d not in ("__pycache__", "narrate")]
         for name in sorted(files):
-            if not name.endswith(".py") or name in ("text.py", "standing.py"):
+            # ⚠️ `style.py` IS a wording file and always was — it lived under
+            # `narrate/`, which the dirs-prune above excluded WHOLESALE, so its
+            # membership in the renderer set was an accident of its address.
+            # TASK-115 moved it to vesta/shared (the agent's chat/digest need
+            # `inert`, so it is shared by dependency) and the prune no longer
+            # covers it; it is excluded by NAME now, which is what the original
+            # exclusion actually meant.
+            if not name.endswith(".py") or name in ("text.py", "standing.py",
+                                                    "style.py"):
                 continue
             yield os.path.join(base, name)
 
@@ -107,7 +117,8 @@ def test_the_shared_JUDGEMENTS_have_one_definition_each() -> None:
     still disagree, if each decides for itself what "worse" means or what a
     device is called. These are the three that both layers ask."""
     package = {}
-    for base, dirs, files in os.walk(REPORTS):
+    for walk_root in (REPORTS, VESTA):
+      for base, dirs, files in os.walk(walk_root):
         dirs[:] = [d for d in dirs if d != "__pycache__"]
         for name in sorted(files):
             if name.endswith(".py"):

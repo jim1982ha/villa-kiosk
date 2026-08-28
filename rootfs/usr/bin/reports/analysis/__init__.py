@@ -22,7 +22,7 @@ deliberately; a missing module is still visible as an absent skip line, not
 as silence, because the registry stays keyed by name and sorted.
 """
 
-from .base import AnalysisModule, Finding, ModuleContext, dedup_key
+from vesta.shared.analysis.base import AnalysisModule, Finding, ModuleContext, dedup_key
 from .registry import describe_skips, gate, register, registered, run_all
 
 __all__ = ["AnalysisModule", "Finding", "ModuleContext", "dedup_key",

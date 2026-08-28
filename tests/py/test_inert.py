@@ -37,7 +37,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports.narrate import style                              # noqa: E402
+from vesta.shared import style                              # noqa: E402
 from agent import fallback as agent_fallback                  # noqa: E402
 
 #: The exact name that broke it, kept as the regression case.
@@ -233,6 +233,7 @@ def test_no_reader_ever_sees_the_word_caretaker() -> None:
     # where it APPLIES is `feedback_audit-applicable-set`, and this is its
     # textbook shape: the scan root was the file the rule was born in.
     roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports"),
+             os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta"),
              os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")]
     offenders: List[str] = []
     for root in roots:
@@ -289,7 +290,7 @@ def test_a_home_assistant_name_is_humanised_before_it_is_printed() -> None:
     Two properties, because fixing only the first is how a real label gets
     damaged in the name of tidiness (see `readable_label`'s own docstring).
     """
-    from reports.text import readable_label
+    from vesta.shared.text import readable_label
 
     assert readable_label("critical_doorbell---parking_gate") == (
         "Critical doorbell — parking gate")
@@ -317,7 +318,7 @@ def test_both_readers_of_the_label_map_humanise_it() -> None:
     import re
 
     targets = [
-        "rootfs/usr/bin/reports/analysis/base.py",
+        "rootfs/usr/bin/vesta/shared/analysis/base.py",
     ]
     offenders = []
     for rel in targets:

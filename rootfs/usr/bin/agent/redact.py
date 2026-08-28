@@ -40,7 +40,7 @@ import re
 from typing import Any, Dict, List, Mapping, Tuple
 
 from agent import contracts
-from reports.narrate.style import inert
+from vesta.shared.style import inert
 
 #: Keys a tool result may carry into the transcript. Everything else is dropped
 #: whether or not anyone has thought about it.

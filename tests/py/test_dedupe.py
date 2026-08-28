@@ -36,9 +36,9 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from reports import pipeline as pipeline_mod                      # noqa: E402
 from reports.analysis import registry                             # noqa: E402
-from reports.analysis.base import (Finding, ModuleContext,        # noqa: E402
+from vesta.shared.analysis.base import (Finding, ModuleContext,        # noqa: E402
                                    dedup_key, subject_key)
-from reports.analysis.modules import (level_anomaly, sensor_health,  # noqa: E402,F401
+from vesta.shared.analysis.modules import (level_anomaly, sensor_health,  # noqa: E402,F401
                                       standby_creep)
 
 PUMP = "sensor.pool_pump_power"
@@ -117,7 +117,7 @@ def test_the_subject_key_does_not_reach_the_narration_payload() -> None:
     the ALLOW-LIST rather than over the input, so a field is admitted only by
     being named — and this one is not. Checked against the contract rather than
     against the builder, because the contract is what the guarantee rests on."""
-    from reports.contracts import PAYLOAD_ALLOWED_FIELDS
+    from vesta.shared.contracts import PAYLOAD_ALLOWED_FIELDS
     assert "subject_key" not in PAYLOAD_ALLOWED_FIELDS
     from reports.narrate import payload as payload_mod
     reduced = payload_mod.finding_payload(_finding(PUMP))
@@ -188,7 +188,7 @@ def test_the_two_keys_share_one_hash_expression() -> None:
     recognising the same equipment — silently, because both keys stay
     well-formed. `dedup_key` now calls `subject_key`; this pins that it does.
     """
-    from reports.analysis import base
+    from vesta.shared.analysis import base
     source = inspect.getsource(base.dedup_key)
     assert "subject_key(" in source, (
         "`dedup_key` must derive its digest from `subject_key`, not restate the "

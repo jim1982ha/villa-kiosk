@@ -36,7 +36,7 @@ from . import collect, ledger
 from .hass import HassClient, HassUnavailable, statistic_ids_of
 from .log import log
 from .stats import list_statistic_ids
-from .text import name_of
+from vesta.shared.text import name_of
 
 # Capability names. Strings rather than an enum for the same reason
 # contracts.py uses tuples — they cross into JSON and into the SPA.

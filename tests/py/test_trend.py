@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from reports import trend  # noqa: E402
 from reports.narrate import ReportContext  # noqa: E402
-from reports.narrate.style import inert  # noqa: E402
+from vesta.shared.style import inert  # noqa: E402
 
 
 def _ctx(**kw: Any) -> ReportContext:

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 # ⚠️ THE HEADING COMES FROM THE VOCABULARY — see `style.py`. Asserting the
 # rendered string pinned PRESENTATION while claiming to pin structure.
-from reports.narrate.style import heading
+from vesta.shared.style import heading
 
 from typing import Any, Dict, List
 

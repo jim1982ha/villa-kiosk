@@ -27,8 +27,8 @@ import asyncio
 from typing import Any, Dict, List, Sequence, Tuple
 
 from ..log import swallow, warn
-from ..text import readable_label
-from .base import AnalysisModule, Finding, ModuleContext, skip
+from vesta.shared.text import readable_label
+from vesta.shared.analysis.base import AnalysisModule, Finding, ModuleContext, skip
 
 #: One module's budget. Generous — a month of hourly statistics for twenty
 #: meters is real work on a Pi — but bounded, because the tick that runs it is
@@ -256,9 +256,9 @@ def _snapshot() -> Dict[str, Any]:
 # superseded by this block — a new module is added HERE, deliberately, and an
 # absent one is still visible as an absent skip line.
 def _register_shipped() -> None:
-    from .modules.level_anomaly import LevelAnomaly
-    from .modules.sensor_health import SensorHealth
-    from .modules.standby_creep import StandbyCreep
+    from vesta.shared.analysis.modules.level_anomaly import LevelAnomaly
+    from vesta.shared.analysis.modules.sensor_health import SensorHealth
+    from vesta.shared.analysis.modules.standby_creep import StandbyCreep
     for module in (LevelAnomaly(), SensorHealth(), StandbyCreep()):
         register(module)
 

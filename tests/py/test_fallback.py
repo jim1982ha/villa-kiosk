@@ -243,7 +243,7 @@ def test_the_history_does_NOT_claim_the_deterministic_renderer_wrote_it() -> Non
     """⚠️ THE FIELD'S OWN DOCSTRING IS "what actually wrote this one". A brief
     the renderer RAISED on, recorded as `deterministic`, is that instrument
     describing the single case it exists to make visible as a normal one."""
-    from reports.contracts import NARRATION_FALLBACK, NARRATION_RECORD
+    from vesta.shared.contracts import NARRATION_FALLBACK, NARRATION_RECORD
 
     entry = _run_with_a_broken_renderer()
     assert entry["narration"] == NARRATION_FALLBACK

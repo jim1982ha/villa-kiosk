@@ -26,7 +26,7 @@ from typing import Dict, List, Tuple
 
 import pytest
 
-from reports.contracts import CONTRACT_SETS, CONTRACT_VERSION
+from vesta.shared.contracts import CONTRACT_SETS, CONTRACT_VERSION
 from agent.contracts import CONTRACT_SETS as AGENT_SETS
 from agent.contracts import CONTRACT_VERSION as AGENT_VERSION
 
@@ -268,7 +268,7 @@ def test_an_audience_is_NOT_a_role() -> None:
     well read the facility brief, which is why neither set may be derived from
     the other — and why `ops` had no business being in the audience list."""
     from agent import contracts as agent_contracts
-    from reports import contracts as reports_contracts
+    from vesta.shared import contracts as reports_contracts
 
     assert agent_contracts.AUDIENCE == reports_contracts.AUDIENCE, (
         "the agent invented its own audience vocabulary")
