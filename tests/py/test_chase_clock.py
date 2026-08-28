@@ -122,26 +122,103 @@ def test_the_chase_task_is_STARTED_and_CANCELLED_by_the_proxy() -> None:
 
 
 # ── a ticked job counts as "somebody has this" ──────────────────────────────
-def test_a_TICKED_JOB_marks_its_concern_seen() -> None:
-    """⚠️ TWO "DONE" BUTTONS DID TWO DIFFERENT THINGS. The tablet's completes
-    the item AND acknowledges; Telegram's only completed the item, so a
-    facility manager who did the work and pressed Done on their phone left the
-    concern on the wall and — if critical — still being chased."""
+def test_a_TICKED_JOB_RUNS_THE_SAME_ACT_AS_THE_BUTTON() -> None:
+    """⚠️ THREE SURFACES, ONE ACT (2026-08-29, reported: "I checked the item in
+    Home Assistant … nothing has been modified in the Reason tab and in the
+    Telegram message"). Ticking the row in Home Assistant's own to-do panel,
+    pressing ✅ on the phone and pressing Done on the tablet are the same
+    statement — the work is finished — so they run one implementation.
+
+    A LOCAL `transition` HERE WOULD BE A FOURTH WAY TO END AN ALERT and the
+    first to fall behind; `actions.apply` also writes the `action: cNN done by
+    …` line, so the trace reads identically whichever surface did it.
+    """
+    import inspect
+    import re as _re
     from vesta.supervise.agent import task
     assert hasattr(task, "reconcile_done")
-    code = _code(task.reconcile_done)
-    assert "acknowledge(" in code, "a ticked job acknowledges nothing"
+    code = _re.sub(r"#[^\n]*", "", inspect.getsource(task.reconcile_done))
+    assert 'apply(' in code and '"done"' in code, (
+        "a ticked job no longer runs the shared act, so Home Assistant's own "
+        "panel and the phone's button do different things")
+    assert "transition(" not in code, (
+        "the lifecycle is moved here by hand instead of through the one act")
     assert "completed" in code, "it does not read the COMPLETED half of the list"
 
 
-def test_it_acknowledges_rather_than_CLOSES() -> None:
-    """⚠️ A TICKED JOB MEANS SOMEBODY DEALT WITH THE WORK, NOT THAT THE PUMP
-    STOPPED. Closing is a claim about the villa; only the condition clearing
-    can make it."""
-    from vesta.supervise.agent import task
-    code = _code(task.reconcile_done)
-    assert "transition(" not in code, "ticking a job moves the lifecycle state"
+def test_a_TICKED_JOB_CLOSES_THE_ALERT_EVERYWHERE(tmp_path: Any) -> None:
+    """⚠️ THIS REVERSES A PRINCIPLE THIS FILE USED TO PIN, AND THE REVERSAL IS
+    THE OWNER'S. The old rule read: "a ticked job means somebody dealt with the
+    WORK, not that the pump stopped — closing is a claim about the villa". That
+    was right while `Done` only acknowledged. On 2026-08-28 the owner merged
+    Done and the closer ("should imply the same effect"), so ✅ now ticks,
+    records and SETTLES; leaving the Home Assistant path at an acknowledgement
+    made the same gesture mean two different things depending on where it was
+    made — the alert kept its buttons on the phone and its row in the briefing.
 
+    ⚠️ WHAT THE OLD PRINCIPLE PROTECTED IS STILL PROTECTED, JUST NOT HERE. "The
+    condition may not have cleared" is the verification sweep's question, and it
+    still runs over settled alerts; a person saying the work is done was never
+    the same claim as the villa observing it, and neither is asked to be.
+    """
+    import asyncio
+    import inspect
+    import re as _re
+    from vesta.supervise.agent import task, concerns as concerns_mod
+
+    code = _re.sub(r"#[^\n]*", "", inspect.getsource(task.reconcile_done))
+    assert "acknowledge(" not in code, (
+        "it acknowledges directly again, which is the half-close that left "
+        "the phone and the briefing out of step")
+
+    # ⚠️ RUN, NOT READ: the act must actually settle the row.
+    seen: list = []
+
+    async def fake_apply(session, action, concern_id, **kw):
+        seen.append((action, concern_id, kw.get("by")))
+        class _Out:
+            ok = True
+        return _Out()
+
+    # ⚠️ THE STORE IS REDIRECTED FIRST. This file has no autouse fixture for it,
+    # so a write would land on the real path, `read()` would return nothing, and
+    # the loop would never reach the act — a test that passes by never running
+    # the thing it is about.
+    original_file = concerns_mod.CONCERNS_FILE
+    concerns_mod.CONCERNS_FILE = str(tmp_path / "c.json")
+
+    from vesta.supervise.agent import actions as actions_mod
+    original = actions_mod.apply
+    actions_mod.apply = fake_apply                    # type: ignore[assignment]
+    try:
+        concerns_mod._write([{"id": "c1", "title": "t", "state": "open",
+                              "delivered_at": "x", "acknowledged_at": ""}])
+
+        async def _tasks(_h, _lists, status=""):
+            return [{"rule_id": "c1", "uid": "u1"}] if status == "completed" else []
+
+        from vesta.adapters import ledger as ledger_mod
+        original_tasks = ledger_mod.todo_tasks
+        ledger_mod.todo_tasks = _tasks                # type: ignore[assignment]
+
+        class _Hass:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *a): return False
+            async def command(self, *a, **k): return None
+        from vesta.adapters import hass as hass_mod
+        original_client = hass_mod.HassClient
+        hass_mod.HassClient = lambda _s: _Hass()      # type: ignore[assignment]
+        try:
+            asyncio.run(task.reconcile_done(object(),
+                                            config={"task_list": "todo.x"}))
+        finally:
+            ledger_mod.todo_tasks = original_tasks    # type: ignore[assignment]
+            hass_mod.HassClient = original_client     # type: ignore[assignment]
+    finally:
+        actions_mod.apply = original                  # type: ignore[assignment]
+        concerns_mod.CONCERNS_FILE = original_file
+
+    assert seen == [("done", "c1", "the job was ticked")], seen
 
 def test_an_UNDELIVERED_concern_is_not_acknowledged_by_a_tick() -> None:
     """Nobody was told, so there is nothing to acknowledge — and stamping it

@@ -1,3 +1,16 @@
+## 2.865.0
+
+### Fixed — ticking a job in Home Assistant's own list left the alert open everywhere else
+
+Checking the item off directly in the to-do panel removed it from the list and
+changed nothing else: the Reason tab still showed the alert as open and the
+Telegram message kept all of its buttons. Reconciliation was only
+ACKNOWLEDGING the alert, which was the right half while Done and the closer
+were two separate actions — since they were merged, ✅ ticks, records and
+settles, so an acknowledgement alone left the alert open behind a job the
+owner had plainly finished. The tick now runs the same act as the button, so
+the tablet, the phone and Home Assistant's own list agree.
+
 ## 2.864.0
 
 ### Changed — every message opens the same way, and the daily job list waits for morning

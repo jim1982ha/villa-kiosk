@@ -282,11 +282,33 @@ async def reconcile_done(session: Any, *,
             # `acknowledge` would happily stamp it, which would stop a chase
             # that was never going to start and hide the row from the wall.
             continue
-        ok, _ = concerns_mod.acknowledge(str(row.get("id")),
-                                         by="the job was ticked", now=now)
-        marked += 1 if ok else 0
+        # ⚠️ THE SAME ACT AS PRESSING ✅, NOT A LESSER ONE (2026-08-29,
+        # reported: "I checked the item in Home Assistant … nothing has been
+        # modified in the Reason tab and in the Telegram message"). This used
+        # to acknowledge and stop there, which was right while Done was two
+        # separate things; since ✅ became tick + record + settle, an
+        # acknowledgement alone left the alert OPEN — so it kept its buttons on
+        # the phone and its row in the briefing, and the three surfaces
+        # disagreed about an item the owner had plainly finished.
+        #
+        # ⚠️ THROUGH `actions.apply`, WHICH IS THE WHOLE POINT OF THAT MODULE:
+        # ticking in Home Assistant, pressing the button on the phone and
+        # pressing it on the tablet are now one implementation. A local
+        # `transition` here would be a fourth way to end an alert, and the
+        # first to fall behind. It also logs `action: cNN done by …`, so the
+        # trace reads the same whichever surface did it.
+        #
+        # ⚠️ AND THE TICK INSIDE IT IS A NO-OP, DELIBERATELY REACHED. `_done`
+        # completes the item first; this one is already completed, so it is not
+        # among the open rows and the act proceeds to the settle. Cheaper to let
+        # that happen than to add a "skip the tick" flag nobody else needs.
+        from vesta.supervise.agent import actions as actions_mod
+        outcome = await actions_mod.apply(session, "done", str(row.get("id")),
+                                          by="the job was ticked",
+                                          config=config, now=now)
+        marked += 1 if outcome.ok else 0
     if marked:
-        stage("task", f"{marked} concern(s) marked seen — their job was ticked")
+        stage("task", f"{marked} alert(s) closed — their job was ticked")
     return marked
 
 
