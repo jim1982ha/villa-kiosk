@@ -22,11 +22,11 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import contracts  # noqa: E402
-from agent.tools import ALL_TOOLS  # noqa: E402
-from agent.tools import base as tools_base  # noqa: E402
-from agent.tools import read as read_tools  # noqa: E402
-from observe import snapshot  # noqa: E402
+from vesta.supervise.agent import contracts
+from vesta.supervise.agent.tools import ALL_TOOLS
+from vesta.supervise.agent.tools import base as tools_base
+from vesta.supervise.agent.tools import read as read_tools
+from vesta.supervise.observe import snapshot
 
 
 def _run(coro: Any) -> Any:
@@ -244,7 +244,7 @@ def test_every_BaseTool_subclass_reaches_ALL_TOOLS_or_is_a_stated_exception() ->
     import importlib
     import pkgutil
 
-    from agent.tools.base import BaseTool
+    from vesta.supervise.agent.tools.base import BaseTool
 
     #: name -> why it is not collected. Anything else must be in ALL_TOOLS.
     EXEMPT = {
@@ -272,9 +272,9 @@ def test_every_BaseTool_subclass_reaches_ALL_TOOLS_or_is_a_stated_exception() ->
 
     collected = {cls.__name__ for cls in ALL_TOOLS}
     found: Dict[str, str] = {}
-    package = importlib.import_module("agent.tools")
+    package = importlib.import_module("vesta.supervise.agent.tools")
     for info in pkgutil.iter_modules(package.__path__):
-        module = importlib.import_module(f"agent.tools.{info.name}")
+        module = importlib.import_module(f"vesta.supervise.agent.tools.{info.name}")
         for attr in vars(module).values():
             if (isinstance(attr, type) and issubclass(attr, BaseTool)
                     and attr.__module__ == module.__name__):
@@ -300,7 +300,7 @@ def test_the_reply_tool_cannot_be_told_who_to_reply_to() -> None:
     away from an agent that can message anybody it can name. A tool with no
     vocabulary for a recipient is not.
     """
-    from agent.tools import reply as reply_mod
+    from vesta.supervise.agent.tools import reply as reply_mod
 
     tool = reply_mod.build(targets=["notify.a"], thread_key="telegram:1")
     props = set(tool.inputSchema.get("properties", {}))
@@ -381,7 +381,7 @@ def test_read_villa_returns_a_document_with_a_cache_prefix() -> None:
 
 
 def _salient_fixture():
-    from observe import salience as sal
+    from vesta.supervise.observe import salience as sal
     rows = [{"day": f"2026-08-{i + 1:02d}", "value": v}
             for i, v in enumerate([10, 12, 8, 11, 9, 10, 13, 7])]
     return [sal.score_numeric(rows, 95.0, entity_id="sensor.loud"),
@@ -402,7 +402,7 @@ def test_read_salient_ranks_and_can_report_the_unscorable() -> None:
     A contract test that pins the wrong contract is worse than none — it makes
     the defect look deliberate to everybody who reads it afterwards.
     """
-    from agent.refs import RefTable
+    from vesta.supervise.agent.refs import RefTable
     table = RefTable()
     table.ref_for("sensor.loud")
     table.ref_for("sensor.thin")
@@ -478,8 +478,8 @@ def test_an_UNWIRED_tool_REFUSES_rather_than_returning_empty() -> None:
     """
     import asyncio
 
-    from agent.tools import logs as logs_mod
-    from agent.tools import read as read_mod
+    from vesta.supervise.agent.tools import logs as logs_mod
+    from vesta.supervise.agent.tools import read as read_mod
 
     for tool in (read_mod.ReadSalient(), logs_mod.LOG_TOOLS[0]()):
         blocks = asyncio.run(tool.call({"window_hours": 24}))

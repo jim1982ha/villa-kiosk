@@ -31,7 +31,11 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import reason, registry as reg, runtime, triage, upstream  # noqa: E402
+from vesta.supervise.agent import reason
+from vesta.supervise.agent import registry as reg
+from vesta.supervise.agent import runtime
+from vesta.supervise.agent import triage
+from vesta.supervise.agent import upstream
 
 SHIPPED = os.path.join(REPO_ROOT, "rootfs", "usr", "bin")
 
@@ -107,7 +111,7 @@ def test_investigate_FORWARDS_it_rather_than_accepting_it_politely() -> None:
 def test_the_SCHEDULER_hands_its_session_to_both_tiers() -> None:
     """⚠️ WHERE IT WAS ACTUALLY DROPPED. `_run_once` has had the session since
     it was written and called both tiers without it."""
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
     src = inspect.getsource(scheduler._run_once)
     assert re.search(r"triage_mod\.run\((?:[^)]|\n)*session=session", src), (
         "the triage pass is started without the session")

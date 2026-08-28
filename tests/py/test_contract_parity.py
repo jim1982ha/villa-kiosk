@@ -27,8 +27,8 @@ from typing import Dict, List, Tuple
 import pytest
 
 from vesta.shared.contracts import CONTRACT_SETS, CONTRACT_VERSION
-from agent.contracts import CONTRACT_SETS as AGENT_SETS
-from agent.contracts import CONTRACT_VERSION as AGENT_VERSION
+from vesta.supervise.agent.contracts import CONTRACT_SETS as AGENT_SETS
+from vesta.supervise.agent.contracts import CONTRACT_VERSION as AGENT_VERSION
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TS_PATH = os.path.join(REPO_ROOT, "src", "reports", "reportsTypes.ts")
@@ -247,7 +247,7 @@ def test_the_sender_roles_are_the_APPS_OWN_PROFILES() -> None:
     """
     import re
 
-    from agent import contracts as agent_contracts
+    from vesta.supervise.agent import contracts as agent_contracts
 
     proxy = _read(PROXY_PATH) if "PROXY_PATH" in globals() else open(
         os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
@@ -267,7 +267,7 @@ def test_an_audience_is_NOT_a_role() -> None:
     one-to-one onto `auth/permissions.ts` profiles". The owner may perfectly
     well read the facility brief, which is why neither set may be derived from
     the other — and why `ops` had no business being in the audience list."""
-    from agent import contracts as agent_contracts
+    from vesta.supervise.agent import contracts as agent_contracts
     from vesta.shared import contracts as reports_contracts
 
     assert agent_contracts.AUDIENCE == reports_contracts.AUDIENCE, (
@@ -292,7 +292,7 @@ def test_the_severity_ORDERING_agrees_across_both_languages() -> None:
     """
     import re
 
-    from agent import contracts as agent_contracts
+    from vesta.supervise.agent import contracts as agent_contracts
 
     ts = _agent_ts_source()
     assert "export function severityRank" in ts, (

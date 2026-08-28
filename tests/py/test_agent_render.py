@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import render                                      # noqa: E402
+from vesta.supervise.agent import render
 
 EV: List[Dict[str, Any]] = [
     {"tool": "read_salient", "args_digest": "a1",

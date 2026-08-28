@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import flagtypes                                   # noqa: E402
+from vesta.supervise.agent import flagtypes
 
 
 @pytest.fixture(autouse=True)
@@ -375,7 +375,7 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
         "the thumb handler no longer delegates to the one place an act is "
         "defined, so the tablet and the phone can drift apart")
     import inspect
-    from agent import actions as actions_mod
+    from vesta.supervise.agent import actions as actions_mod
     judge = re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._judge))
     assert "flagtypes_mod.record(" in judge, (
         "pressing a thumb records a verdict and teaches nothing — the button's "
@@ -392,7 +392,7 @@ def test_the_kind_is_STAMPED_when_the_concern_is_raised() -> None:
     settings list silently stops growing."""
     import inspect
     import re
-    from agent.tools import concern as concern_mod
+    from vesta.supervise.agent.tools import concern as concern_mod
 
     code = re.sub(r"#[^\n]*", "", inspect.getsource(concern_mod.RaiseConcern.run))
     assert "flag_type=" in code, "the kind is not stamped at raise time"
@@ -404,7 +404,7 @@ def test_the_weights_reach_the_document_every_check_reads() -> None:
     much weaker promise than the one the settings screen makes."""
     import inspect
     import re
-    from agent import sources
+    from vesta.supervise.agent import sources
 
     code = re.sub(r"#[^\n]*", "", inspect.getsource(sources.build_document))
     assert "scored = flagtypes_mod.apply_weights" in code, (

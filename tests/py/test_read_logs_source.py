@@ -28,8 +28,10 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import redact, refs as refs_mod, sources                # noqa: E402
-from agent.tools import logs as log_tools                          # noqa: E402
+from vesta.supervise.agent import redact
+from vesta.supervise.agent import refs as refs_mod
+from vesta.supervise.agent import sources
+from vesta.supervise.agent.tools import logs as log_tools
 
 
 def _run(awaitable: Any) -> Any:

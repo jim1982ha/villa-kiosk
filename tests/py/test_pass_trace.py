@@ -166,7 +166,7 @@ def test_the_outbox_reports_even_when_there_is_NOTHING_to_carry() -> None:
     explanations: there was nothing to send, or the delivery tier never ran."""
     import inspect
 
-    from agent import outbox
+    from vesta.supervise.agent import outbox
 
     src = inspect.getsource(outbox.sweep)
     code = "\n".join(l for l in src.splitlines()
@@ -181,7 +181,7 @@ def test_a_thin_document_is_a_WARNING_and_not_just_a_number() -> None:
     """⚠️ THE 480-CHARACTER DOCUMENT THAT COST AN OBSERVATION PERIOD. It was
     well-formed, which is why nobody caught it; a size with no threshold beside
     it is a statistic somebody might notice rather than a fault that arrives."""
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
 
     buf = io.StringIO()
     with redirect_stdout(buf):

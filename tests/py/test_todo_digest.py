@@ -34,7 +34,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import digest, task                                # noqa: E402
+from vesta.supervise.agent import digest
+from vesta.supervise.agent import task
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -60,7 +61,7 @@ def test_the_EVENT_TYPE_constant_is_GONE_not_merely_unused() -> None:
     declared would let the next reader wire it back in one plausible line —
     the shape CLAUDE.md warns about for the deleted blueprint-era names."""
     assert not hasattr(task, "EVENT_TYPE")
-    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                             "task.py"), encoding="utf-8").read()
     body = re.sub(r"#[^\n]*", "", src)
     assert "vesta_task_event" not in body.split('"""', 2)[-1], (
@@ -187,7 +188,7 @@ def test_every_refusal_has_a_DISTINCT_reason() -> None:
 def test_the_digest_is_REACHED_from_a_clock() -> None:
     """⚠️ THE ASSERTION THAT WOULD CATCH THE DEFECT THIS REPO KEEPS MAKING. A
     digest nothing calls is `concerns.verify` again."""
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
     code = _code(scheduler.chase_forever)
     assert "send_daily" in code, "nothing ever sends the digest"
 

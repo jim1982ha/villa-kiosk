@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(
     "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import scheduler                                    # noqa: E402
+from vesta.supervise.agent import scheduler
 from fake_provider import FakeProvider, says                    # noqa: E402
 
 ON: Dict[str, Any] = {"enabled": True, "triage_minutes": 15,
@@ -29,8 +29,8 @@ ON: Dict[str, Any] = {"enabled": True, "triage_minutes": 15,
 
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from agent import audit as audit_mod
-    from agent import budget as budget_mod
+    from vesta.supervise.agent import audit as audit_mod
+    from vesta.supervise.agent import budget as budget_mod
     monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "a.json"))
     monkeypatch.setattr(budget_mod, "BUDGET_FILE", str(tmp_path / "b.json"))
     monkeypatch.setattr(budget_mod, "_BREAKER", None)
@@ -62,7 +62,7 @@ def test_a_spent_budget_stops_it_before_the_provider() -> None:
     budget while appearing to test an exhausted one. Caught by this test failing
     for the wrong reason.
     """
-    from agent import budget as budget_mod
+    from vesta.supervise.agent import budget as budget_mod
 
     tight = {**ON, "monthly_limit": 1}
     budget_mod.spend("run")
@@ -160,7 +160,7 @@ def test_run_once_DECLINES_without_a_provider_so_the_caller_must_pass_one() -> N
     import os
     import re
 
-    from agent import scheduler as scheduler_mod
+    from vesta.supervise.agent import scheduler as scheduler_mod
 
     assert "provider" in inspect.signature(scheduler_mod.run_once).parameters
     reason = asyncio.run(scheduler_mod.run_once(

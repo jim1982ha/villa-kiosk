@@ -332,14 +332,14 @@ def test_the_two_AUDIENCE_OF_ROLE_tables_agree() -> None:
     `reports/` (layering is strictly downward), and this fact is needed on both
     sides. Two copies with nothing checking them is the drift this repo has paid
     for repeatedly — so they are pinned equal rather than trusted."""
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
     assert people_mod.AUDIENCE_OF_ROLE == playbooks.AUDIENCE_OF_ROLE
 
 
 def test_policy_delegates_to_this_module() -> None:
     """The agent's own entry point must resolve identically — one table, one
     answer, not two lookups that agree today."""
-    from agent import policy
+    from vesta.supervise.agent import policy
     assert policy.sender_role(CFG, channel="telegram",
                               sender_id="765979167") == "owner"
     assert policy.sender_role(CFG, channel="telegram",

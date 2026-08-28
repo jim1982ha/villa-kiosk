@@ -180,7 +180,7 @@ def test_the_ROLES_the_server_permits_can_REACH_the_surface() -> None:
     # "not found" and said so, which is this file's own vacuous-pass guard doing
     # its job. Importing follows the alias wherever it points and cannot go
     # blind the next time the declaration moves.
-    from agent import actions as actions_mod
+    from vesta.supervise.agent import actions as actions_mod
     assert "TASK_ACK_ROLES" in proxy, (
         "TASK_ACK_ROLES not found; this test is checking nothing")
     permitted = set(actions_mod.MAY_ACT)

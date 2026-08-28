@@ -25,13 +25,20 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import audit, budget, concerns, contracts, policy  # noqa: E402
-from agent import runtime, triage  # noqa: E402
-from agent.concerns import Concern  # noqa: E402
-from agent.refs import RefTable  # noqa: E402
-from agent.registry import Registry  # noqa: E402
-from agent.tools.base import BaseTool, data  # noqa: E402
-from agent.tools.concern import RaiseConcern, writer  # noqa: E402
+from vesta.supervise.agent import audit
+from vesta.supervise.agent import budget
+from vesta.supervise.agent import concerns
+from vesta.supervise.agent import contracts
+from vesta.supervise.agent import policy
+from vesta.supervise.agent import runtime
+from vesta.supervise.agent import triage
+from vesta.supervise.agent.concerns import Concern
+from vesta.supervise.agent.refs import RefTable
+from vesta.supervise.agent.registry import Registry
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import data
+from vesta.supervise.agent.tools.concern import RaiseConcern
+from vesta.supervise.agent.tools.concern import writer
 from fake_provider import FakeProvider, asks, says  # noqa: E402
 
 #: A device id shaped like a real one and belonging to no property.
@@ -265,7 +272,7 @@ def test_a_figure_past_the_summary_cutoff_is_still_sourced() -> None:
     the concern, so a run that read a ranking of twenty-five devices could
     source a number from the first entry and nothing after it. Two fields now:
     `summary` for the reader, `cited` for the check (registry.CITED_CHARS)."""
-    from agent import registry as reg_mod
+    from vesta.supervise.agent import registry as reg_mod
 
     padded = "x" * (reg_mod.SUMMARY_CHARS + 50)
     row = [{"tool": "read_salient", "args_digest": "d",
@@ -443,8 +450,8 @@ def test_the_built_registry_carries_the_table_its_tools_mint_into(
     anywhere. Found by a mutation that survived every other test in this file:
     `build_registry` dropping `refs=` changes nothing any of them can see.
     """
-    from agent import registry as reg_mod
-    from agent import sources
+    from vesta.supervise.agent import registry as reg_mod
+    from vesta.supervise.agent import sources
 
     monkeypatch.setattr(sources, "_journal_rows",
                         lambda: [{"id": DEVICE, "s": "340",
@@ -472,7 +479,7 @@ def test_read_concerns_is_wired_to_the_store_the_writes_go_to() -> None:
     the model to check before raising, and `raise_concern` REFUSES a repeat that
     does not supersede — so an unwired reader is an instruction the model cannot
     comply with."""
-    from agent import sources
+    from vesta.supervise.agent import sources
 
     stored, _ = concerns.raise_concern(Concern(
         subject_key=contracts.subject_key(DEVICE), title="already open",
@@ -491,7 +498,7 @@ def test_read_concerns_reads_the_ONE_live_store_in_every_mode() -> None:
     LIVE (stamped informational), so the model's dedupe read must see it from
     every mode — the shadow-aware split this test used to pin is gone, and a
     reader that filtered by mode would re-open the refused-supersede loop."""
-    from agent import sources
+    from vesta.supervise.agent import sources
 
     _call(_tool(cfg={"mode": "observe"}))
     for mode in ("observe", "live", "ask"):
@@ -521,7 +528,7 @@ def test_a_concern_records_WHICH_investigation_produced_it() -> None:
     """
     import inspect
 
-    from agent import runtime as runtime_mod
+    from vesta.supervise.agent import runtime as runtime_mod
 
     class _Sink:
         def __init__(self) -> None:

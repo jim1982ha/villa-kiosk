@@ -41,8 +41,13 @@ def _package_sources() -> List[Tuple[str, str]]:
     PACKAGE, and both were broken outside `analysis/modules/`.
     """
     out: List[Tuple[str, str]] = []
-    for pkg_root in (PACKAGE_DIR, VESTA_DIR):
-      for root, _dirs, files in os.walk(pkg_root):
+    # ⚠️ supervise IS PRUNED, AND THE PRUNE IS THE OLD SCOPE, NOT A NARROWING.
+    # These conventions were written for the reports package (now shared +
+    # adapters + brief); the agent has its own suites and its own idioms — its
+    # ISO-stamp parsing lives beside the writer in concerns.py by an explicit
+    # 2026-08-28 decision this pin would otherwise indict as a day-key parse.
+    for root, dirs, files in os.walk(VESTA_DIR):
+        dirs[:] = [d for d in dirs if d != "supervise"]
         if "__pycache__" in root:
             continue
         for name in sorted(files):

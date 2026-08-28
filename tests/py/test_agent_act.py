@@ -18,11 +18,11 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import audit as audit_mod                           # noqa: E402
-from agent import policy as policy_mod                         # noqa: E402
-from agent import proposals as proposals_mod                   # noqa: E402
-from agent.refs import RefTable                                # noqa: E402
-from agent.tools import act as act_mod                         # noqa: E402
+from vesta.supervise.agent import audit as audit_mod
+from vesta.supervise.agent import policy as policy_mod
+from vesta.supervise.agent import proposals as proposals_mod
+from vesta.supervise.agent.refs import RefTable
+from vesta.supervise.agent.tools import act as act_mod
 
 LAMP = "light.probe_lamp"
 DOOR = "switch.probe_door_relay"
@@ -196,7 +196,7 @@ def test_a_DIFFERENT_action_is_not_a_replay() -> None:
 def test_the_digest_is_stable_under_key_ORDER() -> None:
     """⚠️ Or the same call fingerprints differently and the idempotency guard
     silently stops guarding."""
-    from agent import contracts
+    from vesta.supervise.agent import contracts
     assert contracts.args_digest({"a": 1, "b": 2}) == \
         contracts.args_digest({"b": 2, "a": 1})
 
@@ -206,8 +206,8 @@ def test_act_service_is_mode_ACT_so_MCP_excludes_it_by_construction() -> None:
     """⚠️ REQ-047, and the reason `TOOL_MODE` became three-valued BEFORE this
     file existed: the MCP surface is an allow-list over modes, so this is
     excluded by BEING what it is rather than by anyone remembering to deny it."""
-    from agent import mcp_server
-    from agent.registry import Registry
+    from vesta.supervise.agent import mcp_server
+    from vesta.supervise.agent.registry import Registry
 
     tool, _ = _tool()
     assert tool.mode == "ACT"
@@ -215,7 +215,7 @@ def test_act_service_is_mode_ACT_so_MCP_excludes_it_by_construction() -> None:
 
 
 def test_it_is_absent_from_the_shared_registry() -> None:
-    from agent.tools import ALL_TOOLS
+    from vesta.supervise.agent.tools import ALL_TOOLS
     assert "act_service" not in {cls().name for cls in ALL_TOOLS}
 
 

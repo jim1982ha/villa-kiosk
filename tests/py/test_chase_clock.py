@@ -24,7 +24,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import route, scheduler                            # noqa: E402
+from vesta.supervise.agent import route
+from vesta.supervise.agent import scheduler
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -117,7 +118,7 @@ def test_a_TICKED_JOB_marks_its_concern_seen() -> None:
     the item AND acknowledges; Telegram's only completed the item, so a
     facility manager who did the work and pressed Done on their phone left the
     concern on the wall and — if critical — still being chased."""
-    from agent import task
+    from vesta.supervise.agent import task
     assert hasattr(task, "reconcile_done")
     code = _code(task.reconcile_done)
     assert "acknowledge(" in code, "a ticked job acknowledges nothing"
@@ -128,7 +129,7 @@ def test_it_acknowledges_rather_than_CLOSES() -> None:
     """⚠️ A TICKED JOB MEANS SOMEBODY DEALT WITH THE WORK, NOT THAT THE PUMP
     STOPPED. Closing is a claim about the villa; only the condition clearing
     can make it."""
-    from agent import task
+    from vesta.supervise.agent import task
     code = _code(task.reconcile_done)
     assert "transition(" not in code, "ticking a job moves the lifecycle state"
 
@@ -136,7 +137,7 @@ def test_it_acknowledges_rather_than_CLOSES() -> None:
 def test_an_UNDELIVERED_concern_is_not_acknowledged_by_a_tick() -> None:
     """Nobody was told, so there is nothing to acknowledge — and stamping it
     would hide the row from the wall and stop a chase that never started."""
-    from agent import task
+    from vesta.supervise.agent import task
     assert "delivered_at" in _code(task.reconcile_done)
 
 
@@ -155,7 +156,7 @@ def test_the_join_is_the_BRACKET_both_sides_already_use() -> None:
     `[rule_id]` prefix — the same signal the blueprint's Done matches on and
     `task.summary_for` writes — so this reads `rule_id` rather than re-deriving
     it from the summary."""
-    from agent import task
+    from vesta.supervise.agent import task
     code = _code(task.reconcile_done)
     assert "todo_tasks(" in code
     assert "rule_id" in code

@@ -21,9 +21,12 @@ sys.path.insert(0, os.path.join(
     "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import policy as policy_mod, registry as reg_mod, triage  # noqa: E402
-from agent.registry import Registry                          # noqa: E402
-from agent.tools.base import BaseTool, text                   # noqa: E402
+from vesta.supervise.agent import policy as policy_mod
+from vesta.supervise.agent import registry as reg_mod
+from vesta.supervise.agent import triage
+from vesta.supervise.agent.registry import Registry
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import text
 from fake_provider import FakeProvider, asks, declines, says  # noqa: E402
 
 ON: Dict[str, Any] = {"enabled": True, "triage_minutes": 15}
@@ -31,8 +34,8 @@ ON: Dict[str, Any] = {"enabled": True, "triage_minutes": 15}
 
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    from agent import audit as audit_mod
-    from agent import budget as budget_mod
+    from vesta.supervise.agent import audit as audit_mod
+    from vesta.supervise.agent import budget as budget_mod
     monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "a.json"))
     monkeypatch.setattr(budget_mod, "BUDGET_FILE", str(tmp_path / "b.json"))
     monkeypatch.setattr(budget_mod, "_BREAKER", None)

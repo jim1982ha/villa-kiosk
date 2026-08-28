@@ -386,12 +386,12 @@ def test_no_module_reads_a_PREFIXED_agent_config_key() -> None:
     import sys
 
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import config as agent_config
+    from vesta.supervise.agent import config as agent_config
 
     banned = {f"agent_{name}" for name in agent_config.DEFAULTS}
     assert banned, "no keys derived; this test is checking nothing"
 
-    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent")
     offenders = []
     for base, _dirs, files in os.walk(root):
         for name in files:
@@ -522,7 +522,7 @@ def test_the_agent_wire_map_covers_every_setting() -> None:
     import re
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import config as agent_config
+    from vesta.supervise.agent import config as agent_config
 
     with open(os.path.join(SRC, "agent", "agentApi.ts"),
               encoding="utf-8") as handle:

@@ -252,7 +252,7 @@ def test_the_INDEX_matches_the_DIRECTORY() -> None:
     function that renders it rather than against a transcription."""
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     path = os.path.join(SHIPPED, INDEX_NAME)
     assert os.path.isfile(path), "no INDEX.md — regenerate it"
@@ -270,7 +270,7 @@ def test_the_CATALOGUE_carries_every_description_and_NO_body() -> None:
     """
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     text = playbooks.catalogue(SHIPPED)
     names = [_front_matter(_read(p))["name"] for p in _domain_files()]
@@ -339,7 +339,7 @@ def test_the_system_playbooks_are_ACTUALLY_LOADED_by_a_prompt() -> None:
     import inspect
     import os
 
-    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent")
     importers = []
     for base, _dirs, names in os.walk(root):
         for name in names:
@@ -349,7 +349,8 @@ def test_the_system_playbooks_are_ACTUALLY_LOADED_by_a_prompt() -> None:
             with open(path, encoding="utf-8") as handle:
                 tree = ast.parse(handle.read())
             for node in ast.walk(tree):
-                if isinstance(node, ast.ImportFrom) and node.module == "agent":
+                if isinstance(node, ast.ImportFrom) and node.module in (
+                    "agent", "vesta.supervise.agent"):
                     if any(a.name == "playbooks" for a in node.names):
                         importers.append(name)
                 elif isinstance(node, ast.Import):
@@ -369,9 +370,9 @@ def test_the_system_playbooks_are_ACTUALLY_LOADED_by_a_prompt() -> None:
     # check on the wiring's existence rather than on its effect.
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import chat as chat_mod
-    from agent import playbooks as playbooks_mod
-    from agent import triage as triage_mod
+    from vesta.supervise.agent import chat as chat_mod
+    from vesta.supervise.agent import playbooks as playbooks_mod
+    from vesta.supervise.agent import triage as triage_mod
 
     # ⚠️ ASSERTED ON THE EFFECT, NOT ON THE EXPRESSION. This read the source for
     # the literal `playbooks.system_prompt(` and went red on a refactor that
@@ -409,7 +410,7 @@ def test_only_ONE_voice_is_ever_loaded() -> None:
     thing in one breath."""
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     owner = playbooks.system_prompt("owner", root=SHIPPED)
     facility = playbooks.system_prompt("facility", root=SHIPPED)
@@ -422,7 +423,7 @@ def test_triage_loads_NO_voice_at_all() -> None:
     person, so a voice file is cached tokens about a document it never writes."""
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     text = playbooks.system_prompt("", root=SHIPPED)
     assert "competent facility manager" in text, "no constitution either"
@@ -435,7 +436,7 @@ def test_a_missing_playbook_tree_DEGRADES_rather_than_raising() -> None:
     is an agent that cannot speak because a documentation file is missing."""
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     assert playbooks.system_prompt("owner", root="/nope/nothing/here") == ""
 
@@ -446,7 +447,7 @@ def test_a_playbook_NAME_cannot_traverse_the_filesystem() -> None:
     import inspect
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     for evil in ("../../../data/reports-secrets", "a/b", "..", "", "x\\y"):
         assert playbooks.body(evil, roots=[SHIPPED]) == "", evil

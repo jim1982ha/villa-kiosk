@@ -16,8 +16,9 @@ from typing import Any, Dict, List, Mapping
 
 import pytest
 
-from agent import chat, policy
-from agent.tools import reply as reply_mod
+from vesta.supervise.agent import chat
+from vesta.supervise.agent import policy
+from vesta.supervise.agent.tools import reply as reply_mod
 
 
 @pytest.fixture(autouse=True)
@@ -26,8 +27,8 @@ def _clean(tmp_path, monkeypatch) -> None:
     # ⚠️ WITHOUT THIS THE AUDIT WRITES GO TO /data AND FAIL SILENTLY — `_append`
     # swallows, by design — so every assertion about a row would read an empty
     # list and pass vacuously.
-    from agent import audit as audit_mod
-    from agent import budget as budget_mod
+    from vesta.supervise.agent import audit as audit_mod
+    from vesta.supervise.agent import budget as budget_mod
     monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "audit.json"))
     # ⚠️ THE BUDGET PERSISTS TOO. Patching only the audit left three tests
     # failing on a PermissionError about the VILLA's /data path — the third
@@ -174,7 +175,7 @@ def test_resolving_a_sender_takes_no_message_and_so_cannot_read_one() -> None:
 
 
 def test_the_allow_list_ships_empty() -> None:
-    from agent import config as agent_config
+    from vesta.supervise.agent import config as agent_config
     assert agent_config.DEFAULTS["allowed_senders"] == {}
     assert "allowed_senders" in agent_config.MUST_BE_EMPTY
 
@@ -349,7 +350,7 @@ def test_a_sent_reply_joins_the_thread_as_an_assistant_turn() -> None:
 
 
 def test_the_reply_tool_is_not_offered_to_a_scheduled_run() -> None:
-    from agent.tools import ALL_TOOLS
+    from vesta.supervise.agent.tools import ALL_TOOLS
     assert "reply" not in {cls().name for cls in ALL_TOOLS}, (
         "an unbound reply tool teaches the model a verb it cannot use")
 
@@ -423,7 +424,7 @@ def test_the_master_switch_stops_it_too() -> None:
 def test_an_unlisted_sender_gets_no_run_and_no_reply() -> None:
     """TEST-029. ⚠️ EXACTLY ONE AUDIT ROW AND NO REPLY — silence is the answer,
     because an error reply confirms the bot is live to whoever is probing it."""
-    from agent import audit as audit_mod
+    from vesta.supervise.agent import audit as audit_mod
 
     before = len(audit_mod.rows(500))
     verdict = _handle(_event(), config={"enabled": True,
@@ -509,8 +510,8 @@ def test_the_reply_tool_is_offered_only_on_the_chat_path() -> None:
 def test_adding_the_reply_tool_does_not_mutate_the_shared_registry() -> None:
     """⚠️ A mutated registry would leave a binding to whoever last messaged the
     villa in place for every later run, including scheduled briefs."""
-    from agent.registry import build_registry
-    from agent.tools import reply as reply_mod
+    from vesta.supervise.agent.registry import build_registry
+    from vesta.supervise.agent.tools import reply as reply_mod
 
     base = build_registry()
     before = set(base.names)

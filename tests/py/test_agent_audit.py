@@ -19,7 +19,9 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import audit, contracts, refs  # noqa: E402
+from vesta.supervise.agent import audit
+from vesta.supervise.agent import contracts
+from vesta.supervise.agent import refs
 
 T0 = 1767225600.0
 

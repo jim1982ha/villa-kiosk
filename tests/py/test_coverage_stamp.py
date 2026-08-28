@@ -29,8 +29,9 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import sources  # noqa: E402
-from observe import cycle, journal  # noqa: E402
+from vesta.supervise.agent import sources
+from vesta.supervise.observe import cycle
+from vesta.supervise.observe import journal
 
 
 @pytest.fixture(autouse=True)
@@ -126,7 +127,7 @@ def test_the_operator_warning_fires_once_not_per_run() -> None:
 def test_read_logs_still_refuses_when_constructed_without_a_source() -> None:
     """The tool's own guard stays — withholding it is belt AND braces, and a
     test that only checked the registry would pass with the guard deleted."""
-    from agent.tools import logs as log_tools
+    from vesta.supervise.agent.tools import logs as log_tools
     out = asyncio.new_event_loop().run_until_complete(
         log_tools.ReadLogs().run({}))
     assert "not connected to the villa's logs" in str(out)

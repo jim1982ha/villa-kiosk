@@ -29,7 +29,7 @@ from typing import Set
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FLAGTYPES = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+FLAGTYPES = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                          "flagtypes.py")
 PROXY = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
 CLIENT = os.path.join(REPO_ROOT, "src", "agent", "agentApi.ts")

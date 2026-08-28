@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import route                                        # noqa: E402
+from vesta.supervise.agent import route
 
 OWNER = ["entity:notify.owner_chat"]
 PHONE = ["notify.owner_phone"]
@@ -310,7 +310,7 @@ def test_BOTH_delivery_paths_tell_route_which_profile_they_used() -> None:
     """
     import inspect
 
-    from agent import outbox as outbox_mod
+    from vesta.supervise.agent import outbox as outbox_mod
 
     for fn in (outbox_mod._deliver_one, outbox_mod._escalate_one):
         source = inspect.getsource(fn)

@@ -118,7 +118,7 @@ def test_a_DELIVERED_message_carries_no_reference() -> None:
     """⚠️ THE DIGEST GOES TO A PHONE, which is a screen this app does not own
     and cannot correct afterwards. Checked on the rendered body, not on the
     source, so a reference reintroduced by any means fails."""
-    from agent import digest
+    from vesta.supervise.agent import digest
     body = digest.compose([{"rule_id": "c7", "text": "Pool pump cycling"},
                            {"rule_id": "c12", "text": "Filter overdue"}])
     assert "Pool pump cycling" in body, "the digest stopped naming the work"
@@ -134,7 +134,7 @@ def test_the_TAB_a_message_points_at_is_one_that_EXISTS() -> None:
     minutes earlier at the owner's instruction, so the message sent somebody
     looking for a tab that is not there. A name in prose is a claim about the
     UI and nothing checks prose."""
-    from agent import digest
+    from vesta.supervise.agent import digest
     body = digest.compose([{"rule_id": "c1", "text": "x"}])
     named = set(re.findall(r"under ([A-Z][A-Za-z& -]+?) in VESTA", body))
     assert named, "the digest no longer says where to act"

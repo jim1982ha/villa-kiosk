@@ -19,7 +19,9 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from observe import cycle, heartbeat, journal  # noqa: E402
+from vesta.supervise.observe import cycle
+from vesta.supervise.observe import heartbeat
+from vesta.supervise.observe import journal
 from vesta.adapters import store
 
 

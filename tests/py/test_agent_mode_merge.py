@@ -38,7 +38,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import config as agent_config, policy, reason  # noqa: E402
+from vesta.supervise.agent import config as agent_config
+from vesta.supervise.agent import policy
+from vesta.supervise.agent import reason
 
 
 def test_the_dead_COMBINATION_cannot_be_expressed_at_all() -> None:
@@ -56,8 +58,8 @@ def test_the_dead_COMBINATION_cannot_be_expressed_at_all() -> None:
 def _stamped_informational(mode: str, tmp_path: Any) -> bool:
     """What `tools/concern.writer` stamps for a concern raised under `mode` —
     the predicate that replaced `shadow.suppressed` on 2026-08-28."""
-    from agent import concerns as concerns_mod
-    from agent.tools import concern as concern_tool
+    from vesta.supervise.agent import concerns as concerns_mod
+    from vesta.supervise.agent.tools import concern as concern_tool
 
     original = concerns_mod.CONCERNS_FILE
     concerns_mod.CONCERNS_FILE = str(tmp_path / f"c-{mode}.json")

@@ -28,7 +28,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import actions, concerns                          # noqa: E402
+from vesta.supervise.agent import actions
+from vesta.supervise.agent import concerns
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PROXY = os.path.join(REPO, "rootfs", "usr", "bin", "supervisor-proxy.py")
@@ -72,7 +73,7 @@ def test_BOTH_surfaces_reach_the_same_function() -> None:
     to `/agent-action`; a Telegram press arrives on the websocket. If either
     built its own verdict, "synchronised by design" would be false however
     carefully the two were written."""
-    from agent import buttons
+    from vesta.supervise.agent import buttons
     proxy = _read(PROXY)
     assert "agent_actions.apply(" in proxy, \
         "the tablet no longer performs acts through the shared definition"
@@ -176,7 +177,7 @@ def test_a_THUMB_actually_REACHES_the_flag_type_table() -> None:
     ⚠️ AND AN ALERT WITH NO KIND IS NOT AN ERROR. One raised about a topic
     rather than a device has no measurement to name; its verdict still counts.
     """
-    from agent import flagtypes
+    from vesta.supervise.agent import flagtypes
     taught: List[Any] = []
     original = flagtypes.record
     flagtypes.record = lambda kind, *, useful: taught.append((kind, useful))  # type: ignore[assignment]
@@ -241,7 +242,7 @@ def test_HELP_does_NOT_acknowledge() -> None:
     """⚠️ ASKING FOR HELP IS THE OPPOSITE OF "I HAVE THIS COVERED". The chase
     must continue: the presser has just said they cannot finish alone, and
     stamping it seen is what would stop the ladder that is about to matter."""
-    from agent import outbox
+    from vesta.supervise.agent import outbox
     code = _code(actions._help)
     assert "acknowledge" not in code, \
         "asking for help stops the chase, which is the opposite of asking"

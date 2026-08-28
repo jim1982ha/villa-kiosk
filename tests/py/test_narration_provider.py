@@ -318,7 +318,7 @@ def _provider_hosts() -> List[str]:
     """
     import inspect
     import re
-    from agent.llm import anthropic_sdk as AGENT_PR
+    from vesta.supervise.agent.llm import anthropic_sdk as AGENT_PR
     hosts: List[str] = []
     for module in (PR, AGENT_PR):
         hosts += re.findall(r"https://([a-z0-9.-]+)/", inspect.getsource(module))
@@ -332,7 +332,7 @@ def test_the_agent_adapter_is_the_only_agent_file_naming_the_host() -> None:
     import re
     repo_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    agent_dir = os.path.join(repo_root, "rootfs", "usr", "bin", "agent")
+    agent_dir = os.path.join(repo_root, "rootfs", "usr", "bin", "vesta", "supervise", "agent")
     offenders: List[str] = []
     for base, _dirs, files in os.walk(agent_dir):
         for name in files:

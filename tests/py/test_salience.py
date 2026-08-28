@@ -19,9 +19,9 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from observe import salience  # noqa: E402
+from vesta.supervise.observe import salience
 
-SOURCE = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "observe", "salience.py")
+SOURCE = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "observe", "salience.py")
 
 #: ⚠️ ANCHORED ON `(?:^|[._])`, NOT ON `\b`, AND THIS EXACT BUG WAS SHIPPED IN
 #: THE FIRST DRAFT OF THIS FILE. `\bTHRESHOLD\b` does not match

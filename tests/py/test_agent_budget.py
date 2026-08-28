@@ -18,7 +18,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import budget  # noqa: E402
+from vesta.supervise.agent import budget
 
 JAN = 1767225600.0    # 2026-01-01 UTC
 FEB = 1769904000.0    # 2026-02-01 UTC

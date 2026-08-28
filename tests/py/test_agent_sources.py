@@ -23,8 +23,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import sources                                    # noqa: E402
-from agent.registry import build_registry                    # noqa: E402
+from vesta.supervise.agent import sources
+from vesta.supervise.agent.registry import build_registry
 
 #: A journal as `observe/journal.py` writes one: short keys, oldest first.
 ROWS: List[Dict[str, Any]] = [
@@ -58,7 +58,7 @@ def test_an_entity_with_too_little_history_comes_back_UNSCORABLE() -> None:
     """⚠️ NOT OMITTED. `read_salient(include_unscorable=True)` exists so "I
     could not assess these and here is why" is sayable; dropping them turns
     that into silence, which is the failure this whole phase keeps hitting."""
-    from observe import salience as salience_mod
+    from vesta.supervise.observe import salience as salience_mod
 
     thin = [{"at": "2026-08-22T09:00:00Z", "id": "sensor.new_thing", "s": "5"}]
     scored = sources.build_scorer(thin)()
@@ -89,7 +89,7 @@ def test_a_device_class_is_a_countable_english_plural() -> None:
     `_singular("binary_sensor")` strips the final "r" it mistakes for a plural
     "s"-less stem. Checked against the renderer rather than asserted in
     isolation, because the contract is between the two."""
-    from observe import snapshot
+    from vesta.supervise.observe import snapshot
 
     assert sources._class_name("binary_sensor") == "binary sensors"
     assert sources._class_name("light") == "lights"
@@ -140,7 +140,7 @@ def test_every_tool_in_the_registry_either_HAS_a_source_or_REFUSES() -> None:
 
 def test_a_broken_journal_does_not_take_the_registry_down() -> None:
     """A source that raises must degrade to an empty villa, not to no agent."""
-    import observe.journal as journal_mod
+    import vesta.supervise.observe.journal as journal_mod
 
     original = journal_mod.read
     journal_mod.read = lambda: (_ for _ in ()).throw(RuntimeError("corrupt"))
@@ -167,7 +167,7 @@ def test_a_QUIET_entity_stays_ADDRESSABLE_after_the_ring_fills(
     This drives the real `journal.append` and the real `build_refs` rather than
     a fixture of either, because the defect lived in the seam between them.
     """
-    from observe import journal
+    from vesta.supervise.observe import journal
 
     monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "j.json"))
     monkeypatch.setattr(journal, "JOURNAL_MAX_ENTRIES", 20)
@@ -218,7 +218,7 @@ def test_the_empty_document_SAYS_it_knows_nothing() -> None:
     are on in the gym room", the agent replied that the villa has no gym room,
     about a property whose Home Assistant has a Gym Room with a light in it. A
     silent absence is not an honest one."""
-    from observe import snapshot
+    from vesta.supervise.observe import snapshot
 
     empty = snapshot.villa_document(profile_text=snapshot.profile(),
                                     delta_text=snapshot.delta())
@@ -236,7 +236,7 @@ def test_build_document_describes_the_property_not_an_empty_one() -> None:
     any prose — but "does it contain THIS villa's facts": the device counts, the
     ranked entity, and a coverage claim. All three were absent and the document
     was still well-formed."""
-    from observe import snapshot
+    from vesta.supervise.observe import snapshot
 
     document = sources.build_document(ROWS)
     assert document != snapshot.villa_document(
@@ -277,7 +277,7 @@ def test_a_document_section_degrades_alone_not_the_whole_document(
         sources._open_concerns()
 
     monkeypatch.undo()
-    from agent import concerns as concerns_mod
+    from vesta.supervise.agent import concerns as concerns_mod
     monkeypatch.setattr(concerns_mod, "read", boom)
     document = sources.build_document(ROWS)
     assert "Devices by class:" in document, (
@@ -288,7 +288,7 @@ def test_an_unscorable_count_of_one_reads_as_english() -> None:
     """⚠️ THE SHAPE-NOT-CONTENT DEFECT THE PH-1 CHECKPOINT FOUND AS "1 climate
     units". No assertion sees it and every reader does, in a document whose
     authority rests on reading as though a person wrote it."""
-    from observe import snapshot
+    from vesta.supervise.observe import snapshot
 
     assert "1 entity lacks enough history" in snapshot.delta(unscorable=1)
     assert "2 entities lack enough history" in snapshot.delta(unscorable=2)
@@ -302,7 +302,7 @@ def test_the_whole_journal_is_complete_coverage_over_its_own_extent(
     it, so the Villa
     Document printed "part of this window was not observed" above every delta a
     LISTENING villa ever produced."""
-    from observe import journal
+    from vesta.supervise.observe import journal
 
     monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "j.json"))
     journal.append([{"event_type": "state_changed",
@@ -324,7 +324,7 @@ def test_a_journal_that_never_came_online_is_never_complete(
     """⚠️ THE OTHER HALF, AND THE ONE THE FIX COULD HAVE BROKEN. "The whole
     journal" is complete over its own extent only if there IS one; a villa whose
     observation floor never started must not report full coverage of nothing."""
-    from observe import journal
+    from vesta.supervise.observe import journal
 
     monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "empty.json"))
     assert journal.coverage("")["complete"] is False
@@ -342,8 +342,8 @@ def test_the_SCHEDULER_hands_triage_a_wired_document(monkeypatch: Any) -> None:
     """⚠️ THE PASS ITSELF, not the builder it should use. Asserted on the
     document `run_once` actually receives, so reverting `_pass` to
     `snapshot.profile()` / `snapshot.delta()` turns this red."""
-    from agent import scheduler
-    from observe import snapshot
+    from vesta.supervise.agent import scheduler
+    from vesta.supervise.observe import snapshot
 
     empty = snapshot.villa_document(profile_text=snapshot.profile(),
                                     delta_text=snapshot.delta())
@@ -396,7 +396,7 @@ def test_a_SETTLED_concern_is_not_reported_as_open(monkeypatch: Any) -> None:
     second copy is how a state added to one module goes on being printed as open
     by the other — and "this is still a live problem" about something the owner
     dismissed is the fastest way to be switched off."""
-    from agent import concerns as concerns_mod
+    from vesta.supervise.agent import concerns as concerns_mod
 
     monkeypatch.setattr(concerns_mod, "read", lambda: [
         {"title": "Live thing", "state": "open",
@@ -414,7 +414,7 @@ def test_an_unparseable_opened_at_says_CANNOT_SAY_not_today() -> None:
     """⚠️ `None`, NOT 0.0. `delta` prints nothing for None and "open 0 days" for
     zero — so a stamp that failed to parse would date every concern to today and
     read as a villa whose problems are all brand new."""
-    from observe import snapshot
+    from vesta.supervise.observe import snapshot
 
     assert sources._age_days("not a timestamp") is None
     assert sources._age_days("") is None
@@ -431,7 +431,7 @@ def test_a_concern_never_says_its_state_twice() -> None:
     because no caller ever passed a concern — the same emptiness that hid the
     whole defect this file is about. `(closed, closed)`, `(dismissed,
     dismissed)`, and `(open)` on a live concern of unknown age."""
-    from observe import snapshot
+    from vesta.supervise.observe import snapshot
 
     def suffix_of(state: str, age: Any) -> str:
         printed = snapshot.delta(concerns=[{"title": "T", "state": state,
@@ -462,7 +462,7 @@ def test_read_villa_returns_THE_SAME_document_the_caller_puts_in_the_prompt(
     Asserted as EQUALITY against the shared builder rather than by checking the
     tool's output "looks full" — a shape check passes on any two documents that
     happen to both be long, which is exactly how this survived."""
-    from agent.tools import read as read_tools
+    from vesta.supervise.agent.tools import read as read_tools
 
     monkeypatch.setattr(sources, "_journal_rows", lambda: list(ROWS))
     tool = sources.build_tools()[0]
@@ -488,7 +488,7 @@ def test_read_villa_with_no_source_REFUSES_rather_than_describing_an_empty_villa
     an `internal` error, and a loose assertion cannot tell a deliberate refusal
     from a crash. `unavailable` is a contract code the model routes around;
     `internal` is a bug. They must not be confused here of all places."""
-    from agent.tools import read as read_tools
+    from vesta.supervise.agent.tools import read as read_tools
 
     blocks = asyncio.run(read_tools.ReadVilla().call({}))
     assert blocks and "error" in blocks[0], blocks
@@ -504,7 +504,7 @@ def test_the_document_window_reaches_the_coverage_claim() -> None:
     something. It is the delta's coverage window; a tool that accepts a
     parameter and ignores it is a model being told it has control it does not
     have, which is worse than not offering it."""
-    from observe import journal
+    from vesta.supervise.observe import journal
 
     wide = sources._coverage(now=1_787_000_000.0, window_hours=168)
     narrow = sources._coverage(now=1_787_000_000.0, window_hours=1)
@@ -529,7 +529,7 @@ def test_an_empty_reply_says_WHY_it_was_empty() -> None:
     fix is "the tool and the prompt describe one villa"; this measures why a
     reply was empty, which the fix does not claim to change."""
     import sys as _sys
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
 
     class _Block:
         def __init__(self, kind: str) -> None:
@@ -559,7 +559,7 @@ def test_the_provider_client_is_built_ONCE_and_reused(monkeypatch: Any) -> None:
     official docs build it once and keep it; the only reason it cannot go in
     `__init__` here is that the SDK import is deliberately deferred, so it is
     cached on first use instead."""
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
 
     built = []
 
@@ -595,7 +595,7 @@ def test_the_provider_sets_an_explicit_timeout_and_retry_count(
     passes run sequentially, so what it costs is every later pass queued behind
     it. Asserted as "explicit and bounded" rather than as an exact number — the
     value is tunable, the absence of one is the defect."""
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
 
     built = []
 
@@ -628,7 +628,7 @@ def test_the_adapter_does_NOT_hand_roll_retries() -> None:
     implementation here would be the thing this adapter exists to avoid. Pinned
     as an absence so nobody adds one back "to be safe"."""
     import inspect
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
 
     body = "\n".join(line for line in
                      inspect.getsource(anthropic_sdk).splitlines()
@@ -645,7 +645,7 @@ def test_the_cache_breakpoint_is_on_the_LAST_system_block() -> None:
     tools → system → messages, so one breakpoint on the final system block
     caches the tools AND the whole system prompt; marking every block would
     spend the four-breakpoint budget on a prefix that is already contiguous."""
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
 
     out = anthropic_sdk._cached([{"type": "text", "text": "a"},
                                  {"type": "text", "text": "b"}])
@@ -670,7 +670,7 @@ def test_a_triage_pass_stores_its_NUMBERS_not_only_its_sentence(
     The sentence stays: it is what the panel renders. What is added is the same
     three values AS VALUES, written in the same statement so they cannot drift
     from the sentence beside them."""
-    from agent import audit
+    from vesta.supervise.agent import audit
 
     monkeypatch.setattr(audit, "AUDIT_FILE", str(tmp_path / "audit.json"))
     audit.record_pass(reason="nothing to escalate", trigger="manual",
@@ -692,7 +692,7 @@ def test_the_pass_fields_survive_the_audit_allow_list() -> None:
     raw argument blob. So a field added to `record_pass` and NOT to `ROW_FIELDS`
     is written, dropped, and never missed. Asserted against the constant rather
     than against a written row, so the two cannot agree by luck."""
-    from agent import audit
+    from vesta.supervise.agent import audit
 
     for field in ("doc_chars", "doc_lines", "escalated", "model"):
         assert field in audit.ROW_FIELDS, (
@@ -710,7 +710,7 @@ def test_a_MANUAL_run_is_not_blocked_by_the_schedule_switch() -> None:
     ships `{scheduled, event, chat}` with NO `manual` key, so the lookup is False
     by absence and the button would have died reporting `manual trigger
     disabled` — about a switch that does not exist. Both directions pinned."""
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
 
     off = {"enabled": True, "triggers": {"scheduled": False}}
     assert asyncio.run(scheduler._run_once(None, config=off, trigger="manual")) \
@@ -733,7 +733,7 @@ def test_the_trigger_reaches_the_usage_ledger_not_just_the_trace() -> None:
     trace reading `manual` beside a usage row reading `scheduled`, run id
     `scheduled…`. Reported from the Usage tab. Asserted on what `triage.run`
     hands to `runtime.investigate`, which is where it enters the ledger."""
-    from agent import triage
+    from vesta.supervise.agent import triage
 
     seen: Dict[str, Any] = {}
 
@@ -801,7 +801,8 @@ def test_no_agent_entry_point_hardcodes_a_trigger_it_was_given(
     reads the source rather than exercising every path, because the defect is
     visible in the shape and the paths that expose it need a live provider."""
     import inspect
-    from agent import scheduler, triage
+    from vesta.supervise.agent import scheduler
+    from vesta.supervise.agent import triage
 
     for mod in (triage, scheduler):
         src = inspect.getsource(mod)
@@ -826,7 +827,8 @@ def test_the_trigger_survives_the_WHOLE_chain_not_just_its_ends() -> None:
 
     This is `feedback_pin-the-caller` a third time in one session: the defect
     lives in the wiring, and the wiring is nobody's unit."""
-    from agent import scheduler, triage
+    from vesta.supervise.agent import scheduler
+    from vesta.supervise.agent import triage
 
     seen: Dict[str, Any] = {}
 
@@ -1067,7 +1069,7 @@ def test_the_scheduler_READS_the_layout() -> None:
     degradation ladder, `route.escalate` and now this: a function that is
     correct, tested, and called by nobody. A layout nothing refreshes is a
     document that says NOT SURVEYED for ever."""
-    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                             "scheduler.py"), encoding="utf-8").read()
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith("#"))
@@ -1090,7 +1092,7 @@ def test_build_document_says_HOW_MANY_devices_are_not_reporting(
     which keeps a triage pass cheap on a clock and lets the proxy's document
     preview render with no session at all.
     """
-    from observe import journal
+    from vesta.supervise.observe import journal
     from vesta.adapters import devices as devices_mod
     from vesta.adapters import model as model_mod
 
@@ -1129,7 +1131,7 @@ def test_the_document_NAMES_no_offline_device(
     "critical unavailable") and to pay for an investigation of a device that by
     definition has no data left to read. The count is context; names would be
     detection, and detection here is somebody else's job."""
-    from observe import journal
+    from vesta.supervise.observe import journal
     from vesta.adapters import devices as devices_mod
     from vesta.adapters import model as model_mod
 
@@ -1184,7 +1186,7 @@ def test_an_empty_journal_does_not_report_the_WHOLE_VILLA_as_offline(
     was 0 either way and the pin measured nothing. It needs a villa with
     devices in it to be able to fail: `feedback_mutation-testing`'s whole point.
     """
-    from observe import journal
+    from vesta.supervise.observe import journal
     from vesta.adapters import devices as devices_mod
     from vesta.adapters import model as model_mod
 

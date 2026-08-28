@@ -37,7 +37,9 @@ sys.path.insert(0, os.path.join(ROOT, "rootfs", "usr", "bin"))
 
 import pytest  # noqa: E402
 
-from agent import config as agent_config, outbox, task  # noqa: E402
+from vesta.supervise.agent import config as agent_config
+from vesta.supervise.agent import outbox
+from vesta.supervise.agent import task
 
 
 
@@ -175,7 +177,7 @@ class _Hass:
 def _raise_with(monkeypatch, features: int) -> _Hass:
     import asyncio
 
-    from agent import task as task_mod
+    from vesta.supervise.agent import task as task_mod
     from vesta.adapters import hass as hass_mod
 
     hass = _Hass(features)
@@ -244,7 +246,7 @@ def test_an_UNREADABLE_feature_set_degrades_to_the_shape_that_always_works(
     today: a test is unproven until it has gone red."""
     import asyncio
 
-    from agent import task as task_mod
+    from vesta.supervise.agent import task as task_mod
     from vesta.adapters import hass as hass_mod
 
     class _Broken(_Hass):

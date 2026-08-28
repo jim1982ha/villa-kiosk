@@ -17,9 +17,12 @@ from typing import Any, Dict, List, Mapping
 
 import pytest
 
-from agent import mcp_server, policy as policy_mod, registry as registry_mod
-from agent.registry import Registry
-from agent.tools.base import BaseTool, text
+from vesta.supervise.agent import mcp_server
+from vesta.supervise.agent import policy as policy_mod
+from vesta.supervise.agent import registry as registry_mod
+from vesta.supervise.agent.registry import Registry
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import text
 
 
 class Reader(BaseTool):
@@ -67,7 +70,7 @@ def _registry() -> Registry:
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch) -> None:
     """Each test gets its own audit file, or the rows accumulate across them."""
-    from agent import audit as audit_mod
+    from vesta.supervise.agent import audit as audit_mod
     monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "audit.json"))
     monkeypatch.setattr(mcp_server.secrets, "get",
                         lambda name: "tok-abcdefgh" if name == mcp_server.TOKEN_NAME
@@ -75,7 +78,7 @@ def _isolate(tmp_path, monkeypatch) -> None:
 
 
 def _rows() -> List[Dict[str, Any]]:
-    from agent import audit as audit_mod
+    from vesta.supervise.agent import audit as audit_mod
     return audit_mod.rows(500)
 
 
@@ -292,7 +295,7 @@ def test_a_tool_that_leaks_a_RAW_ENTITY_ID_is_refused_outright() -> None:
 # ── authentication ──────────────────────────────────────────────────────────
 def test_no_token_configured_means_no_service() -> None:
     """⚠️ An unconfigured endpoint must REFUSE, never serve openly."""
-    import agent.mcp_server as mod
+    import vesta.supervise.agent.mcp_server as mod
     original = mod.secrets.get
     try:
         mod.secrets.get = lambda name: None       # type: ignore[assignment]
@@ -320,7 +323,7 @@ def test_the_token_lives_in_secrets_not_in_the_config_store() -> None:
     the test that guards a credential, where a false positive trains the next
     person to reach for the assertion rather than the code.
     """
-    from agent import config as agent_config
+    from vesta.supervise.agent import config as agent_config
     assert mcp_server.TOKEN_NAME not in agent_config.DEFAULTS
     secretish = [key for key in agent_config.DEFAULTS
                  if key.split("_")[-1] in ("token", "key", "secret",

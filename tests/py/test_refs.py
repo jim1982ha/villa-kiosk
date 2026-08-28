@@ -21,10 +21,15 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import refs as refs_mod  # noqa: E402
-from agent.tools import (ALL_TOOLS, analysis, ha, ledger, logs,  # noqa: E402
-                         playbook, read)
-from observe import salience  # noqa: E402
+from vesta.supervise.agent import refs as refs_mod
+from vesta.supervise.agent.tools import ALL_TOOLS
+from vesta.supervise.agent.tools import analysis
+from vesta.supervise.agent.tools import ha
+from vesta.supervise.agent.tools import ledger
+from vesta.supervise.agent.tools import logs
+from vesta.supervise.agent.tools import playbook
+from vesta.supervise.agent.tools import read
+from vesta.supervise.observe import salience
 
 SHIPPED_PLAYBOOKS = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),

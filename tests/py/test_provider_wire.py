@@ -40,10 +40,15 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import policy as policy_mod                       # noqa: E402
-from agent.llm.base import ToolCall, Turn                    # noqa: E402
-from agent.registry import Registry, run as run_loop         # noqa: E402
-from agent.tools.base import BaseTool, data, fail, text      # noqa: E402
+from vesta.supervise.agent import policy as policy_mod
+from vesta.supervise.agent.llm.base import ToolCall
+from vesta.supervise.agent.llm.base import Turn
+from vesta.supervise.agent.registry import Registry
+from vesta.supervise.agent.registry import run as run_loop
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import data
+from vesta.supervise.agent.tools.base import fail
+from vesta.supervise.agent.tools.base import text
 
 #: What a TOOL may carry. Anything else is rejected outright by the API — it
 #: does not ignore unknown fields here.
@@ -146,7 +151,7 @@ class StrictProvider:
         # ⚠️ BUILT THE WAY THE ADAPTER BUILDS IT, by calling the adapter's own
         # translation. Re-implementing the mapping here would test this file
         # against itself and pass while the adapter stayed broken.
-        from agent.llm import anthropic_sdk
+        from vesta.supervise.agent.llm import anthropic_sdk
 
         request = {
             "model": model, "max_tokens": max_tokens,
@@ -169,8 +174,8 @@ def _isolate(tmp_path, monkeypatch) -> None:
     applied to the site in view rather than to everything it applies to.
     `_BREAKER` is reset because it is process-wide by design, so one test's
     failures would otherwise open it for the next."""
-    from agent import audit as audit_mod
-    from agent import budget as budget_mod
+    from vesta.supervise.agent import audit as audit_mod
+    from vesta.supervise.agent import budget as budget_mod
     monkeypatch.setattr(audit_mod, "AUDIT_FILE", str(tmp_path / "audit.json"))
     monkeypatch.setattr(budget_mod, "BUDGET_FILE", str(tmp_path / "budget.json"))
     monkeypatch.setattr(budget_mod, "_BREAKER", None)
@@ -288,8 +293,8 @@ def test_a_JSON_payload_survives_the_wire_as_readable_text() -> None:
 def test_every_REGISTERED_tool_passes_the_tool_rules() -> None:
     """Not the two fixtures above — the real shipped set, since a schema is
     written per tool and only one of them has to be wrong."""
-    from agent.llm import anthropic_sdk
-    from agent.registry import build_registry
+    from vesta.supervise.agent.llm import anthropic_sdk
+    from vesta.supervise.agent.registry import build_registry
 
     for published in build_registry().describe():
         wire = anthropic_sdk._tool_wire(published)

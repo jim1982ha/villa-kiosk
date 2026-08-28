@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import concerns                                    # noqa: E402
+from vesta.supervise.agent import concerns
 
 HOUR = 3600.0
 WEEK = concerns.VERIFY_AFTER_HOURS * HOUR
@@ -352,7 +352,7 @@ def test_the_sweep_is_reached_from_the_villa_s_own_clock() -> None:
     """
     import inspect
     import re
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
 
     src = inspect.getsource(scheduler.dispatch)
     code = re.sub(r"#[^\n]*", "", src)
@@ -366,7 +366,7 @@ def test_the_sweep_runs_BEFORE_delivery_so_a_recurrence_can_be_carried() -> None
     sweep in the SAME pass, or it waits six hours for the next clock."""
     import inspect
     import re
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
 
     code = re.sub(r"#[^\n]*", "", inspect.getsource(scheduler.dispatch))
     assert code.index("verification_sweep") < code.index("outbox_mod.sweep"), (

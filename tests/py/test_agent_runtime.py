@@ -22,9 +22,15 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import audit, budget, policy, registry as reg  # noqa: E402
-from agent.llm.base import Turn  # noqa: E402
-from agent.tools.base import BaseTool, data, fail, text  # noqa: E402
+from vesta.supervise.agent import audit
+from vesta.supervise.agent import budget
+from vesta.supervise.agent import policy
+from vesta.supervise.agent import registry as reg
+from vesta.supervise.agent.llm.base import Turn
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import data
+from vesta.supervise.agent.tools.base import fail
+from vesta.supervise.agent.tools.base import text
 from fake_provider import FakeProvider, asks, declines, says  # noqa: E402
 
 JAN = 1767225600.0
@@ -275,7 +281,7 @@ def test_a_leaking_tool_result_NEVER_reaches_the_transcript() -> None:
     _run(p)
     sent = p.calls[1]["messages"][-1]["content"][0]["content"]
     assert sent[0]["error"]["code"] == "internal"
-    from agent import refs
+    from vesta.supervise.agent import refs
     assert refs.entity_ids_in(p.calls[1]["messages"]) == []
 
 
@@ -332,8 +338,8 @@ def test_the_real_registry_is_built_from_ONE_place() -> None:
     that DO work.
     """
     live = reg.build_registry()
-    from agent.tools import ALL_TOOLS
-    from agent import sources as sources_mod
+    from vesta.supervise.agent.tools import ALL_TOOLS
+    from vesta.supervise.agent import sources as sources_mod
     withheld = {n for n in (cls().name for cls in ALL_TOOLS)
                 if n in sources_mod._UNWIRED_SEEN_NAMES}
     assert set(live.names) == {cls().name for cls in ALL_TOOLS} - withheld
@@ -350,14 +356,14 @@ def test_the_OUTPUT_CEILING_is_passed_on_every_request() -> None:
     Measured before the fix: 7 of 8 supervision passes declined with
     `stop_reason=max_tokens, saw=thinking`, binning 33 billed tool calls."""
     import inspect
-    from agent import registry as registry_mod
+    from vesta.supervise.agent import registry as registry_mod
     src = inspect.getsource(registry_mod.run)
     assert "max_tokens=_output_ceiling(config)" in src, (
         "the provider is called without an output ceiling; it will use 2048")
 
 
 def test_the_ceiling_comes_from_config_and_has_a_floor() -> None:
-    from agent import registry as registry_mod
+    from vesta.supervise.agent import registry as registry_mod
     assert registry_mod._output_ceiling({"max_output_tokens": 16384}) == 16384
     # ⚠️ A FLOOR, because a ceiling below the thinking budget makes every turn
     # fail in exactly the way this fixed — and 0 is a plausible typo.
@@ -371,7 +377,7 @@ def test_a_DECLINE_that_gathered_evidence_is_PARTIAL_not_a_total_loss() -> None:
     declined on their FINAL turn and threw away every tool result gathered
     before it. Only a bound-stop was rescued before; a provider decline was not."""
     import asyncio
-    from agent import runtime
+    from vesta.supervise.agent import runtime
     from fake_provider import FakeProvider, asks, declines
 
     result = asyncio.run(runtime.investigate(
@@ -389,7 +395,7 @@ def test_a_DECLINE_that_gathered_evidence_is_PARTIAL_not_a_total_loss() -> None:
 def test_a_decline_with_NO_evidence_stays_declined() -> None:
     """Nothing to salvage is not a partial success."""
     import asyncio
-    from agent import runtime
+    from vesta.supervise.agent import runtime
     from fake_provider import FakeProvider, declines
 
     result = asyncio.run(runtime.investigate(
@@ -403,7 +409,7 @@ def test_the_model_is_TOLD_when_it_is_on_its_last_turn() -> None:
     """⚠️ OTHERWISE IT FINDS OUT BY BEING CUT OFF. Reported from the villa:
     "I could not answer that. turn cap of 8 reached" — after seven turns of
     reading exactly the right things."""
-    from agent import registry as registry_mod
+    from vesta.supervise.agent import registry as registry_mod
     notice = registry_mod.LAST_TURN_NOTICE.lower()
     assert "final turn" in notice and "answer now" in notice
     # ⚠️ IT NAMES THE ACTION, NOT THE LIMIT — a bare turn count is a fact about
@@ -423,7 +429,8 @@ def test_the_notice_ACTUALLY_REACHES_the_model_on_its_last_turn() -> None:
     It must ride the tool results, which are new and uncached anyway.
     """
     import asyncio
-    from agent import policy as policy_mod, registry as registry_mod
+    from vesta.supervise.agent import policy as policy_mod
+    from vesta.supervise.agent import registry as registry_mod
     from fake_provider import FakeProvider, asks
 
     # ⚠️ THREE TURNS, NOT TWO, SO THERE IS A MIDDLE ONE. At max_turns=2 every

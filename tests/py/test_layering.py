@@ -77,9 +77,8 @@ LAYER_OF: Tuple[Tuple[str, str], ...] = (
     # reports/ NO LONGER EXISTS; the delete-later operation is now literally
     # `rm -rf vesta/brief` plus the host's wiring lines.
     ("vesta/brief/", "brief"),
-    # ── supervise: the exportable half ──────────────────────────────────────
-    ("agent/", "supervise"),
-    ("observe/", "supervise"),
+    # ── supervise: the exportable half — MOVED in the 3d release ────────────
+    ("vesta/supervise/", "supervise"),
     # ── host ────────────────────────────────────────────────────────────────
     ("supervisor-proxy", "host"),
 )
@@ -100,7 +99,7 @@ MAY_IMPORT: Dict[str, Set[str]] = {
 #: still fails.
 ALLOWED_DEBT: Set[Tuple[str, str]] = {
     # TASK-115 step 8: extract _statistics_fetcher into adapters, then delete.
-    ("agent/tools/analysis", "vesta/brief/pipeline"),
+    ("vesta/supervise/agent/tools/analysis", "vesta/brief/pipeline"),
 }
 
 

@@ -18,8 +18,8 @@ REPO_ROOT = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import playbooks as playbooks_mod  # noqa: E402
-from agent import review as review_mod  # noqa: E402
+from vesta.supervise.agent import playbooks as playbooks_mod
+from vesta.supervise.agent import review as review_mod
 
 SOURCE = "concern/01J9XABCDEF"
 BODY = "# When a thing does the thing\n\n1. Look at it.\n2. Look again."
@@ -188,7 +188,7 @@ def test_NO_TOOL_can_reach_the_review_queue() -> None:
     derived; what a device name says about itself is not a procedure this villa
     should adopt."""
     import ast
-    tools = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent", "tools")
+    tools = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "tools")
     offenders = []
     for base, _dirs, names in os.walk(tools):
         for name in names:

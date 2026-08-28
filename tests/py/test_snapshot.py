@@ -20,7 +20,8 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from observe import salience, snapshot  # noqa: E402
+from vesta.supervise.observe import salience
+from vesta.supervise.observe import snapshot
 
 VILLA: Dict[str, Any] = {
     "floors": ["Ground", "First"],

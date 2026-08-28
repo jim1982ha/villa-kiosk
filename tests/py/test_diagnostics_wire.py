@@ -96,7 +96,7 @@ def test_the_JOURNAL_S_CLOCK_survives_the_whole_round_trip() -> None:
     backend produces it, the wire carries it under the name the client asks
     for, and the component reads that name. Any one of the three moving alone
     is the defect."""
-    from observe import heartbeat
+    from vesta.supervise.observe import heartbeat
     assert "last_seen" in heartbeat.snapshot({}), "the backend stopped producing it"
     assert "last_seen" in _journal_keys_sent(), "the proxy stopped sending it"
     assert "last_seen" in _journal_keys_read(), "the client stopped reading it"

@@ -19,7 +19,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from observe import journal  # noqa: E402
+from vesta.supervise.observe import journal
 
 
 @pytest.fixture(autouse=True)

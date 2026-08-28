@@ -31,12 +31,18 @@ pytest.importorskip(
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TARGET = os.path.join("rootfs", "usr", "bin", "vesta")
+# ⚠️ THE THREE LAYERS THAT WERE `reports/` — shared, adapters, brief. NOT
+# `vesta/` whole: supervise (the agent) was never in this strict gate and has
+# its own known non-strict spots; widening the target silently with a path
+# re-point would have turned an unrelated backlog into this test's failure.
+TARGETS = [os.path.join("rootfs", "usr", "bin", "vesta", "shared"),
+           os.path.join("rootfs", "usr", "bin", "vesta", "adapters"),
+           os.path.join("rootfs", "usr", "bin", "vesta", "brief")]
 
 
 def test_reports_package_is_strict_clean() -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "mypy", "--strict", TARGET],
+        [sys.executable, "-m", "mypy", "--strict", *TARGETS],
         cwd=REPO_ROOT, capture_output=True, text=True, timeout=300)
     assert result.returncode == 0, (
         "mypy --strict on reports/ fails — CI's Types step will refuse this "

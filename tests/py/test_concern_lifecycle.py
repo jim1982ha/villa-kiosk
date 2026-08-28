@@ -28,7 +28,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import contracts  # noqa: E402
+from vesta.supervise.agent import contracts
 
 COPY = os.path.join(REPO_ROOT, "src", "components", "agent",
                     "ConcernLifecycle.tsx")
@@ -74,7 +74,7 @@ def test_the_SUPPRESSION_THRESHOLD_matches_the_rule_it_describes() -> None:
     branch "the highest-value signal in the system" — and a screen promising a
     different number than the code enforces is worse than one that says nothing,
     because a reader would count wrong."""
-    from agent import concerns as concerns_mod
+    from vesta.supervise.agent import concerns as concerns_mod
     with open(COPY, encoding="utf-8") as handle:
         ui = handle.read()
     m = re.search(r"SUPPRESS_AFTER = (\d+)", ui)

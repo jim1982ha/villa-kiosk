@@ -22,8 +22,10 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import concerns, outbox, route  # noqa: E402
-from agent.concerns import Concern  # noqa: E402
+from vesta.supervise.agent import concerns
+from vesta.supervise.agent import outbox
+from vesta.supervise.agent import route
+from vesta.supervise.agent.concerns import Concern
 
 ON: Dict[str, Any] = {
     "enabled": True, "shadow": False,
@@ -123,7 +125,7 @@ def test_an_INFORMATIONAL_concern_is_sent_once_and_raises_no_job(
     withholds is the to-do job and the chase. Both directions are pinned here
     because the job call is a caller-wiring fact a test of `task.raise_for`
     alone stays green through — `feedback_pin-the-caller`, again."""
-    from agent import task as task_mod
+    from vesta.supervise.agent import task as task_mod
     jobs: List[Any] = []
 
     async def _record_job(session: Any, concern: Any, *, config: Any = None
@@ -318,7 +320,7 @@ def test_the_clock_runs_the_sweep_every_pass() -> None:
     never looked at again. `feedback_pin-the-caller`."""
     import inspect
 
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
 
     assert "outbox_mod.sweep(" in _decommented(
         inspect.getsource(scheduler.dispatch)), (
@@ -367,7 +369,7 @@ def test_a_concern_reaches_the_briefing() -> None:
     """⚠️ THE DISCREPANCY THIS SUBSYSTEM'S CARDINAL RULE FORBIDS. Until this
     existed the agent filed a Concern, it rendered on the kiosk, and the
     briefing showed a different list about the same villa."""
-    from agent import fallback as agent_fallback
+    from vesta.supervise.agent import fallback as agent_fallback
 
     # ⚠️ RE-POINTED AT THE BRIEF'S NEW AUTHOR (TASK-073); the property is the
     # cardinal rule itself and outlives any renderer.
@@ -388,7 +390,7 @@ def test_the_worst_first_ordering_is_not_inverted() -> None:
     `reports.contracts` counts UP to critical; `agent.contracts` counts DOWN. A
     sort written from the agent's habit puts the critical line LAST, which reads
     as "nothing much" on a phone."""
-    from agent import fallback as agent_fallback
+    from vesta.supervise.agent import fallback as agent_fallback
 
     body = agent_fallback.brief(
         concerns=[{"title": "Quiet notice", "severity": "notice",
@@ -622,7 +624,7 @@ def test_the_scheduler_RUNS_the_escalation_sweep() -> None:
     """⚠️ `feedback_pin-the-caller`, and the reason this task exists at all:
     `route.escalate` was correct and uncalled. A sweep nobody runs is the same
     defect one layer out."""
-    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                             "scheduler.py"), encoding="utf-8").read()
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith("#"))

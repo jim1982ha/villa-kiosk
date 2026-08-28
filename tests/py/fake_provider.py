@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from agent.llm.base import ToolCall, Turn
+from vesta.supervise.agent.llm.base import ToolCall
+from vesta.supervise.agent.llm.base import Turn
 
 
 class FakeProvider:

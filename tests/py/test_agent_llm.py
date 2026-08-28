@@ -19,7 +19,8 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent.llm import anthropic_sdk, base  # noqa: E402
+from vesta.supervise.agent.llm import anthropic_sdk
+from vesta.supervise.agent.llm import base
 
 
 def _run(coro: Any) -> Any:
@@ -320,7 +321,7 @@ def test_a_tool_is_sent_as_input_schema_not_inputSchema() -> None:
     It stands in for the LOOP, which is the right scope for it — this is the
     test that stands in for the API.
     """
-    from agent.registry import build_registry
+    from vesta.supervise.agent.registry import build_registry
 
     published = {t["name"]: t for t in build_registry().describe()}
     request = _capture_request(list(published.values()))
@@ -365,7 +366,9 @@ def test_a_tool_result_carrying_JSON_is_flattened_to_text() -> None:
     reduction existed — for MCP, written when the MCP server was built — and the
     provider path simply never got it.
     """
-    from agent.tools.base import data, fail, text as text_block
+    from vesta.supervise.agent.tools.base import data
+    from vesta.supervise.agent.tools.base import fail
+    from vesta.supervise.agent.tools.base import text as text_block
 
     request = _capture_request_messages([{
         "role": "user",
@@ -383,7 +386,7 @@ def test_a_tool_ERROR_is_flattened_too() -> None:
     """⚠️ `fail()` RETURNS AN OBJECT WITH NO `type` AT ALL, so it is rejected
     for a different reason than `json` is — and it was the next 400 queued
     behind that one, unreached only because no tool had failed yet."""
-    from agent.tools.base import fail
+    from vesta.supervise.agent.tools.base import fail
 
     request = _capture_request_messages([{
         "role": "user",
@@ -419,8 +422,8 @@ def test_the_flattener_has_exactly_one_implementation() -> None:
     block vocabulary and both callers delegate."""
     import inspect
 
-    from agent import mcp_server
-    from agent.tools import base as tools_base
+    from vesta.supervise.agent import mcp_server
+    from vesta.supervise.agent.tools import base as tools_base
 
     assert "flatten_blocks" in inspect.getsource(mcp_server._as_content)
     for name in ("mcp_server", "anthropic_sdk"):
@@ -442,7 +445,7 @@ def test_the_SYSTEM_PROMPT_is_cache_marked_so_a_tool_loop_is_not_paid_for_twice(
     lever in the subsystem and it is invisible in behaviour, which is why it
     needs a test rather than a reviewer.
     """
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
 
     out = anthropic_sdk._cached([{"type": "text", "text": "a"},
                                  {"type": "text", "text": "b"}])
@@ -471,7 +474,7 @@ def test_the_SYSTEM_PROMPT_is_cache_marked_so_a_tool_loop_is_not_paid_for_twice(
 def test_a_callers_OWN_cache_boundary_is_left_alone() -> None:
     """A caller that has thought about its own boundaries knows more than this
     function does."""
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
 
     mine = {"type": "text", "text": "a", "cache_control": {"type": "persistent"}}
     assert anthropic_sdk._cached([mine])[-1]["cache_control"] == {"type": "persistent"}
@@ -482,7 +485,7 @@ def test_CHAT_does_not_default_to_the_frontier_model() -> None:
     answered by `model_reason`, which defaults to the most expensive model in
     the table. 100% of one afternoon's testing spend, on opus, for questions a
     mid-tier model answers."""
-    from agent import config as agent_config
+    from vesta.supervise.agent import config as agent_config
 
     view = agent_config.view({})
     assert view.get("model_chat"), "chat has no tier of its own again"
@@ -530,7 +533,7 @@ def test_the_STABLE_half_is_cached_SEPARATELY_from_the_villa_document() -> None:
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.abspath(__file__)))), "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     blocks = anthropic_sdk._cached(
         playbooks.system_blocks("owner", instructions="I", document="D"))
@@ -549,7 +552,7 @@ def test_a_changed_DOCUMENT_leaves_the_stable_prefix_byte_identical() -> None:
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.abspath(__file__)))), "rootfs", "usr", "bin"))
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
 
     a = anthropic_sdk._cached(playbooks.system_blocks(
         "owner", instructions="I", document="MONDAY"))

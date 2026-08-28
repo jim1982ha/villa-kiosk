@@ -22,12 +22,19 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import audit, budget, concerns, config as agent_config  # noqa: E402
-from agent import reason, registry as reg_mod, runtime  # noqa: E402
-from agent import scheduler, triage  # noqa: E402
-from agent.refs import RefTable  # noqa: E402
-from agent.registry import Registry  # noqa: E402
-from agent.tools.base import BaseTool, data  # noqa: E402
+from vesta.supervise.agent import audit
+from vesta.supervise.agent import budget
+from vesta.supervise.agent import concerns
+from vesta.supervise.agent import config as agent_config
+from vesta.supervise.agent import reason
+from vesta.supervise.agent import registry as reg_mod
+from vesta.supervise.agent import runtime
+from vesta.supervise.agent import scheduler
+from vesta.supervise.agent import triage
+from vesta.supervise.agent.refs import RefTable
+from vesta.supervise.agent.registry import Registry
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import data
 from fake_provider import FakeProvider, asks, says  # noqa: E402
 from vesta.adapters import usage as usage_mod
 

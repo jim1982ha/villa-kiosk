@@ -42,11 +42,20 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from agent import audit, budget, concerns, contracts, memory  # noqa: E402
-from agent import policy, redact, refs as refs_mod, runtime  # noqa: E402
-from agent.refs import RefTable  # noqa: E402
-from agent.registry import Registry  # noqa: E402
-from agent.tools.base import BaseTool, data, text  # noqa: E402
+from vesta.supervise.agent import audit
+from vesta.supervise.agent import budget
+from vesta.supervise.agent import concerns
+from vesta.supervise.agent import contracts
+from vesta.supervise.agent import memory
+from vesta.supervise.agent import policy
+from vesta.supervise.agent import redact
+from vesta.supervise.agent import refs as refs_mod
+from vesta.supervise.agent import runtime
+from vesta.supervise.agent.refs import RefTable
+from vesta.supervise.agent.registry import Registry
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import data
+from vesta.supervise.agent.tools.base import text
 from fake_provider import FakeProvider, asks, says  # noqa: E402
 
 #: A device id shaped like a real one and belonging to nobody.
@@ -314,7 +323,7 @@ def test_the_ref_table_is_one_way_and_no_tool_resolves_one() -> None:
     """⚠️ THE BOUNDARY IS A BOUNDARY BECAUSE THE INVERSE DOES NOT EXIST, not
     because callers are careful. A tool that answered "what is d3?" would undo
     `refs.py` entirely."""
-    from agent.tools import ALL_TOOLS
+    from vesta.supervise.agent.tools import ALL_TOOLS
 
     for cls in ALL_TOOLS:
         tool = cls()
@@ -343,7 +352,7 @@ def test_no_path_leads_from_a_tool_result_into_the_memory_store() -> None:
     permanent and would compound. Checked STATICALLY, because a runtime test can
     only prove the paths it happened to walk."""
     for name in ("registry", "redact"):
-        src = inspect.getsource(__import__(f"agent.{name}", fromlist=[name]))
+        src = inspect.getsource(__import__(f"vesta.supervise.agent.{name}", fromlist=[name]))
         assert "memory" not in src.replace("# ", ""), (
             f"agent/{name}.py references the memory store; a tool result must "
             f"never be able to write one")
@@ -366,7 +375,7 @@ def test_a_memory_subject_key_outside_hex_is_refused(tmp_path: Any) -> None:
 
 # ── RISK-008, 047 · the MCP surface ─────────────────────────────────────────
 def test_the_mcp_surface_never_exports_an_actuating_tool() -> None:
-    from agent import mcp_server
+    from vesta.supervise.agent import mcp_server
 
     reg = Registry([_PoisonedRead("x"), _Actuator()], refs=_table())
     names = {t.name for t in mcp_server.exported(reg)}
@@ -378,7 +387,7 @@ def test_the_mcp_surface_never_exports_an_actuating_tool() -> None:
 
 def test_an_unconfigured_mcp_token_refuses_rather_than_admits() -> None:
     """⚠️ `secrets.get` RETURNING None MUST NEVER READ AS 'no check required'."""
-    from agent import mcp_server
+    from vesta.supervise.agent import mcp_server
 
     assert not mcp_server.authorised(None)
     assert not mcp_server.authorised("")

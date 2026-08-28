@@ -188,7 +188,7 @@ def test_every_provider_call_site_RECORDS_usage() -> None:
     alike, by ARCH-012) and the brief narrator's adapter. This walks for a
     third rather than trusting that there is none.
     """
-    roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent"),
+    roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent"),
              os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")]
     callers, recorders = set(), set()
     for root in roots:
@@ -226,7 +226,7 @@ def test_the_agent_loop_records_on_a_DECLINED_turn_too() -> None:
     """A turn that was billed and came back unusable is precisely the spend an
     owner cannot otherwise account for, so the record must precede the decline
     branch — the same ordering `budget.spend` already has."""
-    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                             "registry.py"), encoding="utf-8").read()
     record_at = src.index("usage_mod.record(")
     decline_at = src.index("if turn.declined:")

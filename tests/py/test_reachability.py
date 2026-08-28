@@ -45,7 +45,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-PKG = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")
+PKG = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent")
 
 #: name -> why it has no shipped caller. ⚠️ EVERY ENTRY IS A DECISION SOMEBODY
 #: MADE, and the ones marked BLOCKED are findings rather than exemptions — they

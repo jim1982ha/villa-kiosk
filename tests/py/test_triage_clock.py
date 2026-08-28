@@ -22,7 +22,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import scheduler  # noqa: E402
+from vesta.supervise.agent import scheduler
 
 
 @pytest.fixture(autouse=True)

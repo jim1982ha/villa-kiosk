@@ -17,8 +17,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import concerns                                    # noqa: E402
-from agent.contracts import subject_key                       # noqa: E402
+from vesta.supervise.agent import concerns
+from vesta.supervise.agent.contracts import subject_key
 
 
 @pytest.fixture(autouse=True)
@@ -287,7 +287,7 @@ def test_suppression_and_the_GATE_have_different_owners() -> None:
     depend on a feedback tally; gating here would give the store a veto."""
     import inspect
 
-    from agent import policy as policy_mod
+    from vesta.supervise.agent import policy as policy_mod
     assert "dismiss" not in inspect.getsource(policy_mod.is_suppressed).lower()
     assert "suppressed_subjects" in inspect.getsource(policy_mod.is_suppressed)
 

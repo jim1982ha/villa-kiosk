@@ -37,8 +37,10 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import config as agent_config  # noqa: E402
-from agent import playbooks, reason, triage  # noqa: E402
+from vesta.supervise.agent import config as agent_config
+from vesta.supervise.agent import playbooks
+from vesta.supervise.agent import reason
+from vesta.supervise.agent import triage
 from vesta.adapters import usage
 
 PLAYBOOK_ROOT = os.path.join(REPO_ROOT, "rootfs", "usr", "share", "vesta",

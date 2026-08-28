@@ -35,7 +35,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "rootfs", "usr", "bin"))
 
-from agent import budget, config as agent_config, reason, registry, runtime, triage  # noqa: E402
+from vesta.supervise.agent import budget
+from vesta.supervise.agent import config as agent_config
+from vesta.supervise.agent import reason
+from vesta.supervise.agent import registry
+from vesta.supervise.agent import runtime
+from vesta.supervise.agent import triage
 
 
 def test_the_investigation_tier_does_NOT_get_the_upstream_catalogue() -> None:

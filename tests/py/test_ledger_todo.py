@@ -145,7 +145,7 @@ def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
     """⚠️ RE-POINTED AT THE BRIEF'S NEW AUTHOR (TASK-073). The property: an
     open job raised in an EARLIER period reaches the page, under a heading
     that says it is still open rather than new — and no entity id travels."""
-    from agent import fallback as agent_fallback
+    from vesta.supervise.agent import fallback as agent_fallback
     body = agent_fallback.brief(carried=[_parse(PM01)]).text
     assert "Jobs still open with the facility manager:" in body
     assert "sensor." not in body
@@ -154,7 +154,7 @@ def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
 def test_a_week_whose_only_news_is_an_old_open_job_is_not_empty() -> None:
     """Saying "found nothing" over the top of an outstanding task is the
     2.530.0 defect in a new place — re-pinned against `fallback.brief`."""
-    from agent import fallback as agent_fallback
+    from vesta.supervise.agent import fallback as agent_fallback
     body = agent_fallback.brief(carried=[_parse(PM01)]).text
     assert "Nothing needs your attention" not in body
     assert "found nothing" not in body

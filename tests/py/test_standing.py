@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from vesta.adapters import model as model_mod
 from vesta.brief import standing as standing_mod
-from agent import fallback as agent_fallback  # noqa: E402
+from vesta.supervise.agent import fallback as agent_fallback
 from vesta.brief.narrate import ReportContext
 from vesta.shared.style import BULLET                    # noqa: E402
 from vesta.shared.style import SECTION_MARK               # noqa: E402

@@ -31,9 +31,10 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import config as agent_config, runtime  # noqa: E402
-from agent.refs import RefTable  # noqa: E402
-from agent.tools import act as act_mod  # noqa: E402
+from vesta.supervise.agent import config as agent_config
+from vesta.supervise.agent import runtime
+from vesta.supervise.agent.refs import RefTable
+from vesta.supervise.agent.tools import act as act_mod
 
 #: Two devices of the same villa. ⚠️ Placeholders, classified in
 #: `test_hard_rules.ILLUSTRATIVE` — this repository is public.
@@ -128,8 +129,8 @@ def test_a_MISSING_caller_is_a_stated_fault_never_a_silent_success() -> None:
     something that never happened, making the record of what the villa did
     fiction. `sources.service_caller` returns None without a session, and this
     is what the tool does with that."""
-    from agent import policy as policy_mod
-    from agent import sources
+    from vesta.supervise.agent import policy as policy_mod
+    from vesta.supervise.agent import sources
 
     assert sources.service_caller(None) is None
 
@@ -153,7 +154,7 @@ def test_a_MISSING_caller_is_a_stated_fault_never_a_silent_success() -> None:
 def test_the_caller_sends_the_service_HA_would_recognise() -> None:
     """The domain comes from the ENTITY when the service is a bare verb, which
     is the form `REVERSIBLE_SERVICES` and `policy.may_act`'s key both use."""
-    from agent import sources
+    from vesta.supervise.agent import sources
 
     sent: List[Dict[str, Any]] = []
 

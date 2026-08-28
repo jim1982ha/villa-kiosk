@@ -44,9 +44,16 @@ VESTA = os.path.join(ROOT, "rootfs", "usr", "bin", "vesta")
 #: own directory and the two files whose job IS wording. A new synthesis module
 #: is covered on the day it is written.
 def _synthesis_files():
-    for walk_root in (REPORTS, VESTA):
-      for base, dirs, files in os.walk(walk_root):
-        dirs[:] = [d for d in dirs if d not in ("__pycache__", "narrate")]
+    # ⚠️ ONE ROOT AGAIN, WITH supervise PRUNED. During the move this walked
+    # (REPORTS, VESTA) and the 3d step made those overlap AND pulled the agent
+    # into a scope it was never in — its contracts.py holds the DELEGATING
+    # severity_rank (asserted one-definition-each below via the shared copy),
+    # so the walk reported two definitions the day supervise entered it. The
+    # synthesis set this file audits is the old reports package: shared,
+    # adapters, brief.
+    for base, dirs, files in os.walk(VESTA):
+        dirs[:] = [d for d in dirs
+                   if d not in ("__pycache__", "narrate", "supervise")]
         for name in sorted(files):
             # ⚠️ `style.py` IS a wording file and always was — it lived under
             # `narrate/`, which the dirs-prune above excluded WHOLESALE, so its
@@ -101,7 +108,7 @@ def test_the_renderer_IS_where_the_prose_lives() -> None:
     and every rung now. Its vocabulary is plainer — list dashes and f-strings
     rather than BULLET/heading calls — so the guard anchors on the seams that
     define it: the composer, the rungs, and the inert() discipline."""
-    renderer = _code(os.path.join(ROOT, "rootfs", "usr", "bin", "agent",
+    renderer = _code(os.path.join(ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                                   "fallback.py"))
     assert renderer.count("inert(") > 10, (
         "the renderer no longer routes its strings through inert(), so the "
@@ -117,9 +124,14 @@ def test_the_shared_JUDGEMENTS_have_one_definition_each() -> None:
     still disagree, if each decides for itself what "worse" means or what a
     device is called. These are the three that both layers ask."""
     package = {}
-    for walk_root in (REPORTS, VESTA):
-      for base, dirs, files in os.walk(walk_root):
-        dirs[:] = [d for d in dirs if d != "__pycache__"]
+    # ⚠️ supervise PRUNED HERE TOO, and it is not the same reason as above: the
+    # agent's contracts.py holds a severity_rank that DELIBERATELY differs
+    # (reports counts UP to critical, agent counts DOWN — test_agent_outbox
+    # documents the pair). The one-definition rule is about the OLD reports
+    # package's layers; the agent was never in this walk and joining it would
+    # indict a divergence that is on purpose and pinned elsewhere.
+    for base, dirs, files in os.walk(VESTA):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", "supervise")]
         for name in sorted(files):
             if name.endswith(".py"):
                 path = os.path.join(base, name)

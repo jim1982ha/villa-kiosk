@@ -21,7 +21,9 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import contracts, policy as policy_mod, upstream   # noqa: E402
+from vesta.supervise.agent import contracts
+from vesta.supervise.agent import policy as policy_mod
+from vesta.supervise.agent import upstream
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -175,7 +177,7 @@ def test_no_install_specific_slug_is_hardcoded() -> None:
 def test_the_scheduler_REFRESHES_the_catalogue() -> None:
     """⚠️ `feedback_pin-the-caller`, fourth release running. A catalogue nothing
     refreshes is a registry with no Home Assistant tools in it, for ever."""
-    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                             "scheduler.py"), encoding="utf-8").read()
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith("#"))
@@ -185,7 +187,7 @@ def test_the_scheduler_REFRESHES_the_catalogue() -> None:
 def test_the_registry_FOLDS_THEM_IN_rather_than_beside() -> None:
     """One registry, two backends, one gate (ARCH-012). A parallel surface is a
     second tool path beside the audited one."""
-    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                             "registry.py"), encoding="utf-8").read()
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith("#"))
@@ -335,7 +337,7 @@ def test_a_CONFIGURED_url_is_used_without_asking_the_supervisor() -> None:
     async def _boom(session: Any, url: str) -> Any:
         raise AssertionError("the Supervisor must not be consulted")
 
-    import agent.upstream as u
+    import vesta.supervise.agent.upstream as u
     saved, u._get = u._get, _boom
     try:
         got = asyncio.run(u.endpoint(object(),
@@ -353,7 +355,7 @@ def test_NO_url_and_no_privilege_degrades_quietly_but_audibly() -> None:
     async def _refused(session: Any, url: str) -> Any:
         return None
 
-    import agent.upstream as u
+    import vesta.supervise.agent.upstream as u
     saved, u._get = u._get, _refused
     try:
         assert asyncio.run(u.endpoint(object(), {"mcp_url": ""})) == ""
@@ -407,7 +409,7 @@ def test_an_argument_ALREADY_PASSED_is_not_offered_as_a_way_to_narrow() -> None:
 
 def test_a_schema_with_nothing_left_falls_back_to_the_generic_wording() -> None:
     """An empty hint would render "Narrow the query —  — rather than…"."""
-    from agent.tools.base import NARROW_HINT
+    from vesta.supervise.agent.tools.base import NARROW_HINT
     assert upstream._narrowing({"type": "object", "properties": {}}, {}) \
         == NARROW_HINT
     assert upstream._narrowing({"type": "object"}, {}) == NARROW_HINT
@@ -416,7 +418,7 @@ def test_a_schema_with_nothing_left_falls_back_to_the_generic_wording() -> None:
 def test_the_hint_reaches_the_TRUNCATION_NOTE_and_not_just_the_helper() -> None:
     """⚠️ PIN THE CALLER. A helper that returns the right string while nobody
     passes it is this repo's twice-paid defect."""
-    from agent.tools.base import truncate
+    from vesta.supervise.agent.tools.base import truncate
     note = truncate("x" * 40, 10, hint="area_filter, domain_filter")
     assert "area_filter, domain_filter" in note, note
     import inspect
@@ -433,8 +435,10 @@ def test_an_upstream_result_survives_the_REDACTION_AUDIT() -> None:
     whatever aggregate it still had. Reported as "I'm encountering a technical
     issue retrieving the fan data"."""
     import asyncio
-    from agent.redact import audit, scrub
-    from agent.refs import RefTable, entity_ids_in
+    from vesta.supervise.agent.redact import audit
+    from vesta.supervise.agent.redact import scrub
+    from vesta.supervise.agent.refs import RefTable
+    from vesta.supervise.agent.refs import entity_ids_in
 
     raw = ('[{"entity_id":"fan.a_first_unit","state":"off"},'
            '{"entity_id":"fan.b_second_unit","state":"on"}]')
@@ -464,7 +468,7 @@ def test_build_registry_PASSES_the_ref_table_to_the_upstream_tools() -> None:
     table; the bug was that `build_registry` did not pass one, and a test of
     either half alone stays green through it."""
     import inspect
-    from agent import registry as registry_mod
+    from vesta.supervise.agent import registry as registry_mod
     src = inspect.getsource(registry_mod.build_registry)
     assert "tools_for(lambda: session, refs)" in src, (
         "the upstream tools get no ref table, so every result naming a device "

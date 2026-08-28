@@ -150,18 +150,18 @@ from vesta.adapters import store as reports_store
 # PH-5; keeping them apart means that cleanup is a directory rather than a
 # filename audit. Same layering rule applies: the proxy imports from both, and
 # neither imports the proxy.
-from agent import scheduler as agent_scheduler      # noqa: E402
+from vesta.supervise.agent import scheduler as agent_scheduler
 # ⚠️ AT MODULE SCOPE, NOT INSIDE `on_start`. It is registered on the report
 # pipeline at boot and is the thing that runs when composing has already failed;
 # an import deferred to that moment would be a new failure mode on the one path
 # that exists to have none.
-from agent import fallback as agent_fallback        # noqa: E402
+from vesta.supervise.agent import fallback as agent_fallback
 # ⚠️ AT MODULE SCOPE FOR ONE REASON: `TASK_ACK_ROLES` is an ALIAS of
 # `actions.MAY_ACT` evaluated when this module loads, and a deferred import
 # cannot be aliased. Every other use of `actions` below is deferred as usual.
-from agent import actions as agent_actions          # noqa: E402
-from agent import config as agent_config            # noqa: E402
-from observe import cycle as observe_cycle          # noqa: E402
+from vesta.supervise.agent import actions as agent_actions
+from vesta.supervise.agent import config as agent_config
+from vesta.supervise.observe import cycle as observe_cycle
 
 SUPERVISOR = "supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -2152,7 +2152,7 @@ def _agent_config_guard(request, body, old, new):
     mistake somebody should see, and silently rewriting it is how an operator
     comes to believe a setting took effect.
     """
-    from agent import config as agent_config
+    from vesta.supervise.agent import config as agent_config
     problems = agent_config.errors(new)
     if problems:
         return web.json_response(
@@ -2219,8 +2219,8 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
     # again, and the owner's requirement is that the two surfaces cannot fall
     # out of step BY DESIGN. Every reason the order matters is recorded there,
     # beside the code, rather than here beside one of its callers.
-    from agent import actions as agent_actions
-    from agent import concerns as agent_concerns
+    from vesta.supervise.agent import actions as agent_actions
+    from vesta.supervise.agent import concerns as agent_concerns
     useful = bool(body["useful"])
     outcome = await agent_actions.apply(
         request.app.get("session"),
@@ -2261,7 +2261,7 @@ async def agent_action_handler(request: web.Request) -> web.Response:
     """
     if not _authorized(request):
         return _unauthorized()
-    from agent import actions as agent_actions
+    from vesta.supervise.agent import actions as agent_actions
     if _role_for(request) not in agent_actions.MAY_ACT:
         return _forbidden("Only an owner or facility manager may act on an "
                           "alert.")
@@ -2295,7 +2295,7 @@ async def agent_flag_types_get_handler(request: web.Request) -> web.Response:
     """
     if not _authorized(request):
         return _unauthorized()
-    from agent import flagtypes as agent_flagtypes
+    from vesta.supervise.agent import flagtypes as agent_flagtypes
     return web.json_response({
         "types": agent_flagtypes.listing(),
         # ⚠️ THE BOUNDS AND THE STEP COME FROM THE SERVER, so the
@@ -2331,7 +2331,7 @@ async def agent_flag_types_post_handler(request: web.Request) -> web.Response:
     if not isinstance(body, dict):
         return web.json_response({"error": "expected an object"}, status=400)
 
-    from agent import flagtypes as agent_flagtypes
+    from vesta.supervise.agent import flagtypes as agent_flagtypes
     action = str(body.get("action") or "").strip().lower()
     key = str(body.get("key") or "").strip()
     if action == "nudge":
@@ -2393,7 +2393,7 @@ async def agent_acknowledge_handler(request: web.Request) -> web.Response:
     if not concern_id:
         return web.json_response({"error": "no concern id"}, status=400)
 
-    from agent import concerns as agent_concerns
+    from vesta.supervise.agent import concerns as agent_concerns
     ok, reason = agent_concerns.acknowledge(
         concern_id, by=str(_role_for(request) or ""))
     if not ok:
@@ -2450,8 +2450,8 @@ def _agent_concerns_for_reports() -> List[Dict[str, Any]]:
     and this cannot silently print nothing during an observe period.
     """
     try:
-        from agent import concerns as agent_concerns
-        from agent import sources as agent_sources
+        from vesta.supervise.agent import concerns as agent_concerns
+        from vesta.supervise.agent import sources as agent_sources
 
         rows = agent_sources.concern_rows(
             _read_json_store(AGENT_CONFIG_FILE, {}))()
@@ -2482,7 +2482,7 @@ async def agent_memory_get_handler(request: web.Request) -> web.Response:
     if _role_for(request) not in TASK_ACK_ROLES:
         return _forbidden("Only an owner or facility manager may read or "
                           "correct the villa's memories.")
-    from agent import memory as agent_memory
+    from vesta.supervise.agent import memory as agent_memory
     return web.json_response({"memories": [
         {"subject_key": m.subject_key, "claim": m.claim, "source": m.source,
          "learned_at": m.learned_at, "review_after": m.review_after,
@@ -2527,7 +2527,7 @@ async def agent_memory_correct_handler(request: web.Request) -> web.Response:
             {"ok": False, "reason": "a subject and a correction are required"},
             status=400)
 
-    from agent import memory as agent_memory
+    from vesta.supervise.agent import memory as agent_memory
     # ⚠️ THE CORRECTOR IS THE SESSION'S ROLE, NEVER A FIELD IN THE BODY. "Who
     # told us this" is the half that makes a correction outrank the agent, and a
     # browser-supplied name is a claim about identity rather than a fact about
@@ -2554,7 +2554,7 @@ async def agent_review_get_handler(request: web.Request) -> web.Response:
     if _role_for(request) not in TASK_ACK_ROLES:
         return _forbidden("Only an owner or facility manager may review "
                           "proposed playbooks.")
-    from agent import review as agent_review
+    from vesta.supervise.agent import review as agent_review
     return web.json_response({"drafts": [
         {"slug": d.slug, "title": d.title, "domain": d.domain,
          "description": d.description, "source": d.source,
@@ -2591,7 +2591,7 @@ async def agent_review_decide_handler(request: web.Request) -> web.Response:
         return web.json_response(
             {"error": "decision must be approve or discard"}, status=400)
 
-    from agent import review as agent_review
+    from vesta.supervise.agent import review as agent_review
     # ⚠️ THE ROLE IS THE ACTOR, NOT A NAME FROM THE BODY. A client-supplied
     # "approved_by" is a client-supplied audit trail, which is no audit trail.
     if decision == "approve":
@@ -2618,7 +2618,7 @@ async def agent_proposals_handler(request: web.Request) -> web.Response:
         return _unauthorized()
     if _role_for(request) != "owner":
         return _forbidden("Only the owner profile may confirm an action.")
-    from agent import proposals as agent_proposals
+    from vesta.supervise.agent import proposals as agent_proposals
     return web.json_response(
         {"proposals": agent_proposals.pending(),
          "ttlSeconds": agent_proposals.TTL_SECONDS},
@@ -2664,8 +2664,8 @@ async def agent_confirm_handler(request: web.Request) -> web.Response:
         return web.json_response(
             {"error": "decision must be confirm or decline"}, status=400)
 
-    from agent import audit as agent_audit
-    from agent import proposals as agent_proposals
+    from vesta.supervise.agent import audit as agent_audit
+    from vesta.supervise.agent import proposals as agent_proposals
 
     # ⚠️ THE ACTOR IS THE SESSION'S ROLE, never a name from the body. A
     # client-supplied author is not an audit trail.
@@ -2731,7 +2731,7 @@ async def agent_chats_handler(request: web.Request) -> web.Response:
         return _unauthorized()
     if _role_for(request) != "owner":
         return _forbidden("Only the owner profile may list the bot's chats.")
-    from agent import chat as agent_chat
+    from vesta.supervise.agent import chat as agent_chat
     found = await agent_chat.known_chats(request.app["session"])
     return web.json_response({"chats": [
         {"id": c.chat_id, "name": c.name} for c in found]})
@@ -2748,7 +2748,7 @@ async def agent_runs_handler(request: web.Request) -> web.Response:
     """
     if not _authorized(request):
         return _unauthorized()
-    from agent import audit as agent_audit
+    from vesta.supervise.agent import audit as agent_audit
     rows = [r for r in agent_audit.rows(500)
             if str(r.get("tool") or "").startswith("run:")]
     return web.json_response({"runs": rows[-100:],
@@ -2766,7 +2766,7 @@ async def agent_audit_handler(request: web.Request) -> web.Response:
         return _unauthorized()
     if _role_for(request) != "owner":
         return _forbidden("Only the owner profile may read the agent audit.")
-    from agent import audit as agent_audit
+    from vesta.supervise.agent import audit as agent_audit
     return web.json_response({
         "rows": agent_audit.rows(500),
         "unfinished": agent_audit.unfinished(),
@@ -2802,11 +2802,11 @@ async def _agent_drill(request: web.Request,
     reading it on a phone at 3am is never frightened by our test. And it is
     `topic:`-keyed, so it can never collide with a real device's subject.
     """
-    from agent import concerns as agent_concerns
-    from agent import contracts as agent_contracts
-    from agent import policy as agent_policy
-    from agent import scheduler as agent_scheduler
-    from agent.tools import concern as concern_tool
+    from vesta.supervise.agent import concerns as agent_concerns
+    from vesta.supervise.agent import contracts as agent_contracts
+    from vesta.supervise.agent import policy as agent_policy
+    from vesta.supervise.agent import scheduler as agent_scheduler
+    from vesta.supervise.agent.tools import concern as concern_tool
 
     stored = _read_json_store(AGENT_CONFIG_FILE, {})
     # ⚠️ THE OWNER CHOOSES THE SEVERITY, because it selects which downstream
@@ -2929,8 +2929,8 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
         return await _agent_drill(request, body)
 
     if body.get("triage"):
-        from agent import scheduler as agent_scheduler
-        from agent.llm import anthropic_sdk
+        from vesta.supervise.agent import scheduler as agent_scheduler
+        from vesta.supervise.agent.llm import anthropic_sdk
         # ⚠️ THE PROVIDER IS BUILT AND PASSED IN, because `run_once` does not
         # build one: it takes whatever the caller has and declines with "no
         # model provider configured" when that is None. The forever-task passes
@@ -2978,8 +2978,8 @@ async def agent_queue_get_handler(request: web.Request) -> web.Response:
         return _unauthorized()
     if _role_for(request) != "owner":
         return _forbidden("Only the owner profile may read the approval queue.")
-    from agent import audit as agent_audit
-    from agent import reason as agent_reason
+    from vesta.supervise.agent import audit as agent_audit
+    from vesta.supervise.agent import reason as agent_reason
     config = _read_json_store(AGENT_CONFIG_FILE, {})
     return web.json_response({
         "pending": agent_audit.pending_escalations(),
@@ -3015,12 +3015,12 @@ async def agent_queue_post_handler(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "reason": "no escalation named"},
                                  status=400)
 
-    from agent import reason as agent_reason
+    from vesta.supervise.agent import reason as agent_reason
     if action == "dismiss":
         ok, why = agent_reason.dismiss(run_id, reason=str(body.get("reason") or ""))
         return web.json_response({"ok": ok, "reason": why})
 
-    from agent.llm import anthropic_sdk
+    from vesta.supervise.agent.llm import anthropic_sdk
     # ⚠️ THE PROVIDER IS BUILT AND PASSED IN — `run-now` above records the four
     # button presses and four refusals that came of assuming a callee builds
     # one. The document is assembled the same way every other agent entry point
@@ -3061,7 +3061,7 @@ def _agent_config_now() -> Dict[str, Any]:
     measuring whether the clock had ticked at all. Found by reading the add-on
     log for an unrelated reason.
     """
-    from agent import config as agent_config
+    from vesta.supervise.agent import config as agent_config
     return agent_config.view(_read_json_store(AGENT_CONFIG_FILE, {}))
 
 
@@ -3078,10 +3078,10 @@ def _chat_dispatch(app: Any) -> Any:
     restart — a kill switch you have to reboot to use is not one.
     """
     async def dispatch(event: Dict[str, Any]) -> None:
-        from agent import buttons as agent_buttons
-        from agent import chat as agent_chat
-        from agent import config as agent_config
-        from agent.llm import anthropic_sdk
+        from vesta.supervise.agent import buttons as agent_buttons
+        from vesta.supervise.agent import chat as agent_chat
+        from vesta.supervise.agent import config as agent_config
+        from vesta.supervise.agent.llm import anthropic_sdk
 
         kind = str(event.get("event_type") or "")
         # ⚠️ A BUTTON PRESS IS ANSWERED BEFORE A MESSAGE IS, AND IT NEVER REACHES
@@ -3159,7 +3159,7 @@ async def _agent_document_text() -> str:
     wrong the same way; one builder is why a fix reaches both.
     """
     try:
-        from agent import sources
+        from vesta.supervise.agent import sources
         return sources.build_document()
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         print(f"[supervisor-proxy] villa document failed: {err}", flush=True)
@@ -3175,7 +3175,7 @@ async def _agent_document_text() -> str:
 # `registry.invoke` the in-process agent uses, so the authority a caller gains
 # by arriving over the wire is exactly none (ARCH-011).
 async def agent_mcp_handler(request: web.Request) -> web.StreamResponse:
-    from agent.mcp_server import http_handler
+    from vesta.supervise.agent.mcp_server import http_handler
     return await http_handler(request)
 
 
@@ -3353,7 +3353,7 @@ def _journal_facts() -> Dict[str, Any]:
     ids on a screen anyone can photograph is not something a tab needs to do.
     """
     try:
-        from observe import heartbeat as observe_heartbeat
+        from vesta.supervise.observe import heartbeat as observe_heartbeat
         snap = observe_heartbeat.snapshot()
         return {
             "entries": snap.get("entries"),

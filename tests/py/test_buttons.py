@@ -27,7 +27,9 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import actions, buttons, concerns                 # noqa: E402
+from vesta.supervise.agent import actions
+from vesta.supervise.agent import buttons
+from vesta.supervise.agent import concerns
 from vesta.adapters import collect
 from vesta.adapters import deliver
 
@@ -188,7 +190,7 @@ def test_the_OUTBOX_sends_plainly_whatever_the_buttons_did_not_take() -> None:
     must deliver exactly as it did before this existed — so what is pinned is
     that the plain list is computed from what did NOT land, rather than from
     whether buttons were attempted at all."""
-    from agent import outbox
+    from vesta.supervise.agent import outbox
     code = _code(outbox._deliver_one)
     assert "_send_with_buttons" in code
     plain = code[code.index("plain = "):code.index("landed = ")]
@@ -199,7 +201,7 @@ def test_the_OUTBOX_sends_plainly_whatever_the_buttons_did_not_take() -> None:
 
 def test_a_BUTTON_FAILURE_never_costs_the_ALERT() -> None:
     """The message is the alert; the buttons are an affordance on top of it."""
-    from agent import outbox
+    from vesta.supervise.agent import outbox
 
     async def boom(*a: Any, **kw: Any) -> Any:
         raise RuntimeError("telegram is down")
@@ -294,7 +296,7 @@ def test_a_message_it_COULD_NOT_retire_is_KEPT_and_tried_again() -> None:
 def test_RECONCILE_is_REACHED_from_the_chase_clock() -> None:
     """⚠️ THE ASSERTION THAT WOULD CATCH THE DEFECT THIS REPO KEEPS MAKING.
     `concerns.verify` had unit tests and no caller for its whole existence."""
-    from agent import scheduler
+    from vesta.supervise.agent import scheduler
     assert "buttons_mod.reconcile" in _code(scheduler.dispatch), \
         "nothing ever retires a stale button"
 

@@ -30,7 +30,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent.tools import analysis as analysis_tools            # noqa: E402
+from vesta.supervise.agent.tools import analysis as analysis_tools
 from vesta.shared.analysis.base import ModuleContext               # noqa: E402
 from vesta.shared.analysis.modules.standby_creep import StandbyCreep  # noqa: E402
 

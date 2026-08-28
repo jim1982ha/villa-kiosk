@@ -444,8 +444,10 @@ def test_switching_supervision_off_dims_ONLY_the_tiers_that_stop() -> None:
     # and the claim is checked against the backend, not against this list
     root = os.path.dirname(SRC)
     bins = os.path.join(root, "rootfs", "usr", "bin")
-    for mod, stops in (("agent/scheduler.py", True), ("agent/runtime.py", True),
-                       ("agent/outbox.py", True), ("observe/cycle.py", False)):
+    for mod, stops in (("vesta/supervise/agent/scheduler.py", True),
+                       ("vesta/supervise/agent/runtime.py", True),
+                       ("vesta/supervise/agent/outbox.py", True),
+                       ("vesta/supervise/observe/cycle.py", False)):
         src = _read(os.path.join(bins, *mod.split("/")))
         gates = 'cfg.get("enabled")' in src or 'get("enabled")' in src
         assert gates is stops, (
@@ -850,7 +852,7 @@ def test_the_concerns_list_says_WHAT_GETS_CHASED() -> None:
     """
     import re as _re
     root = os.path.dirname(SRC)
-    with open(os.path.join(root, "rootfs", "usr", "bin", "agent", "route.py"),
+    with open(os.path.join(root, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "route.py"),
               encoding="utf-8") as handle:
         route = handle.read()
     critical_only = _re.search(
@@ -1091,7 +1093,7 @@ def test_the_chase_line_matches_the_bands_the_BACKEND_actually_uses() -> None:
     import re as _re
 
     panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
-    with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+    with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                            "route.py"), encoding="utf-8") as handle:
         route = handle.read()
     # ⚠️ `[^"]+`, NOT `[a-z ]+`. The first draft of this scan read only two of
@@ -1139,7 +1141,7 @@ def test_no_card_carries_a_chip_that_can_only_say_ONE_thing() -> None:
     panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
     backend = ""
     for name in ("concerns.py", "outbox.py", "runtime.py"):
-        with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent",
+        with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                                name), encoding="utf-8") as handle:
             backend += handle.read()
     writes_acted = _re.search(r'transition\([^)]*"acted"', backend) is not None
@@ -1286,7 +1288,7 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
 
     import inspect
     import re as _re
-    from agent import actions as actions_mod
+    from vesta.supervise.agent import actions as actions_mod
     done = _re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._done))
     assert "acknowledge(" in done, (
         "ticking a job does not record that the concern was seen, so the villa "
@@ -1438,7 +1440,8 @@ def test_the_JOURNAL_reports_its_OWN_clock() -> None:
     """The half above needs a field to read, and it had none until this shipped:
     `heartbeat.snapshot()` carried entries, span and rate but never a
     timestamp, which is why the banner reached for the collector's."""
-    from observe import heartbeat, journal
+    from vesta.supervise.observe import heartbeat
+    from vesta.supervise.observe import journal
     assert "last_seen" in heartbeat.snapshot({}), (
         "the journal snapshot no longer carries when it last recorded "
         "anything, so any screen asking will reach for the collector again")

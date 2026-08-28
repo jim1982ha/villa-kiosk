@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 import pytest  # noqa: E402
 
-from agent import proposals  # noqa: E402
+from vesta.supervise.agent import proposals
 
 KEY = "a1b2c3"
 
@@ -42,7 +42,7 @@ def test_NO_TOOL_can_confirm_a_proposal() -> None:
     with a session and a role — never through the tool registry, which the model
     drives. A tool named anything like confirm/approve/decide is this feature
     defeating itself, and it would pass every other test in this file."""
-    tools_dir = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent", "tools")
+    tools_dir = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "tools")
     names = []
     for entry in sorted(os.listdir(tools_dir)):
         if not entry.endswith(".py"):
@@ -68,7 +68,7 @@ def test_act_records_a_proposal_and_never_executes_one() -> None:
     """⚠️ THE TOOL PROPOSES; NOTHING IN THE TOOL LAYER DECIDES. `act.py` may
     only reach `propose` — a call to `decide` from there would be the model
     confirming its own request through one more layer."""
-    act = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent", "tools",
+    act = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "tools",
                        "act.py")
     with open(act, encoding="utf-8") as handle:
         source = re.sub(r"#[^\n]*", "", handle.read())

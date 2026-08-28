@@ -50,13 +50,13 @@ CALL = re.compile(r"(?:await\s+)?\w+\.(run|narrate)\(")
 ALLOWED: Dict[str, set] = {
     # The one agent loop. ⚠️ `run` here is Provider.run — the loop's single
     # model call per turn, bounded by depth/deadline/budget upstream.
-    "rootfs/usr/bin/agent/registry.py": {"run"},
+    "rootfs/usr/bin/vesta/supervise/agent/registry.py": {"run"},
     # The brief's narration overlay: one optional sentence per report.
     "rootfs/usr/bin/vesta/brief/pipeline.py": {"narrate"},
     # The seam's own plumbing: the bounded wrapper forwards run() to the inner
     # provider, and the adapter table's entries implement narrate() — callers
     # one level INSIDE the boundary, not new doors through it.
-    "rootfs/usr/bin/agent/runtime.py": {"run"},
+    "rootfs/usr/bin/vesta/supervise/agent/runtime.py": {"run"},
     "rootfs/usr/bin/vesta/brief/narrate/providers.py": {"narrate"},
 }
 
@@ -95,7 +95,7 @@ def test_exactly_the_allowed_files_invoke_the_seam() -> None:
     # ⚠️ VACUOUS-PASS GUARD: the two real sites MUST be found, or the regex has
     # drifted off the idiom and every other assertion here is comparing empty
     # sets — the four-counters-read-zero failure this suite keeps meeting.
-    assert any(s.startswith("rootfs/usr/bin/agent/registry.py")
+    assert any(s.startswith("rootfs/usr/bin/vesta/supervise/agent/registry.py")
                and s.endswith("run") for s in sites), (
         f"the agent loop's own call site was not found — pattern drift; saw {sites}")
     assert any(s.startswith("rootfs/usr/bin/vesta/brief/pipeline.py")

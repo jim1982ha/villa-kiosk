@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from agent import fallback                                    # noqa: E402
+from vesta.supervise.agent import fallback
 
 CONCERNS: List[Dict[str, Any]] = [
     {"severity": "notice", "title": "Standby load creeping", "body": "Slowly."},

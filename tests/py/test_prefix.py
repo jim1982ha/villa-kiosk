@@ -19,7 +19,9 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import playbooks, prefix, registry as registry_mod  # noqa: E402
+from vesta.supervise.agent import playbooks
+from vesta.supervise.agent import prefix
+from vesta.supervise.agent import registry as registry_mod
 
 
 def _blocks() -> List[Dict[str, Any]]:
@@ -238,7 +240,7 @@ def test_a_run_LOGS_THE_TOOLS_IT_USED_not_just_how_many() -> None:
     ⚠️ AND IT COUNTS RATHER THAN LISTS. One run reading a tool six times is not
     evidence for keeping it; six runs each reading it once is.
     """
-    from agent import runtime as runtime_mod
+    from vesta.supervise.agent import runtime as runtime_mod
     src = inspect.getsource(runtime_mod.investigate)
     assert "tools used:" in src, "a run does not record which tools it called"
     assert 'row.get("tool")' in src, (

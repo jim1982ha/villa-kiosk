@@ -26,7 +26,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from agent import memory as memory_mod  # noqa: E402
+from vesta.supervise.agent import memory as memory_mod
 
 DAY = 86400.0
 NOW = 1_760_000_000.0
@@ -166,7 +166,7 @@ def test_NO_TOOL_can_reach_the_memory_store() -> None:
     This walks the imports rather than trusting the absence of a write tool,
     because the defect would arrive as a convenience import in one tool file.
     """
-    tools = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent", "tools")
+    tools = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "tools")
     offenders = []
     for base, _dirs, names in os.walk(tools):
         for name in names:
@@ -192,7 +192,7 @@ def test_NO_TOOL_can_reach_the_memory_store() -> None:
 def test_there_is_NO_write_tool_at_all() -> None:
     """The other half: not merely that no tool imports it, but that none of the
     registered tool names offers writing a memory."""
-    from agent.tools import ALL_TOOLS
+    from vesta.supervise.agent.tools import ALL_TOOLS
     names = {t.name for t in ALL_TOOLS}
     assert not any("memor" in n for n in names), names
 
@@ -253,7 +253,7 @@ def test_the_memory_index_REACHES_THE_PROMPT(root) -> None:
     shipped playbooks were written, CI-gated and loaded by nobody for several
     releases while every test about their CONTENT passed. This asserts the
     learned half is assembled into the prompt, not merely stored."""
-    from agent import playbooks
+    from vesta.supervise.agent import playbooks
     memory_mod.write(KEY, claim="the supply pump runs twice daily",
                      source=SOURCE, confidence=0.9, root=root, now=NOW)
     shipped = os.path.join(REPO_ROOT, "rootfs", "usr", "share", "vesta",

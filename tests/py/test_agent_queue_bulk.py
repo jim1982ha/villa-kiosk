@@ -29,7 +29,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 # with it, because the reason for it is unchanged — a villa left in Flag & Ask
 # still accumulates one waiting flag per check.
 QUEUE = os.path.join(ROOT, "src", "components", "agent", "RecentChecks.tsx")
-REASON = os.path.join(ROOT, "rootfs", "usr", "bin", "agent", "reason.py")
+REASON = os.path.join(ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "reason.py")
 
 
 def _read(path: str) -> str:
