@@ -1,3 +1,16 @@
+## 2.846.0
+
+### Changed — the export seams: the assistant's loops and addresses become its own
+Three pieces of groundwork for the reserved capability of running the assistant
+on an external server, none changing behaviour in the add-on. The one remaining
+boundary violation is paid: the statistics fetcher moves to the layer that owns
+the call it wraps, and the exception list in the boundary test is empty again.
+The Home Assistant address, token and data directory can now be pointed
+elsewhere by one startup call each — the add-on never makes it, so its path is
+identical. And the assistant's four background loops start from one function in
+its own folder; the add-on's server makes that one call where it used to start
+each loop inline among its own.
+
 ## 2.845.0
 
 ### Changed — the assistant moves under one roof: last of the backend layer moves
