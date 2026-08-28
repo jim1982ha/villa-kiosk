@@ -51,7 +51,7 @@ that property, and a seeded default would write jobs into a stranger's list.
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from vesta.supervise.agent import config as agent_config
 from vesta.adapters.log import stage, swallow
@@ -123,6 +123,93 @@ async def _accepts_description(hass: Any, entity_id: str) -> bool:
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow(f"could not read the features of {entity_id}", err)
     return False
+
+
+async def complete_items(session: Any, concern_ids: Sequence[str], *,
+                         config: Optional[Mapping[str, Any]] = None
+                         ) -> Tuple[int, bool]:
+    """Tick the job of every alert named. Returns (ticked, failed). NEVER RAISES.
+
+    ⚠️ THE ONE PLACE A JOB IS TICKED OFF, because there are now two callers and
+    they must not each grow their own: the Done button ticks ONE, and
+    `reconcile_settled` ticks every job whose alert has been settled elsewhere.
+    A second implementation is how the bracket join, the status filter and the
+    service call drift apart.
+
+    ⚠️ ONE LIST READ FOR THE WHOLE SET. The sweep passes every settled alert the
+    villa has ever had, so asking Home Assistant per id would put a round trip
+    on the clock for each one; the OPEN items are the small side, and the
+    intersection is done here.
+
+    ⚠️ FOUND BY ITS BRACKET, the same join every other reader uses —
+    `ledger.TASK_PREFIX`, written by `summary_for`, parsed by
+    `ledger.todo_tasks`. Matching on the title would break the moment one is
+    edited.
+
+    ⚠️ (ticked, failed) RATHER THAN A COUNT, because "nothing to tick" and "the
+    tick was refused" need opposite answers from `_done` — see its docstring.
+    """
+    from vesta.adapters import ledger as ledger_mod
+    from vesta.adapters.hass import HassClient
+
+    wanted = {str(i) for i in concern_ids if str(i or "").strip()}
+    entity_id = list_for(config)
+    if not entity_id or session is None or not wanted:
+        return 0, False
+    ticked = 0
+    try:
+        async with HassClient(session) as hass:
+            open_items = await ledger_mod.todo_tasks(hass, [entity_id],
+                                                     status="needs_action")
+            for item in open_items:
+                if str(item.get("rule_id") or "") not in wanted:
+                    continue
+                uid = str(item.get("uid") or "")
+                if not uid:
+                    continue
+                await hass.command(
+                    "call_service", domain="todo", service="update_item",
+                    target={"entity_id": entity_id},
+                    service_data={"item": uid, "status": "completed"})
+                ticked += 1
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not tick a job off the list", err)
+        return ticked, True
+    return ticked, False
+
+
+async def reconcile_settled(session: Any, *,
+                            config: Optional[Mapping[str, Any]] = None) -> int:
+    """Tick the job of every alert that has been SETTLED. Returns how many.
+
+    ⚠️ THE OTHER DIRECTION OF `reconcile_done`, AND IT WAS MISSING (2026-08-28,
+    the owner's ruling after it was reported). A ticked job marked its alert
+    seen; a settled alert did nothing to its job, and `actions._done` was the
+    only thing in the tree that ever ticked one. So a thumbs-down — which
+    DISMISSES the alert — left work on the facility manager's list for ever,
+    with no alert behind it and nobody able to say where it came from. Same for
+    an alert superseded by the next one about the same subject, and for one the
+    verification sweep found had come right on its own.
+
+    ⚠️ ONE SWEEP RATHER THAN A CALL AT EACH SITE, and that is the whole reason
+    it is here. Five paths settle an alert (a thumb, a dismissal on the tablet,
+    a supersede, the verification sweep, an expiry) and adding a tick to each is
+    the shape of defect this subsystem produced three times in one day — one
+    rule, applied at the call sites somebody happened to be looking at. Asking
+    the STORE what is settled covers every path, including ones not yet written.
+
+    ⚠️ NATURALLY IDEMPOTENT: it only ever reads items that are still open, so a
+    job ticked on an earlier pass is not seen again, and a job somebody REOPENS
+    is ticked once more — which is correct, its alert is still settled.
+    """
+    from vesta.supervise.agent import concerns as concerns_mod
+
+    settled = [str(row.get("id") or "") for row in concerns_mod.read()
+               if str(row.get("state") or "") in concerns_mod.SETTLED]
+    ticked, _failed = await complete_items(session, settled, config=config)
+    if ticked:
+        stage("task", f"{ticked} job(s) ticked off — their alert was settled")
+    return ticked
 
 
 async def reconcile_done(session: Any, *,

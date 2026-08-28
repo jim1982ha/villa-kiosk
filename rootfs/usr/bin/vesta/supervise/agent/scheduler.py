@@ -497,6 +497,14 @@ async def dispatch(session: Any,
     from vesta.supervise.agent import task as task_mod
     await task_mod.reconcile_done(session, config=config)
 
+    # ⚠️ AND THE SAME RECONCILIATION IN THE OTHER DIRECTION, which was missing
+    # until it was reported (2026-08-28). A ticked job marked its alert seen;
+    # a SETTLED alert did nothing to its job, so a thumbs-down left work on the
+    # facility manager's list for ever with no alert behind it. It sweeps the
+    # store rather than being called from each of the five places that settle an
+    # alert — the shape of defect this subsystem produced three times in one day.
+    await task_mod.reconcile_settled(session, config=config)
+
     # ⚠️ THE SAME KIND OF RECONCILIATION ONE SURFACE FURTHER OUT, and it belongs
     # beside that one rather than anywhere else: both exist because an alert can
     # be dealt with somewhere this add-on cannot be told about. A ticked job is

@@ -1,3 +1,15 @@
+## 2.853.0
+
+### Fixed — a job stayed on the list after its alert was dealt with
+Only the Done button ever ticked a job off. So a thumbs-down, which dismisses
+the alert, left the work on the facility manager's list for ever with no alert
+behind it — and the same for a job whose alert was replaced by a newer one about
+the same thing, or settled because the villa came right on its own. Ticking one
+now happens for every alert that has been settled, whichever way it was settled:
+the list is reconciled against the alerts on the same clock that already reads
+it in the other direction. It sweeps what the store says is settled rather than
+being called from each place that settles something.
+
 ## 2.852.0
 
 ### Changed — an alert now says it is on the To-Do List, and the thumbs say what they are

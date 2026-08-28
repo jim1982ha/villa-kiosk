@@ -265,3 +265,113 @@ def test_an_UNREADABLE_feature_set_degrades_to_the_shape_that_always_works(
     assert "description" not in _item_fields(hass), (
         "an unreadable feature set was guessed as 'supports descriptions' — on "
         "a list that does not, that guess loses the job entirely")
+
+
+# ── the other direction: a settled alert ticks its job off ──────────────────
+class _ListHass(_Hass):
+    """A list holding open items, recording every `update_item` it is sent."""
+
+    def __init__(self, open_items: list) -> None:
+        super().__init__(0)
+        self.open_items = open_items
+
+    async def command(self, command_type: str, **payload: object) -> object:
+        if command_type == "get_states":
+            return [{"entity_id": "todo.x", "attributes": {}}]
+        self.calls.append((command_type, payload))
+        return None
+
+
+def _ticked(hass: _Hass) -> list:
+    return [dict(p.get("service_data") or {}).get("item")
+            for kind, p in hass.calls
+            if kind == "call_service" and p.get("service") == "update_item"]
+
+
+def _sweep(monkeypatch, rows: list, open_items: list) -> _Hass:
+    from vesta.supervise.agent import concerns as concerns_mod
+    from vesta.supervise.agent import task as task_mod
+    from vesta.adapters import hass as hass_mod
+    from vesta.adapters import ledger as ledger_mod
+
+    hass = _ListHass(open_items)
+    monkeypatch.setattr(hass_mod, "HassClient", lambda _s: hass)
+    monkeypatch.setattr(concerns_mod, "read", lambda: rows)
+
+    async def _tasks(_h: object, _lists: object, status: str = "") -> list:
+        return open_items if status == "needs_action" else []
+
+    monkeypatch.setattr(ledger_mod, "todo_tasks", _tasks)
+    asyncio.run(task_mod.reconcile_settled(object(), config={"task_list": "todo.x"}))
+    return hass
+
+
+def test_a_SETTLED_alert_has_its_job_TICKED_OFF(monkeypatch: Any) -> None:
+    """⚠️ THE LOOP HAD ONE DIRECTION ONLY, AND THE OWNER RULED ON THE OTHER
+    (2026-08-28). A ticked job marked its alert seen (`reconcile_done`); a
+    settled alert did nothing to its job, and `actions._done` was the only thing
+    in the tree that ever ticked one. So a thumbs-down — which DISMISSES the
+    alert — left work on the facility manager's list for ever, with no alert
+    behind it and no way to say where it came from."""
+    hass = _sweep(
+        monkeypatch,
+        rows=[{"id": "c1", "state": "dismissed"},
+              {"id": "c2", "state": "open"},
+              {"id": "c3", "state": "verified"}],
+        open_items=[{"rule_id": "c1", "uid": "u1"},
+                    {"rule_id": "c2", "uid": "u2"},
+                    {"rule_id": "c3", "uid": "u3"}])
+    assert _ticked(hass) == ["u1", "u3"], \
+        "a settled alert's job was left open, or a LIVE alert's job was ticked"
+
+
+def test_it_sweeps_the_STORE_rather_than_being_called_per_settling_path(
+        monkeypatch: Any) -> None:
+    """⚠️ FIVE PATHS SETTLE AN ALERT — a thumb, a dismissal on the tablet, a
+    supersede, the verification sweep, an expiry — and a tick added to each is
+    the defect this subsystem produced three times in one day: one rule applied
+    at the call sites somebody happened to be looking at. Asking the store what
+    is SETTLED covers every path, including ones not yet written, so a state
+    reached by no code at all is still swept."""
+    hass = _sweep(monkeypatch,
+                  rows=[{"id": "c9", "state": "closed"}],
+                  open_items=[{"rule_id": "c9", "uid": "u9"}])
+    assert _ticked(hass) == ["u9"], \
+        "an alert closed by superseding kept its job"
+    # ⚠️ EVERY SETTLED STATE, DERIVED FROM THE STORE'S OWN TUPLE rather than
+    # transcribed here — a fourth one added there must not silently escape.
+    from vesta.supervise.agent import concerns as concerns_mod
+    for state in concerns_mod.SETTLED:
+        swept = _sweep(monkeypatch, rows=[{"id": "c1", "state": state}],
+                       open_items=[{"rule_id": "c1", "uid": "u1"}])
+        assert _ticked(swept) == ["u1"], f"{state} did not tick its job"
+
+
+def test_the_SWEEP_is_REACHED_from_the_chase_clock() -> None:
+    """⚠️ THE ASSERTION THAT WOULD CATCH THE DEFECT THIS REPO KEEPS MAKING —
+    `feedback_pin-the-caller`. A sweep with unit tests and no caller is a
+    subsystem that is green and does nothing, which has happened here before."""
+    from vesta.supervise.agent import scheduler
+    assert "task_mod.reconcile_settled" in inspect.getsource(scheduler.dispatch), (
+        "nothing calls reconcile_settled, so a settled alert's job stays open "
+        "for ever however green this file is")
+
+
+def test_THE_TICK_HAS_ONE_OWNER(monkeypatch: Any) -> None:
+    """⚠️ TWO CALLERS, ONE WRITER. The Done button ticks one job and the sweep
+    ticks many; two copies of "find the item by its bracket, then complete it"
+    is how the join, the status filter and the service call drift apart."""
+    from vesta.supervise.agent import actions as actions_mod
+    # ⚠️ DOCSTRING OUT, THEN COMMENTS — the same order `test_buttons` uses on
+    # `deliver.py`, and for the same reason: this function's prose NAMES the
+    # join it delegates ("parsed by `ledger.todo_tasks`"), and a check that read
+    # prose as code would forbid it from explaining itself. Caught by this test
+    # failing on its own first run.
+    body = re.sub(r'"""(?:.|\n)*?"""', "",
+                  inspect.getsource(actions_mod._complete_item))
+    body = re.sub(r"#[^\n]*", "", body)
+    assert "complete_items" in body, \
+        "the Done button ticks jobs through its own copy of the write"
+    for grown in ("todo_tasks", "update_item", "HassClient"):
+        assert grown not in body, \
+            f"the Done button grew its own {grown} again"

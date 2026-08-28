@@ -304,46 +304,25 @@ async def _complete_item(session: Any, concern_id: str, *,
     "There was nothing to tick" and "the tick was refused" need opposite
     answers from the caller, and a boolean cannot carry that.
 
-    ⚠️ FOUND BY ITS BRACKET, WHICH IS THE SAME JOIN EVERY OTHER READER USES —
-    `ledger.TASK_PREFIX`, written by `task.summary_for`, parsed by
-    `ledger.todo_tasks`. Matching on the title instead would break the moment a
-    title is edited, and re-implementing the parse here is how the two halves
-    drift.
+    ⚠️ THE TICK ITSELF LIVES IN `task.complete_items` AND THIS IS ITS CALLER
+    (2026-08-28). A second writer appeared — the sweep that ticks a job whose
+    alert was settled somewhere else — and two copies of "find the item by its
+    bracket, then complete it" is how the join, the status filter and the
+    service call drift apart. What stays here is the mapping onto three answers,
+    because this is the only caller that needs them: found by its bracket, which
+    is the same join every other reader uses (`ledger.TASK_PREFIX`, written by
+    `task.summary_for`, parsed by `ledger.todo_tasks`).
     """
     from vesta.supervise.agent import task as task_mod
-    from vesta.adapters import ledger as ledger_mod
-    from vesta.adapters.hass import HassClient
 
-    entity_id = task_mod.list_for(config)
-    if not entity_id or session is None:
-        return "none"
-    try:
-        async with HassClient(session) as hass:
-            open_items = await ledger_mod.todo_tasks(hass, [entity_id],
-                                                     status="needs_action")
-            # ⚠️ BY `uid`, WHICH `todo_tasks` ALREADY CARRIES for exactly this
-            # reason — its own comment says the id and the list must come from
-            # the pass that decided the item was ours. `todo.update_item` also
-            # accepts a summary, and matching on one would miss any item whose
-            # text a person had tidied.
-            uid = ""
-            for item in open_items:
-                if str(item.get("rule_id") or "") == concern_id:
-                    uid = str(item.get("uid") or "")
-                    break
-            if not uid:
-                # ⚠️ `none`, NOT `failed`. Nothing is wrong: this alert never
-                # raised a job (an FYI does not), or somebody has already
-                # ticked it somewhere else.
-                return "none"
-            await hass.command(
-                "call_service", domain="todo", service="update_item",
-                target={"entity_id": entity_id},
-                service_data={"item": uid, "status": "completed"})
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow(f"could not tick the job for {concern_id}", err)
+    ticked, failed = await task_mod.complete_items(session, [concern_id],
+                                                   config=config)
+    if failed:
         return "failed"
-    return "ticked"
+    # ⚠️ `none`, NOT `failed`. Nothing is wrong: this alert never raised a job
+    # (an FYI does not, and neither does a villa with no list configured), or
+    # somebody has already ticked it somewhere else.
+    return "ticked" if ticked else "none"
 
 
 async def _job(session: Any, row: Mapping[str, Any], *, by: str,
