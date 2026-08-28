@@ -33,6 +33,7 @@ from vesta.supervise.agent import concerns
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PROXY = os.path.join(REPO, "rootfs", "usr", "bin", "supervisor-proxy.py")
+API_PATH = os.path.join(REPO, "rootfs", "usr", "bin", "vesta", "supervise", "api.py")
 
 
 def _code(fn: Any) -> str:
@@ -74,7 +75,7 @@ def test_BOTH_surfaces_reach_the_same_function() -> None:
     built its own verdict, "synchronised by design" would be false however
     carefully the two were written."""
     from vesta.supervise.agent import buttons
-    proxy = _read(PROXY)
+    proxy = _read(API_PATH)
     assert "agent_actions.apply(" in proxy, \
         "the tablet no longer performs acts through the shared definition"
     assert "actions_mod.apply(" in _code(buttons.handle), \

@@ -63,6 +63,17 @@ def _routes() -> List[str]:
         _read(PROXY),
     ):
         found.append(match.group(1).split("{", 1)[0].rstrip("/") or "/")
+    # ⚠️ THE AGENT'S ROUTES LIVE IN supervise/api.py's table since TASK-115
+    # step 6 — same addition as test_nginx_routes' parser, same reason. (Two
+    # earlier attempts landed this block in _fetched_paths on bad anchors,
+    # which marked every agent route as "called by the SPA"; the scan caught
+    # itself both times — /agent-mcp read as called AND unregistered.)
+    api_path = PROXY.replace("supervisor-proxy.py",
+                             os.path.join("vesta", "supervise", "api.py"))
+    with open(api_path, encoding="utf-8") as handle:
+        api_src = handle.read()
+    for match in re.finditer(r'web\.(?:get|post|put|delete)\("([^"]+)"', api_src):
+        found.append(match.group(1).split("{", 1)[0])
     return sorted(set(found))
 
 

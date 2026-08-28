@@ -48,6 +48,17 @@ def _routes() -> List[str]:
         path = match.group(1)
         path = path.split("{", 1)[0]
         found.append(path)
+    # ⚠️ THE AGENT'S ROUTES REGISTER THROUGH ITS OWN TABLE SINCE TASK-115 STEP
+    # 6 — `supervise/api.routes()` returns `web.get/post/put(...)` entries and
+    # the proxy mounts the table in one call, so the add_* regex above cannot
+    # see them. Parsed from the api file with the table's own idiom; the
+    # vacuous-pass guard below (>=15 routes, known names present) covers this
+    # half too, so a reformat of EITHER file fails loudly.
+    api_path = PROXY_PATH.replace("supervisor-proxy.py",
+                                  os.path.join("vesta", "supervise", "api.py"))
+    for match in re.finditer(r'web\.(?:get|post|put|delete)\("([^"]+)"',
+                             _read(api_path)):
+        found.append(match.group(1).split("{", 1)[0])
     return found
 
 

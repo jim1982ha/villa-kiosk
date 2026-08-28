@@ -27,6 +27,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(REPO_ROOT, "src")
 PROXY = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
+API_PATH = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "api.py")
 PERMISSIONS = os.path.join(SRC, "auth", "permissions.ts")
 
 
@@ -188,6 +189,8 @@ def test_the_ROLES_the_server_permits_can_REACH_the_surface() -> None:
 
     # ⚠️ THE HANDLERS MUST ACTUALLY USE IT. A route that checked a different
     # list would make everything below a comparison against the wrong constant.
+    with open(API_PATH, encoding="utf-8") as _api:
+        proxy = _api.read()
     handlers = proxy[proxy.index("async def agent_review_get_handler"):]
     handlers = handlers[:handlers.index("async def agent_chats_handler")]
     assert handlers.count("TASK_ACK_ROLES") == 2, (

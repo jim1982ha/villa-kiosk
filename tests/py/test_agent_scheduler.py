@@ -186,8 +186,10 @@ def test_run_once_DECLINES_without_a_provider_so_the_caller_must_pass_one() -> N
 
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
-    with open(os.path.join(root, "rootfs", "usr", "bin", "supervisor-proxy.py"),
-              encoding="utf-8") as handle:
+    # ⚠️ THE MANUAL ROUTE MOVED TO supervise/api.py (TASK-115 step 6); its
+    # run_once call — the caller this pin exists for — moved with it.
+    with open(os.path.join(root, "rootfs", "usr", "bin", "vesta", "supervise",
+                           "api.py"), encoding="utf-8") as handle:
         proxy = re.sub(r"#[^\n]*", "", handle.read())
     call = proxy[proxy.index("agent_scheduler.run_once("):]
     call = call[:call.index(")\n")]

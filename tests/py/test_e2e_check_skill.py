@@ -142,7 +142,7 @@ def test_the_skill_still_refuses_to_ship_or_update() -> None:
 
 # ── the drill the skill depends on ──────────────────────────────────────────
 def _proxy_source() -> str:
-    with open(os.path.join(ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py"),
+    with open(os.path.join(ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "api.py"),
               encoding="utf-8") as handle:
         return handle.read()
 
@@ -209,7 +209,7 @@ def test_the_drill_is_behind_the_SAME_owner_check_as_the_button() -> None:
     source = _proxy_source()
     handler = source[source.index("async def agent_run_now_handler"):]
     handler = handler[:handler.index('if body.get("triage")')]
-    assert handler.index('_role_for(request) != "owner"') < \
+    assert handler.index('role_for(request) != "owner"') < \
         handler.index('body.get("drill")'), (
         "the drill branch is reachable before the owner check — anyone with a "
         "session could message the owner's phone")

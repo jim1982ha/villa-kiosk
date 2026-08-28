@@ -353,7 +353,7 @@ def test_the_BUTTON_delivers_too_and_not_only_the_clock() -> None:
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
     with open(os.path.join(root, "rootfs", "usr", "bin",
-                           "supervisor-proxy.py"), encoding="utf-8") as fh:
+                           "vesta", "supervise", "api.py"), encoding="utf-8") as fh:
         proxy = _decommented(fh.read())
 
     assert "agent_scheduler.dispatch(" in proxy, (
@@ -637,8 +637,8 @@ def test_the_proxy_EXPOSES_an_acknowledgement_route() -> None:
     with index.html at status 200 and surfaces as a JSON parse error blaming the
     client (2.501.0). An alert that can only be acknowledged by walking to the
     kiosk escalates while somebody is reading it."""
-    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
-                            "supervisor-proxy.py"), encoding="utf-8").read()
+    src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta",
+                            "supervise", "api.py"), encoding="utf-8").read()
     conf = open(os.path.join(REPO_ROOT, "rootfs", "etc", "nginx",
                              "nginx.conf"), encoding="utf-8").read()
     assert '"/agent-acknowledge"' in src

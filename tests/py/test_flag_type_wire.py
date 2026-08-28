@@ -32,6 +32,7 @@ REPO_ROOT = os.path.dirname(
 FLAGTYPES = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                          "flagtypes.py")
 PROXY = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
+API_PATH = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "api.py")
 CLIENT = os.path.join(REPO_ROOT, "src", "agent", "agentApi.ts")
 
 
@@ -109,7 +110,7 @@ def test_the_ACTIONS_the_client_sends_are_all_HANDLED() -> None:
     # whole client and picked up `approve` from `decideEscalation`, an
     # unrelated endpoint that also has an `action`. A pin that reads more than
     # its subject reports a defect in code it was never about.
-    handled = set(re.findall(r'action == "(\w+)"', _no_comments(_read(PROXY))))
+    handled = set(re.findall(r'action == "(\w+)"', _no_comments(_read(API_PATH))))
     block = _no_comments(_read(CLIENT)).split(
         "export async function tuneFlagTypes")[1].split("\nexport ")[0]
     sent = set(re.findall(r'action: "(\w+)"', block))
@@ -124,7 +125,7 @@ def test_the_bounds_the_dial_uses_come_from_PYTHON() -> None:
     would be a second copy of the arithmetic, and 0.1 is precisely the value
     that does not survive binary floating point — the two would drift and the
     screen would stop matching what a press produced."""
-    served = _no_comments(_read(PROXY))
+    served = _no_comments(_read(API_PATH))
     assert "agent_flagtypes.MIN_FACTOR" in served
     assert "agent_flagtypes.MAX_FACTOR" in served
     assert "agent_flagtypes.STEP" in served

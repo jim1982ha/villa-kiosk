@@ -359,7 +359,7 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
     with open(os.path.join(root, "rootfs", "usr", "bin",
-                           "supervisor-proxy.py"), encoding="utf-8") as handle:
+                           "vesta", "supervise", "api.py"), encoding="utf-8") as handle:
         src = handle.read()
     body = src.split("async def agent_feedback_handler")[1].split(
         "\nasync def ")[0]

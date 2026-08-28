@@ -184,8 +184,16 @@ def test_the_store_uses_the_existing_factory_not_a_bespoke_pair() -> None:
         source = handle.read()
     assert "agent_config_get_handler, agent_config_put_handler = _json_store_handlers(" \
         in source
-    assert 'add_get("/agent-config", agent_config_get_handler)' in source
-    assert 'add_put("/agent-config", agent_config_put_handler)' in source
+    # ⚠️ REGISTRATION MOVED INTO THE API TABLE (TASK-115 step 6): the factory
+    # pair is INJECTED via bind() and mounted by `web.put` in supervise/api.py.
+    # Both hops pinned — the injection here, the mount in the table.
+    assert 'config_get=agent_config_get_handler' in source
+    assert 'config_put=agent_config_put_handler' in source
+    api = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta",
+                       "supervise", "api.py")
+    with open(api, encoding="utf-8") as handle:
+        table = handle.read()
+    assert 'web.put("/agent-config", deps.config_put)' in table
 
 
 def test_the_stored_empty_is_a_bare_dict_not_the_defaults() -> None:

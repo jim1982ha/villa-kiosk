@@ -373,7 +373,7 @@ def test_the_MANUAL_route_hands_over_the_same_wired_document() -> None:
     assemble a document of its own."""
     import re
 
-    proxy = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
+    proxy = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "api.py")
     with open(proxy, "r", encoding="utf-8") as handle:
         body = handle.read()
     start = body.index("async def _agent_document_text")

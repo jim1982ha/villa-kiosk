@@ -274,11 +274,11 @@ def test_the_correction_path_is_reachable_from_a_route() -> None:
 
     This pins the WIRE. `feedback_pin-the-caller`, tenth instance."""
     proxy = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
-                              "supervisor-proxy.py"), encoding="utf-8").read()
+                              "vesta", "supervise", "api.py"), encoding="utf-8").read()
     assert "agent_memory.correct(" in proxy, (
         "no handler calls memory_mod.correct, so a person still cannot contradict "
         "a claim the villa holds")
-    assert 'add_post("/agent-memory"' in proxy, "the route is not registered"
+    assert 'web.post("/agent-memory"' in proxy, "the route is not registered"
 
     nginx = open(os.path.join(REPO_ROOT, "rootfs", "etc", "nginx",
                               "nginx.conf"), encoding="utf-8").read()

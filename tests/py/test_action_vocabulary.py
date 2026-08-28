@@ -97,10 +97,10 @@ def test_the_ENDPOINT_the_tablet_posts_to_is_the_one_the_server_routes() -> None
         "the tablet no longer posts to `agent-action`; if the endpoint was "
         "renamed, the proxy route and the nginx location must move with it")
 
-    with open(os.path.join(REPO, "rootfs", "usr", "bin",
-                           "supervisor-proxy.py"), encoding="utf-8") as handle:
+    with open(os.path.join(REPO, "rootfs", "usr", "bin", "vesta",
+                           "supervise", "api.py"), encoding="utf-8") as handle:
         proxy = handle.read()
-    assert 'add_post("/agent-action"' in proxy, (
+    assert 'web.post("/agent-action"' in proxy, (
         "the tablet posts to /agent-action and the proxy does not route it — "
         "nginx's catch-all would answer 200 with index.html")
 
