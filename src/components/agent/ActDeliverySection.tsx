@@ -46,10 +46,6 @@ export default function ActDeliverySection() {
   return (
     <>
       <div className="settings-section-title">What it is allowed to do</div>
-      <p className="muted body-text">
-        Set under Settings &amp; others; shown here because this is the step
-        that acts on it.
-      </p>
       <dl className="tier-facts">
         <div>
           <dt>Quiet hours</dt>
@@ -68,23 +64,34 @@ export default function ActDeliverySection() {
           <dd>{mayAct ? (devices > 0 ? `${devices} allowed` : "none chosen") : "no"}</dd>
         </div>
       </dl>
+      {/* ⚠️ ONE PARAGRAPH, NOT TWO (2026-08-28, owner: "merge the 2 text
+          section together … and make it shorter, while keeping the same
+          relevancy"). The line above the facts said only where the settings are
+          edited, which is a sentence about navigation sitting where the reader
+          wants a sentence about behaviour — and it pushed the thing they came
+          to read below three chips. Where to change them is now a clause on the
+          end, which is also where somebody who has finished reading needs it.
+          ⚠️ THE TO-DO CLAUSE LOST ITS POINTER because the list is now directly
+          underneath (the separate tab was merged in on the same day), and
+          "appears under To-Do List" sent a reader looking for a tab that is
+          no longer there. */}
       <p className="muted body-text">
         {quietText(start, end)}
         {" "}
         {list
-          ? "Anything it tells you about is also added to your to-do list as a "
-            + "to-do item, and appears under To-Do List."
-          : "Findings are never added to a to-do list, because none is "
-            + "named."}
+          ? "Anything it tells you about becomes a to-do item, listed below."
+          : "Nothing it finds is added to a to-do list, because none is named."}
         {" "}
         {mayAct
           ? (devices > 0
-            ? "It may operate the devices you chose, and nothing else. Anything "
+            ? "It may operate the devices you chose and nothing else; anything "
               + "that could let somebody in or silence an alarm is offered to "
               + "you rather than done."
             : "It is allowed to operate devices but none have been chosen, so "
               + "it can still touch nothing.")
           : "It can watch and tell, and touch nothing at all."}
+        {" "}
+        Change any of this under Settings &amp; others.
       </p>
     </>
   );

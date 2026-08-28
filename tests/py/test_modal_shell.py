@@ -530,7 +530,7 @@ def _read(relative: str) -> str:
 
 def _component_path(name: str) -> str:
     """Where a modal component lives, by name — the repo has one of each."""
-    for folder in ("reports", "fm", "cockpit", "settings", "panels"):
+    for folder in ("reports", "fm", "cockpit", "settings", "panels", "agent"):
         candidate = os.path.join("src", "components", folder, f"{name}.tsx")
         if os.path.exists(os.path.join(REPO_ROOT, candidate)):
             return candidate
@@ -569,7 +569,15 @@ def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
     dashboard = _read("src/pages/Dashboard.tsx")
     permissions = _read("src/auth/permissions.ts")
 
-    hosts = [name for name in ("ReportsModal", "FacilityModal")
+    # ⚠️ THE SUBJECT MOVED ON 2026-08-28 AND THE PROPERTY DID NOT. This was
+    # written about `TasksTab`, the blueprint-era task list; that tab was
+    # deleted when its producer turned out to have been retired before it. The
+    # facility manager's work now renders as `AgentTodo`, inside Act & Tell —
+    # and folding it in nearly repeated the original bug exactly, because that
+    # tab carried `owner: true` and `ops` does not hold `editConfig`. The gate
+    # had to move inwards onto `AgentProposals` instead. Same question, new
+    # surface: can the role the server permits actually GET here.
+    hosts = [name for name in ("AgentModal", "FacilityModal")
              if f"<{name}" in dashboard]
     assert hosts, "neither modal is rendered — this test is blind"
 
@@ -584,8 +592,8 @@ def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
 
     # Which hosts actually render the Tasks tab.
     rendering = [h for h in hosts
-                 if "TasksTab" in _read(_component_path(h))]
-    assert rendering, "nothing renders TasksTab — the feature is gone"
+                 if "AgentTodo" in _read(_component_path(h))]
+    assert rendering, "nothing renders the to-do list — the feature is gone"
 
     # Which capabilities `ops` holds.
     ops_block = permissions[permissions.index("ops: {"):]
@@ -609,7 +617,7 @@ def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
     unreachable = {h: gates.get(h) for h in rendering
                    if gates.get(h) not in ops_caps}
     assert not unreachable, (
-        f"the facility manager cannot reach the Tasks tab in {sorted(unreachable)}. "
+        f"the facility manager cannot reach their own to-do list in {sorted(unreachable)}. "
         f"It renders in {rendering}, gated on {[gates.get(h) for h in rendering]}, "
         f"and `ops` holds {sorted(ops_caps)}. The server permits `ops` to complete "
         f"a task; every surface that offers one must let them in.")

@@ -1211,16 +1211,30 @@ def test_the_TO_DO_ITEMS_the_villa_raises_have_a_surface_in_this_APP() -> None:
     modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
     assert "<AgentTodo />" in modal, (
         "the To-Do List tab is built and never rendered")
-    assert '{ id: "todo"' in modal, "there is no To-Do List tab in the strip"
-    assert 'label: "To-Do List"' in modal, (
-        "the tab is not labelled To-Do List — three words named one thing "
-        "until 2026-08-28 and the owner was shown all three")
-    # ⚠️ NOT OWNER-GATED: the work belongs to the Facility manager, and gating
-    # it to the owner hides somebody's own work list from them.
-    tab_row = modal[modal.index('{ id: "todo"'):]
-    assert "owner: true" not in tab_row[:tab_row.index("\n")], (
-        "the Jobs tab is owner-only, so the Facility manager cannot see the "
-        "work they are being asked to do")
+    # ⚠️ NO LONGER A TAB OF ITS OWN (2026-08-28, owner: "merge the content of
+    # the To-Do List tab inside this Act & Tell tab"). What this pin exists for
+    # is that the items HAVE a surface in this app at all — before 2.816.0 a
+    # delivered alert raised a to-do item and the only place it appeared was
+    # Home Assistant's own panel. WHERE it renders is a layout decision; THAT it
+    # renders is the rule, so the assertion above follows the component.
+    #
+    # ⚠️ AND THE GATE HAD TO MOVE WITH IT, WHICH IS THE HALF A MERGE LOSES
+    # SILENTLY. The To-Do List tab was deliberately not owner-gated — the work
+    # belongs to the Facility Manager and hiding somebody's own job list from
+    # them is the opposite of why it exists — and Act & Tell carried
+    # `owner: true`. Folding one into the other would have taken the list away
+    # from exactly the person it is for, with nothing on screen to say so.
+    act_row = modal[modal.index('{ id: "act"'):]
+    act_row = act_row[:act_row.index("\n")]
+    assert "owner: true" not in act_row, (
+        "Act & Tell is owner-only and now contains the To-Do List, so the "
+        "Facility manager cannot see the work they are being asked to do")
+    # ⚠️ THE GATE DID NOT VANISH, IT MOVED INWARDS. Confirming an action is
+    # still the owner's — §4.1's authority boundary — and it is enforced
+    # server-side regardless; this is the rendering half.
+    assert "{canConfigure && <AgentProposals />}" in modal, (
+        "un-gating the tab exposed the action-confirmation surface to anyone "
+        "who can open the dialog")
 
 
 def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:

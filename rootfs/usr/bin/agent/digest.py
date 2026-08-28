@@ -22,7 +22,7 @@ message, not forty.
 an oversight. A daily "you have no jobs" is pure noise on a property that is
 usually fine, and this is a message to a PERSON rather than an instrument whose
 silence could be misread as a fault — the distinction `observe/heartbeat.py`
-records. The To-Do List tab is always there and always says the truth.
+records. The list under Act & Tell is always there and always says the truth.
 
 ⚠️ IT DOES NOT REACH FOR THE CONCERN STORE. An item's whole content — the
 bracketed reference, the title — is already on the to-do list, which is the one
@@ -87,11 +87,19 @@ def due(now: Optional[float] = None,
 
 
 def _line(item: Mapping[str, Any]) -> str:
-    """One item, as a person reads it. ⚠️ THE REFERENCE IS KEPT — it is what
-    ties a line to the alert behind it and to the row the tablet ticks."""
-    ref = str(item.get("rule_id") or "").strip()
-    text = " ".join(str(item.get("text") or "").split())
-    return f"- {text}" + (f"  [{ref}]" if ref else "")
+    """One item, in the words a person would use for it.
+
+    ⚠️ THE REFERENCE IS DROPPED, AND THE ARGUMENT FOR KEEPING IT WAS WRONG
+    (2026-08-28). This used to append `[c7]` on the reasoning that it "ties a
+    line to the alert behind it and to the row the tablet ticks" — true of the
+    SOFTWARE and worth nothing to the reader, who cannot type `c7` anywhere and
+    has no screen that asks for it. The tying is done by `ledger.TASK_PREFIX`
+    against the stored summary, which is where it belongs; printing it into a
+    message is the internal vocabulary leaking onto somebody's phone.
+    See `feedback_speak-in-ui-terms` — the owner has now reported this twice,
+    once about my prose and once about a screen.
+    """
+    return "- " + " ".join(str(item.get("text") or "").split())
 
 
 def compose(items: List[Mapping[str, Any]]) -> str:
@@ -100,9 +108,9 @@ def compose(items: List[Mapping[str, Any]]) -> str:
     lines = [_line(i) for i in shown]
     more = len(items) - len(shown)
     if more > 0:
-        lines.append(f"- and {more} more, on the To-Do List tab")
+        lines.append(f"- and {more} more, under Act & Tell in VESTA")
     lines.append("")
-    lines.append("Tick one off on the To-Do List tab in VESTA, or on the "
+    lines.append("Tick one off under Act & Tell in VESTA, or on the "
                  "to-do list itself.")
     return "\n".join(lines)
 

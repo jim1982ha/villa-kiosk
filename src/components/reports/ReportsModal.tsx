@@ -73,10 +73,7 @@
 // capability instead.
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, FileText,
-  ListChecks, Loader2, ShieldQuestion,
-} from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, FileText, ListChecks, Loader2, ShieldQuestion } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -94,9 +91,8 @@ import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
 import ModulesTab from "./ModulesTab";
 import { TierIntro, STEPS } from "@/components/agent/tiers";
-import TasksTab from "./TasksTab";
 
-type Tab = "checks" | "coverage" | "preview" | "schedule" | "tasks";
+type Tab = "checks" | "coverage" | "preview" | "schedule";
 
 /** ⚠️ `configure: true` MEANS "THE PROXY WOULD REFUSE THIS TAB TO ANYONE BUT
  *  THE OWNER" — see the endpoint table in this file's header. It is not a
@@ -117,21 +113,37 @@ const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[
   { id: "coverage", label: "What it can see", icon: ShieldQuestion, configure: true },
   { id: "preview", label: "The briefing", icon: FileText, configure: true },
   { id: "schedule", label: "Sending it", icon: CalendarClock, configure: true },
-  // ⚠️ NOT `configure`-GATED. A facility manager task is the facility manager's work,
-  // and the proxy gates COMPLETING one on `manageFacility` — the capability
-  // that opens this dialog — not on `editConfig`.
-  { id: "tasks", label: "What it asked for", icon: ClipboardList },
+  // ⚠️ "WHAT IT ASKED FOR" IS GONE (2026-08-28), AND ITS PRODUCER WAS RETIRED
+  // BEFORE IT WAS. The tab listed to-do items the villa's own BLUEPRINTS had
+  // raised — `maintenance_*`, `roi_*` and `audit_*` each called `todo.add_item`
+  // alongside their event. The cutover retired all three, so no shipped
+  // blueprint writes a to-do item any more and the tab had no source of its
+  // own left.
+  //
+  // ⚠️ IT DID NOT GO BLANK, WHICH IS WHY IT SURVIVED THE CUTOVER UNNOTICED. It
+  // reads every `todo.*` entity and keeps whatever carries `TASK_PREFIX`, and
+  // since 2.763.0 `agent/task.py` writes exactly that bracket — so it quietly
+  // started listing the AGENT's items under a "Safety reflex" chip and the
+  // sentence "to-do items your automations raised". Both false, and both about
+  // rows already shown, correctly, on Act & Tell. The owner reported it as a
+  // duplicate; it was worse than one.
+  //
+  // ⚠️ AND IT PRINTED THE INTERNAL ID. `ruleId` was rendered beside the text
+  // deliberately, as corroboration — its comment read "an agent-derived row
+  // could not have one", which was true when written and stopped being true
+  // the day the agent started raising to-do items. That is how `c7` reached a
+  // screen. `/reports-tasks` and its client stay: the brief's "Followed up"
+  // section still reconciles against the list.
 ];
 
 export default function ReportsModal(
-  { onClose, canAck, canConfigure }:
-  // ⚠️ `canAck` IS BACK, WITH THE TAB. A facility manager task is written by an
-  // AUTOMATION into a Home Assistant to-do list and read back here — so it
-  // belongs in this dialog and NOT in Facility, where it was rendering the same
-  // component against the same endpoint. `canAck` is a rendering convenience;
-  // the proxy checks `TASK_ACK_ROLES` on every completion whatever a browser
-  // sends.
-  { onClose: () => void; canAck: boolean; canConfigure: boolean },
+  { onClose, canConfigure }:
+  // ⚠️ `canAck` WENT WITH THE TAB IT GATED (2026-08-28). It decided whether the
+  // "What it asked for" list offered a Done button; that list is now on Act &
+  // Tell, where `AgentTodo` reads `manageFacility` for itself. The prop is
+  // dropped rather than left unused, because an ignored permission prop is one
+  // a future tab picks up believing it does something.
+  { onClose: () => void; canConfigure: boolean },
 ) {
   const dialogRef = useModalA11y(onClose);
   const tabs = TABS.filter((t) => canConfigure || !t.configure);
@@ -442,7 +454,6 @@ export default function ReportsModal(
           {tab === "coverage" && <TierIntro tier={STEPS.visible} />}
           {tab === "preview" && <TierIntro tier={STEPS.brief} />}
           {tab === "schedule" && <TierIntro tier={STEPS.sent} />}
-          {tab === "tasks" && <TierIntro tier={STEPS.work} />}
 
           {tab === "preview" && (
             <PreviewTab
@@ -493,7 +504,6 @@ export default function ReportsModal(
               brief is sent and what was actually delivered are one question in
               two tenses; splitting them put a FAILED delivery on a tab nobody
               opens after configuring the schedule. */}
-          {tab === "tasks" && <TasksTab canAck={canAck} />}
         </div>
 
         {/* ⚠️ ONE FOOTER COMPONENT, ONE SAVING POLICY — `common/ModalFooter`.

@@ -25,7 +25,8 @@ about, sitting on a list, with no message to explain it.
 
   1. The TODO ITEM, whose summary must contain `[<rule_id>]`. That bracket is
      parsed by `ledger.TASK_PREFIX` and is the join everything downstream uses
-     — the To-Do List tab, the daily digest, and `reconcile_done`, which marks
+     — the To-Do List under Act & Tell, the daily digest, and `reconcile_done`,
+     which marks
      the alert seen when the item is ticked from ANY surface. An item without
      it is work nothing can trace back to its alert.
      ⚠️ It used to be the string `vesta_task_actions.yaml`'s "Done" button
@@ -261,7 +262,8 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
             #
             # ⚠️ THE ITEM IS STILL CREATED — the record survives, only the
             # announcement goes. The concern is the alert; this is the work,
-            # and it is read from the To-Do List tab, from Home Assistant's own
+            # and it is read from the To-Do List under Act & Tell, from Home
+            # Assistant's own
             # to-do panel, and from the daily digest in `digest.py`.
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow(f"could not raise a facility manager task for {rule_id}", err)

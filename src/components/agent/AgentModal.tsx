@@ -25,10 +25,7 @@
 // a dialog-level gate would make it one.
 
 import { useEffect, useState } from "react";
-import {
-  Activity, Brain, ClipboardList, Search, Send, SlidersHorizontal, Sparkles,
-  Zap, Eye, EyeOff,
-} from "lucide-react";
+import { Activity, Brain, Search, Send, SlidersHorizontal, Sparkles, Zap, Eye, EyeOff } from "lucide-react";
 
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
@@ -51,7 +48,7 @@ import { loadAgentConfig } from "@/agent/agentApi";
 import { fetchReportsDiagnostics,
          type ReportsDiagnostics } from "@/reports/reportsApi";
 
-type Tab = "reflex" | "observe" | "triage" | "reason" | "act" | "todo";
+type Tab = "reflex" | "observe" | "triage" | "reason" | "act";
 
 /** ⚠️ THE SIX TABS ARE THE HLD'S FIVE TIERS, IN ITS ORDER, PLUS SETTINGS.
  *  §4 orders them by how fast each must answer and how much judgement it is
@@ -76,22 +73,21 @@ const TABS: { id: Tab; label: string; icon: typeof Sparkles; owner?: true }[] = 
   { id: "observe", label: "Observe", icon: Activity },
   { id: "triage", label: "Triage", icon: Search, owner: true },
   { id: "reason", label: "Reason", icon: Brain },
-  { id: "act", label: "Act & Tell", icon: Send, owner: true },
-  // ⚠️ A SIXTH TAB THAT IS NOT A TIER, AND IT CARRIES NO STEP BADGE FOR THAT
-  // REASON (owner's decision, 2026-08-27). The five above are the HLD's five
-  // tiers in the villa's signal path; this is what the last of them PRODUCED,
-  // and it had no surface anywhere in this app — a delivered concern raises a
-  // to-do item and the only place it appeared was Home Assistant's own panel.
+  // ⚠️ NO LONGER OWNER-GATED, AND THE MERGE BELOW IS WHY. The sixth tab
+  // ("To-Do List") was folded in here on 2026-08-28 at the owner's
+  // instruction, and it was deliberately NOT owner-gated: the work belongs to
+  // the Facility Manager and hiding somebody's own job list from them is the
+  // opposite of why it exists. Carrying `owner: true` across the merge would
+  // have done exactly that, silently — the tab would simply stop appearing for
+  // them, with the list inside it.
   //
-  // ⚠️ NOT OWNER-GATED, DELIBERATELY. The work belongs to the Facility manager;
-  // gating it to the owner would hide somebody's own job list from them, which
-  // is the opposite of why it exists.
-  // ⚠️ "To-Do List", NOT "Jobs" (2026-08-28, owner's instruction). Three
-  // words named one thing — the tab said Jobs, the Telegram message said
-  // "task", the setting said "to-do list" — and the owner was shown all
-  // three. This is Home Assistant's own word for the list the items live on,
-  // so the tab, the setting and the panel a reader opens in HA now agree.
-  { id: "todo", label: "To-Do List", icon: ClipboardList },
+  // ⚠️ SO THE GATE MOVED INWARDS RATHER THAN BEING DROPPED. `AgentProposals`
+  // — an action awaiting confirmation — reads `editConfig` for itself, which
+  // is the authority boundary §4.1 calls the most important one, and it is
+  // enforced server-side regardless. What a Facility Manager gains is a
+  // read-only description of the villa's quiet hours and actuation permission,
+  // which is not a secret and is the context their own to-do list sits in.
+  { id: "act", label: "Act & Tell", icon: Send },
   // ⚠️ "Settings" MOVED INTO THE ADVANCED DIALOG IN 2.759.0, by request, and
   // that dialog is now "Settings & Others". The five that remain are the five
   // TIERS — one story, read top to bottom, each answering "what happens at this
@@ -352,14 +348,13 @@ function AgentDialog(
                   the same word directly beneath itself — reported as a
                   redundant badge. The legend earns its place where SEVERAL
                   sources appear together, not where one does. */}
-              <AgentProposals />
+              {canConfigure && <AgentProposals />}
               <ActDeliverySection />
-            </div>
-          )}
-
-          {/* ── The work that came out of it ───────────────────────────── */}
-          {tab === "todo" && (
-            <div className="reports-pane">
+              {/* ⚠️ THE WORK THIS STEP PRODUCED, BENEATH THE RULES IT PRODUCED
+                  IT UNDER. It had its own tab until 2026-08-28; the paragraph
+                  above now ends "…becomes a to-do item, listed below" and this
+                  is that list, so the sentence and the thing it describes are
+                  on one screen. */}
               <AgentTodo />
             </div>
           )}

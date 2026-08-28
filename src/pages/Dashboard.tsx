@@ -1080,7 +1080,6 @@ export default function Dashboard() {
       {reportsOpen && canManageFacility && (
         <ReportsModal
           onClose={() => setReportsOpen(false)}
-          canAck={canManageFacility}
           /* ⚠️ THREE CAPABILITIES, DELIBERATELY NOT COLLAPSED. Briefings OPENS
              on `manageFacility` (owner + facility manager, 2026-08-22 — it was
              `editConfig`, so the facility manager could not reach the tasks a

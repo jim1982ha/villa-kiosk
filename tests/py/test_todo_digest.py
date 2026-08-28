@@ -75,13 +75,22 @@ def test_the_ITEM_is_still_created() -> None:
 
 
 # ── the digest ──────────────────────────────────────────────────────────────
-def test_it_lists_every_open_item_with_its_reference() -> None:
-    """The bracket is what ties a line to the alert behind it and to the row
-    the tablet ticks."""
+def test_it_lists_every_open_item_IN_A_PERSON_S_WORDS() -> None:
+    """⚠️ THE REFERENCE USED TO BE PRINTED AND IS NOW DELIBERATELY ABSENT
+    (2026-08-28). This asserted `[c7]` appeared, on the reasoning that the
+    bracket "ties a line to the alert behind it and to the row the tablet
+    ticks" — true of the software, worth nothing to the reader, who cannot type
+    `c7` anywhere. The owner reported seeing it on a screen; the tying is done
+    by `ledger.TASK_PREFIX` against the STORED summary, which is untouched.
+
+    ⚠️ THE ABSENCE IS PINNED IN `test_no_internal_ids_on_screen.py`, which owns
+    that rule for every surface. What is pinned HERE is what remains true of a
+    digest: every item is named, and named readably."""
     body = digest.compose([{"rule_id": "c7", "text": "Pool pump cycling"},
                            {"rule_id": "c9", "text": "Filter overdue"}])
-    assert "Pool pump cycling" in body and "[c7]" in body
-    assert "Filter overdue" in body and "[c9]" in body
+    assert "Pool pump cycling" in body
+    assert "Filter overdue" in body
+    assert body.count("\n- ") + 1 == 2, "an item was dropped from the list"
 
 
 def test_a_LONG_list_is_capped_and_SAYS_it_was() -> None:
@@ -95,10 +104,17 @@ def test_a_LONG_list_is_capped_and_SAYS_it_was() -> None:
 
 
 def test_it_points_at_the_TAB_by_its_current_name() -> None:
-    """The tab was renamed on 2026-08-28; a digest naming the old one sends a
-    reader looking for a tab that is not there."""
+    """The tab was renamed and then MERGED on 2026-08-28 — the list now lives
+    under Act & Tell — and a digest naming a tab that is not there sends
+    somebody hunting.
+
+    ⚠️ DERIVED FROM THE TAB STRIP, NOT SPELLED OUT. Writing the current name
+    here makes this pin need editing on the next rename, which is how it came
+    to name a tab that had been gone for an hour. `test_no_internal_ids_on_
+    screen.py` cross-checks the digest's own words against `AgentModal`'s
+    labels; this asserts only that it still says where to go."""
     body = digest.compose([{"rule_id": "c1", "text": "x"}])
-    assert "To-Do List" in body
+    assert "in VESTA" in body, "the digest no longer says where to act"
 
 
 def test_the_DAY_BOUNDARY_is_the_one_the_budget_already_owns() -> None:
