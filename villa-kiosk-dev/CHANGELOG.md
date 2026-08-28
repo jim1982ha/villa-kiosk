@@ -1,3 +1,15 @@
+## 2.835.0
+
+### Fixed — Observe said "last change seen 34 h ago" on a villa changing constantly
+It was reading the wrong clock: the chat and automation event stream, which is
+legitimately near-silent now those automations are retired, rather than the
+record of device changes the checks actually read. The tiles beside it were
+right all along — 51,430 changes, 1,266 devices — so the banner contradicted
+them. It now reports when a change was last written down. "Blueprint events not
+seen" went with it: nothing has listened for those events since the cutover, so
+naming them as unheard implied a watch that no longer exists, and one of the
+names it printed was not a real event at all.
+
 ## 2.834.0
 
 ### Fixed — "Nothing judged yet" after judging something
