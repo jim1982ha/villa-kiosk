@@ -609,11 +609,16 @@ async def run_report(
             standing = _standing_rows(states)
             labels = _entity_labels(states)
             units = _entity_units(states)
-        # ⚠️ RECONCILED AGAINST NOTHING, AND THAT IS NOW ALWAYS RIGHT. The
-        # second argument was "tasks this period's blueprint events already
-        # stated", so the brief would not print a job twice; with no events
-        # there is no second route, and every open to-do is simply carried.
-        carried = ledger.reconcile(todo, [])
+        # ⚠️ EVERY OPEN TO-DO IS CARRIED, DIRECTLY. This was
+        # `ledger.reconcile(todo, [])` — a dedupe against "tasks this period's
+        # blueprint events already stated", called with a hard-coded EMPTY
+        # second argument since TASK-074, i.e. an identity function wearing its
+        # old name. The name was the cost: it kept implying an event route into
+        # the brief that the owner's rule (2026-08-29) says must not exist —
+        # "automations only generate alerts and are never read by the briefing".
+        # `reconcile` and `collect.events_since` are deleted outright, so that
+        # rule now holds by ABSENCE: there is no accessor left to wire in.
+        carried = list(todo)
 
         # ⚠️ VERIFY AND NOISE ARE GONE WITH THEIR INPUT (TASK-074). Both were
         # computed OVER THE BLUEPRINT EVENTS: verify proved "reported, acted

@@ -98,46 +98,50 @@ def test_the_dimmed_tabs_are_exactly_the_ones_that_stop() -> None:
         "leaving one undimmed hides that it stopped.")
 
 
-def test_the_brief_does_not_dim_a_layer_that_keeps_working() -> None:
-    """⚠️ THE REGRESSION I SHIPPED IN 2.868.0, PINNED IN THE TAB IT HAPPENED IN.
+def test_the_brief_dims_nothing_at_all_any_more() -> None:
+    """⚠️ SECOND REVERSAL ON THIS SPOT IN TWO DAYS, so the history is the
+    test. 2.868.0 dimmed the automations section (wrong — nothing there
+    stops); 2.869.0 corrected that to dimming only a check the server
+    reported as standing down; 2026-08-29 the owner's reasoning removed the
+    stand-down itself — the briefing never read the automations, so a check
+    that stands down leaves the briefing with no analysis at all. The checks
+    now run in both modes, so there is NOTHING mode-dependent left on the
+    briefing's checks tab, and this pin holds the whole tab to that.
 
-    `critical` reflexes and the `audit` channel test do not stop for the
-    supervision switch, so the section listing them may not be dimmed by it. The
-    rows that MAY dim are the built-in checks, and only on the server's own
-    `standingDown` verdict.
+    `.reports-standing-down` itself survives — `AutomationsTab` uses it for
+    the families the owner has switched off, and `AgentActSettings` for the
+    to-do field under "Alert only". Those ARE genuinely idle. This pin is
+    about the checks tab only.
     """
     path = os.path.join(REPO_ROOT, "src", "vesta", "brief", "components",
                         "ModulesTab.tsx")
     with open(path, encoding="utf-8") as handle:
         source = handle.read()
-
-    assert "reports-standing-down" in source, (
-        "the tab no longer dims anything at all — if that is deliberate, this "
-        "pin and its companion in the CSS should go with it")
-
-    for match in re.finditer(r"reports-standing-down", source):
-        window = source[max(0, match.start() - 260):match.start()]
-        assert "supervisionEnabled" not in window, (
-            "the tab dims something directly from the supervision switch again. "
-            "The only layer that stops is a check the SERVER reports as standing "
-            "down (`standingDown`); `critical` and `audit` keep working.")
+    assert "reports-checks" in source, "the checks tab has moved — pin is blind"
+    assert "reports-standing-down" not in source, (
+        "the checks tab dims something again. The stand-down was removed with "
+        "the gate arm; a dimmed check on this tab claims a mode-dependence "
+        "the pipeline no longer has.")
+    assert "standingDown" not in source, "the deleted wire field is read again"
 
 
-def test_the_servers_verdict_reaches_the_browser() -> None:
-    """⚠️ A snake_case KEY ONE SIDE, camelCase THE OTHER, AND NOTHING BETWEEN
-    THEM — the shape that made every reports save 400 and both reads degrade
-    silently to defaults. `standing_down` renders a sentence, so a mismatch here
-    shows as "this check is fine" on a check that is standing down."""
+def test_the_stand_down_verdict_is_gone_from_both_sides_of_the_wire() -> None:
+    """⚠️ AN ABSENCE PIN, because the field crossed a language boundary. If
+    `standing_down` returns on ONE side only, the client silently renders
+    every check as running (the exact envelope-key failure shape) — so the
+    only safe states are both-present or both-absent, and the design says
+    absent."""
     with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin",
                            "supervisor-proxy.py"), encoding="utf-8") as handle:
         proxy = handle.read()
     with open(os.path.join(REPO_ROOT, "src", "vesta", "brief", "reportsApi.ts"),
               encoding="utf-8") as handle:
         client = handle.read()
-
-    assert '"standing_down"' in proxy, "the endpoint no longer sends the verdict"
-    assert "standingDown: str(mod.standing_down)" in client, (
-        "the client no longer maps standing_down → standingDown, so every check "
-        "renders as running")
+    assert '"standing_down"' not in proxy, (
+        "the proxy sends the stand-down verdict again — if that is deliberate, "
+        "the client mapping and the gate arm must come back with it, together")
+    assert "standingDown:" not in client, (
+        "the client parses a field the proxy no longer sends")
+    # the banner flag is still real and still needed by AutomationsTab:
     assert '"supervision_enabled": supervision_on' in proxy
     assert "supervisionEnabled: bool(d.supervision_enabled)" in client

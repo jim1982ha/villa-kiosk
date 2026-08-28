@@ -91,6 +91,20 @@ def _run(fake: _FakeHass) -> _FakeHass:
 
 # ── capture ──────────────────────────────────────────────────────────────────
 
+def test_events_since_is_gone() -> None:
+    """⚠️ THREE WINDOW-ARITHMETIC PINS STOOD HERE for an accessor nothing in
+    production ever called. `events_since` was the one door through which the
+    briefing COULD have read automation events; the owner's rule (2026-08-29,
+    "automations only generate alerts and are never read by the briefing")
+    is enforced by deleting the door. The buffer itself survives — chat rides
+    it, and `coverage()`/`state()` read its metadata."""
+    assert not hasattr(collect, "events_since"), (
+        "collect.events_since is back; the briefing has a door to automation "
+        "events again")
+    assert hasattr(collect, "coverage") and hasattr(collect, "state"), (
+        "the metadata readers were meant to survive")
+
+
 def test_an_event_is_persisted() -> None:
     _collect([_event()])
     assert len(collect.read_buffer()["events"]) == 1
@@ -172,16 +186,6 @@ def test_reconnecting_does_not_reset_the_coverage_claim() -> None:
 
 
 # ── querying ─────────────────────────────────────────────────────────────────
-
-def test_events_are_filtered_by_period() -> None:
-    _collect([_event()])
-    future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(timespec="seconds")
-    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
-    assert collect.events_since(past)
-    assert collect.events_since(future) == []
-
-
-# ── the capability that used to decide duplication ──────────────────────────
 
 def test_the_BLUEPRINT_LAYER_capability_is_GONE_and_stays_gone() -> None:
     """⚠️ THREE TESTS OF `blueprint_layer_present` LIVED HERE AND THE PREDICATE
@@ -624,44 +628,10 @@ def test_state_is_safe_before_anything_has_happened() -> None:
 # correctly; `at` is stamped in UTC; comparing them as raw strings is only
 # chronological when the offsets match.
 
-def test_a_local_midnight_window_finds_a_utc_event_inside_it() -> None:
-    """The exact case, with the reference deployment's own numbers: UTC+8,
-    01:18 local on the 21st, asked for "since local midnight on the 21st"."""
-    buffer = collect.read_buffer()
-    store.write_json(store.REPORTS_EVENTS_FILE, {
-        **buffer,
-        "events": [{"at": "2026-08-20T17:18:59+00:00", "type": "vesta_roi_event",
-                    "fired": "", "data": {}}],
-    })
-    found = collect.events_since("2026-08-21T00:00:00+08:00")
-    assert len(found) == 1, (
-        "an event 1h18 inside the window was excluded because the DATE DIGITS "
-        "differ — string ordering across offsets is not chronological")
-
-
-def test_an_event_genuinely_before_the_window_is_still_excluded() -> None:
-    """The fix must not simply admit everything."""
-    buffer = collect.read_buffer()
-    store.write_json(store.REPORTS_EVENTS_FILE, {
-        **buffer,
-        "events": [{"at": "2026-08-20T15:00:00+00:00", "type": "vesta_roi_event",
-                    "fired": "", "data": {}}],   # 23:00 local on the 20th
-    })
-    assert collect.events_since("2026-08-21T00:00:00+08:00") == []
-
-
-def test_a_negative_offset_works_too() -> None:
-    """UTC+8 is where it was found; the defect is any non-zero offset."""
-    buffer = collect.read_buffer()
-    store.write_json(store.REPORTS_EVENTS_FILE, {
-        **buffer,
-        "events": [{"at": "2026-08-21T06:30:00+00:00", "type": "vesta_roi_event",
-                    "fired": "", "data": {}}],   # 01:30 local at UTC-5
-    })
-    assert len(collect.events_since("2026-08-21T00:00:00-05:00")) == 1
-
-
 def test_coverage_compares_in_utc_as_well() -> None:
+    # ⚠️ ALSO THE SOLE HEIR of `events_since`'s offset pins (deleted with the
+    # function, 2026-08-29): both shared one normalisation, and this is the
+    # copy of it that still has a caller.
     """Same two kinds of string, same defect — it would have claimed full
     coverage of a period the collector missed the start of."""
     buffer = collect.read_buffer()

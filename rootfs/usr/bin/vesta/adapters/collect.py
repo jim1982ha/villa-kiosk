@@ -287,32 +287,6 @@ def as_utc_iso(value: str) -> str:
     return moment.astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
-def events_since(since_iso: str) -> List[Dict[str, Any]]:
-    """Buffered events at or after `since_iso`, oldest first.
-
-    ⚠️ `since_iso` IS NORMALISED TO UTC FIRST, AND SKIPPING THAT COST A RELEASE.
-    Events are stored with a UTC `at`; `schedule.period_start` builds the
-    window from the villa's LOCAL midnight, correctly and deliberately. Compared
-    as raw strings the two disagree: on a UTC+8 property
-    `"2026-08-20T17:18:59+00:00" >= "2026-08-21T00:00:00+08:00"` is False,
-    because the date digits differ, while the instant it names is an hour and a
-    quarter INSIDE the window.
-
-    Measured on the reference deployment: a daily report showed
-    `buffered: 8, events_seen: 0` and told the owner five categories of
-    automation alert had found nothing — a sentence that was true of what the
-    aggregation received and false about the villa. Every event fired between
-    local midnight and 08:00 was silently outside its own day.
-
-    The parse happens ONCE per call, not once per event, so the fast path this
-    docstring used to defend is intact.
-    """
-    cutoff = as_utc_iso(since_iso)
-    buffer = read_buffer()
-    return [e for e in buffer["events"]
-            if isinstance(e, dict) and str(e.get("at", "")) >= cutoff]
-
-
 def coverage(since_iso: str) -> Dict[str, Any]:
     """How much of the period the collector was actually listening for.
 
@@ -321,7 +295,8 @@ def coverage(since_iso: str) -> Dict[str, Any]:
     """
     buffer = read_buffer()
     online_since = str(buffer.get("online_since") or "")
-    # ⚠️ SAME NORMALISATION AS `events_since`, for the same reason — this
+    # ⚠️ NORMALISED TO UTC (the treatment `events_since` shared before it
+    # was deleted, 2026-08-29) — this
     # compares a UTC `online_since` against a caller's local window and would
     # otherwise claim full coverage of a period the collector missed the start
     # of, or deny coverage it had.

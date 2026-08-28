@@ -87,17 +87,15 @@ export const SOURCES: Record<Source, SourceSpec> = {
     // legacy layer is the `maintenance_*`/`roi_*` automations that were
     // RETIRED; these are what replaced them and what runs today.
     label: "VESTA check",
-    // ⚠️ THE SWITCH GOVERNS BRIEFINGS, NOT THE AGENT, AND SAYING SO IS THE
-    // WHOLE POINT OF THIS SENTENCE (2026-08-29). An earlier draft of this hint
-    // ran "…run by VESTA in every briefing — and by the agent when it
-    // investigates. …you can switch it off", which a reader takes as covering
-    // both. It does not: `agent/tools/analysis.py` builds its context with
-    // `settings={}` and never consults `registry.gate`, deliberately — a check
-    // reached through the tool was ASKED FOR, by name, about a specific
-    // question. Two true halves and a false join.
+    // ⚠️ THIS HINT HAS NOW BEEN WRONG IN BOTH DIRECTIONS IN ONE DAY. First
+    // it implied the toggle stopped the agent (it did not, then); 2.873.0 made
+    // the toggle reach the agent — one switch, one meaning — and the correction
+    // written hours earlier became the new falsehood. The sentence below is
+    // the whole contract and nothing more: off means off, everywhere.
     hint: "A fixed calculation over weeks of this villa's own history. It "
-      + "always works the same way. Switching it off keeps it out of "
-      + "briefings; the agent can still run it when investigating something.",
+      + "always works the same way, runs whether or not supervision is on, "
+      + "and switching it off stops it everywhere — briefings and the agent "
+      + "alike.",
     tone: "check",
   },
   triage: {

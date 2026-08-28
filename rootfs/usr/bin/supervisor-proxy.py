@@ -2629,17 +2629,10 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
                 "requires": list(m.requires),
                 "audiences": list(m.audiences),
                 "min_days": m.min_days,
-                # ⚠️ THE VERDICT, NOT THE INGREDIENTS. The browser gets "this
-                # check is standing down, and here is the automation doing it
-                # instead" rather than `superseded_by` plus the switch to
-                # combine itself — `registry.gate` owns that rule and a second
-                # implementation in TypeScript is this project's cardinal sin.
-                # Empty string means "running", which is the common case and
-                # renders as nothing.
-                "standing_down": (
-                    reports_registry.readable_label(list(covered)[0])
-                    if (covered := getattr(m, "superseded_by", ()) or ())
-                    and not supervision_on else ""),
+                # ⚠️ `standing_down` LIVED HERE FOR ONE DAY (2.868.0-2.874.0)
+                # and left with the gate arm it mirrored: the checks run in
+                # both modes now, so there is no verdict to send. See
+                # `registry.gate` for the whole story.
             }
             for m in reports_registry.registered()
         ],

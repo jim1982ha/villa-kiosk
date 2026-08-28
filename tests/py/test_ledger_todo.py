@@ -96,51 +96,31 @@ def test_cleaning_leaves_no_punctuation_rubble() -> None:
 
 # ── the reconciliation ───────────────────────────────────────────────────────
 
-def test_a_task_already_stated_from_this_periods_events_is_not_repeated() -> None:
-    """⚠️ THE SAME TASK ARRIVES BY TWO ROUTES. A blueprint fires its event AND
-    calls `todo.add_item` in one action, so a job raised inside the window is in
-    both the collector's buffer and the todo list."""
-    todo = [_parse(s) for s in (PM01, PM02, PM04)]
-    reported = [{"rule_id": "PM-02", "text": "x"}, {"rule_id": "PM-04", "text": "y"}]
-    assert [t["rule_id"] for t in ledger.reconcile(todo, reported)] == ["PM-01"]
-
-
-def test_a_task_older_than_the_buffer_is_what_this_is_FOR() -> None:
-    """The collector only knows what fired while it was listening. PM-01 is
-    genuinely open on the reference deployment and its event predates the
-    buffer entirely — the report could not otherwise know."""
-    assert ledger.reconcile([_parse(PM01)], []) == [_parse(PM01)]
-
-
-def test_matching_is_on_rule_id_not_on_text() -> None:
-    """⚠️ The item's text format VARIES by blueprint, so a text comparison would
-    match some rules and not others — worse than not matching at all."""
-    todo = [_parse(PM02)]
-    reported = [{"rule_id": "PM-02", "text": "completely different wording"}]
-    assert ledger.reconcile(todo, reported) == []
-
-
-def test_a_blank_rule_id_never_matches_anything() -> None:
-    """It defaults to `""` in every blueprint; blank-equals-blank would collapse
-    every untagged task into one."""
-    todo = [{"rule_id": "", "text": "a"}, {"rule_id": "PM-01", "text": "b"}]
-    carried = ledger.reconcile(todo, [{"rule_id": "", "text": "z"}])
-    assert [t["rule_id"] for t in carried] == ["PM-01"]
-
-
-def test_reconcile_is_read_only() -> None:
-    """⚠️ `ledger.py`'s first rule. A report generator that mutates the record
-    it reports on is one nobody can trust — and writing a store from outside its
-    HTTP handler is the defect the proxy's own docstring records shipping once."""
-    todo: List[Dict[str, str]] = [_parse(PM01)]
-    reported: List[Dict[str, Any]] = [{"rule_id": "PM-04"}]
-    before = ([dict(t) for t in todo], [dict(r) for r in reported])
-    ledger.reconcile(todo, reported)
-    assert (todo, reported) == before
-
-
-# ── the rendered result ──────────────────────────────────────────────────────
-
+def test_the_event_dedupe_is_gone_and_every_open_task_is_carried() -> None:
+    """⚠️ FIVE PINS OF `ledger.reconcile` STOOD HERE, AND THE FUNCTION IS
+    DELETED (2026-08-29). It deduplicated to-do items against "tasks this
+    period's blueprint events already stated" — and had been called with a
+    hard-coded EMPTY second argument since TASK-074, an identity function
+    wearing its old name. The owner's rule made the name itself the defect:
+    "automations only generate alerts and are never read by the briefing", so
+    an API implying an event route into the brief is an invitation to rebuild
+    one. `collect.events_since` went with it, so the rule holds by absence.
+    """
+    assert not hasattr(ledger, "reconcile"), (
+        "ledger.reconcile is back — with it comes the implication that the "
+        "briefing deduplicates against automation events, which the owner's "
+        "rule forbids")
+    import inspect
+    import os as _os
+    import sys as _sys
+    pipeline_path = _os.path.join(
+        _os.path.dirname(inspect.getfile(ledger)), "..", "brief", "pipeline.py")
+    with open(_os.path.abspath(pipeline_path), encoding="utf-8") as handle:
+        code = "\n".join(line for line in handle.read().split("\n")
+                         if not line.lstrip().startswith("#"))
+    assert "carried = list(todo)" in code, (
+        "the pipeline no longer carries every open task directly")
+    assert "reconcile(" not in code, "the pipeline calls a dedupe again"
 def test_carried_tasks_reach_the_report_under_their_own_heading() -> None:
     """⚠️ RE-POINTED AT THE BRIEF'S NEW AUTHOR (TASK-073). The property: an
     open job raised in an EARLIER period reaches the page, under a heading

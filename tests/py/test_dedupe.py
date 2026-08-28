@@ -132,51 +132,34 @@ def test_the_subject_key_does_not_reach_the_narration_payload() -> None:
 
 # ── the gate ─────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("module_name", ["sensor_health", "standby_creep",
-                                         "level_anomaly"])
-def test_every_superseded_module_can_still_be_reached(module_name: str) -> None:
-    """⚠️ EVERY superseded module, not one — the rule must reach all three or a
-    cutover switches one check on and leaves the others dark."""
-    ok, reason, _ = registry.gate(
-        _module(module_name), _context(supervision_enabled=True), {}, 999)
-    assert ok is True, f"{module_name} refused with {reason}"
+@pytest.mark.parametrize("module_name",
+                         ["sensor_health", "standby_creep", "level_anomaly"])
+def test_a_covered_module_RUNS_whatever_the_switch_says(module_name: str) -> None:
+    """⚠️ THIS REVERSES THE PIN THAT STOOD HERE, AND THE REVERSAL IS THE
+    OWNER'S REASONING, NOT A PREFERENCE (2026-08-29). The old pin held that
+    supervision OFF hands the job back to the automations — written while the
+    blueprints still REPORTED into the briefing. TASK-074 removed that
+    reporting from every shipped blueprint, and the briefing has never read an
+    automation's output anyway (`events_since` had no caller and is now
+    deleted). So the stand-down traded the briefing's ONLY analysis input for
+    a layer that cannot reach the briefing: supervision off produced no
+    analysis from either side, however many automations the owner re-enabled.
 
-
-@pytest.mark.parametrize("module_name", ["sensor_health", "standby_creep",
-                                         "level_anomaly"])
-def test_supervision_OFF_hands_the_job_back_to_the_automations(
-        module_name: str) -> None:
-    """The other half of the one rule, and it must be symmetric: nothing else
-    may make a covered check run or stand down."""
-    ok, reason, _ = registry.gate(
-        _module(module_name), _context(supervision_enabled=False), {}, 999)
-    assert ok is False and reason == "superseded", (
-        f"{module_name} stood down for {reason!r}, not for the one reason "
-        "there is")
-
-
-def test_the_silent_cover_skip_reaches_the_renderer_with_its_own_code() -> None:
-    """⚠️ THE WHOLE PATH, NOT A HAND-BUILT DICT. `test_actionable`'s fixtures
-    set `code` themselves, so they exercise the renderer's grouping and NOT the
-    gate that produces it — a mutation changing the gate's returned reason to
-    `missing_capability` survived every test in that file. The brief would have
-    silently lost its sub-heading and scattered those lines again.
+    The automations' real job — instant alerts, straight from Home Assistant —
+    never needed the gate. Both directions must RUN now, and `superseded_by`
+    survives on the module purely as the record of what each check replaced.
     """
-    module = _module("sensor_health")
-    ok, reason, detail = registry.gate(
-        module, _context(supervision_enabled=False), {}, 60)
-    assert ok is False
-    assert reason == "superseded", (
-        "the gate no longer marks this skip as its own kind, so the renderer "
-        "cannot group it without parsing English")
-    assert detail == "Maintenance silence", (
-        "the detail must be the blueprint NAME alone — the renderer writes the "
-        "sentence once, so a sentence here would repeat on every line")
-
-    described = registry.describe_skips([{"module": module.name,
-                                          "reason": reason, "detail": detail}])
-    assert described[0]["code"] == "superseded", (
-        "describe_skips drops the raw code, so the renderer sees only prose")
+    module = _module(module_name)
+    assert getattr(module, "superseded_by", ()), (
+        f"{module_name} no longer names its predecessor — the record half of "
+        "the old rule should survive even though the gate half is gone")
+    for flag in (True, False):
+        ok, reason, _ = registry.gate(
+            module, _context(supervision_enabled=flag), {}, 60)
+        assert ok is True, (
+            f"{module_name} refused ({reason!r}) with supervision_enabled="
+            f"{flag} — the stand-down is back, and with it the mode in which "
+            "the briefing has no analysis at all")
 
 
 def test_the_two_keys_share_one_hash_expression() -> None:

@@ -79,7 +79,7 @@ export interface Tier {
 export const STEPS: Record<string, Tier> = {
   watched: {
     n: 1, name: "What is watched",
-    what: "Fixed checks over this villa's own history, plus your automations.",
+    what: "Fixed checks over this villa's own history, run in both modes.",
     more: "Each check works the same way every time and can be switched off.",
     speed: "each briefing", model: false, offline: true, source: "check",
   },

@@ -85,8 +85,8 @@ export default function AutomationsTab(
           {on
             ? "VESTA is doing the detecting. The automations below still do "
               + "their own job — reacting instantly, which no check can."
-            : "Your automations are doing the detecting. Every family you have "
-              + "is listed below."}
+            : "The agent is off. Your automations alert you directly, and "
+              + "VESTA’s own checks still run for the briefing."}
         </span>
       </div>
 
@@ -112,10 +112,15 @@ export default function AutomationsTab(
       {superseded.length > 0 && (
         <>
           <h3 className="settings-section-title">Standing by</h3>
+          {/* ⚠️ "TAKE THE JOB BACK" WAS DELETED FROM THIS SENTENCE the day
+              after it was written: the checks run in BOTH modes now
+              (2026-08-29, see registry.gate), so switching supervision off
+              hands these automations nothing — they alert in parallel if the
+              owner re-enables them, and the briefing is complete either way. */}
           <p className="muted body-text">
-            VESTA’s own checks cover these while supervision is on, so they are
-            not the ones finding problems. Switch supervision off and they take
-            the job back.
+            VESTA’s own checks cover the same ground, in both modes. These are
+            switched off in Home Assistant; re-enable one there and it alerts
+            you directly, alongside the checks.
           </p>
           <dl className="reflex-table reports-standing-down">
             {superseded.map((cat) => (

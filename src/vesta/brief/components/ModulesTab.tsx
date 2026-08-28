@@ -135,17 +135,16 @@ export default function ModulesTab({
 
   return (
     <div className="reports-pane">
-      {/* ⚠️ ONE SENTENCE, NOT TWO BEHIND A FLAG (2.755.0). This paragraph
-          used to switch on `agent_owns_analysis` and describe two different
-          precedence rules, because there genuinely were two. There is one now:
-          supervision on, the checks run; supervision off, your automations do
-          the job. */}
+      {/* ⚠️ THE MODE IS GONE FROM THIS SENTENCE (2026-08-29), on the owner's
+          own reasoning: the briefing has never read an automation's output, so
+          standing a check down for supervision-off traded the briefing's ONLY
+          analysis input for a layer that cannot reach it. The checks run in
+          both modes now; `registry.gate` records the full argument. */}
       <p className="muted body-text">
         What this property is watched by, and what a brief can be built from.
-        VESTA runs the checks below itself — in every briefing, and again when
-        the agent investigates something. While supervision is on they all run;
-        switch it off and the automations you built take the job back. The
-        toggles here decide what a briefing is built from.
+        VESTA runs the checks below itself, whatever the supervision switch
+        says — in every briefing, and again when the agent investigates
+        something. The toggles here are the one thing that stops a check.
       </p>
 
       {/* ── 1. Is anything listening? ───────────────────────────────────── */}
@@ -212,15 +211,8 @@ export default function ModulesTab({
         const on = isOn(m.name);
         const missing = m.requires.filter((r) => !diagnostics.capabilities.includes(r));
         const reason = skipReason.get(m.name);
-        // ⚠️ THE SERVER'S VERDICT, RENDERED — NOT RECOMPUTED (2026-08-29).
-        // Non-empty means the villa's own automation of that name is doing this
-        // job instead, which is only ever true while supervision is OFF.
-        const standingDown = m.standingDown;
         return (
-          <div
-            key={m.name}
-            className={`reports-entry${standingDown ? " reports-standing-down" : ""}`}
-          >
+          <div key={m.name} className="reports-entry">
             {/* ⚠️ THE TITLE AND THE SENTENCE COME FROM THE MODULE ITSELF. This
                 showed the identifier with its underscores removed — "level
                 anomaly" — beside "owner and facility · needs 42 days of
@@ -279,29 +271,15 @@ export default function ModulesTab({
                 </span>
               </p>
             )}
-            {/* ⚠️ BEFORE THE "switched off" LINE, because standing down is
-                the stronger statement: a check the operator left ON is not
-                running, and saying only "switched off" would be false while
-                saying nothing at all is what made this screen unreadable. */}
-            {standingDown && (
-              <p className="reports-item muted">
-                <Info size={14} aria-hidden="true" />
-                <span>
-                  Standing down — your {standingDown} automation does this.
-                  It runs again when supervision is on.
-                </span>
-              </p>
-            )}
             {!on && missing.length === 0 && (
               <p className="reports-item muted">
-                {/* ⚠️ NAMES WHAT THE SWITCH ACTUALLY REACHES. It gates the
-                    BRIEFING gate only; the agent's analysis tool bypasses it
-                    on purpose, so "switched off" on its own reads as "this
-                    never runs" and would be wrong the first time a concern
-                    came from a check the owner had switched off. */}
+                {/* ⚠️ SINCE 2.873.0 THE SWITCH REACHES THE AGENT TOO — one
+                    switch, one meaning — so the sentence promising "the agent
+                    can still run it" that stood here was false the moment that
+                    shipped. Third stale copy from that day's releases. */}
                 <span>
-                  Switched off — the brief will say so rather than omit it. The
-                  agent can still run this check when it investigates something.
+                  Switched off — for briefings and for the agent alike. The
+                  brief will say so rather than omit it.
                 </span>
               </p>
             )}

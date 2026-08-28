@@ -332,31 +332,3 @@ async def todo_tasks(hass: HassClient,
                             "uid": str(item.get("uid") or ""),
                             "entity_id": entity_id})
     return out
-
-
-def reconcile(todo: Sequence[Dict[str, str]],
-              reported: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """Facility manager tasks NOT already stated from this period's own events.
-
-    ⚠️ THE SAME TASK REACHES THE REPORT BY TWO ROUTES. A blueprint fires its
-    event AND calls `todo.add_item` in the same action, so a task raised inside
-    the reporting window is in both the collector's buffer and the todo list.
-    Printing both was the duplication Phase B exists to remove.
-
-    ⚠️ MATCHED ON `rule_id`, WHICH IS THE ONLY RELIABLE JOIN. The item's text
-    format varies by blueprint — some write "[PM-04] entities - task", others
-    "[PM-01] entity has drifted -99.9%. task" — so a text comparison would
-    match on some rules and not others, which is worse than not matching at
-    all. The bracketed rule id is written identically by every one of the nine.
-
-    ⚠️ A BLANK `rule_id` NEVER MATCHES ANYTHING. It defaults to `""` in every
-    blueprint, so treating blank-equals-blank as a match would collapse every
-    untagged task into one.
-    """
-    seen = {
-        str(row.get("rule_id") or "").strip()
-        for row in reported
-        if isinstance(row, dict) and str(row.get("rule_id") or "").strip()
-    }
-    return [task for task in todo
-            if task.get("rule_id") and task["rule_id"] not in seen]

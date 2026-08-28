@@ -101,11 +101,22 @@ def test_every_caller_of_run_report_passes_the_master_switch() -> None:
         f"gate sees its default of False and stands down every covered check: {offenders}")
 
 
-def test_the_flag_actually_stands_a_covered_check_down() -> None:
-    """⚠️ THE MECHANISM, NOT JUST THE ARGUMENT. The pin above would keep passing
-    if `gate` stopped reading the flag; this asserts the consequence the owner
-    saw — and asserts it in BOTH directions, because a rule that never fires is
-    indistinguishable from one that always does."""
+def test_the_gate_no_longer_reads_the_switch_at_all() -> None:
+    """⚠️ THE PREMISE OF THIS FILE REVERSED FOUR DAYS AFTER IT WAS WRITTEN,
+    AND THE CALLER PIN ABOVE OUTLIVED IT. This file was born pinning "the
+    switch must REACH the gate" — the preview endpoint had omitted it and
+    silently ran a different pipeline from the scheduler. On 2026-08-29 the
+    owner's reasoning removed the gate arm the flag fed: the briefing never
+    reads the automations, so standing a check down left off-mode with no
+    analysis from either side.
+
+    The caller pin above still earns its keep — `supervision_enabled` is still
+    real context (the diagnostics banner reads it) and a caller that omits it
+    still diverges from the scheduler on whatever reads it next. THIS test
+    pins the other half: the gate treats both positions identically, so the
+    preview-vs-scheduled divergence this file was born from is now impossible
+    at the gate rather than merely guarded against.
+    """
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
     from vesta.brief.registry import gate
@@ -113,8 +124,8 @@ def test_the_flag_actually_stands_a_covered_check_down() -> None:
 
     module = LevelAnomaly()
     assert getattr(module, "superseded_by", ()), (
-        "this module no longer declares superseded_by, so it cannot exercise "
-        "the rule and this test is vacuous — pick one that does")
+        "the record of what this check replaced has been dropped — that half "
+        "was meant to survive")
 
     class _Ctx:
         capabilities = frozenset(module.requires)
@@ -124,10 +135,9 @@ def test_the_flag_actually_stands_a_covered_check_down() -> None:
         supervision_enabled = True
 
     ok_on, reason_on, _ = gate(module, _Ctx(), {}, 3650)
-
     _Ctx.supervision_enabled = False
     ok_off, reason_off, _ = gate(module, _Ctx(), {}, 3650)
 
-    assert ok_on, f"supervision ON must let a covered check run, got {reason_on!r}"
-    assert not ok_off and reason_off == "superseded", (
-        f"supervision OFF must stand it down as superseded, got {reason_off!r}")
+    assert ok_on and ok_off, (
+        f"a covered check refused (on={reason_on!r}, off={reason_off!r}) — "
+        "the stand-down arm is back")

@@ -85,10 +85,26 @@ def gate(module: AnalysisModule, context: ModuleContext,
     # the agent supersedes the blueprint; supervision OFF means the blueprint
     # does the work. Nothing else is consulted, and there is nothing left that
     # can be true-but-surprising.
-    covered_by = list(getattr(module, "superseded_by", ()) or ())
-    if covered_by and not context.supervision_enabled:
-        return (False, "superseded", readable_label(covered_by[0]))
-
+    # ⚠️ THE STAND-DOWN ARM IS GONE, AND THE REASONING THAT KILLED IT IS THE
+    # OWNER'S OWN QUESTION (2026-08-29): "wouldn't re-enabling the automations
+    # allow the briefing to be complete again?" It would not — the briefing has
+    # NEVER read an automation's output. It reads statistics, live states and
+    # the to-do lists; `collect.coverage()` is metadata about the listener and
+    # `events_since` has no caller outside its module. So this arm traded the
+    # briefing's ONLY analysis input for a layer that cannot reach the briefing
+    # at all: with supervision off, an owner got no analysis from either side,
+    # however many automations they re-enabled.
+    #
+    # The automations' real job — instant alerts, straight from Home Assistant
+    # to a phone — continues regardless and never needed this gate. What
+    # supervision means now is exactly one thing: does the AGENT think about
+    # this villa too. `superseded_by` survives on the modules as the record of
+    # which retired blueprint each check replaced; nothing reads it here.
+    #
+    # ⚠️ 2.755.0's ruling ("one switch decides which layer detects") was made
+    # while the blueprints still REPORTED. TASK-074 removed that reporting from
+    # every shipped blueprint, which quietly removed the premise. This is the
+    # completion of that change, not a reversal of the ruling's intent.
     missing = [c for c in module.requires if c not in context.capabilities]
     if missing:
         return (False, "missing_capability",
@@ -194,7 +210,9 @@ def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
         # a phrase reaches the owner as `superseded` in the middle of a
         # sentence — which is what this map replaced `covered_but_silent` with
         # when the gate changed, found by the pin rather than by reading.
-        "superseded": "your own automation is doing this job",
+        # ("superseded" left this table with the gate arm, 2026-08-29 —
+        #  an unreachable reason prints as absent, which reads as "measured,
+        #  did not happen", the 2.416.0 lesson.)
     }
     out: List[Dict[str, str]] = []
     for item in skipped:
