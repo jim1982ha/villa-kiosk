@@ -163,18 +163,23 @@ def test_the_ONE_IRREVERSIBLE_ACT_NAMES_ITSELF() -> None:
     # ruling is the distinctiveness half: the ending glyph must appear on
     # exactly ONE act, or the irreversible button stops standing out — the
     # property both versions of this pin existed to hold.
-    # ⚠️ ✅, NOT 🚫, AND THE CHANGE WITHIN THE HOUR WAS THE OWNER'S THIRD MERGE
-    # (2026-08-28): once `Done` folded into the closer, the survivor means
-    # "handled" at least as often as "not needed", and a red prohibition sign
-    # on the button most presses reach for reads as a warning. ✅ was already
-    # the owner's chosen glyph for Done; the meaning moved onto it.
-    assert dismiss.label == "\u2705", (
-        f"the closer is {dismiss.label!r}; the owner's rulings put ✅ on it, "
-        f"and a drive-by rename would desync the phone from what the outcome "
-        f"notes and the tablet's title describe")
-    others = [a.id for a in actions.ACTS
-              if a.id != "dismiss" and "\u2705" in a.label]
-    assert not others, f"{others} also carry ✅, so the closer stops standing out"
+    # ⚠️ 🚫 AGAIN, AND THE ROUND TRIP IS THE OWNER'S, RECORDED SO IT IS NOT
+    # READ AS INDECISION HERE (2026-08-28, one evening): ✅-only while the two
+    # clearing acts were merged; ✅ AND 🚫 once the owner ruled the RECORD must
+    # survive the merge — "the work is finished" and "this did not need
+    # raising" are different endings even though the effect is identical.
+    assert dismiss.label == "\U0001F6AB", (
+        f"the dismiss act is {dismiss.label!r}; the owner chose the 🚫 glyph, "
+        f"and a drive-by rename desyncs the phone from the tablet's mirror")
+    done = actions.act_by_id("done")
+    assert done is not None and done.label == "\u2705", (
+        "the finished act is not ✅; the pair's whole meaning is the contrast")
+    for glyph, owner_id in (("\u2705", "done"), ("\U0001F6AB", "dismiss")):
+        others = [a.id for a in actions.ACTS
+                  if a.id != owner_id and glyph in a.label]
+        assert not others, (
+            f"{others} also carry {glyph}, so the two endings stop being "
+            f"distinguishable at a glance")
 
 
 def test_the_TABLET_OFFERS_THE_ACTS_IN_THE_SAME_ORDER_AS_THE_PHONE() -> None:
@@ -242,8 +247,16 @@ def test_the_TABLET_DRAWS_THE_PHONE_S_GLYPHS() -> None:
 
     known = {a.id: a.label for a in actions.ACTS}
     for act_id, raw in mirrored.items():
-        glyph = raw.encode("ascii", "backslashreplace").decode("unicode_escape") \
-            if "\\u" in raw else raw
+        # ⚠️ THREE SPELLINGS, ONE DECODER: TS writes `\u2705` and `\u{1F6AB}`,
+        # Python writes `\U0001F6AB`. Normalise the braced form first, then a
+        # single escape decode covers the rest; a raw emoji passes through.
+        cooked = re.sub(r"\\u\{([0-9a-fA-F]+)\}",
+                        lambda m: chr(int(m.group(1), 16)), raw)
+        try:
+            glyph = cooked.encode("ascii", "backslashreplace") \
+                .decode("unicode_escape") if "\\" in cooked else cooked
+        except UnicodeDecodeError:
+            glyph = cooked
         assert act_id in known, (
             f"the tablet mirrors an act {act_id!r} the server does not define")
         assert glyph == known[act_id], (

@@ -1,3 +1,15 @@
+## 2.860.0
+
+### Changed — two ways to clear an alert, buttons on the escalation, instant sync
+✅ and 🚫 both clear an alert the same way — job ticked, person recorded, no
+more chasing — and differ only in the record: finished, or not needed. 🚫 never
+makes that kind of alert rarer; only ⬇️ does. The pair takes the wide row on the
+phone with 🆘 ⬆️ ⬇️ smaller beneath, the closest Telegram allows to the asked
+3:1. The "Still open" escalation message now carries the same buttons — it is
+the message most worth acting on and was the only one without them. And acting
+from the VESTA screens updates the phone's message at once instead of within a
+quarter-hour. Both screens draw the same symbols from one table.
+
 ## 2.859.0
 
 ### Changed — one row of symbols on the phone, and Done merged into the closer

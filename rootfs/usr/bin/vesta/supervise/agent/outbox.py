@@ -284,9 +284,22 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # by definition a critical nobody has picked up, and `route.escalate` has
     # already refused every severity below critical. Holding it overnight is the
     # exact case the whole ladder exists to break.
-    from vesta.adapters import deliver as deliver_mod
-    results = await deliver_mod.deliver(
-        session, plan.targets, f"Still open: {plan.title}", plan.body)
+    # ⚠️ WITH THE SAME BUTTONS AS THE FIRST MESSAGE (owner, 2026-08-28, after
+    # pressing 🆘 and receiving a bare "Still open"): the escalation is the
+    # message MOST worth acting on — it exists because nobody has — so it is
+    # the last place to strip the acts. Same try-buttons-else-plain shape as
+    # the primary send, and the refs it produces join `messages`, so these
+    # copies are redrawn and retired by the same sweep as every other.
+    import dataclasses
+    plan2 = dataclasses.replace(plan, title=f"Still open: {plan.title}")
+    results = await _send_with_buttons(session, concern, plan2, config=config)
+    plain = [r.get("target") for r in results
+             if isinstance(r, Mapping) and str(r.get("status")) != "sent"]
+    if plain:
+        from vesta.adapters import deliver as deliver_mod
+        results += await deliver_mod.deliver(
+            session, [str(t) for t in plain if t],
+            f"Still open: {plan.title}", plan.body)
     if not any(str(r.get("status")) == "sent" for r in results
                if isinstance(r, Mapping)):
         return False

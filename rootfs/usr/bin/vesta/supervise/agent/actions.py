@@ -65,8 +65,8 @@ class Act:
 #: ⚠️ TWO QUESTIONS, AND THEY ARE NOT THE SAME QUESTION (2026-08-28, owner's
 #: ruling). A person looking at an alert is answering either:
 #:
-#:    WHAT HAPPENS TO IT   Done · Need help · Nothing more   — lifecycle
-#:    HOW GOOD WAS IT      +1 · -1                          — tuning
+#:    WHAT HAPPENS TO IT   ✅ · 🚫 · 🆘   — lifecycle
+#:    HOW GOOD WAS IT      ⬆️ · ⬇️        — tuning
 #:
 #: and until 2.854.0 the second decided the first. A thumb up ACKNOWLEDGED, which
 #: takes the card off the tablet's wall; a thumb down DISMISSED, which settles
@@ -75,10 +75,9 @@ class Act:
 #: notification", and dismissal now has its own control that says the word.
 #:
 #: ⚠️ THE ORDER IS THE READING ORDER on a phone, and it is not arbitrary: the
-#: acts that DISCHARGE the alert come first, the one that stops the chase
-#: without claiming the work is done comes next, then the one that throws it
-#: away, and the rating LAST. A rating is a comment on the supervisor, not on
-#: the villa, so it must never be the first thing offered.
+#: two acts that CLEAR the alert come first and share the wide row, asking for
+#: help comes next, and the rating LAST. A rating is a comment on the
+#: supervisor, not on the villa, so it must never be the first thing offered.
 #: ⚠️ THE LABELS ARE EMOJI, BY THE OWNER'S RULING FROM A SCREENSHOT OF THE
 #: WORDED SET (2026-08-28, same day the words were added — and the same shape
 #: of ruling that took them off the tablet an hour earlier). Emoji are also the
@@ -89,29 +88,35 @@ class Act:
 #: alone on an alert-only notice, where there is no neighbouring set to teach a
 #: reader what an unexplained glyph means — the exact reason the thumbs got
 #: words this morning.
-#: ⚠️ `done` IS GONE, MERGED INTO THE CLOSER (owner, 2026-08-28: "`Done` and
-#: `Nothing more is needed — close this` should imply the same effect, hence
-#: the same button"). The third merge of the day, and the residue of the first
-#: two: once `Seen` folded in and suppression moved to the ⬇️ rating, both
-#: remaining buttons ended in "handled, stop showing it" — the work-finished /
-#: not-needed distinction lived only in the store, at the price of a choice the
-#: reader had to make on every press. The merged act does EVERYTHING either
-#: did: tick the job, record who, settle the alert.
+#: ⚠️ TWO WAYS TO CLEAR, AND THE MERGE THAT PRECEDED THIS WAS ALSO THE OWNER'S
+#: (2026-08-28, hours apart, both from screenshots). Merged: "`Done` and
+#: `Nothing more is needed` should imply the same EFFECT". Split again: "make
+#: sure there is a 🚫 button ... that will clear the alert and remove it from
+#: the todo list WITHOUT acting on the propensity to re-trigger". Both rulings
+#: are consistent once EFFECT and RECORD are separated — which is precisely
+#: what one button could not express:
+#:
+#:    ✅  the work is finished       → clears, and the history says `closed`
+#:    🚫  it did not need raising    → clears, and the history says `dismissed`
+#:
+#: They do the SAME THING to the list and to the wall — tick the job, record
+#: who, take the alert away — and differ only in what is written down. Neither
+#: changes how readily this kind is raised again: that is the ⬇️ rating ALONE,
+#: which is the guarantee the second ruling asked for, true by construction
+#: rather than by care (`concerns.suppressed_subjects` counts ratings, and has
+#: since suppression stopped riding a lifecycle act).
 ACTS: Tuple[Act, ...] = (
-    Act("dismiss", "x", "\u2705"),
+    # ⚠️ `d` AND `x` MEAN WHAT THEY ALWAYS MEANT. `d` was briefly aliased to
+    # the closer while the two were merged; the alias is gone now that `done` is
+    # real again, so a Done button in old chat history is not re-pointed.
+    Act("done", "d", "\u2705"),
+    Act("dismiss", "x", "\U0001F6AB"),
     Act("help", "h", "🆘"),
-    # ⚠️ ONE ACT, NOT TWO (2026-08-28, owner: "I want the dismiss and seen
-    # button to be merged in the same function, so it achieves the same, ie:
-    # cancel the task"). `Seen — stop chasing` stopped the chase and left the
-    # alert standing; `Dismiss completely` settled it. Both were pressed for the
-    # same reason — "I do not need to hear about this again" — and offering two
-    # buttons that both make an alert go away is a distinction the reader has to
-    # hold rather than one the screen explains.
-    #
-    # ⚠️ IT DOES BOTH HALVES: acknowledges (so the chase stops and the record
-    # says WHO) and then settles. Acknowledging first is what makes the merge a
-    # merge rather than a replacement — dropping it would lose the name of the
-    # person who dealt with it, which is the whole content of `Seen`.
+    # ⚠️ `Seen — stop chasing` WAS A SIXTH ACT AND IS NOT COMING BACK (retired
+    # 2026-08-28, owner). It stopped the chase and left the alert standing;
+    # both clearing acts acknowledge as well, so the record of WHO dealt with an
+    # alert survives without a button of its own. Its wire code `s` stays dead
+    # rather than re-pointed — see `LEGACY_CODES`.
     Act("job", "j", "Add to the To-Do List"),
     # ⚠️ `+1` AND `-1`, NOT THUMBS, AND THE CHANGE IS NOT COSMETIC. A thumb is a
     # verdict on a THING — people read it as approving or rejecting the alert
@@ -143,7 +148,7 @@ def act_by_id(action_id: str) -> Optional[Act]:
 #: mapped: Seen meant "keep it open, I have it", and closing on that press
 #: would do the OPPOSITE of what the button in an old message promises — an
 #: ignored press beats a betrayed one.
-LEGACY_CODES: Dict[str, str] = {"d": "dismiss"}
+LEGACY_CODES: Dict[str, str] = {}
 
 
 def act_by_code(code: str) -> Optional[Act]:
@@ -222,13 +227,16 @@ def available_for(concern: Mapping[str, Any],
         # "I have read this and it can go" is still an act somebody needs, and
         # without it an alert-only notice could only be cleared by turning it
         # into a job — which is the one thing the mode exists not to do.
+        # ⚠️ NO ✅ ON AN FYI. "The work is finished" presumes work was asked
+        # for, and an alert-only notice asks for none; 🚫 is the honest way to
+        # clear one, and `job` is how a reader turns it into work if they want.
         return [_BY_ID["job"], _BY_ID["dismiss"]] + rating
 
     # ⚠️ ONE SET NOW, WHATEVER THE ACKNOWLEDGEMENT SAYS. The branch that
     # differed per state withdrew `Seen`; with the merges there is nothing left
     # to withdraw — closing, asking for help and rating all still make sense on
     # an alert somebody has picked up. A branch that cannot differ is deleted.
-    return [_BY_ID["dismiss"], _BY_ID["help"]] + rating
+    return [_BY_ID["done"], _BY_ID["dismiss"], _BY_ID["help"]] + rating
 
 
 def _spent(concern_id: str, config: Optional[Mapping[str, Any]]) -> bool:
@@ -413,10 +421,15 @@ async def _help(session: Any, row: Mapping[str, Any], *, by: str,
         Outcome(False, "there is nobody else configured to tell")
 
 
-async def _dismiss(session: Any, row: Mapping[str, Any], *, by: str,
-                   config: Optional[Mapping[str, Any]], reason: str,
-                   now: Optional[float]) -> Outcome:
-    """Throw this alert away: it did not need raising, or no longer matters.
+async def _clear(session: Any, row: Mapping[str, Any], *, state: str, by: str,
+                 config: Optional[Mapping[str, Any]], reason: str,
+                 now: Optional[float]) -> Outcome:
+    """Clear an alert: tick its job, record who dealt with it, settle it.
+
+    ⚠️ ONE BODY FOR ✅ AND 🚫. They do the same thing and differ only in what
+    the history records, so two copies would be two places for the
+    tick-then-acknowledge ORDER to drift — and that order is a rule paid for
+    twice. `state` is the whole difference.
 
     ⚠️ THE ONLY IRREVERSIBLE ACT ON THE LIST, which is why it is the only one
     whose label says "completely". It settles the alert, so the alert leaves the
@@ -453,17 +466,39 @@ async def _dismiss(session: Any, row: Mapping[str, Any], *, by: str,
     # at all), so it is not checked — the settle is the act that must succeed.
     concerns_mod.acknowledge(concern_id, by=by, now=now)
     note = str(reason or "").strip()
-    outcome = f"closed by {by}" + (f": {note}" if note else "")
-    ok, why = concerns_mod.transition(concern_id, "dismissed",
-                                      outcome=outcome, now=now)
+    verb = "finished" if state == "closed" else "dismissed"
+    outcome = f"{verb} by {by}" + (f": {note}" if note else "")
+    ok, why = concerns_mod.transition(concern_id, state, outcome=outcome,
+                                      now=now)
     if not ok:
         return Outcome(False, why)
-    return Outcome(True, "Closed — the job is ticked off, and nobody will "
-                         "chase you about this again" if ticked == "ticked"
-                   else "Closed — nobody will chase you about this again")
+    lead = "Marked done" if state == "closed" else "Dismissed"
+    tail = ("the job is ticked off and nobody will chase you about this again"
+            if ticked == "ticked"
+            else "nobody will chase you about this again")
+    return Outcome(True, f"{lead} — {tail}")
+
+
+async def _done(session: Any, row: Mapping[str, Any], **kw: Any) -> Outcome:
+    """✅ — the work is finished. Clears the alert; the history says `closed`."""
+    return await _clear(session, row, state="closed", **kw)
+
+
+async def _dismiss(session: Any, row: Mapping[str, Any], **kw: Any) -> Outcome:
+    """🚫 — it did not need raising. Clears it; the history says `dismissed`.
+
+    ⚠️ IT DOES NOT MAKE THIS KIND RARER, which is the owner's explicit
+    requirement (2026-08-28): "without acting on the propensity to re-trigger —
+    this shall just clear the alert and item in the todo list". True by
+    construction rather than by care: `concerns.suppressed_subjects` counts ⬇️
+    RATINGS and has done since suppression stopped riding a lifecycle act. A
+    reader who also wants fewer of these presses ⬇️ as well, deliberately.
+    """
+    return await _clear(session, row, state="dismissed", **kw)
 
 
 _HANDLERS = {
+    "done": _done,
     "help": _help,
     "dismiss": _dismiss,
     "job": _job,

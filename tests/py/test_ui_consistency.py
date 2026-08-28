@@ -1286,14 +1286,14 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
     # the owner's third merge of the day) — the pin follows the act, and every
     # rule below now guards the MERGED handler, which inherited them all.
     jobs = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentTodo.tsx"))
-    assert "actOnAlert(" in jobs and '"dismiss"' in jobs, (
+    assert "actOnAlert(" in jobs and '"done"' in jobs, (
         "ticking a job no longer goes through the one place an act is defined, "
         "so the tablet and the phone can drift apart")
 
     import inspect
     import re as _re
     from vesta.supervise.agent import actions as actions_mod
-    done = _re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._dismiss))
+    done = _re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._clear))
     assert "acknowledge(" in done, (
         "closing a job does not record that the concern was seen, so the villa "
         "keeps chasing work that is already done")
@@ -1496,3 +1496,33 @@ def test_the_BRIEFINGS_tab_lists_only_families_that_can_STILL_report() -> None:
     assert not unshipped, (
         f"the tab lists {sorted(unshipped)}, for which no blueprint ships. A "
         f"family with no producer can only ever show a stale count or a zero.")
+
+
+def test_an_act_from_the_UI_updates_the_CHAT_MESSAGE_immediately() -> None:
+    """⚠️ THE OWNER'S REQUIREMENT, VERBATIM (2026-08-28): "when I click 'done'
+    in vesta UI, the button in the associated notification shall update
+    accordingly". The chase-clock sweep already reconciles — up to FIFTEEN
+    MINUTES later, which is fifteen minutes of a phone offering acts the store
+    would refuse. So both act-performing handlers kick the sweep the moment an
+    act succeeds; the clock stays as the net for whatever this misses.
+    """
+    import inspect
+    import re as _re
+    from vesta.supervise import api as agent_api
+
+    sync = _re.sub(r"#[^\n]*", "",
+                   inspect.getsource(agent_api._sync_chat_messages))
+    assert "reconcile(" in sync, (
+        "_sync_chat_messages no longer reconciles, so the kick is a no-op and "
+        "the phone waits for the clock again")
+
+    for handler_name in ("agent_action_handler", "agent_feedback_handler"):
+        body = _re.sub(r"#[^\n]*", "",
+                       inspect.getsource(getattr(agent_api, handler_name)))
+        assert "_sync_chat_messages(" in body, (
+            f"{handler_name} does not sync the chat after an act, so a press "
+            f"on the tablet leaves the phone stale for up to 15 minutes")
+        # ⚠️ AFTER the refusal return, so a refused act does not rewrite
+        # anything — the store did not move.
+        assert body.index("_sync_chat_messages(") > body.index('status=400'), (
+            f"{handler_name} syncs before the act is known to have succeeded")

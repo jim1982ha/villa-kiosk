@@ -53,8 +53,9 @@ export const AGENT_CONTRACT_VERSION = 1;
  *  Reason tab has no "ask the owner" button and an alert-only notice is not
  *  actionable there), so listing them here would be a mirror of something this
  *  side never renders — a value nothing can check against a screen. */
-export const ACT_GLYPH: Record<"dismiss" | "useful" | "not_useful", string> = {
-  dismiss: "\u2705",
+export const ACT_GLYPH: Record<"done" | "dismiss" | "useful" | "not_useful", string> = {
+  done: "\u2705",
+  dismiss: "\u{1F6AB}",
   useful: "\u2B06\uFE0F",
   not_useful: "\u2B07\uFE0F",
 };

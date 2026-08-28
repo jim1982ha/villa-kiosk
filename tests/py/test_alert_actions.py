@@ -140,9 +140,9 @@ def test_an_OPEN_alert_offers_the_full_set() -> None:
     A rating is a comment on the supervisor rather than on the villa, so it is
     never the first thing offered."""
     ids = [a.id for a in actions.available_for({"id": "c1", "state": "open"})]
-    # ⚠️ FOUR, AFTER THE THIRD MERGE (2026-08-28): `done` folded into the
-    # closer, which now ticks the job AND settles. Acts first, rating last.
-    assert ids == ["dismiss", "help", "useful", "not_useful"]
+    # ⚠️ FIVE: the clearing PAIR (✅ finished / 🚫 not needed — same effect,
+    # different record), help, then the rating. Acts first, rating last.
+    assert ids == ["done", "dismiss", "help", "useful", "not_useful"]
 
 
 # ── applying one ────────────────────────────────────────────────────────────
@@ -247,22 +247,34 @@ def test_a_RATING_RECORDS_A_RATING_AND_NOTHING_ELSE() -> None:
             f"{act_id} moved the alert out of open"
 
 
-def test_CLOSING_an_alert_does_BOTH_HALVES_of_the_buttons_it_merged() -> None:
-    """⚠️ ACKNOWLEDGE **AND** SETTLE (2026-08-28, owner: "I want the dismiss and
-    seen button to be merged in the same function"). `Seen` recorded WHO had it
-    and stopped the chase; `Dismiss` settled it. Dropping the first half would
-    make the merge a replacement, and the name of the person who dealt with an
-    alert is the whole content of the button that went.
+def test_BOTH_CLEARING_ACTS_tick_acknowledge_and_settle() -> None:
+    """⚠️ SAME EFFECT, DIFFERENT RECORD (owner, 2026-08-28, two rulings hours
+    apart that are consistent exactly here): ✅ and 🚫 both tick the job, both
+    record WHO, both take the alert away — and the history keeps `closed` and
+    `dismissed` apart because a person meant different things. One body
+    (`_clear`) carries both, so the tick-then-acknowledge order — a rule paid
+    for twice — cannot drift between them."""
+    for act_id, state, verb in (("done", "closed", "finished"),
+                                ("dismiss", "dismissed", "dismissed")):
+        _put()
+        out = asyncio.run(actions.apply(None, act_id, "c1", by="Jim"))
+        assert out.ok, f"{act_id}: {out.note}"
+        row = concerns.read()[0]
+        assert row["state"] == state, f"{act_id} settled as {row['state']}"
+        assert row["acknowledged_by"] == "Jim", \
+            f"{act_id} lost the record of who dealt with it"
+        assert f"{verb} by Jim" in str(row.get("outcome") or "")
 
-    ⚠️ THE ORDER IS LOAD-BEARING: acknowledging is written while the alert is
-    still live, because `acknowledge` has nothing to say about a settled one."""
-    _put()
-    assert asyncio.run(actions.apply(None, "dismiss", "c1", by="Jim")).ok
-    row = concerns.read()[0]
-    assert row["state"] == "dismissed", "the alert was not settled"
-    assert row["acknowledged_by"] == "Jim", \
-        "nobody is recorded as having dealt with it — the `Seen` half was lost"
-    assert "closed by Jim" in str(row.get("outcome") or "")
+
+def test_DISMISS_does_not_touch_suppression() -> None:
+    """⚠️ THE OWNER'S EXPLICIT GUARANTEE for 🚫: "without acting on the
+    propensity to re-trigger". Three dismissals of one subject must leave it
+    un-silenced; only ⬇️ ratings count."""
+    for i in range(3):
+        _put(id=f"c{i+1}", subject_key="k9")
+        asyncio.run(actions.apply(None, "dismiss", f"c{i+1}", by="Jim"))
+    assert concerns.suppressed_subjects() == [], (
+        "clearing three alerts silenced the subject — 🚫 promised it would not")
 
 
 def test_HELP_does_NOT_acknowledge() -> None:

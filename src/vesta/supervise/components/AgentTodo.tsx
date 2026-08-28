@@ -119,7 +119,7 @@ export default function AgentTodo() {
     setNote("");
     const id = row.concern ? String(row.concern.id) : "";
     const result = id
-      ? await actOnAlert(id, "dismiss")
+      ? await actOnAlert(id, "done")
       : { ok: await completeTodoItem(ws, list ?? "", row.item.summary),
           note: "" };
     setBusy(null);

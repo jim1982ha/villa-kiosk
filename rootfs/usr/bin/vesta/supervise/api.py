@@ -108,6 +108,31 @@ def routes() -> List[Any]:
     ]
 
 
+async def _sync_chat_messages(request: web.Request) -> None:
+    """Bring every chat message into step NOW, not at the next chase tick.
+
+    ⚠️ THE OWNER'S REQUIREMENT, VERBATIM (2026-08-28): "when I click 'done' in
+    vesta UI, the button in the associated notification shall update
+    accordingly". The chase-clock sweep already does this — up to fifteen
+    minutes later, which is fifteen minutes of a phone offering acts the store
+    would refuse. An act performed HERE is the one moment we know the state
+    just moved, so the sweep is kicked immediately.
+
+    ⚠️ NEVER RAISES AND NEVER BLOCKS THE VERDICT: the press has already been
+    recorded, and a Telegram outage must not turn a successful act into an HTTP
+    error. The clock remains the net for anything this misses.
+    """
+    try:
+        from vesta.supervise.agent import buttons as agent_buttons
+        await agent_buttons.reconcile(
+            request.app.get("session"),
+            config=agent_config.view(
+                deps.read_json_store(deps.agent_config_file, {})))
+    except Exception as err:  # noqa: BLE001 - a sync is never worth a 500
+        from vesta.adapters.log import swallow
+        swallow("could not sync the chat buttons after a UI act", err)
+
+
 async def agent_feedback_handler(request: web.Request) -> web.Response:
     """Record a person's verdict on a concern. TASK-062.
 
@@ -161,6 +186,7 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
         reason=str(body.get("reason") or "")[:500])
     if not outcome.ok:
         return web.json_response({"error": outcome.note}, status=400)
+    await _sync_chat_messages(request)
 
     taught = ""
     for row in agent_concerns.read():
@@ -215,6 +241,7 @@ async def agent_action_handler(request: web.Request) -> web.Response:
         reason=str(body.get("reason") or "")[:500])
     if not outcome.ok:
         return web.json_response({"error": outcome.note}, status=400)
+    await _sync_chat_messages(request)
     return web.json_response({"ok": True, "note": outcome.note})
 
 

@@ -70,32 +70,29 @@ def test_SOMEBODY_ELSE_S_BUTTON_is_ignored_rather_than_misread() -> None:
         assert buttons.decode(foreign) == ("", "")
 
 
-def test_the_KEYBOARD_is_ONE_ROW_of_GLYPHS_in_ACTS_order() -> None:
-    """⚠️ ONE ROW SINCE THE LABELS BECAME EMOJI — one ruling for both
-    (2026-08-28: "rename all icon on the same row/line"). Three rows existed
-    because five WORDED buttons in one line are five unreadable slivers on a
-    phone; five glyphs fit. The two decisions travel together, and this pin is
-    the tripwire: a label growing words again must bring the rows back with it.
-    """
-    rows = buttons.keyboard_for({"id": "c1", "state": "open"})
-    # ⚠️ FOUR since `done` merged into the closer, minutes after the ruling
-    # that made it five — the count follows ACTS and is not itself the rule.
-    assert len(rows) == 1 and len(rows[0]) == 4, (
-        f"the keyboard is {[len(r) for r in rows]}; one row, one button per "
-        f"live act, legible only because every label is a single glyph")
-    # ⚠️ THE WIRE CODES ARE UNCHANGED THOUGH THE LABELS AND ROWS ARE NOT, which
-    # is what keeps a button already sitting in somebody's chat meaning what it
-    # meant. Order is ACTS order: acts first, the rating pair last (the
-    # act-before-rating rule has its own derivational pin).
-    assert [b[1] for b in rows[0]] == \
-        ["vx:c1", "vh:c1", "vu:c1", "vn:c1"]
-    # ⚠️ `vd` STILL DECODES — to the closer, which does everything Done did.
-    # A button lives in chat history for ever; `vs` (Seen) is deliberately
-    # dead instead, because closing on a press that promised "keep it open"
-    # would betray it.
-    assert buttons.decode("vd:c9") == ("dismiss", "c9")
-    assert buttons.decode("vs:c9") == ("", "")
+def test_the_KEYBOARD_gives_the_CLEARING_PAIR_the_WIDE_ROW() -> None:
+    """⚠️ THE OWNER'S LAYOUT, AS CLOSE AS THE PLATFORM ALLOWS (2026-08-28:
+    "3/4 for the ✅ and the 🚫 buttons, and 1/4 for both ⬇️ and ⬆️"). Telegram
+    gives every button in a ROW an equal width share and offers no spans, so
+    proportions are chosen by how many buttons share a line: two on the first
+    row is half each, three on the second is a third each — the clearing pair
+    are the biggest targets on the message, the ratings visibly smaller, which
+    is what the ratio was asking for. The exact 3:1 is NOT expressible; if the
+    platform ever grows spans, revisit.
 
+    ⚠️ Legible only because the labels are glyphs — three worded buttons in one
+    line are slivers. A label growing words must bring more rows with it."""
+    rows = buttons.keyboard_for({"id": "c1", "state": "open"})
+    assert [len(r) for r in rows] == [2, 3], (
+        f"the keyboard is {[len(r) for r in rows]}; the owner ruled a wide "
+        f"clearing pair over a narrow help+rating row")
+    # ⚠️ WIRE CODES: the clearing pair leads, the rating pair is last.
+    assert [b[1] for b in rows[0]] == ["vd:c1", "vx:c1"]
+    assert [b[1] for b in rows[1]] == ["vh:c1", "vu:c1", "vn:c1"]
+    # ⚠️ RETIRED CODES: `vs` (Seen) stays dead — mapping it to a clearing act
+    # would do the OPPOSITE of what the button in an old message promises.
+    assert buttons.decode("vs:c9") == ("", "")
+    assert buttons.decode("vd:c9") == ("done", "c9")
 
 def test_a_RATING_IS_OFFERED_ONCE_and_the_STAMP_is_what_says_so() -> None:
     """⚠️ "The rating shall only be applied once" (2026-08-28, owner). Read
@@ -578,13 +575,22 @@ def test_a_redraw_that_FAILED_is_not_stamped() -> None:
 
 def test_ACTS_ARE_READ_OFF_THE_KEYBOARD_that_was_drawn() -> None:
     """⚠️ DERIVED, NEVER DECLARED. `acts_of` reading the real keyboard is what
-    makes the record incapable of describing a message that was never sent."""
+    makes the record incapable of describing a message that was never sent.
+
+    ⚠️ SAME MEMBERS, NOT SAME ORDER, since the wide-row layout (2026-08-28):
+    the keyboard groups the clearing pair first, so its flattened order can
+    differ from `available_for`'s (an FYI draws 🚫 above `job` while the list
+    says `job` first). That is safe BECAUSE both the stamp and the comparison
+    read the KEYBOARD — `reconcile` never compares against `available_for`
+    directly, which `test_the_COMPARISON_survives_a_reordered_keyboard` pins."""
     for state in ({"acknowledged_at": ""},
                   {"acknowledged_at": "2026-08-28T07:23:03Z"},
                   {"acknowledged_at": "", "informational": True}):
         row = {"id": "c9", "title": "t", "state": "open", **state}
         keyboard = buttons.keyboard_for(row, {})
-        assert buttons.acts_of(keyboard) == _acts_now(row), \
+        drawn = set(buttons.acts_of(keyboard).split(","))
+        offered = set(_acts_now(row).split(","))
+        assert drawn == offered, \
             f"what a message records and what it draws disagree: {state}"
     assert buttons.acts_of([[["Other", "somebody-elses-button"]]]) == "", \
         "a button this cannot decode was claimed as one of ours"

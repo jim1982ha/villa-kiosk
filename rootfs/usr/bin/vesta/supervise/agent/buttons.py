@@ -221,18 +221,27 @@ def keyboard_for(concern: Mapping[str, Any],
     button = [[a.label, encode(a.code, ident)] for a in acts]
     by_id = {a.id: b for a, b in zip(acts, button)}
 
-    # ⚠️ ONE ROW, BY THE OWNER'S RULING (2026-08-28: "rename all icon on the
-    # same row/line"), AND IT IS ONLY SOUND BECAUSE THE LABELS BECAME EMOJI IN
-    # THE SAME RULING. Telegram gives every button in a row an equal share of
-    # the width, so five WORDED buttons in one line were five unreadable
-    # slivers — the reason this was three rows until today. Five single glyphs
-    # fit. The two decisions travel together: if the labels ever grow words
-    # again, the rows must come back with them.
+    # ⚠️ THE CLEARING PAIR GETS THE WIDE ROW, THE REST SHARE THE NARROW ONE
+    # (owner, 2026-08-28: "3/4 for the ✅ and the 🚫 buttons, and 1/4 for both
+    # ⬇️ and ⬆️").
     #
-    # ⚠️ THE ORDER IS `ACTS` ORDER AND STILL CARRIES THE RULE — acts first, the
-    # rating pair last, never a rating before an act (pinned). One row makes
-    # the order the ONLY remaining geometry.
-    return [[[a.label, encode(a.code, ident)] for a in acts]]
+    # ⚠️ THE EXACT RATIO IS NOT EXPRESSIBLE AND THIS IS THE CLOSEST THAT IS.
+    # Telegram gives every button in a ROW an equal share of the width — there
+    # is no span, no weight, no width field — so proportions can only be chosen
+    # by how many buttons share a line. Two on the first line is half the width
+    # each; three on the second is a third each. The ASKED-FOR 3:1 would need a
+    # button to occupy two slots, which the platform does not offer. What the
+    # ruling wanted is what this delivers: the two ways to clear an alert are
+    # the biggest targets on the message, and the ratings are visibly smaller.
+    #
+    # ⚠️ AND IT IS ONLY LEGIBLE BECAUSE THE LABELS ARE GLYPHS. Three WORDED
+    # buttons on one line are three unreadable slivers on a phone — the reason
+    # this was three rows before the emoji ruling. If a label ever grows words
+    # again, the layout must be revisited with it.
+    wide = [by_id[i] for i in ("done", "dismiss") if i in by_id]
+    narrow = [by_id[a.id] for a in acts
+              if a.id not in ("done", "dismiss")]
+    return [row for row in (wide, narrow) if row]
 
 
 # ── which targets can carry a button ────────────────────────────────────────

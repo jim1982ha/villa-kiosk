@@ -552,30 +552,37 @@ export default function AgentConcerns() {
                 {/* ⚠️ THE GLYPHS ARE THE PHONE'S GLYPHS (owner, 2026-08-28:
                     "edit everything that needs to be updated to be consistent
                     with this, also in the VESTA Addon UI"). One vocabulary,
-                    two renderers: ✅ closes, ⬆️/⬇️ rate, on the keyboard and
-                    on this card alike — a symbol that means one thing on the
-                    phone and another on the tablet is the two-surfaces bug in
-                    miniature. Emoji rather than lucide strokes for exactly
+                    two renderers: ✅ and 🚫 clear, ⬆️/⬇️ rate, on the keyboard
+                    and on this card alike — a symbol that means one thing on
+                    the phone and another on the tablet is the two-surfaces bug
+                    in miniature. Emoji rather than lucide strokes for exactly
                     that reason: Telegram cannot draw lucide, so the shared
-                    form is the emoji.
+                    form is the emoji, via `ACT_GLYPH`, the mirror of the
+                    backend's act table, pinned in both directions.
 
-                    ⚠️ IT WAS 🚫 FOR ONE HOUR, and the merge is why it is not.
-                    While `Done` existed beside it this button meant "not
-                    needed" and a prohibition sign fitted; it now also carries
-                    "the work is finished — tick the job" (owner: "`Done` and
-                    `Nothing more is needed` should imply the same effect"), so
-                    the glyph most presses reach for must not read as a refusal.
-                    And it is no longer `danger`-coloured for the same reason.
-
-                    ⚠️ THE GLYPH COMES FROM `ACT_GLYPH`, THE MIRROR OF THE
-                    BACKEND'S ACT TABLE — the same arrangement the rest of this
-                    vocabulary uses, and pinned in both directions, so an edit
-                    to one surface cannot silently leave the other behind. */}
+                    ⚠️ TWO CLEARING BUTTONS, ONE DIFFERENCE — THE RECORD. ✅
+                    means the work is finished; 🚫 means it did not need
+                    raising. Both tick the job, record who, and take the alert
+                    away; neither makes this kind rarer (that is ⬇️ alone,
+                    which is the owner's explicit requirement for 🚫). The pair
+                    was merged for an afternoon and split again by the ruling
+                    that a reader should be able to say WHICH kind of ending
+                    this was — the history keeps `closed` and `dismissed`
+                    apart because a person did. */}
                 <button
                   type="button" className="row-action"
                   disabled={busy === c.id}
-                  aria-label={`Nothing more is needed, close this: ${c.title}`}
-                  title="Nothing more is needed. The job is ticked off, nobody will chase you about this again, and it leaves this list and the next briefing. Use ⬇️ if you also want fewer alerts like it."
+                  aria-label={`The work is finished, close this: ${c.title}`}
+                  title="The work is finished. The job is ticked off, nobody will chase you about this again, and it leaves this list and the next briefing."
+                  onClick={() => void act(c.id, "done")}
+                >
+                  <span className="concern-tally" aria-hidden>{ACT_GLYPH.done}</span>
+                </button>
+                <button
+                  type="button" className="row-action"
+                  disabled={busy === c.id}
+                  aria-label={`This did not need raising, clear it: ${c.title}`}
+                  title="This did not need raising. It is cleared the same way — job ticked, no chasing — and the record says dismissed. It does NOT make this kind rarer; use ⬇️ for that."
                   onClick={() => void act(c.id, "dismiss")}
                 >
                   <span className="concern-tally" aria-hidden>{ACT_GLYPH.dismiss}</span>
