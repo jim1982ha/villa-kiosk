@@ -1,3 +1,15 @@
+## 2.847.0
+
+### Changed — the assistant's web endpoints become its own, completing its independence
+The nineteen endpoints the app uses to talk to the assistant — alerts, actions,
+approvals, usage, the check button — moved verbatim into the assistant's own
+folder, with the add-on's sign-in machinery handed to them at startup rather
+than baked in. The add-on mounts the whole set in one line; a future external
+deployment would mount the same set with its own sign-in. Every route answers
+at the same address with the same permission checks — the security suite runs
+against the mounted result unchanged, and deliberately removing one handler's
+checks turns it red. This closes the backend half of the reorganisation.
+
 ## 2.846.0
 
 ### Changed — the export seams: the assistant's loops and addresses become its own
