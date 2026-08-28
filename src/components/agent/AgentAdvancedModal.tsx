@@ -18,7 +18,6 @@ import { AgentConfigProvider,
          useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 import ApiKeyPanel from "@/components/settings/ApiKeyPanel";
 import PeoplePanel from "@/components/settings/PeoplePanel";
-import SourceLegend from "@/components/common/SourceLegend";
 import AgentTuningPanel from "@/components/settings/AgentTuningPanel";
 import FlagTypesPanel from "@/components/settings/FlagTypesPanel";
 import UsagePanel from "@/components/settings/UsagePanel";
@@ -119,7 +118,6 @@ function AdvancedDialog({ onBack }: { onBack: () => void }) {
                   the page where that question is actually asked is the one
                   itemising what each source charged. A seventh tab holding one
                   static key would be a tab nobody opens twice. */}
-              <SourceLegend />
             </div>
           )}
           {/* ⚠️ ONE DRAFT PROVIDER AROUND THE TWO THAT WRITE CONFIG. Two panels

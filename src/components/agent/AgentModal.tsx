@@ -343,11 +343,12 @@ function AgentDialog(
                   decides who is told, whether a brief already went, or whether
                   an action is permitted. Anything that could let somebody in or
                   silence an alarm is offered here and never executed. */}
-              {/* ⚠️ NO `SourceLegend` ON THESE TABS. The step header already
-                  carries the one chip they would explain, so the key repeated
-                  the same word directly beneath itself — reported as a
-                  redundant badge. The legend earns its place where SEVERAL
-                  sources appear together, not where one does. */}
+              {/* ⚠️ NO KEY TO THE SOURCE CHIPS ANYWHERE, and there is nothing
+                  left for one to do: a chip opens its own explanation on tap
+                  (2026-08-28). The key used to live under these tabs, where it
+                  repeated the one word already in the step header — reported as
+                  a redundant badge — and was then moved twice, ending up in a
+                  dialog that showed no chips at all. */}
               {canConfigure && <AgentProposals />}
               <ActDeliverySection />
               {/* ⚠️ THE WORK THIS STEP PRODUCED, BENEATH THE RULES IT PRODUCED

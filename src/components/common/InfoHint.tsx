@@ -47,11 +47,20 @@ function setOpen(id: string | null) {
 
 interface Spot { top: number; left: number; width: number; above: boolean; }
 
-export default function InfoHint({ children, label }: {
+export default function InfoHint({ children, label, trigger }: {
   /** The detail. Prose, not a second description — it is read on demand. */
   children: React.ReactNode;
   /** What it explains, for the button's accessible name. */
   label: string;
+  /** ⚠️ AN ALTERNATIVE TO THE (i), FOR SOMETHING ALREADY ON SCREEN THAT IS
+   *  ITSELF THE THING NEEDING EXPLANATION (2026-08-28). A source chip is a word
+   *  a reader does not know yet; putting an (i) BESIDE it doubles the ink and
+   *  asks them to find a second target for the first one's meaning. When this
+   *  is given, the caller's own element becomes the button and no icon is
+   *  drawn — the bubble, the placement, the one-open-at-a-time and the Escape
+   *  handling are all unchanged, which is the whole reason this is a prop here
+   *  rather than a second popover somewhere else. */
+  trigger?: React.ReactNode;
 }) {
   const id = useId();
   const [open, setLocal] = useState(false);
@@ -124,12 +133,18 @@ export default function InfoHint({ children, label }: {
     <span className="info-hint" ref={box}>
       <button
         type="button"
-        className="info-hint-btn"
+        className={trigger ? "info-hint-bare" : "info-hint-btn"}
         aria-label={`More about ${label}`}
         aria-expanded={open}
-        onClick={(e) => { e.preventDefault(); setOpen(open ? null : id); }}
+        // ⚠️ `stopPropagation` AS WELL AS `preventDefault`. With a `trigger` this
+        // button sits inside rows that carry their own click handlers, and
+        // asking what a label means must never also perform the row's action.
+        onClick={(e) => {
+          e.preventDefault(); e.stopPropagation();
+          setOpen(open ? null : id);
+        }}
       >
-        <Info size={14} aria-hidden="true" />
+        {trigger ?? <Info size={14} aria-hidden="true" />}
       </button>
       {open && spot && createPortal(
         <div ref={bubble} role="tooltip" className="info-hint-bubble"

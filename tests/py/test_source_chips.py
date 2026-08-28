@@ -124,5 +124,17 @@ def test_the_chip_EXPLAINS_itself_on_every_source() -> None:
     assert labels == hints == len(_declared_tones()), (
         f"{labels} label(s) and {hints} hint(s) across "
         f"{len(_declared_tones())} source(s) — every source needs both")
-    assert 'title={spec.hint}' in source, (
+    assert "{spec.hint}" in source, (
         "the hint is declared and never rendered")
+    # ⚠️ NOT THROUGH `title=`, WHICH IS THE POINT (2026-08-28). `InfoHint`'s own
+    # header says a native tooltip needs a hover and the target is a
+    # wall-mounted iPad, so every `title` written as an explanation is one a
+    # touch user cannot reach. This component carried the hint that way for its
+    # whole life, and the seven-row legend in another dialog existed to
+    # compensate. The chip opens its own bubble now; the legend is deleted.
+    assert "title={spec.hint}" not in source, (
+        "the chip explains itself through `title` again — invisible on the "
+        "device this app is built for")
+    assert "InfoHint" in source, (
+        "the chip no longer opens its explanation on tap, so on a tablet the "
+        "vocabulary is unreadable and the legend has to come back")

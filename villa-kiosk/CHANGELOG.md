@@ -1,3 +1,15 @@
+## 2.836.0
+
+### Fixed — Observe said "nothing written down yet" above 51,579 changes
+Yesterday's fix sent the journal's own clock to the screen under one name and
+read it under another, so the field arrived and was ignored — which renders
+exactly like having no data. A test now checks every key on that wire in both
+directions. Also: the coloured source labels explain themselves when tapped,
+instead of relying on a hover no tablet has, so the seven-row key that existed
+to compensate — in a dialog showing none of them — is gone. And Act & Tell's
+paragraph moved into an (i) beside its title; it restated the three values
+printed directly beneath it.
+
 ## 2.835.0
 
 ### Fixed — Observe said "last change seen 34 h ago" on a villa changing constantly

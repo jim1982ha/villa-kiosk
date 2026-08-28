@@ -3357,7 +3357,16 @@ def _journal_facts() -> Dict[str, Any]:
         snap = observe_heartbeat.snapshot()
         return {
             "entries": snap.get("entries"),
-            "lastSeen": snap.get("last_seen"),
+            # ⚠️ snake_case, LIKE ITS SIBLINGS. This shipped as `lastSeen` for
+            # one release and the client — which camelCases every key on the
+            # way in, exactly as it does for `at_bound` and `span_days` — then
+            # looked for `last_seen` in a payload that no longer had it. The
+            # field arrived, was ignored, and read as "nothing has been written
+            # down yet" above 51,579 recorded changes. Two correct halves and a
+            # join nobody owned; CLAUDE.md calls this the envelope bug one level
+            # down, and it is the same shape: a key that differs is ACCEPTED and
+            # IGNORED rather than refused.
+            "last_seen": snap.get("last_seen"),
             "bound": snap.get("bound"),
             "at_bound": snap.get("at_bound"),
             "span_days": snap.get("span_days"),

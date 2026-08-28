@@ -4793,19 +4793,13 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    outrank the finding it labels. `color-mix` keeps each tone at the same
    weight against either theme's ground, so nothing needs a second definition
    in the dark block. */
-/* The key to the colour code. ⚠️ A `dl`, because that is what it is — a term
-   and its definition — and a screen reader announces the pairing for free.
-   ⚠️ AND IT STACKS ON A NARROW SCREEN rather than truncating the sentence: the
-   explanation IS the content here, so a column that squeezes it to an ellipsis
-   defeats the whole point. The chip column is `auto` so the pills stay aligned
-   while the prose wraps. */
-.source-legend { margin-top: 4px; }
-.source-legend-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; }
-.source-legend-row { display: grid; grid-template-columns: 1fr; gap: 2px 10px; align-items: baseline; }
-.source-legend-row > dd { margin: 0; }
-@media (min-width: 520px) {
-  .source-legend-row { grid-template-columns: auto minmax(0, 1fr); }
-}
+/* ⚠️ `.source-legend*` WAS DELETED HERE (2026-08-28). It styled a seven-row key
+   to the chip colours, which existed only because the chips carried their
+   explanation in `title=` — unreadable on a wall-mounted tablet, which is the
+   target. The chips now open their own bubble on tap, so the key had nothing
+   left to add; and it had drifted into Settings & others while the chips it
+   explained were in two other dialogs, so a reader had to leave the screen
+   showing a word to find out what the word meant. */
 
 /* A switch with its explanation above it. ⚠️ Its own flex column so the pair is
    ONE block in whatever stack holds it — as two loose siblings the container's
@@ -5655,13 +5649,30 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    the painted glyph stays 14px and the ::after gives the finger its target,
    which is the same trick `.hud-overflow` uses and for the same reason. */
 .info-hint { position: relative; display: inline-flex; vertical-align: middle; }
+/* ⚠️ THE `trigger` VARIANT: the caller's own element IS the button, so this
+   strips every affordance the (i) needs and adds none of its own — no margin
+   (the chip owns its spacing in the row), no radius, no colour (the chip is
+   already coloured by its source). A `<button>` otherwise arrives with the
+   UA's border, padding and font, which would draw a second box around a pill
+   that is already a box. `cursor: pointer` is the only thing kept, because it
+   is the one signal that the word answers when pressed.
+   ⚠️ IT KEEPS THE 44px TOUCH OVERLAY from `.info-hint-btn::after` below — a
+   source chip is ~20px tall and the target is a wall-mounted tablet operated
+   by finger. Reusing that rule rather than restating it is why the selector
+   below names both. */
+.info-hint-bare {
+  display: inline-flex; align-items: center; position: relative;
+  padding: 0; border: 0; background: none; font: inherit; color: inherit;
+  cursor: pointer;
+}
 .info-hint-btn {
   display: inline-flex; align-items: center; justify-content: center;
   position: relative; margin-inline-start: 4px; padding: 0;
   border: 0; background: none; color: var(--text-dim); cursor: pointer;
   line-height: 0; border-radius: 50%;
 }
-.info-hint-btn::after {
+.info-hint-btn::after,
+.info-hint-bare::after {
   content: ""; position: absolute; left: 50%; top: 50%;
   width: var(--touch-min); height: var(--touch-min);
   transform: translate(-50%, -50%);

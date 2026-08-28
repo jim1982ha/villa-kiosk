@@ -21,6 +21,7 @@
 // owner who has just changed a permission in Settings and come back to look
 // should see what they chose, not what was stored before it.
 
+import InfoHint from "@/components/common/InfoHint";
 import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
 
 /** `""` → a sentence that says so. ⚠️ AN UNSET WINDOW MEANS NEVER QUIET, NOT
@@ -45,7 +46,36 @@ export default function ActDeliverySection() {
 
   return (
     <>
-      <div className="settings-section-title">What it is allowed to do</div>
+      {/* ⚠️ THE PROSE MOVED INTO THE (i) (2026-08-28, owner: "completely remove
+          this redundant text … and show it as a tooltip of an (i) icon, inline
+          with the title"). It restated in sentences exactly what the three
+          facts below state as values — quiet hours, whether a list is named,
+          whether devices may be operated — so a reader read the same thing
+          twice, once as data and once as prose. This app's rule is at most two
+          lines beside a control and everything else in here; the paragraph was
+          three and was a duplicate besides. Nothing is deleted, it moves. */}
+      <div className="settings-section-title">
+        What it is allowed to do
+        <InfoHint label="What it is allowed to do">
+          <p>{quietText(start, end)}</p>
+          <p>
+            {list
+              ? "Anything it tells you about becomes a to-do item, listed below."
+              : "Nothing it finds is added to a to-do list, because none is named."}
+          </p>
+          <p>
+            {mayAct
+              ? (devices > 0
+                ? "It may operate the devices you chose and nothing else. "
+                  + "Anything that could let somebody in or silence an alarm is "
+                  + "offered to you rather than done."
+                : "It is allowed to operate devices but none have been chosen, "
+                  + "so it can still touch nothing.")
+              : "It can watch and tell, and touch nothing at all."}
+          </p>
+          <p>Change any of this under Settings &amp; others.</p>
+        </InfoHint>
+      </div>
       <dl className="tier-facts">
         <div>
           <dt>Quiet hours</dt>
@@ -64,35 +94,6 @@ export default function ActDeliverySection() {
           <dd>{mayAct ? (devices > 0 ? `${devices} allowed` : "none chosen") : "no"}</dd>
         </div>
       </dl>
-      {/* ⚠️ ONE PARAGRAPH, NOT TWO (2026-08-28, owner: "merge the 2 text
-          section together … and make it shorter, while keeping the same
-          relevancy"). The line above the facts said only where the settings are
-          edited, which is a sentence about navigation sitting where the reader
-          wants a sentence about behaviour — and it pushed the thing they came
-          to read below three chips. Where to change them is now a clause on the
-          end, which is also where somebody who has finished reading needs it.
-          ⚠️ THE TO-DO CLAUSE LOST ITS POINTER because the list is now directly
-          underneath (the separate tab was merged in on the same day), and
-          "appears under To-Do List" sent a reader looking for a tab that is
-          no longer there. */}
-      <p className="muted body-text">
-        {quietText(start, end)}
-        {" "}
-        {list
-          ? "Anything it tells you about becomes a to-do item, listed below."
-          : "Nothing it finds is added to a to-do list, because none is named."}
-        {" "}
-        {mayAct
-          ? (devices > 0
-            ? "It may operate the devices you chose and nothing else; anything "
-              + "that could let somebody in or silence an alarm is offered to "
-              + "you rather than done."
-            : "It is allowed to operate devices but none have been chosen, so "
-              + "it can still touch nothing.")
-          : "It can watch and tell, and touch nothing at all."}
-        {" "}
-        Change any of this under Settings &amp; others.
-      </p>
     </>
   );
 }

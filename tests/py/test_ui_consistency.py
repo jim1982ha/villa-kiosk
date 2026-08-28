@@ -654,16 +654,38 @@ def test_recent_checks_has_ONE_implementation() -> None:
     assert len(hits) == 1, f"the row rendering is written {len(hits)} times"
 
 
-def test_the_source_legend_lives_in_ADVANCED_and_only_there() -> None:
-    """⚠️ ITS JOURNEY IS THE ARGUMENT. It started under three tier tabs, where it
-    restated the one chip already in each header (reported as a redundant badge),
-    then moved to Settings — correct, but still on the daily path below the dials
-    people tune. It is reference material: read once, consulted rarely."""
-    main = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
-    adv = _read(os.path.join(SRC, "components", "agent",
-                             "AgentAdvancedModal.tsx"))
-    assert "<SourceLegend" not in main, "the legend is back on the daily path"
-    assert "<SourceLegend" in adv, "the legend is not in Advanced either"
+def test_the_source_vocabulary_is_explained_AT_THE_CHIP() -> None:
+    """⚠️ THE LEGEND IS GONE AND ITS JOURNEY IS THE ARGUMENT (2026-08-28). It
+    started under three tier tabs, restating the one chip already in each header
+    — reported as a redundant badge. It moved to Settings, then to Settings &
+    others: correct each time, and each time further from the chips it
+    explained, until a reader had to leave the dialog showing a word to find out
+    what the word meant. The owner's instruction closed it: "remove it and make
+    sure each pill is properly showing their contextual description instead".
+
+    ⚠️ IT ONLY EVER EXISTED BECAUSE THE CHIPS WERE UNREADABLE ON A TABLET. They
+    carried their hint in `title=`, which needs a hover. Fix that and the key
+    has nothing left to add — which is why this pins the CHIP rather than
+    pinning the absence of a legend: an absence alone would be satisfied by
+    deleting the explanation altogether.
+    """
+    chip = _read(os.path.join(SRC, "components", "common", "SourceChip.tsx"))
+    assert "InfoHint" in chip and "{spec.hint}" in chip, (
+        "a source chip no longer explains itself, so the vocabulary is "
+        "unreadable on the device this app is built for")
+    for name in ("AgentModal.tsx", "AgentAdvancedModal.tsx"):
+        # ⚠️ CODE ONLY. Prose recording why the legend went is exactly what this
+        # project wants kept, and matching it would forbid the file from
+        # explaining itself — the same correction `test_buttons` made when it
+        # first flagged `deliver.py`'s own header.
+        body = _read(os.path.join(SRC, "components", "agent", name))
+        body = re.sub(r"\{/\*[\s\S]*?\*/\}", "", body)
+        assert "SourceLegend" not in body, (
+            f"{name} renders a legend again — one definition per source, and it "
+            f"is the chip's")
+    assert not os.path.exists(os.path.join(SRC, "components", "common",
+                                           "SourceLegend.tsx")), \
+        "the legend component is back"
 
 
 def test_a_component_lives_where_it_is_RENDERED() -> None:

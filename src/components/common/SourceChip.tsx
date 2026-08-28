@@ -26,6 +26,8 @@
 // permanent role — rather than "the rules we have not deleted yet". Nothing in
 // this table becomes wrong on the day that cutover finishes.
 
+import InfoHint from "./InfoHint";
+
 /** Every producer of a statement about the villa. ⚠️ ORDERED BY HOW DIRECT THE
  *  CLAIM IS — from a raw reading to a paraphrase of a judgement — because that
  *  ordering is the one a reader actually wants when two rows disagree. */
@@ -98,11 +100,26 @@ export const SOURCES: Record<Source, SourceSpec> = {
 };
 
 /**
- * ⚠️ A `<span>`, NOT A BUTTON, AND NOT A TOOLTIP COMPONENT. It is a label on a
- * row that already has its own actions; making it interactive would put a
- * second tap target inside a row whose whole surface is often the control, and
- * on a wall tablet that is how a reader opens something they meant to read.
- * The explanation rides `title` for exactly that reason.
+ * ⚠️ THE CHIP IS ITS OWN EXPLANATION, AND IT USED TO BE `title=` (2026-08-28).
+ * The header of `InfoHint` has always said why that is wrong here: "a native
+ * tooltip needs a hover, and the villa's kiosk is a wall-mounted iPad — so
+ * every `title` written as an explanation is an explanation a touch user
+ * cannot reach". That rule was rolled out by CALL SITE and this component was
+ * not one of them, which is `feedback_audit-applicable-set` exactly: audit what
+ * a rule APPLIES to, not where it already appears.
+ *
+ * ⚠️ THE SIDE EFFECT WAS A LEGEND IN ANOTHER DIALOG. Because the chips could
+ * not be read on the target device, a seven-row key was added at the foot of
+ * Settings & others — listing every source in the vocabulary, while the chips
+ * themselves live in the agent and briefing dialogs. A reader had to leave the
+ * screen with the chip on it to find out what the chip meant. Deleted; the
+ * word now answers for itself where it stands.
+ *
+ * ⚠️ IT IS NOW A BUTTON, WHICH THE PREVIOUS COMMENT HERE ARGUED AGAINST — "a
+ * second tap target inside a row whose whole surface is often the control". The
+ * objection is answered rather than ignored: `InfoHint` stops propagation, so
+ * asking what a label means can no longer also perform the row's action, which
+ * is a stronger guarantee than a non-interactive span had.
  */
 export default function SourceChip({ source, className = "" }: {
   source: Source;
@@ -116,11 +133,21 @@ export default function SourceChip({ source, className = "" }: {
   // box reads as a fault in the app rather than as a value it has not heard of.
   if (!spec) return null;
   return (
-    <span
-      className={`source-chip source-${spec.tone}${className ? ` ${className}` : ""}`}
-      title={spec.hint}
+    <InfoHint
+      label={spec.label}
+      trigger={
+        <span
+          className={`source-chip source-${spec.tone}${className ? ` ${className}` : ""}`}
+        >
+          {spec.label}
+        </span>
+      }
     >
-      {spec.label}
-    </span>
+      {/* ⚠️ `SOURCES[source].hint` — THE ONE DEFINITION, read here and nowhere
+          else now that the legend is gone. A source is named, coloured and
+          explained in exactly one place, so a rename lands everywhere at once
+          and a seventh source is one entry rather than several edits. */}
+      <p>{spec.hint}</p>
+    </InfoHint>
   );
 }
