@@ -2,8 +2,8 @@
 
 ⚠️ 2026-08-29, reported from the tablet: "it doesn't make sense to see this
 screen while the VESTA agent supervision is on". The Modules tab was printing
-`Last preview: Roi baseline deviation` on three live checks, which reads as "not
-used" — and it was telling the truth about a preview that had run with
+`Last preview: Roi baseline deviation` on checks that were live, which reads as
+"not used" — and it was telling the truth about a preview that had run with
 supervision OFF.
 
 `run_report(..., supervision_enabled: bool = False)` is threaded to
@@ -11,8 +11,8 @@ supervision OFF.
 down as `superseded`. The scheduled path (`pipeline.tick`) passed it. The
 owner-only "run now / preview" endpoint in `supervisor-proxy.py` did not, and a
 default of False is a VALID value, so nothing raised, nothing typed wrong and
-nothing went red: every preview and every MANUAL send silently dropped the three
-modules carrying `superseded_by`, while the scheduled brief kept them. The
+nothing went red: every preview and every MANUAL send silently dropped every
+module carrying `superseded_by`, while the scheduled brief kept them. The
 endpoint's own comment called itself "a faithful rehearsal of the scheduled path
 rather than a different one".
 

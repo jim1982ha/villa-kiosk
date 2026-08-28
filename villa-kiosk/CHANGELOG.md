@@ -1,3 +1,14 @@
+## 2.870.0
+
+### Changed — comments only: removed two counts that would go stale in silence
+
+An audit of the previous three releases found the habit it had just recorded as
+forbidden, committed inside the same session: the fix for the preview endpoint
+explained itself as standing down "three" checks, and its test said the same.
+Both were accurate and neither is checked by anything, so the day a fourth
+check declares itself superseded they quietly become wrong. The rule is the set,
+not its size. No behaviour change.
+
 ## 2.869.0
 
 ### Fixed — the previous release greyed a layer that was still working

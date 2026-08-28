@@ -2832,14 +2832,17 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
             # ⚠️ THE MASTER SWITCH, AND OMITTING IT MADE THIS ENDPOINT A
             # DIFFERENT PIPELINE FROM THE SCHEDULED ONE (2026-08-29, reported
             # from the tablet: "it doesn't make sense to see this screen while
-            # supervision is on"). It defaults to False, so every check with a
-            # `superseded_by` — three of them — stood down as `superseded` on
-            # every preview and every manual send, while the scheduled brief at
-            # `pipeline.tick` passed the flag and ran them. Two visible
+            # supervision is on"). It defaults to False, so EVERY check that
+            # declares a `superseded_by` stood down as `superseded` on every
+            # preview and every manual send, while the scheduled brief at
+            # `pipeline.tick` passed the flag and ran them. (No count here on
+            # purpose: the set is whatever declares the field, and a number in
+            # a comment beside it goes stale in silence — this file carried two
+            # such counts within the hour of that rule being written down.) Two visible
             # consequences, one cosmetic and one not: the Modules tab printed
             # "Last preview: Roi baseline deviation" on rows that are live, which
             # reads as "this check is not used"; and a brief sent by hand was
-            # MISSING three checks the scheduled one contains.
+            # MISSING every covered check the scheduled one contains.
             #
             # ⚠️ `registry.run_all` carries a comment warning about exactly this
             # defect one level further in — a field not copied arrives at the
