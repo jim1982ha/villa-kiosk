@@ -1,3 +1,11 @@
+## 2.856.2
+
+### Fixed — a measurement in a comment that was taken for a different screen
+Nothing on screen changes. The note explaining why an alert's row wraps on a
+phone quoted a width measured when the row held two buttons; it has held two,
+four and three since. The reason survives a relabelling and the arithmetic does
+not, so the number is gone and the reason stays.
+
 ## 2.856.1
 
 ### Fixed — comments describing buttons that no longer exist

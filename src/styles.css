@@ -5049,12 +5049,19 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   text-align: center;
 }
 /* ⚠️ THIS ROW WRAPS AND `.editable-row` MUST NOT LEARN TO — five components
-   share that class and a settings control belongs beside its label. Here the
-   pair of pills is ~200 CSS px, so on a phone the alert's own title would be
-   crushed to a few characters a line; giving the fields a real flex-basis is
-   what lets the buttons drop to their own line instead of taking the text's
-   width. Without the basis they never wrap at all: `min-width: 0` lets the
-   text column shrink to nothing first. */
+   share that class and a settings control belongs beside its label. Every
+   control here carries its WORDS (a `title` explains nothing to a finger), so
+   the buttons together are wider than a phone can spare beside the alert's own
+   title, which would otherwise be crushed to a few characters a line. Giving
+   the fields a real flex-basis is what lets the buttons drop to their own line
+   instead of taking the text's width; without it they never wrap at all,
+   because `min-width: 0` lets the text column shrink to nothing first.
+
+   ⚠️ NO PIXEL TOTAL IS QUOTED HERE ON PURPOSE. It said "the pair of pills is
+   ~200 CSS px" — measured when there were two, and the row has carried two,
+   four and three controls on three occasions since. The REASON survives a
+   relabelling; an arithmetic total does not, and a stale one reads as a
+   measurement somebody took. */
 .concern-row { flex-wrap: wrap; }
 .concern-row > .editable-row-fields { flex: 1 1 220px; }
 /* The destructive one keeps the app's danger treatment, still circular. */
