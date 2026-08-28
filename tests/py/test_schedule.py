@@ -19,14 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
-from reports.schedule import (
-    CATCH_UP_HOURS,
-    due,
-    idempotency_key,
-    period_key,
-    prune_keys,
-    resolve_timezone,
-)
+from vesta.adapters.schedule import CATCH_UP_HOURS, due, idempotency_key, period_key, prune_keys, resolve_timezone
 
 # A zone with a real DST transition, so the wall-clock property is exercised
 # rather than asserted. Deliberately NOT the reference deployment's zone
@@ -295,7 +288,7 @@ def test_a_schedule_can_fire_at_an_arbitrary_minute() -> None:
     statistics buckets this does not slice. Delivery time and measurement window
     are independent."""
     from datetime import datetime
-    from reports.schedule import due
+    from vesta.adapters.schedule import due
     entry = {"id": "s1", "cadence": "daily", "hour": 7, "minute": 30}
 
     at_0729 = datetime(2026, 8, 21, 7, 29, tzinfo=timezone.utc)
@@ -311,7 +304,7 @@ def test_a_schedule_written_before_minutes_existed_still_fires() -> None:
     delivering reports an operator already configured — the worst possible
     reading of a field being added."""
     from datetime import datetime
-    from reports.schedule import due
+    from vesta.adapters.schedule import due
     legacy = {"id": "s1", "cadence": "daily", "hour": 7}
     fired = due([legacy], [], datetime(2026, 8, 21, 7, 0, tzinfo=timezone.utc))
     assert len(fired) == 1
@@ -323,7 +316,7 @@ def test_a_nonsense_minute_falls_back_rather_than_dropping_the_schedule() -> Non
     a typo should fail; by the time the scheduler reads it, delivering at the
     top of the hour beats not delivering."""
     from datetime import datetime
-    from reports.schedule import due
+    from vesta.adapters.schedule import due
     for bad in (99, -1, True, "30", None):
         entry = {"id": "s1", "cadence": "daily", "hour": 7, "minute": bad}
         fired = due([entry], [], datetime(2026, 8, 21, 7, 0, tzinfo=timezone.utc))
@@ -331,7 +324,7 @@ def test_a_nonsense_minute_falls_back_rather_than_dropping_the_schedule() -> Non
 
 
 def test_the_config_validator_refuses_a_bad_minute_but_allows_an_absent_one() -> None:
-    from reports.store import validate_config
+    from vesta.adapters.store import validate_config
     ok = {"schedules": [{"cadence": "daily", "hour": 7}]}
     assert validate_config(ok) == []
     ok_minute = {"schedules": [{"cadence": "daily", "hour": 7, "minute": 30}]}
@@ -346,7 +339,7 @@ def test_a_weekly_schedule_can_land_on_any_weekday() -> None:
     11:59, received nothing, and were right to ask why. Its slot for that week
     was Monday 11:59 — four days past, outside the six-hour catch-up window."""
     from datetime import datetime
-    from reports.schedule import due
+    from vesta.adapters.schedule import due
     friday = datetime(2026, 8, 21, 11, 59, tzinfo=timezone.utc)
     assert due([{"id": "s", "cadence": "weekly", "hour": 11, "minute": 59}],
                [], friday) == [], "the default is still Monday"
@@ -357,7 +350,7 @@ def test_a_weekly_schedule_can_land_on_any_weekday() -> None:
 
 def test_next_fire_answers_the_question_the_dialog_could_not() -> None:
     from datetime import datetime
-    from reports.schedule import next_fire
+    from vesta.adapters.schedule import next_fire
     friday_noon = datetime(2026, 8, 21, 12, 1, tzinfo=timezone.utc)
     nxt = next_fire({"cadence": "weekly", "hour": 11, "minute": 59}, friday_noon)
     assert nxt is not None
@@ -368,7 +361,7 @@ def test_a_monthly_day_is_clamped_to_the_month_rather_than_refused() -> None:
     """An operator who wants the 31st gets the 31st in January and the last day
     in February, rather than a date they can see on a calendar being rejected."""
     from datetime import datetime
-    from reports.schedule import next_fire
+    from vesta.adapters.schedule import next_fire
     in_february = datetime(2026, 2, 5, 9, 0, tzinfo=timezone.utc)
     nxt = next_fire({"cadence": "monthly", "hour": 7, "day": 31}, in_february)
     assert nxt is not None and nxt.strftime("%d %b") == "28 Feb"
@@ -376,7 +369,7 @@ def test_a_monthly_day_is_clamped_to_the_month_rather_than_refused() -> None:
 
 def test_next_fire_is_always_in_the_future_for_every_cadence() -> None:
     from datetime import datetime
-    from reports.schedule import next_fire
+    from vesta.adapters.schedule import next_fire
     now = datetime(2026, 8, 21, 12, 1, tzinfo=timezone.utc)
     for cadence in ("daily", "weekly", "monthly"):
         nxt = next_fire({"cadence": cadence, "hour": 7}, now)
@@ -394,7 +387,7 @@ def test_next_fire_is_TODAY_for_a_time_still_ahead() -> None:
     So the behaviour is pinned here and the DIALOG now asks this same function
     live, through `/reports-next-run`, rather than reimplementing it."""
     from datetime import datetime
-    from reports.schedule import next_fire
+    from vesta.adapters.schedule import next_fire
     at_1341 = datetime(2026, 8, 21, 13, 41, tzinfo=timezone.utc)
     nxt = next_fire({"cadence": "daily", "hour": 13, "minute": 42}, at_1341)
     assert nxt is not None and nxt.strftime("%d %b %H:%M") == "21 Aug 13:42", (
@@ -419,7 +412,7 @@ def test_every_cadence_says_what_its_window_is() -> None:
     the same silence that prompted the question.
     """
     from datetime import datetime, timezone
-    from reports import schedule
+    from vesta.adapters import schedule
 
     moment = datetime(2026, 8, 21, 23, 35, tzinfo=timezone.utc)  # a Friday
     for cadence in ("daily", "weekly", "monthly"):
@@ -452,7 +445,7 @@ def test_the_title_span_says_which_days_the_report_covers() -> None:
     both halves stay internally consistent and only the reader can tell.
     """
     from datetime import datetime, timezone
-    from reports import schedule
+    from vesta.adapters import schedule
     friday = datetime(2026, 8, 21, 23, 35, tzinfo=timezone.utc)
     assert schedule.period_span("daily", friday) == "21 Aug 2026"
     assert schedule.period_span("weekly", friday) == "17-23 Aug 2026"

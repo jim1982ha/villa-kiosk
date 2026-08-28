@@ -32,7 +32,7 @@ from agent.registry import run as run_loop
 from agent import sources as sources_mod
 from agent.tools import act as act_mod
 from agent.tools import concern as concern_mod
-from reports.log import log, swallow
+from vesta.adapters.log import log, swallow
 
 #: How long a whole investigation may take, wall clock. ⚠️ NOT A TURN LIMIT —
 #: `policy.max_turns` already bounds those. This bounds the case turns cannot:

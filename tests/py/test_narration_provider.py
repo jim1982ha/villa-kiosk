@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from reports import secrets
+from vesta.adapters import secrets
 from reports.narrate import payload as P, providers as PR
 
 

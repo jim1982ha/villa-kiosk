@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from agent.llm.base import ToolCall, Turn
 from agent.tools.base import flatten_blocks
-from reports.log import swallow
+from vesta.adapters.log import swallow
 
 #: The provider's API host. ⚠️ THIS STRING LIVES HERE AND NOWHERE ELSE — see the
 #: module docstring. It is not used to build a request (the SDK does that); it
@@ -136,7 +136,7 @@ class AnthropicProvider:
         if self._key and len(self._key) >= 8:
             out = out.replace(self._key, "***")
         try:
-            from reports.secrets import redact
+            from vesta.adapters.secrets import redact
             return redact(out)
         except Exception:  # noqa: BLE001 - never let redaction itself fail open
             return out

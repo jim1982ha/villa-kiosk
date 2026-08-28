@@ -206,7 +206,7 @@ class AnalysisTool(BaseTool):
             if hasattr(found, "__await__"):
                 found = await found
             return dict(found or {})
-        from reports import discovery
+        from vesta.adapters import discovery
         return dict(await discovery.discover(session))
 
     def _context(self, session: Any, found: Mapping[str, Any],

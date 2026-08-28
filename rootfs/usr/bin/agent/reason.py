@@ -42,7 +42,7 @@ from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
 from agent.registry import REASON_TOOLS
-from reports.log import stage, swallow
+from vesta.adapters.log import stage, swallow
 
 #: How many investigations one pass may start when config says nothing.
 #: ⚠️ MIRRORS `config.DEFAULTS`, and `test_agent_reason` pins that it does. A

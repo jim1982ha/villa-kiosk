@@ -65,9 +65,9 @@ KIOSK_VIEW = os.path.join(HARNESS, "kiosk_view.ts")
 
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports import devices as devices_mod       # noqa: E402
+from vesta.adapters import devices as devices_mod
 from reports import standing as standing_mod     # noqa: E402
-from reports import ledger as ledger_mod         # noqa: E402
+from vesta.adapters import ledger as ledger_mod
 
 FIXTURE_NAMES = ["bare", "pack-only", "blueprints-live", "both"]
 

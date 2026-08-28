@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Sequence, Tuple
 
-from ..log import swallow, warn
+from vesta.adapters.log import swallow, warn
 from vesta.shared.text import readable_label
 from vesta.shared.analysis.base import AnalysisModule, Finding, ModuleContext, skip
 

@@ -34,8 +34,8 @@ from dataclasses import dataclass, field
 from typing import (Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple)
 
 from agent import contracts
-from reports import store
-from reports.log import stage, swallow
+from vesta.adapters import store
+from vesta.adapters.log import stage, swallow
 
 CONCERNS_FILE: str = f"{store.DATA_DIR}/vesta/concerns.json"
 
@@ -641,7 +641,7 @@ def _coverage(since_iso: str) -> Mapping[str, Any]:
     that a test can hand `verification_sweep` a stand-in without patching a
     module attribute, and so this module keeps no import-time dependency on the
     collector."""
-    from reports import collect
+    from vesta.adapters import collect
     return collect.coverage(since_iso)
 
 

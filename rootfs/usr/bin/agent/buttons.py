@@ -44,7 +44,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from reports.log import log, stage, swallow, warn
+from vesta.adapters.log import log, stage, swallow, warn
 
 #: The HA event a press arrives as. ⚠️ ADDED TO THE CHAT SUBSCRIPTION RATHER
 #: THAN A NEW ONE — one more type on a websocket already held, which is the same
@@ -185,7 +185,7 @@ async def telegram_entities(session: Any, *,
     if cached and (at - read_at) < REGISTRY_TTL_S:
         return cached
     try:
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             entries = await hass.command("config/entity_registry/list")
     except Exception as err:  # noqa: BLE001 - degrade, never fail
@@ -208,7 +208,7 @@ def _bare(target: str) -> str:
     `telegram_bot.send_message` takes `entity_id` and has no `chat_id` and no
     `target` field — verified against the running instance by `chat.target_for`,
     whose comment says so — so a legacy notify SERVICE has no route here."""
-    from reports import deliver as deliver_mod
+    from vesta.adapters import deliver as deliver_mod
     return target[len(deliver_mod.ENTITY_PREFIX):] \
         if target.startswith(deliver_mod.ENTITY_PREFIX) else ""
 
@@ -265,7 +265,7 @@ async def _send_one(session: Any, entity_id: str, title: str, body: str,
         "inline_keyboard": [[list(b) for b in row] for row in keyboard],
     }
     try:
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             result = await hass.command(
                 "call_service", domain=domain, service=service,
@@ -393,7 +393,7 @@ async def _answer(session: Any, query_id: str, text: str) -> None:
         return
     domain, service = ANSWER_SERVICE
     try:
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             await hass.command("call_service", domain=domain, service=service,
                                service_data={"callback_query_id": query_id,
@@ -415,7 +415,7 @@ async def retire(session: Any, ref: Ref, closing: str) -> bool:
         return False
     domain, service = EDIT_SERVICE
     try:
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             await hass.command("call_service", domain=domain, service=service,
                                service_data={"entity_id": ref.entity_id,

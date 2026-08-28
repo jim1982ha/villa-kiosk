@@ -20,7 +20,7 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from observe import cycle, heartbeat, journal  # noqa: E402
-from reports import store  # noqa: E402
+from vesta.adapters import store
 
 
 @pytest.fixture(autouse=True)

@@ -359,14 +359,14 @@ def test_the_chat_event_is_subscribed_on_every_path() -> None:
     """⚠️ INCLUDING THE FALLBACK. A property with no VESTA blueprints must still
     be able to answer a question; the conversation has nothing to do with the
     detection layer and must not degrade with it."""
-    from reports import collect
+    from vesta.adapters import collect
     assert "telegram_text" in collect.CHAT_EVENT_TYPES
     assert "telegram_text" in collect._with_chat(collect.FALLBACK_EVENT_TYPES)
     assert "telegram_text" in collect._with_chat(["vesta_roi_event"])
 
 
 def test_the_chat_event_is_not_duplicated() -> None:
-    from reports import collect
+    from vesta.adapters import collect
     got = collect._with_chat(["telegram_text", "vesta_roi_event"])
     assert got.count("telegram_text") == 1
 
@@ -628,7 +628,7 @@ REGISTRY_ROWS = [
 
 
 def _resolve(chat_id: str, rows: Any = None) -> str:
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
 
     fake = _Registry(REGISTRY_ROWS if rows is None else rows)
     original = hass_mod.HassClient
@@ -659,7 +659,7 @@ def test_the_resolved_target_is_ENTITY_ADDRESSED() -> None:
     entity by construction and returns the addressed form rather than leaving
     each caller to remember.
     """
-    from reports import deliver
+    from vesta.adapters import deliver
 
     got = _resolve("765979167")
     assert got.startswith(deliver.ENTITY_PREFIX), got
@@ -696,7 +696,7 @@ def test_only_the_telegram_platform_is_considered() -> None:
 
 
 def test_an_unreadable_registry_falls_back_rather_than_raising() -> None:
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
 
     class _Broken:
         async def __aenter__(self) -> "_Broken":
@@ -716,7 +716,7 @@ def test_an_unreadable_registry_falls_back_rather_than_raising() -> None:
 def test_the_lookup_is_cached_rather_than_asked_per_message() -> None:
     """The registry changes when somebody adds a chat to the bot, which is
     rare; a websocket round trip per message is a cost with no answer."""
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
 
     fake = _Registry(REGISTRY_ROWS)
     original = hass_mod.HassClient
@@ -790,7 +790,7 @@ def test_an_answer_the_model_ALREADY_replied_is_not_sent_twice() -> None:
 
 # ── naming the chats, so nobody copies a number ─────────────────────────────
 def _chats(rows: Any = None, states: Any = None) -> List[Any]:
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
 
     class _Both(_Registry):
         async def command(self, name: str, **_kw: Any) -> Any:
@@ -855,7 +855,7 @@ def test_a_chat_with_no_friendly_name_falls_back_to_its_entity_id() -> None:
 
 
 def test_each_chat_carries_a_target_deliver_can_actually_use() -> None:
-    from reports import deliver
+    from vesta.adapters import deliver
 
     found = _chats()
     assert found[0].target.startswith(deliver.ENTITY_PREFIX)
@@ -865,7 +865,7 @@ def test_each_chat_carries_a_target_deliver_can_actually_use() -> None:
 def test_an_unreachable_core_yields_an_EMPTY_list_not_an_error() -> None:
     """The panel falls back to typing the number, which is what existed
     before — a villa whose core is restarting must not lose the editor."""
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
 
     class _Broken:
         async def __aenter__(self) -> "_Broken":

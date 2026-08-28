@@ -97,7 +97,7 @@ def test_every_module_sets_a_subject_key() -> None:
     reported alongside the blueprint's own line about the same device, which is
     the duplicate this whole mechanism exists to prevent. Derived from the
     source so a fourth module is covered on the day it is written."""
-    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "shared",
                         "analysis", "modules")
     for name in sorted(os.listdir(root)):
         if not name.endswith(".py") or name == "__init__.py":

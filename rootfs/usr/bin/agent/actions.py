@@ -35,7 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
-from reports.log import stage, swallow
+from vesta.adapters.log import stage, swallow
 
 #: Who may act on an alert at all. ⚠️ ONE TUPLE FOR EVERY SURFACE — the proxy
 #: imports it rather than declaring its own, and the Telegram path checks the
@@ -305,8 +305,8 @@ async def _complete_item(session: Any, concern_id: str, *,
     drift.
     """
     from agent import task as task_mod
-    from reports import ledger as ledger_mod
-    from reports.hass import HassClient
+    from vesta.adapters import ledger as ledger_mod
+    from vesta.adapters.hass import HassClient
 
     entity_id = task_mod.list_for(config)
     if not entity_id or session is None:

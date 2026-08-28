@@ -223,7 +223,7 @@ def _earned_suppressions() -> FrozenSet[str]:
         from agent import concerns as concerns_mod
         return frozenset(str(k) for k in concerns_mod.suppressed_subjects() if k)
     except Exception as err:  # noqa: BLE001 - degrade, never fail
-        from reports.log import swallow
+        from vesta.adapters.log import swallow
         swallow("could not read earned suppressions", err)
         return frozenset()
 
@@ -283,7 +283,7 @@ def sender_role(config: Optional[Mapping[str, Any]], *, channel: str,
     # `role_for_sender` reads ONLY the telegram field: a delivery target on the
     # same row is a place to send to, never an identity to trust, and that is
     # the one way merging the two tables could have widened the allow-list.
-    from reports import people as people_mod
+    from vesta.adapters import people as people_mod
     role = people_mod.role_for_sender(config, channel=channel,
                                       sender_id=sender_id)
     if not role:

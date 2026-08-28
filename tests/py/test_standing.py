@@ -23,7 +23,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports import model as model_mod                      # noqa: E402
+from vesta.adapters import model as model_mod
 from reports import standing as standing_mod                 # noqa: E402
 from agent import fallback as agent_fallback  # noqa: E402
 from reports.narrate import ReportContext  # noqa: E402

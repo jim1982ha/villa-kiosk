@@ -42,8 +42,8 @@ from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence
 
 from agent import content
-from reports import store as store_mod
-from reports.log import log, swallow
+from vesta.adapters import store as store_mod
+from vesta.adapters.log import log, swallow
 
 MEMORY_ROOT: str = "/data/vesta/memory"
 

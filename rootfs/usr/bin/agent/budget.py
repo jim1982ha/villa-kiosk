@@ -36,9 +36,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, Final, Mapping, Optional
 
 from agent import config as agent_config
-from reports import store
-from reports import usage as usage_mod
-from reports.log import swallow
+from vesta.adapters import store
+from vesta.adapters import usage as usage_mod
+from vesta.adapters.log import swallow
 
 BUDGET_FILE: Final[str] = f"{store.DATA_DIR}/vesta/budget.json"
 

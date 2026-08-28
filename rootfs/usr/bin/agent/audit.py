@@ -29,8 +29,8 @@ import time
 from typing import Any, Dict, Final, List, Mapping, Optional, Tuple
 
 from agent import contracts
-from reports import store
-from reports.log import swallow
+from vesta.adapters import store
+from vesta.adapters.log import swallow
 
 AUDIT_FILE: Final[str] = f"{store.DATA_DIR}/vesta/audit.json"
 

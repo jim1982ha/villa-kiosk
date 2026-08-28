@@ -18,7 +18,7 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports import links  # noqa: E402
+from vesta.adapters import links
 
 ENTRY = "/api/hassio_ingress/AbC123token"
 EXTERNAL = {"external_url": "https://villa.example.org",
@@ -69,7 +69,7 @@ def test_the_page_table_is_a_closed_set_with_no_interpolation() -> None:
     future "link to this device" feature cannot quietly start interpolating an
     entity id: every value in PAGES must be a literal string.
     """
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "adapters",
                                "links.py"), encoding="utf-8").read()
     tree = ast.parse(source)
     table = next(n for n in ast.walk(tree)
@@ -195,7 +195,7 @@ def test_links_reads_the_keys_discovery_actually_writes() -> None:
     each, nothing between them — so it is checked the same way: derive the keys
     from the WRITER and assert the READER accepts them.
     """
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "adapters",
                                "discovery.py"), encoding="utf-8").read()
     block = source[source.index('inventory["urls"] = {'):]
     block = block[:block.index("}") + 1]

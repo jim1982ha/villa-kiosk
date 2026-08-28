@@ -75,7 +75,7 @@ def _isolated(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(budget, "BUDGET_FILE", str(tmp_path / "b.json"))
     monkeypatch.setattr(audit, "AUDIT_FILE", str(tmp_path / "a.json"))
     monkeypatch.setattr(budget, "_BREAKER", None)
-    from reports import usage as usage_mod
+    from vesta.adapters import usage as usage_mod
     monkeypatch.setattr(usage_mod, "USAGE_PATH", str(tmp_path / "u.json"))
 
 

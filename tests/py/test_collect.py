@@ -15,7 +15,8 @@ from typing import Any, AsyncIterator, Dict, List, Sequence
 
 import pytest
 
-from reports import collect, store
+from vesta.adapters import collect
+from vesta.adapters import store
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +64,7 @@ class _FakeHass:
 def _collect(events: Sequence[Dict[str, Any]]) -> _FakeHass:
     fake = _FakeHass(events)
     collector = collect.Collector(None, ["vesta_roi_event"])  # type: ignore[arg-type]
-    import reports.collect as module
+    import vesta.adapters.collect as module
 
     original = module.HassClient
     module.HassClient = lambda session: fake  # type: ignore[assignment,misc]
@@ -77,7 +78,7 @@ def _collect(events: Sequence[Dict[str, Any]]) -> _FakeHass:
 def _run(fake: _FakeHass) -> _FakeHass:
     """`_collect` for a caller that built its own fake. Same patch idiom."""
     collector = collect.Collector(None, ["vesta_roi_event"])  # type: ignore[arg-type]
-    import reports.collect as module
+    import vesta.adapters.collect as module
 
     original = module.HassClient
     module.HassClient = lambda session: fake  # type: ignore[assignment,misc]
@@ -207,7 +208,7 @@ def test_the_BLUEPRINT_LAYER_capability_is_GONE_and_stays_gone() -> None:
     assert not hasattr(collect, "blueprint_layer_present"), (
         "the predicate is back. It can only mean something if the collector "
         "SUBSCRIBES to vesta_* and the gate consults it — check both.")
-    from reports import discovery
+    from vesta.adapters import discovery
     assert "blueprint_layer" not in discovery.ALL_CAPABILITIES
     assert not [t for t in collect.CHAT_EVENT_TYPES if t.startswith("vesta_")]
 
@@ -342,7 +343,7 @@ def test_no_vesta_blueprints_falls_back_rather_than_going_deaf() -> None:
 
 def test_an_unreachable_core_falls_back_rather_than_going_deaf() -> None:
     """A collector that gave up here would silently never listen again."""
-    from reports.hass import HassUnavailable
+    from vesta.adapters.hass import HassUnavailable
 
     async def run() -> Any:
         class Broken:
@@ -401,7 +402,7 @@ def test_subscribe_is_chat_only_and_keeps_the_established_record() -> None:
         "blueprint_categories": ["roi"], "blueprint_names": ["roi_idle_load"]})
     fake = _FakeHass([])
     collector = collect.Collector(None)  # type: ignore[arg-type]
-    import reports.collect as module
+    import vesta.adapters.collect as module
 
     original_client = module.HassClient
     module.HassClient = lambda session: fake  # type: ignore[assignment,misc]
@@ -679,7 +680,7 @@ def _with_consumer(events: Sequence[Dict[str, Any]],
     fake = _FakeHass(events)
     collector = collect.Collector(None, ["vesta_roi_event"],  # type: ignore[arg-type]
                                   on_event=consumer)
-    import reports.collect as module
+    import vesta.adapters.collect as module
 
     original = module.HassClient
     module.HassClient = lambda session: fake  # type: ignore[assignment,misc]

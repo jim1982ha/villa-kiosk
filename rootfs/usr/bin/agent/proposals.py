@@ -33,8 +33,8 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from reports import store as store_mod
-from reports.log import log, swallow
+from vesta.adapters import store as store_mod
+from vesta.adapters.log import log, swallow
 
 #: Where proposals live. ⚠️ ITS OWN FILE, not a flag on a concern: a concern is
 #: something the villa has CONCLUDED and this is something it wants PERMISSION

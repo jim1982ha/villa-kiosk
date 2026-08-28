@@ -29,7 +29,7 @@ from agent import playbooks
 from agent import runtime
 from agent.llm.base import Provider
 from agent.registry import Registry, build_registry, narrowed
-from reports.log import stage
+from vesta.adapters.log import stage
 
 #: The only tool triage may see. ⚠️ A NAME, not a mode: `read_state` is READ too
 #: and would let a cheap pass fan out across the villa one entity at a time.

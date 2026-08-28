@@ -43,8 +43,8 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from agent import contracts, policy as policy_mod
 from agent.registry import Registry, build_registry, invoke
 from agent.tools.base import BaseTool, flatten_blocks
-from reports import secrets
-from reports.log import log
+from vesta.adapters import secrets
+from vesta.adapters.log import log
 
 #: The bearer token's name in the 0600 secrets file. ⚠️ It is a SECRET, not a
 #: config value: `/agent-config` is readable by any authorised session, and a

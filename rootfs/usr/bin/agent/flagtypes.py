@@ -40,8 +40,8 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from reports import store
-from reports.log import swallow
+from vesta.adapters import store
+from vesta.adapters.log import swallow
 
 FLAG_TYPES_FILE: str = f"{store.DATA_DIR}/vesta/flag-types.json"
 

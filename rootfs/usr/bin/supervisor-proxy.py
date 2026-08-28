@@ -125,8 +125,8 @@ if _HERE not in sys.path:
     sys.path.append(_HERE)
 
 from vesta.shared import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
-from reports import collect as reports_collect      # noqa: E402
-from reports import discovery as reports_discovery  # noqa: E402
+from vesta.adapters import collect as reports_collect
+from vesta.adapters import discovery as reports_discovery
 from reports import pipeline as reports_pipeline    # noqa: E402
 # ⚠️ BOTH LINES ARE LOAD-BEARING, AND THE SECOND IS THE ONE THAT IS EASY TO
 # DROP. A module registers itself at IMPORT TIME, and `analysis/__init__`
@@ -138,13 +138,13 @@ from reports import pipeline as reports_pipeline    # noqa: E402
 # is the defect being fixed here wearing a different hat.
 from reports.analysis import registry as reports_registry  # noqa: E402
 from reports.analysis import registry as _reports_registry  # noqa: E402,F401
-from reports import schedule as reports_schedule    # noqa: E402
-from reports import secrets as reports_secrets      # noqa: E402
-from reports import log as reports_log          # noqa: E402
-from reports import hass as reports_hass          # noqa: E402
+from vesta.adapters import schedule as reports_schedule
+from vesta.adapters import secrets as reports_secrets
+from vesta.adapters import log as reports_log
+from vesta.adapters import hass as reports_hass
 from reports import tasks as reports_tasks        # noqa: E402
 from reports.narrate import providers as reports_narrate_providers  # noqa: E402
-from reports import store as reports_store          # noqa: E402
+from vesta.adapters import store as reports_store
 # ⚠️ A SECOND PACKAGE BESIDE `reports`, NOT INSIDE IT. `observe` is the
 # agent-era observation floor and `reports` is the pipeline being dismantled in
 # PH-5; keeping them apart means that cleanup is a directory rather than a
@@ -2420,7 +2420,7 @@ async def agent_usage_handler(request: web.Request) -> web.Response:
         return _unauthorized()
     if _role_for(request) != "owner":
         return _forbidden("Only the owner profile may read API usage.")
-    from reports import usage as reports_usage
+    from vesta.adapters import usage as reports_usage
     try:
         since = float(request.query.get("since") or 0)
     except (TypeError, ValueError):

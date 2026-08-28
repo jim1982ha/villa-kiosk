@@ -31,10 +31,16 @@ from aiohttp import ClientSession
 # (TASK-071/074, 2026-08-27). They parsed, counted and cross-checked the
 # `vesta_*` blueprint events; the last emitter stopped on the same day and a
 # parser with no producer is the machinery this phase exists to remove.
-from . import (collect, devices as devices_mod,
-               discovery, ledger, links as links_mod, model as model_mod,
-               schedule as schedule_mod, standing as standing_mod,
-               stats as stats_mod, store, trend as trend_mod)
+from . import standing as standing_mod, trend as trend_mod
+from vesta.adapters import stats as stats_mod
+from vesta.adapters import collect
+from vesta.adapters import devices as devices_mod
+from vesta.adapters import discovery
+from vesta.adapters import ledger
+from vesta.adapters import links as links_mod
+from vesta.adapters import model as model_mod
+from vesta.adapters import schedule as schedule_mod
+from vesta.adapters import store
 from .analysis import ModuleContext, describe_skips, registered, run_all
 from vesta.shared.analysis.series import hourly_by_day, parse_day
 from vesta.shared.contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
@@ -42,14 +48,14 @@ from vesta.shared.contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
 # ⚠️ THE REGISTRY REGISTERS ITS OWN MODULES since TASK-115 — importing it is
 # what populates it. This line used to import `modules` for the side effect.
 from .analysis import registry as _registry  # noqa: F401  (importing registers)
-from .hass import HassClient, HassUnavailable
-from .deliver import deliver
-from .hass import fetch_timezone
-from .log import log, swallow, warn
+from vesta.adapters.hass import HassClient, HassUnavailable
+from vesta.adapters.deliver import deliver
+from vesta.adapters.hass import fetch_timezone
+from vesta.adapters.log import log, swallow, warn
 from .narrate import ReportContext
 from .narrate import payload as payload_mod, providers as providers_mod
 from vesta.shared import style as style_mod
-from .schedule import period_key, period_start
+from vesta.adapters.schedule import period_key, period_start
 
 
 def _rejected_candidates() -> List[Dict[str, Any]]:
@@ -1059,7 +1065,7 @@ def _profile_targets(schedule: Mapping[str, Any],
     already going, never send it nowhere.
     """
     try:
-        from reports import people as people_mod
+        from vesta.adapters import people as people_mod
         return people_mod.targets_for_role(agent_config,
                                            str(schedule.get("role") or ""))
     except Exception as err:  # noqa: BLE001 - degrade, never fail
@@ -1098,7 +1104,7 @@ def audience_of(schedule: Dict[str, Any],
     if audience in ("owner", "facility"):
         return str(audience)
     try:
-        from reports import people as people_mod
+        from vesta.adapters import people as people_mod
         role = str(schedule.get("role") or "").strip().lower()
         return people_mod.AUDIENCE_OF_ROLE.get(role, "owner")
     except Exception as err:  # noqa: BLE001 - degrade, never fail
@@ -1200,7 +1206,7 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
         # ⚠️ READ ONCE PER TICK, NOT PER SCHEDULE. Every schedule firing in this
         # minute resolves its audience against the same table, and re-reading a
         # JSON file per row would make the answer able to change mid-tick.
-        from reports import people as people_mod
+        from vesta.adapters import people as people_mod
         agent_cfg = people_mod.read_config()
         for entry in ready:
             targets = targets_for(config, entry, agent_cfg)

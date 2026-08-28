@@ -54,7 +54,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Optional
 
 from agent import config as agent_config
-from reports.log import stage, swallow
+from vesta.adapters.log import stage, swallow
 
 #: The stored key naming the facility manager list. Empty means the feature is off.
 CONFIG_KEY: str = "task_list"
@@ -162,8 +162,8 @@ async def reconcile_done(session: Any, *,
     misbehaving.
     """
     from agent import concerns as concerns_mod
-    from reports import ledger as ledger_mod
-    from reports.hass import HassClient
+    from vesta.adapters import ledger as ledger_mod
+    from vesta.adapters.hass import HassClient
 
     entity_id = list_for(config)
     if not entity_id or session is None:
@@ -225,7 +225,7 @@ async def raise_for(session: Any, concern: Mapping[str, Any], *,
         return "failed"
 
     try:
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             # ⚠️ THE BODY GOES IN THE DESCRIPTION, NOT THE SUMMARY. A todo
             # summary is one line on a phone and in the Facility Manager list;

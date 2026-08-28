@@ -42,8 +42,8 @@ from agent import config as agent_config
 from agent import reason as reason_mod
 from agent import route as route_mod
 from agent import triage as triage_mod
-from reports import store
-from reports.log import log, pass_scope, stage, swallow, warn
+from vesta.adapters import store
+from vesta.adapters.log import log, pass_scope, stage, swallow, warn
 
 #: How long to wait after a failed pass before trying again. ⚠️ NOT THE
 #: CADENCE: a villa whose provider is down should not retry every fifteen
@@ -390,7 +390,7 @@ async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
     """Assemble what a pass needs, then run it. Never raises."""
     from agent import sources
     from agent.llm import anthropic_sdk
-    from reports import secrets as reports_secrets
+    from vesta.adapters import secrets as reports_secrets
 
     # ⚠️ THROUGH `sources`, NEVER BY CALLING `snapshot` DIRECTLY. This line read
     # `snapshot.villa_document(profile_text=snapshot.profile(), delta_text=

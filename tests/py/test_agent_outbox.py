@@ -54,8 +54,8 @@ class _Sender:
 
 def _wire(monkeypatch: pytest.MonkeyPatch, sender: _Sender,
           *, targets: Any = ("notify.owner",), occupied: Any = None) -> None:
-    from reports import deliver as deliver_mod
-    from reports import people as people_mod
+    from vesta.adapters import deliver as deliver_mod
+    from vesta.adapters import people as people_mod
 
     monkeypatch.setattr(deliver_mod, "deliver", sender.deliver)
     monkeypatch.setattr(people_mod, "targets_for_role",

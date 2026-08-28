@@ -26,8 +26,8 @@ import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from agent import content
-from reports import store as store_mod
-from reports.log import swallow
+from vesta.adapters import store as store_mod
+from vesta.adapters.log import swallow
 
 SHIPPED_ROOT: str = "/usr/share/vesta/playbooks"
 

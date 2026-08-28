@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from agent.tools.base import (BaseTool, DEFAULT_MAX_RESULT_CHARS, NARROW_HINT,
                               fail, truncate)
-from reports.log import log, swallow
+from vesta.adapters.log import log, swallow
 
 SUPERVISOR = "http://supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -354,7 +354,7 @@ async def refresh(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     stamp = time.time() if now is None else now
     hours = CATALOGUE_MAX_AGE_H if max_age_h is None else max_age_h
     try:
-        from reports import store
+        from vesta.adapters import store
         raw = store.read_json(CATALOGUE_FILE, {})
         at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
         if stamp - at < max(1, hours) * 3600.0:
@@ -394,7 +394,7 @@ async def refresh(session: Any, *, config: Optional[Mapping[str, Any]] = None,
 def catalogue() -> Dict[str, Any]:
     """The stored tool list, or `{}` when nobody has read one."""
     try:
-        from reports import store
+        from vesta.adapters import store
         raw = store.read_json(CATALOGUE_FILE, {})
         if not isinstance(raw, Mapping) or not raw.get("tools"):
             return {}

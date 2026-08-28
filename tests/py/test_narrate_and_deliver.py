@@ -20,7 +20,7 @@ from datetime import datetime
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from reports.deliver import _service_path, deliver, deliver_one
+from vesta.adapters.deliver import _service_path, deliver, deliver_one
 from reports.narrate import ReportContext
 
 
@@ -73,7 +73,7 @@ def test_only_services_that_take_a_required_message_are_offered() -> None:
     REQUIRED `message` plus a `title`. Requiring `message` to be REQUIRED is
     what keeps the other twenty telegram actions (send_photo, edit_caption,
     delete_message) out of a list the operator picks a destination from."""
-    from reports.discovery import _speaks_message
+    from vesta.adapters.discovery import _speaks_message
     assert _speaks_message({"message": {"required": True}, "title": {}})
     # title-only, message-optional, and message-absent are all not destinations
     assert not _speaks_message({"title": {}})
@@ -136,7 +136,7 @@ def test_no_platform_name_appears_in_the_delivery_module() -> None:
     import ast
     import inspect
 
-    from reports import deliver as deliver_module
+    from vesta.adapters import deliver as deliver_module
 
     tree = ast.parse(inspect.getsource(deliver_module))
     for node in ast.walk(tree):
@@ -159,7 +159,7 @@ def test_the_stripper_can_still_see_real_code() -> None:
     import ast
     import inspect
 
-    from reports import deliver as deliver_module
+    from vesta.adapters import deliver as deliver_module
 
     tree = ast.parse(inspect.getsource(deliver_module))
     code = ast.unparse(tree)
@@ -291,7 +291,8 @@ def test_history_stores_no_prose_and_no_findings(tmp_path: Any) -> None:
     """⚠️ The ring is capped by ENTRY COUNT. An entry whose size depends on how
     much a narrator wrote makes that cap meaningless — 200 entries could be a
     megabyte or fifty."""
-    from reports import pipeline, store
+    from reports import pipeline
+    from vesta.adapters import store
 
     original = store.REPORTS_HISTORY_FILE
     store.REPORTS_HISTORY_FILE = str(tmp_path / "h.json")
@@ -353,7 +354,7 @@ def test_an_entity_target_goes_through_send_message_and_carries_its_entity() -> 
     `notify.living_room_bot_group` is an ENTITY, and nothing about the two
     strings distinguishes them.
     """
-    from reports.deliver import _payload_for
+    from vesta.adapters.deliver import _payload_for
     target = "entity:notify.living_room_bot_group"
     assert _service_path(target) == "notify/send_message"
     body = _payload_for(target, "T", "B")
@@ -364,7 +365,7 @@ def test_an_entity_target_goes_through_send_message_and_carries_its_entity() -> 
 def test_a_plain_target_carries_no_entity_id() -> None:
     """Still the intersection — `title` plus `message` — everywhere else.
     Sending a stray `entity_id` to a classic notify service is a 400."""
-    from reports.deliver import _payload_for
+    from vesta.adapters.deliver import _payload_for
     assert _payload_for("notify.mobile_app_x", "T", "B") == \
         {"title": "T", "message": "B"}
     assert _payload_for("telegram_bot.send_message", "T", "B") == \
@@ -379,7 +380,7 @@ def test_a_duplicate_route_to_an_offered_destination_is_not_offered() -> None:
 
     Both rules read data already fetched, and neither names an integration.
     """
-    from reports.discovery import _redundant
+    from vesta.adapters.discovery import _redundant
     speaks = {"message": {"required": True}, "title": {}}
 
     # A: `notify.persistent_notification` exists, so `persistent_notification.*`
@@ -417,7 +418,7 @@ def test_a_service_that_parses_markup_is_told_not_to() -> None:
     and it had. Only comparing the message against the composed one found it —
     which is why the QA harness prints the composed brief.
     """
-    from reports.deliver import _payload_for
+    from vesta.adapters.deliver import _payload_for
     assert _payload_for("telegram_bot.send_message", "T", "B", "plain_text") == {
         "title": "T", "message": "B", "parse_mode": "plain_text"}
     # ⚠️ A SERVICE OFFERING NO SUCH OPTION GETS EXACTLY WHAT IT GOT BEFORE.
@@ -435,7 +436,7 @@ def test_the_no_parse_option_is_read_from_the_service_not_a_platform_list() -> N
     parsing off", never "is this Telegram". Escaping instead would mean knowing
     which dialect each platform speaks — markdown, markdownv2 and html differ —
     which is the platform table this file exists to avoid."""
-    from reports.discovery import _plain_mode
+    from vesta.adapters.discovery import _plain_mode
     telegram = {"parse_mode": {"selector": {"select": {
         "options": ["html", "markdown", "markdownv2", "plain_text"]}}}}
     assert _plain_mode(telegram) == "plain_text"
@@ -462,7 +463,7 @@ def test_every_builder_of_a_target_record_sets_every_field() -> None:
     so the shape is pinned here instead, derived from the builders themselves.
     """
     import asyncio
-    from reports import discovery
+    from vesta.adapters import discovery
 
     class _Hass:
         async def command(self, kind: str, **kw: object) -> object:
@@ -495,7 +496,7 @@ def test_an_entity_target_cannot_be_told_not_to_parse_and_says_so() -> None:
     Pinned as an expectation so that if Home Assistant ever adds the field, the
     failure is a prompt to use it rather than a silent missed opportunity.
     """
-    from reports.discovery import _plain_mode
+    from vesta.adapters.discovery import _plain_mode
     send_message_schema = {"message": {"required": True}, "title": {}}
     assert _plain_mode(send_message_schema) == "", (
         "notify.send_message now offers a parse mode — entity targets can be "

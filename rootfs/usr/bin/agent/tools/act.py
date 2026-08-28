@@ -32,7 +32,7 @@ from agent import config as agent_config
 from agent import proposals as proposals_mod
 from agent import policy as policy_mod
 from agent.tools.base import BaseTool, data, fail, text
-from reports.log import log, swallow
+from vesta.adapters.log import log, swallow
 
 #: Services that put a device back where it was. ⚠️ A LIST OF VERBS, NOT A
 #: JUDGEMENT ABOUT DEVICES: `turn_off` is reversible on a lamp and on a pump.

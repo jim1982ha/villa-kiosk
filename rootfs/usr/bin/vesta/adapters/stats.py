@@ -25,8 +25,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-from .hass import HassClient, HassUnavailable
-from .log import warn
+from vesta.adapters.hass import HassClient, HassUnavailable
+from vesta.adapters.log import warn
 
 # `statistics_during_period` takes a list of ids and returns a dict keyed by
 # them. Asking for hundreds at once builds a response big enough to stall the

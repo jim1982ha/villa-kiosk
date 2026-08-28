@@ -16,18 +16,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from reports.discovery import (
-    ALL_CAPABILITIES,
-    CAP_ENERGY_COST,
-    CAP_ENERGY_GRID,
-    CAPABILITY_MEANING,
-    _device_stats,
-    _duplicate_names,
-    _grid_sources,
-    _has_tariff,
-)
-from reports.discovery import CAPABILITY_ABSENT, missing_statistic_preflight
-from reports.hass import statistic_ids_of
+from vesta.adapters.discovery import ALL_CAPABILITIES, CAP_ENERGY_COST, CAP_ENERGY_GRID, CAPABILITY_MEANING, _device_stats, _duplicate_names, _grid_sources, _has_tariff
+from vesta.adapters.discovery import CAPABILITY_ABSENT, missing_statistic_preflight
+from vesta.adapters.hass import statistic_ids_of
 
 
 def _grid(**overrides: Any) -> Dict[str, Any]:

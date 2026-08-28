@@ -9,15 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from reports.store import (
-    CONFIG_DEFAULTS,
-    EMPTY_CONFIG,
-    REPORTS_HISTORY_MAX_ENTRIES,
-    config_view,
-    history_view,
-    trim_history,
-    validate_config,
-)
+from vesta.adapters.store import CONFIG_DEFAULTS, EMPTY_CONFIG, REPORTS_HISTORY_MAX_ENTRIES, config_view, history_view, trim_history, validate_config
 
 
 def test_empty_config_is_empty() -> None:

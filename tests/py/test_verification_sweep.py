@@ -61,7 +61,7 @@ def _row(**over: Any) -> Dict[str, Any]:
 
 def _store(rows: List[Dict[str, Any]], monkeypatch: pytest.MonkeyPatch,
            tmp_path: Any) -> None:
-    from reports import store
+    from vesta.adapters import store
     path = str(tmp_path / "c.json")
     monkeypatch.setattr(concerns, "CONCERNS_FILE", path)
     store.write_json(path, {"concerns": rows})

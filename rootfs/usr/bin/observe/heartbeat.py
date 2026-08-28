@@ -36,8 +36,8 @@ import time
 from typing import Any, Dict, List, Mapping, Optional
 
 from observe import journal
-from reports import store
-from reports.log import log
+from vesta.adapters import store
+from vesta.adapters.log import log
 
 #: The add-on option that turns this on. Off by default: it is a diagnostic for
 #: a question currently open, not a permanent cost on every install.

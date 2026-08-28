@@ -33,8 +33,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from . import devices as devices_mod
-from . import ledger
+from vesta.adapters import devices as devices_mod
+from vesta.adapters import ledger
 
 DAY_MS = 86_400_000.0
 

@@ -20,7 +20,7 @@ from vesta.shared.style import heading
 
 from typing import Any, Dict, List
 
-from reports import ledger
+from vesta.adapters import ledger
 
 # Verbatim from `todo.shopping_list` on the reference deployment.
 PM01 = ("[PM-01] sensor.house_pump_power has drifted -99.9% from baseline. "

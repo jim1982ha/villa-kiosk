@@ -53,7 +53,7 @@ def _reader_over(text: str, monkeypatch: pytest.MonkeyPatch) -> Any:
     async def _fake(_session: Any, _path: str) -> str:
         return text
 
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
     monkeypatch.setattr(hass_mod, "rest_get_text", _fake)
     return sources.log_reader(_FakeSession(text))
 
@@ -227,7 +227,7 @@ def test_a_SYNCHRONOUS_source_still_works() -> None:
 def _published(session: Any, monkeypatch: pytest.MonkeyPatch) -> List[str]:
     async def _fake(_session: Any, _path: str) -> str:
         return ""
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
     monkeypatch.setattr(hass_mod, "rest_get_text", _fake)
     monkeypatch.setattr(sources, "_journal_rows", lambda: [])
     return [t.name for t in sources.build_tools(session)]
@@ -255,10 +255,10 @@ def test_the_source_failing_is_an_ERROR_BLOCK_not_a_quiet_week(
         monkeypatch: pytest.MonkeyPatch) -> None:
     """Home Assistant unreachable must not read as "nothing was logged"."""
     async def _boom(_session: Any, _path: str) -> str:
-        from reports.hass import HassUnavailable
+        from vesta.adapters.hass import HassUnavailable
         raise HassUnavailable("GET error_log -> HTTP 502")
 
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
     monkeypatch.setattr(hass_mod, "rest_get_text", _boom)
     reader = sources.log_reader(_FakeSession(""))
     out = _run(log_tools.ReadLogs(source=reader).call({}))
@@ -272,7 +272,7 @@ def test_the_fetch_is_CAPPED_and_keeps_the_TAIL() -> None:
     always about what happened recently, so it is the tail that must survive."""
     import inspect
     import re
-    from reports import hass as hass_mod
+    from vesta.adapters import hass as hass_mod
 
     code = re.sub(r"#[^\n]*", "", inspect.getsource(hass_mod.rest_get_text))
     assert "MAX_LOG_BYTES" in code, "the read is unbounded"

@@ -12,15 +12,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from reports import ledger
-from reports.stats import (
-    accumulating_ids,
-    chunked,
-    completeness,
-    measurement_ids,
-    start_of_day,
-    total_change,
-)
+from vesta.adapters import ledger
+from vesta.adapters.stats import accumulating_ids, chunked, completeness, measurement_ids, start_of_day, total_change
 
 # ── stats ────────────────────────────────────────────────────────────────────
 
@@ -243,7 +236,7 @@ def test_ids_removed_mid_sentence_do_not_strand_their_separator() -> None:
     reasonably distrusts the rest of the line. "found OFF." reads as a complete
     sentence about a fact they can go and check.
     """
-    from reports import ledger
+    from vesta.adapters import ledger
 
     line = ("Critical automation(s) found OFF: "
             "automation.outdoor_unified_doorbell_call_and_unlock. "
@@ -258,7 +251,7 @@ def test_a_separator_that_still_introduces_something_survives() -> None:
     """⚠️ THE BOUND ON THE FIX. A dash joining two live clauses is not stranded
     and must not be eaten — removing it would maul every ROI line, which is a
     worse defect than the one being fixed and would look like a typo."""
-    from reports import ledger
+    from vesta.adapters import ledger
 
     out = ledger.clean_summary(
         "sensor.pool_pump_power is drawing 761.7 W outside its scheduled "
@@ -269,7 +262,7 @@ def test_a_separator_that_still_introduces_something_survives() -> None:
 
 def test_the_leading_id_list_shape_is_unchanged() -> None:
     """The shape that already worked, pinned so the new rule cannot regress it."""
-    from reports import ledger
+    from vesta.adapters import ledger
 
     out = ledger.clean_summary(
         "sensor.a_power_factor, sensor.b_power_factor - Check the pump for a "

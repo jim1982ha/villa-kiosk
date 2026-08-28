@@ -40,9 +40,10 @@ import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from aiohttp import ClientSession
-from .. import secrets, usage
+from vesta.adapters import secrets
+from vesta.adapters import usage
 from vesta.shared.contracts import NARRATION_MODE
-from ..log import log, swallow, warn
+from vesta.adapters.log import log, swallow, warn
 from . import payload as payload_mod
 from vesta.shared.style import BULLET
 

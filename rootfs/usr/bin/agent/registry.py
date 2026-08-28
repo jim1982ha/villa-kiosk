@@ -37,8 +37,8 @@ from agent import upstream
 from agent.llm.base import Provider, ToolCall, Turn
 from agent.tools import ALL_TOOLS
 from agent.tools.base import BaseTool, fail
-from reports import usage as usage_mod
-from reports.log import log, swallow
+from vesta.adapters import usage as usage_mod
+from vesta.adapters.log import log, swallow
 
 
 class Registry:

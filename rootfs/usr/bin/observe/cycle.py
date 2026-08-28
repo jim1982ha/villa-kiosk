@@ -38,9 +38,9 @@ from aiohttp import ClientSession
 
 from observe import heartbeat as heartbeat_mod
 from observe import journal
-from reports import store
-from reports.hass import HassClient, HassUnavailable
-from reports.log import log, swallow, warn
+from vesta.adapters import store
+from vesta.adapters.hass import HassClient, HassUnavailable
+from vesta.adapters.log import log, swallow, warn
 
 #: Config key and default. The default is the plan's stated triage cadence, so
 #: the observation floor and the tier that reads it stay in step; an operator

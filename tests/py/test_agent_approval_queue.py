@@ -29,7 +29,7 @@ from agent.refs import RefTable  # noqa: E402
 from agent.registry import Registry  # noqa: E402
 from agent.tools.base import BaseTool, data  # noqa: E402
 from fake_provider import FakeProvider, asks, says  # noqa: E402
-from reports import usage as usage_mod  # noqa: E402
+from vesta.adapters import usage as usage_mod
 
 DEVICE = "sensor.example_pump_power"
 

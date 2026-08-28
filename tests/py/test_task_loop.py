@@ -97,7 +97,7 @@ def test_the_summary_carries_the_BRACKETED_id() -> None:
     """
     made = task.summary_for({"id": "c12", "title": "Pool pump drawing more"})
     assert made.startswith("[c12] ")
-    from reports.ledger import TASK_PREFIX
+    from vesta.adapters.ledger import TASK_PREFIX
     matched = TASK_PREFIX.match(made)
     assert matched and matched.group(1) == "c12", (
         "the one parser that reads this bracket no longer recognises what we "
@@ -176,7 +176,7 @@ def _raise_with(monkeypatch, features: int) -> _Hass:
     import asyncio
 
     from agent import task as task_mod
-    from reports import hass as hass_mod
+    from vesta.adapters import hass as hass_mod
 
     hass = _Hass(features)
     monkeypatch.setattr(hass_mod, "HassClient", lambda _s: hass)
@@ -245,7 +245,7 @@ def test_an_UNREADABLE_feature_set_degrades_to_the_shape_that_always_works(
     import asyncio
 
     from agent import task as task_mod
-    from reports import hass as hass_mod
+    from vesta.adapters import hass as hass_mod
 
     class _Broken(_Hass):
         async def command(self, command_type: str, **payload: object) -> object:

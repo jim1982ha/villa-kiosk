@@ -41,7 +41,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 BIN = os.path.join(ROOT, "rootfs", "usr", "bin")
 sys.path.insert(0, BIN)
 
-from reports import log as log_mod  # noqa: E402
+from vesta.adapters import log as log_mod
 
 #: The tiers a pass passes through, in order. ⚠️ EVERY ONE OF THESE IS A BOX ON
 #: THE ARCHITECTURE DIAGRAM. `document` is Tier 1's output, `triage` is Tier 2,
@@ -215,7 +215,7 @@ def test_the_trace_helpers_have_no_import_cost() -> None:
     boot and every tool module. A trace helper that dragged in the agent
     package would make the cheapest module in the tree the most expensive, and
     would be a circular import waiting for the first tool that logs."""
-    with open(os.path.join(BIN, "reports", "log.py"), encoding="utf-8") as fh:
+    with open(os.path.join(BIN, "vesta", "adapters", "log.py"), encoding="utf-8") as fh:
         tree = ast.parse(fh.read())
     imported = {
         (node.module or "").split(".")[0]

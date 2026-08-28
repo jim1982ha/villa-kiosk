@@ -35,7 +35,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from reports.log import log
+from vesta.adapters.log import log
 from vesta.shared.style import inert
 
 #: The HA event this listens for. ⚠️ LOW-VOLUME BY NATURE — a person typing.
@@ -425,7 +425,7 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     if not agent_config.trigger_enabled(config, "chat"):
         return "chat trigger disabled"
 
-    from reports import collect
+    from vesta.adapters import collect
     connected = collect.connected_seconds()
     if not is_fresh(message, connected_since=connected):
         # ⚠️ COUNTED IN THE LOG, NOT SILENTLY DROPPED. A villa whose clock or
@@ -626,12 +626,12 @@ async def target_for(session: Any, chat_id: str,
         return cached[0]
 
     try:
-        from reports import deliver
-        from reports.hass import HassClient
+        from vesta.adapters import deliver
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             entries = await hass.command("config/entity_registry/list")
     except Exception as err:  # noqa: BLE001 - degrade, never fail
-        from reports.log import swallow
+        from vesta.adapters.log import swallow
         swallow("could not read the entity registry for a chat target", err)
         return ""
 
@@ -702,13 +702,13 @@ async def known_chats(session: Any) -> List[Chat]:
     this feature were found.
     """
     try:
-        from reports import deliver
-        from reports.hass import HassClient
+        from vesta.adapters import deliver
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             entries = await hass.command("config/entity_registry/list")
             states = await hass.command("get_states")
     except Exception as err:  # noqa: BLE001 - degrade, never fail
-        from reports.log import swallow
+        from vesta.adapters.log import swallow
         swallow("could not list the bot's chats", err)
         return []
 

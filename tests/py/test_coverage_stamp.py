@@ -111,7 +111,7 @@ def test_an_unwired_tool_is_withheld_rather_than_left_to_refuse() -> None:
 def test_the_operator_warning_fires_once_not_per_run() -> None:
     sources._UNWIRED_SEEN.clear()
     seen = []
-    import reports.log as log_mod
+    import vesta.adapters.log as log_mod
     orig = log_mod.warn
     try:
         sources.warn = lambda m: seen.append(m)   # type: ignore[attr-defined]

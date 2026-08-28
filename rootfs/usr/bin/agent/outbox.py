@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from agent import concerns as concerns_mod
 from agent import config as agent_config
 from agent import route as route_mod
-from reports.log import stage, swallow, warn
+from vesta.adapters.log import stage, swallow, warn
 
 #: How many concerns one sweep may deliver. ⚠️ A BURST GUARD, NOT A POLICY. A
 #: villa that has been in shadow for a month has a backlog, and turning delivery
@@ -242,7 +242,7 @@ def _facility_reachable(config: Optional[Mapping[str, Any]]) -> bool:
     residence, which is the branch `route.escalate` was written for.
     """
     try:
-        from reports import people as people_mod
+        from vesta.adapters import people as people_mod
         return bool(people_mod.targets_for_role(config, "ops"))
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow("could not read the facility manager's targets", err)
@@ -260,7 +260,7 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     it. An escalation that bypassed it would be the one message that dodged
     the routing table.
     """
-    from reports import people as people_mod
+    from vesta.adapters import people as people_mod
 
     # ⚠️ THE STEP DECIDES THE AUDIENCE, WHICH IS THE WHOLE POINT OF ESCALATING.
     # "add the owner" and "every configured target" both mean people who were
@@ -284,7 +284,7 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # by definition a critical nobody has picked up, and `route.escalate` has
     # already refused every severity below critical. Holding it overnight is the
     # exact case the whole ladder exists to break.
-    from reports import deliver as deliver_mod
+    from vesta.adapters import deliver as deliver_mod
     results = await deliver_mod.deliver(
         session, plan.targets, f"Still open: {plan.title}", plan.body)
     if not any(str(r.get("status")) == "sent" for r in results
@@ -350,7 +350,7 @@ def quiet_now(config: Optional[Mapping[str, Any]] = None,
 
     from datetime import datetime
 
-    from reports.schedule import resolve_timezone
+    from vesta.adapters.schedule import resolve_timezone
 
     tz = resolve_timezone(str(cfg.get("timezone") or ""))
     stamp = datetime.fromtimestamp(now if now is not None else time.time(), tz)
@@ -396,7 +396,7 @@ async def occupancy_now(session: Any) -> Optional[bool]:
         # delivers on it, so nothing was held that should have gone; what was
         # lost is the ability to hold anything BACK for an empty villa, and
         # `guests_present` was false for every routing decision ever made.
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as client:
             states = await client.command("get_states")
     except Exception as err:  # noqa: BLE001 - a sweep is not worth a failed pass
@@ -460,8 +460,8 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
                        quiet: bool, occupied: Optional[bool],
                        now: Optional[float]) -> str:
     """One concern, routed and sent. Returns sent | held | failed."""
-    from reports import deliver as deliver_mod
-    from reports import people as people_mod
+    from vesta.adapters import deliver as deliver_mod
+    from vesta.adapters import people as people_mod
 
     audience = str(concern.get("audience") or "owner")
     # ⚠️ THE AUDIENCE IS A PROFILE HERE, AND `people` OWNS THE MAPPING. An
@@ -480,7 +480,7 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
         # delivers its BRIEFINGS perfectly and its CONCERNS nowhere — which
         # reads as "the alerts are broken" when the alerts are unconfigured.
         # Reported as briefings arriving and concern notifications never doing.
-        from reports import store as reports_store
+        from vesta.adapters import store as reports_store
         stored = reports_store.config_view(
             reports_store.read_json(reports_store.REPORTS_CONFIG_FILE,
                                     reports_store.EMPTY_CONFIG))

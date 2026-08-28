@@ -170,7 +170,7 @@ def test_the_caller_sends_the_service_HA_would_recognise() -> None:
         async def command(self, kind: str, **payload: Any) -> None:
             sent.append({"kind": kind, **payload})
 
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
     original = hass_mod.HassClient
     hass_mod.HassClient = _Hass                    # type: ignore[assignment]
     try:

@@ -54,7 +54,7 @@ from agent import contracts, render
 from agent.concerns import Concern
 from agent.refs import RefTable
 from agent.tools.base import BaseTool, fail, text
-from reports.log import swallow
+from vesta.adapters.log import swallow
 
 #: Where a concern lands when the model gives no confidence of its own.
 #: ⚠️ THE MIDDLE, NOT THE TOP. An unstated confidence is an unstated confidence.

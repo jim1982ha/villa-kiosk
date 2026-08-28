@@ -240,7 +240,7 @@ WIRE_ENTRY = re.compile(r"^\s*(\w+):\s*\"(\w+)\",", re.MULTILINE)
 
 def config_defaults() -> List[str]:
     """The reports config's top-level keys, from `store.CONFIG_DEFAULTS`."""
-    path = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports", "store.py")
+    path = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "adapters", "store.py")
     with open(path, encoding="utf-8") as handle:
         source = handle.read()
     block = source[source.index("CONFIG_DEFAULTS"):]

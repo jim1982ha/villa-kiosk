@@ -20,7 +20,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports import usage as usage_mod  # noqa: E402
+from vesta.adapters import usage as usage_mod
 
 NOW = 1_760_000_000.0
 DAY = 86400.0

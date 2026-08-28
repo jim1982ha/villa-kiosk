@@ -48,7 +48,7 @@ from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
 from agent import flagtypes as flagtypes_mod
 from agent.refs import RefTable
 from agent.tools.base import BaseTool
-from reports.log import swallow, warn
+from vesta.adapters.log import swallow, warn
 
 #: ⚠️ THE WINDOW AND THE SAMPLE MINIMUMS BELONG TO `observe/salience.py` AND ARE
 #: NOT RESTATED HERE. This module decides what to feed it, never what counts as
@@ -87,7 +87,7 @@ def labeller() -> Callable[[str], str]:
     alone.
     """
     try:
-        from reports import devices as devices_mod
+        from vesta.adapters import devices as devices_mod
         entity_map = devices_mod.read_config().get("entityMap") or {}
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow("could not read the device labels", err)
@@ -95,7 +95,7 @@ def labeller() -> Callable[[str], str]:
 
     def name(entity_id: str) -> str:
         try:
-            from reports import devices as devices_mod
+            from vesta.adapters import devices as devices_mod
             return devices_mod.label_for(str(entity_id), entity_map, {})
         except Exception:  # noqa: BLE001 - a name is not worth a failed pass
             return ""
@@ -258,7 +258,7 @@ def absent_capability_sentences() -> Optional[List[str]]:
     stores that OUTPUT so the document's bytes do not depend on re-deriving it.
     """
     try:
-        from reports import store
+        from vesta.adapters import store
         raw = store.read_json(CAPABILITIES_FILE, {})
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow("could not read the capability survey", err)
@@ -291,7 +291,7 @@ def layout() -> Dict[str, Any]:
     room" about a villa with a Gym Room and a light in it.
     """
     try:
-        from reports import store
+        from vesta.adapters import store
         raw = store.read_json(LAYOUT_FILE, {})
         if not isinstance(raw, Mapping):
             return {}
@@ -325,7 +325,7 @@ async def refresh_layout(session: Any, *, now: Optional[float] = None,
     stamp = time.time() if now is None else now
     hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
     try:
-        from reports import store
+        from vesta.adapters import store
         raw = store.read_json(LAYOUT_FILE, {})
         at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
         if stamp - at < max(1, hours) * 3600.0:
@@ -345,7 +345,7 @@ async def refresh_layout(session: Any, *, now: Optional[float] = None,
         # keeping the old answer when a read fails and refusing to record an
         # empty registry as an answer are VESTA's job and no upstream tool does
         # them. The duplication is the two `command()` calls, not the function.
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             areas = await hass.command("config/area_registry/list")
             floors = await hass.command("config/floor_registry/list")
@@ -387,13 +387,13 @@ async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
     stamp = time.time() if now is None else now
     hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
     try:
-        from reports import store
+        from vesta.adapters import store
         raw = store.read_json(CAPABILITIES_FILE, {})
         at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
         if stamp - at < max(1, hours) * 3600.0:
             return False
 
-        from reports import discovery as discovery_mod
+        from vesta.adapters import discovery as discovery_mod
         found = await discovery_mod.discover(session)
         if not isinstance(found, Mapping) or not found.get("reachable"):
             # ⚠️ AN UNREACHABLE HOME ASSISTANT IS NOT A SURVEY. Writing this
@@ -535,8 +535,8 @@ def _offline_count() -> int:
     """
     try:
         from observe import journal as journal_mod
-        from reports import devices as devices_mod
-        from reports import model as model_mod
+        from vesta.adapters import devices as devices_mod
+        from vesta.adapters import model as model_mod
 
         states = journal_mod.last_states()
         if not states:
@@ -627,7 +627,7 @@ def _facility_record() -> Optional[Dict[str, Any]]:
     own rule is that everything it returns is a number or a boolean, which is
     what makes it safe to put in an unattended payload at all."""
     try:
-        from reports import ledger as ledger_mod
+        from vesta.adapters import ledger as ledger_mod
         summary = ledger_mod.summarise(ledger_mod.read())
     except Exception as err:  # noqa: BLE001
         swallow("could not read the facility record", err)
@@ -695,7 +695,7 @@ def service_caller(session: Any) -> Optional[Callable[..., Any]]:
 
     async def call(entity_id: str, service: str,
                    params: Optional[Mapping[str, Any]] = None) -> None:
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         head, _, tail = str(service).partition(".")
         domain, verb = ((head, tail) if tail
                         else (str(entity_id).split(".", 1)[0], head))
@@ -736,12 +736,12 @@ async def refresh_measures(session: Any, *, now: Optional[float] = None,
     stamp = time.time() if now is None else now
     hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
     try:
-        from reports import store
+        from vesta.adapters import store
         raw = store.read_json(MEASURES_FILE, {})
         at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
         if stamp - at < max(1, hours) * 3600.0:
             return False
-        from reports.hass import HassClient
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             states = await hass.command("get_states")
         found: Dict[str, Dict[str, str]] = {}
@@ -782,7 +782,7 @@ def flag_type_of(entity_id: str) -> str:
     "above baseline" while the screen said "below".
     """
     from agent import flagtypes
-    from reports import store
+    from vesta.adapters import store
     entity = str(entity_id or "")
     if not entity:
         return ""
@@ -855,7 +855,7 @@ def log_reader(session: Any) -> Optional[Callable[..., Any]]:
         return None
 
     async def read(window_hours: int = 24) -> List[str]:
-        from reports.hass import rest_get_text
+        from vesta.adapters.hass import rest_get_text
         text = await rest_get_text(session, LOG_PATH)
         cutoff = _stamp_of(time.time() - max(1, int(window_hours)) * 3600)
         kept: List[str] = []

@@ -208,7 +208,7 @@ def test_malformed_discovery_output_degrades_to_an_empty_block() -> None:
 def test_it_reads_the_REAL_discovery_table_not_a_fixture_copy() -> None:
     """⚠️ Pinned against the shipped module, so a change to discovery's wording
     cannot leave this renderer quoting a sentence that no longer exists."""
-    from reports import discovery
+    from vesta.adapters import discovery
     assert discovery.CAPABILITY_ABSENT, "discovery must still hold the table"
     sample = sorted(discovery.CAPABILITY_ABSENT)[0]
     out = snapshot.absent_sentences({

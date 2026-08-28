@@ -33,7 +33,7 @@ import os
 import re
 from typing import Any, Dict, List
 
-from reports import collect
+from vesta.adapters import collect
 from reports.analysis import registry
 from vesta.shared.analysis.base import ModuleContext
 from reports.analysis import registry as _registry  # noqa: F401  (importing registers)

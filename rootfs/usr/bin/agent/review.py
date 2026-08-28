@@ -30,8 +30,8 @@ from dataclasses import dataclass
 from typing import Any, List, Mapping, Optional
 
 from agent import content
-from reports import store as store_mod
-from reports.log import log, swallow
+from vesta.adapters import store as store_mod
+from vesta.adapters.log import log, swallow
 
 QUEUE_ROOT: str = "/data/vesta/review-queue"
 

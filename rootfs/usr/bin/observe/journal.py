@@ -59,8 +59,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
 
-from reports import store
-from reports.log import log
+from vesta.adapters import store
+from vesta.adapters.log import log
 
 # ── where it lives ──────────────────────────────────────────────────────────
 #: ⚠️ Its OWN directory, not `/data` alongside the reports stores. Everything

@@ -52,7 +52,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from reports import store as store_mod
+from vesta.adapters import store as store_mod
 
 #: Where the villa's own agent settings live. ⚠️ READ DIRECTLY RATHER THAN
 #: THROUGH `agent.config`, and this module sits in `reports/` for the same

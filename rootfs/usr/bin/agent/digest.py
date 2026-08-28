@@ -38,10 +38,10 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from agent import budget as budget_mod
 from agent import config as agent_config
-from reports import people as people_mod
+from vesta.adapters import people as people_mod
 from agent import task as task_mod
-from reports import store
-from reports.log import stage, swallow
+from vesta.adapters import store
+from vesta.adapters.log import stage, swallow
 
 #: Where the last send is recorded. ⚠️ ON DISK, because the alternative is an
 #: in-process flag that a restart clears — and this add-on restarted eleven
@@ -141,8 +141,8 @@ async def send_daily(session: Any, *,
         return "nobody holds the facility manager role"
 
     try:
-        from reports import ledger as ledger_mod
-        from reports.hass import HassClient
+        from vesta.adapters import ledger as ledger_mod
+        from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
             items = await ledger_mod.todo_tasks(
                 hass, [task_mod.list_for(config)], status="needs_action")
@@ -160,7 +160,7 @@ async def send_daily(session: Any, *,
         return "nothing outstanding"
 
     try:
-        from reports import deliver as deliver_mod
+        from vesta.adapters import deliver as deliver_mod
         results = await deliver_mod.deliver(
             session, list(targets),
             f"VESTA — {len(items)} job(s) still open", compose(items))

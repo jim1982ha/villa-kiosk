@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Mapping
 
 from agent.tools.base import BaseTool, data, fail
-from reports import ledger as ledger_mod
+from vesta.adapters import ledger as ledger_mod
 
 #: ⚠️ AN ALLOW-LIST OF SHAPES, NOT A DENY-LIST OF KEYS. A deny-list has to be
 #: updated every time the FM module gains a field, and the update that is

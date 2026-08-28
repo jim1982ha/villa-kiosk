@@ -28,7 +28,8 @@ sys.path.insert(0, os.path.join(
     "rootfs", "usr", "bin"))
 
 from agent import actions, buttons, concerns                 # noqa: E402
-from reports import collect, deliver                         # noqa: E402
+from vesta.adapters import collect
+from vesta.adapters import deliver
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

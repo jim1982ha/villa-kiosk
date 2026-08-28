@@ -21,7 +21,7 @@ import os
 import stat
 from typing import Any
 
-from reports import secrets
+from vesta.adapters import secrets
 
 
 def _at(tmp_path: Any, monkeypatch: Any) -> str:
@@ -152,7 +152,7 @@ def test_log_redact_never_prints_the_value() -> None:
     credential, for a diagnostic line. Length is kept because "configured but
     wrong length" and "not configured" are different faults; the prefix is not,
     because four characters of an API key is still four characters of one."""
-    from reports.log import redact
+    from vesta.adapters.log import redact
     out = redact("sk-test-abcdef123456")
     assert "sk-test" not in out and "abcdef" not in out
     assert "len=20" in out

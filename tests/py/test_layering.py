@@ -61,8 +61,6 @@ LAYER_OF: Tuple[Tuple[str, str], ...] = (
     # `base` (shared), so importing the FACADE is importing brief — it is
     # layered brief, and a shared or adapters module that wants `base` must
     # import `reports.analysis.base` directly, never the package.
-    ("reports/analysis/__init__", "brief"),
-    ("reports/narrate/__init__", "brief"),
     # ── shared: pure, exportable — MOVED to vesta/shared in the 3a release ──
     # ⚠️ materiality was RECLASSIFIED shared during the pin's first red run:
     # the plan put it in brief because agent/ never imports it directly, but
@@ -70,15 +68,16 @@ LAYER_OF: Tuple[Tuple[str, str], ...] = (
     # exportable set NEEDS, not by who calls it today.
     ("vesta/shared/", "shared"),
     # ── brief: the deletable half ───────────────────────────────────────────
-    ("reports/pipeline", "brief"),
-    ("reports/standing", "brief"),
-    ("reports/tasks", "brief"),
-    ("reports/analysis/registry", "brief"),
     ("reports/analysis/stats", "brief"),
     ("reports/analysis/trend", "brief"),
-    ("reports/narrate/", "brief"),
-    # ── adapters: the environment ───────────────────────────────────────────
-    ("reports/", "adapters"),          # store hass deliver secrets log … rest
+    # ── adapters: the environment — MOVED to vesta/adapters in the 3b release
+    # (stats came with them: it wraps HA's recorder through HassClient and
+    # discovery imports it — the plan's table had it in brief, the import
+    # graph corrected it, same as materiality in reverse).
+    ("vesta/adapters/", "adapters"),
+    # what is left under reports/ pending the brief move: pipeline, standing,
+    # tasks, trend, analysis/registry, narrate/{base,payload,providers}
+    ("reports/", "brief"),
     # ── supervise: the exportable half ──────────────────────────────────────
     ("agent/", "supervise"),
     ("observe/", "supervise"),

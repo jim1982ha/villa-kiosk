@@ -42,7 +42,7 @@ def _isolated(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _store(tools: List[Dict[str, Any]], url: str = "http://x:9583/s") -> None:
-    from reports import store
+    from vesta.adapters import store
     store.write_json(upstream.CATALOGUE_FILE,
                      {"at": 1.0, "url": url, "tools": tools})
 

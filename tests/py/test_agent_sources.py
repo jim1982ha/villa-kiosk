@@ -764,7 +764,7 @@ def test_a_MANUAL_brief_is_attributed_to_the_person_who_pressed_it(
     button. So an owner testing a brief had the spend attributed to the villa
     acting on its own, in the one breakdown ("by who caused it") that this
     ledger exists to provide and the provider's own console cannot."""
-    from reports import usage as usage_mod
+    from vesta.adapters import usage as usage_mod
     from reports.narrate import providers as providers_mod
 
     path = str(tmp_path / "usage.json")
@@ -859,7 +859,7 @@ def test_the_profile_carries_the_absent_capability_block(
     simply omitted, so every document said NOT SURVEYED. That was honest and it
     was not the requirement: a model that does not know it is blind answers
     confidently anyway."""
-    from reports import store
+    from vesta.adapters import store
 
     monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "cap.json"))
     store.write_json(str(tmp_path / "cap.json"),
@@ -885,7 +885,7 @@ def test_an_absent_survey_still_says_NOT_SURVEYED(
 
 def test_a_surveyed_villa_with_no_gaps_is_not_an_unsurveyed_one(
         tmp_path: Any, monkeypatch: Any) -> None:
-    from reports import store
+    from vesta.adapters import store
 
     monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
     store.write_json(str(tmp_path / "c.json"), {"at": 1.0, "sentences": []})
@@ -897,7 +897,7 @@ def test_a_surveyed_villa_with_no_gaps_is_not_an_unsurveyed_one(
 def test_a_file_with_no_sentences_key_is_NOT_an_empty_survey(
         tmp_path: Any, monkeypatch: Any) -> None:
     """A survey that failed to write must not report as 'nothing missing'."""
-    from reports import store
+    from vesta.adapters import store
 
     monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
     store.write_json(str(tmp_path / "c.json"), {"at": 1.0})
@@ -909,7 +909,7 @@ def test_the_profile_stays_byte_stable_across_two_passes(
     """⚠️ REQ-004 IS THE CONSTRAINT THIS FEATURE COULD MOST EASILY BREAK.
     Prompt caching matches on an exact prefix, so a block that reshuffles
     between passes costs real money and nothing looks wrong."""
-    from reports import store
+    from vesta.adapters import store
 
     monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
     store.write_json(str(tmp_path / "c.json"), {
@@ -923,7 +923,7 @@ def test_the_survey_runs_at_most_once_a_day(tmp_path: Any, monkeypatch: Any) -> 
     """⚠️ THE WHOLE REASON THIS WAS LEFT UNWIRED. Discovery is a fan-out across
     Home Assistant's registries; per triage pass that is ~96 a day for an answer
     that moves a few times a year."""
-    from reports import store
+    from vesta.adapters import store
 
     monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
     store.write_json(str(tmp_path / "c.json"), {"at": 1_000_000.0, "sentences": []})
@@ -936,8 +936,8 @@ def test_an_unreachable_home_assistant_leaves_the_old_answer_alone(
     """⚠️ A MOMENTARY OUTAGE MUST NOT TURN A SURVEYED VILLA INTO AN UNSURVEYED
     ONE — that swaps a true statement for NOT SURVEYED and changes the cached
     prefix on a whim."""
-    from reports import discovery as discovery_mod
-    from reports import store
+    from vesta.adapters import discovery as discovery_mod
+    from vesta.adapters import store
 
     monkeypatch.setattr(sources, "CAPABILITIES_FILE", str(tmp_path / "c.json"))
     store.write_json(str(tmp_path / "c.json"),
@@ -973,7 +973,7 @@ def test_no_session_means_no_survey() -> None:
 
 def test_the_document_NAMES_the_villas_rooms(tmp_path: Any,
                                              monkeypatch: Any) -> None:
-    from reports import store
+    from vesta.adapters import store
 
     monkeypatch.setattr(sources, "LAYOUT_FILE", str(tmp_path / "layout.json"))
     store.write_json(str(tmp_path / "layout.json"),
@@ -1013,7 +1013,7 @@ def test_a_failed_read_LEAVES_the_rooms_alone(tmp_path: Any,
     changes the cached prompt prefix on a whim."""
     import asyncio
 
-    from reports import store
+    from vesta.adapters import store
 
     path = str(tmp_path / "layout.json")
     monkeypatch.setattr(sources, "LAYOUT_FILE", path)
@@ -1026,7 +1026,7 @@ def test_a_failed_read_LEAVES_the_rooms_alone(tmp_path: Any,
         async def __aexit__(self, *a: Any) -> bool:
             return False
 
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
     monkeypatch.setattr(hass_mod, "HassClient", lambda s: _Boom())
     ran = asyncio.run(sources.refresh_layout(object(), now=1e12))
     assert ran is False
@@ -1052,7 +1052,7 @@ def test_an_EMPTY_registry_is_not_written_as_an_answer(tmp_path: Any,
         async def command(self, name: str) -> Any:
             return []
 
-    import reports.hass as hass_mod
+    import vesta.adapters.hass as hass_mod
     monkeypatch.setattr(hass_mod, "HassClient", lambda s: _Empty())
     assert asyncio.run(sources.refresh_layout(object(), now=1e12)) is False
     # ⚠️ NO AREAS, WHICH `profile` RENDERS AS NOT SURVEYED. The reader returns
@@ -1091,8 +1091,8 @@ def test_build_document_says_HOW_MANY_devices_are_not_reporting(
     preview render with no session at all.
     """
     from observe import journal
-    from reports import devices as devices_mod
-    from reports import model as model_mod
+    from vesta.adapters import devices as devices_mod
+    from vesta.adapters import model as model_mod
 
     monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "j.json"))
     journal.append([{"event_type": "state_changed",
@@ -1130,8 +1130,8 @@ def test_the_document_NAMES_no_offline_device(
     definition has no data left to read. The count is context; names would be
     detection, and detection here is somebody else's job."""
     from observe import journal
-    from reports import devices as devices_mod
-    from reports import model as model_mod
+    from vesta.adapters import devices as devices_mod
+    from vesta.adapters import model as model_mod
 
     monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "j.json"))
     journal.append([{"event_type": "state_changed",
@@ -1185,8 +1185,8 @@ def test_an_empty_journal_does_not_report_the_WHOLE_VILLA_as_offline(
     devices in it to be able to fail: `feedback_mutation-testing`'s whole point.
     """
     from observe import journal
-    from reports import devices as devices_mod
-    from reports import model as model_mod
+    from vesta.adapters import devices as devices_mod
+    from vesta.adapters import model as model_mod
 
     monkeypatch.setattr(journal, "JOURNAL_FILE", str(tmp_path / "empty.json"))
     monkeypatch.setattr(devices_mod, "read_config", lambda *a, **k: {

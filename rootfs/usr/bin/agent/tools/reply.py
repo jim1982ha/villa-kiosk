@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from agent import chat
 from agent.tools.base import BaseTool, fail, text
-from reports.log import swallow
+from vesta.adapters.log import swallow
 
 
 class ReplyTool(BaseTool):
@@ -94,7 +94,7 @@ class ReplyTool(BaseTool):
             # which is the path every test uses.
             return True
         try:
-            from reports import deliver
+            from vesta.adapters import deliver
             await deliver.deliver(self._session, self._targets,
                                   title="", message=body)
             return True

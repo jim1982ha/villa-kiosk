@@ -185,7 +185,7 @@ class BaseTool:
         try:
             return await self.run(args)
         except Exception as err:  # noqa: BLE001 - degrade, never fail
-            from reports.log import swallow
+            from vesta.adapters.log import swallow
             swallow(f"tool {self.name} failed", err)
             return [fail("internal", f"{self.name} could not complete: {err}")]
 
