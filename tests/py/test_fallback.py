@@ -159,7 +159,7 @@ def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
     import asyncio
     from datetime import datetime, timezone
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     def explode(**kw: Any) -> Any:
         raise RuntimeError("the composer fell over")
@@ -218,7 +218,7 @@ def test_rung_2_carries_the_FLOOR_S_observations_and_no_entity_ids() -> None:
     ⚠️ AND NO ENTITY ID TRAVELS, though `from_salient` would happily print one.
     The label is what a person reads; the id stays in the villa.
     """
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     class _Context:
         concerns: List[Dict[str, Any]] = []
@@ -278,7 +278,7 @@ def test_an_UNREGISTERED_ladder_still_delivers_something() -> None:
     """An embedder without the agent package is a supported state, and it must
     degrade to the old minimal body rather than to an exception on the one path
     that has no further fallback."""
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     class _Context:
         concerns: List[Dict[str, Any]] = []

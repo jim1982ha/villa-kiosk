@@ -765,7 +765,7 @@ def test_a_MANUAL_brief_is_attributed_to_the_person_who_pressed_it(
     acting on its own, in the one breakdown ("by who caused it") that this
     ledger exists to provide and the provider's own console cannot."""
     from vesta.adapters import usage as usage_mod
-    from reports.narrate import providers as providers_mod
+    from vesta.brief.narrate import providers as providers_mod
 
     path = str(tmp_path / "usage.json")
     monkeypatch.setattr(usage_mod, "USAGE_PATH", path)

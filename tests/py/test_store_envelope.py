@@ -471,7 +471,7 @@ def test_the_client_speaks_every_key_the_narration_slice_reads() -> None:
 
     Derived from `providers.shared`'s own `settings.get(...)` calls, so a fourth
     narration setting is covered on the day it is read."""
-    providers = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    providers = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                              "narrate", "providers.py")
     with open(providers, encoding="utf-8") as handle:
         block = handle.read()

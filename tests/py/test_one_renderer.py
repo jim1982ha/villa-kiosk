@@ -36,7 +36,7 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-REPORTS = os.path.join(ROOT, "rootfs", "usr", "bin", "reports")
+REPORTS = os.path.join(ROOT, "rootfs", "usr", "bin", "vesta", "brief")
 VESTA = os.path.join(ROOT, "rootfs", "usr", "bin", "vesta")
 
 #: Files that decide WHAT to say. None of them may decide HOW it reads.

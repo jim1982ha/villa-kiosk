@@ -83,7 +83,7 @@ def _strip_prose(src: str) -> str:
 def _shipped_source() -> str:
     """Every shipped Python file, with comments and docstrings removed."""
     out = []
-    for pkg in ("agent", "reports", "observe"):
+    for pkg in ("agent", "vesta", "observe"):
         for base, _dirs, files in os.walk(os.path.join(BIN, pkg)):
             for name in files:
                 if name.endswith(".py"):
@@ -225,6 +225,6 @@ def test_the_trace_helpers_have_no_import_cost() -> None:
         for node in ast.walk(tree) if isinstance(node, ast.Import)
         for alias in node.names
     }
-    assert not (imported & {"agent", "reports", "observe"}), (
+    assert not (imported & {"agent", "vesta", "observe"}), (
         f"reports/log.py imports {sorted(imported)} — it must stay dependency-"
         "free, or the module every other module logs through gains a cycle")

@@ -24,9 +24,9 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from vesta.adapters import model as model_mod
-from reports import standing as standing_mod                 # noqa: E402
+from vesta.brief import standing as standing_mod
 from agent import fallback as agent_fallback  # noqa: E402
-from reports.narrate import ReportContext  # noqa: E402
+from vesta.brief.narrate import ReportContext
 from vesta.shared.style import BULLET                    # noqa: E402
 from vesta.shared.style import SECTION_MARK               # noqa: E402
 
@@ -106,7 +106,7 @@ def test_every_kind_the_builder_emits_reaches_the_page() -> None:
     `fallback.brief` has no table — every standing row prints — and this pin
     is what notices if a table ever comes back: one row of EVERY kind the
     builder emits, each title required on the page."""
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                                "standing.py"), encoding="utf-8").read()
     emitted = sorted(set(re.findall(r'kind="(\w+)"', source)))
     assert emitted, "could not read the emitted kinds — this test is blind"
@@ -136,7 +136,7 @@ def test_the_subject_never_crosses_into_the_renderer() -> None:
     "the data is not there" rather than "the filter is careful" — the same rule
     that makes `dedup_key` hash its subject and `Finding` carry no entity field.
     """
-    pipeline = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    pipeline = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                                  "pipeline.py"), encoding="utf-8").read()
     builder = re.search(r'return \[\{"kind": i\.kind.*?\]', pipeline, re.DOTALL)
     assert builder, "the standing row builder moved — this test is blind"

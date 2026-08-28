@@ -41,13 +41,14 @@ from vesta.adapters import links as links_mod
 from vesta.adapters import model as model_mod
 from vesta.adapters import schedule as schedule_mod
 from vesta.adapters import store
-from .analysis import ModuleContext, describe_skips, registered, run_all
+from vesta.shared.analysis.base import ModuleContext
+from .registry import describe_skips, registered, run_all
 from vesta.shared.analysis.series import hourly_by_day, parse_day
 from vesta.shared.contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
                         severity_rank)
 # ⚠️ THE REGISTRY REGISTERS ITS OWN MODULES since TASK-115 — importing it is
 # what populates it. This line used to import `modules` for the side effect.
-from .analysis import registry as _registry  # noqa: F401  (importing registers)
+from . import registry as _registry  # noqa: F401  (importing registers)
 from vesta.adapters.hass import HassClient, HassUnavailable
 from vesta.adapters.deliver import deliver
 from vesta.adapters.hass import fetch_timezone

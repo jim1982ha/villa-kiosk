@@ -19,7 +19,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from vesta.adapters import people as people_mod
-from reports import pipeline as pipeline_mod  # noqa: E402
+from vesta.brief import pipeline as pipeline_mod
 
 OWNER = {"telegram": "765979167",
          "targets": ["entity:notify.iphone_16_fab"], "role": "owner"}

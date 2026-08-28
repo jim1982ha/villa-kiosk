@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from vesta.shared.contracts import PAYLOAD_ALLOWED_FIELDS
-from reports.narrate import payload as P
+from vesta.brief.narrate import payload as P
 
 
 def _finding(**extra: Any) -> Dict[str, Any]:
@@ -207,7 +207,7 @@ def test_a_preview_carries_the_payload_that_would_actually_be_sent() -> None:
 
     This pins the identity: what the preview exposes IS what narration sends.
     """
-    from reports.narrate.base import ReportContext
+    from vesta.brief.narrate.base import ReportContext
     context = ReportContext(
         audience="owner", cadence="weekly", period="2026-W34",
         generated_at="2026-08-21T07:00:00+08:00",
@@ -231,8 +231,8 @@ def test_the_withheld_list_names_fields_and_never_values() -> None:
     the policy says; a list of names it actually dropped on their own data shows
     it applying. Names only — printing the values would leak them into the panel
     whose purpose is to show they are not leaked."""
-    from reports.narrate.base import ReportContext
-    from reports.pipeline import _withheld_fields
+    from vesta.brief.narrate.base import ReportContext
+    from vesta.brief.pipeline import _withheld_fields
     context = ReportContext(
         audience="owner", cadence="weekly", period="P", generated_at="",
         findings=[_finding(entity_id="sensor.bedroom_window",
@@ -258,8 +258,8 @@ def test_withheld_means_the_policy_dropped_it_not_that_it_was_empty() -> None:
     Telling an owner we protect more than we do, in the one panel whose whole
     job is to be believed, is worse than telling them nothing.
     """
-    from reports.narrate.base import ReportContext
-    from reports.pipeline import _withheld_fields
+    from vesta.brief.narrate.base import ReportContext
+    from vesta.brief.pipeline import _withheld_fields
     from vesta.shared.contracts import PAYLOAD_ALLOWED_FIELDS
 
     # `area` is allow-listed and empty here; `detail` is allow-listed nowhere.

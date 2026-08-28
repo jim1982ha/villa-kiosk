@@ -34,9 +34,9 @@ import re
 from typing import Any, Dict, List
 
 from vesta.adapters import collect
-from reports.analysis import registry
+from vesta.brief import registry
 from vesta.shared.analysis.base import ModuleContext
-from reports.analysis import registry as _registry  # noqa: F401  (importing registers)
+from vesta.brief import registry as _registry
 from vesta.shared.analysis.modules import (  # noqa: F401
     level_anomaly, sensor_health, standby_creep,
 )

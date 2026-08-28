@@ -52,12 +52,12 @@ ALLOWED: Dict[str, set] = {
     # model call per turn, bounded by depth/deadline/budget upstream.
     "rootfs/usr/bin/agent/registry.py": {"run"},
     # The brief's narration overlay: one optional sentence per report.
-    "rootfs/usr/bin/reports/pipeline.py": {"narrate"},
+    "rootfs/usr/bin/vesta/brief/pipeline.py": {"narrate"},
     # The seam's own plumbing: the bounded wrapper forwards run() to the inner
     # provider, and the adapter table's entries implement narrate() — callers
     # one level INSIDE the boundary, not new doors through it.
     "rootfs/usr/bin/agent/runtime.py": {"run"},
-    "rootfs/usr/bin/reports/narrate/providers.py": {"narrate"},
+    "rootfs/usr/bin/vesta/brief/narrate/providers.py": {"narrate"},
 }
 
 #: Names whose `.run(`/`.narrate(` is NOT the provider seam. Each is verified
@@ -98,7 +98,7 @@ def test_exactly_the_allowed_files_invoke_the_seam() -> None:
     assert any(s.startswith("rootfs/usr/bin/agent/registry.py")
                and s.endswith("run") for s in sites), (
         f"the agent loop's own call site was not found — pattern drift; saw {sites}")
-    assert any(s.startswith("rootfs/usr/bin/reports/pipeline.py")
+    assert any(s.startswith("rootfs/usr/bin/vesta/brief/pipeline.py")
                and s.endswith("narrate") for s in sites), (
         f"the narration call site was not found — pattern drift; saw {sites}")
 

@@ -210,7 +210,7 @@ def test_being_UNABLE_to_see_still_reaches_a_person_deterministically() -> None:
     root = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "rootfs", "usr", "bin")
-    with open(os.path.join(root, "reports", "pipeline.py"), encoding="utf-8") as h:
+    with open(os.path.join(root, "vesta", "brief", "pipeline.py"), encoding="utf-8") as h:
         pipeline_src = h.read()
     with open(os.path.join(root, "supervisor-proxy.py"), encoding="utf-8") as h:
         proxy_src = h.read()

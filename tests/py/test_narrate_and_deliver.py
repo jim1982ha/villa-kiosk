@@ -21,7 +21,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from vesta.adapters.deliver import _service_path, deliver, deliver_one
-from reports.narrate import ReportContext
+from vesta.brief.narrate import ReportContext
 
 
 def _ctx(**kw: Any) -> ReportContext:
@@ -207,7 +207,7 @@ def test_a_scheduled_entry_is_identified_by_its_idempotency_key() -> None:
     import asyncio
     from datetime import datetime, timezone
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     entry = asyncio.run(pipeline.run_report(
         _FakeSession(), "owner", "daily", [],  # type: ignore[arg-type]
@@ -222,7 +222,7 @@ def test_two_schedules_on_one_day_produce_distinct_entries() -> None:
     import asyncio
     from datetime import datetime, timezone
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     moment = datetime(2026, 8, 20, 18, 29, tzinfo=timezone.utc)
     found = {"reachable": True, "preflight": []}
@@ -241,7 +241,7 @@ def test_a_manual_send_is_marked_manual_and_carries_the_clock() -> None:
     import asyncio
     from datetime import datetime, timezone
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     entry = asyncio.run(pipeline.run_report(
         _FakeSession(), "owner", "weekly", [],  # type: ignore[arg-type]
@@ -258,7 +258,7 @@ def test_a_preview_composes_everything_and_sends_nothing() -> None:
     import asyncio
     from datetime import datetime, timezone
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     session = _FakeSession()
     entry = asyncio.run(pipeline.run_report(
@@ -277,7 +277,7 @@ def test_a_real_send_still_delivers() -> None:
     import asyncio
     from datetime import datetime, timezone
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     session = _FakeSession()
     asyncio.run(pipeline.run_report(
@@ -291,7 +291,7 @@ def test_history_stores_no_prose_and_no_findings(tmp_path: Any) -> None:
     """⚠️ The ring is capped by ENTRY COUNT. An entry whose size depends on how
     much a narrator wrote makes that cap meaningless — 200 entries could be a
     megabyte or fifty."""
-    from reports import pipeline
+    from vesta.brief import pipeline
     from vesta.adapters import store
 
     original = store.REPORTS_HISTORY_FILE
@@ -319,13 +319,13 @@ def test_history_stores_no_prose_and_no_findings(tmp_path: Any) -> None:
 def test_a_schedule_without_targets_inherits_the_shared_list() -> None:
     """The common case, and why the shared list exists at all: one property,
     one or two destinations, every brief to both."""
-    from reports.pipeline import targets_for
+    from vesta.brief.pipeline import targets_for
     config = {"notify_targets": ["notify.a", "notify.b"]}
     assert targets_for(config, {"cadence": "daily"}) == ["notify.a", "notify.b"]
 
 
 def test_a_schedule_with_its_own_targets_overrides_the_shared_list() -> None:
-    from reports.pipeline import targets_for
+    from vesta.brief.pipeline import targets_for
     config = {"notify_targets": ["notify.a"]}
     assert targets_for(config, {"targets": ["telegram_bot.send_message"]}) == \
         ["telegram_bot.send_message"]
@@ -338,7 +338,7 @@ def test_an_EMPTY_own_list_means_nowhere_not_inherit() -> None:
     opposite. Latent until the dialog could express it. An operator who gives a
     schedule its own destinations and then removes them all must not silently
     resume delivering to everyone."""
-    from reports.pipeline import targets_for
+    from vesta.brief.pipeline import targets_for
     config = {"notify_targets": ["notify.a", "notify.b"]}
     assert targets_for(config, {"targets": []}) == []
 
@@ -523,7 +523,7 @@ def test_a_history_ENTRY_carries_its_findings_not_just_a_count() -> None:
     """
     import inspect
 
-    from reports import pipeline as pipeline_mod
+    from vesta.brief import pipeline as pipeline_mod
 
     source = inspect.getsource(pipeline_mod.run_report)
     entry = source[source.index("entry: Dict[str, Any] = {"):]

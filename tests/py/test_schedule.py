@@ -200,7 +200,7 @@ def test_a_late_weekly_still_catches_up_within_the_window() -> None:
 def test_an_explicit_setting_wins() -> None:
     import asyncio
 
-    from reports.pipeline import resolve_zone
+    from vesta.brief.pipeline import resolve_zone
 
     zone, learned = asyncio.run(resolve_zone(
         None, {"timezone": "Europe/Paris"}, {}))  # type: ignore[arg-type]
@@ -214,7 +214,7 @@ def test_a_cached_name_is_used_without_asking() -> None:
     call happens — it would raise if one were attempted."""
     import asyncio
 
-    from reports.pipeline import resolve_zone
+    from vesta.brief.pipeline import resolve_zone
 
     zone, learned = asyncio.run(resolve_zone(
         None, {"timezone": ""}, {"timezone": "Asia/Tokyo"}))  # type: ignore[arg-type]
@@ -225,7 +225,7 @@ def test_a_cached_name_is_used_without_asking() -> None:
 def test_a_learned_name_is_returned_for_caching() -> None:
     import asyncio
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     async def fake(_session: object) -> str:
         return "Australia/Sydney"
@@ -244,7 +244,7 @@ def test_a_learned_name_is_returned_for_caching() -> None:
 def test_utc_is_the_last_resort_only() -> None:
     import asyncio
 
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     async def unavailable(_session: object) -> None:
         return None

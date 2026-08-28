@@ -66,7 +66,7 @@ KIOSK_VIEW = os.path.join(HARNESS, "kiosk_view.ts")
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from vesta.adapters import devices as devices_mod
-from reports import standing as standing_mod     # noqa: E402
+from vesta.brief import standing as standing_mod
 from vesta.adapters import ledger as ledger_mod
 
 FIXTURE_NAMES = ["bare", "pack-only", "blueprints-live", "both"]
@@ -305,7 +305,7 @@ def test_every_standing_kind_has_a_severity() -> None:
     not `info` on purpose — a kind nobody has classified must not arrive as the
     quietest thing in the report — but every kind the builder actually emits
     should be classified deliberately rather than by that fallback."""
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                                "standing.py"), encoding="utf-8").read()
     emitted = set(re.findall(r'kind="(\w+)"', source))
     assert emitted, "could not read the emitted kinds — this test is blind"

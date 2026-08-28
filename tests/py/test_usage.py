@@ -189,7 +189,7 @@ def test_every_provider_call_site_RECORDS_usage() -> None:
     third rather than trusting that there is none.
     """
     roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent"),
-             os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports")]
+             os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")]
     callers, recorders = set(), set()
     for root in roots:
         for base, _dirs, names in os.walk(root):

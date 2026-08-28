@@ -129,7 +129,7 @@ def test_the_footer_would_be_destroyed_by_inert_which_is_why_it_is_appended() ->
     assert inert(url) == url, "an encoded URL must pass through untouched"
     assert "%5F" in url, "the ingress path's underscore must be encoded"
 
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                                "pipeline.py"), encoding="utf-8").read()
     inert_at = source.index("style_mod.inert(body)")
     link_at = source.index("links_mod.footer(")

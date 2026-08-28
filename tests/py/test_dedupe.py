@@ -34,8 +34,8 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports import pipeline as pipeline_mod                      # noqa: E402
-from reports.analysis import registry                             # noqa: E402
+from vesta.brief import pipeline as pipeline_mod
+from vesta.brief import registry
 from vesta.shared.analysis.base import (Finding, ModuleContext,        # noqa: E402
                                    dedup_key, subject_key)
 from vesta.shared.analysis.modules import (level_anomaly, sensor_health,  # noqa: E402,F401
@@ -119,7 +119,7 @@ def test_the_subject_key_does_not_reach_the_narration_payload() -> None:
     against the builder, because the contract is what the guarantee rests on."""
     from vesta.shared.contracts import PAYLOAD_ALLOWED_FIELDS
     assert "subject_key" not in PAYLOAD_ALLOWED_FIELDS
-    from reports.narrate import payload as payload_mod
+    from vesta.brief.narrate import payload as payload_mod
     reduced = payload_mod.finding_payload(_finding(PUMP))
     assert "subject_key" not in reduced
     whole = payload_mod.build([_finding(PUMP)], audience="owner",

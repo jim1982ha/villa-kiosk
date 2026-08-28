@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Sequence
 
 import pytest
 
-from reports.analysis import ModuleContext, gate, run_all
+from vesta.brief.registry import ModuleContext, gate, run_all
 from vesta.shared.analysis.base import Finding, label_for, resolve_threshold
 from vesta.shared.analysis.modules.standby_creep import (
     DEFAULT_RISE_FRACTION,
@@ -279,7 +279,7 @@ def test_a_healthy_module_passes_the_gate() -> None:
 
 def test_a_module_that_throws_becomes_a_skip_not_a_dead_pass() -> None:
     """⚠️ ONE MODULE MUST NOT TAKE THE PASS DOWN."""
-    from reports.analysis import registry
+    from vesta.brief import registry
 
     class Exploding:
         name = "exploding"
@@ -308,7 +308,7 @@ def test_a_module_that_throws_becomes_a_skip_not_a_dead_pass() -> None:
 
 
 def test_a_module_that_hangs_is_timed_out() -> None:
-    from reports.analysis import registry
+    from vesta.brief import registry
 
     class Hanging:
         name = "hanging"
@@ -414,7 +414,7 @@ def test_no_analysis_module_contains_a_physical_constant() -> None:
     import ast
     import inspect
 
-    from reports.analysis import registry
+    from vesta.brief import registry
     from vesta.shared.analysis import base, robust
     from vesta.shared.analysis.modules import standby_creep
 
@@ -636,7 +636,7 @@ def test_a_module_is_switched_off_by_a_SLICE_not_by_a_bare_boolean() -> None:
     tab must produce, in the renderer's own terms rather than in a comment.
     """
     import asyncio
-    from reports.analysis.registry import register, run_all
+    from vesta.brief.registry import register, run_all
     from vesta.shared.analysis.base import AnalysisModule, Finding, ModuleContext
 
     class _Probe:

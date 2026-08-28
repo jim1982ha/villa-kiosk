@@ -29,7 +29,7 @@ REPO_ROOT = os.path.dirname(
 # vesta/ and the rest has not yet; every walker here must cover BOTH or the
 # moved half silently leaves the applicable set — the exact under-roll this
 # suite exists to catch. Collapses to one root when the move completes.
-PACKAGE_DIR = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports")
+PACKAGE_DIR = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")
 VESTA_DIR = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")
 MODULE_DIR = os.path.join(VESTA_DIR, "shared", "analysis", "modules")
 

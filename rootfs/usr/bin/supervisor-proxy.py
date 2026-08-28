@@ -127,7 +127,7 @@ if _HERE not in sys.path:
 from vesta.shared import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
 from vesta.adapters import collect as reports_collect
 from vesta.adapters import discovery as reports_discovery
-from reports import pipeline as reports_pipeline    # noqa: E402
+from vesta.brief import pipeline as reports_pipeline
 # ⚠️ BOTH LINES ARE LOAD-BEARING, AND THE SECOND IS THE ONE THAT IS EASY TO
 # DROP. A module registers itself at IMPORT TIME, and `analysis/__init__`
 # imports `base` and `registry` but NOT `modules` — so importing the registry
@@ -136,14 +136,14 @@ from reports import pipeline as reports_pipeline    # noqa: E402
 # depending on that is depending on an unrelated module's import list: drop that
 # line in pipeline and this endpoint silently reports zero modules again, which
 # is the defect being fixed here wearing a different hat.
-from reports.analysis import registry as reports_registry  # noqa: E402
-from reports.analysis import registry as _reports_registry  # noqa: E402,F401
+from vesta.brief import registry as reports_registry
+from vesta.brief import registry as _reports_registry
 from vesta.adapters import schedule as reports_schedule
 from vesta.adapters import secrets as reports_secrets
 from vesta.adapters import log as reports_log
 from vesta.adapters import hass as reports_hass
-from reports import tasks as reports_tasks        # noqa: E402
-from reports.narrate import providers as reports_narrate_providers  # noqa: E402
+from vesta.brief import tasks as reports_tasks
+from vesta.brief.narrate import providers as reports_narrate_providers
 from vesta.adapters import store as reports_store
 # ⚠️ A SECOND PACKAGE BESIDE `reports`, NOT INSIDE IT. `observe` is the
 # agent-era observation floor and `reports` is the pipeline being dismantled in

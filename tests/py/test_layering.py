@@ -68,16 +68,15 @@ LAYER_OF: Tuple[Tuple[str, str], ...] = (
     # exportable set NEEDS, not by who calls it today.
     ("vesta/shared/", "shared"),
     # ── brief: the deletable half ───────────────────────────────────────────
-    ("reports/analysis/stats", "brief"),
-    ("reports/analysis/trend", "brief"),
     # ── adapters: the environment — MOVED to vesta/adapters in the 3b release
     # (stats came with them: it wraps HA's recorder through HassClient and
     # discovery imports it — the plan's table had it in brief, the import
     # graph corrected it, same as materiality in reverse).
     ("vesta/adapters/", "adapters"),
-    # what is left under reports/ pending the brief move: pipeline, standing,
-    # tasks, trend, analysis/registry, narrate/{base,payload,providers}
-    ("reports/", "brief"),
+    # ── brief: the deletable half — MOVED to vesta/brief in the 3c release.
+    # reports/ NO LONGER EXISTS; the delete-later operation is now literally
+    # `rm -rf vesta/brief` plus the host's wiring lines.
+    ("vesta/brief/", "brief"),
     # ── supervise: the exportable half ──────────────────────────────────────
     ("agent/", "supervise"),
     ("observe/", "supervise"),
@@ -101,7 +100,7 @@ MAY_IMPORT: Dict[str, Set[str]] = {
 #: still fails.
 ALLOWED_DEBT: Set[Tuple[str, str]] = {
     # TASK-115 step 8: extract _statistics_fetcher into adapters, then delete.
-    ("agent/tools/analysis", "reports/pipeline"),
+    ("agent/tools/analysis", "vesta/brief/pipeline"),
 }
 
 

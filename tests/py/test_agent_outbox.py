@@ -402,7 +402,7 @@ def test_a_blueprint_already_reporting_a_subject_wins() -> None:
     """⚠️ THE SAME RULE ONE LAYER UP APPLIES: while a blueprint covers a device
     it sees occupancy, schedules and tariffs the agent's evidence does not.
     Retire it and the Concern becomes the only report of that device."""
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     pipeline.set_concerns_source(lambda: [
         {"title": "Covered", "severity": "warning", "subject_key": "dup"},
@@ -419,7 +419,7 @@ def test_reports_does_not_import_the_agent_to_do_this() -> None:
     one; a briefing must still compose with the agent switched off, broken or
     absent. The first version of this feature imported `agent.sources` directly
     and `test_reports_never_imports_agent` caught it."""
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     pipeline.set_concerns_source(None)
     assert pipeline._agent_concerns(set()) == [], (
@@ -444,7 +444,7 @@ def test_a_concern_does_not_repeat_a_built_in_finding() -> None:
     a metered device the modules had already reported could appear twice in one
     brief, once as a finding and once as a Concern, in different words, about
     the same equipment."""
-    from reports import pipeline
+    from vesta.brief import pipeline
 
     pipeline.set_concerns_source(lambda: [
         {"title": "Also seen by a check", "severity": "warning",

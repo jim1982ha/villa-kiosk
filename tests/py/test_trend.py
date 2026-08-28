@@ -20,8 +20,8 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from reports import trend  # noqa: E402
-from reports.narrate import ReportContext  # noqa: E402
+from vesta.brief import trend
+from vesta.brief.narrate import ReportContext
 from vesta.shared.style import inert  # noqa: E402
 
 
@@ -137,7 +137,7 @@ def test_the_pipeline_rejects_a_paragraph_where_a_sentence_belongs() -> None:
     where the lead goes pushes the dateline out of the notification preview —
     the exact thing the slot protects. Checked in `pipeline`; asserted here on
     the source so the guard cannot be dropped as redundant."""
-    from reports.pipeline import MAX_LEAD_CHARS, usable_lead
+    from vesta.brief.pipeline import MAX_LEAD_CHARS, usable_lead
 
     assert usable_lead("One device stopped reporting overnight.") == (
         "One device stopped reporting overnight.")
@@ -168,7 +168,7 @@ def test_an_unknown_zone_or_direction_is_dropped_not_forwarded() -> None:
     """⚠️ THE NEW ENUMS GET THE SAME OUTBOUND VALIDATION as severity and kind.
     An unvalidated enum is a free-text field with a short name, and these reach
     a third party."""
-    from reports.narrate import payload
+    from vesta.brief.narrate import payload
     built = payload.build(
         [{"label": "X", "zone": "../etc", "trend_direction": "sideways",
           "occurrences": 3}],

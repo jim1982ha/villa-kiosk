@@ -116,7 +116,7 @@ def test_the_pipeline_sanitises_after_both_narrators() -> None:
     text too and `_flatten` is a different, narrower function; sanitising the
     deterministic body and then letting a provider replace it would leave the
     narrated path exactly as broken as the one being fixed."""
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                                "pipeline.py"), encoding="utf-8").read()
     call = source.index("style_mod.inert(title)")
     # ⚠️ THE PROVIDER'S LEAD IS HANDED TO THE COMPOSER NOW (TASK-073), so the
@@ -134,7 +134,7 @@ def test_history_records_what_was_sent() -> None:
     """⚠️ THE SAME STRING, OR THE HISTORY TAB IS A DIFFERENT DOCUMENT FROM THE
     NOTIFICATION. Sanitising inside `deliver` would have been the smaller change
     and would have left the stored copy carrying markup the reader never saw."""
-    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports",
+    source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                                "pipeline.py"), encoding="utf-8").read()
     call = source.index("style_mod.inert(title)")
     entry = source.index('entry["_body"]') if 'entry["_body"]' in source \
@@ -177,7 +177,7 @@ def test_no_module_quotes_a_name_by_hand() -> None:
     caught on the day it is written. It looks for an apostrophe-wrapped
     interpolation in an f-string — the exact thing `name_of` returns.
     """
-    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports")
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief")
     pattern = re.compile(r"'\{[A-Za-z_][A-Za-z0-9_.\[\]()]*\}'")
     offenders = []
     for folder, _, files in os.walk(root):
@@ -232,8 +232,7 @@ def test_no_reader_ever_sees_the_word_caretaker() -> None:
     # forbids it was green. A rule enforced where it was WRITTEN rather than
     # where it APPLIES is `feedback_audit-applicable-set`, and this is its
     # textbook shape: the scan root was the file the rule was born in.
-    roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "reports"),
-             os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta"),
+    roots = [os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta"),
              os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "agent")]
     offenders: List[str] = []
     for root in roots:

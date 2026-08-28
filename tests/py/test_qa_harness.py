@@ -30,7 +30,7 @@ REPO_ROOT = os.path.dirname(
 HARNESS = os.path.join(REPO_ROOT, "tests", "qa", "briefings-qa.js")
 BIN = os.path.join(REPO_ROOT, "rootfs", "usr", "bin")
 PROXY = os.path.join(BIN, "supervisor-proxy.py")
-PIPELINE = os.path.join(BIN, "reports", "pipeline.py")
+PIPELINE = os.path.join(BIN, "vesta", "brief", "pipeline.py")
 DISCOVERY = os.path.join(BIN, "vesta", "adapters", "discovery.py")
 
 

@@ -31,7 +31,7 @@ pytest.importorskip(
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TARGET = os.path.join("rootfs", "usr", "bin", "reports")
+TARGET = os.path.join("rootfs", "usr", "bin", "vesta")
 
 
 def test_reports_package_is_strict_clean() -> None:
@@ -43,5 +43,9 @@ def test_reports_package_is_strict_clean() -> None:
         "push:\n" + result.stdout)
     # ⚠️ VACUOUS-PASS GUARD: success prints a file count; zero checked files
     # means the target moved and the gate is asserting nothing.
-    assert "no issues found" in result.stdout and "0 source files" not in (
+    # ⚠️ " 0 source files", WITH THE SPACE. The bare substring matched inside
+    # "40 source files" the day the package grew to that size, and the guard
+    # against an empty target started failing a healthy run — the vacuous-pass
+    # guard itself passing vacuously, inverted.
+    assert "no issues found" in result.stdout and " 0 source files" not in (
         result.stdout), result.stdout

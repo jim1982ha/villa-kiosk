@@ -23,7 +23,8 @@ import asyncio
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from vesta.adapters import secrets
-from reports.narrate import payload as P, providers as PR
+from vesta.brief.narrate import payload as P
+from vesta.brief.narrate import providers as PR
 
 
 # ── the budget ──────────────────────────────────────────────────────────────

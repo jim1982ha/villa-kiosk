@@ -12,7 +12,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Sequence
 
-from reports.analysis import ModuleContext
+from vesta.brief.registry import ModuleContext
 from vesta.shared.analysis.base import Finding
 from vesta.shared.analysis.modules.level_anomaly import WEEKDAY_NAME, LevelAnomaly
 from vesta.shared.analysis.modules.sensor_health import SensorHealth
@@ -220,7 +220,7 @@ def test_history_is_measured_not_assumed() -> None:
     it breaks silently the moment one wants more — `level_anomaly` needs 28 and
     would have been skipped forever with "has 14", a number nobody measured.
     """
-    from reports.pipeline import measure_history
+    from vesta.brief.pipeline import measure_history
 
     series = {"sensor.a_energy": _flat(40, 0.5)}
 
@@ -233,7 +233,7 @@ def test_history_is_measured_not_assumed() -> None:
 def test_history_takes_the_longest_of_several_meters() -> None:
     """The shortest would be whichever meter was added most recently, which
     would report an established property as having no history."""
-    from reports.pipeline import measure_history
+    from vesta.brief.pipeline import measure_history
 
     series = {"sensor.new_energy": _flat(3, 0.5),
               "sensor.old_energy": _flat(45, 0.5)}
@@ -246,7 +246,7 @@ def test_history_takes_the_longest_of_several_meters() -> None:
 
 
 def test_no_statistics_is_no_history() -> None:
-    from reports.pipeline import measure_history
+    from vesta.brief.pipeline import measure_history
 
     async def fetch(ids: Sequence[str], days: int) -> Dict[str, Any]:
         return {}
