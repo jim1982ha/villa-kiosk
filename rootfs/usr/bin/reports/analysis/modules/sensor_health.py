@@ -26,7 +26,6 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from ..base import (Finding, ModuleContext, dedup_key, subject_key, label_for,
                     resolve_threshold)
-from ..registry import register
 from ..series import (daily_totals, hourly_by_day, last_reading_day,
                       parse_day)
 
@@ -193,4 +192,3 @@ def _days_between(earlier: str, later: str) -> Optional[int]:
     return (b - a).days
 
 
-register(SensorHealth())

@@ -55,12 +55,26 @@ BIN = os.path.join(REPO, "rootfs", "usr", "bin")
 #: everything else is derived. When the folders move, these keys change and the
 #: assertions do not.
 LAYER_OF: Tuple[Tuple[str, str], ...] = (
+    # ⚠️ PACKAGE FACADES CARRY THE LAYER OF WHAT THEY RE-EXPORT, and both are
+    # named here explicitly because the corrected relative-import resolution
+    # surfaced them: `analysis/__init__` re-exports `registry` (brief) beside
+    # `base` (shared), so importing the FACADE is importing brief — it is
+    # layered brief, and a shared or adapters module that wants `base` must
+    # import `reports.analysis.base` directly, never the package.
+    ("reports/analysis/__init__", "brief"),
+    ("reports/narrate/__init__", "brief"),
     # ── shared: pure, exportable ────────────────────────────────────────────
     ("reports/contracts", "shared"),
     ("reports/text", "shared"),
     ("reports/narrate/style", "shared"),
     ("reports/analysis/base", "shared"),
     ("reports/analysis/robust", "shared"),
+    # ⚠️ RECLASSIFIED shared DURING THE FIRST RED RUN. The plan put materiality
+    # in brief because agent/ never imports it directly — but level_anomaly (a
+    # shared module) does, and "shared" is defined by what the exportable set
+    # NEEDS, not by who calls it today. It is pure (imports only robust), so
+    # the purity pin holds it to that.
+    ("reports/analysis/materiality", "shared"),
     ("reports/analysis/series", "shared"),
     ("reports/analysis/modules/", "shared"),
     # ── brief: the deletable half ───────────────────────────────────────────
@@ -68,7 +82,6 @@ LAYER_OF: Tuple[Tuple[str, str], ...] = (
     ("reports/standing", "brief"),
     ("reports/tasks", "brief"),
     ("reports/analysis/registry", "brief"),
-    ("reports/analysis/materiality", "brief"),
     ("reports/analysis/stats", "brief"),
     ("reports/analysis/trend", "brief"),
     ("reports/narrate/", "brief"),
@@ -118,7 +131,12 @@ def _modules() -> Dict[str, str]:
 
 def _layer(rel: str) -> str:
     for prefix, layer in LAYER_OF:
-        if rel == prefix or rel.startswith(prefix):
+        # ⚠️ A PACKAGE MATCHES ITS OWN TRAILING-SLASH PREFIX. `reports/analysis/
+        # modules` (the package, as an import target) must resolve to the same
+        # layer as `reports/analysis/modules/level_anomaly` — without the
+        # rstrip it fell through to the `reports/` catch-all and the modules'
+        # own `__init__` reported importing "adapters".
+        if rel == prefix or rel == prefix.rstrip("/") or rel.startswith(prefix):
             return layer
     return ""
 
@@ -137,8 +155,27 @@ def _imports(source: str, path: str) -> List[Tuple[str, int]]:
         names: List[str] = []
         if isinstance(node, ast.Import):
             names = [a.name for a in node.names]
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            mod = node.module
+        elif isinstance(node, ast.ImportFrom):
+            # ⚠️ RELATIVE IMPORTS RESOLVE AGAINST THE IMPORTER'S OWN PACKAGE,
+            # AND THE FIRST VERSION OF THIS DROPPED THEM — `from ..registry
+            # import register` produced the bare name `registry`, which failed
+            # the top-package check and vanished. The hole was found because the
+            # tree it hid was REAL: the three statistical modules self-register
+            # into the brief registry through exactly that import, a
+            # shared→brief edge this file shipped green over while claiming
+            # mutation coverage. Every mutation had used an absolute import.
+            if node.level:
+                pkg = path.split("/")
+                base = pkg[:len(pkg) - node.level]
+                if node.module:
+                    base = base + node.module.split(".")
+                if not base:
+                    continue
+                mod = "/".join(base).replace("/", ".")
+            elif node.module:
+                mod = node.module
+            else:
+                continue
             names = [mod] + [f"{mod}.{a.name}" for a in node.names]
         for name in names:
             top = name.split(".")[0]

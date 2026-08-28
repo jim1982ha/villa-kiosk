@@ -39,7 +39,9 @@ from .analysis import ModuleContext, describe_skips, registered, run_all
 from .analysis.series import hourly_by_day, parse_day
 from .contracts import (NARRATION_FALLBACK, PAYLOAD_ALLOWED_FIELDS,
                         severity_rank)
-from .analysis import modules as _modules  # noqa: F401  (importing registers them)
+# ⚠️ THE REGISTRY REGISTERS ITS OWN MODULES since TASK-115 — importing it is
+# what populates it. This line used to import `modules` for the side effect.
+from .analysis import registry as _registry  # noqa: F401  (importing registers)
 from .hass import HassClient, HassUnavailable
 from .deliver import deliver
 from .hass import fetch_timezone

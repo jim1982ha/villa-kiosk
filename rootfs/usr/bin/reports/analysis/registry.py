@@ -242,3 +242,25 @@ def _reset_for_tests() -> None:
 
 def _snapshot() -> Dict[str, Any]:
     return dict(_REGISTRY)
+
+
+# ⚠️ THE REGISTRY REGISTERS; A MODULE NO LONGER REGISTERS ITSELF (TASK-115,
+# 2026-08-28). Each module used to end with `register(TheModule())` behind
+# `from ..registry import register` — which made the three SHARED statistical
+# modules import a BRIEF module, the one upward edge in the whole lattice, and
+# it existed only to run a two-line side effect at import time. Registration is
+# a briefing concern (the gate, the skip lines, run_all), so it lives with the
+# registry: importing THIS module yields a populated registry exactly as
+# importing `modules/` used to, and the statistics stay import-clean for the
+# export. The analysis package docstring's "importing a module registers it" is
+# superseded by this block — a new module is added HERE, deliberately, and an
+# absent one is still visible as an absent skip line.
+def _register_shipped() -> None:
+    from .modules.level_anomaly import LevelAnomaly
+    from .modules.sensor_health import SensorHealth
+    from .modules.standby_creep import StandbyCreep
+    for module in (LevelAnomaly(), SensorHealth(), StandbyCreep()):
+        register(module)
+
+
+_register_shipped()

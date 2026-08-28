@@ -31,7 +31,6 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from ..base import (Finding, ModuleContext, dedup_key, subject_key, label_for,
                     resolve_threshold)
-from ..registry import register
 from ..materiality import has_stable_baseline, is_material
 from ..robust import median, robust_sigma
 from ..series import daily_totals, weekday_of
@@ -211,4 +210,3 @@ class LevelAnomaly:
         return worst
 
 
-register(LevelAnomaly())

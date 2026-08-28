@@ -14,11 +14,12 @@ may not be imported from inside it. That is why `readable_label` lives in
 `reports.text` rather than in `aggregate`, where it was written: `registry.gate`
 names a blueprint in prose and needs it (2.568.0).
 
-⚠️ IMPORTING A MODULE REGISTERS IT. `modules/__init__.py` imports each one, so
-adding a file there is all it takes to make a module run — and forgetting to
-import it is how a module comes to exist and never execute. That is the reason
-the registry is keyed by name and sorted: a missing module is visible as an
-absent skip line, not as silence.
+⚠️ THE REGISTRY REGISTERS THE MODULES (TASK-115, 2026-08-28 — it used to be
+the other way: each module self-registered at import, which made the three
+SHARED statistical modules import a BRIEF one, the single upward edge in the
+layer lattice). Adding a module is one line in `registry._register_shipped`,
+deliberately; a missing module is still visible as an absent skip line, not
+as silence, because the registry stays keyed by name and sorted.
 """
 
 from .base import AnalysisModule, Finding, ModuleContext, dedup_key

@@ -1,3 +1,15 @@
+## 2.841.0
+
+### Fixed — the layer check could not see relative imports, and the tree hid one
+The boundary test added in the last release resolved `from ..x import` to a
+bare name and dropped it, so a whole class of import was invisible — and a real
+violation sat inside it: the three statistical checks registered themselves
+into the briefing's registry at import time, making the exportable half depend
+on the deletable half for a two-line side effect. The check now resolves
+relative imports, the registry registers its own modules instead, and one
+threshold helper moved to the shared set because a shared module needs it.
+No behaviour changes: the same three checks register, from the other side.
+
 ## 2.840.0
 
 ### Added — the dependency layers, named and enforced before anything moves

@@ -29,7 +29,6 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from ..base import (Finding, ModuleContext, dedup_key, subject_key, label_for,
                     resolve_threshold)
-from ..registry import register
 from ..robust import median, percentile, relative_change, robust_sigma
 from ..series import complete_days, hourly_by_day
 
@@ -294,4 +293,3 @@ class StandbyCreep:
         })
 
 
-register(StandbyCreep())

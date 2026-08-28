@@ -137,7 +137,7 @@ from reports import pipeline as reports_pipeline    # noqa: E402
 # line in pipeline and this endpoint silently reports zero modules again, which
 # is the defect being fixed here wearing a different hat.
 from reports.analysis import registry as reports_registry  # noqa: E402
-from reports.analysis import modules as _reports_modules  # noqa: E402,F401
+from reports.analysis import registry as _reports_registry  # noqa: E402,F401
 from reports import schedule as reports_schedule    # noqa: E402
 from reports import secrets as reports_secrets      # noqa: E402
 from reports import log as reports_log          # noqa: E402
