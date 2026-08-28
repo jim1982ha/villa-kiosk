@@ -1,3 +1,16 @@
+## 2.866.0
+
+### Fixed — the To-Do List tab said ticking an item only marks the alert "seen"
+
+It closes the alert, since the previous release. The tab's help text still
+promised the weaker outcome — the sentence an owner reads to decide whether
+ticking in Home Assistant is enough. Found by a claim audit, with four more
+stale descriptions of the same act: `reconcile_done`'s docstring said "marked
+seen" directly above the code that closes, and the acts module claimed "three
+of the five" when the table holds six and four are compound, crediting a thumb
+with an acknowledgement the owner had removed. The census is deleted rather
+than corrected — a count in prose beside a table that changes goes stale.
+
 ## 2.865.0
 
 ### Fixed — ticking a job in Home Assistant's own list left the alert open everywhere else
