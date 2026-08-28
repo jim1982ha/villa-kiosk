@@ -1,3 +1,15 @@
+## 2.845.0
+
+### Changed — the assistant moves under one roof: last of the backend layer moves
+The assistant and its observation record — 53 files — now live under the folder
+a future external deployment would ship, completing the backend half of the
+reorganisation: pure code, environment code, the deletable briefing and the
+exportable assistant each in a folder that says what it is. Several checks that
+had quietly widened their scope during the moves were re-scoped to what they
+always covered — one was about to flag a deliberate difference between the two
+halves as a duplicate. No behaviour changes anywhere; the same code runs from
+its final addresses.
+
 ## 2.844.0
 
 ### Changed — the briefing layer moves: the deletable half is now one folder
