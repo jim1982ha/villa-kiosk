@@ -144,10 +144,15 @@ async def send_daily(session: Any, *,
     """One digest, at most once a local day. Returns why it stopped. NEVER RAISES.
 
     ⚠️ IT RETURNS A REASON RATHER THAN A BOOLEAN, for the same cause
-    `scheduler.run_once` does: "nothing happened" has five causes here — not
-    due, no list, no recipient, nothing outstanding, could not read — and four
-    of them are fine. A caller that could not tell them apart would report a
-    healthy villa and a broken one identically.
+    `scheduler.run_once` does: "nothing happened" has MANY causes here — not
+    due, quiet hours, before the day has begun, no list, no recipient, nothing
+    outstanding, could not read, delivery failed — and most of them are fine. A
+    caller that could not tell them apart would report a healthy villa and a
+    broken one identically.
+
+    ⚠️ NO COUNT, DELIBERATELY. This said "five causes ... and four of them are
+    fine" while the function had eleven return sites; the two gates added on
+    2026-08-28 did not change the sentence. Count the `return`s, not this line.
     """
     if session is None:
         return "no session"

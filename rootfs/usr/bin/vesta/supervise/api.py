@@ -850,8 +850,8 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
     #
     # ⚠️ IT KEEPS EVERY GUARD. `run_once` re-checks enabled, the scheduled
     # trigger and the budget, and returns WHY it stopped
-    # rather than a boolean — five causes that look identical from outside and
-    # four of which are fine. That reason is handed straight back.
+    # rather than a boolean — several causes that look identical from outside,
+    # most of which are fine. That reason is handed straight back.
     if body.get("drill"):
         return await _agent_drill(request, body)
 

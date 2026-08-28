@@ -1,3 +1,15 @@
+## 2.867.0
+
+### Changed — comments only: four stale counts and a keyboard docstring that described a layout it no longer draws
+
+No behaviour changes. `keyboard_for` still described three button rows and a
+rating pair at the bottom, which it stopped drawing when the layout was settled
+from a rendered mock-up — contradicted by its own comment eight lines below.
+And "nothing happened has five causes, four of them fine" was restated in three
+files against a function with eleven return sites; the same census had gone
+wrong in the acts table a release earlier. The counts are deleted rather than
+corrected: nothing goes red when a number in prose drifts.
+
 ## 2.866.0
 
 ### Fixed — the To-Do List tab said ticking an item only marks the alert "seen"

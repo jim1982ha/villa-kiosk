@@ -85,7 +85,7 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     The reason was precise from the day this was written and went only to the
     add-on log, so a reader deciding the PH-3 cutover saw "the agent found
     nothing" with no way to tell a quiet pass from a pass that never happened.
-    The guards are in `_run_once`, which has SIX return points; recording at
+    The guards are in `_run_once`, whose every return point is a reason; recording at
     each of them is one edit away from a sixth blind spot forever, so the
     recording lives HERE, wrapped around it, and a new guard cannot escape it.
     """

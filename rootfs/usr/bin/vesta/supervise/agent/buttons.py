@@ -209,11 +209,16 @@ def keyboard_for(concern: Mapping[str, Any],
 
     ⚠️ ROWS ARE CHOSEN FOR A PHONE, NOT FOR THE MODEL. Telegram gives every
     button in a row an equal share of the width, so five in a line is five
-    unreadable slivers. Three groups: everything that leaves the villa's problem
-    STANDING shares the top row, the one irreversible act gets a row to itself so
-    it cannot be hit while aiming at a neighbour, and the rating pair sits last
-    where a verdict belongs. `[[label, data], …]` per row is the structure the service
-    documents and the retired blueprint sent.
+    unreadable slivers. ONE row now, and only the acts — see the reasoning at
+    `drawn` below, which is the owner's ruling from a rendered layout.
+    `[[label, data], …]` per row is the structure the service documents and the
+    retired blueprint sent.
+
+    ⚠️ THIS PARAGRAPH DESCRIBED THREE ROWS UNTIL 2026-08-29, INCLUDING "the
+    rating pair sits last" — a layout the code below had already stopped
+    drawing, contradicted by its own comment eight lines down. A docstring is
+    the half a reader trusts; keep the SHAPE claim here in step with `drawn` or
+    state it only there.
 
     ⚠️ AN EMPTY LIST IS A REAL ANSWER and means "this alert wants no buttons" —
     it is settled, and `outbox` sends it through the ordinary path instead.

@@ -614,7 +614,7 @@ const numOr = (v: unknown): number | undefined => {
  * runs, with every guard it applies — enabled, the budget, the provider — and
  * since 2.768.0 with the delivery sweeps that carry a Concern to a phone and
  * onto the facility manager's list. It returns WHY it stopped rather than a
- * boolean, because "nothing happened" has five causes and four of them are fine.
+ * boolean, because "nothing happened" has several causes and most are fine.
  * This spends real budget.
  */
 export async function runTriageNow(): Promise<{ ok: boolean; reason: string }> {
