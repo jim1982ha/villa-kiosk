@@ -373,13 +373,19 @@ def acknowledge(concern_id: str, *, by: str,
     return False, f"no concern {concern_id!r}"
 
 
-def note_message(concern_id: str, entity_id: str, message_id: str) -> bool:
+def note_message(concern_id: str, entity_id: str, message_id: str,
+                 acts: str = "") -> bool:
     """Remember a chat message carrying this alert's buttons. See `messages`.
 
     ⚠️ IT REFUSES A MESSAGE WITH NO ID, because the only thing a ref is FOR is
     editing that message later and an unidentified one can never be edited.
     Storing it anyway would grow a list of things that look retirable and are
     not, and `buttons.reconcile` would walk them on every tick forever.
+
+    ⚠️ `acts` IS WHAT THE MESSAGE IS SHOWING — the comma-joined act ids, as
+    `buttons.Ref.acts`. Without it reconciliation can only ask "is this alert
+    settled" and never "has what it offers changed", which is the transition an
+    acknowledgement makes and the one that shipped unhandled (2026-08-28).
     """
     if not str(message_id or "").strip() or not str(entity_id or "").strip():
         return False
@@ -391,7 +397,8 @@ def note_message(concern_id: str, entity_id: str, message_id: str) -> bool:
         if not isinstance(refs, list):
             refs = []
         refs.append({"entity_id": str(entity_id),
-                     "message_id": str(message_id)})
+                     "message_id": str(message_id),
+                     "acts": str(acts or "")})
         # ⚠️ BOUNDED, like every list in this store. A villa escalating the same
         # alert repeatedly must not grow one row without limit.
         row["messages"] = refs[-MAX_MESSAGE_REFS:]
@@ -406,13 +413,22 @@ def set_messages(concern_id: str,
     ⚠️ REPLACE RATHER THAN CLEAR, because a reconciliation that could not reach
     Telegram must KEEP the messages it failed to retire and try again. A `clear`
     verb would make "I gave up" the easy call to write.
+
+    ⚠️ IT REBUILDS EACH REF FIELD BY FIELD, SO A FIELD IT DOES NOT NAME IS
+    DISCARDED IN SILENCE — which is how `acts` was lost on its first run: the
+    caller stamped it, this dropped it, and reconciliation redrew the same
+    message on every tick because the stamp never survived the write. A new key
+    on a ref belongs in this list. The rebuild stays (it is what stops a caller
+    persisting arbitrary junk into the store) but it is a list to MAINTAIN, not
+    a filter to trust.
     """
     rows = read()
     for row in rows:
         if str(row.get("id")) != str(concern_id):
             continue
         kept = [{"entity_id": str(r.get("entity_id") or ""),
-                 "message_id": str(r.get("message_id") or "")}
+                 "message_id": str(r.get("message_id") or ""),
+                 "acts": str(r.get("acts") or "")}
                 for r in refs if isinstance(r, Mapping)]
         if kept == (row.get("messages") or []):
             # ⚠️ NO WRITE WHEN NOTHING MOVED. This runs on the chase clock over

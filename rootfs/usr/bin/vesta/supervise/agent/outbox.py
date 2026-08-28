@@ -601,7 +601,13 @@ async def _send_with_buttons(session: Any, concern: Mapping[str, Any],
     for row in results:
         ref = row.get("ref")
         if str(row.get("status")) == "sent" and ref is not None:
-            concerns_mod.note_message(ident, ref.entity_id, ref.message_id)
+            # ⚠️ `ref.acts` TRAVELS WITH THE REF, so what a message is showing is
+            # recorded by the same call that records where it is. Reconciliation
+            # needs both to answer "has this fallen behind", and a send that
+            # stored only the address is what let a stale button survive an
+            # acknowledgement (2026-08-28).
+            concerns_mod.note_message(ident, ref.entity_id, ref.message_id,
+                                      ref.acts)
     return results
 
 

@@ -19,7 +19,7 @@ import inspect
 import os
 import re
 import sys
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pytest
 
@@ -240,36 +240,163 @@ def test_the_PRESS_rides_the_socket_the_collector_already_holds() -> None:
         "turn deciding what 'vd:c7' means")
 
 
-def test_RECONCILE_retires_only_the_alerts_that_are_DONE_WITH() -> None:
-    """⚠️ THIS IS THE HALF THAT MAKES THE REQUIREMENT TRUE RATHER THAN NEARLY
-    TRUE. An alert also moves when somebody acknowledges it on the tablet or
-    ticks its job in Home Assistant's own panel, and neither can reach into a
-    chat — Telegram offers no way to be told a message has gone stale."""
+def _acts_now(row: Dict[str, Any]) -> str:
+    """What the store currently offers on this alert, as `Ref.acts` spells it.
+
+    ⚠️ ASKED OF THE CODE, NOT TYPED OUT. A literal here would pass while the two
+    sides disagreed — the fixture would be pinning my transcription of the act
+    list rather than the list, which is `feedback_pin-the-caller` inside a
+    fixture.
+    """
+    from vesta.supervise.agent import actions
+    return ",".join(a.id for a in actions.available_for(row, {}))
+
+
+def test_RECONCILE_handles_THREE_outcomes_not_two() -> None:
+    """⚠️ THE FIXTURE OF THE VERSION THIS REPLACES IS WHY THE DEFECT SHIPPED.
+    It had one live alert, `acknowledged_at: ""`, and one settled — so it
+    measured "leave" and "retire" and never the state BETWEEN them, which is the
+    only one that moves: acknowledging withdraws `Seen` and keeps four acts, so
+    the drawn set CHANGED without EMPTYING. The owner found it on their phone.
+
+    Three rows, three outcomes, and the middle one is the regression."""
+    live = {"id": "c1", "title": "live", "state": "open", "acknowledged_at": ""}
+    ack = {"id": "c2", "title": "picked up", "state": "open",
+           "acknowledged_at": "2026-08-28T07:23:03Z", "acknowledged_by": "owner"}
     concerns._write([
-        {"id": "c1", "title": "live", "state": "open", "acknowledged_at": "",
-         "messages": [{"entity_id": "notify.x", "message_id": "11"}]},
-        {"id": "c2", "title": "settled", "state": "closed",
-         "messages": [{"entity_id": "notify.x", "message_id": "22"}]},
+        # in step: drawn with exactly what it still offers
+        {**live, "messages": [{"entity_id": "notify.x", "message_id": "11",
+                               "acts": _acts_now(live)}]},
+        # STALE: drawn while unacknowledged, acknowledged since
+        {**ack, "messages": [{"entity_id": "notify.x", "message_id": "22",
+                              "acts": _acts_now(live)}]},
+        # settled: nothing is offered at all
+        {"id": "c3", "title": "settled", "state": "closed",
+         "messages": [{"entity_id": "notify.x", "message_id": "33",
+                       "acts": _acts_now(live)}]},
     ])
-    edited: List[str] = []
+    assert _acts_now(ack) and _acts_now(ack) != _acts_now(live), \
+        "the fixture cannot show a CHANGED set: acknowledging changed nothing"
+
+    retired: List[str] = []
+    redrawn: List[Tuple[str, str]] = []
 
     async def fake_retire(session: Any, ref: Any, closing: str) -> bool:
-        edited.append(ref.message_id)
+        retired.append(ref.message_id)
         return True
 
-    original = buttons.retire
+    async def fake_redraw(session: Any, ref: Any, keyboard: Any) -> bool:
+        redrawn.append((ref.message_id, buttons.acts_of(keyboard)))
+        return True
+
+    originals = (buttons.retire, buttons.redraw)
     buttons.retire = fake_retire                      # type: ignore[assignment]
+    buttons.redraw = fake_redraw                      # type: ignore[assignment]
     try:
         count = asyncio.run(buttons.reconcile(None, config={}))
     finally:
-        buttons.retire = original                     # type: ignore[assignment]
-    assert edited == ["22"], \
-        "reconciliation retired the buttons of an alert still open"
-    assert count == 1
+        buttons.retire, buttons.redraw = originals    # type: ignore[assignment]
+
+    assert retired == ["33"], \
+        "reconciliation retired the buttons of an alert that still offers acts"
+    assert redrawn == [("22", _acts_now(ack))], \
+        "a message whose act set CHANGED was left showing the old buttons"
+    assert count == 2
+
     rows = {r["id"]: r for r in concerns.read()}
-    assert rows["c1"]["messages"], "a live alert's message was forgotten"
-    assert rows["c2"]["messages"] == [], \
+    assert rows["c1"]["messages"][0]["acts"] == _acts_now(live), \
+        "a message already in step was rewritten, so every tick rewrites it"
+    assert rows["c2"]["messages"][0]["acts"] == _acts_now(ack), \
+        "a redrawn message kept its old stamp, so it is redrawn on every tick"
+    assert rows["c3"]["messages"] == [], \
         "a retired message is remembered, so it is rewritten on every tick"
+
+
+def test_a_ref_stored_BEFORE_acts_existed_is_redrawn_ONCE() -> None:
+    """⚠️ AN ABSENT RECORD IS NOT AGREEMENT. Every message already out on a villa
+    when this shipped has no `acts`, and reading that as "in step" would let the
+    defect survive its own fix on exactly the alerts that have it."""
+    concerns._write([{"id": "c1", "title": "t", "state": "open",
+                      "acknowledged_at": "",
+                      "messages": [{"entity_id": "notify.x",
+                                    "message_id": "11"}]}])
+    calls: List[str] = []
+
+    async def fake_redraw(session: Any, ref: Any, keyboard: Any) -> bool:
+        calls.append(ref.message_id)
+        return True
+
+    original = buttons.redraw
+    buttons.redraw = fake_redraw                      # type: ignore[assignment]
+    try:
+        assert asyncio.run(buttons.reconcile(None, config={})) == 1
+        assert calls == ["11"], "a message with no record of its buttons was trusted"
+        assert asyncio.run(buttons.reconcile(None, config={})) == 0, \
+            "the stamp did not take, so this message is redrawn forever"
+    finally:
+        buttons.redraw = original                     # type: ignore[assignment]
+
+
+def test_a_redraw_that_FAILED_is_not_stamped() -> None:
+    """⚠️ RECORDING WHAT WE MEANT TO DRAW WOULD MAKE THE NEXT TICK BELIEVE AN
+    UNREACHABLE MESSAGE IS CORRECT — the same rule the retire path keeps."""
+    concerns._write([{"id": "c1", "title": "t", "state": "open",
+                      "acknowledged_at": "",
+                      "messages": [{"entity_id": "notify.x",
+                                    "message_id": "11"}]}])
+
+    async def refuse(session: Any, ref: Any, keyboard: Any) -> bool:
+        return False
+
+    original = buttons.redraw
+    buttons.redraw = refuse                           # type: ignore[assignment]
+    try:
+        assert asyncio.run(buttons.reconcile(None, config={})) == 0
+    finally:
+        buttons.redraw = original                     # type: ignore[assignment]
+    assert not concerns.read()[0]["messages"][0].get("acts"), \
+        "a failed redraw was stamped, so the stale buttons are never tried again"
+
+
+def test_ACTS_ARE_READ_OFF_THE_KEYBOARD_that_was_drawn() -> None:
+    """⚠️ DERIVED, NEVER DECLARED. `acts_of` reading the real keyboard is what
+    makes the record incapable of describing a message that was never sent."""
+    for state in ({"acknowledged_at": ""},
+                  {"acknowledged_at": "2026-08-28T07:23:03Z"},
+                  {"acknowledged_at": "", "informational": True}):
+        row = {"id": "c9", "title": "t", "state": "open", **state}
+        keyboard = buttons.keyboard_for(row, {})
+        assert buttons.acts_of(keyboard) == _acts_now(row), \
+            f"what a message records and what it draws disagree: {state}"
+    assert buttons.acts_of([[["Other", "somebody-elses-button"]]]) == "", \
+        "a button this cannot decode was claimed as one of ours"
+
+
+def test_the_COMPARISON_survives_a_reordered_keyboard() -> None:
+    """⚠️ THE ROW LAYOUT IS A DECISION ABOUT PHONES AND `available_for` IS A
+    DECISION ABOUT ACTS. They agree on order today and nothing makes them: a
+    stamp taken from the act list would, the day the rows were rearranged,
+    describe an order never drawn — or match nothing and redraw the same message
+    on every tick forever. So reconcile reads the keyboard it is about to send,
+    and reversing the rows must change NOTHING about how often it redraws."""
+    row = {"id": "c1", "title": "t", "state": "open", "acknowledged_at": ""}
+    upright = buttons.keyboard_for(row, {})
+    concerns._write([{**row, "messages": [
+        {"entity_id": "notify.x", "message_id": "11",
+         "acts": buttons.acts_of(list(reversed(upright)))}]}])
+
+    async def never(session: Any, ref: Any, keyboard: Any) -> bool:
+        raise AssertionError("redrew a message drawn from a reordered keyboard")
+
+    original_kb = buttons.keyboard_for
+    buttons.keyboard_for = (                          # type: ignore[assignment]
+        lambda concern, config=None: list(reversed(original_kb(concern, config))))
+    original_rd, buttons.redraw = buttons.redraw, never  # type: ignore[assignment]
+    try:
+        assert asyncio.run(buttons.reconcile(None, config={})) == 0
+    finally:
+        buttons.keyboard_for = original_kb            # type: ignore[assignment]
+        buttons.redraw = original_rd                  # type: ignore[assignment]
 
 
 def test_a_message_it_COULD_NOT_retire_is_KEPT_and_tried_again() -> None:

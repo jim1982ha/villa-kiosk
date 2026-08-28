@@ -32,10 +32,28 @@ the one way the two surfaces can visibly disagree.
 ⚠️ AND A PRESS IS NOT THE ONLY WAY AN ALERT MOVES. Somebody may acknowledge it
 on the tablet, or tick its job in Home Assistant's own panel, and the phone's
 buttons would sit there offering to do it again. `reconcile` closes that: it
-runs on the chase clock and retires the keyboard of any message whose alert has
-since been dealt with. Immediate on this side, eventually consistent from the
-other — which is the strongest promise a chat platform allows, because there is
-no way to subscribe to "this message is now wrong".
+runs on the chase clock and brings the keyboard of any such message back into
+step. Immediate on this side, eventually consistent from the other — which is
+the strongest promise a chat platform allows, because there is no way to
+subscribe to "this message is now wrong".
+
+⚠️ AN ALERT HAS THREE STATES, NOT TWO, AND RECONCILE MISSED THE MIDDLE ONE
+(2026-08-28). It asked one question — is this alert SETTLED? — and read every
+other answer as "still live: its buttons are correct". But acknowledging an
+alert does not settle it: it withdraws exactly ONE act (`Seen — stop chasing`,
+now spent) and leaves the other four live. So the set CHANGED without EMPTYING,
+which was the one transition nothing handled, and a message drawn with five
+buttons kept offering a fifth the store would refuse. Found on the owner's phone
+after they pressed the thumb and Done on the tablet; the log had said `with 5
+button(s)` while the store offered four, and both numbers were on screen at once
+without being subtracted. **The question is now "do the drawn buttons still
+match", and retiring is what happens when the answer is none.**
+
+⚠️ WHICH MEANS A MESSAGE HAS TO REMEMBER WHAT IT WAS DRAWN WITH — `Ref.acts` —
+and that record is DERIVED FROM THE KEYBOARD THAT WAS SENT (`acts_of`), never
+passed alongside it. A second parameter saying what the first one contains is a
+pair that can disagree, and this module's whole premise is that there is no
+second implementation to fall out of step with the first.
 """
 
 from __future__ import annotations
@@ -64,6 +82,13 @@ EVENT_TYPE: str = "telegram_callback"
 #:   edit_message              message_id REQUIRED, entity_id, message, and an
 #:                             OPTIONAL inline_keyboard — omitting it is what
 #:                             removes the buttons
+#:   edit_replymarkup          message_id AND inline_keyboard both REQUIRED,
+#:                             entity_id optional (read 2026-08-28). It changes
+#:                             the buttons and NOT the text, which is what a
+#:                             redraw needs: rewriting the body of an alert
+#:                             somebody has already read would move it back to
+#:                             the bottom of nothing and reword a message they
+#:                             may have acted on.
 #:   answer_callback_query     callback_query_id, message AND show_alert all
 #:                             REQUIRED, and it takes NO entity_id at all
 #:
@@ -74,6 +99,7 @@ EVENT_TYPE: str = "telegram_callback"
 SEND_SERVICE: Tuple[str, str] = ("telegram_bot", "send_message")
 ANSWER_SERVICE: Tuple[str, str] = ("telegram_bot", "answer_callback_query")
 EDIT_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_message")
+EDIT_MARKUP_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_replymarkup")
 
 #: ⚠️ THE PLATFORM AS THE ENTITY REGISTRY SPELLS IT. `chat.target_for` matches
 #: the same string for the same reason — a notify entity and a notify service
@@ -103,10 +129,19 @@ _ENTITIES: List[Tuple["frozenset[str]", float]] = [(frozenset(), 0.0)]
 
 @dataclass(frozen=True)
 class Ref:
-    """One sent message, enough to edit it later."""
+    """One sent message, enough to edit it later AND to know when to.
+
+    ⚠️ `acts` IS WHAT THE MESSAGE IS SHOWING, not what the alert deserves. The
+    second is recomputed on every tick from the store; only the first can say
+    whether the phone has fallen behind it, and Telegram will not tell us. It is
+    the comma-joined act ids in drawn order, so a change of ORDER counts as a
+    change too — the buttons are laid out for a thumb and their positions are
+    muscle memory.
+    """
 
     entity_id: str
     message_id: str
+    acts: str = ""
 
 
 # ── the wire form ───────────────────────────────────────────────────────────
@@ -134,6 +169,29 @@ def decode(data: Any) -> Tuple[str, str]:
     if act is None or not concern_id.strip():
         return "", ""
     return act.id, concern_id.strip()
+
+
+def acts_of(keyboard: Sequence[Sequence[Sequence[str]]]) -> str:
+    """What a drawn keyboard is offering, as `Ref.acts`. Reads its OWN buttons.
+
+    ⚠️ DERIVED, NEVER DECLARED. The alternative — `send` taking both a keyboard
+    and a list of what is in it — is two statements of one fact, and the one
+    that drifts is always the one nobody looks at. Decoding the callback data
+    the buttons actually carry means the record cannot describe a message that
+    was never sent.
+
+    ⚠️ A BUTTON THIS CANNOT DECODE CONTRIBUTES NOTHING, which is deliberate: a
+    row put there by somebody else is not ours to reconcile, exactly as `decode`
+    refuses to act on one.
+    """
+    ids: List[str] = []
+    for row in keyboard or []:
+        for button in row or []:
+            pair = list(button or [])
+            action_id, _ = decode(pair[1]) if len(pair) > 1 else ("", "")
+            if action_id:
+                ids.append(action_id)
+    return ",".join(ids)
 
 
 def keyboard_for(concern: Mapping[str, Any],
@@ -294,7 +352,8 @@ async def _send_one(session: Any, entity_id: str, title: str, body: str,
     if not message_id:
         log(f"sent with buttons to {entity_id} but got no message id back — "
             f"they cannot be retired later")
-    return Ref(entity_id=entity_id, message_id=message_id)
+    return Ref(entity_id=entity_id, message_id=message_id,
+               acts=acts_of(keyboard))
 
 
 # ── answering a press ───────────────────────────────────────────────────────
@@ -427,10 +486,48 @@ async def retire(session: Any, ref: Ref, closing: str) -> bool:
     return True
 
 
+async def redraw(session: Any, ref: "Ref",
+                 keyboard: Sequence[Sequence[Sequence[str]]]) -> bool:
+    """Replace a message's buttons with the ones its alert now offers.
+
+    ⚠️ THE BUTTONS AND NOT THE TEXT, which is why this is `edit_replymarkup` and
+    not `edit_message` with a keyboard. The body of an alert somebody has
+    already read must not change under them: they may have acted on the words,
+    and a redraw is not new information — it is the same alert, minus an act
+    that has been spent.
+
+    ⚠️ AN EMPTY KEYBOARD IS NOT THIS FUNCTION'S JOB. `inline_keyboard` is
+    REQUIRED here, so "no buttons" would have to be expressed as an empty list,
+    and Telegram treats that as a keyboard rather than as its absence. Removal
+    is `retire`, which omits the field entirely — the same distinction that
+    function already records, one call further down.
+    """
+    if not ref.entity_id or not ref.message_id or not keyboard:
+        return False
+    domain, service = EDIT_MARKUP_SERVICE
+    try:
+        from vesta.adapters.hass import HassClient
+        async with HassClient(session) as hass:
+            await hass.command(
+                "call_service", domain=domain, service=service,
+                service_data={
+                    "entity_id": ref.entity_id,
+                    "message_id": ref.message_id,
+                    "inline_keyboard": [[list(b) for b in row]
+                                        for row in keyboard],
+                })
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow(f"could not redraw the buttons on message {ref.message_id}", err)
+        return False
+    return True
+
+
 # ── keeping the phone in step with the tablet ───────────────────────────────
 async def reconcile(session: Any, *,
                     config: Optional[Mapping[str, Any]] = None) -> int:
-    """Retire the buttons of every alert dealt with somewhere else. Never raises.
+    """Bring every message back into step with its alert. Never raises.
+
+    Returns the number of messages CHANGED — retired plus redrawn.
 
     ⚠️ THIS IS THE HALF THAT MAKES THE OWNER'S REQUIREMENT TRUE RATHER THAN
     NEARLY TRUE. A press is answered instantly, but an alert also moves when
@@ -439,28 +536,67 @@ async def reconcile(session: Any, *,
     those can reach into a chat. Telegram offers no way to be told a message has
     gone stale, so the only honest mechanism is to ask, on a clock.
 
+    ⚠️ THE QUESTION IS "DO THE DRAWN BUTTONS STILL MATCH", NOT "IS THIS SETTLED"
+    — see the module docstring. Asking the second read an alert whose act set
+    had merely CHANGED as one whose buttons were correct, and acknowledgement is
+    exactly that case: `Seen` goes, four acts stay. Three outcomes now, and the
+    middle one is the one that was missing:
+
+        no acts at all   → retire: buttons gone, text says what became of it
+        acts differ      → redraw: same text, the buttons it now offers
+        acts match       → nothing, and NOTHING IS THE COMMON CASE — a message
+                           must not be rewritten on every tick of a 15-minute
+                           clock for the life of the store
+
+    ⚠️ A REF REMEMBERED BEFORE `acts` EXISTED HAS NONE, AND IS REDRAWN ONCE.
+    An absent record cannot be compared, and treating "I do not know what this
+    message shows" as "it is fine" is how the defect would survive its own fix
+    on every villa with an alert already out. One redraw stamps it and it
+    settles into the common case.
+
     ⚠️ IT RIDES THE CHASE CLOCK RATHER THAN OWNING ONE, exactly as the daily
     digest does. It decides its own work from the store, so all a loop provides
     is somewhere to ask often enough.
     """
     from vesta.supervise.agent import concerns as concerns_mod
+    from vesta.supervise.agent import actions as actions_mod
 
-    retired = 0
+    retired = redrawn = 0
     for row in concerns_mod.read():
         refs = row.get("messages")
         if not isinstance(refs, list) or not refs:
             continue
-        from vesta.supervise.agent import actions as actions_mod
-        if actions_mod.available_for(row, config):
-            continue                     # still live: its buttons are correct
-        closing = _settled_line(row)
+        want = actions_mod.available_for(row, config)
+        keyboard = keyboard_for(row, config) if want else []
+        # ⚠️ FROM THE KEYBOARD, NOT FROM `want`. The two agree today — the
+        # thumbs are last in both — but that agreement is nobody's contract:
+        # the row layout is a decision about phones and `available_for` is a
+        # decision about acts, and the day one is reordered a stamp would
+        # describe an order that was never drawn, or match nothing and redraw
+        # the same message on every tick forever. Comparing what WILL be drawn
+        # against what WAS drawn needs no agreement at all.
+        drawn = acts_of(keyboard)
+        closing = "" if want else _settled_line(row)
         kept: List[Dict[str, str]] = []
         for raw in refs:
             if not isinstance(raw, Mapping):
                 continue
-            ok = await retire(session,
-                              Ref(str(raw.get("entity_id") or ""),
-                                  str(raw.get("message_id") or "")), closing)
+            ref = Ref(str(raw.get("entity_id") or ""),
+                      str(raw.get("message_id") or ""),
+                      str(raw.get("acts") or ""))
+            if want and ref.acts == drawn:
+                kept.append(dict(raw))      # in step; leave the message alone
+                continue
+            if want:
+                ok = await redraw(session, ref, keyboard)
+                redrawn += 1 if ok else 0
+                # ⚠️ THE STAMP GOES ON ONLY IF THE EDIT LANDED. Recording what
+                # we MEANT to draw would make the next tick believe a message
+                # nobody could reach is correct — the same "an outage must not
+                # look like agreement" rule the retire path states below.
+                kept.append({**dict(raw), "acts": drawn} if ok else dict(raw))
+                continue
+            ok = await retire(session, ref, closing)
             retired += 1 if ok else 0
             # ⚠️ A RETIRED MESSAGE IS FORGOTTEN, which is what stops this
             # rewriting the same message on every tick for the life of the
@@ -471,7 +607,9 @@ async def reconcile(session: Any, *,
         concerns_mod.set_messages(str(row.get("id") or ""), kept)
     if retired:
         stage("button", f"retired the buttons on {retired} message(s)")
-    return retired
+    if redrawn:
+        stage("button", f"redrew the buttons on {redrawn} message(s)")
+    return retired + redrawn
 
 
 def _settled_line(row: Mapping[str, Any]) -> str:
