@@ -214,17 +214,24 @@ def keyboard_for(concern: Mapping[str, Any],
     if not acts:
         return []
     ident = str(concern.get("id") or "")
-    thumbs = [a for a in acts if a.id in ("useful", "not_useful")]
-    rest = [a for a in acts if a.id not in ("useful", "not_useful")]
+    button = [[a.label, encode(a.code, ident)] for a in acts]
+    by_id = {a.id: b for a, b in zip(acts, button)}
 
+    # ⚠️ THREE GROUPS, AND THE GROUPING IS WHAT A READER LEARNS THE MEANING
+    # FROM. Everything that leaves the villa's problem standing shares the top
+    # row (2026-08-28, owner: "show the stop chasing button on the same line as
+    # the done and need help button"); the one irreversible act gets a row to
+    # itself so it cannot be hit while aiming at a neighbour; the rating pair
+    # sits last, where a verdict belongs and where it is furthest from the acts.
     rows: List[List[List[str]]] = []
-    if len(rest) >= 2:
-        rows.append([[a.label, encode(a.code, ident)] for a in rest[:2]])
-        rest = rest[2:]
-    for act in rest:
-        rows.append([[act.label, encode(act.code, ident)]])
-    if thumbs:
-        rows.append([[a.label, encode(a.code, ident)] for a in thumbs])
+    top = [by_id[i] for i in ("done", "help", "seen", "job") if i in by_id]
+    if top:
+        rows.append(top)
+    if "dismiss" in by_id:
+        rows.append([by_id["dismiss"]])
+    rating = [by_id[i] for i in ("useful", "not_useful") if i in by_id]
+    if rating:
+        rows.append(rating)
     return rows
 
 

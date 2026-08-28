@@ -522,26 +522,35 @@ export default function AgentConcerns() {
                     screen this is written for is operated by finger, so every
                     one of these carries its word visibly; `title` keeps the
                     longer sentence for a mouse. */}
-                <button
-                  type="button" className="row-action concern-judge"
-                  disabled={busy === c.id}
-                  aria-label={`Raise this kind of alert more often: ${c.title}`}
-                  title="Worth telling me — the villa raises this kind more readily. The alert itself is not changed."
-                  onClick={() => void judge(c.id, true)}
-                >
-                  <span className="concern-tally" aria-hidden>+1</span>
-                  <span className="body-text">More like this</span>
-                </button>
-                <button
-                  type="button" className="row-action concern-judge"
-                  disabled={busy === c.id}
-                  aria-label={`Raise this kind of alert less often: ${c.title}`}
-                  title="Not worth telling me — the villa raises this kind less readily. The alert itself is not changed."
-                  onClick={() => void judge(c.id, false)}
-                >
-                  <span className="concern-tally" aria-hidden>-1</span>
-                  <span className="body-text">Less like this</span>
-                </button>
+                {/* ⚠️ ONCE ONLY, AND THE STAMP IS THE DISCRIMINATOR (2026-08-28,
+                    owner: "the rating shall only be applied once"). Keyed on
+                    `useful_at` and never on `useful`, which is `false` both for
+                    "less like this" and for "nobody has said anything" — the
+                    same conflation that hid the receipt for a `-1`, one release
+                    ago, in this very block. The line above replaces them, so
+                    the row does not simply go quiet. */}
+                {!String(c.useful_at ?? "").trim() && (<>
+                  <button
+                    type="button" className="row-action concern-judge"
+                    disabled={busy === c.id}
+                    aria-label={`Raise this kind of alert more often: ${c.title}`}
+                    title="Worth telling me — the villa raises this kind more readily. The alert itself is not changed."
+                    onClick={() => void judge(c.id, true)}
+                  >
+                    <span className="concern-tally" aria-hidden>+1</span>
+                    <span className="body-text">More like this</span>
+                  </button>
+                  <button
+                    type="button" className="row-action concern-judge"
+                    disabled={busy === c.id}
+                    aria-label={`Raise this kind of alert less often: ${c.title}`}
+                    title="Not worth telling me — the villa raises this kind less readily. The alert itself is not changed."
+                    onClick={() => void judge(c.id, false)}
+                  >
+                    <span className="concern-tally" aria-hidden>-1</span>
+                    <span className="body-text">Less like this</span>
+                  </button>
+                </>)}
                 {/* ⚠️ THE EYE IS BACK, AND THAT FOLLOWS FROM THE RULING RATHER
                     THAN REVERSING THE ONE THAT REMOVED IT. It went on
                     2026-08-28 because the thumbs acknowledged and two paths to

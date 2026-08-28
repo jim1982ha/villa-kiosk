@@ -170,7 +170,16 @@ def available_for(concern: Mapping[str, Any],
     # ⚠️ THE RATING PAIR IS OFFERED IN EVERY LIVE STATE, because it is not part
     # of the lifecycle at all — it says how good the alert was, which is as
     # answerable after somebody has picked the work up as before.
-    rating = [_BY_ID["useful"], _BY_ID["not_useful"]]
+    #
+    # ⚠️ BUT ONCE ONLY, AND `useful_at` IS THE DISCRIMINATOR (2026-08-28, owner:
+    # "as soon as user click on either the +1 or -1 button, these 2 buttons
+    # shall also disappear, since the rating shall only be applied once").
+    # Read the STAMP, never the verdict: `useful` is `false` both for "less like
+    # this" and for "nobody has said anything", so keying on it would leave a
+    # `-1` still offering to be pressed while a `+1` correctly withdrew — the
+    # same false/unset conflation that hid the receipt for a `-1` a release ago.
+    rating = [] if str(concern.get("useful_at") or "").strip() \
+        else [_BY_ID["useful"], _BY_ID["not_useful"]]
     if bool(concern.get("informational")):
         # ⚠️ AN FYI CAN BE DISMISSED TOO. Nothing is asked of the reader, but
         # "I have read this and it can go" is still an act somebody needs, and

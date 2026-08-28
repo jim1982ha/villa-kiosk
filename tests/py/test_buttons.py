@@ -70,20 +70,48 @@ def test_SOMEBODY_ELSE_S_BUTTON_is_ignored_rather_than_misread() -> None:
         assert buttons.decode(foreign) == ("", "")
 
 
-def test_the_KEYBOARD_pairs_the_two_discharging_acts_and_the_thumbs() -> None:
-    """⚠️ TELEGRAM GIVES EVERY BUTTON IN A ROW AN EQUAL SHARE OF THE WIDTH, so
-    five in a line is five unreadable slivers on a phone."""
+def test_the_KEYBOARD_GROUPS_BY_WHAT_AN_ACT_DOES() -> None:
+    """⚠️ THE GROUPING IS WHAT A READER LEARNS THE MEANING FROM, and it is three
+    rows (2026-08-28, owner: "show the stop chasing button on the same line as
+    the done and need help button"). Everything that leaves the villa's problem
+    STANDING shares the top row; the one irreversible act has a row to itself so
+    it cannot be hit while aiming at a neighbour; the rating sits last, where a
+    verdict belongs and furthest from the acts.
+
+    ⚠️ Telegram gives every button in a row an equal share of the width, so the
+    top row is capped at the three that belong there — five in a line would be
+    five unreadable slivers on a phone."""
     rows = buttons.keyboard_for({"id": "c1", "state": "open"})
-    # ⚠️ FOUR ROWS SINCE `Dismiss` BECAME ITS OWN ACT (2026-08-28): the two that
-    # discharge the alert share the top row, `Seen` and `Dismiss` take one each
-    # because both are consequential and neither should be a half-width target,
-    # and the rating pair sits last where a verdict belongs.
-    assert [len(r) for r in rows] == [2, 1, 1, 2]
-    assert [b[0] for b in rows[0]] == ["Done", "Need help"]
+    assert [b[0] for b in rows[0]] == ["Done", "Need help", "Seen — stop chasing"]
+    assert [len(r) for r in rows] == [3, 1, 2]
     assert rows[-1][0][1] == "vu:c1" and rows[-1][1][1] == "vn:c1"
-    # ⚠️ THE WIRE CODES ARE UNCHANGED THOUGH THE LABELS ARE NOT, which is what
-    # keeps a button already sitting in somebody's chat meaning what it meant.
-    assert rows[2][0][1] == "vx:c1", "dismiss is not on its own row"
+    # ⚠️ THE WIRE CODES ARE UNCHANGED THOUGH THE LABELS AND ROWS ARE NOT, which
+    # is what keeps a button already sitting in somebody's chat meaning what it
+    # meant.
+    assert rows[1][0][1] == "vx:c1", "dismiss is not alone on its own row"
+
+
+def test_a_RATING_IS_OFFERED_ONCE_and_the_STAMP_is_what_says_so() -> None:
+    """⚠️ "The rating shall only be applied once" (2026-08-28, owner). Read
+    `useful_at`, NEVER `useful`: the verdict is `false` both for "less like
+    this" and for "nobody has said anything", so keying on it would withdraw the
+    pair after a `+1` and leave it offered after a `-1` — the same false/unset
+    conflation that hid the on-screen receipt for a `-1` one release earlier, in
+    the same feature."""
+    from vesta.supervise.agent import actions
+    for verdict in (True, False):
+        rated = {"id": "c1", "state": "open", "delivered_at": "x",
+                 "useful": verdict, "useful_at": "2026-08-28T09:38:39Z"}
+        ids = [a.id for a in actions.available_for(rated)]
+        assert "useful" not in ids and "not_useful" not in ids, \
+            f"a {'+1' if verdict else '-1'} can be pressed again"
+        # ⚠️ AND THE LIFECYCLE IS UNTOUCHED BY IT — withdrawing the rating must
+        # not withdraw the acts, which is the whole separation.
+        assert "done" in ids and "dismiss" in ids
+    unrated = [a.id for a in actions.available_for(
+        {"id": "c1", "state": "open", "delivered_at": "x", "useful": False})]
+    assert "useful" in unrated and "not_useful" in unrated, \
+        "an unrated alert offers no rating, so nobody can ever rate one"
 
 
 def test_a_SETTLED_alert_gets_NO_keyboard_and_that_is_a_real_answer() -> None:

@@ -1,3 +1,15 @@
+## 2.855.0
+
+### Changed — a rating can be given once, and the buttons say so by leaving
+Pressing +1 or -1 left both buttons sitting there, so an alert could be rated
+again and again and nothing said which way it had gone. They now withdraw as
+soon as either is pressed, on the phone and on the tablet, replaced by a line
+saying which was given. The message is redrawn without them rather than going
+quiet. "Seen — stop chasing" also moves up beside "Done" and "Need help": those
+three all leave the villa's problem standing, so they belong together, and
+"Dismiss completely" keeps a row of its own where it cannot be hit while aiming
+at a neighbour.
+
 ## 2.854.0
 
 ### Changed — rating an alert no longer decides what happens to it
