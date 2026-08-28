@@ -1,3 +1,14 @@
+## 2.844.0
+
+### Changed — the briefing layer moves: the deletable half is now one folder
+The scheduled briefing — its pipeline, gating, narration adapters and task
+reconciliation — now lives in a single folder whose header states the owner's
+future plainly: this is the half that gets deleted wholesale once the assistant
+supervises exclusively. The old reports folder no longer exists; that deletion
+is now one folder plus a few wiring lines, instead of archaeology. Along the
+way a test's own safety guard was found matching the digit 0 inside "40 source
+files" — it now checks the number, not the substring. No behaviour changes.
+
 ## 2.843.0
 
 ### Changed — the environment layer moves: second of the layer moves
