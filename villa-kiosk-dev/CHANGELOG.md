@@ -1,3 +1,15 @@
+## 2.857.0
+
+### Fixed — an alert's buttons came apart one at a time on a narrow screen
+Each button carries its words, so on a phone they no longer fit beside the
+alert's title — and as loose controls they wrapped individually, wherever the
+row ran out of room, which looks like a layout that has broken rather than one
+that has adapted. They are one group now: it moves to its own line intact,
+right-aligned, and the +1 / -1 pair can never be split with one stranded above
+the other. The Reason tab also offered the rating before the act, the opposite
+of the phone and of the rule the code states — the act comes first on both
+screens now.
+
 ## 2.856.2
 
 ### Fixed — a measurement in a comment that was taken for a different screen
