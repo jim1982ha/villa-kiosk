@@ -35,6 +35,7 @@ export type Source =
   | "ha"
   | "reflex"
   | "check"
+  | "addon"
   | "agent"
   | "triage"
   | "llm"
@@ -68,9 +69,27 @@ export const SOURCES: Record<Source, SourceSpec> = {
     tone: "reflex",
   },
   check: {
-    label: "Built-in check",
-    hint: "A fixed calculation over weeks of this villa's own history. It "
-      + "always works the same way, and you can switch it off.",
+    // ⚠️ "VESTA check", NOT "Built-in check" (2026-08-29, owner: name these so
+    // "user always know what type of checks are currently used"). "Built-in"
+    // says where the code came from, which is the one thing a reader does not
+    // need; what they need is WHOSE check it is, because the other half of the
+    // same screen is "Your automations".
+    //
+    // ⚠️ AND DELIBERATELY NOT "VESTA AGENT check", WHICH WAS ONE OF THE TWO
+    // NAMES PROPOSED. These are fixed arithmetic: the briefing runs them
+    // whether or not the agent ever thinks, and this very chip sits beside a
+    // "No AI" chip on the tab header. Naming them for the AI tier would
+    // contradict the row above them. The agent DOES run the same three classes
+    // as a tool (`agent/tools/analysis.py`), which the hint says outright —
+    // that is the honest version of "used by the agent".
+    //
+    // ⚠️ NOR "LEGACY checks", THE OTHER PROPOSAL: it is exactly backwards. The
+    // legacy layer is the `maintenance_*`/`roi_*` automations that were
+    // RETIRED; these are what replaced them and what runs today.
+    label: "VESTA check",
+    hint: "A fixed calculation over weeks of this villa's own history, run by "
+      + "VESTA itself in every briefing — and by the agent when it "
+      + "investigates. It always works the same way, and you can switch it off.",
     tone: "check",
   },
   triage: {
@@ -84,6 +103,21 @@ export const SOURCES: Record<Source, SourceSpec> = {
     hint: "Looked into properly, with the evidence it used recorded. The "
       + "severity is its own judgement.",
     tone: "agent",
+  },
+  addon: {
+    // ⚠️ SPLIT OUT OF `check` (2026-08-29). The briefing's title chip used
+    // `check` to mean "this prose was composed by fixed rules, not a model",
+    // and read back "A fixed calculation over weeks of this villa's own
+    // history ... you can switch it off" — which describes a statistical
+    // module, not the wording of a report. One label, two claims; renaming
+    // `check` would have entrenched it. It is the exact counterpart of `llm`
+    // below and is worded as its pair.
+    // ⚠️ `tone: "check"` REUSES `.source-check` on purpose — same visual
+    // family, no new CSS class, nothing for the dead-class probe to find.
+    label: "Written by VESTA",
+    hint: "The wording as well as the facts, composed by the add-on itself "
+      + "with no AI involved.",
+    tone: "check",
   },
   llm: {
     label: "Written by AI",

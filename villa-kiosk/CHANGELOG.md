@@ -1,3 +1,16 @@
+## 2.871.0
+
+### Changed — the checks are named for whose they are, not where the code shipped from
+
+"Built-in checks" said where they came from, which is the one thing a reader
+does not need; the other half of that screen is "Your automations". They are
+"VESTA's own checks" now — heading, chip and tooltip — and the copy says VESTA
+runs them in every briefing and the agent runs the same ones when it
+investigates. The rename exposed a chip carrying two meanings: the briefing's
+title used "Built-in check" to say its wording was not written by AI, explained
+as a calculation over history you can switch off. That is its own label now,
+"Written by VESTA", the counterpart of "Written by AI".
+
 ## 2.870.0
 
 ### Changed — comments only: removed two counts that would go stale in silence

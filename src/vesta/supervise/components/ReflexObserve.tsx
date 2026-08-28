@@ -10,7 +10,7 @@
 // payload and the same helpers to render four numbers each.
 
 import InfoHint from "@/components/common/InfoHint";
-import { TierIntro, TIERS, FAMILIES } from "./tiers";
+import { TierIntro, TIERS, FAMILIES } from "@/vesta/shared/tiers";
 import { useHA } from "@/ha/HAStateStore";
 import type { ReportsDiagnostics } from "@/vesta/brief/reportsApi";
 

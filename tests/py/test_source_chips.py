@@ -39,6 +39,25 @@ def _declared_tones() -> Set[str]:
     return set(re.findall(r'tone:\s*"([a-z]+)"', block))
 
 
+def _declared_sources() -> Set[str]:
+    """The KEYS of `SOURCES` — one per producer the UI can label.
+
+    ⚠️ NOT `_declared_tones()`, AND THE DIFFERENCE IS REAL (2026-08-29). The
+    count-of-labels test below used the tone set as its stand-in for "how many
+    sources are there", which held only while every source had a colour of its
+    own. `addon` ("Written by VESTA") deliberately reuses `check`'s tone: both
+    mean "VESTA's own deterministic work", they should look like one family,
+    and a private colour would be a new CSS class carrying no new meaning. Two
+    sources, one tone — so the proxy under-counted and the pin failed on a
+    correct tree. The colour tests below still key on TONES, which is right:
+    what needs a `.source-*` rule is a tone, not a source.
+    """
+    source = _read(CHIP)
+    block = source[source.index("export const SOURCES"):]
+    block = block[:block.index("\n};")]
+    return set(re.findall(r"^  ([a-z]+):\s*\{", block, re.M))
+
+
 def _styled_tones() -> Set[str]:
     r"""Every tone rule in the stylesheet — the ones that SET `--source-tone`.
 
@@ -121,9 +140,10 @@ def test_the_chip_EXPLAINS_itself_on_every_source() -> None:
     block = block[:block.index("\n};")]
     labels = len(re.findall(r"^    label:", block, re.M))
     hints = len(re.findall(r"^    hint:", block, re.M))
-    assert labels == hints == len(_declared_tones()), (
+    assert len(_declared_sources()) >= 6, "the SOURCES key parser found nothing"
+    assert labels == hints == len(_declared_sources()), (
         f"{labels} label(s) and {hints} hint(s) across "
-        f"{len(_declared_tones())} source(s) — every source needs both")
+        f"{len(_declared_sources())} source(s) — every source needs both")
     assert "{spec.hint}" in source, (
         "the hint is declared and never rendered")
     # ⚠️ NOT THROUGH `title=`, WHICH IS THE POINT (2026-08-28). `InfoHint`'s own

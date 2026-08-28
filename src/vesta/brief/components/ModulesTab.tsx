@@ -19,7 +19,7 @@
 //
 //   1  Is anything listening?      nothing below means anything if it is not
 //   2  Your automations            what still acts by itself, whatever the mode
-//   3  Built-in checks             on/off, and why each ran
+//   3  VESTA's own checks          on/off, and why each ran
 //   4  Adding your own             how to extend it — blueprints, not code
 //
 // ⚠️ LINE 2 READ "the primary detection layer, which WINS" UNTIL 2026-08-29 and
@@ -170,8 +170,9 @@ export default function ModulesTab({
           the job. */}
       <p className="muted body-text">
         What this property is watched by, and what a brief can be built from.
-        While supervision is on these checks all run; switch it off and the
-        automations you built take the job back.
+        VESTA runs the checks below itself — in every briefing, and again when
+        the agent investigates something. While supervision is on they all run;
+        switch it off and the automations you built take the job back.
       </p>
 
       {/* ── 1. Is anything listening? ───────────────────────────────────── */}
@@ -275,7 +276,7 @@ export default function ModulesTab({
           `discovery.py`, where the constant used to be. */}
 
       {/* ── 3. Built-in checks ──────────────────────────────────────────── */}
-      <h3 className="settings-section-title">Built-in checks</h3>
+      <h3 className="settings-section-title">VESTA’s own checks</h3>
       {diagnostics.modules.length === 0 && (
         <p className="reports-item sev-warning">
           None are registered. That is a fault in the add-on, not a setting.
@@ -334,7 +335,7 @@ export default function ModulesTab({
                   switch it off" is the property that makes that swap
                   acceptable — and it is worth saying on the row. */}
               {/* ⚠️ NO `SourceChip` HERE. Every row in this list sits under a
-                  heading reading "Built-in checks", so a "Built-in check" chip
+                  heading reading "VESTA’s own checks", so a "VESTA check" chip
                   on each one repeats the section title once per row — the same
                   redundancy the reflex table had, reported in the same breath.
                   The chip earns its place where a list MIXES sources; this list
@@ -419,7 +420,7 @@ export default function ModulesTab({
       <h3 className="settings-section-title">Adding your own checks</h3>
       <p className="muted body-text">
           These arrive with the add-on — nothing to install, nothing to delete.
-          <InfoHint label="Built-in checks">
+          <InfoHint label="VESTA’s own checks">
             Your own Home Assistant automations are what extend a brief: anything they
             report is grouped, priced and written in automatically. “Your automations”
             above lists what has been heard, which is how you confirm a rule is

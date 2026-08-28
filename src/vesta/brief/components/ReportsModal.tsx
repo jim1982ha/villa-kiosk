@@ -90,7 +90,7 @@ import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
 import ModulesTab from "./ModulesTab";
-import { TierIntro, STEPS } from "@/vesta/supervise/components/tiers";
+import { TierIntro, STEPS } from "@/vesta/shared/tiers";
 
 type Tab = "checks" | "coverage" | "preview" | "schedule";
 

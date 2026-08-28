@@ -51,7 +51,7 @@ export default function PreviewTab({
               below proves rather than asserts. */}
           <div className="reports-title-row">
             <h3 className="settings-section-title">{preview.title}</h3>
-            <SourceChip source={narrationMode === "provider" ? "llm" : "check"} />
+            <SourceChip source={narrationMode === "provider" ? "llm" : "addon"} />
           </div>
           {/* ⚠️ PRE, NOT A PARAGRAPH. The renderer emits plain text with
               meaningful line breaks — `deliver.py` sends the intersection of

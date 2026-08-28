@@ -324,7 +324,7 @@ def test_a_step_header_is_ONE_line_with_the_rest_behind_the_hint() -> None:
     own note — so two-line descriptions became six lines of grey before the
     reader reached a switch. Each is short enough alone and the STACK is the
     defect, which is why this measures the header specifically."""
-    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "shared", "tiers.tsx"))
     longest = max(len(re.sub(r"\s+", " ", m))
                   for m in re.findall(r'what:\s*"([^"]*)"', src))
     assert longest <= 90, (
@@ -408,7 +408,7 @@ def test_every_blueprint_family_the_villa_reports_has_a_described_ROLE() -> None
     """⚠️ A BLANK CELL READS AS "THIS FAMILY DOES NOTHING". `control` and `vesta`
     were absent from FAMILIES and rendered an empty role beside a real count.
     Same shape as an unlisted severity defaulting to the quietest value."""
-    tiers = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
+    tiers = _read(os.path.join(SRC, "vesta", "shared", "tiers.tsx"))
     block = tiers[tiers.index("export const FAMILIES"):]
     block = block[:block.index("\n};")]
     named = set(re.findall(r"^  (\w+):", block, re.M))
@@ -733,7 +733,7 @@ def test_a_tier_fact_ICON_follows_its_VALUE() -> None:
     one fact. So both facts render their PLAIN glyph and `.tier-fact-off` draws
     the diagonal, which is also why the CSS has to exist for this to work at all.
     """
-    tiers = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
+    tiers = _read(os.path.join(SRC, "vesta", "shared", "tiers.tsx"))
     css = _read(os.path.join(SRC, "styles.css"))
     # ⚠️ CODE ONLY, AND THIS IS THE FOURTH TIME IN ONE SESSION THAT A FIRST-CUT
     # PIN MATCHED THE COMMENT RECORDING ITS OWN FIX. The header above `TierIntro`
@@ -760,7 +760,7 @@ def test_the_tier_FACTS_sit_above_the_description() -> None:
     it survives an outage belong with the step number and the name — a reader
     who stops after the first line should still have them. They used to sit
     after a paragraph of prose."""
-    tiers = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
+    tiers = _read(os.path.join(SRC, "vesta", "shared", "tiers.tsx"))
     body = tiers[tiers.index("export function TierIntro"):]
     assert body.index('<dl className="tier-facts">') < body.index("{tier.what}"), (
         "the facts row is below the description again")
@@ -960,7 +960,7 @@ def test_the_reflex_tab_lists_ONLY_what_acts_by_itself() -> None:
         "the Reflex tab no longer filters to families that ACT, so retired "
         "detection rules are listed as things that act on their own")
 
-    fam = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
+    fam = _read(os.path.join(SRC, "vesta", "shared", "tiers.tsx"))
     # ⚠️ THE TWO THAT ACT. `critical` closes valves and sounds alarms; `control`
     # turns lights and fans on and off. Everything else only ever reported.
     for name in ("critical", "control"):

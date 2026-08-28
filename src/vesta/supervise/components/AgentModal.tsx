@@ -40,7 +40,7 @@ import AgentMemories from "@/vesta/supervise/components/AgentMemories";
 import AgentProposals from "@/vesta/supervise/components/AgentProposals";
 import AgentReview from "@/vesta/supervise/components/AgentReview";
 import { ReflexTab, ObserveTab } from "./ReflexObserve";
-import { TierIntro, TIERS } from "./tiers";
+import { TierIntro, TIERS } from "@/vesta/shared/tiers";
 import ActDeliverySection from "./ActDeliverySection";
 import AgentTodo from "./AgentTodo";
 import AgentAdvancedModal from "./AgentAdvancedModal";
