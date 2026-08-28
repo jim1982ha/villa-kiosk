@@ -328,3 +328,58 @@ def test_BOTH_delivery_paths_tell_route_which_profile_they_used() -> None:
         assert "profile=" in call, (
             f"{fn.__name__} calls route.plan without naming the profile, so "
             f"its message arrives unsigned:\n{call}")
+
+
+# ── the alert says it has a job ─────────────────────────────────────────────
+def test_a_DELIVERED_ALERT_says_it_is_on_the_TO_DO_LIST() -> None:
+    """⚠️ THE INVISIBLE SIDE EFFECT, NAMED AT LAST (2026-08-28, owner: "it's
+    currently not clear from the UI that clicking on the Thumbs will create a
+    ToDo item in the list"). It does not — DELIVERY raises the job, before
+    anybody presses anything, and no surface said so. An item appeared on the
+    list with nothing connecting it to the alert, so its arrival was attributed
+    to whichever button had just been pressed."""
+    out = route.plan(_c(), targets=OWNER,
+                     config={"task_list": "todo.shopping_list"})
+    assert "To-Do List" in out.body
+    # ⚠️ IT SAYS WHAT `Done` DOES, NOT THAT AN ITEM IS ALREADY THERE. The job is
+    # raised AFTER the send, deliberately, so a message that failed to leave
+    # never puts work on anybody's list — a body claiming otherwise would be
+    # ahead of the fact it describes.
+    assert "Done" in out.body
+
+
+def test_it_CLAIMS_NO_JOB_on_a_villa_that_has_configured_no_list() -> None:
+    """⚠️ `task_list` DEFAULTS TO EMPTY, so this is the state a fresh install is
+    in, not an edge case. `list_for` returning "" means the loop is off and
+    there is no item — a message promising one would send its reader to look
+    for something that does not exist."""
+    out = route.plan(_c(), targets=OWNER, config={"task_list": ""})
+    assert "To-Do List" not in out.body
+    assert route.plan(_c(), targets=OWNER, config={}).body.count("To-Do") == 0
+
+
+def test_an_FYI_claims_no_job_either_because_it_RAISES_none() -> None:
+    """⚠️ AN ALERT-ONLY NOTICE ASKS FOR NOTHING, and raising no job is the whole
+    point of the mode — so the sentence that explains the job must not appear on
+    the one delivery class that never has one."""
+    out = route.plan(_c(informational=True), targets=OWNER,
+                     config={"task_list": "todo.shopping_list"})
+    assert "nothing is asked of you" in out.body, "the fixture is not an FYI"
+    assert "To-Do List" not in out.body
+
+
+def test_the_THUMBS_say_what_they_are_in_WORDS() -> None:
+    """⚠️ A BARE EMOJI SAYS NOTHING, AND IT WAS READ AS FILING SOMETHING. Beside
+    `Done` and `Add to the To-Do List`, two unlabelled thumbs were taken for a
+    third thing that touches the list. Every other label already states its
+    effect ("Seen — stop chasing"); these two stated nothing."""
+    from vesta.supervise.agent import actions
+    for act_id in ("useful", "not_useful"):
+        label = actions.act_by_id(act_id).label          # type: ignore[union-attr]
+        assert any(ch.isalpha() for ch in label), \
+            f"{act_id} is drawn as a bare glyph, so it explains nothing"
+    # ⚠️ AND NEITHER PROMISES ANYTHING ABOUT THE LIST, which is the belief that
+    # started this: a thumb records a verdict and marks the alert seen.
+    for act in actions.ACTS:
+        if act.id in ("useful", "not_useful"):
+            assert "To-Do" not in act.label and "job" not in act.label.lower()

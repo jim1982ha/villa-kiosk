@@ -319,7 +319,7 @@ export default function AgentConcerns() {
       </p>
       <div className="cockpit-attention-list">
         {rows.map((c) => (
-          <div className="editable-row" key={c.id}>
+          <div className="editable-row concern-row" key={c.id}>
             <div className="editable-row-fields" style={{ alignItems: "flex-start" }}>
               {/* ⚠️ THE FOUR FACTS ARE ONE BLOCK, STACKED, NOT FOUR SIBLINGS OF
                   THE TITLE (2.765.0). They sat inline with it, so on any real
@@ -486,22 +486,34 @@ export default function AgentConcerns() {
             )}
             {canJudge && (
               <>
+                {/* ⚠️ A `title` IS NOT AN EXPLANATION ON A TABLET. These two
+                    said what they do only on hover, and the screen this is
+                    written for is operated by finger — so on the device that
+                    matters they were two unlabelled icons beside a To-Do List,
+                    and were read as filing something there. They do not touch
+                    it (2026-08-28, owner: "it's currently not clear from the UI
+                    that clicking on the Thumbs will create a ToDo item"). The
+                    words are visible now, and `title` keeps the longer sentence
+                    for a mouse. */}
                 <button
-                  type="button" className="row-action" disabled={busy === c.id}
+                  type="button" className="row-action concern-judge"
+                  disabled={busy === c.id}
                   aria-label={`Useful, and I have seen it: ${c.title}`}
-                  title="Worth telling me — marks it seen, and the villa raises this kind more readily"
+                  title="Worth telling me — marks it seen, and the villa raises this kind more readily. Your To-Do List is not changed."
                   onClick={() => void judge(c.id, true)}
                 >
                   <ThumbsUp size={16} aria-hidden />
+                  <span className="body-text">Useful</span>
                 </button>
                 <button
-                  type="button" className="row-action danger"
+                  type="button" className="row-action danger concern-judge"
                   disabled={busy === c.id}
                   aria-label={`Not useful, and I have seen it: ${c.title}`}
-                  title="Not worth telling me — marks it seen, and the villa raises this kind less readily"
+                  title="Not worth telling me — marks it seen, and the villa raises this kind less readily. Your To-Do List is not changed."
                   onClick={() => void judge(c.id, false)}
                 >
                   <ThumbsDown size={16} aria-hidden />
+                  <span className="body-text">Not useful</span>
                 </button>
               </>
             )}

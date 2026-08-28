@@ -5029,6 +5029,24 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 .row-action:hover:not(:disabled) { border-color: var(--hairline-strong); }
 .row-action:disabled { opacity: 0.55; }
+/* ⚠️ THE VERDICT BUTTONS CARRY THEIR WORDS, SO THEY ARE PILLS RATHER THAN
+   DISCS (2026-08-28). A `title` explains nothing to a finger, and on the screen
+   this app is written for — a wall-mounted tablet — two unlabelled thumbs beside
+   a To-Do List were read as filing something into it. `--touch-min` stays the
+   HEIGHT and the floor on the width, so the target is unchanged. */
+.row-action.concern-judge {
+  width: auto; padding: 0 12px; gap: 6px;
+  border-radius: var(--radius-pill); white-space: nowrap;
+}
+/* ⚠️ THIS ROW WRAPS AND `.editable-row` MUST NOT LEARN TO — five components
+   share that class and a settings control belongs beside its label. Here the
+   pair of pills is ~200 CSS px, so on a phone the alert's own title would be
+   crushed to a few characters a line; giving the fields a real flex-basis is
+   what lets the buttons drop to their own line instead of taking the text's
+   width. Without the basis they never wrap at all: `min-width: 0` lets the
+   text column shrink to nothing first. */
+.concern-row { flex-wrap: wrap; }
+.concern-row > .editable-row-fields { flex: 1 1 220px; }
 /* The destructive one keeps the app's danger treatment, still circular. */
 .row-action.danger { color: var(--status-danger); }
 

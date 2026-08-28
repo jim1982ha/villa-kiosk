@@ -221,6 +221,27 @@ def plan(concern: Mapping[str, Any], *, targets: Sequence[str],
                 f"Investigate and Log Only, so nothing is asked of you. This "
                 f"will not be re-sent or chased.")
 
+    # ⚠️ AND IT SAYS THE ALERT HAS A JOB, BECAUSE OTHERWISE NOTHING DOES
+    # (2026-08-28, owner: "it's currently not clear from the UI that clicking
+    # on the Thumbs will create a ToDo item in the list"). It does not — a thumb
+    # records a verdict and acknowledges. The item is raised by DELIVERY, before
+    # anybody presses anything, and no surface mentioned it: an item appeared on
+    # the list with nothing to connect it to, so its arrival was attributed to
+    # whichever button had just been pressed. An invisible side effect gets
+    # blamed on a visible one.
+    #
+    # ⚠️ CONDITIONAL ON THE JOB ACTUALLY EXISTING, on both counts. `task_list`
+    # DEFAULTS TO EMPTY, so on a villa that has configured no list there is no
+    # job and this must not claim one; and an FYI raises none by design. That is
+    # also why this is a sentence about what Done DOES rather than a claim that
+    # an item is already there — the job is raised AFTER the send, deliberately,
+    # so that nothing is ever put on a list for a message that failed to leave.
+    if not informational:
+        from vesta.supervise.agent import task as task_mod
+        if task_mod.list_for(config):
+            body = (f"{body}\n\nThis is on the To-Do List. Press Done when it "
+                    f"is finished and it is ticked off there too.")
+
     # ⚠️ THE MESSAGE SAYS WHO IT IS FOR (2026-08-27, owner's request). One
     # Telegram chat can carry both the household's alerts and the Facility
     # manager's work, and a reader had no way to tell which of them a given

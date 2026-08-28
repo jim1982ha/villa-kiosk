@@ -72,8 +72,14 @@ ACTS: Tuple[Act, ...] = (
     Act("help", "h", "Need help"),
     Act("seen", "s", "Seen — stop chasing"),
     Act("job", "j", "Add to the To-Do List"),
-    Act("useful", "u", "👍"),
-    Act("not_useful", "n", "👎"),
+    # ⚠️ THE THUMBS CARRY WORDS, AND THE WORDS SAY WHAT THEY DO NOT TOUCH
+    # (2026-08-28). A bare 👍 beside `Done` and `Add to the To-Do List` was read
+    # as a third thing that files something — the owner reported believing a
+    # thumb created a job. It does not: it records a verdict and marks the alert
+    # seen. Every other label here already states its effect ("Seen — stop
+    # chasing"), and these two were the only ones saying nothing at all.
+    Act("useful", "u", "👍 Useful"),
+    Act("not_useful", "n", "👎 Not useful"),
 )
 
 _BY_ID = {a.id: a for a in ACTS}
