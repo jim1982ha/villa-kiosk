@@ -1,3 +1,15 @@
+## 2.851.0
+
+### Fixed — pressing one button on the phone removed all the others
+"Seen — stop chasing" only withdraws itself: the alert goes on offering Done,
+Need help and the thumbs, and the tablet goes on showing them. But a press
+removed the whole keyboard, so the phone offered nothing while the tablet
+offered four — the same two screens disagreeing, the other way round. A press
+now leaves whatever the alert still offers and takes the keyboard away only
+when nothing is left, which is what a thumbs-down does. The message is rewritten
+with what happened and who did it, and keeps the alert's own wording, so the
+buttons left on it still say what they are for.
+
 ## 2.850.0
 
 ### Fixed — buttons pressed on the phone would have come back a few minutes later

@@ -404,25 +404,45 @@ async def handle(event: Mapping[str, Any], *, session: Any,
     await _answer(session, query_id, outcome.note or
                   ("Done" if outcome.ok else "That did not work"))
     if outcome.ok or outcome.spent:
-        # ⚠️ RETIRED ON A REFUSAL TOO, and that is the point rather than an
+        # ⚠️ ACTED ON A REFUSAL TOO, and that is the point rather than an
         # oversight: `spent` means the store says this alert is already dealt
         # with, so the buttons the presser is looking at are the stale ones. The
         # press that discovered it is the best moment to correct them.
-        retired_here = await retire(
-            session, Ref(await _entity_of(session, data), message_id),
-            _closing_line(data, outcome.note))
-        # ⚠️ AND THE REF IS FORGOTTEN, BECAUSE RETIRING IS PERMANENT. A ref
+        #
+        # ⚠️ AND WHAT THE MESSAGE BECOMES IS DECIDED BY WHAT THE ALERT STILL
+        # OFFERS — the SAME three-way question `reconcile` asks, because it is
+        # the same question. This path retired the whole keyboard after ANY
+        # press, which is right only for an act that DISCHARGES the alert.
+        # `Seen — stop chasing` withdraws itself and leaves Done, Need help and
+        # the thumbs live; the tablet went on offering all four while the phone
+        # offered none, so the two surfaces disagreed again — the mirror image
+        # of the defect fixed hours earlier, and the THIRD time in one day that
+        # one rule was applied at one of its two call sites. The owner asked the
+        # question that found it: "if I click stop chasing, I should still see
+        # the done and thumb up/down buttons, right?" (2026-08-28).
+        from vesta.supervise.agent import concerns as concerns_mod
+        row = next((r for r in concerns_mod.read()
+                    if str(r.get("id")) == str(concern_id)), {})
+        remaining = actions_mod.available_for(row, config)
+        ref = Ref(await _entity_of(session, data), message_id)
+        if remaining:
+            # ⚠️ THE TEXT IS REWRITTEN TOO, AND MUST CARRY THE ALERT'S OWN BODY.
+            # Editing replaces everything the message showed, and for an alert
+            # still open the body IS the content somebody acts on — dropping it
+            # for a one-line receipt would leave live buttons under a message
+            # that no longer says what they are for.
+            keyboard = keyboard_for(row, config)
+            if await restate(session, ref, _acted_text(row, outcome.note, who),
+                             keyboard):
+                concerns_mod.stamp_message(concern_id, message_id,
+                                           acts_of(keyboard))
+        # ⚠️ A RETIRED REF IS FORGOTTEN, BECAUSE RETIRING IS PERMANENT. A ref
         # exists only so a message can be edited later; this one has just had
         # its buttons removed and its text replaced, so there is nothing left to
         # keep in step. `reconcile` has always forgotten a ref it retired and
         # this path never did — harmless while reconciliation only ever REMOVED
-        # buttons, and a live defect the moment it could also PUT THEM BACK:
-        # pressing a button on the phone would have stripped the keyboard and
-        # the next tick would have drawn it again, up to 15 minutes later, on
-        # the message somebody had just dealt with. Found the same day the
-        # redraw shipped, on the owner's own press (2026-08-28).
-        if retired_here:
-            from vesta.supervise.agent import concerns as concerns_mod
+        # buttons, and a live defect the moment it could also PUT THEM BACK.
+        elif await retire(session, ref, _closing_line(data, outcome.note)):
             concerns_mod.forget_message(concern_id, message_id)
     stage("button", f"{concern_id} {action_id} by {who}: "
                     f"{'ok' if outcome.ok else outcome.note}")
@@ -441,6 +461,25 @@ async def _entity_of(session: Any, data: Mapping[str, Any]) -> str:
     from vesta.supervise.agent import chat as chat_mod
     target = await chat_mod.target_for(session, str(data.get("chat_id") or ""))
     return _bare(target)
+
+
+def _acted_text(row: Mapping[str, Any], note: str, who: str) -> str:
+    """What a message says after a press that left it with buttons.
+
+    ⚠️ TITLE AND BODY, NOT JUST A RECEIPT. `_closing_line` is a receipt and is
+    right for a message that is finished; this one still carries live buttons,
+    and an edit replaces everything the message showed — so leaving the body out
+    would put `Done` and `Need help` under a line that no longer says what the
+    alert was about. The title goes back in for the same reason: editing a
+    Telegram message takes text only, and the bold title sent with the original
+    is not part of it.
+    """
+    title = " ".join(str(row.get("title") or "").split())
+    body = str(row.get("body") or "").strip()
+    tail = str(note or "").strip()
+    if tail and who:
+        tail = f"{tail} — {who}"
+    return "\n\n".join(part for part in (title, body, tail) if part)
 
 
 def _closing_line(data: Mapping[str, Any], note: str) -> str:
@@ -496,6 +535,42 @@ async def retire(session: Any, ref: Ref, closing: str) -> bool:
                                              "message": closing})
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow(f"could not retire the buttons on message {ref.message_id}", err)
+        return False
+    return True
+
+
+async def restate(session: Any, ref: "Ref", text: str,
+                  keyboard: Sequence[Sequence[Sequence[str]]]) -> bool:
+    """Say what just happened AND leave the buttons that are still live.
+
+    ⚠️ ONE CALL, BECAUSE TWO WOULD BE VISIBLE. `edit_message` takes an OPTIONAL
+    `inline_keyboard`, so text and buttons move together; editing the text and
+    then the markup would show a message with the new wording under the OLD
+    buttons for as long as the second call takes, which is exactly the state a
+    presser would act on.
+
+    ⚠️ IT IS FOR A MESSAGE THAT KEEPS BUTTONS. With none left the call to make
+    is `retire`, which OMITS the field — passing an empty list here would leave
+    Telegram an empty keyboard rather than no keyboard, the distinction that
+    function records.
+    """
+    if not ref.entity_id or not ref.message_id or not text or not keyboard:
+        return False
+    domain, service = EDIT_SERVICE
+    try:
+        from vesta.adapters.hass import HassClient
+        async with HassClient(session) as hass:
+            await hass.command(
+                "call_service", domain=domain, service=service,
+                service_data={
+                    "entity_id": ref.entity_id,
+                    "message_id": ref.message_id,
+                    "message": text,
+                    "inline_keyboard": [[list(b) for b in row]
+                                        for row in keyboard],
+                })
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow(f"could not restate message {ref.message_id}", err)
         return False
     return True
 

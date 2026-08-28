@@ -406,6 +406,30 @@ def note_message(concern_id: str, entity_id: str, message_id: str,
     return False
 
 
+def stamp_message(concern_id: str, message_id: str, acts: str) -> bool:
+    """Record what ONE message is now showing, after its buttons were changed.
+
+    ⚠️ THE PAIR OF `forget_message`: a press either ends a message (forget) or
+    changes what it offers (stamp). Leaving the old stamp behind would make
+    `buttons.reconcile` believe the phone is a set of buttons behind, and redraw
+    it on the next tick for no reason, for the life of the alert.
+    """
+    if not str(message_id or "").strip():
+        return False
+    for row in read():
+        if str(row.get("id")) != str(concern_id):
+            continue
+        refs = row.get("messages")
+        if not isinstance(refs, list):
+            return False
+        return set_messages(concern_id,
+                            [{**r, "acts": str(acts or "")}
+                             if str(r.get("message_id") or "") == str(message_id)
+                             else r
+                             for r in refs if isinstance(r, Mapping)])
+    return False
+
+
 def forget_message(concern_id: str, message_id: str) -> bool:
     """Stop tracking ONE message — it has been retired and cannot change again.
 

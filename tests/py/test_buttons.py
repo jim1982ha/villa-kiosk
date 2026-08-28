@@ -312,27 +312,18 @@ def test_RECONCILE_handles_THREE_outcomes_not_two() -> None:
         "a retired message is remembered, so it is rewritten on every tick"
 
 
-def test_a_PRESS_forgets_the_message_so_reconcile_cannot_PUT_THE_BUTTONS_BACK(
-) -> None:
-    """⚠️ THE REGRESSION THE REDRAW ALMOST SHIPPED. `handle` strips a pressed
-    message's keyboard and never forgot its ref — harmless while reconciliation
-    could only REMOVE buttons, and a live defect once it could also restore
-    them: press on the phone, buttons gone, and up to 15 minutes later they are
-    back on the message you just dealt with. The owner pressed `Need help` the
-    same day the redraw shipped, which is how this was found before it ran.
-
-    ⚠️ `help` DELIBERATELY DOES NOT SETTLE THE ALERT — asking for help is the
-    opposite of "I have this covered" — so the alert is still open with four
-    live acts, which is exactly the state reconcile now acts on."""
-    concerns._write([{"id": "c1", "title": "t", "state": "open",
-                      "delivered_at": "x", "acknowledged_at": "",
-                      "messages": [{"entity_id": "notify.x",
-                                    "message_id": "174", "acts": "stale"},
-                                   {"entity_id": "notify.fm",
-                                    "message_id": "999", "acts": "stale"}]}])
+def _fake_chat(retire_ok: bool = True, restate_ok: bool = True) -> Any:
+    """Patch the three calls a press makes to the outside world. Records both."""
+    seen: Dict[str, Any] = {"retired": [], "restated": []}
 
     async def fake_retire(session: Any, ref: Any, closing: str) -> bool:
-        return True
+        seen["retired"].append(ref.message_id)
+        return retire_ok
+
+    async def fake_restate(session: Any, ref: Any, text: str,
+                           keyboard: Any) -> bool:
+        seen["restated"].append((ref.message_id, buttons.acts_of(keyboard), text))
+        return restate_ok
 
     async def fake_answer(session: Any, query_id: str, text: str) -> None:
         return None
@@ -340,10 +331,37 @@ def test_a_PRESS_forgets_the_message_so_reconcile_cannot_PUT_THE_BUTTONS_BACK(
     async def fake_entity(session: Any, data: Any) -> str:
         return "notify.x"
 
-    originals = (buttons.retire, buttons._answer, buttons._entity_of)
+    seen["_originals"] = (buttons.retire, buttons.restate,
+                          buttons._answer, buttons._entity_of)
     buttons.retire = fake_retire                      # type: ignore[assignment]
+    buttons.restate = fake_restate                    # type: ignore[assignment]
     buttons._answer = fake_answer                     # type: ignore[assignment]
     buttons._entity_of = fake_entity                  # type: ignore[assignment]
+    return seen
+
+
+def _restore(seen: Any) -> None:
+    (buttons.retire, buttons.restate,
+     buttons._answer, buttons._entity_of) = seen["_originals"]
+
+
+def test_a_press_that_LEAVES_ACTS_LIVE_restates_rather_than_retiring() -> None:
+    """⚠️ THE OWNER'S QUESTION, AND IT WAS RIGHT: "if I click stop chasing, I
+    should still see the done and thumb up/down buttons, right?" `Seen` withdraws
+    only ITSELF — the store goes on offering Done, Need help and the thumbs, and
+    the tablet goes on showing them — but this path retired the WHOLE keyboard
+    after any press. The phone then offered nothing while the tablet offered
+    four, which is the same two surfaces disagreeing, mirrored.
+
+    The message keeps its ref, is stamped with what it now shows, and carries the
+    alert's own body — an edit replaces everything, so live buttons under a
+    one-line receipt would say nothing about what they are for."""
+    concerns._write([{"id": "c1", "title": "Pump", "body": "used 243% more",
+                      "state": "open", "delivered_at": "x",
+                      "acknowledged_at": "",
+                      "messages": [{"entity_id": "notify.x",
+                                    "message_id": "174", "acts": "stale"}]}])
+    seen = _fake_chat()
     try:
         asyncio.run(buttons.handle(
             _press({"data": "vs:c1", "id": "q1", "user_id": 1,
@@ -351,9 +369,54 @@ def test_a_PRESS_forgets_the_message_so_reconcile_cannot_PUT_THE_BUTTONS_BACK(
             session=None,
             config={"people": [{"telegram": "1", "role": "owner"}]}))
     finally:
-        buttons.retire, buttons._answer, buttons._entity_of = (
-            originals)                                # type: ignore[assignment]
+        _restore(seen)
 
+    assert not seen["retired"], \
+        "the whole keyboard was retired while four acts were still live"
+    assert len(seen["restated"]) == 1
+    message_id, acts, text = seen["restated"][0]
+    row = {"id": "c1", "state": "open", "delivered_at": "x",
+           "acknowledged_at": "yes"}
+    assert message_id == "174"
+    assert acts == _acts_now(row), \
+        "the message was redrawn with something other than what the alert offers"
+    assert "seen" not in acts, "the act just spent is still offered"
+    assert "Pump" in text and "243% more" in text, \
+        "the alert's own body was dropped, leaving live buttons explaining nothing"
+
+    kept = concerns.read()[0]["messages"]
+    assert [r["message_id"] for r in kept] == ["174"], \
+        "a message that still carries buttons was forgotten"
+    assert kept[0]["acts"] == acts, \
+        "the stamp was not updated, so reconcile redraws it on every tick"
+
+
+def test_a_press_on_a_SETTLED_alert_retires_and_FORGETS_the_message() -> None:
+    """⚠️ THE OTHER HALF, AND THE REGRESSION THE REDRAW ALMOST SHIPPED. With no
+    act left the keyboard goes for good, and the ref must go with it: a ref
+    exists only so a message can be edited later, and reconciliation would
+    otherwise draw the buttons again on the message just dealt with.
+
+    ⚠️ THE PRESS IS REFUSED HERE (`spent`) AND THE MESSAGE IS STILL CORRECTED —
+    a press on a stale button is the best moment to discover it."""
+    concerns._write([{"id": "c1", "title": "t", "state": "closed",
+                      "delivered_at": "x",
+                      "messages": [{"entity_id": "notify.x",
+                                    "message_id": "174", "acts": "stale"},
+                                   {"entity_id": "notify.fm",
+                                    "message_id": "999", "acts": "stale"}]}])
+    seen = _fake_chat()
+    try:
+        asyncio.run(buttons.handle(
+            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+                    "from_first": "Jm", "message": {"message_id": "174"}}),
+            session=None,
+            config={"people": [{"telegram": "1", "role": "owner"}]}))
+    finally:
+        _restore(seen)
+
+    assert seen["retired"] == ["174"] and not seen["restated"], \
+        "a settled alert's message kept or gained buttons"
     left = [r["message_id"] for r in concerns.read()[0]["messages"]]
     assert "174" not in left, \
         "the pressed message is still tracked, so its buttons come back"
@@ -368,25 +431,19 @@ def test_a_press_whose_EDIT_FAILED_keeps_the_message_to_try_again() -> None:
     could not be reached, that message is still sitting there with live buttons
     on an alert already acted on — the one state this whole mechanism exists to
     prevent — and dropping the ref would mean nothing ever revisits it. The same
-    "an outage must not look like agreement" rule `reconcile` keeps."""
+    "an outage must not look like agreement" rule `reconcile` keeps.
+
+    ⚠️ BOTH EDITS, because a press now makes one of two calls and each has its
+    own way of lying about success. The restate half is the sharper one: the
+    stamp must NOT advance, or the next tick believes an unreachable message is
+    showing buttons it never received."""
+    ref = {"entity_id": "notify.x", "message_id": "174", "acts": "stale"}
+
+    # (a) the alert keeps acts → restate → refused
     concerns._write([{"id": "c1", "title": "t", "state": "open",
                       "delivered_at": "x", "acknowledged_at": "",
-                      "messages": [{"entity_id": "notify.x",
-                                    "message_id": "174", "acts": "stale"}]}])
-
-    async def refuse(session: Any, ref: Any, closing: str) -> bool:
-        return False
-
-    async def fake_answer(session: Any, query_id: str, text: str) -> None:
-        return None
-
-    async def fake_entity(session: Any, data: Any) -> str:
-        return "notify.x"
-
-    originals = (buttons.retire, buttons._answer, buttons._entity_of)
-    buttons.retire = refuse                           # type: ignore[assignment]
-    buttons._answer = fake_answer                     # type: ignore[assignment]
-    buttons._entity_of = fake_entity                  # type: ignore[assignment]
+                      "messages": [dict(ref)]}])
+    seen = _fake_chat(restate_ok=False)
     try:
         asyncio.run(buttons.handle(
             _press({"data": "vs:c1", "id": "q1", "user_id": 1,
@@ -394,9 +451,25 @@ def test_a_press_whose_EDIT_FAILED_keeps_the_message_to_try_again() -> None:
             session=None,
             config={"people": [{"telegram": "1", "role": "owner"}]}))
     finally:
-        buttons.retire, buttons._answer, buttons._entity_of = (
-            originals)                                # type: ignore[assignment]
+        _restore(seen)
+    kept = concerns.read()[0]["messages"]
+    assert [r["message_id"] for r in kept] == ["174"], \
+        "an unreachable message was forgotten, so its live buttons are never fixed"
+    assert kept[0]["acts"] == "stale", \
+        "a refused restate advanced the stamp, so the phone is never corrected"
 
+    # (b) nothing left to offer → retire → refused
+    concerns._write([{"id": "c1", "title": "t", "state": "closed",
+                      "delivered_at": "x", "messages": [dict(ref)]}])
+    seen = _fake_chat(retire_ok=False)
+    try:
+        asyncio.run(buttons.handle(
+            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+                    "from_first": "Jm", "message": {"message_id": "174"}}),
+            session=None,
+            config={"people": [{"telegram": "1", "role": "owner"}]}))
+    finally:
+        _restore(seen)
     assert [r["message_id"] for r in concerns.read()[0]["messages"]] == ["174"], \
         "an unreachable message was forgotten, so its live buttons are never fixed"
 
