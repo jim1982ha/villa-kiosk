@@ -1,3 +1,15 @@
+## 2.850.0
+
+### Fixed — buttons pressed on the phone would have come back a few minutes later
+Pressing a button strips it from the message, and the alert kept a note of that
+message anyway. That was harmless while the tidy-up could only ever REMOVE
+buttons; the redraw added in 2.849.0 made it live, because the note is what the
+tidy-up works from — it would have drawn the buttons again, up to fifteen
+minutes later, on a message somebody had just dealt with. A retired message is
+now forgotten, and only that one: an alert sent to two chats keeps the copy
+nobody has touched. A message Telegram refused to edit is still kept and tried
+again, or its live buttons would never be corrected.
+
 ## 2.849.0
 
 ### Fixed — a Telegram alert kept offering a button that had already been used

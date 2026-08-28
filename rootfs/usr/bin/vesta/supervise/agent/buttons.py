@@ -408,8 +408,22 @@ async def handle(event: Mapping[str, Any], *, session: Any,
         # oversight: `spent` means the store says this alert is already dealt
         # with, so the buttons the presser is looking at are the stale ones. The
         # press that discovered it is the best moment to correct them.
-        await retire(session, Ref(await _entity_of(session, data), message_id),
-                     _closing_line(data, outcome.note))
+        retired_here = await retire(
+            session, Ref(await _entity_of(session, data), message_id),
+            _closing_line(data, outcome.note))
+        # ⚠️ AND THE REF IS FORGOTTEN, BECAUSE RETIRING IS PERMANENT. A ref
+        # exists only so a message can be edited later; this one has just had
+        # its buttons removed and its text replaced, so there is nothing left to
+        # keep in step. `reconcile` has always forgotten a ref it retired and
+        # this path never did — harmless while reconciliation only ever REMOVED
+        # buttons, and a live defect the moment it could also PUT THEM BACK:
+        # pressing a button on the phone would have stripped the keyboard and
+        # the next tick would have drawn it again, up to 15 minutes later, on
+        # the message somebody had just dealt with. Found the same day the
+        # redraw shipped, on the owner's own press (2026-08-28).
+        if retired_here:
+            from vesta.supervise.agent import concerns as concerns_mod
+            concerns_mod.forget_message(concern_id, message_id)
     stage("button", f"{concern_id} {action_id} by {who}: "
                     f"{'ok' if outcome.ok else outcome.note}")
     return "" if outcome.ok else outcome.note

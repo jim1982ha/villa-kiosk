@@ -406,6 +406,28 @@ def note_message(concern_id: str, entity_id: str, message_id: str,
     return False
 
 
+def forget_message(concern_id: str, message_id: str) -> bool:
+    """Stop tracking ONE message — it has been retired and cannot change again.
+
+    ⚠️ ONE, NOT ALL. An escalated alert has a message in more than one chat, and
+    a press in the facility manager's chat says nothing about the copy in the
+    owner's: that one still carries live buttons and must still be reconciled.
+    Clearing the list here would abandon it.
+    """
+    if not str(message_id or "").strip():
+        return False
+    for row in read():
+        if str(row.get("id")) != str(concern_id):
+            continue
+        refs = row.get("messages")
+        if not isinstance(refs, list):
+            return False
+        return set_messages(concern_id,
+                            [r for r in refs if isinstance(r, Mapping)
+                             and str(r.get("message_id") or "") != str(message_id)])
+    return False
+
+
 def set_messages(concern_id: str,
                  refs: Sequence[Mapping[str, str]]) -> bool:
     """Replace the remembered messages — how `buttons.reconcile` forgets one.

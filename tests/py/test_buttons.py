@@ -312,6 +312,95 @@ def test_RECONCILE_handles_THREE_outcomes_not_two() -> None:
         "a retired message is remembered, so it is rewritten on every tick"
 
 
+def test_a_PRESS_forgets_the_message_so_reconcile_cannot_PUT_THE_BUTTONS_BACK(
+) -> None:
+    """⚠️ THE REGRESSION THE REDRAW ALMOST SHIPPED. `handle` strips a pressed
+    message's keyboard and never forgot its ref — harmless while reconciliation
+    could only REMOVE buttons, and a live defect once it could also restore
+    them: press on the phone, buttons gone, and up to 15 minutes later they are
+    back on the message you just dealt with. The owner pressed `Need help` the
+    same day the redraw shipped, which is how this was found before it ran.
+
+    ⚠️ `help` DELIBERATELY DOES NOT SETTLE THE ALERT — asking for help is the
+    opposite of "I have this covered" — so the alert is still open with four
+    live acts, which is exactly the state reconcile now acts on."""
+    concerns._write([{"id": "c1", "title": "t", "state": "open",
+                      "delivered_at": "x", "acknowledged_at": "",
+                      "messages": [{"entity_id": "notify.x",
+                                    "message_id": "174", "acts": "stale"},
+                                   {"entity_id": "notify.fm",
+                                    "message_id": "999", "acts": "stale"}]}])
+
+    async def fake_retire(session: Any, ref: Any, closing: str) -> bool:
+        return True
+
+    async def fake_answer(session: Any, query_id: str, text: str) -> None:
+        return None
+
+    async def fake_entity(session: Any, data: Any) -> str:
+        return "notify.x"
+
+    originals = (buttons.retire, buttons._answer, buttons._entity_of)
+    buttons.retire = fake_retire                      # type: ignore[assignment]
+    buttons._answer = fake_answer                     # type: ignore[assignment]
+    buttons._entity_of = fake_entity                  # type: ignore[assignment]
+    try:
+        asyncio.run(buttons.handle(
+            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+                    "from_first": "Jm", "message": {"message_id": "174"}}),
+            session=None,
+            config={"people": [{"telegram": "1", "role": "owner"}]}))
+    finally:
+        buttons.retire, buttons._answer, buttons._entity_of = (
+            originals)                                # type: ignore[assignment]
+
+    left = [r["message_id"] for r in concerns.read()[0]["messages"]]
+    assert "174" not in left, \
+        "the pressed message is still tracked, so its buttons come back"
+    # ⚠️ THE OTHER CHAT'S COPY SURVIVES. An escalated alert has a message in more
+    # than one chat and a press in one says nothing about the other, which still
+    # carries live buttons and must still be reconciled.
+    assert left == ["999"], "a press abandoned another chat's live message"
+
+
+def test_a_press_whose_EDIT_FAILED_keeps_the_message_to_try_again() -> None:
+    """⚠️ FORGETTING IS FOR A MESSAGE THAT HAS ACTUALLY BEEN RETIRED. If Telegram
+    could not be reached, that message is still sitting there with live buttons
+    on an alert already acted on — the one state this whole mechanism exists to
+    prevent — and dropping the ref would mean nothing ever revisits it. The same
+    "an outage must not look like agreement" rule `reconcile` keeps."""
+    concerns._write([{"id": "c1", "title": "t", "state": "open",
+                      "delivered_at": "x", "acknowledged_at": "",
+                      "messages": [{"entity_id": "notify.x",
+                                    "message_id": "174", "acts": "stale"}]}])
+
+    async def refuse(session: Any, ref: Any, closing: str) -> bool:
+        return False
+
+    async def fake_answer(session: Any, query_id: str, text: str) -> None:
+        return None
+
+    async def fake_entity(session: Any, data: Any) -> str:
+        return "notify.x"
+
+    originals = (buttons.retire, buttons._answer, buttons._entity_of)
+    buttons.retire = refuse                           # type: ignore[assignment]
+    buttons._answer = fake_answer                     # type: ignore[assignment]
+    buttons._entity_of = fake_entity                  # type: ignore[assignment]
+    try:
+        asyncio.run(buttons.handle(
+            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+                    "from_first": "Jm", "message": {"message_id": "174"}}),
+            session=None,
+            config={"people": [{"telegram": "1", "role": "owner"}]}))
+    finally:
+        buttons.retire, buttons._answer, buttons._entity_of = (
+            originals)                                # type: ignore[assignment]
+
+    assert [r["message_id"] for r in concerns.read()[0]["messages"]] == ["174"], \
+        "an unreachable message was forgotten, so its live buttons are never fixed"
+
+
 def test_a_ref_stored_BEFORE_acts_existed_is_redrawn_ONCE() -> None:
     """⚠️ AN ABSENT RECORD IS NOT AGREEMENT. Every message already out on a villa
     when this shipped has no `acts`, and reading that as "in step" would let the
