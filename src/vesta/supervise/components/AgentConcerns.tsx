@@ -537,15 +537,26 @@ export default function AgentConcerns() {
                     Its job — naming the person who picked this up — is now
                     done by this button, so a second control for it would be
                     the redundancy that removed it the first time. */}
+                {/* ⚠️ GLYPH ONLY, BY THE OWNER'S RULING ON A SCREENSHOT OF THE
+                    LABELLED VERSION (2026-08-28: "remove the text from the icon
+                    and just show glyph"). This narrows the same-day decision
+                    that gave every control visible words — that decision was
+                    made against two bare THUMBS, which said nothing; `+1`/`-1`
+                    and the slash say what they are, and the pair sits grouped
+                    away from the act, so the words had stopped carrying the
+                    disambiguation they were added for. The full sentence stays
+                    in `aria-label` (a screen reader gets it) and `title` (a
+                    mouse does); a finger gets the glyph, which is the trade the
+                    owner chose looking at the rendered screen — the one measure
+                    nobody else in this file has. */}
                 <button
-                  type="button" className="row-action danger concern-judge"
+                  type="button" className="row-action danger"
                   disabled={busy === c.id}
                   aria-label={`Nothing more is needed, close this: ${c.title}`}
-                  title="Nobody will chase you about this again. It leaves this list and the next briefing, and its job is ticked off. Use -1 if you also want fewer alerts like it."
+                  title="Nothing more is needed. Nobody will chase you about this again — it leaves this list and the next briefing, and its job is ticked off. Use -1 if you also want fewer alerts like it."
                   onClick={() => void act(c.id, "dismiss")}
                 >
                   <CircleSlash size={16} aria-hidden />
-                  <span className="body-text">Nothing more needed</span>
                 </button>
                 {/* ⚠️ TWO QUESTIONS, TWO GROUPS, AND THE SPLIT IS THE WHOLE
                     POINT (2026-08-28, owner's ruling). The rating says how good
@@ -570,24 +581,22 @@ export default function AgentConcerns() {
                 {!String(c.useful_at ?? "").trim() && (
                   <span className="concern-rating">
                     <button
-                      type="button" className="row-action concern-judge"
+                      type="button" className="row-action"
                       disabled={busy === c.id}
-                      aria-label={`Raise this kind of alert more often: ${c.title}`}
-                      title="Worth telling me — the villa raises this kind more readily. The alert itself is not changed."
+                      aria-label={`More like this — raise this kind of alert more often: ${c.title}`}
+                      title="More like this — the villa raises this kind more readily. The alert itself is not changed."
                       onClick={() => void judge(c.id, true)}
                     >
                       <span className="concern-tally" aria-hidden>+1</span>
-                      <span className="body-text">More like this</span>
                     </button>
                     <button
-                      type="button" className="row-action concern-judge"
+                      type="button" className="row-action"
                       disabled={busy === c.id}
-                      aria-label={`Raise this kind of alert less often: ${c.title}`}
-                      title="Not worth telling me — the villa raises this kind less readily. The alert itself is not changed."
+                      aria-label={`Less like this — raise this kind of alert less often: ${c.title}`}
+                      title="Less like this — the villa raises this kind less readily. The alert itself is not changed."
                       onClick={() => void judge(c.id, false)}
                     >
                       <span className="concern-tally" aria-hidden>-1</span>
-                      <span className="body-text">Less like this</span>
                     </button>
                   </span>
                 )}

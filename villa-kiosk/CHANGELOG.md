@@ -1,3 +1,14 @@
+## 2.858.0
+
+### Changed — the alert's buttons are compact glyphs again
+On the Reason tab the three controls on an alert card drop their words: the
+closer is the slash icon alone, the rating pair is +1 and -1 alone, all three
+round buttons. The words were added when the pair was two bare thumbs that said
+nothing; +1 and -1 say what a thumb never did, so the labels had stopped earning
+their width — the owner ruled them off from a screenshot. The full sentence
+stays on hover and for screen readers, and the Telegram buttons keep their
+words, since a chat button is text or nothing.
+
 ## 2.857.0
 
 ### Fixed — an alert's buttons came apart one at a time on a narrow screen

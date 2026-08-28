@@ -5029,18 +5029,18 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 .row-action:hover:not(:disabled) { border-color: var(--hairline-strong); }
 .row-action:disabled { opacity: 0.55; }
-/* ⚠️ THE VERDICT BUTTONS CARRY THEIR WORDS, SO THEY ARE PILLS RATHER THAN
-   DISCS (2026-08-28). A `title` explains nothing to a finger, and on the screen
-   this app is written for — a wall-mounted tablet — two unlabelled thumbs beside
-   a To-Do List were read as filing something into it. `--touch-min` stays the
-   HEIGHT and the floor on the width, so the target is unchanged. */
-.row-action.concern-judge {
-  width: auto; padding: 0 12px; gap: 6px;
-  border-radius: var(--radius-pill); white-space: nowrap;
-}
-/* ⚠️ `+1` / `-1` IS TYPESET, NOT AN ICON, because it is a number and the
-   glyphs beside it are 16px lucide strokes. Tabular figures keep the two the
-   same width so the pair does not shift as a row re-renders. It is `aria-hidden`
+/* ⚠️ THE VERDICT BUTTONS ARE DISCS AGAIN, AND THE ROUND TRIP IS A RECORD, NOT
+   A WOBBLE (2026-08-28, one day, three states). Bare THUMBS were read as filing
+   something into the To-Do List, so every control gained visible words and
+   became a pill; the words plus grouping made the glyphs self-explanatory
+   (`+1`/`-1` says what a 👍 never did), and the owner — looking at the rendered
+   screen, the one measure nobody else has — ruled the words off again: "remove
+   the text from the icon and just show glyph". So: discs, via the base
+   `.row-action`, with the sentence kept in `aria-label` and `title`. Do not
+   re-add a `.concern-judge` pill rule without new evidence from the screen. */
+/* ⚠️ `+1` / `-1` IS TYPESET, NOT AN ICON, because it is a number and the icon
+   beside it in the row is a 16px lucide stroke. Tabular figures keep the pair
+   the same width so it does not shift as a row re-renders. It is `aria-hidden`
    in the markup — the button's own label says what it does — so this is
    decoration and may be sized for the eye. */
 .concern-tally {
