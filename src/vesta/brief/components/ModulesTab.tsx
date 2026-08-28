@@ -202,7 +202,28 @@ export default function ModulesTab({
       </div>
 
       {/* ── 2. Your automations ─────────────────────────────────────────── */}
+      {/* ⚠️ THE OTHER HALF OF THE SAME SWITCH (2026-08-29, owner: "contextualize
+          all the menu ... to gray it out when it is not actually used"). One
+          switch decides which layer DETECTS, so exactly one of these two
+          sections is live at a time and the screen now says which. Dimmed, not
+          hidden — a section that vanishes when a switch moves is a screen the
+          reader cannot navigate by memory, and the counts here are still the
+          record of what these automations HAVE reported.
+          ⚠️ The dim is the house 0.45, the same value a disabled control uses,
+          so it is emphatically secondary; it is stacked on `.muted` text in
+          places. If it reads as too faint on the wall tablet it is one
+          constant — `.reports-standing-down` — and not a structural change. */}
       <h3 className="settings-section-title">Your automations</h3>
+      {diagnostics.supervisionEnabled && (
+        <p className="reports-item muted">
+          <Info size={14} aria-hidden="true" />
+          <span>
+            Not the detecting layer right now — supervision is on, so the checks
+            below are doing this. These automations take the job back when you
+            switch supervision off.
+          </span>
+        </p>
+      )}
       {/* ⚠️ THE SAME `.reflex-table` THE AGENT'S REFLEX TAB USES. This was the
           identical list in `.reports-item` flex rows — name, chip, sentence and
           count on one line — and it wrapped just as badly here. One rule for one
@@ -222,7 +243,7 @@ export default function ModulesTab({
           for — and `vesta` is not a family at all: it is the filename stem of
           the retired task blueprint, and it rendered with a blank description
           because `FAMILIES` has no such entry — see its comment. */}
-      <dl className="reflex-table">
+      <dl className={`reflex-table${diagnostics.supervisionEnabled ? " reports-standing-down" : ""}`}>
         {c.blueprintCategories.filter((cat) => FAMILIES[cat]).map((cat) => {
           const seen = c.seenTypes[`vesta_${cat}_event`] ?? 0;
           const family = FAMILIES[cat];
@@ -275,8 +296,15 @@ export default function ModulesTab({
         const on = isOn(m.name);
         const missing = m.requires.filter((r) => !diagnostics.capabilities.includes(r));
         const reason = skipReason.get(m.name);
+        // ⚠️ THE SERVER'S VERDICT, RENDERED — NOT RECOMPUTED (2026-08-29).
+        // Non-empty means the villa's own automation of that name is doing this
+        // job instead, which is only ever true while supervision is OFF.
+        const standingDown = m.standingDown;
         return (
-          <div key={m.name} className="reports-entry">
+          <div
+            key={m.name}
+            className={`reports-entry${standingDown ? " reports-standing-down" : ""}`}
+          >
             {/* ⚠️ THE TITLE AND THE SENTENCE COME FROM THE MODULE ITSELF. This
                 showed the identifier with its underscores removed — "level
                 anomaly" — beside "owner and facility · needs 42 days of
@@ -332,6 +360,19 @@ export default function ModulesTab({
                 <span>
                   Not possible here.{" "}
                   {missing.map((cap) => diagnostics.capabilityAbsent[cap] || cap).join(" ")}
+                </span>
+              </p>
+            )}
+            {/* ⚠️ BEFORE THE "switched off" LINE, because standing down is
+                the stronger statement: a check the operator left ON is not
+                running, and saying only "switched off" would be false while
+                saying nothing at all is what made this screen unreadable. */}
+            {standingDown && (
+              <p className="reports-item muted">
+                <Info size={14} aria-hidden="true" />
+                <span>
+                  Standing down — your {standingDown} automation does this.
+                  It runs again when supervision is on.
                 </span>
               </p>
             )}

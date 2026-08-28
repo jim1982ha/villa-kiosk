@@ -36,7 +36,18 @@ export interface ReportsDiagnostics {
   modules: {
     name: string; title: string; description: string;
     requires: string[]; audiences: Audience[]; minDays: number;
+    /** ⚠️ THE SERVER'S VERDICT, NOT INGREDIENTS TO COMBINE HERE. Non-empty
+     *  means this check is standing down because the villa's own automation of
+     *  that name is doing the job, which is true only while supervision is
+     *  OFF. `registry.gate` owns the rule; re-deriving it from a flag and a
+     *  `supersededBy` list in the browser is the second implementation this
+     *  project treats as its cardinal sin. Empty is the common case. */
+    standingDown: string;
   }[];
+  /** ⚠️ WHICH LAYER IS DETECTING. Supervision ON means the assistant
+   *  supersedes the villa's own automations, so the section listing them is
+   *  describing a layer that is no longer the one finding things. */
+  supervisionEnabled: boolean;
   reachable: boolean;
   error: string;
   capabilities: string[];
@@ -629,8 +640,10 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
           requires: strs(mod.requires),
           audiences: membersOf(mod.audiences, AUDIENCE),
           minDays: num(mod.min_days),
+          standingDown: str(mod.standing_down),
         };
       }),
+      supervisionEnabled: bool(d.supervision_enabled),
       reachable: bool(d.reachable),
       error: str(d.error),
       capabilities: strs(d.capabilities),

@@ -2590,6 +2590,13 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
         return _forbidden("Only the owner profile may read reports diagnostics.")
     stored = _read_json_store(reports_store.REPORTS_CONFIG_FILE,
                               reports_store.EMPTY_CONFIG)
+    # ⚠️ THE MASTER SWITCH, READ HERE SO THE SCREEN CAN SAY WHICH LAYER IS LIVE
+    # (2026-08-29, owner: "it doesn't make sense to see this screen while the
+    # VESTA agent supervision is on"). One switch decides which layer DETECTS,
+    # and until now the tab described both as though both were running — its
+    # own header still called the automations "the primary detection layer,
+    # which WINS", which stopped being true when supervision took over.
+    supervision_on = bool(_read_json_store(AGENT_CONFIG_FILE, {}).get("enabled"))
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
     try:
         found = await reports_discovery.discover(request.app["session"], now_iso)
@@ -2622,9 +2629,24 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
                 "requires": list(m.requires),
                 "audiences": list(m.audiences),
                 "min_days": m.min_days,
+                # ⚠️ THE VERDICT, NOT THE INGREDIENTS. The browser gets "this
+                # check is standing down, and here is the automation doing it
+                # instead" rather than `superseded_by` plus the switch to
+                # combine itself — `registry.gate` owns that rule and a second
+                # implementation in TypeScript is this project's cardinal sin.
+                # Empty string means "running", which is the common case and
+                # renders as nothing.
+                "standing_down": (
+                    reports_registry.readable_label(list(covered)[0])
+                    if (covered := getattr(m, "superseded_by", ()) or ())
+                    and not supervision_on else ""),
             }
             for m in reports_registry.registered()
         ],
+        # ⚠️ THE OTHER HALF OF THE SAME SWITCH. When supervision is ON the
+        # villa's own automations are the superseded layer, so the section
+        # listing them is describing something that is no longer detecting.
+        "supervision_enabled": supervision_on,
         # The detection layer's own health: what it has heard, and from which
         # categories. Without this the only way to tell "nothing happened" from
         # "nothing is listening" is to read a file on the host.
@@ -2807,6 +2829,25 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
             [str(t) for t in targets], now_local,
             settings=modules_cfg if isinstance(modules_cfg, dict) else {},
             min_history_days=int(config.get("min_history_days") or 14),
+            # ⚠️ THE MASTER SWITCH, AND OMITTING IT MADE THIS ENDPOINT A
+            # DIFFERENT PIPELINE FROM THE SCHEDULED ONE (2026-08-29, reported
+            # from the tablet: "it doesn't make sense to see this screen while
+            # supervision is on"). It defaults to False, so every check with a
+            # `superseded_by` — three of them — stood down as `superseded` on
+            # every preview and every manual send, while the scheduled brief at
+            # `pipeline.tick` passed the flag and ran them. Two visible
+            # consequences, one cosmetic and one not: the Modules tab printed
+            # "Last preview: Roi baseline deviation" on rows that are live, which
+            # reads as "this check is not used"; and a brief sent by hand was
+            # MISSING three checks the scheduled one contains.
+            #
+            # ⚠️ `registry.run_all` carries a comment warning about exactly this
+            # defect one level further in — a field not copied arrives at the
+            # gate as its default, silently, because the default is valid. The
+            # warning was there and the CALLER was never checked, which is
+            # `feedback_pin-the-caller`. `test_supervision_reaches_the_gate`
+            # now derives every `run_report(` call site from the tree.
+            supervision_enabled=bool(agent_cfg.get("enabled")),
             module_failures=(state.get("moduleFailures")
                              if isinstance(state.get("moduleFailures"), dict) else {}),
             narration=(config.get("narration")

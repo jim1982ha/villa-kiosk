@@ -2640,6 +2640,17 @@ label.toggle input[type="checkbox"]:checked {
 
    0.45 matches .pinpad-key:disabled and .btn:disabled: the house value for
    "present, explained, not available yet". */
+/* A layer that is not the one detecting right now. ⚠️ 0.45 IS THE HOUSE VALUE
+   documented just below for "present, explained, not available yet", which is
+   exactly this state — the setting is real and will apply again the moment the
+   master switch moves, so it is dimmed rather than hidden or removed.
+   ⚠️ NO `pointer-events: none`. A standing-down check keeps its toggle: the
+   operator is configuring what happens in the OTHER mode as much as this one,
+   and a control they can see and cannot press reads as broken. Only the
+   emphasis drops, never the reachability — which is also what keeps it usable
+   with a keyboard and a screen reader. */
+.reports-standing-down { opacity: 0.45; }
+
 label.toggle input[type="checkbox"]:disabled {
   opacity: 0.45;
   cursor: not-allowed;
