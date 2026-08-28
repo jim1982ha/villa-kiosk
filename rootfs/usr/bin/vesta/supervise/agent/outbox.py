@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.supervise.agent import concerns as concerns_mod
 from vesta.supervise.agent import config as agent_config
@@ -291,7 +291,15 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # the primary send, and the refs it produces join `messages`, so these
     # copies are redrawn and retired by the same sweep as every other.
     import dataclasses
-    plan2 = dataclasses.replace(plan, title=f"Still open: {plan.title}")
+    from vesta.adapters import links as links_mod
+    plain_line, html_line = await _rating_link(session)
+    # ⚠️ THE ESCALATION GETS THE SAME TREATMENT AS THE FIRST MESSAGE — it is the
+    # one most worth acting on, so it must not be the plain one.
+    rich_body = (f"{links_mod.html_escape(plan.body)}\n\n{html_line}"
+                 if html_line else plan.body)
+    plan2 = dataclasses.replace(
+        plan, title=links_mod.html_escape(f"Still open: {plan.title}"),
+        body=rich_body)
     results = await _send_with_buttons(session, concern, plan2, config=config)
     plain = [r.get("target") for r in results
              if isinstance(r, Mapping) and str(r.get("status")) != "sent"]
@@ -299,7 +307,8 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
         from vesta.adapters import deliver as deliver_mod
         results += await deliver_mod.deliver(
             session, [str(t) for t in plain if t],
-            f"Still open: {plan.title}", plan.body)
+            f"Still open: {plan.title}",
+            f"{plan.body}\n\n{plain_line}" if plain_line else plan.body)
     if not any(str(r.get("status")) == "sent" for r in results
                if isinstance(r, Mapping)):
         return False
@@ -468,7 +477,7 @@ async def sweep(session: Any, *,
     return out
 
 
-async def _rating_link(session: Any) -> str:
+async def _rating_link(session: Any) -> Tuple[str, str]:
     """The one line that replaces the ⬆️/⬇️ buttons, or "" fail-closed.
 
     ⚠️ THE OWNER'S RULING (2026-08-28): the keyboard keeps only the acts, and
@@ -494,15 +503,20 @@ async def _rating_link(session: Any) -> str:
         async with HassClient(session) as hass:
             ha_config = await hass.command("get_config")
     except Exception:  # noqa: BLE001 - no link is a complete answer
-        return ""
+        return "", ""
     urls = {"external_url": str((ha_config or {}).get("external_url") or "")} \
         if isinstance(ha_config, dict) else {}
-    # ⚠️ `links.line` IS THE ONE SHAPE EVERY NOTIFICATION USES (owner,
-    # 2026-08-28) — a brief and an alert must not teach the same tap two ways.
-    # The word VESTA is not a hyperlink and cannot be: see that function for
-    # the two delivery rules that forbid it, both paid for in the field.
-    return links_mod.line("Rate this alert in", urls,
-                          os.environ.get("VK_INGRESS_ENTRY", ""))
+    if not urls:
+        return "", ""
+    # ⚠️ TWO DIALECTS FOR ONE SENTENCE, BECAUSE THE TWO TRANSPORTS DIFFER IN
+    # WHAT THEY CAN PARSE — not because the wording differs. `telegram_bot`
+    # publishes a `parse_mode` field so we set HTML there and VESTA is a real
+    # hyperlink (proven on the owner's phone, 2026-08-28); `notify.send_message`
+    # publishes none, so that path shows the address itself, which Telegram
+    # auto-links. Same words, same destination, whichever way it goes out.
+    entry = os.environ.get("VK_INGRESS_ENTRY", "")
+    return (links_mod.line("Rate this alert in", urls, entry),
+            links_mod.html_line("Rate this alert in", urls, entry))
 
 
 async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
@@ -549,10 +563,22 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     # THEN append the line this add-on generated from Home Assistant's own
     # config. Appending before `plan` would put the URL through `inert()`,
     # which strips underscores, and an ingress path has underscores.
-    rating_line = await _rating_link(session)
-    if rating_line:
-        import dataclasses
-        plan = dataclasses.replace(plan, body=f"{plan.body}\n\n{rating_line}")
+    plain_line, html_line = await _rating_link(session)
+    import dataclasses
+    rich = plan
+    if html_line:
+        # ⚠️ THE RICH BODY IS ESCAPED FIRST, THEN OUR MARKUP IS ADDED — the same
+        # order `inert` established and for the same reason. `inert` has already
+        # removed `<` and `>` from villa strings at the routing boundary; this
+        # catches an `&` it does not touch, and covers anything a later renderer
+        # adds. Escaping AFTER appending would eat our own link.
+        from vesta.adapters import links as links_mod
+        rich = dataclasses.replace(
+            plan,
+            title=links_mod.html_escape(plan.title),
+            body=f"{links_mod.html_escape(plan.body)}\n\n{html_line}")
+    if plain_line:
+        plan = dataclasses.replace(plan, body=f"{plan.body}\n\n{plain_line}")
 
     # ⚠️ THE ROUTING VERDICT IS SAID OUT LOUD, AND `Delivery.reason` IS WHY IT
     # CAN BE. Every branch below was already decided correctly and reported only
@@ -592,7 +618,7 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     # every target it cannot serve — which is all of them on a villa that does
     # not use a chat platform. That villa's delivery is byte-identical to what
     # it was before this existed.
-    results = await _send_with_buttons(session, concern, plan, config=config)
+    results = await _send_with_buttons(session, concern, rich, config=config)
     plain = [t for t in plan.targets
              if not any(str(r.get("target")) == t
                         and str(r.get("status")) == "sent" for r in results)]

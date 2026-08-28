@@ -200,6 +200,52 @@ def line(prompt: str, ha_config: Any, ingress_entry: str) -> str:
     return f"{text} VESTA: {url}" if url and text else ""
 
 
+def html_line(prompt: str, ha_config: Any, ingress_entry: str) -> str:
+    """`<prompt> <a href="url">VESTA</a>` — the same line, as a real hyperlink.
+
+    ⚠️ ONLY FOR A TRANSPORT WHOSE PARSE MODE WE SET OURSELVES, which today means
+    `buttons._send_one` (`telegram_bot.send_message` publishes a `parse_mode`
+    field; `notify.send_message` publishes none, so on that path the villa's own
+    integration setting decides and this markup would arrive as literal tags).
+    `line()` remains the plain form for exactly that reason.
+
+    ⚠️ HTML, NEVER MARKDOWN, AND THAT IS MEASURED RATHER THAN PREFERRED
+    (2026-08-28, three probes to the owner's phone). Markdown with a real device
+    name and this very URL returned **HTTP 500** — `Timmerflotte_8343` and the
+    ingress path both carry underscores, and one unclosed italic kills the whole
+    message. The same content as HTML rendered bold, a tappable VESTA, and the
+    name INTACT: in HTML an underscore is an ordinary character. That is the
+    entire reason this function exists and the reason it may not be "improved"
+    into markdown.
+
+    ⚠️ THE URL IS ALREADY PERCENT-ENCODED by `_safe_url`, so it carries no `"`
+    to close the attribute early, and the prompt is our own literal. Nothing
+    villa-derived reaches this line — the body it is appended to is escaped by
+    the caller.
+    """
+    url = kiosk_url("cockpit", ha_config, ingress_entry)
+    text = " ".join(str(prompt or "").split())
+    return f'{text} <a href="{url}">VESTA</a>' if url and text else ""
+
+
+def html_escape(text: str) -> str:
+    """Make villa-derived text safe inside an HTML-parsed message.
+
+    ⚠️ THREE CHARACTERS, ONE DIALECT, NO TABLE. `discovery._plain_mode` rejects
+    escaping because it would mean knowing which dialect each platform speaks —
+    true when the mode is the villa's to choose. Where WE set the mode there is
+    exactly one dialect, and HTML's is the smallest: `&` first (or it would
+    double-escape the others), then `<` and `>`.
+
+    ⚠️ IT DOES NOT REPLACE `style.inert`, which still runs at the routing
+    boundary for every transport. This is the belt to that braces: inert has
+    already removed `<` and `>` from villa strings, and this catches an `&` it
+    does not touch, plus anything a future renderer adds after it.
+    """
+    return (str(text or "").replace("&", "&amp;")
+            .replace("<", "&lt;").replace(">", "&gt;"))
+
+
 def footer(ha_config: Any, ingress_entry: str) -> str:
     """The one line a brief appends, or "" when no safe link exists.
 

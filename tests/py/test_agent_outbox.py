@@ -709,20 +709,24 @@ def test_a_send_with_no_profile_is_not_recorded_as_a_blank_one() -> None:
     assert row.get("delivered_at"), "the send itself must still be marked"
 
 
-def test_the_RATING_LINK_is_appended_after_plan_and_fails_closed(
+def test_the_RATING_LINK_is_appended_after_plan_in_BOTH_dialects(
         monkeypatch: Any) -> None:
-    """⚠️ THE RATING MOVED FROM THE KEYBOARD INTO THE BODY (owner, 2026-08-28:
-    "gracefully link inside the message for ⬆️+⬇️"), so the line IS the rating
-    surface on the phone — dropping it removes the rating from that screen
-    entirely, with the keyboard no longer drawing the pair. Found unpinned by
-    its own mutation surviving (M51).
+    """⚠️ THE RATING MOVED FROM THE KEYBOARD INTO THE BODY (owner, 2026-08-28),
+    so this line IS the rating surface on the phone — dropping it removes
+    rating from that screen entirely.
 
-    Three properties, each load-bearing:
-      * appended AFTER `route.plan` — the body is sanitised there and an
-        ingress URL carries underscores `inert()` would eat (links.py rule 5);
-      * built by `links.kiosk_url`, the module with the safety rules, never
-        from parts here;
-      * fail-closed: no external URL (the offline villa) → no line, silently.
+    ⚠️ TWO DIALECTS, ONE SENTENCE, AND THE SPLIT IS FORCED BY THE TRANSPORTS
+    RATHER THAN CHOSEN. `telegram_bot.send_message` publishes a `parse_mode`
+    field, so the buttoned path sets HTML and VESTA is a real hyperlink;
+    `notify.send_message` publishes NONE, so the plain path shows the address
+    and lets Telegram auto-link it. Proven by three probes to the owner's phone:
+    HTML rendered bold, a tappable VESTA and `Timmerflotte_8343` INTACT, while
+    the identical content as markdown returned HTTP 500.
+
+    Properties: appended AFTER `route.plan` (its body is sanitised there, and an
+    ingress URL carries underscores `inert()` would eat), built by `links`, the
+    rich body ESCAPED before our markup is added, and fail-closed on a villa
+    with no external URL.
     """
     import inspect
     import re as _re
@@ -735,19 +739,74 @@ def test_the_RATING_LINK_is_appended_after_plan_and_fails_closed(
     assert body.index("route_mod.plan(") < body.index("_rating_link("), (
         "the link is added before plan(), so inert() strips the underscores "
         "out of the ingress URL — links.py rule 5, already paid for once")
+    assert "html_escape(" in body, (
+        "the rich body is not escaped, so an `&` in a device name can break "
+        "an HTML-parsed message")
+    # ⚠️ THE VILLA'S TEXT IS ESCAPED; OUR LINK IS NOT. Stated as the two things
+    # that must be true rather than as an ordering of first occurrences — the
+    # variable `html_line` is bound long before the expression that uses it, so
+    # an index comparison measured the wrong pair and failed on correct code.
+    assert "html_escape(plan.body)" in body, (
+        "the villa-derived body is not escaped before our markup is added")
+    assert "html_escape(f" not in body and "html_escape(rich" not in body, (
+        "the COMPOSED string is escaped, which turns our own link into "
+        "literal &lt;a href&gt; — escape the villa's text, never the markup")
+
+    # ⚠️ AND THE BUTTONED SEND MUST RECEIVE THE RICH BODY. Building it and then
+    # handing the plain one to the transport that can parse it is the whole
+    # feature quietly not happening — a mutation doing exactly that survived
+    # the first round, because every other assertion here is about how the
+    # bodies are BUILT and none about which one is SENT.
+    assert "_send_with_buttons(session, concern, rich" in body, (
+        "the Telegram path is given the plain body, so the hyperlink is built "
+        "and thrown away — VESTA arrives as a bare URL")
+    assert "deliver_mod.deliver(" not in body or "plan.body" in body, (
+        "the plain fallback no longer sends the plain body")
 
     helper = _re.sub(r"#[^\n]*", "",
                      inspect.getsource(outbox_mod._rating_link))
-    assert "links_mod.line(" in helper, (
-        "the line is built by hand instead of by `links.line`, which owns the "
-        "https-only / closed-page-set / no-secret rules AND the one shape every "
-        "notification shares")
+    for shape in ("links_mod.line(", "links_mod.html_line("):
+        assert shape in helper, (
+            f"{shape} is missing: the line is built by hand instead of by "
+            f"`links`, which owns the https-only / no-secret rules and the one "
+            f"shape every notification shares")
 
-    # ⚠️ AND THE FAIL-CLOSED HALF RUNS RATHER THAN BEING READ: no reachable
-    # Home Assistant → "" — never a placeholder, never an exception.
-    async def _run() -> str:
+    # ⚠️ FAIL-CLOSED, RUN RATHER THAN READ: no Home Assistant, no entry → both
+    # dialects empty. Never a placeholder, never an exception.
+    async def _run() -> Any:
         return await outbox_mod._rating_link(None)
     monkeypatch.delenv("VK_INGRESS_ENTRY", raising=False)
-    assert asyncio.run(_run()) == "", (
-        "with no Home Assistant and no ingress entry the link line must be "
-        "empty — a broken or placeholder URL is worse than none")
+    assert asyncio.run(_run()) == ("", ""), (
+        "with no Home Assistant the link must be empty in both dialects — a "
+        "broken or half-built URL is worse than none")
+
+
+def test_the_TELEGRAM_path_sets_its_own_PARSE_MODE() -> None:
+    """⚠️ FORMATTING IS SHIPPABLE ONLY BECAUSE WE SET THE MODE OURSELVES. The
+    villa's integration default decides for `notify.send_message` (it publishes
+    no `parse_mode`), so a feature relying on it would render on one property
+    and show raw tags on the next. `telegram_bot.send_message` publishes the
+    field, and `buttons` sets it — which also keeps `deliver.py` free of any
+    platform branch, the negative property that module exists to hold.
+
+    ⚠️ HTML, NEVER MARKDOWN: measured, not preferred. Markdown with a real
+    device name and our own ingress URL returned HTTP 500 (2026-08-28) — both
+    contain underscores, and one unclosed italic kills the send."""
+    import inspect
+    import re as _re
+    from vesta.supervise.agent import buttons as buttons_mod
+    from vesta.adapters import deliver as deliver_mod
+
+    assert buttons_mod.PARSE_MODE == "html", (
+        f"the send dialect is {buttons_mod.PARSE_MODE!r}; markdown is proven "
+        f"fatal with real device names and html is proven safe")
+    send = _re.sub(r"#[^\n]*", "", inspect.getsource(buttons_mod._send_one))
+    assert "PARSE_MODE" in send, (
+        "the send no longer states its dialect, so it falls back to the "
+        "villa's integration setting and formatting stops being portable")
+    # ⚠️ AND THE AGNOSTIC SENDER STAYS AGNOSTIC.
+    agnostic = _re.sub(r'"""(?:.|\n)*?"""', "", inspect.getsource(deliver_mod))
+    agnostic = _re.sub(r"#[^\n]*", "", agnostic)
+    assert "html" not in agnostic.lower(), (
+        "an HTML dialect reached reports/deliver.py's CODE, which must stay "
+        "platform-agnostic — put it in agent/buttons.py")

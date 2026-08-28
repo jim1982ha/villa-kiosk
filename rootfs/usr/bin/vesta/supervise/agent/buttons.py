@@ -104,6 +104,12 @@ ANSWER_SERVICE: Tuple[str, str] = ("telegram_bot", "answer_callback_query")
 EDIT_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_message")
 EDIT_MARKUP_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_replymarkup")
 
+#: The dialect this module sends in. ⚠️ ONE VALUE, READ BY EVERY SEND AND EVERY
+#: EDIT here, so a message and its later rewrite can never disagree about how
+#: they are parsed — which would show as a body that renders on arrival and
+#: turns into raw tags the first time the buttons are redrawn.
+PARSE_MODE: str = "html"
+
 #: ⚠️ THE PLATFORM AS THE ENTITY REGISTRY SPELLS IT. `chat.target_for` matches
 #: the same string for the same reason — a notify entity and a notify service
 #: are the same shape, so only the registry can say which integration is behind
@@ -325,8 +331,20 @@ async def _send_one(session: Any, entity_id: str, title: str, body: str,
     same reason. `no message id` is logged so this degradation cannot be silent.
     """
     domain, service = SEND_SERVICE
+    # ⚠️ HTML, SET EXPLICITLY, AND ONLY HERE. `telegram_bot.send_message`
+    # publishes a `parse_mode` field, so this path does not depend on the
+    # villa's integration setting — which is what makes formatting shippable
+    # rather than true on one property. `notify.send_message` publishes no such
+    # field, so the plain path stays plain and `deliver` is untouched: no
+    # platform branch moved into the agnostic sender.
+    #
+    # ⚠️ HTML RATHER THAN MARKDOWN IS A MEASUREMENT (2026-08-28): the same
+    # message in markdown returned HTTP 500, because a real device name and our
+    # own ingress URL both contain underscores and one unclosed italic kills
+    # the send. In HTML an underscore is an ordinary character.
     payload: Dict[str, Any] = {
         "entity_id": entity_id, "title": title, "message": body,
+        "parse_mode": PARSE_MODE,
         "inline_keyboard": [[list(b) for b in row] for row in keyboard],
     }
     try:
