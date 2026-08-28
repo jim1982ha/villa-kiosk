@@ -504,53 +504,27 @@ export default function AgentConcerns() {
               </span>
             )}
             {canJudge && (
-              <>
-                {/* ⚠️ TWO QUESTIONS, TWO GROUPS, AND THE SPLIT IS THE WHOLE
-                    POINT (2026-08-28, owner's ruling). The rating pair says how
-                    good the alert was and LEAVES IT ALONE; `Seen` and `Dismiss`
-                    say what happens to it. Until now a thumb up acknowledged —
-                    which is what takes a card off this wall — and a thumb down
-                    dismissed outright, so rating the villa's judgement quietly
-                    disposed of the villa's problem.
+              /* ⚠️ AN ACTION GROUP, NOT LOOSE SIBLINGS IN THE ROW, AND THE
+                 DIFFERENCE IS WHAT A NARROW SCREEN SHOWS (2026-08-28). Every
+                 control carries its words — a `title` explains nothing to a
+                 finger — so together they outgrow what a phone can spare beside
+                 the alert's title. Left as siblings they wrapped one at a time,
+                 wherever they happened to run out of room, which reads as a
+                 layout that has come apart. As a group they drop to their own
+                 line INTACT and stay right-aligned, which reads as a decision.
 
-                    ⚠️ `+1` / `-1` RATHER THAN THUMBS, ALSO ASKED FOR, AND NOT
-                    COSMETIC: a thumb reads as approving or rejecting the alert
-                    itself, which is exactly the confusion that made a thumb
-                    down dismissing feel natural. A tally reads as a tally.
+                 ⚠️ THE ORDER IS THE PHONE'S ORDER, AND THIS SIDE HAD IT
+                 BACKWARDS. `ACTS` states the rule — "a rating is a comment on
+                 the supervisor, not on the villa, so it must never be the first
+                 thing offered" — and Telegram's keyboard follows it; the tablet
+                 put `+1` first and the act last, so the two surfaces taught
+                 opposite habits for the same alert.
 
-                    ⚠️ AND A `title` IS NOT AN EXPLANATION ON A TABLET. The
-                    screen this is written for is operated by finger, so every
-                    one of these carries its word visibly; `title` keeps the
-                    longer sentence for a mouse. */}
-                {/* ⚠️ ONCE ONLY, AND THE STAMP IS THE DISCRIMINATOR (2026-08-28,
-                    owner: "the rating shall only be applied once"). Keyed on
-                    `useful_at` and never on `useful`, which is `false` both for
-                    "less like this" and for "nobody has said anything" — the
-                    same conflation that hid the receipt for a `-1`, one release
-                    ago, in this very block. The line above replaces them, so
-                    the row does not simply go quiet. */}
-                {!String(c.useful_at ?? "").trim() && (<>
-                  <button
-                    type="button" className="row-action concern-judge"
-                    disabled={busy === c.id}
-                    aria-label={`Raise this kind of alert more often: ${c.title}`}
-                    title="Worth telling me — the villa raises this kind more readily. The alert itself is not changed."
-                    onClick={() => void judge(c.id, true)}
-                  >
-                    <span className="concern-tally" aria-hidden>+1</span>
-                    <span className="body-text">More like this</span>
-                  </button>
-                  <button
-                    type="button" className="row-action concern-judge"
-                    disabled={busy === c.id}
-                    aria-label={`Raise this kind of alert less often: ${c.title}`}
-                    title="Not worth telling me — the villa raises this kind less readily. The alert itself is not changed."
-                    onClick={() => void judge(c.id, false)}
-                  >
-                    <span className="concern-tally" aria-hidden>-1</span>
-                    <span className="body-text">Less like this</span>
-                  </button>
-                </>)}
+                 ⚠️ AND THE RATING PAIR IS ONE UNIT, so it can never be split
+                 across two lines with `+1` orphaned above `-1`. That is the
+                 phone's bottom row expressed in CSS rather than in a keyboard
+                 table: same grouping, same order, two renderers. */
+              <div className="concern-actions">
                 {/* ⚠️ ONE BUTTON, NOT TWO (2026-08-28, owner's ruling). `Seen`
                     stopped the chase and left the alert standing; `Dismiss`
                     settled it. Both were pressed for the same reason — "I do
@@ -573,7 +547,51 @@ export default function AgentConcerns() {
                   <CircleSlash size={16} aria-hidden />
                   <span className="body-text">Nothing more needed</span>
                 </button>
-              </>
+                {/* ⚠️ TWO QUESTIONS, TWO GROUPS, AND THE SPLIT IS THE WHOLE
+                    POINT (2026-08-28, owner's ruling). The rating says how good
+                    the alert was and LEAVES IT ALONE; the act beside it says
+                    what happens to it. Until then a thumb up acknowledged —
+                    which is what takes a card off this wall — and a thumb down
+                    dismissed outright, so rating the villa's judgement quietly
+                    disposed of the villa's problem.
+
+                    ⚠️ `+1` / `-1` RATHER THAN THUMBS, ALSO ASKED FOR, AND NOT
+                    COSMETIC: a thumb reads as approving or rejecting the alert
+                    itself, which is exactly the confusion that made a thumb
+                    down dismissing feel natural. A tally reads as a tally.
+
+                    ⚠️ ONCE ONLY, AND THE STAMP IS THE DISCRIMINATOR (owner:
+                    "the rating shall only be applied once"). Keyed on
+                    `useful_at` and never on `useful`, which is `false` both for
+                    "less like this" and for "nobody has said anything" — the
+                    same conflation that hid the receipt for a `-1` one release
+                    earlier, in this very block. The line above the buttons
+                    replaces them, so the row does not simply go quiet. */}
+                {!String(c.useful_at ?? "").trim() && (
+                  <span className="concern-rating">
+                    <button
+                      type="button" className="row-action concern-judge"
+                      disabled={busy === c.id}
+                      aria-label={`Raise this kind of alert more often: ${c.title}`}
+                      title="Worth telling me — the villa raises this kind more readily. The alert itself is not changed."
+                      onClick={() => void judge(c.id, true)}
+                    >
+                      <span className="concern-tally" aria-hidden>+1</span>
+                      <span className="body-text">More like this</span>
+                    </button>
+                    <button
+                      type="button" className="row-action concern-judge"
+                      disabled={busy === c.id}
+                      aria-label={`Raise this kind of alert less often: ${c.title}`}
+                      title="Not worth telling me — the villa raises this kind less readily. The alert itself is not changed."
+                      onClick={() => void judge(c.id, false)}
+                    >
+                      <span className="concern-tally" aria-hidden>-1</span>
+                      <span className="body-text">Less like this</span>
+                    </button>
+                  </span>
+                )}
+              </div>
             )}
           </div>
         ))}

@@ -5064,6 +5064,26 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    measurement somebody took. */
 .concern-row { flex-wrap: wrap; }
 .concern-row > .editable-row-fields { flex: 1 1 220px; }
+/* ⚠️ THE ACTIONS ARE A GROUP, SO THEY MOVE AS ONE. Loose siblings wrapped a
+   button at a time, wherever the row happened to run out of room — a layout
+   that has come apart rather than one that has adapted. The group drops to its
+   own line intact and stays right-aligned, which is the same shape the phone's
+   keyboard has: acts first, the rating pair last, on its own row when there is
+   no space beside them.
+
+   `0 1 auto` and not `0 0 auto`: on a screen too narrow for the group ITSELF,
+   its own `flex-wrap` has to be reachable, and a group that refuses to shrink
+   never gets there. */
+.concern-actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  align-items: center; justify-content: flex-end;
+  flex: 0 1 auto; min-width: 0;
+}
+/* ⚠️ ONE UNIT, SO `+1` CAN NEVER BE ORPHANED ABOVE `-1`. They are a pair — one
+   question with two answers — and a wrap between them would read as two
+   unrelated controls. `0 0 auto` is deliberate here and the opposite of the
+   group above it: the pair may move, never split. */
+.concern-rating { display: flex; gap: 8px; flex: 0 0 auto; }
 /* The destructive one keeps the app's danger treatment, still circular. */
 .row-action.danger { color: var(--status-danger); }
 

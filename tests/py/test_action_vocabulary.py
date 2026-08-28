@@ -155,3 +155,40 @@ def test_the_ONE_IRREVERSIBLE_ACT_NAMES_ITSELF() -> None:
               if a.id not in ("dismiss", "done")
               and any(w in a.label.lower() for w in ends)]
     assert not others, f"{others} also read as final, so neither stands out"
+
+
+def test_the_TABLET_OFFERS_THE_ACTS_IN_THE_SAME_ORDER_AS_THE_PHONE() -> None:
+    """⚠️ `ACTS` STATES THE RULE AND ONLY ONE SURFACE WAS FOLLOWING IT. Its own
+    comment: "a rating is a comment on the supervisor, not on the villa, so it
+    must never be the first thing offered" — Telegram's keyboard builds from the
+    table and obeys it; the Reason tab hand-wrote its buttons and put `+1` first
+    with the act last. Two surfaces teaching opposite habits for one alert, and
+    nothing could see it: the order lives in a Python tuple on one side and in
+    JSX source order on the other (2026-08-28, found by /phone-parity).
+
+    ⚠️ DERIVED FROM THE TABLE, NOT TRANSCRIBED. The rule is "every rating comes
+    after every act", so a sixth act added anywhere sensible keeps passing and a
+    rating promoted to the front fails on both sides at once.
+    """
+    ids = [a.id for a in actions.ACTS]
+    rating = {"useful", "not_useful"}
+    first_rating = min(ids.index(i) for i in rating)
+    last_act = max(i for i, name in enumerate(ids) if name not in rating)
+    assert first_rating > last_act, (
+        f"the acts table now offers a rating before an act: {ids}. The phone's "
+        f"keyboard builds from this order, so the rule has to hold here first.")
+
+    with open(os.path.join(REPO, "src", "vesta", "supervise", "components",
+                           "AgentConcerns.tsx"), encoding="utf-8") as handle:
+        wall = handle.read()
+    act_at = wall.find('act(c.id, "dismiss")')
+    rating_at = wall.find("judge(c.id, true)")
+    # ⚠️ THE GUARD THAT KEEPS THIS FROM PASSING VACUOUSLY. Two `-1`s compare
+    # perfectly happily, and this file has had four counters read 0 for exactly
+    # the case they existed to measure.
+    assert act_at > 0 and rating_at > 0, (
+        "neither the act nor the rating was found in AgentConcerns.tsx — this "
+        "test's anchors have moved and it is comparing two absences")
+    assert act_at < rating_at, (
+        "the Reason tab offers the rating before the act, which is the order "
+        "`ACTS` forbids and the phone does not use")
