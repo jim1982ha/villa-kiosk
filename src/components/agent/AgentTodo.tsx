@@ -35,6 +35,7 @@ import { ClipboardCheck, Loader2 } from "lucide-react";
 
 import { actOnAlert, loadAgentConfig, loadConcerns } from "@/agent/agentApi";
 import type { Concern } from "@/agent/agentTypes";
+import InfoHint from "@/components/common/InfoHint";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import { useHA } from "@/ha/HAStateStore";
@@ -136,7 +137,31 @@ export default function AgentTodo() {
 
   return (
     <>
-      <div className="settings-section-title">To-Do List — what somebody is asked to do</div>
+      {/* ⚠️ THE SUBTITLE BECAME THE (i) (2026-08-28, owner's instruction). "—
+          what somebody is asked to do" was a gloss on a title that does not
+          need one, and the paragraph under it repeated the same fact a third
+          time; this app's rule is at most two lines beside a control with
+          everything else in here. */}
+      <div className="settings-section-title">
+        To-Do List
+        <InfoHint label="To-Do List">
+          <p>
+            A row appears here when the villa tells somebody about something,
+            and leaves when it is ticked off — here, or on the list itself.
+          </p>
+          <p>
+            {/* ⚠️ NAMED BECAUSE IT IS NOT A LIST THIS APP OWNS. The items are
+                ordinary Home Assistant to-do items on the list configured
+                under Settings &amp; others, so they can be read and ticked in
+                Home Assistant, in its app, or by voice — and ticking one there
+                is the same act as ticking it here. A reader who does not know
+                that assumes this tab is the only place the work exists. */}
+            The list is a Home Assistant to-do list, so the same items appear in
+            Home Assistant itself and can be ticked off there. Either way counts:
+            the alert behind the row is marked seen and stops being chased.
+          </p>
+        </InfoHint>
+      </div>
       {/* ⚠️ THE UNCONFIGURED CASE IS NOT AN EMPTY LIST. "No items" on a villa
           that cannot raise one is the silence this project keeps being caught
           by; naming the missing setting is the difference between a quiet villa

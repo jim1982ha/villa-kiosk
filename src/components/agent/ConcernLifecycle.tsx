@@ -204,34 +204,23 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
           ⚠️ AND THE PROSE BECAME THE (i), which is this app's settled rule: at
           most two lines of description on screen and everything else inside an
           InfoHint (see its header — the panes had grown a paragraph per
-          control and nobody read them). It hangs off "Fixed and confirmed"
-          because that count is what the whole explanation is ABOUT, so the
-          reader meets the icon exactly where the question occurs to them,
-          rather than after the numbers have already been read. */}
+          control and nobody read them). It LEADS the row: it explains all four
+          counts, and hanging it off the first one (as it did until 2026-08-28)
+          read as belonging to that number alone. */}
       <dl className="tier-facts">
-        <div>
-          {/* ⚠️ THE LABEL IS THE CONTROL AND THE (i) IS ITS SIBLING, NOT ITS
-              CHILD (2026-08-28, owner: "don't make the number clickable but
-              the text… handle properly the click on the (i) icon not to take
-              precedence"). Two things were wrong. The NUMBER carried the
-              press, so the target was one or two characters wide on a wall
-              tablet and read as decoration rather than a control. And the (i)
-              sat INSIDE the `<dt>` beside the label — so making the label
-              clickable naively would have nested `InfoHint`'s own button
-              inside this one, which is invalid HTML and which browsers resolve
-              by giving the outer element the click. Rendering them as
-              siblings makes the precedence a fact of the markup rather than
-              something an event handler has to unpick. */}
-          <dt>
-            <button type="button" className="link-count"
-                    disabled={verified === 0}
-                    title="Download these as a spreadsheet"
-                    onClick={() => save("Fixed and confirmed",
-                      concerns.filter((c) => String(c.state ?? "") === "verified"))}>
-              Fixed and confirmed
-            </button>
-            <InfoHint label="Reading these counts">
-              <p>
+        {/* ⚠️ THE (i) LEADS THE ROW (2026-08-28, owner: "move the (i) icon in
+            the last line at the beginning of the line"). It used to hang off
+            "Fixed and confirmed" — chosen because that count is what the
+            explanation is most ABOUT — but it explains all four, and sitting
+            between the first label and its number it read as belonging to that
+            one number, with the other three unexplained. At the head of the
+            line it is unambiguous: this is the key to what follows.
+            ⚠️ ITS OWN CELL, NOT INSIDE THE FIRST PAIR. `.tier-facts` is a flex
+            row of label/value pairs, so an icon smuggled into the first `<dt>`
+            inherits that pair's spacing and drifts with the label's length. */}
+        <div className="tier-facts-lead">
+          <InfoHint label="Reading these counts">
+            <p>
                 It is the only count that says something actually worked: the
                 condition stopped after somebody did something. Every other
                 count says what was SAID, not what changed.
@@ -248,7 +237,24 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
                 Dismissals are just as useful in the other direction — they are
                 how the villa learns what you do not want to hear about.
               </p>
-            </InfoHint>
+          </InfoHint>
+        </div>
+        {/* ⚠️ THE LABEL IS THE CONTROL, NEVER THE NUMBER (2026-08-28, owner:
+            "don't make the number clickable but the text"). A one- or
+            two-character press target on a wall tablet reads as decoration
+            rather than a control. The (i) that used to sit in this `<dt>` now
+            leads the row above — nesting `InfoHint`'s own button inside this
+            one was invalid HTML, which browsers resolve by giving the outer
+            element the click. */}
+        <div>
+          <dt>
+            <button type="button" className="link-count"
+                    disabled={verified === 0}
+                    title="Download these as a spreadsheet"
+                    onClick={() => save("Fixed and confirmed",
+                      concerns.filter((c) => String(c.state ?? "") === "verified"))}>
+              Fixed and confirmed
+            </button>
           </dt>
           <dd>{verified}</dd>
         </div>

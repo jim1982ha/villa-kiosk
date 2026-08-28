@@ -155,6 +155,21 @@ def record_run(run_id: str, *, actor: str, trigger: str,
 #: rewritten, which is the moment the record stops being evidence.
 AWAITING: Final[str] = "awaiting-approval"
 
+#: An escalation triage raised that this pass did not get to. ⚠️ RECORDED, NOT
+#: DISCARDED (2026-08-28). `reason.follow_up` used to `break` at
+#: `max_investigations_per_pass` and write nothing for the remainder, so the
+#: Triage tab could say "5 items flagged — 2 looked into, 3 waiting for the next
+#: check" and then show two cards: the count came from the pass's own prose and
+#: the SUBJECTS existed nowhere. The owner asked to see them, which is the right
+#: question — a screen naming three things it cannot list is a screen asking to
+#: be distrusted.
+#:
+#: ⚠️ THE APPROVE PATH ALREADY DID THIS, which is what made the gap a defect
+#: rather than a design: an escalation waiting for a person gets an `AWAITING`
+#: row carrying its subject, and an escalation waiting for the CAP got nothing.
+#: One mode recorded, the other forgot, for the same fact.
+DEFERRED: Final[str] = "deferred"
+
 
 def pending_escalations() -> List[Dict[str, Any]]:
     """Escalations queued for a person and not yet acted on. Newest last.

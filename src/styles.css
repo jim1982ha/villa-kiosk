@@ -5741,3 +5741,37 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .link-count:hover:not(:disabled),
 .link-count:focus-visible { text-decoration: underline; }
 .link-count:disabled { cursor: default; }
+
+/* The Triage tab's per-check card heading, made pressable so older checks can
+   be collapsed (2026-08-28, owner: "collapse all the previous flagged item
+   cards and also expand the latest one — that would make the UI less
+   cluttered").
+   ⚠️ A `<button>` STRIPPED BACK TO THE TEXT IT REPLACED, not styled as one:
+   the heading already reads as a heading and adding chrome would make every
+   card look like a control. What it keeps is `cursor: pointer`, a full-width
+   hit area (the whole line, not the caret) and the 44px minimum this app
+   requires on a wall tablet — a 14px chevron is not a touch target. */
+.check-card-toggle {
+  display: flex; align-items: flex-start; gap: 6px;
+  width: 100%; padding: 0; border: 0; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  min-height: var(--touch-min);
+}
+/* ⚠️ ROTATED, NOT SWAPPED FOR A SECOND ICON. Two icons is two things to keep
+   in step and a frame of flicker as one unmounts; a transform is neither. */
+.check-card-caret {
+  flex: 0 0 auto; margin-top: 3px; color: var(--text-dim);
+  transition: transform 120ms ease;
+}
+.check-card-caret.open { transform: rotate(90deg); }
+/* ⚠️ NO `prefers-reduced-motion` BLOCK HERE — the first cut had one and
+   `test_reduced_motion_is_decided_in_exactly_one_place` caught it immediately.
+   That policy is decided ONCE at the foot of this file, and the global rule
+   already collapses every transition; a second opinion beside one animation is
+   exactly what the pin exists to refuse. */
+
+/* The (i) that leads a `.tier-facts` row rather than sitting in a pair.
+   ⚠️ NO `gap` OF ITS OWN: `.info-hint-btn` already carries `margin-inline-start`
+   and the row's own gap follows it, so adding one here doubles the space
+   between the icon and the first label. */
+.tier-facts-lead { align-items: center; }

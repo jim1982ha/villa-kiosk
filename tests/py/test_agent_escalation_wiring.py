@@ -175,6 +175,55 @@ def test_the_cap_bounds_how_many_are_followed_not_how_many_are_recorded() -> Non
     assert "3 left for next pass" in outcome
 
 
+def test_the_ones_the_CAP_left_are_RECORDED_with_their_subjects() -> None:
+    """⚠️ THE COUNT EXISTED AND THE SUBJECTS DID NOT (2026-08-28, owner: "3
+    items are waiting for the next check, but i don't see them in the card").
+    `follow_up` used to `break` at the cap and write nothing for the remainder,
+    so the pass reported "3 left for next pass" and the Triage tab printed that
+    sentence above two cards, naming three things it had no way to list.
+
+    ⚠️ THE APPROVE PATH ALREADY DID THIS, which is what made it a defect rather
+    than a design: an escalation waiting for a PERSON gets an `AWAITING` row
+    carrying its subject; one waiting for the CAP got nothing. One mode recorded
+    the fact, the other forgot it.
+
+    ⚠️ AND THE ROW MUST CARRY THE SUBJECT AND THE REASON, not just exist — the
+    card renders both, and `loadCheckFlags` refuses to start a flag from a
+    subject-less row, so a bare marker would be silently dropped."""
+    provider = _Provider([says(_escalating(5))] + [says("nothing found")] * 5)
+    _run({**ON, "max_investigations_per_pass": 2}, provider)
+
+    deferred = _rows(audit.DEFERRED)
+    assert len(deferred) == 3, (
+        f"{len(deferred)} deferred row(s) for 5 escalations at a cap of 2 — the "
+        f"remainder is counted in the pass line and must also be recorded")
+    assert [r["subject"] for r in deferred] == [
+        "Subject 3", "Subject 4", "Subject 5"], (
+        "the deferred rows do not name the subjects that were actually left")
+    assert all(str(r.get("detail") or "") for r in deferred), (
+        "a deferred row carries no reason, so its card would show a bare name")
+
+    # ⚠️ AND NOT CONFUSED WITH THE ONES THAT RAN. Two verdicts, two meanings:
+    # `escalated` is "a model looked at this", `deferred` is "nobody has".
+    assert audit.DEFERRED != "escalated" and audit.DEFERRED != audit.AWAITING
+    assert len(_rows("escalated")) == 2
+
+
+def test_a_DEFERRED_row_is_not_a_pending_APPROVAL() -> None:
+    """⚠️ THEY LOOK ALIKE AND MEAN OPPOSITE THINGS. `AWAITING` is a request for
+    a person to decide and drives the Investigate/Cancel buttons; `DEFERRED` is
+    a record that this pass ran out of budget and asks nobody for anything. If
+    the queue ever picked these up, a villa on the automatic mode would grow an
+    approval list it never asked for."""
+    provider = _Provider([says(_escalating(5))] + [says("nothing found")] * 5)
+    _run({**ON, "max_investigations_per_pass": 2}, provider)
+    pending = {p["runId"] if "runId" in p else p.get("run_id")
+               for p in audit.pending_escalations()}
+    deferred = {r["run_id"] for r in _rows(audit.DEFERRED)}
+    assert not (pending & deferred), (
+        "a deferred escalation is queued for approval; nobody was asked")
+
+
 def test_the_default_cap_matches_the_shipped_config() -> None:
     """⚠️ ONE NUMBER, TWO FILES. A second default is the drift this repo has
     paid for at every layer it has one."""

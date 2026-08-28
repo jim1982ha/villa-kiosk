@@ -1,3 +1,15 @@
+## 2.839.0
+
+### Added — the items a check ran out of budget for are now listed, not just counted
+Triage said "5 items flagged — 2 looked into, 3 waiting for the next check" and
+showed two cards, because the three were never written down: the pass stopped at
+its investigation limit and recorded only a number. They are recorded now and
+appear as cards like the others, marked as waiting. Older checks start collapsed
+with the newest open, so the tab is one check deep rather than fourteen. "Looked
+into — all clear" now reads "Investigated at …: no alert needed", matching the
+word used everywhere else. The To-Do List heading lost its subtitle to an (i)
+that also says the list lives in Home Assistant.
+
 ## 2.838.0
 
 ### Fixed — notes in the code still calling the modes by their old names

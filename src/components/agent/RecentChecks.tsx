@@ -31,7 +31,7 @@
 // `test_pass_reason_contract.py` as the only thing holding them together.
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Search, X, AlertCircle, MinusCircle } from "lucide-react";
+import { AlertCircle, ChevronRight, Loader2, MinusCircle, Search, X } from "lucide-react";
 
 import { PAGE_CARDS, Pager, usePaged } from "@/components/common/Paged";
 import {
@@ -156,6 +156,19 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
         <span className="sev-warning flag-row-status" title={`The investigation started${byWhom} but could not finish (${flag.runStatus}). Nothing was concluded — flag it again or check Spend & people for a budget stop.`}>
           <AlertCircle size={16} aria-hidden /> Did not finish{at}
         </span>
+      ) : flag.verdict === "deferred" ? (
+        /* ⚠️ THE ITEMS THE HEADING ALREADY COUNTED (2026-08-28, owner: "3 items
+           are waiting for the next check, but i don't see them in the card").
+           They were never recorded until now — `reason.follow_up` broke at the
+           per-pass cap and wrote nothing — so the sentence named three things
+           the tab could not list. `audit.DEFERRED` is the row; this is the row
+           drawn.
+           ⚠️ IT SAYS WHAT WAITING MEANS, because "queued" would be wrong: the
+           next check re-reads the villa from scratch, so this is flagged again
+           only if it is still true. Nothing resumes a list. */
+        <span className="muted flag-row-status" title="This check flagged it but had already used its investigation budget for the pass. The next check looks at the villa again from scratch — if this is still true, it is flagged again; if it has cleared, it simply is not.">
+          <MinusCircle size={16} aria-hidden /> Waiting for the next check{at}
+        </span>
       ) : flag.verdict === "escalated" || mode === "live" || mode === "observe" ? (
         /* ⚠️ AN HONEST CLAIM, NOW PROVABLE PER FLAG. The merged audit rows say
            an investigation RAN (`escalated`), and the concern store says
@@ -170,8 +183,15 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
            settled BEFORE the change whose concern went to the old shadow file
            reads "all clear" here — rare, historical, and the briefing that
            carried it already said what it concluded. */
-        <span className="muted flag-row-status" title={`Investigated${byWhom}${at ? at.replace(" · ", " at ") : ""}. It looked at the evidence and concluded nothing needs your attention — a complete answer, not a failure.`}>
-          <MinusCircle size={16} aria-hidden /> Looked into — all clear{at}
+        /* ⚠️ "Investigated … no alert needed", NOT "Looked into — all clear"
+           (2026-08-28, owner: "since you `investigate` everywhere else I
+           suggest you rename it"). Correct: the step is called Reason and its
+           chip says Investigated, so a third word for the same act made this
+           row read as a different kind of outcome. And "all clear" describes
+           the VILLA; what this row can honestly claim is about the ALERT — the
+           evidence was read and nothing warranted telling anybody. */
+        <span className="muted flag-row-status" title={`Investigated${byWhom}. It read the evidence and concluded nothing needed your attention — a complete answer, not a failure.`}>
+          <MinusCircle size={16} aria-hidden /> Investigated{at ? at.replace(" · ", " at ") : ""}: no alert needed
         </span>
       ) : (
         /* ⚠️ NO MODE AND NO RUN RECORDED — a check written before 2.785.0.
@@ -273,6 +293,22 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
   const [concerns, setConcerns] = useState<Concern[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string>("");
+  // ⚠️ WHICH CARDS THE READER HAS TOGGLED, not which are open (2026-08-28,
+  // owner: "collapse all the previous flagged item cards and expand the latest
+  // one"). Storing the OPEN set would need seeding on every load and reseeding
+  // whenever a new check arrives — and a check that arrives while the dialog is
+  // open would either steal the reader's expansion or not open at all. Storing
+  // the DEVIATIONS makes "newest open, rest closed" the default forever, with
+  // no effect to keep in step: a new newest is open because it is newest, and
+  // the card the reader opened three checks ago stays open because they said so.
+  const [toggled, setToggled] = useState<Set<string>>(new Set());
+  const flip = useCallback((id: string) => {
+    setToggled((was) => {
+      const next = new Set(was);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   const load = useCallback(async () => {
     const [f, c, q] = await Promise.all([
@@ -524,6 +560,14 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
           row drew a marker; reported as clutter. */}
       <ul className="fm-list">
         {paged.page.map(({ pass, reason, outcome, flags: mine }, i) => {
+          // ⚠️ NEWEST OPEN, EVERY OLDER ONE CLOSED, AND A TOGGLE FLIPS THAT.
+          // `rows` is reversed (newest first) and the pager preserves it, so
+          // the newest card is index 0 of page 0 — asked of the LIST rather
+          // than of a timestamp, because two checks in the same minute would
+          // otherwise both open.
+          const newestCard = paged.pageNo === 0 && i === 0;
+          const id = pass.runId || `${pass.at}-${i}`;
+          const open = toggled.has(id) ? !newestCard : newestCard;
           return (
             /* ⚠️ A CARD PER CHECK, NOT A LINE. The list was a wall of
                 timestamps with the flags somewhere else entirely; the owner
@@ -533,7 +577,27 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
             <li key={`${pass.at}-${i}`} className="editable-row-card">
               <div className="editable-row">
                 <div className="editable-row-fields editable-row-tight">
-                  <div className="body-text">
+                  {/* ⚠️ THE HEADING IS THE TOGGLE, AND ONLY WHEN THERE IS
+                      SOMETHING TO SHOW. A card with no items is already its
+                      whole content, so making it pressable would offer an
+                      action that does nothing — the shape this app removes
+                      rather than greys out. A check with items renders a
+                      `<button>` so it is reachable by keyboard and announces
+                      its state; one without renders the same markup in a
+                      plain `<div>`. */}
+                  {mine.length > 0 ? (
+                    <button
+                      type="button"
+                      className="check-card-toggle body-text"
+                      aria-expanded={open}
+                      onClick={() => flip(id)}
+                    >
+                      <ChevronRight
+                        size={14}
+                        aria-hidden
+                        className={`check-card-caret${open ? " open" : ""}`}
+                      />
+                      <span>
                     {/* ⚠️ `whenOf`, NOT THE RAW STRING. See its header: this
                         printed UTC beside flag rows printing local time, so a
                         card read 03:35 over items stamped 11:34. */}
@@ -574,11 +638,28 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
                     {outcome !== "blocked" && pass.docChars === 0 && (
                       <span className="sev-warning"> · nothing to read</span>
                     )}
-                  </div>
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="body-text">
+                      <span className="muted">{whenOf(pass.at)}</span>{" · "}
+                      {outcome === "quiet"
+                        ? <>Nothing to flag in this check</>
+                        : outcome === "blocked"
+                          ? <><strong className="sev-warning">Could not run</strong>{" — "}{reason}</>
+                          : <strong>
+                              {pass.escalated ?? 0} item
+                              {pass.escalated === 1 ? "" : "s"} flagged in this check
+                            </strong>}
+                      {outcome !== "blocked" && pass.docChars === 0 && (
+                        <span className="sev-warning"> · nothing to read</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {mine.length > 0 && (
+              {mine.length > 0 && open && (
                 <ul className="fm-list" style={{ marginTop: 6 }}>
                   {mine.map((f) => (
                     <FlagRow

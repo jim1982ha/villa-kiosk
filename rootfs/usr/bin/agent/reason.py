@@ -192,6 +192,30 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
     for index, item in enumerate(escalations):
         if out.started >= cap:
             out.stopped = f"{len(escalations) - out.started} left for next pass"
+            # ⚠️ THE REMAINDER IS WRITTEN DOWN, NOT JUST COUNTED (2026-08-28).
+            # This used to `break` here and record nothing, so the pass reported
+            # "3 left for next pass" and the three SUBJECTS existed nowhere —
+            # the Triage tab printed that count above two cards and could not
+            # list the rest. The approve path has always recorded its waiting
+            # escalations (`AWAITING`, with the subject); the capped path forgot
+            # the same fact.
+            #
+            # ⚠️ ONE ROW EACH, WITH THE SUBJECT AND TRIAGE'S OWN REASON, and the
+            # id from the SAME `_ident` generator — that is what pairs it to
+            # this check on the tab, and it costs nothing: no model is asked,
+            # this is the branch where spending stopped.
+            #
+            # ⚠️ AND "waiting for the next check" IS WHAT IT MEANS, NOT
+            # "queued". The next pass re-triages from the villa's own state; if
+            # the condition has cleared it is simply not flagged again. Nothing
+            # resumes a list, which is why the row is a record rather than a
+            # work item.
+            for later, rest in enumerate(escalations[index:], start=index):
+                audit_mod.record_run(_ident(trigger, later, now),
+                                     actor="agent", trigger=trigger,
+                                     verdict=audit_mod.DEFERRED,
+                                     subject=_subject_of(rest),
+                                     detail=str(getattr(rest, "reason", "") or ""))
             break
         money = budget_mod.check(config, kind="run")
         if not money.allowed:
