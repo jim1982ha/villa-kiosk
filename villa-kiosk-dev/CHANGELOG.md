@@ -1,3 +1,16 @@
+## 2.873.0
+
+### Fixed — switching a check off now stops the agent using it too
+
+It only ever stopped briefings. The toggle is read inside the briefing's own
+loop and the agent calls the check directly, so one setting meant two things
+depending on which side asked — while the screen said "switch it off". The
+previous release reworded the screen instead of fixing it, which was the wrong
+half: a switch meaning "off, except when it isn't" is the second flag this
+subsystem already ruled out. The agent now honours that switch and nothing else
+from the briefing's gate, since minimum history and audience are questions about
+composing a brief. An unset or unreadable setting still means on.
+
 ## 2.872.0
 
 ### Fixed — "you can switch it off" promised more than the switch reaches
