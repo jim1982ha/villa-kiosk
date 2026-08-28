@@ -1,3 +1,14 @@
+## 2.838.0
+
+### Fixed — notes in the code still calling the modes by their old names
+The three supervision modes were renamed on 28 August. The screen was updated
+that day and the owner's recorded decisions were updated after, but six notes
+describing how the villa behaves right now kept the retired names, so anyone
+reading them would look for words no screen says. Corrected, and a test now
+allows a retired name only where it is explicitly marked as history — which is
+what keeps the recorded decisions quotable. Two other notes described a field
+and a count that no longer exist.
+
 ## 2.837.0
 
 ### Changed — "What is watched" now shows only what can still change
