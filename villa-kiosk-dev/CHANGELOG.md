@@ -1,3 +1,14 @@
+## 2.856.0
+
+### Changed — one button ends an alert, instead of two that both did
+"Seen — stop chasing" and "Dismiss completely" were pressed for the same reason
+and a reader had to hold the difference. They are now one control — "Nothing
+more is needed" — which records who dealt with it and closes it, doing both jobs
+of the buttons it replaces. What stops a subject being raised again moves with
+it: three "-1 Less like this" ratings, not three cancellations, because the
+merged button is also pressed by somebody who simply has the work in hand, and
+silencing a subject for that would be invisible and permanent.
+
 ## 2.855.0
 
 ### Changed — a rating can be given once, and the buttons say so by leaving
