@@ -1,3 +1,15 @@
+## 2.861.0
+
+### Changed — one row of buttons, and the rating becomes a link in the message
+The keyboard under an alert is now a single row — ✅ 🚫 🆘 — chosen by the owner
+from rendered mock-ups after the two-row layout missed the mark. The ⬆️/⬇️
+rating is no longer drawn as buttons: the message ends with a "Rate it ⬆️/⬇️ on
+the Reason tab" line carrying the kiosk's own link, built by the module that
+enforces the link rules (https-only, the owner's published address, no secrets)
+and silently absent on a villa with no external URL — where the tablet still
+offers the rating. Old rating buttons in chat history keep working; they are
+only no longer offered on new messages.
+
 ## 2.860.0
 
 ### Changed — two ways to clear an alert, buttons on the escalation, instant sync
