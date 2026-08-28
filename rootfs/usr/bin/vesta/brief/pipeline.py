@@ -319,51 +319,12 @@ def _standing_rows(states: Any) -> List[Dict[str, Any]]:
             for i in items]
 
 
-def _statistics_fetcher(session: ClientSession, now_local: datetime,
-                        tally: Dict[str, Any]) -> Any:
-    """The ONLY way a module gets data.
-
-    ⚠️ MODULES DO NOT GET THE SESSION. A module that can open its own
-    websocket can also make its own unbudgeted queries, and the scheduler could
-    then no longer bound a pass — one badly written module would stall the
-    proxy's event loop, and the kiosk's own API alongside it. Modules ask; the
-    pipeline fetches, chunked and with `change` rather than `sum`.
-
-    Hourly, because the idle floor a module looks for is a property of the
-    hours within a day — daily buckets average it away entirely.
-    """
-    async def fetch(ids: Sequence[str], days: int) -> Dict[str, List[Dict[str, Any]]]:
-        if not ids:
-            return {}
-        start = stats_mod.start_of_day(now_local, days)
-        try:
-            async with HassClient(session) as hass:
-                series = await stats_mod.statistics_during_period(
-                    hass, list(ids), start, period="hour", types=("change",))
-        except HassUnavailable as err:
-            warn(f"statistics unavailable for this pass: {err}")
-            tally["error"] = str(err)
-            series = {}
-        # ⚠️ RECORDED, NOT ASSUMED. "The module found nothing" and "the module
-        # received nothing" produce an identical report, and telling them apart
-        # by reading the code is guesswork. A live preview that returns no
-        # findings is uninterpretable without these three numbers.
-        tally["requested"] = tally.get("requested", 0) + len(ids)
-        tally["returned"] = tally.get("returned", 0) + len(series)
-        tally["rows"] = tally.get("rows", 0) + sum(len(v) for v in series.values())
-        tally["days_asked"] = days
-        tally["empty_ids"] = sorted(i for i in ids if not series.get(i))[:5]
-        # ⚠️ THE RAW SHAPE, verbatim. The `start` field's type is the whole
-        # reason Phase 3's first live run found nothing, and a tally of counts
-        # could not have shown it — 11,859 rows arrived and every one was
-        # unusable. Recording one real row makes the next reading confirm the
-        # diagnosis instead of assuming the fix is why anything changed.
-        for rows in series.values():
-            if rows:
-                tally["sample_row"] = rows[0]
-                break
-        return series
-    return fetch
+# ⚠️ `_statistics_fetcher` MOVED to `vesta.adapters.stats.statistics_fetcher`
+# (TASK-115 step 8). It was this module's private and the agent's analysis
+# tools reached it anyway — the one supervise → brief edge in the lattice,
+# carried as ALLOWED_DEBT until this extraction paid it. The adapter owns the
+# statistics call the fetcher wraps, so both halves import it downward now.
+_statistics_fetcher = stats_mod.statistics_fetcher
 
 
 #: How far back to look when measuring what the recorder actually holds.

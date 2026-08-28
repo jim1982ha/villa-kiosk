@@ -101,15 +101,24 @@ def test_the_chase_task_is_STARTED_and_CANCELLED_by_the_proxy() -> None:
     """⚠️ BOTH HALVES, BECAUSE THE CLEANUP LIST IS HAND-KEPT. A task started
     and not named in the shutdown loop holds the whole shutdown open — the same
     trap one level up from the one above."""
+    # ⚠️ THE START MOVED INTO `supervise/service.py` (TASK-115 step 5); the
+    # proxy mounts the returned tasks under `agent_<name>` and the cleanup
+    # list names them. Three hops now — service creates, proxy mounts, cleanup
+    # cancels — and each is pinned, because any one missing is either a loop
+    # nobody runs or a shutdown that hangs.
     with open(PROXY, encoding="utf-8") as handle:
         src = re.sub(r"#[^\n]*", "", handle.read())
-    assert "chase_forever(" in src, "nothing starts the chase clock"
-    assert '"agent_chase"' in src
-    started = src.index('a["agent_chase"] = asyncio.create_task')
-    cancelled = src.index('"agent_triage", "agent_chase"')
-    assert started < cancelled, (
-        "the chase task is started but not in the cleanup list, so shutdown "
-        "will hang on it")
+    service_path = PROXY.replace("supervisor-proxy.py",
+                                 "vesta/supervise/service.py")
+    with open(service_path, encoding="utf-8") as handle:
+        service = re.sub(r"#[^\n]*", "", handle.read())
+    assert "chase_forever(" in service, "nothing starts the chase clock"
+    assert 'tasks["chase"]' in service
+    assert "agent_service.start(" in src, "the proxy never starts the service"
+    assert 'a[f"agent_{_name}"] = _task' in src, (
+        "the service's tasks are not mounted where cleanup can see them")
+    assert '"agent_triage", "agent_chase"' in src, (
+        "the chase task is not in the cleanup list, so shutdown will hang on it")
 
 
 # ── a ticked job counts as "somebody has this" ──────────────────────────────

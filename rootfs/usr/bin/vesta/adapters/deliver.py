@@ -48,7 +48,12 @@ from typing import Any, Dict, List, Sequence
 
 from aiohttp import ClientError, ClientSession
 
-from .hass import AUTH_HEADERS, REST_ROOT
+# ⚠️ THE MODULE, NOT THE NAMES (TASK-115 step 4). `from .hass import
+# AUTH_HEADERS` binds an import-time COPY, and `hass.configure()` exists
+# precisely to change these after import — an external deployment that
+# configured a remote villa would have delivered its notifications to the
+# Supervisor address captured here at boot.
+from . import hass as hass_mod
 from .log import log, warn
 
 # One target's patience. Short: a notify platform that has not answered in this
@@ -141,10 +146,10 @@ async def deliver_one(session: ClientSession, target: str,
                       title: str, message: str,
                       plain_mode: str = "") -> Dict[str, Any]:
     """Send to one target. Never raises."""
-    url = f"{REST_ROOT}/services/{_service_path(target)}"
+    url = f"{hass_mod.REST_ROOT}/services/{_service_path(target)}"
     payload = _payload_for(target, title, message, plain_mode)
     try:
-        async with session.post(url, headers=AUTH_HEADERS, json=payload,
+        async with session.post(url, headers=hass_mod.AUTH_HEADERS, json=payload,
                                 timeout=None) as response:
             if response.status in (200, 201):
                 return {"target": target, "status": "sent"}

@@ -160,6 +160,7 @@ from vesta.supervise.agent import fallback as agent_fallback
 # `actions.MAY_ACT` evaluated when this module loads, and a deferred import
 # cannot be aliased. Every other use of `actions` below is deferred as usual.
 from vesta.supervise.agent import actions as agent_actions
+from vesta.supervise import service as agent_service
 from vesta.supervise.agent import config as agent_config
 from vesta.supervise.observe import cycle as observe_cycle
 
@@ -3705,48 +3706,34 @@ def main() -> None:
         reports_pipeline.set_brief_composer(agent_fallback.brief)
         a["reports_task"] = asyncio.create_task(
             reports_pipeline.run_forever(a["session"]))
-        # ⚠️ The collector is the only thing listening to the villa's own
-        # automation layer. 84 automations fire `vesta_*` events that Home
-        # Assistant discards immediately; without this task those findings are
-        # lost and the weekly report has nothing to report.
-        a["reports_collector"] = asyncio.create_task(
-            reports_collect.run_forever(a["session"],
-                                        on_event=_chat_dispatch(a)))
-        # ⚠️ The observation floor (Tier 1). A THIRD task in the SAME loop
-        # rather than a third s6 service: the two above already prove the
-        # pattern, and a supervised service would be another thing to start,
-        # stop, watch and misconfigure for no benefit. It polls on a cadence
-        # read from config, so it cannot starve the loop the way a tight
-        # subscription could, and nothing downstream consumes it yet — until
-        # PH-2 it only fills the journal.
-        a["observe_cycle"] = asyncio.create_task(
-            observe_cycle.run_forever(a["session"]))
-        # ⚠️ THE TRIAGE CLOCK, AND WITHOUT IT THE CONCERN STORE NEVER FILLS.
-        # Triage existed and nothing called it, so the store stayed empty and
-        # the emptiness looked like a quiet villa — the failure this subsystem
-        # keeps rediscovering. Supervision has to accumulate evidence while
-        # nobody is watching or it is not supervision.
-        #
-        # ⚠️ A FOURTH TASK IN THE SAME LOOP, not a fourth s6 service: the three
-        # above already prove the pattern, and every guard it needs — the kill
-        # switches, the budget, the provider — is asked per pass rather than at
-        # start-up, so an operator's change takes effect on the next cycle.
-        a["agent_triage"] = asyncio.create_task(
-            agent_scheduler.run_forever(a["session"], _agent_config_now))
-        # ⚠️ A SECOND CLOCK, AND IT IS NOT THE SAME CLOCK. The triage loop above
-        # sleeps out the villa's cadence — 360 minutes here — and the escalation
-        # ladder's bands are 15/45/90 MINUTES. Sharing the loop is what made a
-        # timed promise on a concern card up to six hours late. This one asks no
-        # model and spends nothing.
-        a["agent_chase"] = asyncio.create_task(
-            agent_scheduler.chase_forever(a["session"], _agent_config_now))
+        # ⚠️ THE AGENT'S FOUR LOOPS START THROUGH ITS OWN SERVICE (TASK-115
+        # step 5) — the collector (chat + button events), the observation
+        # cycle, the triage clock and the chase clock. They used to be four
+        # inline create_task calls here, indistinguishable from the host's own;
+        # `supervise.service.start` is the one call an external deployment
+        # would make instead of running this proxy, and the comments that
+        # explained each task travelled INTO it with the tasks. The briefing
+        # pipeline above deliberately stays the host's: an exported agent
+        # ships without `brief`.
+        # ⚠️ THE HOST STILL SUPPLIES THE EVENT CONSUMER, because building it
+        # needs the provider key and the stored config, which are the host's
+        # to hold. And every task still lands in `a[...]` BY NAME — on_cleanup
+        # cancels what it can enumerate, and a task missing from that list is
+        # a shutdown that hangs.
+        for _name, _task in agent_service.start(
+                a["session"], _agent_config_now,
+                on_event=_chat_dispatch(a)).items():
+            a[f"agent_{_name}"] = _task
 
     async def on_cleanup(a: web.Application) -> None:
         # ⚠️ EVERY BACKGROUND TASK MUST BE NAMED HERE. The list is hand-kept,
         # so a task started above and not added holds the whole shutdown open
         # until aiohttp's timeout — the trap `run_forever`'s own docstring
         # describes about re-raising CancelledError, one level up.
-        for key in ("reports_task", "reports_collector", "observe_cycle",
+        # ⚠️ THE AGENT'S TASK KEYS FOLLOW `service.start`'s names, prefixed
+        # `agent_` where they land in `a[...]` above. The old inline names
+        # (`reports_collector`, `observe_cycle`) died with the inline starts.
+        for key in ("reports_task", "agent_collector", "agent_observe_cycle",
                     "agent_triage", "agent_chase"):
             task = a.get(key)
             if task is not None:

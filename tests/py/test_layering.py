@@ -98,8 +98,11 @@ MAY_IMPORT: Dict[str, Set[str]] = {
 #: module and ONE imported module, so anything else crossing the same boundary
 #: still fails.
 ALLOWED_DEBT: Set[Tuple[str, str]] = {
-    # TASK-115 step 8: extract _statistics_fetcher into adapters, then delete.
-    ("vesta/supervise/agent/tools/analysis", "vesta/brief/pipeline"),
+    # ⚠️ EMPTY, AND IT WAS NOT ALWAYS. The one entry ever here — the agent's
+    # analysis tools reaching `pipeline._statistics_fetcher` — was paid in
+    # step 8 by extracting the fetcher into `adapters.stats`, where the
+    # statistics call it wraps already lived. The set stays, so the NEXT debt
+    # is a named entry with a task number rather than a silent allowance.
 }
 
 

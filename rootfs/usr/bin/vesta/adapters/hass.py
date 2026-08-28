@@ -46,12 +46,38 @@ SUPERVISOR = "supervisor"
 WS_URL = f"ws://{SUPERVISOR}/core/websocket"
 REST_ROOT = f"http://{SUPERVISOR}/core/api"
 
-# Read from the environment rather than imported from the proxy — the reports
-# package never imports upward (see __init__.py's layering note). s6 passes the
+# Read from the environment rather than imported from the proxy — this
+# package never imports upward (see the layering note). s6 passes the
 # same variable to the same process, so this is the same token, not a copy of a
 # decision.
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 AUTH_HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+
+
+def configure(*, ws_url: str = "", rest_root: str = "",
+              token: str = "") -> None:
+    """Point this adapter at a DIFFERENT Home Assistant. TASK-115 step 4.
+
+    ⚠️ THE ADD-ON NEVER CALLS THIS, and that is the design: the module-level
+    defaults above are the Supervisor's own addresses, read exactly as they
+    always were, so the shipped path is byte-identical. What this adds is the
+    SEAM the export needs (REQ-063): an external deployment calls it once at
+    startup with its villa's URL and a long-lived token, and every HassClient
+    built afterwards speaks to that villa. Without it the addresses are
+    import-time constants and "relocate the agent" means editing this file.
+
+    ⚠️ MUTATES MODULE STATE ON PURPOSE, before anything connects — a startup
+    call, not a per-request one. `AUTH_HEADERS` is REBUILT rather than updated
+    in place so a captured reference cannot carry the old token.
+    """
+    global WS_URL, REST_ROOT, TOKEN, AUTH_HEADERS
+    if ws_url:
+        WS_URL = ws_url
+    if rest_root:
+        REST_ROOT = rest_root
+    if token:
+        TOKEN = token
+        AUTH_HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
 # One command's patience. Long enough for `statistics_during_period` over a
 # month of 5-minute data on a Pi, short enough that a wedged socket cannot hold

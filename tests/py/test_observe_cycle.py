@@ -206,24 +206,25 @@ def _proxy_source() -> str:
 
 
 def test_the_cycle_is_registered_as_a_task_in_the_existing_loop() -> None:
-    """⚠️ TASK-014's constraint: no new s6 service. A third supervised service
-    would be a third thing to start, stop, watch and misconfigure."""
-    source = _proxy_source()
-    assert "observe_cycle.run_forever" in source
-    assert 'a["observe_cycle"] = asyncio.create_task(' in source
+    """Not a separate s6 service. Since TASK-115 step 5 the task is created by
+    `supervise/service.py`; the proxy starts the service and mounts its tasks."""
+    service_path = PROXY.replace("supervisor-proxy.py",
+                                 "vesta/supervise/service.py")
+    with open(service_path, encoding="utf-8") as handle:
+        service = handle.read()
+    assert "observe_cycle.run_forever" in service
+    assert 'tasks["observe_cycle"]' in service
+    with open(PROXY, encoding="utf-8") as handle:
+        proxy = handle.read()
+    assert "agent_service.start(" in proxy
 
 
 def test_the_cycle_task_is_cancelled_on_cleanup() -> None:
-    """⚠️ Otherwise aiohttp's shutdown is held open until the timeout — the
-    same trap the two existing tasks are cancelled to avoid."""
-    source = _proxy_source()
-    # ⚠️ ANCHOR ON THE DEFINITION, NOT THE WORD. `on_cleanup` first appears
-    # inside a COMMENT in on_start ("Cancelled in on_cleanup so ..."), so
-    # splitting on the bare string read the wrong region and this assertion
-    # failed against correct code.
-    body = source.split("async def on_cleanup")[1][:400]
-    assert '"observe_cycle"' in body, (
-        "the observation task must be cancelled alongside the other two")
+    """A task missing from the hand-kept cleanup list holds shutdown open."""
+    with open(PROXY, encoding="utf-8") as handle:
+        proxy = handle.read()
+    assert '"agent_observe_cycle"' in proxy, (
+        "the observation cycle is not in the cleanup list")
 
 
 def test_no_new_s6_service_was_added() -> None:

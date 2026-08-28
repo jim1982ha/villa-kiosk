@@ -53,7 +53,30 @@ from typing import Any, Dict, Final, List
 from vesta.shared.contracts import CADENCE, CONTRACT_VERSION, NARRATION_MODE, PROFILE
 from .log import warn
 
-DATA_DIR: Final[str] = "/data"
+# ⚠️ NOT Final ANY MORE (TASK-115 step 4): `configure()` below repoints it for
+# an external deployment. The add-on never calls that, so /data stands.
+DATA_DIR: str = "/data"
+
+
+def configure(*, data_dir: str = "") -> None:
+    """Point every store at a different directory. The export's seam
+    (REQ-063); the add-on never calls it. Startup-only, like `hass.configure`.
+
+    ⚠️ THE `*_FILE` CONSTANTS BELOW ARE DERIVED AT IMPORT and are deliberately
+    LEFT ALONE here — every reader joins paths through them, so they are
+    rebuilt from the new root instead. A caller that imported one by value
+    before configuring gets the old path, which is why this must run before
+    anything else touches the package; the external entrypoint owns that
+    ordering, exactly as the proxy owns its boot order today.
+    """
+    global DATA_DIR
+    if not data_dir:
+        return
+    old_root = DATA_DIR
+    DATA_DIR = data_dir.rstrip("/")
+    for name, value in list(globals().items()):
+        if name.endswith("_FILE") and isinstance(value, str)                 and value.startswith(old_root + "/"):
+            globals()[name] = DATA_DIR + value[len(old_root):]
 
 REPORTS_CONFIG_FILE: Final[str] = f"{DATA_DIR}/reports-config.json"
 REPORTS_HISTORY_FILE: Final[str] = f"{DATA_DIR}/reports-history.json"

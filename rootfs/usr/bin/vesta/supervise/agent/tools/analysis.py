@@ -224,14 +224,14 @@ class AnalysisTool(BaseTool):
         reading it downstream sees the truth about who is asking.
         """
         from vesta.shared.analysis.base import ModuleContext
-        from vesta.brief.pipeline import _statistics_fetcher
+        from vesta.adapters.stats import statistics_fetcher
         return ModuleContext(
             audience="owner", cadence="on demand",
             now_local=datetime.now(),
             capabilities=list(found.get("capabilities") or []),
             inventory=dict(found.get("inventory") or {}),
             settings={}, min_history_days=days,
-            stats=_statistics_fetcher(session, datetime.now(), {}),
+            stats=statistics_fetcher(session, datetime.now(), {}),
             labels={}, supervision_enabled=True)
 
 

@@ -116,32 +116,47 @@ def test_the_config_is_a_READER_not_a_value() -> None:
 
 
 def test_the_proxy_passes_the_FUNCTION_not_its_result() -> None:
-    """The other half of that rule, across the file boundary."""
+    """The other half of that rule, across TWO file boundaries since TASK-115
+    step 5: the proxy hands `_agent_config_now` (the function) to
+    `agent_service.start`, and the service hands `config_source` (still the
+    function) to `run_forever`. Pinning either hop alone would let the other
+    freeze the config at boot."""
     path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "rootfs", "usr", "bin", "supervisor-proxy.py")
     with open(path, encoding="utf-8") as handle:
         proxy = handle.read()
-    assert "agent_scheduler.run_forever(a[\"session\"], _agent_config_now)" in proxy
+    assert 'agent_service.start(' in proxy
+    assert '_agent_config_now,' in proxy, "the proxy no longer hands the reader over"
     assert "_agent_config_now())" not in proxy, "the config was frozen at boot"
+    service_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "rootfs", "usr", "bin", "vesta", "supervise", "service.py")
+    with open(service_path, encoding="utf-8") as handle:
+        service = handle.read()
+    assert "agent_scheduler.run_forever(session, config_source)" in service
+    assert "config_source()" not in service.split("def start")[1].split("tasks[")[0], (
+        "the service froze the config before starting the loops")
 
 
 def test_the_clock_is_a_task_in_the_EXISTING_loop() -> None:
     """⚠️ Not a fourth s6 service: another thing to start, stop, watch and
-    misconfigure for no benefit."""
-    path = os.path.join(
+    misconfigure for no benefit. Since TASK-115 step 5 the task is created in
+    `supervise/service.py` and the proxy mounts the returned dict — so the pin
+    checks the service CREATES it and the proxy STARTS the service."""
+    service_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "rootfs", "usr", "bin", "vesta", "supervise", "service.py")
+    with open(service_path, encoding="utf-8") as handle:
+        service = handle.read()
+    assert "asyncio.create_task(" in service
+    assert "agent_scheduler.run_forever" in service
+    proxy_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "rootfs", "usr", "bin", "supervisor-proxy.py")
-    with open(path, encoding="utf-8") as handle:
+    with open(proxy_path, encoding="utf-8") as handle:
         proxy = handle.read()
-    assert 'a["agent_triage"] = asyncio.create_task(' in proxy
-    # ⚠️ THE SHUTDOWN BLOCK SPECIFICALLY. The first version split on the first
-    # "for key in" in the file, which is unrelated auth-cleanup code — a test
-    # that looked at the wrong 200 characters and would have passed whatever
-    # the shutdown did.
-    cleanup = proxy[proxy.index("reports_task\", \"reports_collector"):]
-    assert '"agent_triage"' in cleanup[:200], (
-        "the task is never cancelled on shutdown, so aiohttp waits for it")
+    assert "agent_service.start(" in proxy
 
 
 def test_run_once_DECLINES_without_a_provider_so_the_caller_must_pass_one() -> None:

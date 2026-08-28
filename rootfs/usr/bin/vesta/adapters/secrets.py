@@ -24,9 +24,12 @@ import os
 from typing import Any, Dict, Optional
 
 from .log import swallow, warn
-from .store import DATA_DIR, write_json
+# ⚠️ THE MODULE, NOT THE NAME — `store.configure()` can repoint DATA_DIR after
+# import, and a copy captured here would keep writing secrets to the old root.
+from . import store as store_mod
+from .store import write_json
 
-SECRETS_FILE = f"{DATA_DIR}/reports-secrets.json"
+SECRETS_FILE = f"{store_mod.DATA_DIR}/reports-secrets.json"
 
 #: Owner-writable, nothing else. ⚠️ The MODE is the point of this module: the
 #: same bytes in `reports-config.json` would be served to any signed-in session
