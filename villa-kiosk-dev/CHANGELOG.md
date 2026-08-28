@@ -1,3 +1,16 @@
+## 2.875.0
+
+### Fixed — the checks run in both modes, so the briefing always has its analysis
+
+Standing the three checks down when supervision is off assumed the automations
+would feed the briefing instead. They never have: the briefing reads statistics,
+live states and the to-do lists, and the one accessor that could have carried
+automation events had no caller. So off-mode traded the briefing's only
+analysis for nothing, however many automations were re-enabled. The stand-down
+is deleted; supervision now means exactly one thing — whether the agent also
+investigates. The event-dedupe and the unused accessor are deleted too, so
+"the briefing never reads automations" holds by absence rather than by care.
+
 ## 2.874.0
 
 ### Changed — Briefings & automations is two tabs, split by what each thing is
