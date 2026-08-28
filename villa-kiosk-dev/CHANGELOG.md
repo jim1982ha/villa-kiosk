@@ -1,3 +1,15 @@
+## 2.849.0
+
+### Fixed — a Telegram alert kept offering a button that had already been used
+Pressing the thumb and Done on the tablet left the phone's message showing all
+five buttons, including "Seen — stop chasing" the alert no longer accepts. The
+tidy-up asked one question — has this alert been settled? — and read every other
+answer as "its buttons are fine". But being picked up does not settle an alert:
+it withdraws that one button and keeps the other four, so the set changed
+without emptying, which was the one case nothing handled. Each message now
+remembers what it was sent with, and the buttons are redrawn — the wording left
+alone — as soon as they stop matching. Messages already out are corrected once.
+
 ## 2.848.0
 
 ### Changed — the app's screens follow the same layers, completing the reorganisation
