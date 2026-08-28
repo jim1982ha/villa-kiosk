@@ -221,27 +221,18 @@ def keyboard_for(concern: Mapping[str, Any],
     button = [[a.label, encode(a.code, ident)] for a in acts]
     by_id = {a.id: b for a, b in zip(acts, button)}
 
-    # ⚠️ THE CLEARING PAIR GETS THE WIDE ROW, THE REST SHARE THE NARROW ONE
-    # (owner, 2026-08-28: "3/4 for the ✅ and the 🚫 buttons, and 1/4 for both
-    # ⬇️ and ⬆️").
-    #
-    # ⚠️ THE EXACT RATIO IS NOT EXPRESSIBLE AND THIS IS THE CLOSEST THAT IS.
-    # Telegram gives every button in a ROW an equal share of the width — there
-    # is no span, no weight, no width field — so proportions can only be chosen
-    # by how many buttons share a line. Two on the first line is half the width
-    # each; three on the second is a third each. The ASKED-FOR 3:1 would need a
-    # button to occupy two slots, which the platform does not offer. What the
-    # ruling wanted is what this delivers: the two ways to clear an alert are
-    # the biggest targets on the message, and the ratings are visibly smaller.
-    #
-    # ⚠️ AND IT IS ONLY LEGIBLE BECAUSE THE LABELS ARE GLYPHS. Three WORDED
-    # buttons on one line are three unreadable slivers on a phone — the reason
-    # this was three rows before the emoji ruling. If a label ever grows words
-    # again, the layout must be revisited with it.
-    wide = [by_id[i] for i in ("done", "dismiss") if i in by_id]
-    narrow = [by_id[a.id] for a in acts
-              if a.id not in ("done", "dismiss")]
-    return [row for row in (wide, narrow) if row]
+    # ⚠️ ONE ROW, ACTS ONLY — THE RATINGS ARE NOT DRAWN (owner, 2026-08-28,
+    # choosing from rendered layouts): "✅+🚫 at bottom, and gracefully link
+    # inside the message for ⬆️+⬇️", with 🆘 beside the pair. The ⬆️/⬇️
+    # rating is still a real act — the tablet offers it, an old rating button
+    # in chat history still decodes and still works — it is simply no longer
+    # DRAWN on new messages; `outbox._rating_link` puts the Reason-tab link in
+    # the body instead. So the drawn set is a deliberate SUBSET of
+    # `available_for`, and `acts_of` stamps only what is drawn, which keeps
+    # the reconcile comparison honest by construction.
+    drawn = [by_id[a.id] for a in acts
+             if a.id not in ("useful", "not_useful")]
+    return [drawn] if drawn else []
 
 
 # ── which targets can carry a button ────────────────────────────────────────

@@ -70,29 +70,24 @@ def test_SOMEBODY_ELSE_S_BUTTON_is_ignored_rather_than_misread() -> None:
         assert buttons.decode(foreign) == ("", "")
 
 
-def test_the_KEYBOARD_gives_the_CLEARING_PAIR_the_WIDE_ROW() -> None:
-    """⚠️ THE OWNER'S LAYOUT, AS CLOSE AS THE PLATFORM ALLOWS (2026-08-28:
-    "3/4 for the ✅ and the 🚫 buttons, and 1/4 for both ⬇️ and ⬆️"). Telegram
-    gives every button in a ROW an equal width share and offers no spans, so
-    proportions are chosen by how many buttons share a line: two on the first
-    row is half each, three on the second is a third each — the clearing pair
-    are the biggest targets on the message, the ratings visibly smaller, which
-    is what the ratio was asking for. The exact 3:1 is NOT expressible; if the
-    platform ever grows spans, revisit.
-
-    ⚠️ Legible only because the labels are glyphs — three worded buttons in one
-    line are slivers. A label growing words must bring more rows with it."""
+def test_the_KEYBOARD_draws_the_ACTS_and_not_the_RATING() -> None:
+    """⚠️ THE OWNER'S LAYOUT, third revision in one day and chosen from rendered
+    mock-ups (2026-08-28): "✅+🚫 at bottom, and gracefully link inside the
+    message for ⬆️+⬇️", 🆘 beside the pair. One row of acts; the rating is NOT
+    drawn — it lives in the body as the Reason-tab link (`outbox._rating_link`)
+    and on the tablet. The drawn set is therefore a deliberate SUBSET of
+    `available_for`; an old ⬆️/⬇️ button in chat history still decodes and
+    still works, it is only no longer offered on new messages."""
     rows = buttons.keyboard_for({"id": "c1", "state": "open"})
-    assert [len(r) for r in rows] == [2, 3], (
-        f"the keyboard is {[len(r) for r in rows]}; the owner ruled a wide "
-        f"clearing pair over a narrow help+rating row")
-    # ⚠️ WIRE CODES: the clearing pair leads, the rating pair is last.
-    assert [b[1] for b in rows[0]] == ["vd:c1", "vx:c1"]
-    assert [b[1] for b in rows[1]] == ["vh:c1", "vu:c1", "vn:c1"]
-    # ⚠️ RETIRED CODES: `vs` (Seen) stays dead — mapping it to a clearing act
-    # would do the OPPOSITE of what the button in an old message promises.
-    assert buttons.decode("vs:c9") == ("", "")
-    assert buttons.decode("vd:c9") == ("done", "c9")
+    assert [b[1] for b in rows[0]] == ["vd:c1", "vx:c1", "vh:c1"], (
+        f"the keyboard is {[[b[1] for b in r] for r in rows]}; the owner ruled "
+        f"one row of ✅ 🚫 🆘 with the rating moved into the message body")
+    assert len(rows) == 1, "the rating pair is drawn again — it moved to a link"
+    # ⚠️ STILL PRESSABLE, JUST NOT DRAWN — the wire codes must keep decoding,
+    # or every rating button already in a chat goes dead.
+    assert buttons.decode("vu:c9") == ("useful", "c9")
+    assert buttons.decode("vn:c9") == ("not_useful", "c9")
+    assert buttons.decode("vs:c9") == ("", ""), "Seen came back from the dead"
 
 def test_a_RATING_IS_OFFERED_ONCE_and_the_STAMP_is_what_says_so() -> None:
     """⚠️ "The rating shall only be applied once" (2026-08-28, owner). Read
@@ -279,6 +274,15 @@ def test_the_PRESS_rides_the_socket_the_collector_already_holds() -> None:
         "turn deciding what 'vd:c7' means")
 
 
+def _drawn_now(row: Dict[str, Any]) -> str:
+    """What the KEYBOARD draws for this alert — the stamp's vocabulary.
+
+    ⚠️ NOT `_acts_now`: since the rating moved into the body (2026-08-28) the
+    drawn set is a deliberate subset of `available_for`, and a fixture stamped
+    from the wrong one measures a redraw that never stops or never starts."""
+    return buttons.acts_of(buttons.keyboard_for(row, {}))
+
+
 def _acts_now(row: Dict[str, Any]) -> str:
     """What the store currently offers on this alert, as `Ref.acts` spells it.
 
@@ -307,23 +311,28 @@ def test_RECONCILE_handles_THREE_outcomes_not_two() -> None:
     # vacuous-pass guard is for: the test would otherwise have gone green while
     # measuring one case twice.
     live = {"id": "c1", "title": "live", "state": "open", "acknowledged_at": ""}
-    ack = {"id": "c2", "title": "rated", "state": "open",
-           "acknowledged_at": "", "useful": True,
-           "useful_at": "2026-08-28T07:23:03Z"}
+    # ⚠️ THE "CHANGED" ROW CARRIES A STAMP FROM A PREVIOUS BUTTON-SET ERA —
+    # exactly what every message already in a chat carries when the layout
+    # ships. Stamping it via `_acts_now` went vacuous the day the keyboard
+    # stopped drawing the rating: the rated row's DRAWN set became identical
+    # to the live row's, and the guard below caught the fixture measuring one
+    # case twice (again).
+    ack = {"id": "c2", "title": "stamped by an older layout", "state": "open",
+           "acknowledged_at": ""}
     concerns._write([
-        # in step: drawn with exactly what it still offers
+        # in step: stamped with exactly what the keyboard now draws
         {**live, "messages": [{"entity_id": "notify.x", "message_id": "11",
-                               "acts": _acts_now(live)}]},
-        # STALE: drawn while unacknowledged, acknowledged since
+                               "acts": _drawn_now(live)}]},
+        # STALE: stamped when the keyboard still drew the rating pair
         {**ack, "messages": [{"entity_id": "notify.x", "message_id": "22",
-                              "acts": _acts_now(live)}]},
+                              "acts": _drawn_now(live) + ",useful,not_useful"}]},
         # settled: nothing is offered at all
         {"id": "c3", "title": "settled", "state": "closed",
          "messages": [{"entity_id": "notify.x", "message_id": "33",
-                       "acts": _acts_now(live)}]},
+                       "acts": _drawn_now(live)}]},
     ])
-    assert _acts_now(ack) and _acts_now(ack) != _acts_now(live), \
-        "the fixture cannot show a CHANGED set: rating changed nothing"
+    assert _drawn_now(ack) != _drawn_now(live) + ",useful,not_useful", \
+        "the fixture cannot show a CHANGED set any more"
 
     retired: List[str] = []
     redrawn: List[Tuple[str, str]] = []
@@ -346,14 +355,14 @@ def test_RECONCILE_handles_THREE_outcomes_not_two() -> None:
 
     assert retired == ["33"], \
         "reconciliation retired the buttons of an alert that still offers acts"
-    assert redrawn == [("22", _acts_now(ack))], \
+    assert redrawn == [("22", _drawn_now(ack))], \
         "a message whose act set CHANGED was left showing the old buttons"
     assert count == 2
 
     rows = {r["id"]: r for r in concerns.read()}
-    assert rows["c1"]["messages"][0]["acts"] == _acts_now(live), \
+    assert rows["c1"]["messages"][0]["acts"] == _drawn_now(live), \
         "a message already in step was rewritten, so every tick rewrites it"
-    assert rows["c2"]["messages"][0]["acts"] == _acts_now(ack), \
+    assert rows["c2"]["messages"][0]["acts"] == _drawn_now(ack), \
         "a redrawn message kept its old stamp, so it is redrawn on every tick"
     assert rows["c3"]["messages"] == [], \
         "a retired message is remembered, so it is rewritten on every tick"
@@ -430,10 +439,10 @@ def test_a_press_that_LEAVES_ACTS_LIVE_restates_rather_than_retiring() -> None:
     row = {"id": "c1", "state": "open", "delivered_at": "x",
            "useful": True, "useful_at": "yes"}
     assert message_id == "174"
-    assert acts == _acts_now(row), \
-        "the message was redrawn with something other than what the alert offers"
+    assert acts == _drawn_now(row), \
+        "the message was redrawn with something other than what the keyboard draws"
     assert "useful" not in acts and "not_useful" not in acts, \
-        "the rating just given is still offered"
+        "the rating is drawn again — it moved into the body link"
     assert "Pump" in text and "243% more" in text, \
         "the alert's own body was dropped, leaving live buttons explaining nothing"
 
@@ -590,7 +599,10 @@ def test_ACTS_ARE_READ_OFF_THE_KEYBOARD_that_was_drawn() -> None:
         keyboard = buttons.keyboard_for(row, {})
         drawn = set(buttons.acts_of(keyboard).split(","))
         offered = set(_acts_now(row).split(","))
-        assert drawn == offered, \
+        # ⚠️ THE RATING PAIR IS THE ONE DELIBERATE GAP (2026-08-28): offered on
+        # the tablet and to old buttons, not drawn on new messages — it moved
+        # into the body as the Reason-tab link. Anything ELSE missing is drift.
+        assert drawn == offered - {"useful", "not_useful"}, \
             f"what a message records and what it draws disagree: {state}"
     assert buttons.acts_of([[["Other", "somebody-elses-button"]]]) == "", \
         "a button this cannot decode was claimed as one of ours"

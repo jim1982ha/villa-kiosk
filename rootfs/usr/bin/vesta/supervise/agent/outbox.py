@@ -468,6 +468,40 @@ async def sweep(session: Any, *,
     return out
 
 
+async def _rating_link(session: Any) -> str:
+    """The one line that replaces the ⬆️/⬇️ buttons, or "" fail-closed.
+
+    ⚠️ THE OWNER'S RULING (2026-08-28): the keyboard keeps only the acts, and
+    rating moves into the message as a link — "✅+🚫 at bottom, and gracefully
+    link inside the message for ⬆️+⬇️". A rating is a judgement, not an act
+    on the villa, so it belongs on the Reason tab where the judgement is
+    explained; the acts stay one press away.
+
+    ⚠️ THE URL COMES FROM `links`, THE MODULE WITH THE RULES — https-only, the
+    owner's own `external_url`, a closed page set, percent-encoded, no secret.
+    Building it here from parts would re-ship every mistake that module's
+    header records. Fail-closed like every caller of it: a villa with no
+    external URL (the offline villa, this product's own target) simply gets no
+    line, and the tablet still offers the rating.
+
+    ⚠️ ONE `get_config` PER SWEEP AT MOST, not per message — the sweep caps at
+    `MAX_PER_SWEEP` sends, and the answer cannot change between them.
+    """
+    from vesta.adapters import links as links_mod
+    from vesta.adapters.hass import HassClient
+    import os
+    try:
+        async with HassClient(session) as hass:
+            ha_config = await hass.command("get_config")
+    except Exception:  # noqa: BLE001 - no link is a complete answer
+        return ""
+    urls = {"external_url": str((ha_config or {}).get("external_url") or "")} \
+        if isinstance(ha_config, dict) else {}
+    url = links_mod.kiosk_url("cockpit", urls,
+                              os.environ.get("VK_INGRESS_ENTRY", ""))
+    return f"Rate it ⬆️/⬇️ on the Reason tab: {url}" if url else ""
+
+
 async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
                        config: Optional[Mapping[str, Any]],
                        quiet: bool, occupied: Optional[bool],
@@ -507,6 +541,15 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     plan = route_mod.plan(concern, targets=targets, push_targets=targets,
                           occupied=occupied, quiet_hours=quiet, profile=role,
                           config=config)
+    # ⚠️ AFTER `plan`, WHICH SANITISED THE BODY — the same order the briefing
+    # uses (links.py rule 5): sanitise everything the villa can influence,
+    # THEN append the line this add-on generated from Home Assistant's own
+    # config. Appending before `plan` would put the URL through `inert()`,
+    # which strips underscores, and an ingress path has underscores.
+    rating_line = await _rating_link(session)
+    if rating_line:
+        import dataclasses
+        plan = dataclasses.replace(plan, body=f"{plan.body}\n\n{rating_line}")
 
     # ⚠️ THE ROUTING VERDICT IS SAID OUT LOUD, AND `Delivery.reason` IS WHY IT
     # CAN BE. Every branch below was already decided correctly and reported only

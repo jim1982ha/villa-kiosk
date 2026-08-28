@@ -707,3 +707,46 @@ def test_a_send_with_no_profile_is_not_recorded_as_a_blank_one() -> None:
     assert not row.get("deliveries"), (
         f"a blank profile was recorded as a send: {row.get('deliveries')!r}")
     assert row.get("delivered_at"), "the send itself must still be marked"
+
+
+def test_the_RATING_LINK_is_appended_after_plan_and_fails_closed(
+        monkeypatch: Any) -> None:
+    """⚠️ THE RATING MOVED FROM THE KEYBOARD INTO THE BODY (owner, 2026-08-28:
+    "gracefully link inside the message for ⬆️+⬇️"), so the line IS the rating
+    surface on the phone — dropping it removes the rating from that screen
+    entirely, with the keyboard no longer drawing the pair. Found unpinned by
+    its own mutation surviving (M51).
+
+    Three properties, each load-bearing:
+      * appended AFTER `route.plan` — the body is sanitised there and an
+        ingress URL carries underscores `inert()` would eat (links.py rule 5);
+      * built by `links.kiosk_url`, the module with the safety rules, never
+        from parts here;
+      * fail-closed: no external URL (the offline villa) → no line, silently.
+    """
+    import inspect
+    import re as _re
+    from vesta.supervise.agent import outbox as outbox_mod
+
+    body = _re.sub(r"#[^\n]*", "", inspect.getsource(outbox_mod._deliver_one))
+    assert "_rating_link(" in body, (
+        "the delivery path no longer appends the rating link, so the phone "
+        "has NO rating surface at all — the keyboard stopped drawing the pair")
+    assert body.index("route_mod.plan(") < body.index("_rating_link("), (
+        "the link is added before plan(), so inert() strips the underscores "
+        "out of the ingress URL — links.py rule 5, already paid for once")
+
+    helper = _re.sub(r"#[^\n]*", "",
+                     inspect.getsource(outbox_mod._rating_link))
+    assert "kiosk_url(" in helper, (
+        "the URL is built by hand instead of by links.py, which owns the "
+        "https-only / closed-page-set / no-secret rules")
+
+    # ⚠️ AND THE FAIL-CLOSED HALF RUNS RATHER THAN BEING READ: no reachable
+    # Home Assistant → "" — never a placeholder, never an exception.
+    async def _run() -> str:
+        return await outbox_mod._rating_link(None)
+    monkeypatch.delenv("VK_INGRESS_ENTRY", raising=False)
+    assert asyncio.run(_run()) == "", (
+        "with no Home Assistant and no ingress entry the link line must be "
+        "empty — a broken or placeholder URL is worse than none")
