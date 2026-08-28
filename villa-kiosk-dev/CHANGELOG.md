@@ -1,14 +1,25 @@
+## 2.832.0
+
+### Changed — one place to write a request, one place to say "Loading"
+An audit found the three-line preamble every call to this add-on's own backend
+must repeat had been copied nineteen times, and one copy — the sign-in call —
+had dropped the line that attaches the session. It worked only because a browser
+default happened to agree. All nineteen now go through one function, so a
+twentieth cannot forget, and a test refuses any that tries. The "Loading…" line
+was seven identical copies and is now one component. Four comments describing
+machinery that changed underneath them were corrected.
+
 ## 2.831.0
 
 ### Added — buttons on an alert in the chat, and one definition of what each does
-Retiring the task blueprint took the phone's buttons with it, so an alert could
-only be acted on by walking to the tablet. They are back, sent by the add-on
-and — this is the change that matters — handled by it: Done, Need help, Seen,
-the thumbs, and Add to the To-Do List all call `agent/actions.py`, the same
-function the tablet calls. Done used to be two browser requests with nothing
-joining them, so a ticked job could sit beside an alert still being chased; it
-is now one act. A press is checked against the store as it arrives, and a
-message whose alert was dealt with elsewhere has its buttons removed.
+The Done and Need help buttons on a Telegram message came from a Home Assistant
+automation, not from this add-on, so switching off its second chase ladder in
+2.827.0 took them with it and an alert could only be acted on at the tablet.
+They are back, and this time the add-on both sends and answers them: Done, Need
+help, Seen, the thumbs and Add to the To-Do List all run the same code the
+tablet runs, so the two cannot disagree. Done used to be two separate browser
+requests, so a ticked job could sit beside an alert still being chased. A press
+is checked as it arrives, and buttons are removed once an alert is dealt with.
 
 ## 2.830.0
 
