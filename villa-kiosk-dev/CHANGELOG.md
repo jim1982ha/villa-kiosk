@@ -1,3 +1,14 @@
+## 2.864.0
+
+### Changed — every message opens the same way, and the daily job list waits for morning
+Alerts, alert-only notices, escalations, briefings and the open-jobs reminder now
+all begin with a coloured dot, a word and the subject — 🟠 WARNING · Pool pump.
+The dot says how serious it is and the word says what is being asked, so an
+alert-only notice keeps its real severity while still saying nothing is wanted.
+It needs no formatting, so it looks the same however the message is delivered.
+The reminder about open jobs was arriving minutes after midnight, because that
+is when a new day starts; it now waits until quiet hours end.
+
 ## 2.863.0
 
 ### Changed — alerts are formatted, and VESTA is a real link at last
