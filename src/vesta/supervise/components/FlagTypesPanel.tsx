@@ -5,7 +5,7 @@
 // ⚠️ THE THUMB BUTTONS PROMISED THIS FOR MONTHS AND NOTHING KEPT IT. Their
 // tooltips have always read "the villa raises this kind more readily" / "…less
 // readily", while the only thing a verdict did was count toward silencing ONE
-// device after three dismissals. This panel is where the other half became
+// device after three `-1` ratings. This panel is where the other half became
 // visible (2026-08-28, owner's request): every kind a thumb has been pressed
 // on, what it is worth, and the four things a person may do about it.
 //

@@ -82,14 +82,19 @@ class Act:
 ACTS: Tuple[Act, ...] = (
     Act("done", "d", "Done"),
     Act("help", "h", "Need help"),
-    Act("seen", "s", "Seen — stop chasing"),
-    # ⚠️ ITS LABEL SAYS "COMPLETELY" BECAUSE THAT IS WHAT IT DOES AND WHAT THE
-    # OTHERS DO NOT. `Seen` stops the chasing and leaves the problem standing;
-    # this one settles the alert, takes it out of the briefing, ticks its job
-    # off and counts toward silencing that subject in future. It is the only
-    # irreversible act on the list, so it is the only one that has to be
-    # unmistakable.
-    Act("dismiss", "x", "Dismiss completely — no action needed"),
+    # ⚠️ ONE ACT, NOT TWO (2026-08-28, owner: "I want the dismiss and seen
+    # button to be merged in the same function, so it achieves the same, ie:
+    # cancel the task"). `Seen — stop chasing` stopped the chase and left the
+    # alert standing; `Dismiss completely` settled it. Both were pressed for the
+    # same reason — "I do not need to hear about this again" — and offering two
+    # buttons that both make an alert go away is a distinction the reader has to
+    # hold rather than one the screen explains.
+    #
+    # ⚠️ IT DOES BOTH HALVES: acknowledges (so the chase stops and the record
+    # says WHO) and then settles. Acknowledging first is what makes the merge a
+    # merge rather than a replacement — dropping it would lose the name of the
+    # person who dealt with it, which is the whole content of `Seen`.
+    Act("dismiss", "x", "Nothing more is needed — close this"),
     Act("job", "j", "Add to the To-Do List"),
     # ⚠️ `+1` AND `-1`, NOT THUMBS, AND THE CHANGE IS NOT COSMETIC. A thumb is a
     # verdict on a THING — people read it as approving or rejecting the alert
@@ -187,14 +192,12 @@ def available_for(concern: Mapping[str, Any],
         # into a job — which is the one thing the mode exists not to do.
         return [_BY_ID["job"], _BY_ID["dismiss"]] + rating
 
-    # ⚠️ ACKNOWLEDGED IS NOT SETTLED. Somebody has it; the villa still has the
-    # problem. So the acts that only say "I have seen this" are spent, and the
-    # ones that change something — finishing the work, asking for help, throwing
-    # it away, rating it — are all still live.
-    if str(concern.get("acknowledged_at") or "").strip():
-        return [_BY_ID["done"], _BY_ID["help"], _BY_ID["dismiss"]] + rating
-    return [_BY_ID["done"], _BY_ID["help"], _BY_ID["seen"],
-            _BY_ID["dismiss"]] + rating
+    # ⚠️ ONE SET NOW, WHATEVER THE ACKNOWLEDGEMENT SAYS. The branch existed to
+    # withdraw `Seen` once somebody had said it; with the merge there is nothing
+    # to withdraw, because the remaining acts all still make sense on an alert
+    # somebody has picked up — finishing it, asking for help, closing it, rating
+    # it. A branch that can no longer differ is a branch to delete.
+    return [_BY_ID["done"], _BY_ID["help"], _BY_ID["dismiss"]] + rating
 
 
 def _spent(concern_id: str, config: Optional[Mapping[str, Any]]) -> bool:
@@ -302,16 +305,6 @@ async def _useful(session, row, **kw) -> Outcome:      # type: ignore[no-untyped
 
 async def _not_useful(session, row, **kw) -> Outcome:  # type: ignore[no-untyped-def]
     return await _judge(session, row, useful=False, **kw)
-
-
-async def _seen(session: Any, row: Mapping[str, Any], *, by: str,
-                config: Optional[Mapping[str, Any]], reason: str,
-                now: Optional[float]) -> Outcome:
-    """"I have got this." Stops the chase and claims nothing else."""
-    from vesta.supervise.agent import concerns as concerns_mod
-    ok, why = concerns_mod.acknowledge(str(row.get("id") or ""), by=by, now=now)
-    return Outcome(ok, why or "Noted — nobody will chase you") if ok \
-        else Outcome(False, why)
 
 
 async def _done(session: Any, row: Mapping[str, Any], *, by: str,
@@ -433,7 +426,7 @@ async def _dismiss(session: Any, row: Mapping[str, Any], *, by: str,
     ⚠️ THE ONLY IRREVERSIBLE ACT ON THE LIST, which is why it is the only one
     whose label says "completely". It settles the alert, so the alert leaves the
     Reason tab and the next briefing, `reconcile_settled` ticks its job off the
-    facility manager's list, and `dismissals_of` counts it toward silencing this
+    facility manager's list, and `negatives_of` counts it toward silencing this
     subject in future. Every other act leaves the villa's problem standing.
 
     ⚠️ IT WAS THE THUMB DOWN UNTIL 2026-08-28, which is how a rating came to
@@ -448,18 +441,25 @@ async def _dismiss(session: Any, row: Mapping[str, Any], *, by: str,
     """
     from vesta.supervise.agent import concerns as concerns_mod
 
+    concern_id = str(row.get("id") or "")
+    # ⚠️ ACKNOWLEDGE FIRST, THEN SETTLE — the two halves of the buttons this
+    # merged, in that order. The acknowledgement is what records WHO dealt with
+    # it, and it must be written while the alert is still live: `acknowledge`
+    # has nothing to say about a settled one. Its failure is not this act's
+    # failure (an alert nobody was told about cannot be acknowledged at all), so
+    # it is not checked — the settle below is the act that has to succeed.
+    concerns_mod.acknowledge(concern_id, by=by, now=now)
     note = str(reason or "").strip()
-    outcome = f"dismissed by {by}" + (f": {note}" if note else "")
-    ok, why = concerns_mod.transition(str(row.get("id") or ""), "dismissed",
+    outcome = f"closed by {by}" + (f": {note}" if note else "")
+    ok, why = concerns_mod.transition(concern_id, "dismissed",
                                       outcome=outcome, now=now)
-    return Outcome(True, "Dismissed — you will not hear about this one again") \
+    return Outcome(True, "Closed — nobody will chase you about this again") \
         if ok else Outcome(False, why)
 
 
 _HANDLERS = {
     "done": _done,
     "help": _help,
-    "seen": _seen,
     "dismiss": _dismiss,
     "job": _job,
     "useful": _useful,

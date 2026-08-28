@@ -737,13 +737,15 @@ def _recurred_after(subject_key: str, settled_at: str, own_id: str,
     return after[0] if after else ""
 
 
-#: How many dismissals of one subject suppress it, and over what window.
+#: How many "-1 Less like this" verdicts on one subject suppress it, and
+#: over what window. ⚠️ RATINGS, NOT CANCELLATIONS (2026-08-28) — see
+#: `suppressed_subjects` for why the cancel button stopped counting.
 #: ⚠️ THREE, AND THE COUNTER IS THE MECHANISM — NOT AGENT JUDGEMENT. "Stop
 #: telling me about the gym lights" must work RELIABLY rather than
 #: probabilistically, and that is the whole difference between a feedback loop
 #: and a suggestion. RPT-05: the acknowledgement half has never existed
 #: anywhere in this system, so no rule could ever be judged noisy.
-DISMISSALS_TO_SUPPRESS: int = 3
+NEGATIVES_TO_SUPPRESS: int = 3
 DISMISSAL_WINDOW_DAYS: int = 90
 
 
@@ -792,7 +794,7 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
     a thumb up wrote `verified` and made the card vanish. The reasoning given
     then applies verbatim in the other direction: a verdict on the SUPERVISOR is
     not a lifecycle event on the VILLA. Dismissal is now `actions._dismiss`,
-    which says what it is, and it is still what `dismissals_of` counts toward
+    which says what it is, and it is still what `negatives_of` counts toward
     suppressing a subject — a deliberate press rather than a by-product of a
     rating, which makes that signal stronger rather than weaker.
     """
@@ -814,19 +816,27 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
     return False, f"no concern {concern_id!r}"
 
 
-def dismissals_of(subject_key: str,
+def negatives_of(subject_key: str,
                   rows: Optional[Sequence[Mapping[str, Any]]] = None) -> int:
-    """How many times a person has dismissed this subject.
+    """How many times a person has said "less like this" about this subject.
 
     ⚠️ COUNTED FROM THE STORE, NEVER HELD SEPARATELY. A counter kept beside the
     concerns is a counter that disagrees with them the first time one is edited
     or expires; the lifecycle IS the record.
+
+    ⚠️ IT MUST COUNT WHAT `suppressed_subjects` COUNTS — it is the per-subject
+    figure that function's threshold is applied to, so two rules here are two
+    answers to one question. It counted `state == "dismissed"` until the ratings
+    became the signal (2026-08-28); a mutation swapping the OTHER one back was
+    survived by every test in this file, because the fixtures happened to do
+    both, which is how a divergence like that stays invisible.
     """
     key = str(subject_key)
     source = list(read() if rows is None else rows)
     return sum(1 for r in source
                if str(r.get("subject_key")) == key
-               and str(r.get("state")) == "dismissed")
+               and str(r.get("useful_at") or "").strip()
+               and not r.get("useful"))
 
 
 def suppressed_subjects(rows: Optional[Sequence[Mapping[str, Any]]] = None
@@ -838,14 +848,34 @@ def suppressed_subjects(rows: Optional[Sequence[Mapping[str, Any]]] = None
     what that means for a run. Two halves, each with one owner — putting the
     counting inside policy would make the authority boundary depend on a
     feedback tally, and putting the gate here would give the store a veto.
+
+    ⚠️ IT COUNTS `-1` RATINGS, NOT CANCELLATIONS (2026-08-28), and that is
+    REQ-039 read literally rather than a change to it. The requirement's own
+    words are *"stop telling me about the gym lights"* — a person saying they do
+    not want to hear this again. Until today the DISMISS button meant exactly
+    that, so counting it was right; then Seen and Dismiss merged into one
+    "nothing more is needed here" (the owner's ruling), and that button now also
+    means "I have this in hand". Counting it would silence a subject because
+    somebody kept clearing their list, which is the opposite of deliberate — and
+    silently, since suppression never expires.
+
+    `-1 Less like this` is now the only control that says "raise this less", so
+    it is the only one that should be able to stop a subject. REQ-038 already
+    specifies the verdict is recorded against the `subject_key`.
+
+    ⚠️ `useful_at` IS THE DISCRIMINATOR, NEVER `useful` ALONE — the verdict is
+    `false` both for "less like this" and for "nobody has said anything", so
+    reading the bare flag would count every unrated concern as a complaint and
+    suppress a subject the moment three were raised. Third time this pair has
+    had to be read together; see `feedback_guessed-field-shapes`.
     """
     counts: Dict[str, int] = {}
     for row in (read() if rows is None else rows):
-        if str(row.get("state")) == "dismissed":
+        if str(row.get("useful_at") or "").strip() and not row.get("useful"):
             key = str(row.get("subject_key") or "")
             if key:
                 counts[key] = counts.get(key, 0) + 1
-    return sorted(k for k, n in counts.items() if n >= DISMISSALS_TO_SUPPRESS)
+    return sorted(k for k, n in counts.items() if n >= NEGATIVES_TO_SUPPRESS)
 
 
 def summary(rows: Optional[Sequence[Mapping[str, Any]]] = None) -> Dict[str, Any]:

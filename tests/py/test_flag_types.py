@@ -397,10 +397,14 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
                                 "components", "AgentConcerns.tsx")
     with open(concerns_tsx, encoding="utf-8") as handle:
         wall = handle.read()
-    for act_id in ('"seen"', '"dismiss"'):
-        assert f"act(c.id, {act_id})" in wall, (
-            f"the Reason tab offers no {act_id} control, so a rating is the "
-            f"only thing a reader can press and it no longer clears anything")
+    # ⚠️ ONE CONTROL, SINCE `Seen` AND `Dismiss` MERGED (2026-08-28). The wall
+    # must still offer SOMETHING that clears a card, or a rating — which now
+    # deliberately changes nothing — is the only thing a reader can press.
+    assert 'act(c.id, "dismiss")' in wall, (
+        "the Reason tab has no control that clears a card, so a rating is the "
+        "only thing a reader can press and it no longer clears anything")
+    assert 'act(c.id, "seen")' not in wall, \
+        "the merged act left its old half behind on the wall"
 
 
 def test_the_kind_is_STAMPED_when_the_concern_is_raised() -> None:

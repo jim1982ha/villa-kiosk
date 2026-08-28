@@ -140,15 +140,18 @@ def test_the_ONE_IRREVERSIBLE_ACT_NAMES_ITSELF() -> None:
     assert dismiss is not None, (
         "dismissal has no act of its own again, so it is riding another "
         "button's meaning")
-    assert "dismiss" in dismiss.label.lower(), \
-        "the dismiss button does not say the word 'dismiss'"
-    # ⚠️ AND IT SAYS HOW FAR IT GOES. "Dismiss" alone reads like closing a card;
-    # this one ends the alert everywhere it appears.
-    assert "complete" in dismiss.label.lower(), (
-        "the label does not distinguish throwing the alert away from merely "
-        "clearing it off a screen")
-    # ⚠️ NO OTHER ACT MAY CLAIM THE WORD, or two buttons say "dismiss" and the
-    # irreversible one stops standing out.
+    # ⚠️ IT SAYS THAT THE ALERT ENDS, IN A WORD A PERSON WOULD USE. The label
+    # has already moved once — "Dismiss completely" while `Seen` sat beside it,
+    # "Nothing more is needed — close this" now that it has absorbed it — so
+    # this asks for the MEANING rather than a phrase.
+    ends = ("close", "nothing more", "dismiss", "done with")
+    assert any(w in dismiss.label.lower() for w in ends), (
+        f"{dismiss.label!r} does not say the alert ENDS, so the one "
+        f"irreversible act reads like the reversible ones")
+    # ⚠️ NO OTHER ACT MAY READ AS FINAL, or two buttons look like the end and
+    # the irreversible one stops standing out. `done` is exempt: it ends the
+    # WORK, a different claim, which is why it has its own button.
     others = [a.id for a in actions.ACTS
-              if a.id != "dismiss" and "dismiss" in a.label.lower()]
-    assert not others, f"{others} also say 'dismiss', so neither one stands out"
+              if a.id not in ("dismiss", "done")
+              and any(w in a.label.lower() for w in ends)]
+    assert not others, f"{others} also read as final, so neither stands out"

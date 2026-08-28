@@ -158,7 +158,7 @@ def for_run(config: Optional[Mapping[str, Any]],
     # ⚠️ TWO SOURCES, UNIONED, AND THE SECOND ONE WAS MISSING FOR THE WHOLE OF
     # PH-4's DESIGN. `suppressed_subjects` in config is the MANUAL list — a
     # person naming a subject outright. The EARNED list is the one REQ-039 is
-    # about: three dismissals of a subject suppress it. `concerns.
+    # about: three `-1` ratings on a subject suppress it. `concerns.
     # suppressed_subjects()` computed that list correctly and was pinned by its
     # own test, and `is_suppressed` honoured this config key and was pinned by
     # its own test — and NOTHING JOINED THEM. The only place the count surfaced

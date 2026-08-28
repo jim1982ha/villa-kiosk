@@ -81,11 +81,11 @@ def test_the_SUPPRESSION_THRESHOLD_matches_the_rule_it_describes() -> None:
     assert m, "the UI no longer states the threshold it explains"
     # ⚠️ THE CONSTANT, NOT A REGEX OVER THE COMPARISON. A first version searched
     # `concerns.py` for a numeric literal beside `>=` and failed on the real
-    # code, which compares against the NAMED `DISMISSALS_TO_SUPPRESS` — the
+    # code, which compares against the NAMED `NEGATIVES_TO_SUPPRESS` — the
     # better-written half. Reading the value the backend actually uses is both
     # simpler and immune to how the comparison is spelt.
-    assert int(m.group(1)) == concerns_mod.DISMISSALS_TO_SUPPRESS, (
+    assert int(m.group(1)) == concerns_mod.NEGATIVES_TO_SUPPRESS, (
         f"the UI tells a reader {m.group(1)} dismissals silence a subject and "
-        f"the rule is {concerns_mod.DISMISSALS_TO_SUPPRESS} — a screen "
+        f"the rule is {concerns_mod.NEGATIVES_TO_SUPPRESS} — a screen "
         f"promising a different number than the code enforces is worse than "
         f"one that says nothing, because a reader would count wrong")

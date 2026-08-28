@@ -223,7 +223,7 @@ def test_the_drill_SUPERSEDES_its_own_previous_run() -> None:
     `raise_concern` refuses a second concern on an open subject, so every
     re-run needed the previous drill SETTLED first. Of the three buttons on a
     concern card only "not useful" settles anything — and that is the
-    DISMISSAL `suppressed_subjects` counts. `DISMISSALS_TO_SUPPRESS` is 3 and
+    DISMISSAL `suppressed_subjects` counts. `NEGATIVES_TO_SUPPRESS` is 3 and
     every drill shares one fixed `topic:` key, so on the third tidy-up the
     drill would have been refused for ever, silently, by the mechanism built to
     silence noisy rules. A test rig that destroys itself after three uses is

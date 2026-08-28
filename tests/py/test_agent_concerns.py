@@ -203,12 +203,18 @@ def _dismiss(n: int) -> None:
     for i in range(n):
         stored, reason = concerns.raise_concern(_c(title=f"gym lights {i}"))
         assert stored is not None, reason
-        # ⚠️ THE `dismiss` ACT'S TRANSITION, NOT A RATING (2026-08-28). What
-        # counts toward silencing a subject is a DELIBERATE dismissal — which
-        # makes this signal stronger than it was, when it could be produced as a
-        # by-product of somebody rating the alert's quality.
-        concerns.transition(stored.id, "dismissed",
-                            outcome="dismissed by owner: gym is closed")
+        # ⚠️ A `-1` RATING, WHICH IS WHAT SUPPRESSION COUNTS SINCE 2026-08-28.
+        # `Seen` and `Dismiss` merged into one "nothing more is needed", so a
+        # cancellation now also means "I have this in hand" — counting it would
+        # silence a subject because somebody kept clearing their list. "-1 Less
+        # like this" is the only control that says "raise this less", which is
+        # REQ-039's own sentence.
+        concerns.feedback(stored.id, useful=False, reason="gym is closed")
+        # ⚠️ RATED, NOT CANCELLED — and the cancel is DELIBERATELY LEFT OUT.
+        # Doing both would make this fixture blind to which one suppression
+        # counts: a mutation swapping the rule back to `state == "dismissed"`
+        # passed every one of these tests until they were separated.
+        concerns.transition(stored.id, "closed", outcome="cleared for the test")
 
 
 def test_marking_a_concern_USEFUL_does_NOT_settle_it() -> None:
@@ -308,7 +314,22 @@ def test_the_REASON_is_kept_verbatim() -> None:
         "a rating discarded the words somebody took the trouble to type"
 
 
-def test_THREE_dismissals_suppress_the_subject() -> None:
+def test_CANCELLING_three_alerts_does_NOT_suppress_the_subject() -> None:
+    """⚠️ THE OTHER HALF OF THE RULE, AND THE ONE WITH TEETH (2026-08-28).
+    Since `Seen` merged into the closer, cancelling also means "I have this in
+    hand" — so counting it would silence a subject because somebody kept
+    clearing their list, silently and for ever, since suppression never
+    expires. Only "-1 Less like this" says "raise this less"."""
+    for i in range(concerns.NEGATIVES_TO_SUPPRESS + 2):
+        stored, why = concerns.raise_concern(_c(title=f"gym lights {i}"))
+        assert stored is not None, why
+        concerns.transition(stored.id, "dismissed", outcome="closed by owner")
+    assert concerns.suppressed_subjects() == [], (
+        "clearing five alerts off the list silenced the subject, so a tidy "
+        "reader stops being told about their villa")
+
+
+def test_THREE_negative_ratings_suppress_the_subject() -> None:
     """⚠️ BY A COUNTER, NEVER BY AGENT JUDGEMENT. "Stop telling me about the
     gym lights" must work reliably rather than probabilistically — that is the
     difference between a feedback loop and a suggestion."""
@@ -322,8 +343,8 @@ def test_the_count_comes_from_the_STORE_not_a_side_tally() -> None:
     """⚠️ A counter kept beside the concerns disagrees with them the first time
     one is edited or expires. The lifecycle IS the record."""
     _dismiss(3)
-    assert concerns.dismissals_of(subject_key("pool pump")) == 3
-    assert concerns.dismissals_of(subject_key("gate")) == 0
+    assert concerns.negatives_of(subject_key("pool pump")) == 3
+    assert concerns.negatives_of(subject_key("gate")) == 0
 
 
 def test_suppression_and_the_GATE_have_different_owners() -> None:

@@ -20,7 +20,7 @@
 //
 // ⚠️ THE DISMISSED BRANCH IS THE ONE TO SURFACE HARDEST — the same section calls
 // it "the highest-value signal in the system and nearly free to collect".
-// Three dismissals on one subject suppress it, deterministically, and until now
+// Three `-1` ratings on one subject suppress it, deterministically, and until now
 // a rule switching itself off was something an owner could only discover by
 // noticing an absence.
 
@@ -98,15 +98,21 @@ export const STATE_COPY: Record<ConcernState, { label: string; hint: string }> =
     hint: "Finished with. Kept as a record of what happened.",
   },
   dismissed: {
-    label: "Not useful",
-    hint: "Somebody said this was not worth raising. Three of these about the "
-        + "same thing stop it being raised again.",
+    label: "Closed by a person",
+    // ⚠️ IT NO LONGER SAYS "not worth raising", BECAUSE THE BUTTON NO LONGER
+    // SAYS IT (2026-08-28). `Seen` and `Dismiss` merged into one "nothing more
+    // is needed", which is also pressed by somebody who has the work in hand —
+    // so this state means "a person ended it", and what stops a subject being
+    // raised again is the -1 rating, counted separately.
+    hint: "A person said nothing more was needed. Rate an alert -1 if you also "
+        + "want fewer like it.",
   },
 };
 
 /** ⚠️ THE THRESHOLD IS THE BACKEND'S, RESTATED FOR THE READER RATHER THAN
- *  RE-DECIDED. `concerns.suppressed_subjects` counts dismissals and the rule is
- *  three; this only says so on screen. If that number ever moves, this line is
+ *  RE-DECIDED. `concerns.suppressed_subjects` counts `-1` RATINGS — not
+ *  cancellations, since 2026-08-28 — and the rule is three; this only says so
+ *  on screen. If that number ever moves, this line is
  *  wrong and the copy above is wrong with it — which is why both live here
  *  together rather than in the component that renders them. */
 export const SUPPRESS_AFTER = 3;

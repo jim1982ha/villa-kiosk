@@ -122,13 +122,17 @@ def test_an_FYI_offers_only_the_JOB_and_the_thumbs() -> None:
     assert ids == ["job", "dismiss", "useful", "not_useful"]
 
 
-def test_an_ACKNOWLEDGED_alert_stops_offering_to_be_acknowledged() -> None:
-    """⚠️ ACKNOWLEDGED IS NOT SETTLED. Somebody has it; the villa still has the
-    problem. So `seen` is spent and everything that CHANGES something is live."""
-    ids = [a.id for a in actions.available_for(
+def test_an_ACKNOWLEDGED_alert_OFFERS_THE_SAME_SET() -> None:
+    """⚠️ THE BRANCH THAT WITHDREW `Seen` IS GONE WITH `Seen` ITSELF
+    (2026-08-28). It existed to stop offering an acknowledgement somebody had
+    already given; the merged act closes the alert outright, and every remaining
+    act still makes sense on one that has been picked up. A branch that can no
+    longer differ is a branch to delete."""
+    picked_up = [a.id for a in actions.available_for(
         {"id": "c1", "state": "open", "acknowledged_at": "2026-01-01"})]
-    assert "seen" not in ids
-    assert "done" in ids and "help" in ids and "useful" in ids
+    fresh = [a.id for a in actions.available_for({"id": "c1", "state": "open"})]
+    assert picked_up == fresh
+    assert "seen" not in picked_up, "the merged act left its old half behind"
 
 
 def test_an_OPEN_alert_offers_the_full_set() -> None:
@@ -136,7 +140,7 @@ def test_an_OPEN_alert_offers_the_full_set() -> None:
     A rating is a comment on the supervisor rather than on the villa, so it is
     never the first thing offered."""
     ids = [a.id for a in actions.available_for({"id": "c1", "state": "open"})]
-    assert ids == ["done", "help", "seen", "dismiss", "useful", "not_useful"]
+    assert ids == ["done", "help", "dismiss", "useful", "not_useful"]
 
 
 # ── applying one ────────────────────────────────────────────────────────────
@@ -218,13 +222,6 @@ def test_an_UNKNOWN_act_is_refused_rather_than_ignored() -> None:
     assert not out.ok and "delete_everything" in out.note
 
 
-def test_SEEN_acknowledges_and_claims_nothing_else() -> None:
-    _put()
-    assert asyncio.run(actions.apply(None, "seen", "c1", by="Jim")).ok
-    row = concerns.read()[0]
-    assert row["acknowledged_by"] == "Jim"
-    assert row["state"] == "open", "acknowledging closed the alert"
-
 
 def test_a_RATING_RECORDS_A_RATING_AND_NOTHING_ELSE() -> None:
     """⚠️ THE OWNER'S RULING, AND IT REVERSES ONE MADE EARLIER THE SAME DAY WITH
@@ -248,17 +245,22 @@ def test_a_RATING_RECORDS_A_RATING_AND_NOTHING_ELSE() -> None:
             f"{act_id} moved the alert out of open"
 
 
-def test_DISMISS_settles_the_alert_as_dismissed_not_closed() -> None:
-    """⚠️ `dismissed` IS NOT `closed`, and collapsing them loses the only signal
-    alert-fatigue measurement has. It is its own act since 2026-08-28 — the only
-    irreversible one on the list, which is why its label is the only one that
-    says "completely"."""
+def test_CLOSING_an_alert_does_BOTH_HALVES_of_the_buttons_it_merged() -> None:
+    """⚠️ ACKNOWLEDGE **AND** SETTLE (2026-08-28, owner: "I want the dismiss and
+    seen button to be merged in the same function"). `Seen` recorded WHO had it
+    and stopped the chase; `Dismiss` settled it. Dropping the first half would
+    make the merge a replacement, and the name of the person who dealt with an
+    alert is the whole content of the button that went.
+
+    ⚠️ THE ORDER IS LOAD-BEARING: acknowledging is written while the alert is
+    still live, because `acknowledge` has nothing to say about a settled one."""
     _put()
     assert asyncio.run(actions.apply(None, "dismiss", "c1", by="Jim")).ok
     row = concerns.read()[0]
-    assert row["state"] == "dismissed"
-    assert "dismissed by Jim" in str(row.get("outcome") or ""), \
-        "the dismissal does not record who threw the alert away"
+    assert row["state"] == "dismissed", "the alert was not settled"
+    assert row["acknowledged_by"] == "Jim", \
+        "nobody is recorded as having dealt with it — the `Seen` half was lost"
+    assert "closed by Jim" in str(row.get("outcome") or "")
 
 
 def test_HELP_does_NOT_acknowledge() -> None:
@@ -331,12 +333,12 @@ def test_a_HANDLER_that_raises_is_reported_not_propagated() -> None:
     async def boom(*args: Any, **kw: Any) -> Any:
         raise RuntimeError("no")
 
-    original = actions._HANDLERS["seen"]
-    actions._HANDLERS["seen"] = boom                  # type: ignore[assignment]
+    original = actions._HANDLERS["dismiss"]
+    actions._HANDLERS["dismiss"] = boom               # type: ignore[assignment]
     try:
-        out = asyncio.run(actions.apply(None, "seen", "c1", by="Jim"))
+        out = asyncio.run(actions.apply(None, "dismiss", "c1", by="Jim"))
     finally:
-        actions._HANDLERS["seen"] = original          # type: ignore[assignment]
+        actions._HANDLERS["dismiss"] = original       # type: ignore[assignment]
     assert not out.ok and out.note
 
 

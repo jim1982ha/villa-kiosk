@@ -365,17 +365,18 @@ def test_three_dismissals_reach_the_gate_without_anyone_editing_config() -> None
     from vesta.shared.analysis.base import subject_key
 
     key = subject_key("gym lights")
-    for _ in range(concerns_mod.DISMISSALS_TO_SUPPRESS):
+    for _ in range(concerns_mod.NEGATIVES_TO_SUPPRESS):
         stored, why = concerns_mod.raise_concern(concerns_mod.Concern(
             subject_key=key, title="Gym lights left on", severity="notice",
             audience="owner", evidence=[{"tool": "read_state", "summary": "on"}]))
         assert stored is not None, why
-        # ⚠️ THE `dismiss` ACT'S TRANSITION, NOT A RATING (2026-08-28). A "-1"
-        # tunes how often this KIND is raised and leaves the alert open; what
-        # silences a SUBJECT is somebody deliberately throwing three of them
-        # away, which is a stronger signal than the by-product it replaced.
-        concerns_mod.transition(stored.id, "dismissed",
-                                outcome="dismissed by owner: the gym is shut")
+        # ⚠️ A `-1` RATING (2026-08-28). Cancelling an alert no longer counts:
+        # `Seen` merged into it, so the button also means "I have this in hand".
+        # Only "-1 Less like this" says "raise this less" — REQ-039's sentence.
+        concerns_mod.feedback(stored.id, useful=False, reason="the gym is shut")
+        # ⚠️ NOT ALSO CANCELLED — see `test_agent_concerns`. A fixture that does
+        # both cannot say which one the gate counts, and a mutation proved it.
+        concerns_mod.transition(stored.id, "closed", outcome="cleared")
 
     snap = policy.for_run({}, tier="reason", tool_names=[])
     assert policy.is_suppressed(snap, key), (
@@ -390,13 +391,13 @@ def test_two_dismissals_are_not_enough() -> None:
     from vesta.shared.analysis.base import subject_key
 
     key = subject_key("hall lamp")
-    for _ in range(concerns_mod.DISMISSALS_TO_SUPPRESS - 1):
+    for _ in range(concerns_mod.NEGATIVES_TO_SUPPRESS - 1):
         stored, _ = concerns_mod.raise_concern(concerns_mod.Concern(
             subject_key=key, title="Hall lamp", severity="notice",
             audience="owner", evidence=[{"tool": "read_state", "summary": "on"}]))
         assert stored is not None
-        concerns_mod.transition(stored.id, "dismissed",
-                                outcome="dismissed by owner")
+        concerns_mod.feedback(stored.id, useful=False)
+        concerns_mod.transition(stored.id, "closed", outcome="cleared")
 
     snap = policy.for_run({}, tier="reason", tool_names=[])
     assert not policy.is_suppressed(snap, key)

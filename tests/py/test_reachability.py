@@ -92,7 +92,7 @@ EXEMPT: Dict[str, str] = {
                        "it needs the strip count to hand back to the model",
 
     # ── mirrors and readers kept complete on purpose ──
-    "dismissals_of": "the per-subject count. `suppressed_subjects` computes the "
+    "negatives_of": "the per-subject count. `suppressed_subjects` computes the "
                      "whole map in one pass and is what policy reads; this is "
                      "the single-subject reader a diagnostic would want",
     "coerce_severity": "the inbound half of the severity vocabulary, mirroring "

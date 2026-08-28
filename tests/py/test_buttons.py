@@ -82,8 +82,8 @@ def test_the_KEYBOARD_GROUPS_BY_WHAT_AN_ACT_DOES() -> None:
     top row is capped at the three that belong there — five in a line would be
     five unreadable slivers on a phone."""
     rows = buttons.keyboard_for({"id": "c1", "state": "open"})
-    assert [b[0] for b in rows[0]] == ["Done", "Need help", "Seen — stop chasing"]
-    assert [len(r) for r in rows] == [3, 1, 2]
+    assert [b[0] for b in rows[0]] == ["Done", "Need help"]
+    assert [len(r) for r in rows] == [2, 1, 2]
     assert rows[-1][0][1] == "vu:c1" and rows[-1][1][1] == "vn:c1"
     # ⚠️ THE WIRE CODES ARE UNCHANGED THOUGH THE LABELS AND ROWS ARE NOT, which
     # is what keeps a button already sitting in somebody's chat meaning what it
@@ -147,7 +147,7 @@ def test_a_press_from_SOMEBODY_NOT_PERMITTED_acts_on_nothing() -> None:
     buttons._answer = fake_answer                     # type: ignore[assignment]
     try:
         out = asyncio.run(buttons.handle(
-            _press({"data": "vs:c1", "id": "q1", "user_id": 99,
+            _press({"data": "vx:c1", "id": "q1", "user_id": 99,
                     "from_first": "Stranger", "role": "owner"}),
             session=None, config={"people": []}))
     finally:
@@ -295,9 +295,17 @@ def test_RECONCILE_handles_THREE_outcomes_not_two() -> None:
     the drawn set CHANGED without EMPTYING. The owner found it on their phone.
 
     Three rows, three outcomes, and the middle one is the regression."""
+    # ⚠️ A RATING IS WHAT CHANGES THE SET NOW, NOT AN ACKNOWLEDGEMENT. This
+    # fixture used `acknowledged_at` until `Seen` merged into the closer
+    # (2026-08-28) and the branch that withdrew it was deleted — after which
+    # acknowledging changed nothing and the "stale" row was identical to the
+    # live one. The guard below caught that on the first run, which is what a
+    # vacuous-pass guard is for: the test would otherwise have gone green while
+    # measuring one case twice.
     live = {"id": "c1", "title": "live", "state": "open", "acknowledged_at": ""}
-    ack = {"id": "c2", "title": "picked up", "state": "open",
-           "acknowledged_at": "2026-08-28T07:23:03Z", "acknowledged_by": "owner"}
+    ack = {"id": "c2", "title": "rated", "state": "open",
+           "acknowledged_at": "", "useful": True,
+           "useful_at": "2026-08-28T07:23:03Z"}
     concerns._write([
         # in step: drawn with exactly what it still offers
         {**live, "messages": [{"entity_id": "notify.x", "message_id": "11",
@@ -311,7 +319,7 @@ def test_RECONCILE_handles_THREE_outcomes_not_two() -> None:
                        "acts": _acts_now(live)}]},
     ])
     assert _acts_now(ack) and _acts_now(ack) != _acts_now(live), \
-        "the fixture cannot show a CHANGED set: acknowledging changed nothing"
+        "the fixture cannot show a CHANGED set: rating changed nothing"
 
     retired: List[str] = []
     redrawn: List[Tuple[str, str]] = []
@@ -396,10 +404,14 @@ def test_a_press_that_LEAVES_ACTS_LIVE_restates_rather_than_retiring() -> None:
                       "acknowledged_at": "",
                       "messages": [{"entity_id": "notify.x",
                                     "message_id": "174", "acts": "stale"}]}])
+    # ⚠️ A `+1`, WHICH IS NOW THE ACT THAT LEAVES THE MOST BEHIND. `Seen` was
+    # this test's press until it merged into the closer (2026-08-28), and the
+    # closer SETTLES — so pressing it here would exercise the retire path and
+    # the test would have been measuring the opposite of its own name.
     seen = _fake_chat()
     try:
         asyncio.run(buttons.handle(
-            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+            _press({"data": "vu:c1", "id": "q1", "user_id": 1,
                     "from_first": "Jm", "message": {"message_id": "174"}}),
             session=None,
             config={"people": [{"telegram": "1", "role": "owner"}]}))
@@ -407,15 +419,17 @@ def test_a_press_that_LEAVES_ACTS_LIVE_restates_rather_than_retiring() -> None:
         _restore(seen)
 
     assert not seen["retired"], \
-        "the whole keyboard was retired while four acts were still live"
+        "the whole keyboard was retired while three acts were still live"
     assert len(seen["restated"]) == 1
     message_id, acts, text = seen["restated"][0]
+    # ⚠️ THE SET A `+1` LEAVES: the rating pair withdraws, the acts stay.
     row = {"id": "c1", "state": "open", "delivered_at": "x",
-           "acknowledged_at": "yes"}
+           "useful": True, "useful_at": "yes"}
     assert message_id == "174"
     assert acts == _acts_now(row), \
         "the message was redrawn with something other than what the alert offers"
-    assert "seen" not in acts, "the act just spent is still offered"
+    assert "useful" not in acts and "not_useful" not in acts, \
+        "the rating just given is still offered"
     assert "Pump" in text and "243% more" in text, \
         "the alert's own body was dropped, leaving live buttons explaining nothing"
 
@@ -443,7 +457,7 @@ def test_a_press_on_a_SETTLED_alert_retires_and_FORGETS_the_message() -> None:
     seen = _fake_chat()
     try:
         asyncio.run(buttons.handle(
-            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+            _press({"data": "vx:c1", "id": "q1", "user_id": 1,
                     "from_first": "Jm", "message": {"message_id": "174"}}),
             session=None,
             config={"people": [{"telegram": "1", "role": "owner"}]}))
@@ -481,7 +495,7 @@ def test_a_press_whose_EDIT_FAILED_keeps_the_message_to_try_again() -> None:
     seen = _fake_chat(restate_ok=False)
     try:
         asyncio.run(buttons.handle(
-            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+            _press({"data": "vu:c1", "id": "q1", "user_id": 1,
                     "from_first": "Jm", "message": {"message_id": "174"}}),
             session=None,
             config={"people": [{"telegram": "1", "role": "owner"}]}))
@@ -499,7 +513,7 @@ def test_a_press_whose_EDIT_FAILED_keeps_the_message_to_try_again() -> None:
     seen = _fake_chat(retire_ok=False)
     try:
         asyncio.run(buttons.handle(
-            _press({"data": "vs:c1", "id": "q1", "user_id": 1,
+            _press({"data": "vx:c1", "id": "q1", "user_id": 1,
                     "from_first": "Jm", "message": {"message_id": "174"}}),
             session=None,
             config={"people": [{"telegram": "1", "role": "owner"}]}))

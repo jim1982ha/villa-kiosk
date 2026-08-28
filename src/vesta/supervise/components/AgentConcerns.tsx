@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { CircleSlash, Eye, Info } from "lucide-react";
+import { CircleSlash, Info } from "lucide-react";
 
 import { actOnAlert, loadConcerns,
          sendConcernFeedback } from "@/vesta/supervise/agentApi";
@@ -551,38 +551,27 @@ export default function AgentConcerns() {
                     <span className="body-text">Less like this</span>
                   </button>
                 </>)}
-                {/* ⚠️ THE EYE IS BACK, AND THAT FOLLOWS FROM THE RULING RATHER
-                    THAN REVERSING THE ONE THAT REMOVED IT. It went on
-                    2026-08-28 because the thumbs acknowledged and two paths to
-                    one act is one too many; the thumbs no longer do, so its job
-                    is unfilled again and this wall would have no way to clear a
-                    card at all. */}
-                {!String(c.acknowledged_at ?? "").trim() && (
-                  <button
-                    type="button" className="row-action concern-judge"
-                    disabled={busy === c.id}
-                    aria-label={`I have seen it, stop chasing: ${c.title}`}
-                    title="Somebody has this. It stops the chasing and leaves the problem standing."
-                    onClick={() => void act(c.id, "seen")}
-                  >
-                    <Eye size={16} aria-hidden />
-                    <span className="body-text">Seen</span>
-                  </button>
-                )}
-                {/* ⚠️ THE ONLY IRREVERSIBLE ONE, SO IT IS THE ONLY ONE THAT
-                    LOOKS IT. It settles the alert, takes it out of the next
-                    briefing, ticks its job off and counts toward silencing this
-                    subject in future — everything the other controls
-                    deliberately do not do. */}
+                {/* ⚠️ ONE BUTTON, NOT TWO (2026-08-28, owner's ruling). `Seen`
+                    stopped the chase and left the alert standing; `Dismiss`
+                    settled it. Both were pressed for the same reason — "I do
+                    not need to hear about this again" — and two controls that
+                    both make an alert go away is a distinction the reader has
+                    to hold rather than one the screen explains. The single act
+                    does both halves server-side: it records WHO, then closes.
+
+                    ⚠️ THE EYE WENT WITH IT, HAVING COME BACK FOR ONE RELEASE.
+                    Its job — naming the person who picked this up — is now
+                    done by this button, so a second control for it would be
+                    the redundancy that removed it the first time. */}
                 <button
                   type="button" className="row-action danger concern-judge"
                   disabled={busy === c.id}
-                  aria-label={`Dismiss completely, no action needed: ${c.title}`}
-                  title="Throw this alert away: it did not need raising, or no longer matters. It leaves this list and the next briefing, and the villa raises this subject less."
+                  aria-label={`Nothing more is needed, close this: ${c.title}`}
+                  title="Nobody will chase you about this again. It leaves this list and the next briefing, and its job is ticked off. Use -1 if you also want fewer alerts like it."
                   onClick={() => void act(c.id, "dismiss")}
                 >
                   <CircleSlash size={16} aria-hidden />
-                  <span className="body-text">Dismiss</span>
+                  <span className="body-text">Nothing more needed</span>
                 </button>
               </>
             )}

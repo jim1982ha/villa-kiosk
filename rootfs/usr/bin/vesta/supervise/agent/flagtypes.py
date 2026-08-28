@@ -3,8 +3,8 @@
 ⚠️ THE SCREEN ALREADY PROMISED THIS AND NOTHING IMPLEMENTED IT. The thumb
 buttons on the Reason tab have carried the tooltips "the villa raises this kind
 more readily" and "…less readily" since they shipped, while `concerns.feedback`
-recorded a verdict and only ever acted on the SUBJECT — three dismissals silence
-one device (`DISMISSALS_TO_SUPPRESS`), and "this kind" existed nowhere in the
+recorded a verdict and only ever acted on the SUBJECT — three `-1` ratings silence
+one device (`NEGATIVES_TO_SUPPRESS`), and "this kind" existed nowhere in the
 code. This module is the missing half, added at the owner's request 2026-08-28.
 
 ⚠️ THE DEVICE IS DELIBERATELY IRRELEVANT, WHICH IS THE WHOLE POINT AND THE
