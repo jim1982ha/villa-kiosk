@@ -28,6 +28,10 @@ import ToggleField from "@/components/common/ToggleField";
 export default function AgentActSettings() {
   const ctx = useAgentConfigDraft();
   const c = ctx.config;
+  // ⚠️ THE DRAFT, NOT THE SAVED VALUE — same reason `AgentModal` dims from the
+  // draft: the pane must respond the moment the mode is changed, or the switch
+  // reads as having done nothing until Save.
+  const fyiOnly = c.mode === "observe";
   const edit = ctx.edit;
   // ⚠️ EMPTY MEANS NEVER QUIET, NOT ALWAYS. A property that has not set a
   // window wants its warnings; defaulting the other way silences a villa
@@ -76,9 +80,25 @@ export default function AgentActSettings() {
           not a tuning dial — it decides whether a finding becomes a TO-DO ITEM
           somebody is asked to do, which is the same authority question as
           "who is told" and "what may it touch" directly above and below it. */}
-      <h3 className="settings-section-title">Turning findings into to-do items</h3>
-      <p className="muted body-text">
-        Leave empty and nothing is added to a list.
+      {/* ⚠️ INERT IN "Alert only", AND THE CODE SAYS SO RATHER THAN THE COPY
+          IMPLYING OTHERWISE (2026-08-29, owner: "contextualize all the menu ...
+          to gray it out when it is not actually used"). `outbox._deliver_one`
+          raises a to-do item only `if not concern.informational`, and every
+          concern raised in this mode carries that stamp — so naming a list here
+          does nothing at all until the mode changes. The field stays reachable:
+          it is exactly the setting somebody configures BEFORE switching modes.
+          ⚠️ NOT `actEnabled`, WHICH SITS BELOW AND IS NOT MODE-DEPENDENT — it
+          is its own master switch, AND-ed with the per-device list, and dimming
+          it here would be inventing a dependency the backend does not have. */}
+      <h3 className={`settings-section-title${fyiOnly ? " reports-standing-down" : ""}`}>
+        Turning findings into to-do items
+      </h3>
+      <p className={`muted body-text${fyiOnly ? " reports-standing-down" : ""}`}>
+        {fyiOnly
+          ? "Nothing is added while the mode is “Alert only” — a finding is "
+            + "reported and asks nothing of anybody. This list is used again as "
+            + "soon as you choose “Ask first” or “Alert & chase”."
+          : "Leave empty and nothing is added to a list."}
         <InfoHint label="Turning findings into to-do items">
           <p>
             Name a to-do list and every finding the villa sends you is also
@@ -114,7 +134,7 @@ export default function AgentActSettings() {
           </p>
         </InfoHint>
       </p>
-      <label className="fm-field">
+      <label className={`fm-field${fyiOnly ? " reports-standing-down" : ""}`}>
         <input
           type="text"
           value={String(c.taskList ?? "")}

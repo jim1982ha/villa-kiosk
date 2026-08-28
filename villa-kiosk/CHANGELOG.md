@@ -1,3 +1,16 @@
+## 2.869.0
+
+### Fixed — the previous release greyed a layer that was still working
+
+A scan of every mode-dependent screen found the mistake in 2.868.0 first: it
+dimmed the automations section whenever supervision was on, but what is left
+there acts in under a second with no add-on and no model, plus the weekly proof
+that alerts can still be delivered. Neither stops for that switch, and the two
+families that do had already been removed from the list. Never presenting a
+working layer as stopped is now a test rather than a paragraph three files away.
+The scan found one genuinely idle setting: the to-do list, now greyed under
+"Alert only", where nothing is ever added to it.
+
 ## 2.868.0
 
 ### Fixed — a preview stood down the three checks it should have run, and the screen said so

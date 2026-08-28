@@ -18,9 +18,16 @@
 // section is a precondition for the one under it:
 //
 //   1  Is anything listening?      nothing below means anything if it is not
-//   2  Your automations            the primary detection layer, which WINS
-//   3  Built-in checks             the fallback, on/off, and why each ran
+//   2  Your automations            what still acts by itself, whatever the mode
+//   3  Built-in checks             on/off, and why each ran
 //   4  Adding your own             how to extend it — blueprints, not code
+//
+// ⚠️ LINE 2 READ "the primary detection layer, which WINS" UNTIL 2026-08-29 and
+// had been false since 2.755.0: one switch decides which layer DETECTS, and
+// with supervision on it is the checks, not the automations. The families that
+// LOST that argument (`maintenance`, `roi`) were removed from `FAMILIES`
+// separately, so what this section lists now — `critical`, `audit` — never
+// depended on the switch at all. Two corrections that happened to meet.
 //
 // ⚠️ THE PLAN NAMED THIS TAB AND PHASE 5 SHIPPED WITHOUT IT. The interface
 // phase specified "Overview · Modules · History · Schedule · Diagnostics" and
@@ -202,28 +209,19 @@ export default function ModulesTab({
       </div>
 
       {/* ── 2. Your automations ─────────────────────────────────────────── */}
-      {/* ⚠️ THE OTHER HALF OF THE SAME SWITCH (2026-08-29, owner: "contextualize
-          all the menu ... to gray it out when it is not actually used"). One
-          switch decides which layer DETECTS, so exactly one of these two
-          sections is live at a time and the screen now says which. Dimmed, not
-          hidden — a section that vanishes when a switch moves is a screen the
-          reader cannot navigate by memory, and the counts here are still the
-          record of what these automations HAVE reported.
-          ⚠️ The dim is the house 0.45, the same value a disabled control uses,
-          so it is emphatically secondary; it is stacked on `.muted` text in
-          places. If it reads as too faint on the wall tablet it is one
-          constant — `.reports-standing-down` — and not a structural change. */}
-      <h3 className="settings-section-title">Your automations</h3>
-      {diagnostics.supervisionEnabled && (
-        <p className="reports-item muted">
-          <Info size={14} aria-hidden="true" />
-          <span>
-            Not the detecting layer right now — supervision is on, so the checks
-            below are doing this. These automations take the job back when you
-            switch supervision off.
-          </span>
-        </p>
-      )}
+      {/* ⚠️ AND THIS SECTION IS DELIBERATELY *NOT* DIMMED WHEN SUPERVISION IS
+          ON — I dimmed it in 2.868.0 and it was wrong (found by the deep scan
+          the owner asked for one release later). The superseded families are
+          `maintenance` and `roi`, and neither is in `FAMILIES` any more: what
+          is left is `critical`, which acts in under a second with no add-on and
+          no model, and `audit`, which proves the delivery channel. Both keep
+          working whatever the master switch says.
+          ⚠️ `AgentModal`'s `INERT_WHEN_OFF` had already written this rule down
+          — "greying the other two would be a lie of exactly the kind this
+          subsystem keeps paying for: a working tier presented as stopped" — and
+          I greyed a working layer on the tab next door while that comment sat
+          three files away. Dim what has STOPPED, never what merely lost an
+          argument about precedence. */}
       {/* ⚠️ THE SAME `.reflex-table` THE AGENT'S REFLEX TAB USES. This was the
           identical list in `.reports-item` flex rows — name, chip, sentence and
           count on one line — and it wrapped just as badly here. One rule for one
@@ -243,7 +241,7 @@ export default function ModulesTab({
           for — and `vesta` is not a family at all: it is the filename stem of
           the retired task blueprint, and it rendered with a blank description
           because `FAMILIES` has no such entry — see its comment. */}
-      <dl className={`reflex-table${diagnostics.supervisionEnabled ? " reports-standing-down" : ""}`}>
+      <dl className="reflex-table">
         {c.blueprintCategories.filter((cat) => FAMILIES[cat]).map((cat) => {
           const seen = c.seenTypes[`vesta_${cat}_event`] ?? 0;
           const family = FAMILIES[cat];
