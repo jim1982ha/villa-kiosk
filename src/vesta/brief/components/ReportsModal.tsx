@@ -73,7 +73,7 @@
 // capability instead.
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, FileText, ListChecks, Loader2, ShieldQuestion } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Loader2, Zap } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -90,9 +90,10 @@ import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
 import ModulesTab from "./ModulesTab";
+import AutomationsTab from "./AutomationsTab";
 import { TierIntro, STEPS } from "@/vesta/shared/tiers";
 
-type Tab = "checks" | "coverage" | "preview" | "schedule";
+type Tab = "briefing" | "automations";
 
 /** ⚠️ `configure: true` MEANS "THE PROXY WOULD REFUSE THIS TAB TO ANYONE BUT
  *  THE OWNER" — see the endpoint table in this file's header. It is not a
@@ -109,10 +110,20 @@ type Tab = "checks" | "coverage" | "preview" | "schedule";
  *  one question asked in two tenses, and separating them made a failed delivery
  *  something you had to go looking for on another tab. */
 const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[] = [
-  { id: "checks", label: "What is watched", icon: ListChecks, configure: true },
-  { id: "coverage", label: "What it can see", icon: ShieldQuestion, configure: true },
-  { id: "preview", label: "The briefing", icon: FileText, configure: true },
-  { id: "schedule", label: "Sending it", icon: CalendarClock, configure: true },
+  // ⚠️ TWO TABS, AND THE LINE BETWEEN THEM IS "IS THIS PART OF A BRIEFING?"
+  // (2026-08-29, owner). It was four: what is watched · what it can see · the
+  // briefing · sending it. All four answer one question in sequence — what a
+  // briefing is built from, whether the property can supply it, what it reads
+  // like, and when it goes — so they are now sections of ONE tab, in that
+  // order, each keeping its step header.
+  //
+  // ⚠️ AUTOMATIONS IS THE SECOND TAB BECAUSE IT IS A DIFFERENT SUBJECT, not
+  // because of the supervision switch. An automation reacts instantly and has
+  // already acted; a briefing summarises a period. The owner's words: "this tab
+  // is about briefing, and reporting/briefing doesn't rely on instant alerts
+  // received from automations".
+  { id: "briefing", label: "Briefing", icon: FileText, configure: true },
+  { id: "automations", label: "Automations", icon: Zap, configure: true },
   // ⚠️ "WHAT IT ASKED FOR" IS GONE (2026-08-28), AND ITS PRODUCER WAS RETIRED
   // BEFORE IT WAS. The tab listed to-do items the villa's own BLUEPRINTS had
   // raised — `maintenance_*`, `roi_*` and `audit_*` each called `todo.add_item`
@@ -450,12 +461,13 @@ export default function ReportsModal(
               the compose button on the briefing tab — the step header explains
               what the reader is looking at, so arriving after the thing it
               explains is worse than not being there. */}
-          {tab === "checks" && <TierIntro tier={STEPS.watched} />}
-          {tab === "coverage" && <TierIntro tier={STEPS.visible} />}
-          {tab === "preview" && <TierIntro tier={STEPS.brief} />}
-          {tab === "schedule" && <TierIntro tier={STEPS.sent} />}
-
-          {tab === "preview" && (
+          {/* ⚠️ THE FOUR STEP HEADERS SURVIVED THE MERGE AND BECAME SECTION
+              DIVIDERS. They were written as a sequence — "the order the answer
+              is actually built, top down" — which is exactly what a single
+              scrolling tab needs; dropping them would have left four bodies
+              butted together with nothing saying where one question ends. */}
+          {tab === "briefing" && <TierIntro tier={STEPS.watched} />}
+          {tab === "briefing" && (
             <PreviewTab
               preview={preview}
               busy={busy}
@@ -463,7 +475,8 @@ export default function ReportsModal(
               onCompose={() => void compose()}
             />
           )}
-          {tab === "coverage" && (
+          {tab === "briefing" && <TierIntro tier={STEPS.visible} />}
+          {tab === "briefing" && (
             <CoverageTab
               diagnostics={diagnostics}
               busy={busy}
@@ -478,7 +491,7 @@ export default function ReportsModal(
               lastBriefing={history && history.length > 0 ? history[0].at : ""}
             />
           )}
-          {tab === "checks" && (
+          {tab === "briefing" && (
             <ModulesTab
               diagnostics={diagnostics}
               config={config}
@@ -488,7 +501,8 @@ export default function ReportsModal(
               onRefresh={() => void refresh()}
             />
           )}
-          {tab === "schedule" && (
+          {tab === "briefing" && <TierIntro tier={STEPS.sent} />}
+          {tab === "briefing" && (
             <ScheduleTab
               config={config}
               diagnostics={diagnostics}
@@ -499,7 +513,14 @@ export default function ReportsModal(
               onSaveSecret={(provider, value) => void saveSecret(provider, value)}
             />
           )}
-          {tab === "schedule" && <HistoryTab entries={history} />}
+          {tab === "briefing" && <HistoryTab entries={history} />}
+
+          {/* ⚠️ ITS OWN SUBJECT, SO ITS OWN BODY. Nothing from the briefing
+              sequence renders here — no step header, no preview, no schedule —
+              because none of it describes what an automation does. */}
+          {tab === "automations" && (
+            <AutomationsTab diagnostics={diagnostics} />
+          )}
           {/* ⚠️ HISTORY RENDERS UNDER "Sending it", NOT ON ITS OWN TAB. When a
               brief is sent and what was actually delivered are one question in
               two tenses; splitting them put a FAILED delivery on a tab nobody

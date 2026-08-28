@@ -1456,46 +1456,53 @@ def test_the_JOURNAL_reports_its_OWN_clock() -> None:
         "the journal's last-seen is computed rather than read, so it cannot "
         "report a journal that has stopped being written")
 
-def test_the_BRIEFINGS_tab_lists_only_families_that_can_STILL_report() -> None:
-    """⚠️ THE COUNTS BESIDE THESE ROWS ARE FROZEN HISTORY (2026-08-28). The
-    collector's `blueprint_categories` is a PERSISTED, CUMULATIVE record of
-    everything it has ever heard from, so the reference villa still listed
-    `maintenance 100 received` and `roi 87 received` weeks after the cutover
-    retired both — rendered as live status. And no count on that list can rise
-    again for ANY family, because TASK-074 dropped the `vesta_*` subscription:
-    what is drawn is a running total that stopped running.
+def test_a_FROZEN_COUNT_is_never_drawn_as_live_status() -> None:
+    """⚠️ THE FACT SURVIVES A RESTRUCTURE; THE ANCHOR DID NOT (2026-08-29).
 
-    So the tab's own `FAMILIES` table is the filter, and this pins it against
-    the blueprints actually SHIPPED rather than against a list somebody has to
-    remember to prune. Add a family back and it must be one that exists.
+    This used to pin the Briefings tab's own `FAMILIES` table, on the grounds
+    that `blueprint_categories` is a PERSISTED, CUMULATIVE record — the
+    reference villa listed `maintenance 100 received` weeks after the cutover
+    retired it, drawn as live status — and that no count on that list can rise
+    again for ANY family, because nothing has subscribed to `vesta_*` since
+    TASK-074. A running total that stopped running.
 
-    ⚠️ `control` AND `vesta` ARE ABSENT ON PURPOSE and are not oversights: a
-    control automation ACTS and emits nothing, so its cell could only ever read
-    "nothing yet", and `vesta` is the filename stem of the retired task
-    blueprint rather than a family at all. Both used to render with a BLANK
-    description because the lookup missed.
+    The dialog is now two tabs and the families moved to `AutomationsTab`, for a
+    reason that has nothing to do with counts: an automation reacts instantly
+    and a briefing summarises a period, so what the automations did is not part
+    of what a briefing is built from. That makes the original assertion
+    unanchored and the underlying rule STRONGER, so it is restated over both
+    tabs rather than deleted with the table it happened to be written against.
     """
-    tab = _read(os.path.join(SRC, "vesta", "brief", "components", "ModulesTab.tsx"))
-    block = tab[tab.index("const FAMILIES"):]
-    block = block[:block.index("\n};")]
-    listed = set(re.findall(r"^  ([a-z_]+): ", block, re.M))
-    assert listed, "no families parsed — this test is checking nothing"
+    # ⚠️ CODE, NOT PROSE — the same stripper `test_cockpit_reach._code` carries,
+    # and for the same reason it carries it. The first run of this test failed
+    # on `AutomationsTab`'s OWN COMMENT explaining why the counts were removed,
+    # which contains the word "received". That is /dry-audit step 7 for the
+    # third time in one session; a test that reads source has to read code.
+    def _code_of(*parts: str) -> str:
+        text = _read(os.path.join(SRC, "vesta", "brief", "components", *parts))
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+        return re.sub(r"^\s*//.*$", "", text, flags=re.MULTILINE)
 
-    for retired in ("maintenance", "roi"):
-        assert retired not in listed, (
-            f"`{retired}` is listed again. Its blueprints were retired at the "
-            f"cutover, so its count can only ever be the frozen total from "
-            f"before — shown to a reader as though it were live.")
+    briefing = _code_of("ModulesTab.tsx")
+    automations = _code_of("AutomationsTab.tsx")
 
-    tree = os.path.join(REPO_ROOT, "sources", "files", "blueprint")
-    if not os.path.isdir(tree):
-        return   # gitignored on a fresh clone; the pin above still holds
-    stems = {f.split("_", 1)[0] for f in os.listdir(tree)
-             if f.endswith(".yaml") and not f.startswith("._")}
-    unshipped = listed - stems
-    assert not unshipped, (
-        f"the tab lists {sorted(unshipped)}, for which no blueprint ships. A "
-        f"family with no producer can only ever show a stale count or a zero.")
+    # ⚠️ VACUOUS-PASS GUARD: both files must actually be the ones in play.
+    assert "reports-checks" in briefing, "the briefing tab has moved"
+    assert "FAMILIES" in automations, "the automations tab no longer reads the families"
+
+    assert "blueprintCategories" not in briefing, (
+        "the briefing tab lists blueprint families again. A briefing is a "
+        "periodic summary and an automation is an instant reaction; what the "
+        "automations did is not part of what a briefing is built from.")
+
+    assert "received" not in automations, (
+        "the automations tab draws an event count again. Those totals are "
+        "frozen — nothing has subscribed to `vesta_*` since the cutover — so a "
+        "number beside a live-looking role reads as current status.")
+
+    assert "seenTypes" not in automations, (
+        "the automations tab reads the per-type tally, which can only be the "
+        "frozen total")
 
 
 def test_an_act_from_the_UI_updates_the_CHAT_MESSAGE_immediately() -> None:

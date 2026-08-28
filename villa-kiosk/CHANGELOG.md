@@ -1,3 +1,16 @@
+## 2.874.0
+
+### Changed — Briefings & automations is two tabs, split by what each thing is
+
+An automation reacts the instant something happens and has already acted; a
+briefing looks back over a period and summarises. Mixed on one screen, what your
+automations did sat under what a briefing is built from. Briefing now holds that
+question end to end — the checks, what the property can supply, the composed
+brief and when it is sent. Automations is its own tab and follows the
+supervision switch: off, every family you have; on, the ones still doing a job
+with the superseded ones standing by. The event totals are gone — nothing has
+fed them since the cutover, so they were a stopped clock shown as live status.
+
 ## 2.873.0
 
 ### Fixed — switching a check off now stops the agent using it too

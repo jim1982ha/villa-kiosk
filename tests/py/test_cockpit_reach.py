@@ -220,9 +220,21 @@ def test_the_coverage_block_is_gated_the_same_way_briefings_is() -> None:
     assert "fetchReportsDiagnostics" not in tab, (
         "the Cockpit still probes the owner-only diagnostics endpoint; that "
         "block moved to the Briefing dialog's Coverage tab")
+    # ⚠️ THE ANCHOR MOVED AGAIN ON 2026-08-29, AND THE FACT DID NOT. The dialog
+    # went from four tabs to two, so "coverage" is no longer a tab id — it is a
+    # SECTION of the Briefing tab. What must stay true is that whatever tab
+    # renders `CoverageTab` is owner-gated, so this now reads the gate off the
+    # tab that mounts it rather than off a name that can be renamed again.
     modal = _code(os.path.join(SRC, "vesta", "brief", "components", "ReportsModal.tsx"))
-    assert "coverage" in modal and "configure: true" in modal, (
-        "the Coverage tab must stay behind the dialog's own owner gate")
+    assert "<CoverageTab" in modal, "the dialog no longer renders the Coverage block"
+    mount = modal[modal.index("<CoverageTab") - 400:modal.index("<CoverageTab")]
+    tab_id = mount.rsplit('tab === "', 1)[-1].split('"')[0]
+    assert tab_id, "could not read which tab mounts CoverageTab"
+    entry = modal[modal.index(f'id: "{tab_id}"'):]
+    entry = entry[:entry.index("}")]
+    assert "configure: true" in entry, (
+        f"the tab mounting CoverageTab ({tab_id!r}) is not owner-gated, so the "
+        "briefing subsystem is visible to a profile that cannot act on it")
 
 
 def test_the_briefing_dialog_reads_the_live_listening_field() -> None:
