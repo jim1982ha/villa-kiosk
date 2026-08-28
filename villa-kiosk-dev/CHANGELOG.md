@@ -1,3 +1,15 @@
+## 2.854.0
+
+### Changed — rating an alert no longer decides what happens to it
+The thumbs answered two questions at once: a thumb up marked the alert seen,
+which takes it off the Reason tab, and a thumb down threw it away outright. So
+saying how good an alert was quietly disposed of it. Rating is now +1 / -1 —
+"more like this" and "less like this" — and both leave the alert exactly where
+it was, with a line on the card confirming the press landed. Throwing one away
+is its own control, labelled "Dismiss completely", the only irreversible act and
+now the only one that says so. The Reason tab regains an explicit "Seen", which
+the thumbs had been doing invisibly.
+
 ## 2.853.0
 
 ### Fixed — a job stayed on the list after its alert was dealt with
