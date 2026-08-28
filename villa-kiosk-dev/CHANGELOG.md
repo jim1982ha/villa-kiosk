@@ -1,3 +1,13 @@
+## 2.856.1
+
+### Fixed — comments describing buttons that no longer exist
+Nothing on screen changes. Three releases in one day reshaped the buttons on an
+alert, and ten explanations next to that code still described the older set —
+including the table a reader meets first and the note directly above the list of
+what an alert offers. Each now says what the code does; the records of why the
+older behaviour was wrong are kept, marked as history rather than reading as
+today.
+
 ## 2.856.0
 
 ### Changed — one button ends an alert, instead of two that both did
