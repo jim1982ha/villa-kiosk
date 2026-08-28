@@ -98,7 +98,7 @@ class Delivery:
     push: bool = False
     held: bool = False
     #: ⚠️ AN FYI, NOT A REQUEST (2026-08-28, owner's ruling). True when the
-    #: concern was raised in "Investigate & Log Only": told once, in the
+    #: concern was raised in "Alert only": told once, in the
     #: thread only, never pushed, never escalated, no job raised. This
     #: REPLACES the old `suppressed` shadow flag — observe mode used to mean
     #: "recorded, delivered to nobody", and the owner has ruled it means

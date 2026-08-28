@@ -176,7 +176,7 @@ function FlagRow({ flag, mode, concern, busy, waiting, onDecide }: {
       ) : (
         /* ⚠️ NO MODE AND NO RUN RECORDED — a check written before 2.785.0.
            Claiming "in the briefing" would be a claim about a setting nobody
-           stored, and it is FALSE in Flag & Ask. "Settled" is the most this
+           stored, and it is FALSE in Ask first. "Settled" is the most this
            row can honestly say. */
         <span className="muted flag-row-status" title="This flag was dealt with, but the check that raised it predates the record of how.">
           <MinusCircle size={16} aria-hidden /> Settled{at}
@@ -315,7 +315,7 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
   }, [load]);
 
   // ⚠️ CARRIED OVER FROM `AgentQueue` (2.775.0), WHICH THIS REPLACES. A villa
-  // left in Flag & Ask accumulates a waiting flag per check and the reference
+  // left in Ask first accumulates a waiting flag per check and the reference
   // villa reached TWENTY-TWO, clearable only one press at a time. Dismiss only,
   // never "investigate all": one investigation is a full frontier-model run, so
   // a bulk approve is a day's ceiling in one press with no undo. Sequential and
@@ -375,7 +375,7 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
   //
   // ⚠️ AND A SETTLED ORPHAN RENDERED A STATE THAT CAN BE FALSE. `FlagRow` falls
   // through to "In the briefing" for anything settled outside Escalate mode —
-  // true of Investigate & Log, and NOT true in Flag & Ask, where nothing
+  // true of the two Alert modes, and NOT true in Ask first, where nothing
   // reaches the briefing at all. Dropping them removes the claim with them.
   const orphans = flags.filter(
     (f) => !attached.has(f.runId) && pending.has(f.runId));

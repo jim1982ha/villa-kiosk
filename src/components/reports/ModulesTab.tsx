@@ -45,11 +45,16 @@
 // nobody made — the same rule `ran` vs `skipped` exists for one layer down.
 //
 // ⚠️ `connected` IS THE LIVE SOCKET, NOT A STORED FLAG, and every count in
-// section 2 is read through it. `silentTypes` means "these categories are
-// quiet" only if something is actually listening; if nothing is, they mean
-// nothing at all. The field this replaced was derived from a persisted
-// timestamp written once and never cleared, so it read `true` forever after the
-// first subscribe — through every drop and restart. See `collect._LIVE`.
+// section 2 is read through it: a count means "this family is quiet" only if
+// something is actually listening, and means nothing at all if nothing is. The
+// field this replaced was derived from a persisted timestamp written once and
+// never cleared, so it read `true` forever after the first subscribe — through
+// every drop and restart. See `collect._LIVE`.
+//
+// ⚠️ THIS PARAGRAPH EXPLAINED HOW TO READ `silentTypes`, DELETED IN 2.835.0
+// because nothing has subscribed to those events since the cutover — so it
+// could only ever report every family as silent. A comment outliving the field
+// it explains is the shape /dry-audit Part 3 exists for.
 
 import { Ban, Check, Info, PlugZap, Radio, RefreshCw } from "lucide-react";
 import InfoHint from "@/components/common/InfoHint";

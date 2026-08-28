@@ -23,9 +23,11 @@
  * value arrive here and render as the set's first member. They are used by
  * type position in the interfaces further down and by anything importing this
  * vocabulary later — /dry-audit's unused-export probe cannot see either, so it
- * reports most of them every run (ten of the eleven, at the last count — the
- * number drifts as the vocabulary grows and is deliberately not restated as a
- * figure to keep in step). Verdict recorded once, here, rather than
+ * used to report them on every run. Each now carries a `dry-audit:ok` marker at
+ * its own declaration, which the probe honours, so the list is silent.
+ * ⚠️ THIS SENTENCE CARRIED A COUNT ("ten of the eleven") FOR ONE RELEASE, and
+ * the marker change in that SAME release made it zero. A number in a comment is
+ * a claim with a shelf life. Verdict recorded once, here, rather than
  * re-adjudicated: the same treatment `AGENT_CONTRACT_VERSION` below and
  * `isTicketOpen` in fmEngine already carry. Deleting one to quiet the probe
  * would be deleting half a contract. */
@@ -184,7 +186,7 @@ export interface Concern {
   /** ⚠️ STAMPED AT RAISE TIME FROM THE MODE THE VILLA WAS IN (2026-08-28,
    *  owner's ruling), never derived from today's setting — the same trap
    *  `TriagePass.mode` avoids. True means the concern was raised under
-   *  "Investigate & Log Only": shown here and told once as an FYI, but never
+   *  "Alert only": shown here and told once as an FYI, but never
    *  escalated, never pushed, and no to-do job was raised — nothing is asked
    *  of the reader. Absent on concerns raised before this existed. */
   informational?: boolean;

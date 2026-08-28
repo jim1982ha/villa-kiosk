@@ -358,7 +358,7 @@ export default function AgentTuningPanel() {
         /* ⚠️ THE TOOLTIP SAYS ONLY WHAT IS TRUE OF ALL THREE. It used to
            compare the modes, which the labels now do themselves — and it
            CONTRADICTED the description below it on the same screen: the tooltip
-           read "your briefing is written either way" while Flag & Ask's own
+           read "your briefing is written either way" while Ask first's own
            text read "nothing reaches the briefing". Both were reaching for the
            same fact and only one is right — the briefing is written in every
            mode; what changes is whether the assistant's own findings are IN it.
