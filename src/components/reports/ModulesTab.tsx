@@ -192,16 +192,6 @@ export default function ModulesTab({
           </p>
         )}
       </dl>
-      {/* ⚠️ A ZERO HERE IS AMBIGUOUS AND MUST SAY SO. Either nothing of that
-          kind happened, or those automations do not report at all — and the
-          second is what once hid an entire alert tier. Naming them is the whole
-          value; pretending the count answers it is not. */}
-      {c.silentTypes.length > 0 && c.connected && (
-        <p className="muted body-text">
-          A category with nothing received is either a quiet period or
-          automations that do not report. This cannot tell which.
-        </p>
-      )}
       {diagnostics.capabilities.includes("blueprint_layer") ? (
         <p className="reports-item">
           <Check size={14} aria-hidden="true" />

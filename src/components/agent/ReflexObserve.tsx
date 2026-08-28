@@ -194,11 +194,27 @@ export function ObserveTab({ diagnostics }: {
           can see. `connected`, NEVER `onlineSince` — the latter is persisted and
           reads true forever after the first connect, which is the exact lie
           `connected` was added to replace. */}
-      <div className={`fm-banner${c?.connected ? "" : " warn"}`}>
-        {c?.connected
-          ? `Recording. Last change seen ${ago(c.lastEventAt) || "recently"}.`
-          : "Not recording — so every check above this one is reading an "
-            + "empty window."}
+      {/* ⚠️ THE JOURNAL'S CLOCK, NOT THE COLLECTOR'S (2026-08-28, reported:
+          "i see that the last change was seen 34h ago … I can't be true,
+          right?"). It was not. This read `collector.lastEventAt`, and the
+          collector is the BLUEPRINT/CHAT event stream — its own comment two
+          blocks down says it "is not subscribed to `state_changed` at all".
+          With every blueprint retired it now measures the last Telegram
+          message, so a villa writing 8,926 rows a day announced "last change
+          seen 34 h ago" above tiles counting 51,430 changes. The block below
+          was corrected for this exact confusion in 2.786.0; the sentence a
+          reader hits FIRST was not, and it is the one that decides whether
+          they trust the rest of the screen.
+          ⚠️ `connected` STILL GATES IT, because "is the websocket up" is a
+          real precondition — but it can no longer be the only thing consulted,
+          or a connected socket with a stalled journal reads as healthy. */}
+      <div className={`fm-banner${c?.connected && j?.lastSeen ? "" : " warn"}`}>
+        {!c?.connected
+          ? "Not recording — so every check above this one is reading an "
+            + "empty window."
+          : j?.lastSeen
+            ? `Recording. Last change written down ${ago(j.lastSeen) || "just now"}.`
+            : "Connected, but nothing has been written down yet."}
       </div>
 
       {/* ⚠️ THE JOURNAL, NOT THE COLLECTOR. This block showed `collector` —
@@ -262,25 +278,6 @@ export function ObserveTab({ diagnostics }: {
         </InfoHint>
       </p>
 
-      {c?.silentTypes && c.silentTypes.length > 0 && (
-        <>
-          <h3 className="settings-section-title">Blueprint events not seen</h3>
-          {/* ⚠️ A ZERO IS AMBIGUOUS AND MUST SAY SO: either nothing of that kind
-              happened, or that source does not report at all. The second is what
-              once hid an entire alert tier. */}
-          <p className="muted body-text">
-            Nothing has arrived from {c.silentTypes.join(", ")} in this window.
-            {/* ⚠️ THE AMBIGUITY MOVES, IT IS NOT DROPPED. A zero here means
-                either outcome and saying so is the whole value of the line;
-                what it does not need is a second sentence of screen. */}
-            <InfoHint label="Heard nothing from">
-              That is either a quiet villa or a source that is not reporting,
-              and from here the two look the same. Worth checking only if you
-              expected that kind of event recently.
-            </InfoHint>
-          </p>
-        </>
-      )}
     </div>
   );
 }

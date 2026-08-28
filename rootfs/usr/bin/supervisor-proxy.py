@@ -3357,6 +3357,7 @@ def _journal_facts() -> Dict[str, Any]:
         snap = observe_heartbeat.snapshot()
         return {
             "entries": snap.get("entries"),
+            "lastSeen": snap.get("last_seen"),
             "bound": snap.get("bound"),
             "at_bound": snap.get("at_bound"),
             "span_days": snap.get("span_days"),

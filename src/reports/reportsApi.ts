@@ -71,7 +71,6 @@ export interface ReportsDiagnostics {
     buffered: number;
     seenTypes: Record<string, number>;
     blueprintCategories: string[];
-    silentTypes: string[];
     lastEventAt: string;
   };
   /** The rolling record of entity state changes — what the CHECKS read.
@@ -80,6 +79,10 @@ export interface ReportsDiagnostics {
    *  `state_changed`, so a light turning on moved nothing on that screen. */
   journal: {
     entries: number;
+    /** When a change was last written down. ⚠️ THE JOURNAL'S CLOCK, NOT THE
+     *  COLLECTOR'S — see `lastEventAt` above, which measures a different
+     *  stream and was reported as this one until 2026-08-28. */
+    lastSeen: string;
     bound: number;
     atBound: boolean;
     spanDays: number;
@@ -667,11 +670,11 @@ export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | nu
         buffered: num(collector.buffered),
         seenTypes: counts(collector.seen_types),
         blueprintCategories: strs(collector.blueprint_categories),
-        silentTypes: strs(collector.silent_types),
         lastEventAt: str(collector.last_event_at),
       },
       journal: {
         entries: num(journal.entries),
+        lastSeen: str(journal.last_seen),
         bound: num(journal.bound),
         atBound: bool(journal.at_bound),
         spanDays: num(journal.span_days),

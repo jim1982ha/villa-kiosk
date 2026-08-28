@@ -367,17 +367,22 @@ def state() -> Dict[str, Any]:
         "buffered": len(events),
         "seen_types": buffer["seen_types"],
         "blueprint_categories": buffer["blueprint_categories"],
-        # ⚠️ A subscribed type with a zero count is the interesting case: either
-        # nothing of that kind has happened, or the blueprints do not emit it at
-        # all. Naming them is what turned a silent, total failure of the
-        # critical tier into a one-line read.
-        "silent_types": sorted(
-            EVENT_TEMPLATE.format(category=c)
-            for c in buffer["blueprint_categories"]
-            if not buffer["seen_types"].get(EVENT_TEMPLATE.format(category=c))
-        ),
-        "blueprint_names": buffer["blueprint_names"],
-        # ⚠️ THE SAME QUESTION AS `silent_types`, ONE LEVEL FINER, AND THE
+        # ⚠️ `silent_types` WAS DELETED, NOT EMPTIED (2026-08-28). It named every
+        # `vesta_<category>_event` with a zero count, and its value was that a
+        # subscribed type reading zero separates "nothing of that kind happened"
+        # from "the blueprints do not emit it" — which once turned a silent, total
+        # failure of the critical tier into a one-line read.
+        #
+        # THE WORD THAT MATTERED WAS *SUBSCRIBED*, AND TASK-074 REMOVED IT. This
+        # socket carries the chat types only; nothing under `vesta_*` is listened
+        # for at all, so every category was guaranteed to read zero forever and the
+        # line could no longer separate anything. It reached a screen as "Nothing
+        # has arrived from vesta_control_event, vesta_vesta_event in this window",
+        # where the second name is not even a real event — it is the `vesta` stem of
+        # `vesta_task_actions` run through the template. An instrument whose
+        # question closed does not stay neutral; it rots until somebody reads it as
+        # meaning something.
+        # ⚠️ THE SAME QUESTION ONE LEVEL FINER THAN THE CATEGORY, AND THE
         # COARSE ONE ANSWERED IT WRONG. A category is alive as soon as ANY of
         # its blueprints fires, so `maintenance` read healthy on the reference
         # villa — three pump findings in one brief — while `maintenance_silence`
@@ -385,7 +390,12 @@ def state() -> Dict[str, Any]:
         # blueprint was reported as "covered", and the devices it covers went
         # unmentioned in every brief. This is what `registry.gate` reads to stop
         # claiming coverage it cannot demonstrate.
-        #
+        "blueprint_names": buffer["blueprint_names"],
+        # ⚠️ THE COLLECTOR'S OWN CLOCK, AND NOT THE VILLA'S. It is the last
+        # event on THIS subscription — chat only, since TASK-074 — so it says
+        # when somebody last typed to the bot, never when a device last moved.
+        # The Observe tab reported it as "last change seen" until 2026-08-28;
+        # `journal.last_seen` is the field that answers that.
         "last_event_at": events[-1].get("at") if events else "",
     }
 

@@ -58,17 +58,6 @@ function listeningFindings(
     : { tone: "warn",
         text: "Not listening — anything that happens now will be missing from "
               + "the next briefing." });
-  // ⚠️ "HAS NEVER REPORTED" IS NOT "IS BROKEN", and the wording has to carry
-  // that: a category with nothing to say is the commonest reason, and a reader
-  // told "2 categories have ever reported" cannot tell which they were reading.
-  if (d.collector.silentTypes.length > 0) {
-    const n = d.collector.silentTypes.length;
-    out.push({ tone: "warn",
-      text: `${n} kind${n === 1 ? "" : "s"} of alert ${n === 1 ? "has" : "have"}`
-            + ` never reported anything: ${d.collector.silentTypes.join(", ")}.`
-            + " Either nothing has gone wrong of that kind, or nothing is"
-            + " watching for it." });
-  }
   out.push(lastBriefing
     ? { tone: "", text: `Last briefing sent ${new Date(lastBriefing).toLocaleString()}.` }
     : { tone: "warn", text: "No briefing has been sent yet." });

@@ -572,11 +572,24 @@ def test_last_flush_is_not_read_as_the_last_event() -> None:
     assert got["last_event_at"] != got["last_flush"]
 
 
-def test_a_subscribed_but_silent_category_is_named() -> None:
-    """⚠️ THE CASE THAT MATTERS. A category with a zero count is either "nothing
-    of that kind happened" or "these blueprints do not emit at all" — and the
-    second is what hid the entire critical tier. Naming them is what turns a
-    silent total failure into a one-line read."""
+def test_a_SILENT_CATEGORY_is_no_longer_claimed_to_be_watched() -> None:
+    """⚠️ THIS PINNED `silent_types`, AND THE FIELD IS GONE (2026-08-28). It
+    named every `vesta_<category>_event` with a zero count, on the reasoning
+    that a SUBSCRIBED type reading zero separates "nothing of that kind
+    happened" from "these blueprints do not emit at all" — the second of which
+    once hid the entire critical tier.
+
+    TASK-074 removed the word the whole thing rested on. This socket carries
+    the chat types only, so nothing under `vesta_*` is subscribed, every
+    category was guaranteed to read zero forever, and the line separated
+    nothing. It reached a screen as "Nothing has arrived from
+    vesta_control_event, vesta_vesta_event in this window" — the second of
+    which is not a real event at all, just the `vesta` stem of
+    `vesta_task_actions` through the template.
+
+    ⚠️ SO WHAT IS PINNED NOW IS THE ABSENCE, and the reason. Re-adding the
+    field without re-adding the subscription would put the same guaranteed-zero
+    claim back on three screens."""
     buffer = collect.read_buffer()
     store.write_json(store.REPORTS_EVENTS_FILE, {
         **buffer, "blueprint_categories": ["roi", "critical", "maintenance"],
@@ -584,8 +597,15 @@ def test_a_subscribed_but_silent_category_is_named() -> None:
         "online_since": "2026-01-01T00:00:00+00:00",
     })
     got = collect.state()
-    assert got["silent_types"] == ["vesta_critical_event", "vesta_maintenance_event"]
-    assert "vesta_roi_event" not in got["silent_types"]
+    assert "silent_types" not in got, (
+        "`silent_types` is back. It can only mean anything if the collector "
+        "SUBSCRIBES to those types — check `run_once` before restoring it.")
+    # ⚠️ THE PRECONDITION, ASSERTED RATHER THAN ASSUMED. If the vesta_*
+    # subscription ever returns, this test is the wrong shape and should fail
+    # loudly rather than keep forbidding a field that would then be honest.
+    assert not [t for t in collect.CHAT_EVENT_TYPES if t.startswith("vesta_")], (
+        "the collector subscribes to vesta_* again, so a silent-category line "
+        "would be measurable once more")
 
 
 def test_state_carries_no_event_payloads() -> None:
@@ -604,7 +624,7 @@ def test_state_is_safe_before_anything_has_happened() -> None:
     got = collect.state()
     assert got["connected"] is False
     assert got["buffered"] == 0
-    assert got["silent_types"] == []
+    assert "silent_types" not in got
 
 
 # ── the window is UTC, whatever clock the caller thinks in ──────────────────

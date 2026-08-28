@@ -9,12 +9,15 @@ it was reported.
 
 from __future__ import annotations
 
+import inspect
 import os
 import re
+import sys
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(REPO_ROOT, "src")
+sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 #: Two lines at a settings dialog's width. ⚠️ ONE NUMBER, because "keep it
 #: short" enforced per reviewer is what produced six-line descriptions.
@@ -1381,3 +1384,45 @@ def test_every_MUTATING_call_to_our_own_backend_carries_the_session() -> None:
         "a write to this add-on's backend does not state `credentials` and does "
         "not go through `postJson`, so it depends on a browser default:\n  "
         + "\n  ".join(offenders))
+
+def test_the_OBSERVE_banner_reads_the_JOURNAL_not_the_collector() -> None:
+    """⚠️ TWO CLOCKS, AND THE TAB WAS SHOWING THE WRONG ONE (2026-08-28,
+    reported: "i see that the last change was seen 34h ago … I can't be true,
+    right?"). It was not true. `collector.lastEventAt` is the last event on the
+    BLUEPRINT/CHAT subscription — the collector is not subscribed to
+    `state_changed` at all — and with every blueprint retired it now measures
+    the last Telegram message. The reference villa read "34 h ago" while its
+    journal was taking 8,926 rows a day.
+
+    ⚠️ THE SAME CONFUSION WAS FIXED ONE BLOCK LOWER IN 2.786.0, when the tiles
+    moved from the collector to the journal. The banner ABOVE them kept the old
+    source — and it is the sentence a reader hits first, so it decides whether
+    they trust the tiles at all. Fixing a screen means fixing every element that
+    answers the same question, not the one that was reported.
+    """
+    observe = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    tab = observe[observe.index("export function ObserveTab"):]
+    body = re.sub(r"/\*[\s\S]*?\*/", "", tab)
+    body = "\n".join(l for l in body.splitlines() if not l.strip().startswith("//"))
+    assert "lastEventAt" not in body, (
+        "the Observe tab reads the collector's clock again; it measures chat "
+        "traffic, not the villa. `journal.lastSeen` is the one that answers "
+        "'when did something last change'.")
+    assert "j?.lastSeen" in body or "j.lastSeen" in body, (
+        "the Observe banner no longer says when a change was last recorded")
+
+
+def test_the_JOURNAL_reports_its_OWN_clock() -> None:
+    """The half above needs a field to read, and it had none until this shipped:
+    `heartbeat.snapshot()` carried entries, span and rate but never a
+    timestamp, which is why the banner reached for the collector's."""
+    from observe import heartbeat, journal
+    assert "last_seen" in heartbeat.snapshot({}), (
+        "the journal snapshot no longer carries when it last recorded "
+        "anything, so any screen asking will reach for the collector again")
+    # ⚠️ AND IT IS THE STORE'S FIELD, not a fresh timestamp — a snapshot that
+    # stamped "now" would report a healthy journal on a stalled one.
+    src = re.sub(r"#[^\n]*", "", inspect.getsource(heartbeat.snapshot))
+    assert 'current.get("last_seen")' in src, (
+        "the journal's last-seen is computed rather than read, so it cannot "
+        "report a journal that has stopped being written")

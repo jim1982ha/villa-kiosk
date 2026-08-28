@@ -126,6 +126,15 @@ def snapshot(stats: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
     rows = int(st.get("rows") or 0)
     return {
         "entries": total,
+        # ⚠️ THE JOURNAL'S OWN CLOCK, AND IT HAD NO READER UNTIL 2026-08-28.
+        # The Observe tab's banner reported `collector.last_event_at` as "last
+        # change seen" — the collector is the BLUEPRINT/CHAT event stream and is
+        # not subscribed to `state_changed` at all, so on a villa whose
+        # blueprints were retired it measures the last Telegram message. It read
+        # "34 h ago" on a property writing 8,926 rows a day, which the owner
+        # correctly refused to believe. The tab below it had already been
+        # corrected for exactly this confusion; the banner above it had not.
+        "last_seen": current.get("last_seen") or "",
         "bound": journal.JOURNAL_MAX_ENTRIES,
         "at_bound": total >= journal.JOURNAL_MAX_ENTRIES,
         "span_days": span,
