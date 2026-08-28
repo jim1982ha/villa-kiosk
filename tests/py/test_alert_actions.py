@@ -97,7 +97,7 @@ def test_the_TABLET_cannot_perform_half_an_act() -> None:
     to-do item over Home Assistant's websocket and then acknowledged the alert
     through the add-on — two calls, nothing joining them, and the first landing
     while the second failed leaves a ticked job beside an alert still chased."""
-    todo = _read(os.path.join(REPO, "src", "components", "agent",
+    todo = _read(os.path.join(REPO, "src", "vesta", "supervise", "components",
                               "AgentTodo.tsx"))
     assert "acknowledgeConcern(" not in todo, (
         "the browser assembles the pair again, so it can still perform half of "

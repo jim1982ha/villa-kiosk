@@ -26,8 +26,8 @@ import RoomChoiceSheet, { type RoomChoice } from "@/components/hud/RoomChoiceShe
 import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, isMappingAllowed } from "@/auth/permissions";
 import FacilityModal, { type FacilityTab } from "@/components/fm/FacilityModal";
-import ReportsModal from "@/components/reports/ReportsModal";
-import AgentModal from "@/components/agent/AgentModal";
+import ReportsModal from "@/vesta/brief/components/ReportsModal";
+import AgentModal from "@/vesta/supervise/components/AgentModal";
 import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";

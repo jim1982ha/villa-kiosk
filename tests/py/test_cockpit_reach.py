@@ -220,7 +220,7 @@ def test_the_coverage_block_is_gated_the_same_way_briefings_is() -> None:
     assert "fetchReportsDiagnostics" not in tab, (
         "the Cockpit still probes the owner-only diagnostics endpoint; that "
         "block moved to the Briefing dialog's Coverage tab")
-    modal = _code(os.path.join(SRC, "components", "reports", "ReportsModal.tsx"))
+    modal = _code(os.path.join(SRC, "vesta", "brief", "components", "ReportsModal.tsx"))
     assert "coverage" in modal and "configure: true" in modal, (
         "the Coverage tab must stay behind the dialog's own owner gate")
 
@@ -230,7 +230,7 @@ def test_the_briefing_dialog_reads_the_live_listening_field() -> None:
     this villa ever had a listener", which reads true forever after the first
     connect. That is the precise lie `connected` was added to replace, and
     carrying the block to a new surface is exactly when it would come back."""
-    tab = _code(os.path.join(SRC, "components", "reports", "CoverageTab.tsx"))
+    tab = _code(os.path.join(SRC, "vesta", "brief", "components", "CoverageTab.tsx"))
     block = re.search(r"function listeningFindings(.*?)\n}", tab, re.DOTALL)
     assert block, "the listening block moved again — this test is blind"
     assert "collector.connected" in block.group(1), (
@@ -243,7 +243,7 @@ def test_the_last_briefing_is_the_NEWEST_entry() -> None:
     Cockpit block read `[length - 1]` and so printed the FIRST briefing ever
     sent under the words "Last briefing". Two readers of one array is what made
     it visible, which is the argument for merging rather than copying."""
-    modal = _code(os.path.join(SRC, "components", "reports", "ReportsModal.tsx"))
+    modal = _code(os.path.join(SRC, "vesta", "brief", "components", "ReportsModal.tsx"))
     assert "history[0].at" in modal, (
         "the newest entry is [0] — fetchReportsHistory returns newest first")
     assert "history[history.length - 1]" not in modal
@@ -253,6 +253,6 @@ def test_an_unreachable_addon_says_so_rather_than_reading_as_healthy() -> None:
     """Three kinds of empty, again: "not listening", "listening and quiet" and
     "could not ask" mean different things and the last must not render as the
     second."""
-    tab = _code(os.path.join(SRC, "components", "reports", "CoverageTab.tsx"))
+    tab = _code(os.path.join(SRC, "vesta", "brief", "components", "CoverageTab.tsx"))
     assert "!diagnostics.reachable" in tab
     assert "could not be reached" in tab

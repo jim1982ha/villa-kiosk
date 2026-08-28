@@ -37,7 +37,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 BIN = os.path.join(ROOT, "rootfs", "usr", "bin")
 # ⚠️ MOVED IN 2.756.0 with the helpers themselves, when ShadowDiffPanel was
 # deleted. The contract is unchanged; only its home is.
-PANEL = os.path.join(ROOT, "src", "components", "agent", "RecentChecks.tsx")
+PANEL = os.path.join(ROOT, "src", "vesta", "supervise", "components", "RecentChecks.tsx")
 
 
 def _read(path: str) -> str:
@@ -124,7 +124,7 @@ def test_the_run_now_BUTTON_classifies_with_the_same_predicate() -> None:
     re-deciding, in either language.
     """
     panel = _read(os.path.join(
-        ROOT, "src", "components", "agent", "RunCheckNow.tsx"))
+        ROOT, "src", "vesta", "supervise", "components", "RunCheckNow.tsx"))
     assert "outcomeOf(" in panel, (
         "the run-now button classifies the pass reason itself instead of using "
         "the shared predicate, so it can disagree with the list right above it")
@@ -137,7 +137,7 @@ def test_the_wire_does_not_promise_an_outcome_it_cannot_compute() -> None:
     """⚠️ THE CLIENT MUST NOT RESURRECT THE PROXY'S `ok`. Classifying a reason
     in Python would be a second copy of `outcomeOf` across a language boundary
     — the exact defect this file was written for."""
-    api = _read(os.path.join(ROOT, "src", "agent", "agentApi.ts"))
+    api = _read(os.path.join(ROOT, "src", "vesta", "supervise", "agentApi.ts"))
     body = api[api.index("export async function runTriageNow"):]
     body = body[:body.index("\n}")]
     assert "d.ok === true" not in body, (

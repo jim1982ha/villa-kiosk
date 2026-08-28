@@ -530,7 +530,9 @@ def _read(relative: str) -> str:
 
 def _component_path(name: str) -> str:
     """Where a modal component lives, by name — the repo has one of each."""
-    for folder in ("reports", "fm", "cockpit", "settings", "panels", "agent"):
+    for folder in ("reports", "fm", "cockpit", "settings", "panels", "agent",
+                   os.path.join("..", "vesta", "supervise", "components"),
+                   os.path.join("..", "vesta", "brief", "components")):
         candidate = os.path.join("src", "components", folder, f"{name}.tsx")
         if os.path.exists(os.path.join(REPO_ROOT, candidate)):
             return candidate
@@ -753,8 +755,9 @@ def test_a_tabbed_dialog_opens_on_the_tab_its_STRIP_shows_first() -> None:
     """
     import re as _re
 
-    for name in ("agent/AgentAdvancedModal.tsx", "agent/AgentModal.tsx",
-                 "reports/ReportsModal.tsx"):
+    for name in ("../vesta/supervise/components/AgentAdvancedModal.tsx",
+                 "../vesta/supervise/components/AgentModal.tsx",
+                 "../vesta/brief/components/ReportsModal.tsx"):
         src = _read(f"src/components/{name}")
         opens = _re.search(r"useState<[A-Za-z]+>\(([^)]*)\)", src)
         assert opens is not None, f"{name} has no tab state to check"

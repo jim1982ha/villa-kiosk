@@ -28,7 +28,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 # the checks that raised them; the bulk action came across to `RecentChecks`
 # with it, because the reason for it is unchanged — a villa left in Flag & Ask
 # still accumulates one waiting flag per check.
-QUEUE = os.path.join(ROOT, "src", "components", "agent", "RecentChecks.tsx")
+QUEUE = os.path.join(ROOT, "src", "vesta", "supervise", "components", "RecentChecks.tsx")
 REASON = os.path.join(ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "reason.py")
 
 

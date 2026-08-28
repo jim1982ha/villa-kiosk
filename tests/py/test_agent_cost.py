@@ -283,7 +283,7 @@ def test_the_ha_tools_copy_states_the_REAL_tool_count() -> None:
     own 10" tools, and `REASON_TOOLS` is what it actually keeps. A list that
     grows to twelve without the sentence moving is the drift this catches.
     """
-    panel = os.path.join(ROOT, "src", "components", "settings",
+    panel = os.path.join(ROOT, "src", "vesta", "supervise", "components",
                          "AgentTuningPanel.tsx")
     with open(panel, "r", encoding="utf-8") as handle:
         src = handle.read()

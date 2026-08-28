@@ -12,7 +12,7 @@ import { Boxes, Home, LogOut, Upload,
          Wrench } from "lucide-react";
 import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
-import { AgentConfigProvider, useAgentConfigDraft } from "@/agent/AgentConfigDraft";
+import { AgentConfigProvider, useAgentConfigDraft } from "@/vesta/supervise/AgentConfigDraft";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";

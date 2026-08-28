@@ -384,7 +384,7 @@ def test_the_sweep_runs_BEFORE_delivery_so_a_recurrence_can_be_carried() -> None
 
 _LIFECYCLE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "src", "components", "agent", "ConcernLifecycle.tsx")
+    "src", "vesta", "supervise", "components", "ConcernLifecycle.tsx")
 
 
 def _tsx() -> str:

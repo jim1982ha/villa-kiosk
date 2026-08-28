@@ -63,7 +63,7 @@ def test_the_LIVE_mode_labels_are_still_the_ones_the_control_offers() -> None:
     """⚠️ THE VACUOUS-PASS GUARD, AND IT IS THE IMPORTANT HALF. If the picker is
     rewritten and this cannot find it, every assertion below compares against an
     empty set and reports health forever."""
-    panel = _sources()["src/components/settings/AgentTuningPanel.tsx"]
+    panel = _sources()["src/vesta/supervise/components/AgentTuningPanel.tsx"]
     live = set(re.findall(r'\{ id: "(?:ask|observe|live)", text: "([^"]+)"', panel))
     assert len(live) == 3, (
         f"found {sorted(live)} — the mode picker moved, so this file can no "

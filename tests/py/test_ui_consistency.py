@@ -104,8 +104,9 @@ def test_long_logs_page_rather_than_capping_silently() -> None:
     """⚠️ A CAP WITH NO AFFORDANCE IS A LIST LYING ABOUT ITS SIZE. TelemetryPanel
     showed the newest ten and told the reader to use Copy or Download "for the
     rest" — a log directing you out of the app to read it."""
-    for name in ("UsagePanel.tsx", "TelemetryPanel.tsx"):
-        src = _read(os.path.join(SRC, "components", "settings", name))
+    for folder, name in ((("vesta", "supervise", "components"), "UsagePanel.tsx"),
+                         (("components", "settings"), "TelemetryPanel.tsx")):
+        src = _read(os.path.join(SRC, *folder, name))
         assert "usePaged(" in src, f"{name} does not use the shared pager"
         assert "<Pager " in src, f"{name} pages but shows no controls"
         assert "VISIBLE_ROWS" not in src and "PAGE_SIZE" not in src, (
@@ -141,7 +142,7 @@ def test_a_flag_with_no_identifiable_check_is_still_RENDERED() -> None:
     simply never rendered, which type-checks perfectly. So the pin asserts the
     RENDER, not the computation.
     """
-    src = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     code = re.sub(r"\{/\*[\s\S]*?\*/\}", "", src)
     code = "\n".join(l for l in code.splitlines()
                       if not l.strip().startswith("//"))
@@ -182,7 +183,7 @@ def test_the_device_list_is_INERT_when_the_master_switch_is_off() -> None:
     the lock too — dimming something a Tab key can still operate is the
     accessible version of a lie.
     """
-    src = _read(os.path.join(SRC, "components", "settings",
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components",
                              "ActuableDevicesPanel.tsx"))
     code = "\n".join(l for l in src.splitlines()
                       if not l.strip().startswith("//"))
@@ -197,7 +198,7 @@ def test_the_device_list_is_INERT_when_the_master_switch_is_off() -> None:
     # its allow-list left the "Act & Tell" TAB for the Settings dialog, because
     # that tab reports and these edit; they moved TOGETHER, which is the thing
     # this test actually guards.
-    caller = _read(os.path.join(SRC, "components", "settings",
+    caller = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                 "AgentActSettings.tsx"))
     assert "locked={c.actEnabled !== true}" in caller, (
         "nothing passes the lock, so the panel is never inert — the helper "
@@ -209,7 +210,7 @@ def test_every_icon_only_concern_button_carries_a_TOOLTIP() -> None:
     only in `aria-label` is readable to a screen reader and to nobody using a
     mouse — which is everybody on the wall tablet. `test_modal_shell` already
     pins this for the footer's exits; the concern row had escaped it."""
-    src = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     buttons = re.findall(r"<button\b[^>]*?>", src, re.S)
     icon_only = [b for b in buttons if "aria-label=" in b]
     assert icon_only, "no labelled buttons found; this test would be vacuous"
@@ -245,7 +246,7 @@ def test_the_shared_controls_all_offer_a_hint() -> None:
     which is how the descriptions grew in the first place."""
     tog = _read(os.path.join(SRC, "components", "common", "ToggleField.tsx"))
     assert "more?" in tog and "InfoHint" in tog
-    panel = _read(os.path.join(SRC, "components", "settings",
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                "AgentTuningPanel.tsx"))
     for fn in ("function Num(", "function Text(", "function Choice<"):
         i = panel.index(fn)
@@ -323,7 +324,7 @@ def test_a_step_header_is_ONE_line_with_the_rest_behind_the_hint() -> None:
     own note — so two-line descriptions became six lines of grey before the
     reader reached a switch. Each is short enough alone and the STACK is the
     defect, which is why this measures the header specifically."""
-    src = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
     longest = max(len(re.sub(r"\s+", " ", m))
                   for m in re.findall(r'what:\s*"([^"]*)"', src))
     assert longest <= 90, (
@@ -380,8 +381,8 @@ def test_the_master_switch_is_in_the_header_and_NOT_duplicated() -> None:
     all spending — `agent_config.trigger_enabled` reads "`enabled` gates all of
     them" — so it belongs where it is visible from every tab. Two controls over
     one key in one dialog is the lost update ActDeliverySection warns about."""
-    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
-    panel = _read(os.path.join(SRC, "components", "settings",
+    modal = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentModal.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                "AgentTuningPanel.tsx"))
     assert "draft.edit({ enabled: on })" in modal, (
         "the header has no master switch")
@@ -392,7 +393,7 @@ def test_the_master_switch_is_in_the_header_and_NOT_duplicated() -> None:
 
 
 def test_the_advanced_opener_is_in_the_footer_so_every_tab_reaches_it() -> None:
-    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    modal = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentModal.tsx"))
     i = modal.index("<ModalFooter")
     # ⚠️ RENAMED IN 2.759.0 WHEN "Settings" MOVED INTO IT. The property is
     # unchanged — the opener lives in the FOOTER so every tier tab reaches it —
@@ -407,7 +408,7 @@ def test_every_blueprint_family_the_villa_reports_has_a_described_ROLE() -> None
     """⚠️ A BLANK CELL READS AS "THIS FAMILY DOES NOTHING". `control` and `vesta`
     were absent from FAMILIES and rendered an empty role beside a real count.
     Same shape as an unlisted severity defaulting to the quietest value."""
-    tiers = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    tiers = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
     block = tiers[tiers.index("export const FAMILIES"):]
     block = block[:block.index("\n};")]
     named = set(re.findall(r"^  (\w+):", block, re.M))
@@ -417,7 +418,7 @@ def test_every_blueprint_family_the_villa_reports_has_a_described_ROLE() -> None
     expected = {"critical", "maintenance", "roi", "audit", "control", "vesta"}
     assert expected <= named, (
         f"families missing a role: {sorted(expected - named)}")
-    reflex = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    reflex = _read(os.path.join(SRC, "vesta", "supervise", "components", "ReflexObserve.tsx"))
     assert 'fam?.role ?? ""' not in reflex, (
         "an unlisted family still renders a blank role rather than saying so")
 
@@ -435,7 +436,7 @@ def test_switching_supervision_off_dims_ONLY_the_tiers_that_stop() -> None:
     for — an owner reading a greyed Observe tab concludes the villa recorded
     nothing while it was off. It recorded everything.
     """
-    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    modal = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentModal.tsx"))
     block = modal[modal.index("INERT_WHEN_OFF"):]
     listed = set(re.findall(r'"(\w+)"', block[:block.index("]")]))
     assert listed == {"triage", "reason", "act"}, (
@@ -460,7 +461,7 @@ def test_switching_supervision_off_dims_ONLY_the_tiers_that_stop() -> None:
 def test_the_header_switch_is_not_a_bare_checkbox() -> None:
     """Reported from the screen: a checkbox with a word beside it read as a form
     field dropped into a title bar. The app already has a header-control idiom."""
-    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    modal = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentModal.tsx"))
     head = modal[modal.index("settings-header-control"):][:1200]
     assert "segmented-icons" in head, "not the app's header-control idiom"
     assert 'type="checkbox"' not in head, "still a raw checkbox"
@@ -511,7 +512,7 @@ def test_a_pass_that_never_RAN_is_not_reported_as_a_quiet_one() -> None:
     it. So the panel must derive the outcome from the REASON and must not render
     the stored verdict.
     """
-    panel = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     assert "export function outcomeOf" in panel, "no derived outcome"
     body = panel[panel.index("export function outcomeOf"):]
     body = body[:body.index("\n}")]
@@ -531,7 +532,7 @@ def test_an_absent_document_size_is_not_read_as_an_empty_document() -> None:
     that as "the assistant was handed nothing to read" would accuse a pass that
     was probably fine, which is the same class of error the field exists to
     report honestly."""
-    panel = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     # ⚠️ THE FACTS ROW THAT PRINTED "? or N char" WENT WITH THE HANDOVER PAGE,
     # but the property it guarded did not: a row whose size is UNKNOWN must not
     # be accused of having run on nothing. `=== 0` is what keeps that true —
@@ -602,7 +603,7 @@ def test_a_field_puts_its_NAME_directly_under_its_CONTROL() -> None:
     which put a paragraph between a field and its own name — the label then read
     as a heading for whatever came next. Reported: "How it should work" floating
     under a sentence about Live mode."""
-    panel = _read(os.path.join(SRC, "components", "settings",
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                "AgentTuningPanel.tsx"))
     # ⚠️ THE WHOLE COMPONENT, not up to the first `\n}` — `Choice` contains
     # nested braces (the options map), so that anchor stopped inside the JSX and
@@ -624,7 +625,7 @@ def test_the_triage_tab_is_never_a_heading_over_nothing() -> None:
     many; on a tab whose entire job is this tier it left a step header over an
     empty pane, which reads as a broken tier. The passes were being recorded the
     whole time and were visible only under Advanced."""
-    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    modal = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentModal.tsx"))
     tab = modal[modal.index('tab === "triage"'):]
     tab = tab[:tab.index("tab === \"reason\"")]
     # ⚠️ THE ELEMENT, WITH ITS BOUNDARY. `"RecentChecks" in tab` is TRUE for
@@ -641,7 +642,7 @@ def test_recent_checks_has_ONE_implementation() -> None:
     ShadowDiffPanel where `test_pass_reason_contract.py` pins them. A second copy
     of "what does `nothing to escalate` mean" is exactly the drift that pin
     exists to stop."""
-    shared = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    shared = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     assert "outcomeOf" in shared and "import" in shared
     # ⚠️ THE SECOND CALL SITE WAS THE HANDOVER TAB, DELETED IN 2.756.0. What is
     # still worth pinning is that the row rendering exists ONCE — a copy would
@@ -680,7 +681,7 @@ def test_the_source_vocabulary_is_explained_AT_THE_CHIP() -> None:
         # project wants kept, and matching it would forbid the file from
         # explaining itself — the same correction `test_buttons` made when it
         # first flagged `deliver.py`'s own header.
-        body = _read(os.path.join(SRC, "components", "agent", name))
+        body = _read(os.path.join(SRC, "vesta", "supervise", "components", name))
         body = re.sub(r"\{/\*[\s\S]*?\*/\}", "", body)
         assert "SourceLegend" not in body, (
             f"{name} renders a legend again — one definition per source, and it "
@@ -707,7 +708,7 @@ def test_a_component_lives_where_it_is_RENDERED() -> None:
     reads as true. This pin is the cheap half — nothing under
     `components/cockpit/` may be imported by the agent surfaces.
     """
-    agent_dir = os.path.join(SRC, "components", "agent")
+    agent_dir = os.path.join(SRC, "vesta", "supervise", "components")
     offenders = []
     for name in sorted(os.listdir(agent_dir)):
         if not name.endswith((".tsx", ".ts")):
@@ -732,7 +733,7 @@ def test_a_tier_fact_ICON_follows_its_VALUE() -> None:
     one fact. So both facts render their PLAIN glyph and `.tier-fact-off` draws
     the diagonal, which is also why the CSS has to exist for this to work at all.
     """
-    tiers = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    tiers = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
     css = _read(os.path.join(SRC, "styles.css"))
     # ⚠️ CODE ONLY, AND THIS IS THE FOURTH TIME IN ONE SESSION THAT A FIRST-CUT
     # PIN MATCHED THE COMMENT RECORDING ITS OWN FIX. The header above `TierIntro`
@@ -759,7 +760,7 @@ def test_the_tier_FACTS_sit_above_the_description() -> None:
     it survives an outage belong with the step number and the name — a reader
     who stops after the first line should still have them. They used to sit
     after a paragraph of prose."""
-    tiers = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    tiers = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
     body = tiers[tiers.index("export function TierIntro"):]
     assert body.index('<dl className="tier-facts">') < body.index("{tier.what}"), (
         "the facts row is below the description again")
@@ -825,9 +826,9 @@ def test_the_actuation_SWITCH_sits_with_the_LIST_it_is_anded_with() -> None:
     # edits — and what this test has always guarded is that they stay on ONE
     # screen, because they are AND-ed and splitting them was the reported
     # defect. The file name was never the property.
-    act = _read(os.path.join(SRC, "components", "settings",
+    act = _read(os.path.join(SRC, "vesta", "supervise", "components",
                              "AgentActSettings.tsx"))
-    tuning = _read(os.path.join(SRC, "components", "settings",
+    tuning = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                 "AgentTuningPanel.tsx"))
     assert "draft.actEnabled" not in tuning, (
         "the actuation switch is edited directly on the tuning panel, away "
@@ -858,7 +859,7 @@ def test_the_concerns_list_says_WHAT_GETS_CHASED() -> None:
     critical_only = _re.search(
         r'if str\(severity\)\.lower\(\) != "critical":\s*\n\s*return Escalation\(False',
         route)
-    concerns = _read(os.path.join(SRC, "components", "agent",
+    concerns = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                   "AgentConcerns.tsx"))
     if critical_only:
         assert "waits for you" in concerns and "Only a critical" in concerns, (
@@ -883,7 +884,7 @@ def test_the_settled_record_survives_an_empty_OPEN_list() -> None:
     reachable from EVERY return path that renders the section, so a future
     early return cannot silently drop the record again.
     """
-    src = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     body = src[src.index("if (rows.length === 0)"):]
     empty_branch = body[:body.index("return (\n    <>")] if "return (\n    <>" in body else body
     assert "<SettledSummary" in empty_branch, (
@@ -905,7 +906,7 @@ def test_recent_checks_reloads_its_flags_when_a_new_check_arrives() -> None:
 
     The effect must therefore depend on something that CHANGES when a new
     check exists, not on the mount alone."""
-    src = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     effect = re.search(r"useEffect\(\(\)\s*=>\s*\{\s*void load\(\);\s*\},\s*"
                         r"\[([^\]]*)\]\)", src)
     assert effect, "the flag-loading effect moved; this pin is blind"
@@ -952,14 +953,14 @@ def test_the_reflex_tab_lists_ONLY_what_acts_by_itself() -> None:
     and `audit`, which is a channel test, have no business on that tab. Listing
     them invited the reader to think this tier still does the villa's detecting.
     Reported as confusing and irrelevant, and it was both."""
-    src = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "ReflexObserve.tsx"))
     code = "\n".join(l for l in src.splitlines()
                       if not l.strip().startswith("//"))
     assert "FAMILIES[cat]?.reflex" in code, (
         "the Reflex tab no longer filters to families that ACT, so retired "
         "detection rules are listed as things that act on their own")
 
-    fam = _read(os.path.join(SRC, "components", "agent", "tiers.tsx"))
+    fam = _read(os.path.join(SRC, "vesta", "supervise", "components", "tiers.tsx"))
     # ⚠️ THE TWO THAT ACT. `critical` closes valves and sounds alarms; `control`
     # turns lights and fans on and off. Everything else only ever reported.
     for name in ("critical", "control"):
@@ -976,7 +977,7 @@ def test_the_observe_tab_reads_the_JOURNAL_not_the_event_collector() -> None:
     the checks read. So a light turning on moved nothing, and the owner asked
     why. The checks read the JOURNAL: every entity polled on the observation
     cycle, every material change written down."""
-    src = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    src = _read(os.path.join(SRC, "vesta", "supervise", "components", "ReflexObserve.tsx"))
     code = "\n".join(l for l in src.splitlines()
                       if not l.strip().startswith("//"))
     head = code[code.index("What the checks read"):]
@@ -1005,7 +1006,7 @@ def test_the_triage_card_and_its_flags_share_ONE_clock() -> None:
     A test asserting the call site would pass the moment somebody added a
     second raw render elsewhere in the file, which is exactly how this arrived.
     """
-    panel = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     # The fallback INSIDE whenOf is the one legitimate raw slice: an
     # unparseable stamp is better shown as itself than as "Invalid Date".
     body = panel[panel.index("const whenOf"):]
@@ -1042,9 +1043,9 @@ def test_no_screen_points_the_reader_at_a_HEADING_that_was_deleted() -> None:
         return "\n".join(l for l in src.splitlines()
                          if not l.lstrip().startswith("//"))
 
-    lifecycle = _read(os.path.join(SRC, "components", "agent",
+    lifecycle = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                    "ConcernLifecycle.tsx"))
-    checks = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    checks = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     # The heading is RENDERED only if it appears outside a comment.
     rendered = re.search(r'settings-section-title">\s*What came of them',
                          without_comments(lifecycle)) is not None
@@ -1062,7 +1063,7 @@ def test_only_ACKNOWLEDGING_takes_a_concern_off_the_wall() -> None:
     it — no other verdict, opinion or count may remove it. Pinned on the
     predicate rather than on the JSX, because the filter is the rule.
     """
-    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     assert "const needsAttention" in panel, (
         "the wall no longer has one predicate for 'is this still asking for "
         "attention', so the rule lives in whichever filter is read next")
@@ -1079,7 +1080,7 @@ def test_an_acknowledged_but_OPEN_concern_is_counted_not_dropped() -> None:
     is deliberately not resolving — `concerns.acknowledge` is emphatic that the
     villa keeps carrying the problem — so taking the card off the wall without
     counting it anywhere would lose it."""
-    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     assert "setSeen(" in panel and "seen.length > 0" in panel, (
         "acknowledged-but-open concerns are dropped from the screen entirely")
 
@@ -1092,7 +1093,7 @@ def test_the_chase_line_matches_the_bands_the_BACKEND_actually_uses() -> None:
     """
     import re as _re
 
-    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                            "route.py"), encoding="utf-8") as handle:
         route = handle.read()
@@ -1113,7 +1114,7 @@ def test_only_a_CRITICAL_shows_a_chase_time() -> None:
     so a countdown on a warning promises a chase that is never coming — the
     exact misreading the "What gets chased" hint had to be written to correct.
     """
-    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     body = panel[panel.index("function chaseLine"):]
     body = body[:body.index("\n}")]
     assert 'severity) !== "critical"' in body and "return null" in body, (
@@ -1138,7 +1139,7 @@ def test_no_card_carries_a_chip_that_can_only_say_ONE_thing() -> None:
     """
     import re as _re
 
-    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     backend = ""
     for name in ("concerns.py", "outbox.py", "runtime.py"):
         with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
@@ -1159,7 +1160,7 @@ def test_an_INFORMATIONAL_concern_can_still_be_cleared_from_the_wall() -> None:
     true of the CHASE and ignored what the press does on screen: since 2.808.0
     acknowledging is the one action that takes a card off the wall. Hiding it
     left informational concerns with no way off it at all."""
-    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     assert "canJudge && c.delivered_at && !c.informational" not in panel, (
         "the acknowledge button is hidden on informational concerns again, so "
         "they can never be cleared from the wall")
@@ -1182,7 +1183,7 @@ def test_a_chased_concern_reports_what_HAPPENED_not_what_might() -> None:
     People table), so it must not try. `escalated_step` is the villa's own
     record of what it DID, and reporting a fact is always true.
     """
-    panel = _read(os.path.join(SRC, "components", "agent", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
     body = panel[panel.index("function chaseLine"):]
     body = body[:body.index("\n}\n")]
     assert "escalated_step" in body, (
@@ -1231,11 +1232,11 @@ def test_the_TO_DO_ITEMS_the_villa_raises_have_a_surface_in_this_APP() -> None:
     websocket command. A surface built from `useHA().entities` alone could only
     ever show a number.
     """
-    jobs = _read(os.path.join(SRC, "components", "agent", "AgentTodo.tsx"))
+    jobs = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentTodo.tsx"))
     assert "fetchTodoItems" in jobs, (
         "the To-Do List tab does not read the to-do list, so it can only show a "
         "count of work it cannot describe")
-    modal = _read(os.path.join(SRC, "components", "agent", "AgentModal.tsx"))
+    modal = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentModal.tsx"))
     assert "<AgentTodo />" in modal, (
         "the To-Do List tab is built and never rendered")
     # ⚠️ NO LONGER A TAB OF ITS OWN (2026-08-28, owner: "merge the content of
@@ -1281,7 +1282,7 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
     # button runs the same one. Pinning only that the button calls `actOnAlert`
     # would go green on an `apply` that had stopped acknowledging — which is
     # `feedback_pin-the-caller` inverted, and just as blind.
-    jobs = _read(os.path.join(SRC, "components", "agent", "AgentTodo.tsx"))
+    jobs = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentTodo.tsx"))
     assert "actOnAlert(" in jobs and '"done"' in jobs, (
         "ticking a job no longer goes through the one place an act is defined, "
         "so the tablet and the phone can drift apart")
@@ -1305,7 +1306,7 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
         "the tick reports one value for 'nothing to tick' and 'the tick was "
         "refused', which are opposite outcomes")
 
-    concerns = _read(os.path.join(SRC, "components", "agent",
+    concerns = _read(os.path.join(SRC, "vesta", "supervise", "components",
                                   "AgentConcerns.tsx"))
     assert "completeTodoItem" not in concerns, (
         "acknowledging on the Reason tab now ticks the job too — seeing an "
@@ -1323,7 +1324,7 @@ def test_the_ACT_tab_reports_its_permissions_rather_than_editing_them() -> None:
     dialog — a guarantee nobody can check is not a guarantee. So the tab still
     states the permissions; it just no longer edits them.
     """
-    act = _read(os.path.join(SRC, "components", "agent",
+    act = _read(os.path.join(SRC, "vesta", "supervise", "components",
                              "ActDeliverySection.tsx"))
     code = re.sub(r"/\*[\s\S]*?\*/", "", act)
     code = "\n".join(l for l in code.splitlines()
@@ -1354,7 +1355,7 @@ def test_a_check_SAYS_when_its_flags_are_still_WAITING() -> None:
     subtracting — a check stopped for a different reason (budget, a provider
     outage) must not be reported as deferred.
     """
-    checks = _read(os.path.join(SRC, "components", "agent", "RecentChecks.tsx"))
+    checks = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
     assert "deferredOf" in checks, (
         "nothing reads how many flags are waiting, so a check can show five "
         "flagged over two cards and explain neither")
@@ -1424,7 +1425,7 @@ def test_the_OBSERVE_banner_reads_the_JOURNAL_not_the_collector() -> None:
     they trust the tiles at all. Fixing a screen means fixing every element that
     answers the same question, not the one that was reported.
     """
-    observe = _read(os.path.join(SRC, "components", "agent", "ReflexObserve.tsx"))
+    observe = _read(os.path.join(SRC, "vesta", "supervise", "components", "ReflexObserve.tsx"))
     tab = observe[observe.index("export function ObserveTab"):]
     body = re.sub(r"/\*[\s\S]*?\*/", "", tab)
     body = "\n".join(l for l in body.splitlines() if not l.strip().startswith("//"))
@@ -1471,7 +1472,7 @@ def test_the_BRIEFINGS_tab_lists_only_families_that_can_STILL_report() -> None:
     blueprint rather than a family at all. Both used to render with a BLANK
     description because the lookup missed.
     """
-    tab = _read(os.path.join(SRC, "components", "reports", "ModulesTab.tsx"))
+    tab = _read(os.path.join(SRC, "vesta", "brief", "components", "ModulesTab.tsx"))
     block = tab[tab.index("const FAMILIES"):]
     block = block[:block.index("\n};")]
     listed = set(re.findall(r"^  ([a-z_]+): ", block, re.M))

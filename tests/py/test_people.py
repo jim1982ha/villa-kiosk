@@ -227,12 +227,12 @@ def test_the_schedules_PROFILE_KEY_crosses_every_boundary_intact() -> None:
         with open(os.path.join(REPO_ROOT, rel), encoding="utf-8") as handle:
             return handle.read()
 
-    types_ts = read("src/reports/reportsTypes.ts")
+    types_ts = read("src/vesta/shared/reportsTypes.ts")
     assert re.search(r"^\s*role\?: Role;", types_ts, re.M), (
         "ReportSchedule lost its `role` field, or renamed it — the backend "
         "still resolves destinations from that exact key")
 
-    api_ts = read("src/reports/reportsApi.ts")
+    api_ts = read("src/vesta/brief/reportsApi.ts")
     assert "s.role" in api_ts, (
         "parseSchedule no longer reads `role` off the stored document, so every "
         "schedule would render as having no profile")

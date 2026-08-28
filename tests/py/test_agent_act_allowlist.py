@@ -209,7 +209,7 @@ def test_the_SPA_no_longer_maps_the_OLD_key() -> None:
     SPA would save a key `validate_config` accepts and the agent never reads,
     and the editor would report success while authorising nothing.
     """
-    path = os.path.join(REPO_ROOT, "src", "agent", "agentApi.ts")
+    path = os.path.join(REPO_ROOT, "src", "vesta", "supervise", "agentApi.ts")
     with open(path, encoding="utf-8") as handle:
         source = handle.read()
     assert "actuable_refs" not in source, (

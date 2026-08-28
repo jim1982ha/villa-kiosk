@@ -32,7 +32,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, os.path.join(REPO, "rootfs", "usr", "bin"))
 
 PROXY = os.path.join(REPO, "rootfs", "usr", "bin", "supervisor-proxy.py")
-CLIENT = os.path.join(REPO, "src", "reports", "reportsApi.ts")
+CLIENT = os.path.join(REPO, "src", "vesta", "brief", "reportsApi.ts")
 
 
 def _read(path: str) -> str:
@@ -100,6 +100,6 @@ def test_the_JOURNAL_S_CLOCK_survives_the_whole_round_trip() -> None:
     assert "last_seen" in heartbeat.snapshot({}), "the backend stopped producing it"
     assert "last_seen" in _journal_keys_sent(), "the proxy stopped sending it"
     assert "last_seen" in _journal_keys_read(), "the client stopped reading it"
-    observe = _read(os.path.join(REPO, "src", "components", "agent",
+    observe = _read(os.path.join(REPO, "src", "vesta", "supervise", "components",
                                  "ReflexObserve.tsx"))
     assert "lastSeen" in observe, "the Observe tab stopped reading it"

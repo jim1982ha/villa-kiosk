@@ -33,7 +33,7 @@ FLAGTYPES = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise"
                          "flagtypes.py")
 PROXY = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
 API_PATH = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "api.py")
-CLIENT = os.path.join(REPO_ROOT, "src", "agent", "agentApi.ts")
+CLIENT = os.path.join(REPO_ROOT, "src", "vesta", "supervise", "agentApi.ts")
 
 
 def _read(path: str) -> str:

@@ -62,11 +62,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { loadBotChats, peopleOf,
-         type AgentConfig, type BotChat, type Person } from "@/agent/agentApi";
-import { useAgentConfigDraft } from "@/agent/AgentConfigDraft";
-import { fetchReportsDiagnostics } from "@/reports/reportsApi";
+         type AgentConfig, type BotChat, type Person } from "@/vesta/supervise/agentApi";
+import { useAgentConfigDraft } from "@/vesta/supervise/AgentConfigDraft";
+import { fetchReportsDiagnostics } from "@/vesta/brief/reportsApi";
 import DestinationList, { RecipientButton,
-                          type DiscoveredTarget } from "@/components/reports/DestinationList";
+                          type DiscoveredTarget } from "@/vesta/brief/components/DestinationList";
 import { ROLE_LABELS, ROLE_ORDER, type Role } from "@/auth/roles";
 import Loading from "@/components/common/Loading";
 

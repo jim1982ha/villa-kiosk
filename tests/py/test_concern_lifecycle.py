@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from vesta.supervise.agent import contracts
 
-COPY = os.path.join(REPO_ROOT, "src", "components", "agent",
+COPY = os.path.join(REPO_ROOT, "src", "vesta", "supervise", "components",
                     "ConcernLifecycle.tsx")
 
 

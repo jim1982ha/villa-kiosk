@@ -229,7 +229,7 @@ def test_the_anchors_still_find_something() -> None:
 
 # ── the keys INSIDE the envelope ────────────────────────────────────────────
 
-REPORTS_API = os.path.join(SRC, "reports", "reportsApi.ts")
+REPORTS_API = os.path.join(SRC, "vesta", "brief", "reportsApi.ts")
 
 #: The client's `wire: "clientName"` table. One place, used by both the parse
 #: and the serialise, so the two directions cannot drift from each other — the
@@ -312,7 +312,7 @@ def test_the_agent_config_client_sends_a_WHOLE_DOCUMENT() -> None:
     import inspect
     import os
 
-    path = os.path.join(SRC, "agent", "agentApi.ts")
+    path = os.path.join(SRC, "vesta", "supervise", "agentApi.ts")
     with open(path, encoding="utf-8") as handle:
         source = _no_comments(handle.read())
     assert "carryOver: Record<string, unknown>" in source, (
@@ -524,7 +524,7 @@ def test_the_agent_wire_map_covers_every_setting() -> None:
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
     from vesta.supervise.agent import config as agent_config
 
-    with open(os.path.join(SRC, "agent", "agentApi.ts"),
+    with open(os.path.join(SRC, "vesta", "supervise", "agentApi.ts"),
               encoding="utf-8") as handle:
         src = handle.read()
     block = src[src.index("AGENT_WIRE_KEYS = {"):]

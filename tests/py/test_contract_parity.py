@@ -1,6 +1,6 @@
 """The Python↔TypeScript contract must not drift.
 
-`reports/contracts.py` is the source of truth and `src/reports/reportsTypes.ts`
+`reports/contracts.py` is the source of truth and `src/vesta/shared/reportsTypes.ts`
 mirrors it. Nothing in either language can enforce that: TypeScript types are
 erased before runtime, and Python never sees the `.ts` file at all. So the
 check is textual, and it runs in CI.
@@ -31,8 +31,8 @@ from vesta.supervise.agent.contracts import CONTRACT_SETS as AGENT_SETS
 from vesta.supervise.agent.contracts import CONTRACT_VERSION as AGENT_VERSION
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TS_PATH = os.path.join(REPO_ROOT, "src", "reports", "reportsTypes.ts")
-AGENT_TS_PATH = os.path.join(REPO_ROOT, "src", "agent", "agentTypes.ts")
+TS_PATH = os.path.join(REPO_ROOT, "src", "vesta", "shared", "reportsTypes.ts")
+AGENT_TS_PATH = os.path.join(REPO_ROOT, "src", "vesta", "shared", "agentTypes.ts")
 
 
 def _ts_source() -> str:
@@ -171,7 +171,7 @@ def test_parser_actually_reads_values() -> None:
 # ── the agent's own contract, same rules ───────────────────────────────────
 #
 # ⚠️ A SECOND PAIR, NOT A SECOND MECHANISM. `agent/contracts.py` mirrors
-# `src/agent/agentTypes.ts` under exactly the rules above, and reuses this
+# `src/vesta/shared/agentTypes.ts` under exactly the rules above, and reuses this
 # module's parser — a second regex would be a second thing to break, and the
 # one that broke would pass vacuously.
 #
@@ -335,7 +335,7 @@ def test_no_module_hand_writes_a_severity_ORDER_map() -> None:
     # failure this whole file exists to prevent: a test reaching for a name
     # from a sibling because both files look alike.
     src_root = os.path.join(REPO_ROOT, "src")
-    for rel in ("components/agent/AgentConcerns.tsx",):
+    for rel in ("vesta/supervise/components/AgentConcerns.tsx",):
         with open(os.path.join(src_root, rel), encoding="utf-8") as handle:
             body = re.sub(r"//[^\n]*", "", handle.read())
         if re.search(r"critical\s*:\s*0", body):

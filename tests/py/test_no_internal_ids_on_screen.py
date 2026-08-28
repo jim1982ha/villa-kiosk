@@ -107,7 +107,7 @@ def test_the_SPA_strips_the_bracket_before_showing_a_to_do_row() -> None:
     """⚠️ THE ONE PLACE THE ID LEGITIMATELY ARRIVES. `task.summary_for` writes
     `[c7] Pool pump…` because `ledger.TASK_PREFIX` is the join, so every reader
     of a to-do item receives the bracket and must remove it before drawing."""
-    todo = _tsx()["src/components/agent/AgentTodo.tsx"]
+    todo = _tsx()["src/vesta/supervise/components/AgentTodo.tsx"]
     assert re.search(r"replace\(/\^\\s\*\\\[\[\^\\\]\]\*\\\]\\s\*/", todo) or \
         "\\[[^\\]]*\\]" in todo, (
         "the To-Do List draws the stored summary verbatim, so every row shows "
@@ -139,7 +139,7 @@ def test_the_TAB_a_message_points_at_is_one_that_EXISTS() -> None:
     named = set(re.findall(r"under ([A-Z][A-Za-z& -]+?) in VESTA", body))
     assert named, "the digest no longer says where to act"
 
-    modal = _tsx()["src/components/agent/AgentModal.tsx"]
+    modal = _tsx()["src/vesta/supervise/components/AgentModal.tsx"]
     labels = set(re.findall(r'label: "([^"]+)"', modal))
     missing = {n.strip() for n in named} - labels
     assert not missing, (
@@ -159,11 +159,11 @@ def test_the_TUNING_PANEL_can_SEE_why_it_is_empty() -> None:
     ⚠️ THE FIELD IS THE FIX, NOT THE SENTENCE. Rewording alone would have left
     the screen unable to distinguish them, so the next reword would guess too.
     """
-    types = _tsx()["src/agent/agentTypes.ts"]
+    types = _tsx()["src/vesta/shared/agentTypes.ts"]
     assert re.search(r"^  flag_type\?: string;$", types, re.M), (
         "`flag_type` is not mirrored, so no screen can explain why judging an "
         "alert taught the villa nothing")
-    panel = _tsx()["src/components/settings/FlagTypesPanel.tsx"]
+    panel = _tsx()["src/vesta/supervise/components/FlagTypesPanel.tsx"]
     assert "flag_type" in panel, (
         "the tuning panel no longer reads the kind, so its empty state is "
         "guessing at its own cause again")
@@ -180,9 +180,9 @@ def test_the_RETIRED_tab_is_gone_rather_than_emptied() -> None:
     under a "Safety reflex" chip. A tab whose source is gone must go with it.
     """
     assert not os.path.exists(
-        os.path.join(SRC, "components", "reports", "TasksTab.tsx")), \
+        os.path.join(SRC, "vesta", "brief", "components", "TasksTab.tsx")), \
         "the retired tab's component is back"
-    reports = _tsx()["src/components/reports/ReportsModal.tsx"]
+    reports = _tsx()["src/vesta/brief/components/ReportsModal.tsx"]
     assert "What it asked for" not in _strip_comments(reports), \
         "the retired tab is registered again"
 
