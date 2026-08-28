@@ -1,3 +1,16 @@
+## 2.868.0
+
+### Fixed — a preview stood down the three checks it should have run, and the screen said so
+
+Reported from the tablet: the built-in checks read as superseded while
+supervision was on. They were — but only in the preview. `run_report` takes the
+supervision switch as its own parameter defaulting to off; the scheduler passed
+it and the owner-only "run now / preview" endpoint never did, so every preview
+AND every manual send dropped the three checks that stand down for an
+automation, while the scheduled brief kept them. A valid default is why nothing
+raised. The tab now greys whichever layer is not detecting — the automations
+while supervision is on, a superseded check while it is off — and says which.
+
 ## 2.867.0
 
 ### Changed — comments only: four stale counts and a keyboard docstring that described a layout it no longer draws
