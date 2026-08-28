@@ -1,3 +1,15 @@
+## 2.833.0
+
+### Fixed — a reference like "c7" on screen, and a tab listing the same work twice
+"What it asked for" under Briefings showed to-do items as though the villa's
+automations had raised them. The automations that did were switched off weeks
+ago, so every row it could still show came from the assistant — already listed,
+correctly, under Act & Tell — printed with its internal reference beside it and
+duplicated once per to-do list. The tab is gone and that reference is gone from
+the daily message too; nothing a person reads carries one now, and a test
+refuses any that tries. To-Do List is no longer its own tab: it sits under Act
+& Tell, beneath the rules it is produced under, with two paragraphs merged.
+
 ## 2.832.0
 
 ### Changed — one place to write a request, one place to say "Loading"
