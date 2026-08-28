@@ -1,3 +1,16 @@
+## 2.872.0
+
+### Fixed — "you can switch it off" promised more than the switch reaches
+
+Yesterday's rename said a check is run by VESTA in every briefing and by the
+agent when it investigates, then that you can switch it off. Both halves are
+true and the join is not: the toggle gates what a briefing is built from, while
+the agent's analysis tool builds its own context and never consults that gate —
+deliberately, because a check reached that way was asked for by name about a
+specific question. So a concern could arrive from a check the owner believed was
+off, with the screen that said so still on the tablet. The wording now names
+what the switch reaches, on the chip and on the row.
+
 ## 2.871.0
 
 ### Changed — the checks are named for whose they are, not where the code shipped from

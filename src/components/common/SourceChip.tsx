@@ -87,9 +87,17 @@ export const SOURCES: Record<Source, SourceSpec> = {
     // legacy layer is the `maintenance_*`/`roi_*` automations that were
     // RETIRED; these are what replaced them and what runs today.
     label: "VESTA check",
-    hint: "A fixed calculation over weeks of this villa's own history, run by "
-      + "VESTA itself in every briefing — and by the agent when it "
-      + "investigates. It always works the same way, and you can switch it off.",
+    // ⚠️ THE SWITCH GOVERNS BRIEFINGS, NOT THE AGENT, AND SAYING SO IS THE
+    // WHOLE POINT OF THIS SENTENCE (2026-08-29). An earlier draft of this hint
+    // ran "…run by VESTA in every briefing — and by the agent when it
+    // investigates. …you can switch it off", which a reader takes as covering
+    // both. It does not: `agent/tools/analysis.py` builds its context with
+    // `settings={}` and never consults `registry.gate`, deliberately — a check
+    // reached through the tool was ASKED FOR, by name, about a specific
+    // question. Two true halves and a false join.
+    hint: "A fixed calculation over weeks of this villa's own history. It "
+      + "always works the same way. Switching it off keeps it out of "
+      + "briefings; the agent can still run it when investigating something.",
     tone: "check",
   },
   triage: {

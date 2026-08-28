@@ -172,7 +172,8 @@ export default function ModulesTab({
         What this property is watched by, and what a brief can be built from.
         VESTA runs the checks below itself — in every briefing, and again when
         the agent investigates something. While supervision is on they all run;
-        switch it off and the automations you built take the job back.
+        switch it off and the automations you built take the job back. The
+        toggles here decide what a briefing is built from.
       </p>
 
       {/* ── 1. Is anything listening? ───────────────────────────────────── */}
@@ -377,7 +378,15 @@ export default function ModulesTab({
             )}
             {!on && missing.length === 0 && (
               <p className="reports-item muted">
-                <span>Switched off. The brief will say so rather than omit it.</span>
+                {/* ⚠️ NAMES WHAT THE SWITCH ACTUALLY REACHES. It gates the
+                    BRIEFING gate only; the agent's analysis tool bypasses it
+                    on purpose, so "switched off" on its own reads as "this
+                    never runs" and would be wrong the first time a concern
+                    came from a check the owner had switched off. */}
+                <span>
+                  Switched off — the brief will say so rather than omit it. The
+                  agent can still run this check when it investigates something.
+                </span>
               </p>
             )}
             {reason && (
