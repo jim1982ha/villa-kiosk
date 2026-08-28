@@ -1,3 +1,15 @@
+## 2.863.0
+
+### Changed — alerts are formatted, and VESTA is a real link at last
+An alert now ends "Rate this alert in VESTA" with VESTA tappable and the address
+hidden, because those messages are sent through the service that lets the add-on
+choose how they are read — so it works the same on every villa rather than
+depending on a setting. Three probes decided the format: the same message in
+Markdown failed to send at all, since real device names and the villa's own
+address contain underscores that Markdown treats as italics; in HTML everything
+rendered and the names stayed intact. Briefings keep the plain address, because
+their delivery service offers no such choice.
+
 ## 2.862.0
 
 ### Changed — every notification links to VESTA the same way
