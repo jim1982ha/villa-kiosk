@@ -1,3 +1,15 @@
+## 2.852.0
+
+### Changed — an alert now says it is on the To-Do List, and the thumbs say what they are
+Nothing anywhere mentioned that every delivered alert puts a job on the list, so
+an item appeared with nothing connecting it to the alert and its arrival was
+read as something the buttons had done. The alert now says so itself — only
+where a list is configured, and never on an alert-only notice, because neither
+has a job. The two thumbs, until now bare glyphs sitting beside "Done" and "Add
+to the To-Do List", were taken for a third thing that files something; they read
+"Useful" and "Not useful" on both screens and change no list. On the tablet they
+said this only in a hover tooltip, which a finger can never see.
+
 ## 2.851.0
 
 ### Fixed — pressing one button on the phone removed all the others
