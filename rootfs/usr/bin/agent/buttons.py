@@ -52,6 +52,25 @@ from reports.log import log, stage, swallow, warn
 EVENT_TYPE: str = "telegram_callback"
 
 #: The services this needs, and the one place their names appear.
+#:
+#: ⚠️ ALL THREE SCHEMAS WERE READ OFF THE RUNNING INSTANCE ON 2026-08-28, NOT
+#: ASSUMED, because `feedback_guessed-field-shapes` is what happens otherwise —
+#: the field NAME right and the TYPE or the requiredness wrong, hidden for the
+#: life of the feature by a degrade-never-fail wrapper. What was confirmed:
+#:
+#:   send_message              entity_id, title, message, inline_keyboard
+#:                             (`object`; its own example is exactly the nested
+#:                             `[[[label, data], …], …]` form built below)
+#:   edit_message              message_id REQUIRED, entity_id, message, and an
+#:                             OPTIONAL inline_keyboard — omitting it is what
+#:                             removes the buttons
+#:   answer_callback_query     callback_query_id, message AND show_alert all
+#:                             REQUIRED, and it takes NO entity_id at all
+#:
+#: ⚠️ THAT LAST ONE IS THE TRAP. Every other service here is addressed by
+#: entity; this one is addressed by the query id alone, so passing an entity is
+#: a 400 and forgetting `show_alert` is another. A press left unanswered spins
+#: until Telegram times out.
 SEND_SERVICE: Tuple[str, str] = ("telegram_bot", "send_message")
 ANSWER_SERVICE: Tuple[str, str] = ("telegram_bot", "answer_callback_query")
 EDIT_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_message")
@@ -76,7 +95,10 @@ PREFIX: str = "v"
 #: trip in front of every alert.
 REGISTRY_TTL_S: float = 300.0
 
-_ENTITIES: Dict[str, Any] = {"ids": frozenset(), "at": 0.0}
+#: The resolved set and when it was read. ⚠️ A LIST OF ONE TUPLE rather than two
+#: module globals, so the pair can only ever be replaced together — a set
+#: refreshed without its timestamp is a cache that never expires again.
+_ENTITIES: List[Tuple["frozenset[str]", float]] = [(frozenset(), 0.0)]
 
 
 @dataclass(frozen=True)
@@ -150,7 +172,7 @@ def keyboard_for(concern: Mapping[str, Any],
 
 # ── which targets can carry a button ────────────────────────────────────────
 async def telegram_entities(session: Any, *,
-                            now: Optional[float] = None) -> frozenset:
+                            now: Optional[float] = None) -> "frozenset[str]":
     """Every notify entity on this platform. Cached; `frozenset()` on failure.
 
     ⚠️ EMPTY ON FAILURE IS THE SAFE DIRECTION. It means "no target can carry
@@ -159,8 +181,9 @@ async def telegram_entities(session: Any, *,
     `inline_keyboard` to a service that does not take one and lose the alert.
     """
     at = time.time() if now is None else now
-    if _ENTITIES["ids"] and (at - float(_ENTITIES["at"])) < REGISTRY_TTL_S:
-        return _ENTITIES["ids"]  # type: ignore[return-value]
+    cached, read_at = _ENTITIES[0]
+    if cached and (at - read_at) < REGISTRY_TTL_S:
+        return cached
     try:
         from reports.hass import HassClient
         async with HassClient(session) as hass:
@@ -171,13 +194,13 @@ async def telegram_entities(session: Any, *,
     ids = frozenset(
         str(e.get("entity_id") or "") for e in entries if isinstance(e, Mapping)
         and str(e.get("platform") or "") == PLATFORM and e.get("entity_id"))
-    _ENTITIES["ids"], _ENTITIES["at"] = ids, at
+    _ENTITIES[0] = (ids, at)
     return ids
 
 
 def forget_entities() -> None:
     """Drop the cached registry. For tests, and for a registry that changed."""
-    _ENTITIES["ids"], _ENTITIES["at"] = frozenset(), 0.0
+    _ENTITIES[0] = (frozenset(), 0.0)
 
 
 def _bare(target: str) -> str:
@@ -252,10 +275,18 @@ async def _send_one(session: Any, entity_id: str, title: str, body: str,
         return None
 
     # ⚠️ THE SHAPE IS `{chats: [{chat_id, message_id, entity_id}]}` — VERIFIED
-    # against this Home Assistant when the retired blueprint was written, not
-    # assumed. Read defensively anyway: a service response is somebody else's
-    # data structure and `feedback_guessed-field-shapes` is what happens when
-    # one is trusted whole.
+    # against this Home Assistant when the retired blueprint was written, and
+    # not merely from a schema: that blueprint's live run captured a real
+    # message id and then edited that exact message. Read defensively anyway, a
+    # service response is somebody else's data structure.
+    #
+    # ⚠️ `return_response` IS THE ONE THING HERE NOT PROVEN ON HARDWARE. Home
+    # Assistant refuses it for a service that does not declare a response, and
+    # the blueprint's `response_variable` is the YAML spelling of the same
+    # request — so the service does declare one. If that is ever wrong the
+    # command raises, this returns None, and `outbox` sends the alert down the
+    # plain path: the owner is still told, without buttons. The failure mode was
+    # chosen before the call was written.
     response = result.get("response") if isinstance(result, Mapping) else None
     chats = response.get("chats") if isinstance(response, Mapping) else None
     first = chats[0] if isinstance(chats, list) and chats else None

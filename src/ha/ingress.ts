@@ -43,3 +43,41 @@ export function ingressApiBase(): string {
 export function ingressPath(rel: string): string {
   return `${ingressBasePath()}${rel.replace(/^\/+/, "")}`;
 }
+
+/**
+ * A JSON write to one of this add-on's own endpoints. Returns the raw
+ * `Response` — parsing is the caller's, because response handling genuinely
+ * varies (`r.ok`, a typed body, a 409 revision conflict) and a helper that
+ * parsed would need a shape argument per call site.
+ *
+ * ⚠️ IT EXISTS BECAUSE THE THREE-LINE PREAMBLE HAD BEEN COPIED NINETEEN TIMES
+ * (found by /dry-audit, 2026-08-28) and one copy was missing a line. Two of
+ * those three lines are inert boilerplate; `credentials` is not. Every endpoint
+ * here is behind the Ingress session cookie, so a call without it is a 401 —
+ * and the site that had dropped it was `auth/verify`, the one that establishes
+ * the session in the first place. It works, because same-origin is `fetch`'s
+ * default, which is exactly the kind of fact a reader should not have to know.
+ * A caller now gets the rule by CALLING rather than by remembering.
+ *
+ * ⚠️ THREE SITES DELIBERATELY DO NOT USE THIS, and each was read before being
+ * left alone: the logout beacon in `ProfileContext` needs `credentials:
+ * "include"` and `keepalive`, `telemetry` needs `keepalive` so a report
+ * survives the page it is describing, and `storage` passes an `AbortSignal`.
+ * `init` is spread last so any of them COULD adopt it; none has to.
+ */
+export function postJson(rel: string, body: unknown,
+                         init: RequestInit = {}): Promise<Response> {
+  return fetch(ingressPath(rel), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    ...init,
+  });
+}
+
+/** The same, for an endpoint whose verb is PUT. See `postJson`. */
+export function putJson(rel: string, body: unknown,
+                        init: RequestInit = {}): Promise<Response> {
+  return postJson(rel, body, { method: "PUT", ...init });
+}

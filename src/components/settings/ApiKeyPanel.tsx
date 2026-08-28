@@ -25,9 +25,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { KeyRound, Loader2 } from "lucide-react";
+import { KeyRound } from "lucide-react";
 
 import { fetchNarrationSecrets, saveNarrationSecret } from "@/reports/reportsApi";
+import Loading from "@/components/common/Loading";
 
 /** ⚠️ THE PROVIDER LIST COMES FROM THE SERVER, keyed by `providers.ADAPTERS` —
  *  `/reports-secret` returns one entry per adapter, so the SPA never keeps its
@@ -61,9 +62,7 @@ export default function ApiKeyPanel() {
 
   if (configured === null) {
     return (
-      <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Loading…
-      </p>
+      <Loading />
     );
   }
 

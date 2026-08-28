@@ -225,7 +225,7 @@ CHAT_EVENT_TYPES = ("telegram_text", "telegram_callback")
 
 
 def _with_chat(types: Sequence[str]) -> List[str]:
-    """The derived list plus the chat event, without duplicating it."""
+    """The derived list plus the chat events, without duplicating any."""
     out = list(types)
     for name in CHAT_EVENT_TYPES:
         if name not in out:
@@ -502,9 +502,10 @@ class Collector:
         producer was retired with the blueprint cutover — the critical_*
         reflexes and the channel-test canary stopped emitting on the same day,
         verified by reading the live blueprints back — so a derived event list
-        is a list of names nothing fires. What remains on this socket is the
-        chat event, which was never derived from anything (see
-        CHAT_EVENT_TYPES), plus whatever a caller passes explicitly.
+        is a list of names nothing fires. What remains on this socket are the
+        CHAT events — a typed message and a button press — which were never
+        derived from anything (see CHAT_EVENT_TYPES), plus whatever a caller
+        passes explicitly.
         `discover_event_types` survives for discovery's blueprint inventory;
         the SUBSCRIPTION no longer consults it."""
         async with HassClient(self._session) as hass:

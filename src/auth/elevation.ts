@@ -10,7 +10,7 @@
 // that removes a Facility Manager record without a fresh token, whatever the
 // client believes. This module only carries the token; it grants nothing.
 
-import { ingressPath } from "@/ha/ingress";
+import { postJson } from "@/ha/ingress";
 
 export type ElevationResult =
   | { ok: true; token: string }
@@ -19,12 +19,7 @@ export type ElevationResult =
 /** Exchange the 6-digit code for one single-use token. */
 export async function requestElevation(pin: string): Promise<ElevationResult> {
   try {
-    const r = await fetch(ingressPath("auth/elevate"), {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
-    });
+    const r = await postJson("auth/elevate", { pin });
     if (r.ok) {
       const d = (await r.json()) as { token?: unknown };
       return typeof d.token === "string" && d.token

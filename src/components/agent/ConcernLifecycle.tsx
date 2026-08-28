@@ -114,7 +114,7 @@ export const SUPPRESS_AFTER = 3;
 /** Where a concern is in its life, as a chip.
  *
  *  ⚠️ NOTHING RENDERS THIS TODAY, AND THAT IS A RECORDED DECISION RATHER THAN
- *  DEAD CODE. `AgentConcerns` dropped it on 2026-08-27 at the owner's
+ *  DEAD CODE. (dry-audit:ok) `AgentConcerns` dropped it on 2026-08-27 at the owner's
  *  instruction because it could only ever say one thing: the wall lists LIVE
  *  concerns, nothing in the backend has ever written `acted`, so every card
  *  read "Nothing done yet" whatever anybody did. The moment a transition to

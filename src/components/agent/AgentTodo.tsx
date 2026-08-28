@@ -38,6 +38,7 @@ import type { Concern } from "@/agent/agentTypes";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import { useHA } from "@/ha/HAStateStore";
+import Loading from "@/components/common/Loading";
 import { completeTodoItem, fetchTodoItems, referenceOf,
          type TodoItem } from "@/ha/HATodoAPI";
 
@@ -129,9 +130,7 @@ export default function AgentTodo() {
 
   if (items === null) {
     return (
-      <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Loading…
-      </p>
+      <Loading />
     );
   }
 

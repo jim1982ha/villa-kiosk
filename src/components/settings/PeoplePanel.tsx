@@ -59,7 +59,7 @@
 
 import ToggleField from "@/components/common/ToggleField";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { loadBotChats, peopleOf,
          type AgentConfig, type BotChat, type Person } from "@/agent/agentApi";
@@ -68,6 +68,7 @@ import { fetchReportsDiagnostics } from "@/reports/reportsApi";
 import DestinationList, { RecipientButton,
                           type DiscoveredTarget } from "@/components/reports/DestinationList";
 import { ROLE_LABELS, ROLE_ORDER, type Role } from "@/auth/roles";
+import Loading from "@/components/common/Loading";
 
 /** ⚠️ Keyed `channel:id` in the legacy map, because a Telegram user id and a
  *  future WhatsApp id are integers from different namespaces and would
@@ -193,9 +194,7 @@ export default function PeoplePanel() {
 
   if (loading) {
     return (
-      <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Loading…
-      </p>
+      <Loading />
     );
   }
 

@@ -18,7 +18,7 @@
  * directions.
  */
 
-import { ingressPath } from "@/ha/ingress";
+import { ingressPath, postJson, putJson } from "@/ha/ingress";
 import type { Concern } from "@/agent/agentTypes";
 import { ROLE_ORDER, type Role } from "@/auth/roles";
 
@@ -325,14 +325,9 @@ export async function saveAgentConfig(
   carryOver: Record<string, unknown>,
   rev: string | null,
 ): Promise<boolean> {
-  const r = await fetch(ingressPath("agent-config"), {
-    method: "PUT",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const r = await putJson("agent-config", {
       config: { ...carryOver, ...toWire(patch) },
       ...(rev === null ? {} : { rev }),
-    }),
   });
   return r.ok;
 }
@@ -374,12 +369,7 @@ export async function loadBotChats(): Promise<BotChat[]> {
 export async function sendConcernFeedback(
   id: string, useful: boolean, reason = "",
 ): Promise<boolean> {
-  const r = await fetch(ingressPath("agent-feedback"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, useful, reason }),
-  });
+  const r = await postJson("agent-feedback", { id, useful, reason });
   return r.ok;
 }
 
@@ -396,12 +386,7 @@ export async function sendConcernFeedback(
  * client-supplied name would let anyone stop an escalation on someone's behalf.
  */
 export async function acknowledgeConcern(id: string): Promise<boolean> {
-  const r = await fetch(ingressPath("agent-acknowledge"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id }),
-  });
+  const r = await postJson("agent-acknowledge", { id });
   return r.ok;
 }
 
@@ -424,12 +409,7 @@ export async function acknowledgeConcern(id: string): Promise<boolean> {
  */
 export async function actOnAlert(id: string, action: string,
                                  reason = ""): Promise<{ ok: boolean; note: string }> {
-  const r = await fetch(ingressPath("agent-action"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, action, reason }),
-  });
+  const r = await postJson("agent-action", { id, action, reason });
   const body = await r.json().catch(() => ({}));
   return { ok: r.ok, note: String(body?.note ?? body?.error ?? "") };
 }
@@ -481,12 +461,7 @@ export async function decideReviewDraft(
   slug: string, decision: "approve" | "discard",
   extra: { body?: string; reason?: string } = {},
 ): Promise<boolean> {
-  const r = await fetch(ingressPath("agent-review"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ slug, decision, ...extra }),
-  });
+  const r = await postJson("agent-review", { slug, decision, ...extra });
   return r.ok;
 }
 
@@ -542,12 +517,7 @@ export async function loadProposals(): Promise<Proposal[]> {
 export async function decideProposal(
   actionKey: string, decision: "confirm" | "decline",
 ): Promise<{ ok: boolean; error: string }> {
-  const r = await fetch(ingressPath("agent-confirm"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ actionKey, decision }),
-  });
+  const r = await postJson("agent-confirm", { actionKey, decision });
   if (r.ok) return { ok: true, error: "" };
   const d = (await r.json().catch(() => ({}))) as { error?: string };
   return { ok: false, error: d.error || `HTTP ${r.status}` };
@@ -648,12 +618,7 @@ const numOr = (v: unknown): number | undefined => {
  * This spends real budget.
  */
 export async function runTriageNow(): Promise<{ ok: boolean; reason: string }> {
-  const r = await fetch(ingressPath("agent-run-now"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ triage: true }),
-  });
+  const r = await postJson("agent-run-now", { triage: true });
   const d = (await r.json().catch(() => ({}))) as
     { ok?: boolean; reason?: string; status?: string };
   // ⚠️ `ok` HERE MEANS "THE PASS RAN", NOT "THE PASS FOUND NOTHING WRONG", and
@@ -831,12 +796,7 @@ export async function decideEscalation(
   // exactly that: "I see a turning icon but nothing happens after this."
   let r: Response;
   try {
-    r = await fetch(ingressPath("agent-queue"), {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ runId, action }),
-    });
+    r = await postJson("agent-queue", { runId, action });
   } catch {
     // ⚠️ AND THE INVESTIGATION MAY WELL BE RUNNING. Losing the reply is not
     // losing the work, so this must not read as "it did not happen" — the
@@ -901,12 +861,7 @@ export async function loadMemories(): Promise<VillaMemory[]> {
 export async function correctMemory(
   subjectKey: string, text: string,
 ): Promise<{ ok: boolean; reason: string }> {
-  const r = await fetch(ingressPath("agent-memory"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ subjectKey, text }),
-  });
+  const r = await postJson("agent-memory", { subjectKey, text });
   const d = (await r.json().catch(() => ({}))) as
     { ok?: boolean; reason?: string };
   if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
@@ -1036,12 +991,7 @@ export async function tuneFlagTypes(
       | { action: "clear" }
       | { action: "import"; document: unknown },
 ): Promise<{ ok: boolean; reason: string; types: FlagTypeWeight[] }> {
-  const r = await fetch(ingressPath("agent-flag-types"), {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const r = await postJson("agent-flag-types", body);
   const d = (await r.json().catch(() => ({}))) as
     { ok?: boolean; error?: string; types?: unknown };
   if (!r.ok) return { ok: false, reason: d.error || `HTTP ${r.status}`, types: [] };

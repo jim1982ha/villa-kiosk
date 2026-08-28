@@ -130,6 +130,11 @@ export function report(kind: TelemetryKind, data: Record<string, unknown> = {}):
   } catch { /* fall through to fetch */ }
   // keepalive gives fetch the same survive-teardown property where beacon
   // isn't available or refused the payload.
+  // ⚠️ NOT `postJson` (/dry-audit, 2026-08-28), and for a reason that is not
+  // the keepalive: `body` here is ALREADY a JSON string — the same one handed
+  // to sendBeacon above — and the helper stringifies what it is given, so
+  // routing this through it would double-encode every telemetry row into a
+  // quoted blob. The preamble is identical and the payload is not.
   fetch(url, {
     method: "POST",
     credentials: "same-origin",

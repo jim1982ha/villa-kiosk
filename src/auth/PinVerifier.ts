@@ -8,7 +8,7 @@
 // that cookie, not this client-side UI, is what actually authorizes /core and
 // /model on the directly-exposed port.
 
-import { ingressPath } from "@/ha/ingress";
+import { ingressPath, postJson } from "@/ha/ingress";
 import { ROLE_ORDER, isRole, type Role } from "./roles";
 
 export interface VerifyResult {
@@ -64,11 +64,7 @@ export async function openSession(role: Role): Promise<VerifyResult> {
 }
 
 async function postVerify(body: { role: Role; pin?: string }): Promise<VerifyResult> {
-  const resp = await fetch(ingressPath("auth/verify"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const resp = await postJson("auth/verify", body);
   if (resp.status === 429) {
     const data = (await resp.json().catch(() => ({}))) as { retryAfter?: number };
     return { ok: false, retryAfter: data.retryAfter ?? 60 };

@@ -29,12 +29,13 @@
 // actions that let somebody in or silence an alarm.
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, ShieldAlert, X } from "lucide-react";
+import { Check, ShieldAlert, X } from "lucide-react";
 import SourceChip from "@/components/common/SourceChip";
 
 import { decideProposal, loadProposals, type Proposal } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
+import Loading from "@/components/common/Loading";
 
 /** How often the countdown re-renders. ⚠️ ONE SECOND, and the list is re-read
  *  far less often: the clock is local arithmetic and the queue is a fetch. */
@@ -90,9 +91,7 @@ export default function AgentProposals() {
 
   if (rows === null) {
     return (
-      <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Loading…
-      </p>
+      <Loading />
     );
   }
 

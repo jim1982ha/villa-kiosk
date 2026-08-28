@@ -91,7 +91,18 @@ def _fetched_paths() -> Set[str]:
             # Assistant THROUGH the proxy and hard-code `core/api` and
             # `core/websocket` inside `ingress.ts`. A scan that knew only the
             # first indicted the two busiest routes in the app.
-            for m in re.finditer(r'ingressPath\(\s*[`"\']([^`"\'?]+)', src):
+            # ⚠️ THREE BUILDERS SINCE 2026-08-28, AND MISSING THE THIRD MADE
+            # THIS TEST REPORT TEN LIVE ROUTES AS ORPHANS. /dry-audit converged
+            # nineteen copies of the JSON-write preamble onto `postJson` /
+            # `putJson`, which call `ingressPath` INTERNALLY — so every write in
+            # the app stopped matching a scan anchored on the old idiom, while
+            # the vacuous-pass guard stayed green on the GETs that had not
+            # moved. A pin anchored on an idiom must be updated WITH the idiom;
+            # that is the standing cost of a convergence, and it is cheaper than
+            # the duplication only if somebody pays it.
+            for m in re.finditer(
+                    r'(?:ingressPath|postJson|putJson)\(\s*[`"\']([^`"\'?]+)',
+                    src):
                 # ⚠️ TEMPLATE LITERALS TRUNCATED AT THE INTERPOLATION, and the
                 # `$` goes with it. `ingressPath(`agent-usage${q}`)` captured
                 # `agent-usage$`, which matches no route — a live route reported

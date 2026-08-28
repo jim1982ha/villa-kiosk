@@ -30,6 +30,20 @@ def _files(*rel):
                     yield os.path.join(root, n)
 
 
+def _surfaces_all():
+    """Every TS/TSX file, by repo-relative path. ⚠️ DERIVED, NEVER LISTED — a
+    pin you have to edit to cover a new file is `grep -l` wearing a test's
+    clothes (/dry-audit Part 5)."""
+    out = {}
+    for root, _dirs, files in os.walk(SRC):
+        for name in files:
+            if name.endswith((".ts", ".tsx")):
+                full = os.path.join(root, name)
+                with open(full, encoding="utf-8") as handle:
+                    out[os.path.relpath(full, REPO_ROOT)] = handle.read()
+    return out
+
+
 def _read(p):
     with open(p, encoding="utf-8") as h:
         return h.read()
@@ -1311,3 +1325,45 @@ def test_a_check_SAYS_when_its_flags_are_still_WAITING() -> None:
     assert "escalated - " not in checks and "escalated -" not in checks, (
         "the waiting count is computed by subtraction, so a check that "
         "stopped for any other reason is mislabelled as deferred")
+
+def test_every_MUTATING_call_to_our_own_backend_carries_the_session() -> None:
+    """⚠️ THE INGRESS SESSION COOKIE IS WHAT MAKES A WRITE AUTHORISED, and until
+    2026-08-28 the three-line preamble stating it had been copied nineteen times
+    across eight files — with one copy, `auth/verify`, missing the line
+    altogether. That one works, because same-origin is `fetch`'s default; it is
+    the kind of fact a reader should not have to know to review a diff.
+
+    ⚠️ SO THE PREAMBLE NOW LIVES IN ONE PLACE AND THIS PINS THAT PLACE. Removing
+    `credentials` from `postJson` would silently un-authorise every write in the
+    app at once — a far worse blast radius than the duplication it replaced, and
+    exactly the trade a convergence makes. It is only a good trade if something
+    watches the single copy.
+
+    ⚠️ AND IT DERIVES THE CALL SITES rather than listing them, so a twentieth
+    write is covered on the day it is written. A site that opts out must say so
+    with its own `credentials`, which is what the three deliberate divergences
+    (the logout beacon, telemetry, storage's abortable read) already do.
+    """
+    ingress = _read(os.path.join(SRC, "ha", "ingress.ts"))
+    helper = ingress[ingress.index("export function postJson"):]
+    helper = helper[:helper.index("\n}")]
+    assert 'credentials: "same-origin"' in helper, (
+        "the one shared writer no longer sends the ingress session, so every "
+        "write in the app is unauthenticated at once")
+
+    # Every fetch to one of OUR endpoints with a mutating verb, wherever it is.
+    offenders = []
+    for path, code in _surfaces_all().items():
+        for match in re.finditer(
+                r"fetch\((?:ingressPath\(|url,|`\$\{ingressPath)[^;]*?\}\)", code,
+                re.DOTALL):
+            block = match.group(0)
+            if not re.search(r'method: "(POST|PUT|DELETE|PATCH)"', block):
+                continue
+            if "credentials" in block:
+                continue
+            offenders.append(f"{path}: {block.splitlines()[0].strip()}")
+    assert not offenders, (
+        "a write to this add-on's backend does not state `credentials` and does "
+        "not go through `postJson`, so it depends on a browser default:\n  "
+        + "\n  ".join(offenders))

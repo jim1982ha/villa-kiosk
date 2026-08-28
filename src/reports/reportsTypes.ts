@@ -39,6 +39,7 @@ export const CONTRACT_VERSION = 1;
 
 /** Ordered least to most urgent — report sections sort by this order. */
 export const SEVERITY = ["info", "notice", "warning", "critical"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type Severity = (typeof SEVERITY)[number];
 
 /**
@@ -47,6 +48,7 @@ export type Severity = (typeof SEVERITY)[number];
  * profiles (the owner may perfectly well read the facility brief).
  */
 export const AUDIENCE = ["owner", "facility"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type Audience = (typeof AUDIENCE)[number];
 
 /**
@@ -56,7 +58,8 @@ export type Audience = (typeof AUDIENCE)[number];
  * freezer's thermometer went offline" is the fastest way to lose a reader.
  */
 /* ⚠️ SOME DERIVED TYPES BELOW HAVE NO CONSUMER YET, AND THAT IS DELIBERATE —
- * recorded here because /dry-audit's unused-export probe flags them on EVERY
+ * recorded here (dry-audit:ok) because /dry-audit's unused-export probe
+ * would otherwise flag them on EVERY
  * run and the verdict was reached twice without ever being written down, which
  * is how a correct adjudication becomes a recurring review cost.
  *
@@ -77,10 +80,12 @@ export const FINDING_KIND = [
   "FORECAST",
   "VERIFICATION",
 ] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type FindingKind = (typeof FINDING_KIND)[number];
 
 /** Not a cron expression — an operator on an iPad should never meet one. */
 export const CADENCE = ["daily", "weekly", "monthly"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type Cadence = (typeof CADENCE)[number];
 
 /**
@@ -89,10 +94,12 @@ export type Cadence = (typeof CADENCE)[number];
  * "failed", and collapsing that loses the distinction a resend needs.
  */
 export const DELIVERY_STATUS = ["pending", "sent", "failed", "skipped"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type DeliveryStatus = (typeof DELIVERY_STATUS)[number];
 
 /** What an operator may ASK for. Not what a history entry may record. */
 export const NARRATION_MODE = ["deterministic", "provider"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type NarrationMode = (typeof NARRATION_MODE)[number];
 
 /**
@@ -109,6 +116,7 @@ export type NarrationMode = (typeof NARRATION_MODE)[number];
 // and failed — and a mirror the parity test cannot read is a mirror nothing
 // checks. The duplication is the point: both lists are compared to contracts.py.
 export const NARRATION_RECORD = ["deterministic", "provider", "fallback"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type NarrationRecord = (typeof NARRATION_RECORD)[number];
 
 /**
@@ -128,6 +136,7 @@ export const SKIP_REASON = [
   // run — which is the whole reason that test exists.
   "superseded",
 ] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type SkipReason = (typeof SKIP_REASON)[number];
 
 /**
@@ -149,9 +158,11 @@ export type SkipReason = (typeof SKIP_REASON)[number];
  *  moved against the periods before it. Both are validated on the way OUT to a
  *  narration provider, so both must match `contracts.py` exactly. */
 export const ZONE = ["needs_you", "this_period", "about_report"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type Zone = (typeof ZONE)[number];
 
 export const TREND_DIRECTION = ["up", "down", "flat"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type TrendDirection = (typeof TREND_DIRECTION)[number];
 
 export const PAYLOAD_ALLOWED_FIELDS = [
@@ -177,6 +188,7 @@ export const PAYLOAD_ALLOWED_FIELDS = [
   "trend_direction",
   "trend_pct",
 ] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type PayloadField = (typeof PAYLOAD_ALLOWED_FIELDS)[number];
 
 /**

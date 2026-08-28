@@ -149,6 +149,14 @@ class Concern:
     #: the first would leave the owner's copy live after the facility manager's
     #: had been answered — exactly what `deliveries` records for the same shape
     #: of mistake.
+    #:
+    #: ⚠️ DELIBERATELY NOT MIRRORED IN `src/agent/agentTypes.ts`, unlike
+    #: `deliveries` beside it (/dry-audit, 2026-08-28). The mirror exists so a
+    #: value the backend owns cannot arrive at the tablet and render as
+    #: something else; this field renders nowhere and never should — it is the
+    #: plumbing that lets a chat message be edited later, and putting it on the
+    #: SPA's interface would invite somebody to display a message id. Recorded
+    #: here so the next audit does not re-adjudicate it as a hole in the mirror.
     messages: List[Dict[str, str]] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:

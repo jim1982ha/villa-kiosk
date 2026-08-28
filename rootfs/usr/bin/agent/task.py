@@ -58,10 +58,6 @@ from reports.log import stage, swallow
 #: The stored key naming the facility manager list. Empty means the feature is off.
 CONFIG_KEY: str = "task_list"
 
-#: What the blueprint listens for. ⚠️ NOT a `vesta_<category>_event` — see the
-#: module docstring. If this name changes, the blueprint instance's "Task events
-#: to watch" must change with it; `test_task_loop.py` pins the pair.
-
 #: Home Assistant's `TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM`.
 #:
 #: ⚠️ NOT EVERY TODO LIST HAS ONE, AND SENDING A DESCRIPTION TO ONE THAT DOES

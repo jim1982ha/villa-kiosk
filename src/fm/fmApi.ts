@@ -4,7 +4,7 @@
 // maintenance record is central and every device sees the same one, exactly
 // like the shared device configuration and scenes.
 
-import { ingressPath } from "@/ha/ingress";
+import { ingressPath, putJson } from "@/ha/ingress";
 import { EMPTY_FM_DATA, type FmData } from "./fmTypes";
 import {
   keyBy, diffKeyed, applyKeyed, keyedDiffIsEmpty,
@@ -77,15 +77,10 @@ export async function saveFmData(
 ): Promise<StoreSaveResult> {
   try {
     const merged = { ...carryOver, ...data };
-    const r = await fetch(ingressPath("fm-data"), {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const r = await putJson("fm-data", {
         data: merged,
         ...(expectedRev === null ? {} : { rev: expectedRev }),
         ...(elevation ? { elevation } : {}),
-      }),
     });
     if (r.status === 409) return { ok: false, conflict: true };
     if (!r.ok) return { ok: false, conflict: false };

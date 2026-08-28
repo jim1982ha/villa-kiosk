@@ -9,9 +9,11 @@ request/response — there is no supported way to push a VESTA-originated turn
 into an HA conversation thread — so alerts can never join it. Two API keys was
 the visible symptom; the broken follow-up was the actual cost.
 
-⚠️ INBOUND RIDES THE WEBSOCKET `collect.py` ALREADY HOLDS. One more event type
-on a connection that is already open: no webhook, no public URL, no inbound
-firewall hole, and nothing new to supervise. A villa behind a Cloudflare tunnel
+⚠️ INBOUND RIDES THE WEBSOCKET `collect.py` ALREADY HOLDS. Two event types on a
+connection that is already open — a typed message and, since 2026-08-28, a
+button press: no webhook, no public URL, no inbound firewall hole, and nothing
+new to supervise. Both are person-driven and therefore low-volume by nature,
+which is the property that matters; `collect.CHAT_EVENT_TYPES` is the list. A villa behind a Cloudflare tunnel
 keeps reaching OUT, which is the same posture that made `Polling` the right
 Telegram platform for this property.
 

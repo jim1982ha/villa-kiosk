@@ -5,8 +5,12 @@ about the phone buttons): *"each state shall be properly and fully synchronised
 with what the VESTA Agent UI is doing, so that there can't be, by design, any
 de-synchronised state"*. The only way to promise that is for the tablet and the
 phone to run THE SAME CODE — not two implementations kept in step by whoever
-remembers, which is `feedback_one-owner-per-predicate` and is the defect this
-repository has produced fourteen times.
+remembers, which is `feedback_one-owner-per-predicate` — and the two-correct-
+halves shape it belongs to is the one this repository has paid for most often.
+⚠️ THAT SENTENCE CARRIED A COUNT ("fourteen times") FOR ONE RELEASE, AND THE
+COUNT WAS BORROWED FROM A DIFFERENT PATTERN — `pin-the-caller`'s tally, in
+CLAUDE.md. A number attached to the wrong rule is worse than no number, because
+it reads as evidence. Found by /dry-audit Part 3 the morning after it shipped.
 
 ⚠️ AND IT ALREADY HAD ONE, BEFORE ANY BUTTON EXISTED. "Done" on the To-Do List
 tab is two browser round trips — complete the item over Home Assistant's

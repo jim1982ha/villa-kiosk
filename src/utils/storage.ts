@@ -289,6 +289,13 @@ async function postUploadOnce(
   try {
     resp = await fetch(ingressPath(`model-upload?${query}`), {
       method: "POST",
+      // ⚠️ STATED, NOT INHERITED (/dry-audit, 2026-08-28). Same-origin is
+      // `fetch`'s default, so this owner-only upload has always been
+      // authorised — but it was the one mutating call in the app that said so
+      // nowhere, which makes a reviewer work out a browser default to know the
+      // session is attached. It cannot use `postJson`: the body is a binary
+      // Blob and the content type is not JSON.
+      credentials: "same-origin",
       headers: { "Content-Type": "application/octet-stream" },
       body,
       signal: ctl.signal,

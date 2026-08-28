@@ -35,12 +35,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { Check, ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import SourceChip from "@/components/common/SourceChip";
 
 import { decideReviewDraft, loadReviewDrafts, type ReviewDraft } from "@/agent/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
+import Loading from "@/components/common/Loading";
 
 export default function AgentReview() {
   const { role } = useProfile();
@@ -91,9 +92,7 @@ export default function AgentReview() {
 
   if (rows === null) {
     return (
-      <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Loading…
-      </p>
+      <Loading />
     );
   }
 

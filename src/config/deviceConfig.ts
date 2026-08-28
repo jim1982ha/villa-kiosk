@@ -29,7 +29,7 @@
 // recomputes the same values on load. Syncing them would just duplicate the
 // GLB's own payload through a second channel.
 
-import { ingressPath } from "@/ha/ingress";
+import { ingressPath, putJson } from "@/ha/ingress";
 import type { AppConfig, DeviceGroup } from "./AppConfig";
 import type { EntityMapping, TeleportPoint } from "@/types/scene.types";
 import {
@@ -353,13 +353,7 @@ export async function saveSharedConfig(
 ): Promise<SaveSharedConfigResult> {
   try {
     const merged = { ...carryOver, ...config };
-    const resp = await fetch(ingressPath("device-config"), {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        expectedRev === null ? { config: merged } : { config: merged, rev: expectedRev }),
-    });
+    const resp = await putJson("device-config", expectedRev === null ? { config: merged } : { config: merged, rev: expectedRev });
     if (resp.status === 409) {
       const data = (await resp.json().catch(() => ({}))) as { config?: unknown; rev?: unknown };
       return {

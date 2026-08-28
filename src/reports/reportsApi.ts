@@ -16,7 +16,7 @@
 // to /reports-config and a non-owner GET of /reports-diagnostics whatever the
 // browser sends. See auth/permissions.ts's own header.
 
-import { ingressPath } from "@/ha/ingress";
+import { ingressPath, postJson, putJson } from "@/ha/ingress";
 import { ROLE_ORDER, type Role } from "@/auth/roles";
 import {
   AUDIENCE, CADENCE, DELIVERY_STATUS, NARRATION_MODE, NARRATION_RECORD,
@@ -398,11 +398,7 @@ export async function fetchTasks(): Promise<{ tasks: FacilityTask[]; reachable: 
 export async function completeTask(
   task: FacilityTask,
 ): Promise<{ ok: boolean; error?: string }> {
-  const r = await fetch(ingressPath("reports-tasks-complete"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ entity_id: task.entityId, uid: task.uid }),
-  });
+  const r = await postJson("reports-tasks-complete", { entity_id: task.entityId, uid: task.uid });
   const body = (await r.json().catch(() => ({}))) as { ok?: unknown; error?: unknown };
   if (r.ok && body.ok === true) return { ok: true };
   return { ok: false, error: typeof body.error === "string" ? body.error
@@ -455,17 +451,12 @@ export async function saveReportsConfig(
   carryOver: Record<string, unknown> = {},
 ): Promise<SaveOutcome> {
   try {
-    const r = await fetch(ingressPath("reports-config"), {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const r = await putJson("reports-config", {
         // ⚠️ `toWire`, NOT the config object — see CONFIG_WIRE_KEYS. Spreading
         // this app's own camelCase names writes keys the scheduler never reads,
         // and the write SUCCEEDS, which is what made it invisible.
         config: { ...withoutDeadKeys(carryOver), ...toWire(config) },
         ...(expectedRev === null ? {} : { rev: expectedRev }),
-      }),
     });
     if (r.status === 409) {
       return { ok: false, conflict: true, error: "Someone else saved first." };
@@ -545,12 +536,7 @@ export async function fetchNextRuns(
   schedules: ReportSchedule[],
 ): Promise<Record<string, string>> {
   try {
-    const r = await fetch(ingressPath("reports-next-run"), {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ schedules: schedules.map(toWireSchedule) }),
-    });
+    const r = await postJson("reports-next-run", { schedules: schedules.map(toWireSchedule) });
     if (!r.ok) return {};
     return texts(obj(await r.json()).next_runs);
   } catch {
@@ -604,12 +590,7 @@ export async function saveNarrationSecret(
   provider: string, value: string,
 ): Promise<{ ok: boolean; error: string }> {
   try {
-    const r = await fetch(ingressPath("reports-secret"), {
-      method: "PUT",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, value }),
-    });
+    const r = await putJson("reports-secret", { provider, value });
     if (r.ok) return { ok: true, error: "" };
     const d = obj(await r.json().catch(() => ({})));
     return { ok: false, error: str(d.error) || `Refused (${r.status}).` };
@@ -721,12 +702,7 @@ export async function runReportNow(
   },
 ): Promise<ReportPreview | null> {
   try {
-    const r = await fetch(ingressPath("reports-run-now"), {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(options),
-    });
+    const r = await postJson("reports-run-now", options);
     if (!r.ok) return null;
     const d = obj(await r.json());
     const analysis = obj(d._analysis);

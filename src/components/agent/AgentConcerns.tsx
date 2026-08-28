@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import InfoHint from "@/components/common/InfoHint";
-import { Info, Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Info, ThumbsDown, ThumbsUp } from "lucide-react";
 
 import { loadConcerns,
          sendConcernFeedback } from "@/agent/agentApi";
@@ -29,6 +29,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import SourceChip from "@/components/common/SourceChip";
 import { SettledSummary } from "@/components/agent/ConcernLifecycle";
 import { severityRank, type Concern } from "@/agent/agentTypes";
+import Loading from "@/components/common/Loading";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
  *  record, not the state of the villa. */
@@ -215,9 +216,7 @@ export default function AgentConcerns() {
    *  failure alert fatigue names. */
   if (rows === null) {
     return (
-      <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Loading…
-      </p>
+      <Loading />
     );
   }
 

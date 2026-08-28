@@ -29,7 +29,7 @@
 // index by 0.1". Nothing is derived, so nothing can drift.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Loader2, Minus, Plus, Trash2, Upload } from "lucide-react";
+import { Download, Minus, Plus, Trash2, Upload } from "lucide-react";
 
 import InfoHint from "@/components/common/InfoHint";
 import { loadFlagTypes, tuneFlagTypes,
@@ -37,6 +37,7 @@ import { loadFlagTypes, tuneFlagTypes,
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import { downloadFile } from "@/utils/download";
+import Loading from "@/components/common/Loading";
 
 /* ⚠️ `effectOf` WAS DELETED HERE (2026-08-28, owner: "I feel this is redundant
  * information and confusing the user"). It rendered "raised 20% less readily"
@@ -106,9 +107,7 @@ export default function FlagTypesPanel() {
 
   if (rows === null) {
     return (
-      <p className="muted body-text">
-        <Loader2 size={14} className="spin" aria-hidden /> Loading…
-      </p>
+      <Loading />
     );
   }
 

@@ -17,12 +17,15 @@
  */
 
 /* ⚠️ THE `export type X = (typeof ARR)[number]` ALIASES BELOW HAVE NO
- * CONSUMER IN `src/`, AND THAT IS CORRECT. Each one names a set the BACKEND
+ * CONSUMER IN `src/`, AND THAT IS CORRECT. (dry-audit:ok — mirror of
+ * `contracts.py`; see below.) Each one names a set the BACKEND
  * owns; this file is the mirror, and a mirror with holes in it is what lets a
  * value arrive here and render as the set's first member. They are used by
  * type position in the interfaces further down and by anything importing this
  * vocabulary later — /dry-audit's unused-export probe cannot see either, so it
- * reports all nine every run. Verdict recorded once, here, rather than
+ * reports most of them every run (ten of the eleven, at the last count — the
+ * number drifts as the vocabulary grows and is deliberately not restated as a
+ * figure to keep in step). Verdict recorded once, here, rather than
  * re-adjudicated: the same treatment `AGENT_CONTRACT_VERSION` below and
  * `isTicketOpen` in fmEngine already carry. Deleting one to quiet the probe
  * would be deleting half a contract. */
@@ -37,15 +40,18 @@ export const AGENT_CONTRACT_VERSION = 1;
 
 /** What caused a run. `chat` is a first-class trigger, not a special case. */
 export const TRIGGER = ["manual", "scheduled", "chat"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type Trigger = (typeof TRIGGER)[number];
 
 /** How a run ended. `declined` is a CORRECT outcome and is not `failed`. */
 export const RUN_STATUS = ["answered", "declined", "failed", "partial"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type RunStatus = (typeof RUN_STATUS)[number];
 
 /** Ordered least to most urgent. Identical to reports' SEVERITY, deliberately —
  *  three unrelated severity scales is the defect that work removed. */
 export const SEVERITY = ["info", "notice", "warning", "critical"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type Severity = (typeof SEVERITY)[number];
 
 /**
@@ -68,6 +74,7 @@ export function severityRank(severity: string): number {
 
 /** Who a concern is for. Three, not two. */
 export const AUDIENCE = ["owner", "facility"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type Audience = (typeof AUDIENCE)[number];
 
 /**
@@ -82,6 +89,7 @@ export type Audience = (typeof AUDIENCE)[number];
  * `ops` reads as the Facility Manager everywhere a person can see it.
  */
 export const SENDER_ROLE = ["guest", "owner", "ops"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type SenderRole = (typeof SENDER_ROLE)[number];
 
 /** A concern's lifecycle. `dismissed` is not `closed`: one was dealt with, the
@@ -89,15 +97,18 @@ export type SenderRole = (typeof SENDER_ROLE)[number];
 export const CONCERN_STATE = [
   "open", "acted", "verified", "closed", "dismissed",
 ] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type ConcernState = (typeof CONCERN_STATE)[number];
 
 /** The second axis of the action gate. Reversibility alone is not a safety
  *  test: unlocking a door is reversible and the harm is instantaneous. */
 export const HARM_CLASS = ["low", "high"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type HarmClass = (typeof HARM_CLASS)[number];
 
 /** Three answers, not a boolean — "propose to a person" is the middle one. */
 export const POLICY_VERDICT = ["allow", "propose", "deny"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type PolicyVerdict = (typeof POLICY_VERDICT)[number];
 
 /** Why a tool call failed. A tool error is DATA the model routes around. */
@@ -105,10 +116,12 @@ export const TOOL_ERROR_CODE = [
   "not_found", "unavailable", "invalid_args", "not_permitted",
   "too_large", "rate_limited", "internal",
 ] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type ToolErrorCode = (typeof TOOL_ERROR_CODE)[number];
 
 /** MCP content blocks. */
 export const CONTENT_KIND = ["text", "json"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type ContentKind = (typeof CONTENT_KIND)[number];
 
 /**
@@ -118,6 +131,7 @@ export type ContentKind = (typeof CONTENT_KIND)[number];
  * rather than the day somebody remembers to deny it.
  */
 export const TOOL_MODE = ["READ", "WRITE", "ACT"] as const;
+/* dry-audit:ok — mirror alias; see this file's header. */
 export type ToolMode = (typeof TOOL_MODE)[number];
 
 /** One concern, as the backend stores it (CTR-010). */
