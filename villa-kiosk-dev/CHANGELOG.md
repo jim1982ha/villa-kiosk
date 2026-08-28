@@ -1,3 +1,15 @@
+## 2.843.0
+
+### Changed — the environment layer moves: second of the layer moves
+The fifteen modules that talk to the outside world — the disk store, the Home
+Assistant connection, notify delivery, secrets, logging, discovery and their
+kin — now live under the folder an external deployment would swap wholesale.
+One correction fell out of the import graph: the statistics reader wraps Home
+Assistant's recorder, so it belongs to this layer, not the briefing where the
+plan had tabled it. What remains in the old folder is exactly the deletable
+briefing half, which the boundary test now states as one line. No behaviour
+changes; the same code runs from new addresses.
+
 ## 2.842.0
 
 ### Changed — the pure layer moves to its own home, first of the layer moves
