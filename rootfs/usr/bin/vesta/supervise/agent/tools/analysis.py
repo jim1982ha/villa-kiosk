@@ -163,6 +163,31 @@ class AnalysisTool(BaseTool):
         if module_cls is None:                                # pragma: no cover
             return [fail("not_found", f"no check named {self.check}")]
 
+        # ⚠️ THE OPERATOR'S OWN SWITCH, AND IT REACHES HERE TOO (2026-08-29,
+        # owner: "How come the agent can continue using a check if we are
+        # switching it off?"). It could not, and the answer was pure
+        # implementation: the toggle is read by `registry.gate` inside the
+        # BRIEFING's loop, and this path calls the module class directly, so
+        # the switch was a line on the briefing's shopping list rather than a
+        # property of the check. Every clause of that is true and none of it is
+        # visible from the tablet, where the control says "switch it off".
+        #
+        # ⚠️ THE `enabled` ARM ONLY, NEVER THE WHOLE GATE. The other arms are
+        # questions about composing a BRIEF — audience, minimum history, the
+        # supersede rule, the failure counter — and an investigation is not a
+        # brief: the agent asks a named question on demand and a "not part of
+        # the owner brief" refusal there would be nonsense. What carries across
+        # is the one arm that is a PERSON'S DECISION.
+        #
+        # ⚠️ AND IT IS THE 2.755.0 RULING APPLIED AGAIN: one switch, one
+        # meaning, no second flag. That release deleted `agent_owns_analysis`
+        # precisely because a setting whose effect depended on which layer read
+        # it produced states nobody could state.
+        if not self._switched_on():
+            return [fail("unavailable",
+                         f"the {self.check} check is switched off for this "
+                         "villa, so it was not run")]
+
         session = (self._session_source() if callable(self._session_source)
                    else self._session_source)
         if session is None:
@@ -210,6 +235,33 @@ class AnalysisTool(BaseTool):
             return dict(found or {})
         from vesta.adapters import discovery
         return dict(await discovery.discover(session))
+
+    def _switched_on(self) -> bool:
+        """Has the operator left this check on? ⚠️ DEFAULTS TO TRUE, INCLUDING
+        ON EVERY ERROR. Absent config, an unreadable file and a villa that has
+        never opened the Briefings dialog must all mean "on" — the same
+        direction `registry.gate` takes, which refuses only on an explicit
+        `enabled is False`. Failing closed would silently disable analysis on a
+        fresh install, which is the shape of defect this file's own module
+        docstring warns about.
+
+        ⚠️ READ THROUGH `adapters`, NOT FROM `brief`. The store constant lives
+        one layer below both halves, which is what keeps `supervise` free of
+        `brief` and the agent exportable — `outbox` and `observe/cycle` already
+        read this same file the same way.
+        """
+        try:
+            from vesta.adapters import store
+            raw = store.read_json(store.REPORTS_CONFIG_FILE, {})
+            modules = store.config_view(raw).get("modules")
+            if not isinstance(modules, dict):
+                return True
+            slice_ = modules.get(self.check)
+            if not isinstance(slice_, dict):
+                return True
+            return slice_.get("enabled") is not False
+        except Exception:  # noqa: BLE001 - a config read may never stop a check
+            return True
 
     def _context(self, session: Any, found: Mapping[str, Any],
                  days: int) -> Any:
