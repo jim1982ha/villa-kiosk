@@ -1,3 +1,16 @@
+## 2.885.0
+
+### Added — one record of what happened, and the briefing reads it
+
+Automation firings, triage flags and the agent's alerts now land in a single
+ledger, filled the same way whichever way the Supervision switch is set — the
+switch is never consulted; what differs is which sources happen to be writing.
+Home Assistant announces every automation itself, so nothing in your Home
+Assistant had to change, and your blueprints' own figures (duration, kWh, cost)
+are picked up where they send them. A flagged item and the alert it became
+share one key, so the briefing tells one story rather than counting it twice,
+and a flag that was never investigated finally has somewhere to say so.
+
 ## 2.884.0
 
 ### Fixed — the listening state is one sentence, so it is one line on a phone
