@@ -30,9 +30,15 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from vesta.shared.style import SEVERITY_WORD, inert, severity_line
 
 #: Severity -> (thread, push, holds-until-morning). The matrix, as a table.
-#: ⚠️ `push` IS OWNER **AND** FACILITY FOR A CRITICAL, which the villa cannot
-#: express until a distinct facility target exists (DQ-04). `targets_for`
-#: returns what it was given rather than pretending.
+#: ⚠️ `push` IS OWNER **AND** FACILITY FOR A CRITICAL, and the villa CAN
+#: express that since the People table shipped: `outbox` merges
+#: `people.targets_for_role(config, "ops")` into a critical's push list, so the
+#: pair is live wherever a facility person is configured. This comment said
+#: "cannot ... until a distinct facility target exists (DQ-04)" long after that
+#: was false — found 2026-08-30 when the HLD repeated it as a blocking gap and
+#: the owner caught the document, not the comment. `targets_for` still returns
+#: what it was given rather than pretending: a villa with no facility person
+#: pushes to the owner alone, which is configuration, not a missing capability.
 @dataclass(frozen=True)
 class Row:
     thread: bool
