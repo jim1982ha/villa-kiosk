@@ -408,7 +408,7 @@ export default function ReportsModal(
         aria-label="Briefings"
       >
         <div className="settings-header">
-          <h2>Briefings &amp; automations</h2>
+          <h2>Briefing &amp; Instant alerts</h2>
           {notice && (
             <button
               type="button"

@@ -18,7 +18,7 @@
 // section is a precondition for the one under it:
 //
 //   1  Is anything listening?      nothing below means anything if it is not
-//   2  VESTA's own checks          on/off, and why each ran
+//   2  The checks                  on/off, and why each ran
 //   3  Adding your own             how to extend it — blueprints, not code
 //
 // ⚠️ "YOUR AUTOMATIONS" WAS STEP 2 HERE AND IS NOW ITS OWN TAB (2026-08-29).
@@ -135,17 +135,59 @@ export default function ModulesTab({
 
   return (
     <div className="reports-pane">
-      {/* ⚠️ THE MODE IS GONE FROM THIS SENTENCE (2026-08-29), on the owner's
-          own reasoning: the briefing has never read an automation's output, so
-          standing a check down for supervision-off traded the briefing's ONLY
-          analysis input for a layer that cannot reach it. The checks run in
-          both modes now; `registry.gate` records the full argument. */}
+      {/* ⚠️ THE COMPOSITION TABLE (2026-08-30, owner: "clearly indicate what
+          the briefing is composed of — you are never mentioning the todo list
+          items, when scanned, what it considers, over what time period"). Every
+          row is a real input of pipeline.run_report, with when it is read and
+          the window it covers — the two facts a reader cannot guess. */}
+      <h3 className="settings-section-title">What a briefing is made of</h3>
       <p className="muted body-text">
-        What this property is watched by, and what a brief can be built from.
-        VESTA runs the checks below itself, whatever the supervision switch
-        says — in every briefing, and again when the agent investigates
-        something. The toggles here are the one thing that stops a check.
+        Four ingredients, all gathered fresh at the moment each briefing is
+        composed — on the schedule, or when you press the test button below.
+        <InfoHint label="What a briefing is made of">
+          <p>
+            Nothing is stockpiled between briefings. When one is due, VESTA
+            reads everything at that moment and writes it up.
+          </p>
+          <p>
+            Your automations are deliberately not on this list: they alert you
+            on the spot (see the Instant alerts tab) and a briefing never reads
+            them.
+          </p>
+        </InfoHint>
       </p>
+      <dl className="reflex-table">
+        <div className="reflex-row">
+          <dt>The checks</dt>
+          <dd className="reflex-role">
+            The calculations below, each over its own window of Home
+            Assistant’s recorded history — from two weeks to six, stated on
+            every card.
+          </dd>
+        </div>
+        <div className="reflex-row">
+          <dt>Device status</dt>
+          <dd className="reflex-role">
+            What is offline or unavailable at composing time, read live.
+          </dd>
+        </div>
+        <div className="reflex-row">
+          <dt>To-do items</dt>
+          <dd className="reflex-role">
+            Every list in Home Assistant is scanned at composing time; items
+            this system wrote (their name starts with a reference in brackets)
+            that are still open are carried into the briefing. Your own
+            groceries are never read.
+          </dd>
+        </div>
+        <div className="reflex-row">
+          <dt>The agent’s alerts</dt>
+          <dd className="reflex-role">
+            Open alerts from the agent’s investigations, when supervision is
+            on.
+          </dd>
+        </div>
+      </dl>
 
       {/* ── 1. Is anything listening? ───────────────────────────────────── */}
       <div className={`fm-banner ${c.connected ? "" : "warn"}`}>
@@ -191,8 +233,15 @@ export default function ModulesTab({
           rule than the one I proposed (their counters are frozen, which is only
           a symptom). See `AutomationsTab`. */}
 
-      {/* ── 2. VESTA's own checks ──────────────────────────────────────────── */}
-      <h3 className="settings-section-title">VESTA’s own checks</h3>
+      {/* ── 2. The checks ──────────────────────────────────────────── */}
+      {/* ⚠️ "The checks" — the PDF's word, and its ladder is the contract:
+          check → flagged item → concern → alert → to-do item → briefing.
+          NOT the Observe tier: Observe is the agent's journal of live state
+          changes; a check reads WEEKS of recorded history. The two meet only
+          in that the agent may run these same checks as a tool while
+          investigating. The (i) says exactly that, because the owner asked
+          the question and a reader will too. */}
+      <h3 className="settings-section-title">The checks</h3>
       {diagnostics.modules.length === 0 && (
         <p className="reports-item sev-warning">
           None are registered. That is a fault in the add-on, not a setting.
@@ -244,15 +293,21 @@ export default function ModulesTab({
                   switch it off" is the property that makes that swap
                   acceptable — and it is worth saying on the row. */}
               {/* ⚠️ NO `SourceChip` HERE. Every row in this list sits under a
-                  heading reading "VESTA’s own checks", so a "VESTA check" chip
+                  heading reading "The checks", so a "VESTA check" chip
                   on each one repeats the section title once per row — the same
                   redundancy the reflex table had, reported in the same breath.
                   The chip earns its place where a list MIXES sources; this list
                   has exactly one. */}
-              <span className="reports-entry-meta">
-                <span className="muted">needs {m.minDays} days</span>
-              </span>
             </div>
+            {/* ⚠️ ITS OWN LINE, NOT THE HEAD ROW (2026-08-30, owner: the cards
+                "appear too high and styled differently"). The head is a
+                wrapping flex, so this rode beside a short title and dropped
+                under a long one — sibling cards rendered two different
+                shapes from one component. A fixed line renders identically
+                on every card. */}
+            <p className="reports-item muted">
+              <span>Reads {m.minDays} days of history.</span>
+            </p>
             {m.description && (
               <p className="muted body-text">{m.description}</p>
             )}
@@ -323,7 +378,14 @@ export default function ModulesTab({
       <h3 className="settings-section-title">Adding your own checks</h3>
       <p className="muted body-text">
           These arrive with the add-on — nothing to install, nothing to delete.
-          <InfoHint label="VESTA’s own checks">
+          <InfoHint label="The checks">
+          <p>
+            These are not the agent’s Observe step. Observe is a journal of
+            what changed in the last day; a check reads weeks of recorded
+            history and looks for slow patterns no single change shows. When
+            the agent investigates something, it can run these same checks
+            itself as one of its tools.
+          </p>
             Your own Home Assistant automations are what extend a brief: anything they
             report is grouped, priced and written in automatically. “Your automations”
             above lists what has been heard, which is how you confirm a rule is

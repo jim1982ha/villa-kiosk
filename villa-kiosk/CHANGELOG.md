@@ -1,3 +1,17 @@
+## 2.879.0
+
+### Changed — the Briefing tab now says what a briefing is made of, and its cards match
+
+The tab opens with the composition table the owner asked for: four ingredients,
+each with when it is read and the window it covers — including the to-do items,
+which are scanned across every list at composing time and carried only when
+this system wrote them. "VESTA's own checks" is renamed "The checks", the
+document's own word, and the (i) answers the question the old name invited:
+not the agent's Observe step — Observe journals live changes, a check reads
+weeks of history, and the agent may run these checks as a tool while
+investigating. The history note left the wrapping title row, so sibling cards
+render one shape. The dialog is now "Briefing & Instant alerts".
+
 ## 2.878.0
 
 ### Changed — comment only: the routing matrix no longer claims the villa cannot page the facility manager

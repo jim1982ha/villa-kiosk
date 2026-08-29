@@ -92,7 +92,7 @@ export default function AutomationsTab(
             ? "VESTA is doing the detecting. The automations below still do "
               + "their own job — reacting instantly, which no check can."
             : "The agent is off. Your automations alert you directly, and "
-              + "VESTA’s own checks still run for the briefing."}
+              + "the checks still run for the briefing."}
         </span>
       </div>
 
@@ -102,7 +102,7 @@ export default function AutomationsTab(
               add-on has heard from, so on a villa that has never fired one it
               is legitimately empty — saying so beats an empty box. */}
           No automations of this kind have been seen on this property. That is
-          not a fault: a villa can be watched entirely by VESTA’s own checks.
+          not a fault: a villa can be watched entirely by the checks alone.
         </p>
       ) : (
         <dl className="reflex-table">
@@ -124,7 +124,7 @@ export default function AutomationsTab(
               hands these automations nothing — they alert in parallel if the
               owner re-enables them, and the briefing is complete either way. */}
           <p className="muted body-text">
-            VESTA’s own checks cover the same ground, in both modes. These are
+            The checks cover the same ground, in both modes. These are
             switched off in Home Assistant; re-enable one there and it alerts
             you directly, alongside the checks.
           </p>
