@@ -73,6 +73,16 @@ class ReportContext:
     #: it was listening; the todo list holds jobs that are still open however
     #: long ago they were raised.
     carried_tasks: List[Dict[str, str]] = field(default_factory=list)
+    #: WHAT HAPPENED during the period — the record, over this brief's window
+    #: (2026-08-30). Automation firings, triage flags and the agent's concerns,
+    #: one ledger, filled the same way whichever position the Supervision
+    #: switch is in.
+    #:
+    #: ⚠️ EVENTS, NOT STATE. `standing` below is what is wrong right NOW and
+    #: `carried_tasks` is what is still open now; this is what occurred. A
+    #: device that broke before the window and is still down belongs to
+    #: standing, not here — merging them would hide it.
+    record: List[Dict[str, Any]] = field(default_factory=list)
     #: What is wrong at the MOMENT OF COMPOSING — `standing.build()`, rendered
     #: as dicts so a stored history entry and a live pass have the same shape.
     #:

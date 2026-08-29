@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import (Any, Awaitable, Callable, Dict, List, Optional, Sequence,
+from typing import (Any, Awaitable, Callable, Dict, List, Mapping, Optional, Sequence,
                     Tuple)
 
 from aiohttp import ClientSession
@@ -225,10 +225,40 @@ async def discover_event_types(hass: HassClient) -> Tuple[List[str], List[str]]:
 #: automation's timeout and a restart lost the wait entirely.
 CHAT_EVENT_TYPES = ("telegram_text", "telegram_callback")
 
+#: Home Assistant's OWN event, fired for every automation that runs — no
+#: blueprint change, no re-import, and it covers automations the owner writes
+#: later (2026-08-30). This is what made the record possible without touching
+#: anything in their Home Assistant.
+AUTOMATION_EVENT = "automation_triggered"
+
+#: The rich half: the blueprints never stopped emitting these — VESTA stopped
+#: listening at TASK-074. Their payload carries the figures a briefing wants
+#: (kwh, cost_local, wasted_minutes, rule_id, report_bucket).
+VESTA_EVENT_TYPES = ("vesta_roi_event", "vesta_maintenance_event",
+                     "vesta_audit_event", "vesta_critical_event")
+
+#: How long a rich event may arrive after the firing it enriches. The blueprint
+#: emits its event as an ACTION, so `automation_triggered` always lands first;
+#: seconds is generous for a local websocket.
+ENRICH_WINDOW_SECONDS = 30
+
 
 def _with_chat(types: Sequence[str]) -> List[str]:
-    """The derived list plus the chat events, without duplicating any."""
+    """The derived list plus chat, automation firings and the rich events.
+
+    ⚠️ THE `vesta_*` SUBSCRIPTION IS BACK, AND IT IS A DELIBERATE REVERSAL
+    (2026-08-30, the owner's ruling). TASK-074 dropped it because every
+    producer had been retired — true of the SHIPPED set, and it silently
+    assumed the owner would never re-enable the archived ones. They do exactly
+    that when Supervision is OFF, which is the supported way to run: the
+    automations alert a phone and now also fill the record. Paired with
+    `automation_triggered`, which needs no blueprint at all, the record is
+    filled the same way whichever position the switch is in.
+    """
     out = list(types)
+    for name in (AUTOMATION_EVENT,) + VESTA_EVENT_TYPES:
+        if name not in out:
+            out.append(name)
     for name in CHAT_EVENT_TYPES:
         if name not in out:
             out.append(name)
@@ -377,6 +407,96 @@ def state() -> Dict[str, Any]:
     }
 
 
+def _to_record(event: Dict[str, Any]) -> None:
+    """Write an automation firing into the RECORD. Never raises.
+
+    ⚠️ THE MERGE, AND ITS JOIN IS DERIVED FROM THE DATA. One firing can arrive
+    twice: `automation_triggered` (thin — time, automation, entity) and then the
+    blueprint's own `vesta_*` event (rich — kwh, cost, duration, rule_id). The
+    join is that the automation's NAME starts with the blueprint's STEM
+    (`roi_idle_load---living_room_ac` ← `blueprint: roi_idle_load`), so the rich
+    event UPGRADES the thin entry it belongs to rather than adding a second row.
+
+    ⚠️ AN UNMATCHED EVENT ON EITHER SIDE STILL LANDS. A rich event whose
+    automation was renamed, or a firing whose blueprint sends nothing, must
+    appear — dropping one to keep the ledger tidy is how a briefing goes quiet
+    about something that happened.
+    """
+    from vesta.adapters import record as record_mod
+    kind = str(event.get("event_type") or "")
+    raw = event.get("data")
+    data: Dict[str, Any] = raw if isinstance(raw, dict) else {}
+    try:
+        if kind == AUTOMATION_EVENT:
+            name = str(data.get("name") or "")
+            record_mod.append({
+                "source": "automation", "fidelity": "thin",
+                "subject": name or str(data.get("entity_id") or ""),
+                "title": name or "an automation ran",
+                "detail": "", "severity": "notice",
+                "payload": {"entity_id": str(data.get("entity_id") or "")},
+            })
+        elif kind in VESTA_EVENT_TYPES:
+            stem = str(data.get("blueprint") or "")
+            if not _enrich_latest(record_mod, stem, data):
+                record_mod.append({
+                    "source": "automation", "fidelity": "rich",
+                    "subject": str(data.get("report_bucket")
+                                   or data.get("rule_id") or stem),
+                    "title": stem or kind,
+                    "detail": _figures(data), "severity": "notice",
+                    "payload": dict(data),
+                })
+    except Exception as err:  # noqa: BLE001 - the record may never break the socket
+        swallow("could not record an automation event", err)
+
+
+def _figures(data: Mapping[str, Any]) -> str:
+    """The blueprint's own numbers, as one readable clause."""
+    bits = []
+    if data.get("wasted_minutes"):
+        bits.append(f"{data['wasted_minutes']} min")
+    if data.get("kwh"):
+        bits.append(f"{data['kwh']} kWh")
+    if data.get("cost_local"):
+        # ⚠️ "about", NEVER "~". The tilde is markup-active, so `style.inert`
+        # rewrites it on the way out and "~510" reached the draft as "-510" —
+        # an approximation rendered as NEGATIVE money. Caught by reading the
+        # composed text rather than the code.
+        bits.append(f"about {data['cost_local']}")
+    if data.get("basis"):
+        bits.append(str(data["basis"]))
+    return " · ".join(str(b) for b in bits)
+
+
+def _enrich_latest(record_mod: Any, stem: str, data: Mapping[str, Any]) -> bool:
+    """Upgrade the newest thin entry this rich event belongs to."""
+    if not stem:
+        return False
+    from datetime import datetime, timezone
+    entries = record_mod.read()
+    now = datetime.now(timezone.utc)
+    for row in reversed(entries[-200:]):
+        if str(row.get("fidelity") or "") != "thin":
+            continue
+        if not str(row.get("subject") or "").startswith(stem):
+            continue
+        try:
+            at = datetime.fromisoformat(str(row.get("at") or ""))
+            if (now - at).total_seconds() > ENRICH_WINDOW_SECONDS:
+                break
+        except ValueError:
+            continue
+        row["fidelity"] = "rich"
+        row["detail"] = _figures(data)
+        row["payload"] = dict(data)
+        row["subject"] = str(data.get("report_bucket")
+                             or data.get("rule_id") or row.get("subject"))
+        store.write_json(store.RECORD_FILE, {"entries": entries})
+        return True
+    return False
+
+
 class Collector:
     """Holds one subscription open and appends what arrives."""
 
@@ -411,6 +531,8 @@ class Collector:
             "fired": str(event.get("time_fired") or ""),
             "data": data if isinstance(data, dict) else {},
         })
+        _to_record(event)
+
 
     def _flush(self, force: bool = False) -> None:
         loop_now = asyncio.get_event_loop().time()

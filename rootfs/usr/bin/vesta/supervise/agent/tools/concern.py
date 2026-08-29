@@ -324,6 +324,36 @@ def writer(policy: Any, config: Optional[Mapping[str, Any]] = None
         if str(agent_config.view(config).get("mode")) == "observe":
             concern.informational = True
         stored, reason = concerns_mod.raise_concern(concern)
+
+        # ⚠️ THE DOMAIN COMES FROM THE PLAYBOOK THIS INVESTIGATION READ
+        # (2026-08-30, the owner's ask to see "Water · 2 · Electrical · 1").
+        # There is ONE agent, not seven — the playbooks are procedures it
+        # consults — so the label rides the concern rather than pretending a
+        # `water_agent` exists for a reader to go looking for.
+        #
+        # ⚠️ AND THE RECORD ENTRY CARRIES `ref` + `subject_key`, NOT A COPY.
+        # `ref` points at the concern (whose store stays the authority on its
+        # state); `subject_key` is the SAME key the triage flag carries, which
+        # is how the briefing groups a flag and the concern it became into one
+        # story instead of counting the event twice.
+        if stored:
+            try:
+                from vesta.adapters import record as record_mod
+                from vesta.supervise.agent import playbooks as playbooks_mod
+                record_mod.append({
+                    "source": "agent",
+                    "domain": playbooks_mod.domain_this_run(),
+                    "subject": concern.title,
+                    "subject_key": concern.subject_key,
+                    "title": concern.title,
+                    "detail": concern.body,
+                    "severity": concern.severity,
+                    "ref": concern.id,
+                })
+                record_mod.stamp_outcome(concern.subject_key,
+                                         f"investigated → {concern.id}")
+            except Exception as err:  # noqa: BLE001 - never fail a concern
+                swallow("could not record the concern", err)
         return bool(stored), reason
 
     return record

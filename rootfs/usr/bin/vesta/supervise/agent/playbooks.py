@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Sequence, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.supervise.agent import content
 from vesta.adapters import store as store_mod
@@ -132,6 +132,64 @@ def _memory_index(root: Optional[str]) -> str:
     except Exception as err:  # noqa: BLE001 - degrade, never fail
         swallow("could not load villa memory", err)
         return ""
+
+
+#: Playbooks consulted during the CURRENT investigation, in order.
+#:
+#: ⚠️ MODULE-LEVEL AND CLEARED PER RUN, WHICH IS SAFE ONLY BECAUSE
+#: INVESTIGATIONS ARE SEQUENTIAL — `max_investigations_per_pass` runs them one
+#: after another inside one pass, and `runtime` clears this at the start of
+#: each. If they ever run concurrently this must move onto the run, and this
+#: comment is the trigger to do it rather than to debug crossed domains.
+_READ_THIS_RUN: List[str] = []
+
+
+def note_for_run(name: str) -> None:
+    """Remember that THIS investigation consulted `name`.
+
+    ⚠️ NOT `note_read`, WHICH ALREADY EXISTS AND ANSWERS A DIFFERENT QUESTION.
+    That one persists "when was this playbook last consulted, ever" for the
+    quarterly unused-playbook review; this one is the CURRENT run's list, in
+    memory, cleared per investigation. My first draft called them both
+    `note_read` and the later definition silently won — the collision compiled,
+    ran, and wrote to /data. Two questions, two names.
+    """
+    if name and name not in _READ_THIS_RUN:
+        _READ_THIS_RUN.append(name)
+
+
+def reset_run() -> None:
+    """Start a new investigation's list. Called by `runtime`."""
+    _READ_THIS_RUN.clear()
+
+
+def domain_of(name: str, roots: Optional[Sequence[str]] = None) -> str:
+    """The domain folder a playbook lives in, or "".
+
+    ⚠️ READ FROM THE FRONT MATTER, NEVER A MAP HERE. `descriptions()` already
+    parses `domain:` out of every playbook; a lookup table in this module would
+    be a second list to keep in step the day a playbook moves folder.
+    """
+    for root in (roots or (LEARNED_ROOT, SHIPPED_ROOT)):
+        for row in descriptions(root):
+            if row.get("name") == name:
+                return str(row.get("domain") or "")
+    return ""
+
+
+def domain_this_run(roots: Optional[Sequence[str]] = None) -> str:
+    """The domain of the FIRST playbook this investigation consulted.
+
+    ⚠️ THE FIRST, NOT THE LAST OR A JOIN. The agent reads the most relevant
+    procedure first; a later `_system` or cross-check read must not relabel the
+    finding. An investigation that read none returns "" and the briefing groups
+    it under no domain rather than guessing one.
+    """
+    for name in _READ_THIS_RUN:
+        found = domain_of(name, roots)
+        if found:
+            return found
+    return ""
 
 
 def catalogue(root: Optional[str] = None) -> str:

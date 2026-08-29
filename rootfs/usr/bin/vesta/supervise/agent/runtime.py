@@ -198,6 +198,12 @@ async def investigate(*, provider: Provider,
     its own loop is how three of them would drift from whichever one gets
     tested.
     """
+    # ⚠️ A NEW INVESTIGATION STARTS WITH AN EMPTY PLAYBOOK LIST, or the domain
+    # stamped on this concern is the one the PREVIOUS investigation read — the
+    # same shape as `occludedIds` carrying a floor's answers upstairs.
+    from vesta.supervise.agent import playbooks as playbooks_mod
+    playbooks_mod.reset_run()
+
     cfg = agent_config.view(config)
     ident = str(run_id or f"{trigger}{int(time.time())}")
     started = time.monotonic()

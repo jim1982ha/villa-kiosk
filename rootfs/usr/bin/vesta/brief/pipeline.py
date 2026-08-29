@@ -34,6 +34,7 @@ from aiohttp import ClientSession
 from . import standing as standing_mod, trend as trend_mod
 from vesta.adapters import stats as stats_mod
 from vesta.adapters import collect
+from vesta.adapters import record as record_mod
 from vesta.adapters import devices as devices_mod
 from vesta.adapters import discovery
 from vesta.adapters import ledger
@@ -644,6 +645,7 @@ async def run_report(
         skipped=skipped, ran=ran,
         collector=collect.state(),
         carried_tasks=carried, standing=standing, labels=labels, units=units,
+        record=record_mod.since(since),
         history=_history_series(cadence),
         currency=str(found.get("currency") or ""),
         # ⚠️ DEDUPED AGAINST THIS BRIEF'S OWN FINDINGS, AND NOTHING ELSE NOW.
@@ -725,6 +727,7 @@ async def run_report(
                 findings=[f for f in context.findings
                           if isinstance(f, Mapping)],
                 carried=context.carried_tasks,
+                record=context.record,
                 coverage_note=_coverage_note(since), lead=lead)
             body = str(made.text)
         except Exception as err:  # noqa: BLE001 - never stops a report

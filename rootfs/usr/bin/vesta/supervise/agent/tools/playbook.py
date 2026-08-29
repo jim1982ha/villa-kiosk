@@ -66,6 +66,12 @@ class ReadPlaybook(BaseTool):
             return [fail("invalid_args", "name a playbook from your context")]
 
         prose = playbooks_mod.body(name, roots=self._roots)
+        # ⚠️ NOTED ON THE WAY OUT, AND ONLY WHEN A BODY WAS ACTUALLY SERVED
+        # (2026-08-30). This is what lets a concern say which DOMAIN it is
+        # about — water, electrical, security — without inventing seven agents
+        # to carry the label. A refused name must not stamp a domain.
+        if prose:
+            playbooks_mod.note_for_run(name)
         if not prose:
             # ⚠️ THE AVAILABLE NAMES COME BACK WITH THE REFUSAL. A model that
             # mistyped can correct itself in the same turn instead of guessing

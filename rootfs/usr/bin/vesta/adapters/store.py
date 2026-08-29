@@ -86,6 +86,13 @@ REPORTS_STATE_FILE: Final[str] = f"{DATA_DIR}/reports-state.json"
 #: bounded by a different rule — see MAX_EVENTS.
 REPORTS_EVENTS_FILE: Final[str] = f"{DATA_DIR}/reports-events.json"
 
+#: The RECORD — what happened at this property, over time, from every source
+#: (2026-08-30). Read by the briefing for its window; written by the collector
+#: (automation firings), triage (flagged items) and the agent (concerns). Not
+#: the observation journal: that is a ring of raw STATE CHANGES feeding
+#: salience, and this is a ledger of things a person would call events.
+RECORD_FILE: Final[str] = f"{DATA_DIR}/record.json"
+
 # Size ceilings, enforced by the proxy's store factory (413 on exceed).
 #
 # Config is small by nature — a handful of schedules and module toggles — and

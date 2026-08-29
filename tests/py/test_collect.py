@@ -338,8 +338,13 @@ def test_no_vesta_blueprints_falls_back_rather_than_going_deaf() -> None:
     # blueprints, or one whose core is unreachable, must still be able to
     # answer a question — the conversation has nothing to do with the detection
     # layer and must not degrade with it.
-    assert types == (list(collect.FALLBACK_EVENT_TYPES)
-                     + list(collect.CHAT_EVENT_TYPES))
+    # ⚠️ THE SET IS DERIVED FROM `_with_chat`, NEVER RE-TYPED (2026-08-30, when
+    # the record added `automation_triggered` and the rich `vesta_*` names to
+    # it). Listing them here made this pin fail on a correct tree and taught
+    # nothing — the property is "the fallback path subscribes to the SAME set
+    # the normal path does, plus its fallback names", which one call proves.
+    assert sorted(types) == sorted(collect._with_chat(
+        list(collect.FALLBACK_EVENT_TYPES)))
     assert categories == [], (
         "a fallback must not claim a blueprint layer — that decides whether the "
         "built-in modules stand down")
@@ -360,8 +365,13 @@ def test_an_unreachable_core_falls_back_rather_than_going_deaf() -> None:
     # blueprints, or one whose core is unreachable, must still be able to
     # answer a question — the conversation has nothing to do with the detection
     # layer and must not degrade with it.
-    assert types == (list(collect.FALLBACK_EVENT_TYPES)
-                     + list(collect.CHAT_EVENT_TYPES))
+    # ⚠️ THE SET IS DERIVED FROM `_with_chat`, NEVER RE-TYPED (2026-08-30, when
+    # the record added `automation_triggered` and the rich `vesta_*` names to
+    # it). Listing them here made this pin fail on a correct tree and taught
+    # nothing — the property is "the fallback path subscribes to the SAME set
+    # the normal path does, plus its fallback names", which one call proves.
+    assert sorted(types) == sorted(collect._with_chat(
+        list(collect.FALLBACK_EVENT_TYPES)))
     assert categories == [], "an unreachable Core proves nothing about the property"
 
 
@@ -421,9 +431,22 @@ def test_subscribe_is_chat_only_and_keeps_the_established_record() -> None:
     # a decision that tuple owns, and re-typing its contents here made adding
     # the button press look like the failure this guards against. The assertion
     # below is what actually bites.
-    assert fake.subscribed == list(collect.CHAT_EVENT_TYPES)
-    assert not [t for t in fake.subscribed if t.startswith("vesta_")], (
-        "the collector subscribed to something the villa can no longer emit")
+    # ⚠️ THE `vesta_*` REFUSAL IS REVERSED, BY THE OWNER (2026-08-30). TASK-074
+    # dropped that subscription because every producer was retired — true of
+    # the SHIPPED set, and it silently assumed the archived blueprints would
+    # never be re-enabled. They ARE, whenever Supervision is switched OFF, which
+    # is the supported way to run: the automations alert a phone and now also
+    # fill the record a briefing reads. So the socket carries chat, Home
+    # Assistant's own `automation_triggered`, and the rich `vesta_*` payloads.
+    #
+    # WHAT STILL BITES: the set is DERIVED from the module's own tuples, never
+    # re-typed here, so adding a name is a decision made in one place.
+    expected = (list(collect.CHAT_EVENT_TYPES)
+                + [collect.AUTOMATION_EVENT]
+                + list(collect.VESTA_EVENT_TYPES))
+    assert sorted(fake.subscribed) == sorted(expected), (
+        f"the socket subscribed to {fake.subscribed} — the record is filled "
+        "from these three families and nothing else")
     after = collect.read_buffer()
     assert after["blueprint_categories"] == ["roi"], "the record was erased"
     assert after["online_since"], "online_since was not set on connect"

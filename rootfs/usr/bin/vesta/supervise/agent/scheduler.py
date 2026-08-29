@@ -177,6 +177,24 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
         # this log line is the human-readable half of that distinction.
         return "nothing to escalate"
 
+    # ⚠️ EVERY FLAG IS RECORDED BEFORE IT IS FOLLOWED (2026-08-30). A flagged
+    # item that is never investigated — because the per-pass cap or the daily
+    # budget stopped it — leaves NO trace anywhere today, so an owner cannot
+    # see that triage noticed the same thing three times and never looked. The
+    # record carries `subject_key`, the SAME key `raise_concern` stamps on the
+    # concern, so the briefing groups a flag and the concern it became into one
+    # story rather than counting the event twice.
+    from vesta.adapters import record as record_mod
+    for esc in result.escalations:
+        record_mod.append({
+            "source": "triage",
+            "subject": esc.subject,
+            "subject_key": _subject_key_of(esc),
+            "title": esc.subject,
+            "detail": esc.reason,
+            "severity": "notice",
+        })
+
     # ⚠️ THE ESCALATIONS ARE FOLLOWED, NOT FORMATTED. This function used to build
     # the sentence below and return — so Tier 2 told Tier 3 nothing, ever, and
     # the two real subjects an owner's pass escalated produced no concern at all.
@@ -384,6 +402,31 @@ def describe_document(document: str) -> None:
     if chars < THIN_DOCUMENT_CHARS:
         warn(f"the villa document is {chars} chars — too thin to be about a "
              "villa; triage is about to run effectively blind")
+
+
+def _subject_key_of(esc: Any) -> str:
+    """The join between a flag and the concern it becomes.
+
+    ⚠️ DELEGATES TO `contracts.subject_key`, WHICH IS THE ONE OWNER — my first
+    draft re-spelled `sha256(...)[:16]` inline, which would have been a FOURTH
+    copy of a hash that `analysis.base`, `agent.contracts` and `tools.concern`
+    already share. That file's own docstring records why: two hashes of one
+    string that disagree because one was cut at 16 and the other at 12 is the
+    shape this subsystem keeps paying for, and an independent copy that happens
+    to agree today is worse than one that disagrees, because it drifts the
+    first time either is touched.
+
+    ⚠️ AND THE `topic:` FORM IS COPIED FROM `concern._subject` EXACTLY — lower-
+    cased, whitespace-collapsed. A flag keyed differently from the concern it
+    becomes cannot be joined at all, which is the defect 2.752.0 measured as a
+    Handover column reading 0 by construction.
+    """
+    from vesta.supervise.agent import contracts as agent_contracts
+    ref = str(getattr(esc, "entity_id", "") or "").strip()
+    if ref:
+        return agent_contracts.subject_key(ref)
+    topic = " ".join(str(getattr(esc, "subject", "") or "").split()).lower()
+    return agent_contracts.subject_key(f"topic:{topic}")
 
 
 async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:

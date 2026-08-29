@@ -146,6 +146,7 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
           standing: Optional[Sequence[Mapping[str, Any]]] = None,
           findings: Optional[Sequence[Mapping[str, Any]]] = None,
           carried: Optional[Sequence[Mapping[str, Any]]] = None,
+          record: Optional[Sequence[Mapping[str, Any]]] = None,
           coverage_note: str = "", lead: str = "",
           title: str = "") -> Brief:
     """The NORMAL brief, banner-free. TASK-073's replacement for the renderer.
@@ -178,6 +179,27 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
     found = [f for f in (findings or []) if isinstance(f, Mapping)]
     jobs = [t for t in (carried or []) if isinstance(t, Mapping)]
 
+    # ── the record, merged ONCE ─────────────────────────────────────────────
+    # ⚠️ GROUPED BY `subject_key`, WHICH IS WHAT STOPS DOUBLE COUNTING
+    # (2026-08-30). A triage flag and the concern it became carry the SAME key,
+    # so they are one story: the concern's words win, the flag is absorbed. A
+    # flag with no concern survives as "noticed, not investigated" — the
+    # coverage-and-cost signal that had no surface anywhere before this.
+    #
+    # ⚠️ MERGED ABOVE THE LEAD, NOT INSIDE THE BODY. The first cut merged in the
+    # body and counted RAW ROWS in the sentence, so a draft read "3 thing(s)
+    # happened" above two lines. One derivation, one number.
+    entries = [r for r in (record or []) if isinstance(r, Mapping)]
+    by_key: Dict[str, Dict[str, Any]] = {}
+    loose: List[Dict[str, Any]] = []
+    for entry in entries:
+        key = str(entry.get("subject_key") or "")
+        if not key:
+            loose.append(dict(entry))
+        elif key not in by_key or str(entry.get("source")) == "agent":
+            by_key[key] = dict(entry)
+    merged = list(by_key.values()) + loose
+
     out: List[str] = [title, ""] if title else []
     if lead.strip():
         out += [inert(lead.strip()), ""]
@@ -187,6 +209,11 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
         out += [f"{len(rows)} alert(s) are open.", ""]
     elif found:
         out += [f"{len(found)} thing(s) stood out in this period's checks.", ""]
+    elif merged:
+        # ⚠️ THE RECORD IS NEWS TOO, same rule as the job below — a first draft
+        # printed "Nothing needs your attention" directly above a list of what
+        # happened, caught by composing a draft and READING it.
+        out += [f"{len(merged)} thing(s) happened during this period.", ""]
     elif jobs:
         # ⚠️ AN OPEN JOB IS NEWS — the 2.530.0 rule, and the FIRST draft of
         # this chain broke it within the hour: "Nothing needs your attention"
@@ -223,6 +250,26 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
             detail = inert(str(row.get("detail") or "")).strip()
             out.append(f"- {label}" + (f" — {detail}" if detail else ""))
         out.append("")
+    if merged:
+        agentish = [r for r in merged if r.get("source") in ("agent", "triage")]
+        automations = [r for r in merged if r.get("source") == "automation"]
+        if agentish:
+            out.append("What VESTA looked at:")
+            for row in sorted(agentish, key=lambda r: str(r.get("domain") or "~"))[:20]:
+                domain = str(row.get("domain") or "")
+                head = f"[{domain}] " if domain else ""
+                tail = ("" if row.get("source") == "agent" or row.get("outcome")
+                        else " — noticed, not investigated")
+                out.append(f"- {head}{inert(str(row.get('title') or '?'))}{tail}")
+            out.append("")
+        if automations:
+            out.append("What your automations did:")
+            for row in automations[:20]:
+                detail = str(row.get("detail") or "")
+                out.append(f"- {inert(str(row.get('subject') or '?'))}"
+                           + (f" — {inert(detail)}" if detail else ""))
+            out.append("")
+
     if jobs:
         out.append("Jobs still open with the facility manager:")
         for row in jobs[:20]:
