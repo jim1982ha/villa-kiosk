@@ -1,3 +1,15 @@
+## 2.880.0
+
+### Changed — the briefing's author is named for what it is, and the two alert views name each other
+
+`agent/fallback.py` wrote every briefing yet was named for its rarest job; it
+is `compose.py` now, with `brief` the author and `ladder` the genuine fallback
+used only when the author raises. No behaviour change — the hooks, both
+accurately named, are untouched. The Reflex tab and the Instant alerts tab now
+say they are one list seen from two doors, and both state what the supervision
+switch does and does not change: these automations run identically in either
+mode; the switch decides only whether the agent also watches and investigates.
+
 ## 2.879.0
 
 ### Changed — the Briefing tab now says what a briefing is made of, and its cards match
