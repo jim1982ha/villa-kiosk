@@ -1,3 +1,16 @@
+## 2.887.0
+
+### Changed — the record's field names are pinned across the language boundary
+
+An audit of the two releases that built the record found the contract unguarded:
+its fields are written by three Python writers and read by the browser, and
+nothing checked the pair. A key the browser reads but nobody writes does not
+fail — it renders empty, which on that screen is indistinguishable from a
+period in which nothing happened. Now derived from both sides, so a fourth
+writer is covered on the day it is written. Also removed one CSS rule left
+behind when the history line moved out of the check cards, and corrected the
+architecture document, which still described automations as never being read.
+
 ## 2.886.0
 
 ### Added — "What happened" on screen, and the dialog is one tab again

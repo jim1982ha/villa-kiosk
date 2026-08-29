@@ -5156,7 +5156,6 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    before it can say anything. ⚠️ ONE FLEX CELL rather than two children of
    `.reports-entry-head`, whose `space-between` would push them to opposite
    ends of the card and read as two unrelated labels. */
-.reports-entry-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 .source-chip {
   flex: 0 0 auto;
