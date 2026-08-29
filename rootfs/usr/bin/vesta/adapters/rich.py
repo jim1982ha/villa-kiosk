@@ -20,10 +20,20 @@ bot: one that can format and one that cannot. The fix is to send the briefing
 the way the alerts already go, not to teach `notify` a dialect it has no field
 for.
 
-⚠️ THE PLATFORM NAME LIVES HERE AND NOWHERE ELSE. `deliver.py`'s header
-promises that no platform name appears in it and that changing transport is a
-configuration change — a promise worth keeping, since it is what makes the
-payload the INTERSECTION of what every notify platform accepts. So the branch
+⚠️ THE PLATFORM NAME IS DECLARED HERE AND READ EVERYWHERE ELSE. ⚠️ THIS
+SENTENCE SAID "LIVES HERE AND NOWHERE ELSE" FOR ONE DAY AND WAS FALSE WHEN
+WRITTEN (/dry-audit Part 3, 2026-08-29): `"telegram_bot"` was a literal in SEVEN
+places across THREE modules at the time — `buttons.py`'s four service tuples and
+`chat.py`'s two registry filters — and the claim was made by generalising from
+the two constants in view, which is the exact failure mode that section
+catalogues. They now read `PLATFORM` from here; the sentence describes the tree
+because the tree was changed to match it, not because it was reworded.
+
+⚠️ AND WHAT IS DELIBERATELY *NOT* HERE: `answer_callback_query`, `edit_message`
+and `edit_replymarkup` stay in `buttons.py`. Answering a press and editing a
+keyboard are BUTTON operations with no briefing counterpart, so an adapter the
+briefing depends on has no business owning them. Only the platform name and the
+send are shared. `deliver.py`'s header
 that knows one integration can do more than the intersection is a separate
 adapter that `deliver` consults, and the answer it gives is discovered from the
 entity registry at runtime rather than configured. `supervise/agent/buttons.py`
@@ -118,7 +128,15 @@ def payload(entity_id: str, title: str, html_body: str,
     CALLERS — the briefing passes no keyboard, the agent passes one, and
     everything else about the message is identical. That sameness is the point:
     an owner reading an alert and a briefing should not be able to tell that two
-    code paths produced them."""
+    code paths produced them.
+
+    ⚠️ THAT WAS AN ASPIRATION FOR ONE DAY, NOT A DESCRIPTION (/dry-audit,
+    2026-08-29). Only `deliver` called this; `buttons._send_one` went on
+    assembling the same four fields inline, so `keyboard` was a parameter
+    written for a caller that was never wired — dead on arrival, and the
+    docstring above asserted the opposite. Both callers now come through here,
+    which is what makes the claim checkable rather than hopeful.
+    `test_rich_delivery` pins that this has more than one caller."""
     body: Dict[str, Any] = {
         "entity_id": entity_id,
         "title": title,

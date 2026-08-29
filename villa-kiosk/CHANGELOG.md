@@ -1,3 +1,14 @@
+## 2.892.0
+
+### Changed — the chat platform is named in one place, and the two senders build one payload
+An audit of the previous two releases. 2.890.0 moved the platform name and the
+parse mode into a shared adapter and asserted the name lived "nowhere else",
+which was false when written: it was still a literal in seven places across
+three modules. The send payload was worse — the shared builder had a keyboard
+parameter written for a caller that was never wired, so the agent went on
+assembling the same four fields itself and the two senders could disagree about
+how a message is parsed. Both now come through the owner. No behaviour changes.
+
 ## 2.891.0
 
 ### Fixed — 🆘 offered on the escalation it produced, stale buttons on older copies, a drill counted once however often it ran

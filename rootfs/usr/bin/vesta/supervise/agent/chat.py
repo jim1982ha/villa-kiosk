@@ -31,6 +31,12 @@ happens to share a channel with an alerting system.
 
 from __future__ import annotations
 
+# ⚠️ THE PLATFORM NAME HAS ONE OWNER (/dry-audit, 2026-08-29). These two
+# filters ask a DIFFERENT question from `rich.capable_entities` — they map a
+# chat id to an entity through `unique_id` — so the LOOKUPS stay separate;
+# only the name they both match on is shared.
+from vesta.adapters import rich as rich_mod
+
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -640,7 +646,7 @@ async def target_for(session: Any, chat_id: str,
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, Mapping):
             continue
-        if str(entry.get("platform") or "") != "telegram_bot":
+        if str(entry.get("platform") or "") != rich_mod.PLATFORM:
             continue
         unique = str(entry.get("unique_id") or "")
         # ⚠️ `rsplit`, NOT `split`. A chat id is NEGATIVE for a group —
@@ -726,7 +732,7 @@ async def known_chats(session: Any) -> List[Chat]:
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, Mapping):
             continue
-        if str(entry.get("platform") or "") != "telegram_bot":
+        if str(entry.get("platform") or "") != rich_mod.PLATFORM:
             continue
         unique = str(entry.get("unique_id") or "")
         if "_" not in unique:

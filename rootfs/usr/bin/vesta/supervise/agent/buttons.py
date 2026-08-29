@@ -99,10 +99,14 @@ EVENT_TYPE: str = "telegram_callback"
 #: entity; this one is addressed by the query id alone, so passing an entity is
 #: a 400 and forgetting `show_alert` is another. A press left unanswered spins
 #: until Telegram times out.
-SEND_SERVICE: Tuple[str, str] = ("telegram_bot", "send_message")
-ANSWER_SERVICE: Tuple[str, str] = ("telegram_bot", "answer_callback_query")
-EDIT_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_message")
-EDIT_MARKUP_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_replymarkup")
+# ⚠️ `SEND_SERVICE` IS GONE — it duplicated `rich.SEND_DOMAIN`/`SEND_SERVICE`
+# in a second shape, and `_send_one` now addresses the send through that owner.
+# The three below STAY here, and deliberately: answering a callback query and
+# editing a message are BUTTON operations with no briefing counterpart, so
+# `adapters` has no business owning them. Only the platform name is shared.
+ANSWER_SERVICE: Tuple[str, str] = (rich_mod.PLATFORM, "answer_callback_query")
+EDIT_SERVICE: Tuple[str, str] = (rich_mod.PLATFORM, "edit_message")
+EDIT_MARKUP_SERVICE: Tuple[str, str] = (rich_mod.PLATFORM, "edit_replymarkup")
 
 #: The dialect this module sends in. ⚠️ ONE VALUE, READ BY EVERY SEND AND EVERY
 #: EDIT here, so a message and its later rewrite can never disagree about how
@@ -327,23 +331,25 @@ async def _send_one(session: Any, entity_id: str, title: str, body: str,
     is the same shape the blueprint used (`sent_id | default('')`) and for the
     same reason. `no message id` is logged so this degradation cannot be silent.
     """
-    domain, service = SEND_SERVICE
-    # ⚠️ HTML, SET EXPLICITLY, AND ONLY HERE. `telegram_bot.send_message`
-    # publishes a `parse_mode` field, so this path does not depend on the
-    # villa's integration setting — which is what makes formatting shippable
-    # rather than true on one property. `notify.send_message` publishes no such
-    # field, so the plain path stays plain and `deliver` is untouched: no
-    # platform branch moved into the agnostic sender.
+    # ⚠️ THE PAYLOAD AND THE ADDRESS BOTH COME FROM `adapters.rich`, WHICH IS
+    # THE ONE OWNER (/dry-audit, 2026-08-29). 2.890.0 moved the platform name
+    # and the parse mode there and left this builder behind, so the same four
+    # fields were assembled twice — and `rich.payload`'s own docstring claimed
+    # "one spelling for BOTH callers" while having exactly one. Its `keyboard`
+    # parameter existed for this call and nothing passed it: an export written
+    # for a caller that was never wired. Now it is.
+    #
+    # ⚠️ HTML, SET EXPLICITLY. `telegram_bot.send_message` publishes a
+    # `parse_mode` field, so this path does not depend on the villa's
+    # integration setting — which is what makes formatting shippable rather
+    # than true on one property.
     #
     # ⚠️ HTML RATHER THAN MARKDOWN IS A MEASUREMENT (2026-08-28): the same
     # message in markdown returned HTTP 500, because a real device name and our
     # own ingress URL both contain underscores and one unclosed italic kills
     # the send. In HTML an underscore is an ordinary character.
-    payload: Dict[str, Any] = {
-        "entity_id": entity_id, "title": title, "message": body,
-        "parse_mode": PARSE_MODE,
-        "inline_keyboard": [[list(b) for b in row] for row in keyboard],
-    }
+    domain, service = rich_mod.SEND_DOMAIN, rich_mod.SEND_SERVICE
+    payload: Dict[str, Any] = rich_mod.payload(entity_id, title, body, keyboard)
     try:
         from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:

@@ -30,6 +30,9 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from vesta.adapters import deliver as deliver_mod  # noqa: E402
 from vesta.adapters import discovery as discovery_mod  # noqa: E402
 from vesta.adapters import rich as rich_mod  # noqa: E402
@@ -176,3 +179,108 @@ def test_the_registry_lookup_has_exactly_one_implementation() -> None:
         "its own TTL and its own failure direction for one fact")
     assert "rich_mod.capable_entities" in src, (
         "buttons no longer delegates the lookup")
+
+
+# ── the platform name and the payload have ONE owner ────────────────────────
+def test_the_platform_name_is_declared_once_and_read_everywhere() -> None:
+    """⚠️ /dry-audit Part 3, 2026-08-29. `rich.py` claimed the platform name
+    lived there "and nowhere else" while it was a literal in seven places
+    across three modules — a sentence written by generalising from the two
+    constants in view. The tree was changed to match the claim; this is what
+    keeps them together, since prose cannot go red."""
+    import os
+    import re
+
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")
+    offenders = []
+    for dirpath, _dirs, files in os.walk(root):
+        if "__pycache__" in dirpath:
+            continue
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(dirpath, name)
+            with open(path, encoding="utf-8") as fh:
+                src = fh.read()
+            # the declaration itself is the one legitimate literal
+            if os.path.abspath(path) == os.path.abspath(rich_mod.__file__):
+                continue
+            for n, line in enumerate(src.splitlines(), 1):
+                if line.lstrip().startswith("#"):
+                    continue          # prose may name it; only CODE may not
+                if re.search(r'"telegram_bot"', line):
+                    offenders.append(f"{name}:{n}")
+
+    assert not offenders, (
+        f"the platform name is a literal outside its declaration: {offenders}. "
+        "Read `rich.PLATFORM` — one owner, or the next rename misses one.")
+
+
+def test_the_rich_payload_has_more_than_one_caller() -> None:
+    """⚠️ ITS DOCSTRING SAYS "FOR BOTH CALLERS" — the `keyboard` parameter
+    exists only for the agent's send. For one day it had a single caller and
+    the parameter was dead, which is a claim and an export rotting together."""
+    import os
+    import re
+
+    callers = set()
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")
+    for dirpath, _dirs, files in os.walk(root):
+        if "__pycache__" in dirpath:
+            continue
+        for name in files:
+            if not name.endswith(".py") or name == "rich.py":
+                continue
+            with open(os.path.join(dirpath, name), encoding="utf-8") as fh:
+                if re.search(r"rich_mod\.payload\(", fh.read()):
+                    callers.add(name)
+
+    assert len(callers) >= 2, (
+        f"only {sorted(callers) or 'nothing'} builds the rich payload through "
+        "its owner; the other sender assembles the fields inline, so the two "
+        "can disagree about parse_mode")
+
+
+def test_the_button_only_services_stay_out_of_adapters() -> None:
+    """⚠️ THE DELIBERATE NON-CONVERGENCE, RECORDED SO THE NEXT AUDIT DOES NOT
+    "FINISH THE JOB". Answering a press and editing a keyboard have no briefing
+    counterpart; moving them here would make an adapter the briefing depends on
+    own the agent's button mechanics."""
+    # ⚠️ STRING LITERALS IN THE AST, NOT `in src` — this module's own docstring
+    # NAMES all three while explaining why they are absent, so a substring
+    # search over the source reports the opposite of the truth. /dry-audit
+    # step 7's comment trap, hit twice in two days by pins written to guard
+    # against exactly this kind of drift.
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(rich_mod))
+    literals = {n.value for n in ast.walk(tree)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+    docstrings = {ast.get_docstring(n) for n in ast.walk(tree)
+                  if isinstance(n, (ast.Module, ast.FunctionDef,
+                                    ast.AsyncFunctionDef, ast.ClassDef))}
+    literals -= {d for d in docstrings if d}
+
+    for service in ("answer_callback_query", "edit_message", "edit_replymarkup"):
+        assert service not in literals, (
+            f"{service} moved into adapters — it is a button operation, and "
+            "the briefing has no use for it")
+
+
+def test_the_payload_carries_the_keyboard_it_was_given() -> None:
+    """⚠️ FOUND BY MUTATION, NOT BY REVIEW (/dry-audit, 2026-08-29). Replacing
+    the keyboard branch with `if False` — so every alert ships with no buttons
+    at all — left 89 tests green. The suite pinned that the agent CALLS this
+    builder and that the briefing passes no keyboard, and nothing checked that
+    a keyboard handed in ever reaches the wire. The whole button subsystem
+    hung off an unasserted branch."""
+    rows = [[["✅", "vd:c1"], ["\U0001F6AB", "vx:c1"]]]
+    body = rich_mod.payload("notify.bot", "T", "<b>b</b>", rows)
+    assert body["inline_keyboard"] == [[["✅", "vd:c1"], ["\U0001F6AB", "vx:c1"]]], (
+        "the keyboard handed to the payload builder never reached it — every "
+        "alert would arrive with no buttons")
+
+    # ⚠️ AND ABSENT, NOT EMPTY, WHEN THERE IS NONE. `inline_keyboard: []` is a
+    # field the service must still parse; the briefing sends no keyboard at all.
+    assert "inline_keyboard" not in rich_mod.payload("notify.bot", "T", "b")

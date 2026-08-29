@@ -816,8 +816,16 @@ def test_the_TELEGRAM_path_sets_its_own_PARSE_MODE() -> None:
         f"the send dialect is {buttons_mod.PARSE_MODE!r}; markdown is proven "
         f"fatal with real device names and html is proven safe")
     send = inspect.getsource(buttons_mod._send_one)
-    assert "PARSE_MODE" in send, (
-        "buttons no longer sets the mode it depends on")
+    # ⚠️ THROUGH THE OWNER, NOT INLINE (/dry-audit, 2026-08-29). This asserted
+    # that `_send_one` mentions PARSE_MODE, which was right while it assembled
+    # its own payload. It no longer does: `adapters.rich.payload` builds the
+    # four fields for BOTH senders, so the mode is set exactly once instead of
+    # once per caller. The property is unchanged — the send declares its own
+    # parse mode rather than inheriting the villa's integration default — and
+    # what proves it moved one level down.
+    assert "rich_mod.payload(" in send, (
+        "buttons builds its own send payload again, so the alert path and the "
+        "briefing can disagree about parse_mode")
 
     # ⚠️ DOCSTRINGS ARE PROSE TOO — deliver's own history paragraphs recount
     # the reference villa's Telegram incident, and the first cut of this
