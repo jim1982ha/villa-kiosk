@@ -130,10 +130,11 @@ export const SKIP_REASON = [
   "audience_mismatch",
   "timed_out",
   "errored",
-  // ⚠️ ITS OWN VALUE SO THE BRIEF CAN GROUP THESE WITHOUT PARSING ENGLISH: a
-  // check standing down for a covering rule that has never fired. Added to
-  // `contracts.py` first and caught here by `test_contract_parity` on the same
-  // run — which is the whole reason that test exists.
+  // ⚠️ HISTORICAL — NO PRODUCER SINCE 2.875.0. Kept because stored analysis
+  // from before that release carries the code; see `contracts.py` for the full
+  // reasoning, which is the copy to trust. It stays in BOTH lists or neither:
+  // `test_contract_parity` holds the two together, and that is what caught this
+  // value's arrival in the first place.
   "superseded",
 ] as const;
 /* dry-audit:ok — mirror alias; see this file's header. */

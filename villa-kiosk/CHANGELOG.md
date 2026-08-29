@@ -1,3 +1,16 @@
+## 2.876.0
+
+### Changed — a test that had quietly stopped measuring, and two comments describing a deleted rule
+
+An audit of yesterday's release. One assertion guarding "the gate grew a second
+way to stand a check down" was written when the gate had one refusal; it has
+five now, so the check survived only because the word it looked for appears in
+a comment explaining the arm was removed. It measured prose. It now reads the
+code with comments stripped. The skip code that arm produced keeps its place in
+the contract — stored analysis from before the change still carries it — but
+both copies of its description said it was a live reason, which it has not been
+since the arm went.
+
 ## 2.875.0
 
 ### Fixed — the checks run in both modes, so the briefing always has its analysis

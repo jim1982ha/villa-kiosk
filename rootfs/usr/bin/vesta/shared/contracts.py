@@ -142,12 +142,20 @@ SKIP_REASON: Final[Tuple[str, ...]] = (
     # Grouping these by matching on the sentence would be the cross-artefact
     # defect this file exists to prevent, one layer in.
     #
-    # ⚠️ IT REPLACED `covered_but_silent` IN 2.755.0. That name described a
-    # condition that no longer exists: there is no silence test, no grace
-    # window and no installed-blueprint test. A check stands down for exactly
-    # one reason now — supervision is off, so the villa's own automation is in
-    # charge — and the value says that and nothing else.
-    "superseded",           # supervision is off; the blueprint does this job
+    # ⚠️ NO PRODUCER SINCE 2.875.0, AND KEPT ANYWAY — the one case where an
+    # unreachable value is right. `gate` lost its stand-down arm entirely (the
+    # briefing never reads an automation's output, so standing a check down
+    # left off-mode with no analysis at all), so nothing can emit this today.
+    # It stays because `entry["_analysis"]["skipped"]` is PERSISTED: history
+    # written before 2.875.0 carries this code, and a reader meeting a value
+    # absent from the contract is the "unlisted kind" failure this project
+    # already pays for in `standing.SEVERITY_OF_KIND`.
+    #
+    # ⚠️ SO IT IS A VOCABULARY FOR READING, NOT A REASON A CHECK CAN STAND DOWN
+    # TODAY. If a future rule needs to stand a check down, it needs its OWN
+    # value — reusing this one would make old history and new skips
+    # indistinguishable.
+    "superseded",           # historical: no producer since 2.875.0
 )
 
 # ⚠️ THE PRIVACY BOUNDARY (Phase 6). The allow-list of field names that may

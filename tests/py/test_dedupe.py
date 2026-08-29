@@ -204,8 +204,25 @@ def test_the_gate_asks_ONE_question_and_the_machinery_is_GONE() -> None:
         assert gone not in src, (
             f"the gate consults {gone} again; the rule is supervision on/off "
             "and nothing else")
-    assert src.count("return (False,") == 1 or "superseded" in src, (
-        "the gate grew a second way to stand a check down")
+    # ⚠️ THIS ASSERTION WAS PASSING ON A COMMENT (found 2026-08-29). It read
+    # `count("return (False,") == 1 or "superseded" in src`, written when the
+    # gate had ONE refusal. The gate has five now (capability, disabled,
+    # errored, history, audience), so the first half is False and the whole
+    # thing survived only because the word "superseded" appears in a COMMENT
+    # explaining that the arm was removed. Strip comments and it fails; tidy
+    # that comment away and it fails for the wrong reason. Meanwhile a genuine
+    # new stand-down arm would sail past if it happened to use the word.
+    #
+    # What it is actually for: NO supervision-conditional refusal may return.
+    # That is checkable against the code, so it is checked against the code.
+    code = "\n".join(line for line in src.split("\n")
+                     if not line.lstrip().startswith("#"))
+    assert "supervision_enabled" not in code, (
+        "the gate reads the supervision switch again — the stand-down arm is "
+        "back, and with it the mode in which the briefing has no analysis")
+    assert "superseded" not in code, (
+        "the gate can emit `superseded` again; that value is historical "
+        "vocabulary for reading old entries, not a live skip reason")
 
 
 def test_nothing_in_the_tree_still_reads_the_deleted_machinery() -> None:
