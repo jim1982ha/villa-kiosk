@@ -117,3 +117,37 @@ def test_the_id_pair_that_prevents_double_counting_is_written_by_both_sides() ->
     assert "subject_key(" in triage or "_subject_key_of" in triage, (
         "the flag's key is no longer computed from the shared hash — a "
         "hand-spelled copy is how the two sides stop matching")
+
+
+def test_both_sides_group_repeated_firings_rather_than_listing_them() -> None:
+    """⚠️ ONE RULE, TWO LANGUAGES, PINNED AS A PAIR (2026-08-30, owner: "without
+    this we see a very long list of automations that triggered and it's not
+    user friendly"). A motion light fires dozens of times a day; one line per
+    firing makes both the tablet's list and the briefing unreadable.
+
+    The SPA cannot call the composer, so the rule genuinely exists twice — which
+    is exactly the shape Part 5 exists to hold together. What is asserted is
+    that neither side has quietly gone back to listing: each must group and each
+    must SUM the figures rather than sample one firing's, because "0.3 kWh"
+    printed beside "14 times" is wrong by a factor of fourteen.
+    """
+    composer = _py("vesta", "supervise", "agent", "compose.py")
+    with open(os.path.join(REPO_ROOT, "src", "vesta", "brief", "components",
+                           "RecordTab.tsx"), encoding="utf-8") as fh:
+        tab = fh.read()
+
+    assert "tally" in composer and 'held["times"] += 1' in composer, (
+        "the composer lists every firing again instead of grouping by automation")
+    # ⚠️ THE CALL, NOT THE NAME. Asserting `"sumFigures" in tab` passed when the
+    # function was renamed `sumFiguresUnused` — a substring match on a symbol,
+    # the same trap this file's own client parser was fixed for one commit
+    # earlier. A name proves a definition exists; only a call proves it runs.
+    assert "held.times += 1" in tab, (
+        "the tablet lists every firing again instead of grouping")
+    assert "sumFigures(held, row)" in tab, (
+        "the tablet no longer sums a grouped row's figures — one firing's "
+        "number beside a count is wrong by the size of the count")
+
+    for side, src in (("composer", composer), ("tablet", tab)):
+        assert "kwh" in src and "cost_local" in src, (
+            f"the {side} stopped carrying the blueprint's own figures")

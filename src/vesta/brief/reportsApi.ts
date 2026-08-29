@@ -624,6 +624,11 @@ export interface RecordEntry {
   ref: string;
   outcome: string;
   fidelity: string;
+  /** The blueprint's own figures, where it sent them — kwh, cost_local,
+   *  wasted_minutes, rule_id, report_bucket. ⚠️ CARRIED RAW, because summing
+   *  repeated firings needs the NUMBERS, not the sentence `detail` renders
+   *  from them. */
+  payload: Record<string, unknown>;
 }
 
 /** The record over a window, newest first. `null` when it could not be read —
@@ -648,6 +653,7 @@ export async function fetchRecord(days = 31): Promise<RecordEntry[] | null> {
         ref: str(row.ref),
         outcome: str(row.outcome),
         fidelity: str(row.fidelity),
+        payload: obj(row.payload),
       };
     });
   } catch {

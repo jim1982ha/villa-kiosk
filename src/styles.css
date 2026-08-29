@@ -3744,6 +3744,12 @@ label.toggle span { user-select: none; line-height: 1.4; }
    reusing a hue here would read as a mis-tagged badge (CLAUDE.md's own rule).
    ⚠️ `.chip-row` is the filter strip; `.btn.ghost.active` is the house
    selected-state, so no new selected styling is invented here. */
+/* "14×" beside a grouped automation. Same quiet chip as the domain tag — a
+   count is a fact about the row, not a status, so it must not read as one. */
+.reports-times {
+  margin-left: 6px; font-size: var(--text-xs); font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
 .reports-domain {
   display: inline-block; margin-right: 6px; padding: 1px 6px;
   border-radius: 999px; font-size: var(--text-xs);

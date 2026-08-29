@@ -200,6 +200,32 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
             by_key[key] = dict(entry)
     merged = list(by_key.values()) + loose
 
+    # ⚠️ AUTOMATIONS ARE TALLIED HERE TOO, FOR THE SAME REASON THE MERGE IS
+    # (2026-08-30). They carry no `subject_key`, so the merge above leaves them
+    # loose and the lead counted 17 firings above two rendered lines — the same
+    # count-vs-body mismatch, one release later, in the one case the first fix
+    # did not cover. Everything the lead counts is now derived once, here.
+    tally: Dict[str, Dict[str, Any]] = {}
+    for row in merged:
+        if str(row.get("source") or "") != "automation":
+            continue
+        name = str(row.get("subject") or row.get("title") or "?")
+        held = tally.setdefault(name, {"times": 0, "kwh": 0.0, "cost": 0.0,
+                                       "mins": 0.0})
+        held["times"] += 1
+        payload = row.get("payload")
+        if isinstance(payload, Mapping):
+            for key, into in (("kwh", "kwh"), ("cost_local", "cost"),
+                              ("wasted_minutes", "mins")):
+                try:
+                    held[into] += float(payload.get(key) or 0)
+                except (TypeError, ValueError):
+                    pass
+
+    agentish = [r for r in merged if r.get("source") in ("agent", "triage")]
+    #: What a reader will actually SEE: one line per story, one per automation.
+    stories = len(agentish) + len(tally)
+
     out: List[str] = [title, ""] if title else []
     if lead.strip():
         out += [inert(lead.strip()), ""]
@@ -209,11 +235,11 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
         out += [f"{len(rows)} alert(s) are open.", ""]
     elif found:
         out += [f"{len(found)} thing(s) stood out in this period's checks.", ""]
-    elif merged:
+    elif stories:
         # ⚠️ THE RECORD IS NEWS TOO, same rule as the job below — a first draft
         # printed "Nothing needs your attention" directly above a list of what
         # happened, caught by composing a draft and READING it.
-        out += [f"{len(merged)} thing(s) happened during this period.", ""]
+        out += [f"{stories} thing(s) happened during this period.", ""]
     elif jobs:
         # ⚠️ AN OPEN JOB IS NEWS — the 2.530.0 rule, and the FIRST draft of
         # this chain broke it within the hour: "Nothing needs your attention"
@@ -250,9 +276,7 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
             detail = inert(str(row.get("detail") or "")).strip()
             out.append(f"- {label}" + (f" — {detail}" if detail else ""))
         out.append("")
-    if merged:
-        agentish = [r for r in merged if r.get("source") in ("agent", "triage")]
-        automations = [r for r in merged if r.get("source") == "automation"]
+    if stories:
         if agentish:
             out.append("What VESTA looked at:")
             for row in sorted(agentish, key=lambda r: str(r.get("domain") or "~"))[:20]:
@@ -262,12 +286,32 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
                         else " — noticed, not investigated")
                 out.append(f"- {head}{inert(str(row.get('title') or '?'))}{tail}")
             out.append("")
-        if automations:
+        if tally:
+            # ⚠️ GROUPED BY AUTOMATION, NOT ONE LINE PER FIRING (2026-08-30,
+            # owner: "without this we see a very long list of automations that
+            # triggered and it's not user friendly"). A motion light fires
+            # dozens of times a day; twenty identical lines is a brief nobody
+            # finishes reading. WHICH automation and HOW OFTEN is the useful
+            # sentence, and it is the same rule the tablet's own list applies —
+            # stated in two languages because the SPA cannot call this, and
+            # pinned as a pair by `test_record_wire`.
+            #
+            # ⚠️ FIGURES ARE SUMMED, NEVER SAMPLED. One firing's "0.3 kWh"
+            # printed beside "14 times" is wrong by a factor of fourteen.
             out.append("What your automations did:")
-            for row in automations[:20]:
-                detail = str(row.get("detail") or "")
-                out.append(f"- {inert(str(row.get('subject') or '?'))}"
-                           + (f" — {inert(detail)}" if detail else ""))
+            for name, held in sorted(tally.items(),
+                                     key=lambda kv: -int(kv[1]["times"])):
+                bits = []
+                if held["times"] > 1:
+                    bits.append(f"{int(held['times'])} times")
+                if held["mins"]:
+                    bits.append(f"{round(held['mins'])} min total")
+                if held["kwh"]:
+                    bits.append(f"{held['kwh']:.1f} kWh total")
+                if held["cost"]:
+                    bits.append(f"about {round(held['cost'])} total")
+                clause = " · ".join(bits)
+                out.append(f"- {inert(name)}" + (f" — {clause}" if clause else ""))
             out.append("")
 
     if jobs:
