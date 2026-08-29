@@ -1,3 +1,16 @@
+## 2.882.0
+
+### Added — the As-Built technical authority, generated from the code and pinned
+
+The architecture document is no longer a patched proposal: a new generator
+reads every table from the code at build time — the four loops, every config
+dial with its shipped default, the checks and their windows, the tools per
+tier, the acts, the escalation bands, the routes and stores — so a figure that
+drifts is a red build, not a wrong sentence. A tracked test pins every table
+non-empty and spot-checks them against the live modules; its empty-table guard
+caught the store parse finding nothing on its very first run. The old HLD
+moves to the archive as the design-era record. No behaviour change.
+
 ## 2.881.0
 
 ### Fixed — the Briefing tab's cards, columns and duplicate blocks; one vocabulary
