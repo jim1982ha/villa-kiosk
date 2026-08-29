@@ -1,3 +1,15 @@
+## 2.888.0
+
+### Changed — one tab per step, so the page stops scrolling past what you came for
+
+Four steps, four tabs: what is watched, what happened, what it can see, the
+briefing itself. Merging them onto one page was right while the page was short;
+adding the record made it long enough that a reader scrolled past the thing they
+opened the dialog for — and a single tab chip above a scrolling page is a
+control that does nothing. What happened sits before what it can see, because
+the events come first and the question of whether the property could have
+measured them comes after.
+
 ## 2.887.0
 
 ### Changed — the record's field names are pinned across the language boundary
