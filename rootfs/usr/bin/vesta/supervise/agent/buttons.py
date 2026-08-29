@@ -467,6 +467,19 @@ async def handle(event: Mapping[str, Any], *, session: Any,
         # buttons, and a live defect the moment it could also PUT THEM BACK.
         elif await retire(session, ref, _closing_line(data, outcome.note)):
             concerns_mod.forget_message(concern_id, message_id)
+        # ⚠️ AND EVERY OTHER COPY OF THIS ALERT, NOW. The block above edits the
+        # message the press came from; an alert that was delivered twice — a
+        # primary send and an escalation copy — has others in the same chat
+        # still showing the act set the store has just changed. Waiting for the
+        # chase tick meant up to 15 minutes of a message offering ✅ on an alert
+        # already dismissed, which is the "two surfaces disagree" defect this
+        # module exists to prevent, inside ONE surface.
+        #
+        # ⚠️ IT RUNS `reconcile`, NOT A COPY OF IT, and it is safely idempotent
+        # over the message just handled: that ref has either been re-stamped
+        # with what it now draws (so it compares equal and is left alone) or
+        # been forgotten (so there is nothing left to visit).
+        await reconcile(session, config=config, only=str(concern_id))
     stage("button", f"{concern_id} {action_id} by {who}: "
                     f"{'ok' if outcome.ok else outcome.note}")
     return "" if outcome.ok else outcome.note
@@ -636,10 +649,22 @@ async def redraw(session: Any, ref: "Ref",
 
 # ── keeping the phone in step with the tablet ───────────────────────────────
 async def reconcile(session: Any, *,
-                    config: Optional[Mapping[str, Any]] = None) -> int:
+                    config: Optional[Mapping[str, Any]] = None,
+                    only: str = "") -> int:
     """Bring every message back into step with its alert. Never raises.
 
     Returns the number of messages CHANGED — retired plus redrawn.
+
+    ⚠️ `only` SCOPES IT TO ONE ALERT, AND EXISTS SO A PRESS CAN RUN THE SAME
+    LOGIC IMMEDIATELY (2026-08-29, owner: "I just clicked on Dismissed in the
+    2nd message but I see that buttons are still being displayed on previous
+    received messages"). `handle` edits the message that was PRESSED and
+    nothing else, so an alert delivered more than once — a primary send plus an
+    escalation copy — left its other copies offering acts the store had already
+    refused, for up to a full chase tick. The alternative was a second retire
+    loop next to the press; that is this module's own three-way question
+    written twice, and the middle outcome is exactly the one a second copy
+    forgets. Same body, narrower input.
 
     ⚠️ THIS IS THE HALF THAT MAKES THE OWNER'S REQUIREMENT TRUE RATHER THAN
     NEARLY TRUE. A press is answered instantly, but an alert also moves when
@@ -676,6 +701,8 @@ async def reconcile(session: Any, *,
 
     retired = redrawn = 0
     for row in concerns_mod.read():
+        if only and str(row.get("id") or "") != only:
+            continue
         refs = row.get("messages")
         if not isinstance(refs, list) or not refs:
             continue

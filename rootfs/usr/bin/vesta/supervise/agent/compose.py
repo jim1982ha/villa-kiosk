@@ -25,7 +25,7 @@ fallback that can fail has not understood its job.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.shared.style import inert
 
@@ -222,9 +222,33 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
                 except (TypeError, ValueError):
                     pass
 
-    agentish = [r for r in merged if r.get("source") in ("agent", "triage")]
+    # ⚠️ GROUPED EXACTLY AS THE AUTOMATIONS ARE (2026-08-29, owner: "I don't see
+    # the number of drill message incremented by one … can you consistently
+    # adjust the way messages is reported in the briefing to make it consistent
+    # with how the number of automation are also reported there"). Two sections
+    # listing the same KIND of thing — something that happened, possibly more
+    # than once — must not count it two different ways: automations said "95
+    # times" while a drill fired twice printed one line and looked like one
+    # event. One rule, both sections.
+    #
+    # ⚠️ THE QUALIFIER IS PART OF THE KEY, NOT DROPPED TO MAKE THE GROUPS
+    # TIDIER. "noticed, not investigated" is the difference between a flag
+    # nobody looked at and a concern somebody concluded; folding those into one
+    # counted line would merge two different facts and report the total under
+    # whichever qualifier happened to be first.
+    looked: Dict[Tuple[str, str, str], int] = {}
+    for row in merged:
+        if row.get("source") not in ("agent", "triage"):
+            continue
+        tail = ("" if row.get("source") == "agent" or row.get("outcome")
+                else " — noticed, not investigated")
+        key = (str(row.get("domain") or ""), str(row.get("title") or "?"), tail)
+        looked[key] = looked.get(key, 0) + 1
+
     #: What a reader will actually SEE: one line per story, one per automation.
-    stories = len(agentish) + len(tally)
+    #: ⚠️ GROUPS, NOT ROWS — the lead must equal the number of lines below it,
+    #: which is the whole reason the tally was moved up here in the first place.
+    stories = len(looked) + len(tally)
 
     out: List[str] = [title, ""] if title else []
     if lead.strip():
@@ -277,14 +301,16 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
             out.append(f"- {label}" + (f" — {detail}" if detail else ""))
         out.append("")
     if stories:
-        if agentish:
+        if looked:
             out.append("What VESTA looked at:")
-            for row in sorted(agentish, key=lambda r: str(r.get("domain") or "~"))[:20]:
-                domain = str(row.get("domain") or "")
+            # ⚠️ SAME SHAPE AS THE AUTOMATION LINES BELOW — busiest first within
+            # a domain, and the count in the same place, so a reader comparing
+            # the two sections is comparing like with like.
+            for (domain, what, tail), times in sorted(
+                    looked.items(), key=lambda kv: (kv[0][0] or "~", -kv[1]))[:20]:
                 head = f"[{domain}] " if domain else ""
-                tail = ("" if row.get("source") == "agent" or row.get("outcome")
-                        else " — noticed, not investigated")
-                out.append(f"- {head}{inert(str(row.get('title') or '?'))}{tail}")
+                often = f" — {times} times" if times > 1 else ""
+                out.append(f"- {head}{inert(what)}{often}{tail}")
             out.append("")
         if tally:
             # ⚠️ GROUPED BY AUTOMATION, NOT ONE LINE PER FIRING (2026-08-30,

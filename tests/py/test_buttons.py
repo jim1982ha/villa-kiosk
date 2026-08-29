@@ -477,15 +477,20 @@ def test_a_press_on_a_SETTLED_alert_retires_and_FORGETS_the_message() -> None:
     finally:
         _restore(seen)
 
-    assert seen["retired"] == ["174"] and not seen["restated"], \
-        "a settled alert's message kept or gained buttons"
+    # ⚠️ EVERY COPY, NOT ONLY THE ONE PRESSED — REVERSED 2026-08-29 BY A REPORT
+    # FROM THE PHONE: "I just clicked on Dismissed in the 2nd message but I see
+    # that buttons are still being displayed on previous received messages."
+    # This used to assert that the other chat's copy SURVIVED, on the reasoning
+    # that "a press in one says nothing about the other". That reasoning was
+    # wrong: what a message may offer is a function of the ALERT, not of which
+    # copy somebody happened to press, and this alert is settled — so every copy
+    # is stale the instant the act lands. Leaving them to the chase clock meant
+    # up to 15 minutes of a dismissed alert still offering ✅ in the same chat.
+    assert seen["retired"] == ["174", "999"] and not seen["restated"], \
+        "a settled alert left a copy of itself carrying live buttons"
     left = [r["message_id"] for r in concerns.read()[0]["messages"]]
-    assert "174" not in left, \
-        "the pressed message is still tracked, so its buttons come back"
-    # ⚠️ THE OTHER CHAT'S COPY SURVIVES. An escalated alert has a message in more
-    # than one chat and a press in one says nothing about the other, which still
-    # carries live buttons and must still be reconciled.
-    assert left == ["999"], "a press abandoned another chat's live message"
+    assert left == [], \
+        "a retired message is still tracked, so its buttons come back"
 
 
 def test_a_press_whose_EDIT_FAILED_keeps_the_message_to_try_again() -> None:

@@ -242,9 +242,47 @@ def available_for(concern: Mapping[str, Any],
 
     # ⚠️ ONE SET NOW, WHATEVER THE ACKNOWLEDGEMENT SAYS. The branch that
     # differed per state withdrew `Seen`; with the merges there is nothing left
-    # to withdraw — closing, asking for help and rating all still make sense on
-    # an alert somebody has picked up. A branch that cannot differ is deleted.
-    return [_BY_ID["done"], _BY_ID["dismiss"], _BY_ID["help"]] + rating
+    # to withdraw — closing and rating both still make sense on an alert
+    # somebody has picked up. A branch that cannot differ is deleted.
+    #
+    # ⚠️ EXCEPT 🆘, WHICH WITHDRAWS ONCE THE LADDER HAS REACHED ITS RUNG
+    # (2026-08-29, owner: "I clicked on SOS … the issue is that I still see an
+    # SOS button in the escalated message … there is no other SOS person to
+    # speak with, so this 2nd message shall not have the SOS button"). It is
+    # the rating rule in a second place: an act that can only be used once must
+    # stop being drawn, and `escalated_step` is the stamp that says so.
+    #
+    # ⚠️ IT WAS ALREADY A NO-OP WEARING A BUTTON, which is exactly what this
+    # function's own docstring forbids: `outbox.escalate` refuses a step it has
+    # already taken, so a second press either did nothing or answered "there is
+    # nobody else configured to tell" — after the owner had been made to ask.
+    return ([_BY_ID["done"], _BY_ID["dismiss"]]
+            + ([] if _help_is_spent(concern) else [_BY_ID["help"]])
+            + rating)
+
+
+def _help_is_spent(concern: Mapping[str, Any]) -> bool:
+    """Has the ladder already reached — or passed — the rung 🆘 jumps to?
+
+    ⚠️ POSITION ON THE LADDER, NOT EQUALITY WITH ONE STEP. `route.BANDS` is
+    ordered, so "every configured target, once" is past "add the owner" and
+    leaves 🆘 nothing to add either. Comparing to a single step would redraw the
+    button on an alert that had already been broadcast to everybody.
+
+    ⚠️ AN UNRECOGNISED STEP KEEPS THE BUTTON. A stamp this ladder does not know
+    is not evidence that anybody was told, and withdrawing the one act that
+    reaches a human on the strength of a string nobody parsed is the wrong
+    direction to fail in.
+    """
+    from vesta.supervise.agent import route as route_mod
+
+    step = str(concern.get("escalated_step") or "").strip()
+    if not step:
+        return False
+    order = [name for _, name in route_mod.BANDS]
+    if step not in order or route_mod.HELP_STEP not in order:
+        return False
+    return order.index(step) >= order.index(route_mod.HELP_STEP)
 
 
 def _spent(concern_id: str, config: Optional[Mapping[str, Any]]) -> bool:
@@ -423,7 +461,10 @@ async def _help(session: Any, row: Mapping[str, Any], *, by: str,
     from vesta.supervise.agent import outbox as outbox_mod
     from vesta.supervise.agent import route as route_mod
 
-    verdict = route_mod.Escalation(act=True, step="add the owner",
+    # ⚠️ `route.HELP_STEP`, NOT A LITERAL — `available_for` decides whether to
+    # draw 🆘 by asking whether the ladder has reached this same rung, and two
+    # spellings would put the button and the act it triggers out of step.
+    verdict = route_mod.Escalation(act=True, step=route_mod.HELP_STEP,
                                    reason=f"{by} asked for help")
     sent = await outbox_mod._escalate_one(session, row, verdict,
                                           config=config, now=now)

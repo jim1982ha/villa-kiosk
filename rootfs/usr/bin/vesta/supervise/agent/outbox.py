@@ -307,7 +307,17 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
         str(concern.get("title") or ""))
     plan2 = dataclasses.replace(
         plan, title=f"<b>{links_mod.html_escape(escalated)}</b>", body=rich_body)
-    results = await _send_with_buttons(session, concern, plan2, config=config)
+    # ⚠️ DRAWN FROM THE POST-ESCALATION VIEW, WHICH IS THE WHOLE FIX (2026-08-29).
+    # `_mark_escalated` runs AFTER the send — deliberately, so a failed send does
+    # not lose the escalation — so `concern` here still carries the step this
+    # message is the RESULT of, and the keyboard was built as though the ladder
+    # had not moved. That is why the escalation arrived still offering 🆘: the
+    # button was correct for the row as stored and wrong for the message being
+    # written. Projecting the step for the DRAW only leaves the stamp ordering
+    # untouched and makes the two agree.
+    drawn_as = dict(concern)
+    drawn_as["escalated_step"] = verdict.step
+    results = await _send_with_buttons(session, drawn_as, plan2, config=config)
     plain = [r.get("target") for r in results
              if isinstance(r, Mapping) and str(r.get("status")) != "sent"]
     if plain:

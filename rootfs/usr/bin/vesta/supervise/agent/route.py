@@ -74,6 +74,15 @@ BANDS: Tuple[Tuple[int, str], ...] = (
     (90, "every configured target, once"),
 )
 
+#: The rung 🆘 jumps straight to. ⚠️ NAMED HERE, BESIDE THE LADDER IT INDEXES,
+#: because two readers need it and they are in different modules: `actions._help`
+#: takes this step, and `actions.available_for` asks whether the ladder has
+#: already reached it in order to decide whether 🆘 is still worth drawing. A
+#: literal in each would be two spellings of one rung, and the button set would
+#: stop matching the act the moment either moved. `test_help_button` pins that it
+#: is a real band rather than a string nothing recognises.
+HELP_STEP: str = "add the owner"
+
 #: How often the escalation sweep re-evaluates.
 #:
 #: ⚠️ DERIVED FROM THE FIRST BAND, NOT DECLARED (2026-08-28, owner: "make the
