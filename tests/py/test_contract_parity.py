@@ -279,7 +279,7 @@ def test_an_audience_is_NOT_a_role() -> None:
 def test_the_severity_ORDERING_agrees_across_both_languages() -> None:
     """⚠️ IT WAS WRITTEN THREE TIMES AND TWO COPIES BROKE THE PROJECT'S RULE.
 
-    `fallback.py` and `AgentConcerns.tsx` each carried
+    `compose.py` and `AgentConcerns.tsx` each carried
     `{critical: 0, warning: 1, notice: 2, info: 3}` with an unknown severity
     defaulting to 9 — so a severity nobody had classified sorted LAST, into the
     quietest position, in the brief AND on the wall. `route.py` and

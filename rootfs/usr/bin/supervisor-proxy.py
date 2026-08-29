@@ -155,7 +155,7 @@ from vesta.supervise.agent import scheduler as agent_scheduler
 # pipeline at boot and is the thing that runs when composing has already failed;
 # an import deferred to that moment would be a new failure mode on the one path
 # that exists to have none.
-from vesta.supervise.agent import fallback as agent_fallback
+from vesta.supervise.agent import compose as agent_compose
 # ⚠️ AT MODULE SCOPE FOR ONE REASON: `TASK_ACK_ROLES` is an ALIAS of
 # `actions.MAY_ACT` evaluated when this module loads, and a deferred import
 # cannot be aliased. Every other use of `actions` below is deferred as usual.
@@ -2926,11 +2926,11 @@ def main() -> None:
         # renderer raises is delivered as a single sentence apologising, with
         # every concern, finding and standing fault of the period thrown away —
         # RISK-015, a component failing silently and the villa looking quiet.
-        reports_pipeline.set_fallback_composer(agent_fallback.compose)
+        reports_pipeline.set_fallback_composer(agent_compose.ladder)
         # ⚠️ THE NORMAL BRIEF'S AUTHOR TOO (TASK-073). Same file, same hook
         # mechanism, different job: `brief` writes the banner-free happy path,
         # `compose` writes the rungs when it cannot.
-        reports_pipeline.set_brief_composer(agent_fallback.brief)
+        reports_pipeline.set_brief_composer(agent_compose.brief)
         a["reports_task"] = asyncio.create_task(
             reports_pipeline.run_forever(a["session"]))
         # ⚠️ THE AGENT'S FOUR LOOPS START THROUGH ITS OWN SERVICE (TASK-115

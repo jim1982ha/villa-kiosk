@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from vesta.adapters import model as model_mod
 from vesta.brief import standing as standing_mod
-from vesta.supervise.agent import fallback as agent_fallback
+from vesta.supervise.agent import compose as agent_compose
 from vesta.brief.narrate import ReportContext
 from vesta.shared.style import BULLET                    # noqa: E402
 from vesta.shared.style import SECTION_MARK               # noqa: E402
@@ -59,10 +59,10 @@ def test_a_brief_with_standing_state_has_found_something() -> None:
     """⚠️ RE-POINTED AT THE NEW COMPOSER (TASK-073). The property is the one
     the 2.530.0 defect paid for — a brief must never announce emptiness above
     a list of problems — and it belongs to whoever writes the brief, which is
-    `agent/fallback.brief` now."""
+    `agent/compose.brief` now."""
     rows = _rows()
     assert rows, "the `both` fixture is supposed to be full of problems"
-    body = agent_fallback.brief(standing=rows).text
+    body = agent_compose.brief(standing=rows).text
     assert "Nothing needs your attention" not in body, (
         "the brief announced it had found nothing directly above a list of "
         "what it found")
@@ -73,7 +73,7 @@ def test_a_clean_villa_still_reads_as_clean() -> None:
     """The mirror, and the easier half to break: an empty standing list must
     not start colouring healthy briefs with a section a reader learns to
     skip."""
-    body = agent_fallback.brief(standing=[]).text
+    body = agent_compose.brief(standing=[]).text
     assert "Nothing needs your attention" in body
     assert "Needs attention right now" not in body
 
@@ -103,7 +103,7 @@ def test_every_kind_the_builder_emits_reaches_the_page() -> None:
     """⚠️ THE 2.530.0 PROPERTY, RE-PINNED AGAINST THE NEW COMPOSER (TASK-073).
     The old renderer routed each kind through a heading table, and a kind
     missing from it was built, counted, and silently absent from the page.
-    `fallback.brief` has no table — every standing row prints — and this pin
+    `compose.brief` has no table — every standing row prints — and this pin
     is what notices if a table ever comes back: one row of EVERY kind the
     builder emits, each title required on the page."""
     source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
@@ -112,7 +112,7 @@ def test_every_kind_the_builder_emits_reaches_the_page() -> None:
     assert emitted, "could not read the emitted kinds — this test is blind"
     rows = [{"kind": k, "title": f"Thing {i}", "detail": "d", "room": ""}
             for i, k in enumerate(emitted)]
-    body = agent_fallback.brief(standing=rows).text
+    body = agent_compose.brief(standing=rows).text
     for i in range(len(emitted)):
         assert f"Thing {i}" in body, (
             f"kind {emitted[i]!r} was built and never printed")
@@ -121,7 +121,7 @@ def test_every_kind_the_builder_emits_reaches_the_page() -> None:
 def test_standing_leads_the_brief() -> None:
     """The old rule "every audience sees standing first" survives its renderer:
     the standing section must come before concerns and findings on the page."""
-    body = agent_fallback.brief(
+    body = agent_compose.brief(
         standing=[{"kind": "alarm", "title": "STANDROW", "detail": "", "room": ""}],
         concerns=[{"title": "CONCROW", "severity": "warning"}],
         findings=[{"label": "FINDROW", "detail": ""}]).text

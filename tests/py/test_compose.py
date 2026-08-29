@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
-from vesta.supervise.agent import fallback
+from vesta.supervise.agent import compose
 
 CONCERNS: List[Dict[str, Any]] = [
     {"severity": "notice", "title": "Standby load creeping", "body": "Slowly."},
@@ -29,36 +29,36 @@ SALIENT: List[Dict[str, Any]] = [
 
 
 def test_every_rung_names_itself_in_the_text_a_person_reads() -> None:
-    for brief in (fallback.from_concerns(CONCERNS),
-                  fallback.from_salient(SALIENT),
-                  fallback.nothing()):
+    for brief in (compose.from_concerns(CONCERNS),
+                  compose.from_salient(SALIENT),
+                  compose.nothing()):
         assert "This is a fallback" in brief.text, brief.rung
         assert brief.complete is False, "a fallback claimed to be a full brief"
 
 
 def test_rung_1_orders_by_SEVERITY_because_the_prose_is_missing() -> None:
     """⚠️ With no writing to carry the weight, the ordering IS the report."""
-    text = fallback.from_concerns(CONCERNS).text
+    text = compose.from_concerns(CONCERNS).text
     assert text.index("Pool pump stopped") < text.index("Gate did not close")
     assert text.index("Gate did not close") < text.index("Standby load")
 
 
 def test_rung_1_says_the_REASONING_layer_was_missing() -> None:
-    assert "reasoning layer" in fallback.from_concerns(CONCERNS).text
+    assert "reasoning layer" in compose.from_concerns(CONCERNS).text
 
 
 def test_rung_2_refuses_to_call_unjudged_numbers_findings() -> None:
     """⚠️ Nothing has judged these — that is the layer that is missing — so
     presenting them as findings would be the fallback inventing the thing it
     stands in for."""
-    text = fallback.from_salient(SALIENT).text
+    text = compose.from_salient(SALIENT).text
     assert "unjudged" in text
     assert "triage layer was unreachable" in text
 
 
 def test_rung_2_with_nothing_measured_does_NOT_say_all_is_well() -> None:
     """The rule this whole phase keeps rediscovering, at the bottom rung."""
-    text = fallback.from_salient([]).text
+    text = compose.from_salient([]).text
     assert "rather than as 'all is well'" in text
 
 
@@ -66,7 +66,7 @@ def test_rung_4_is_still_a_DELIVERY() -> None:
     """⚠️ Silence reads as a working system with nothing to say, which is the
     one reading that must never be available when the truth is that nothing
     ran."""
-    brief = fallback.nothing(detail="no provider configured")
+    brief = compose.nothing(detail="no provider configured")
     assert "could not be assessed" in brief.text
     assert "no provider configured" in brief.text
     assert "Reflexes, the journal and the kiosk" in brief.text
@@ -76,14 +76,14 @@ def test_the_ladder_DESCENDS_and_never_merges() -> None:
     """⚠️ A caller with both gets the higher rung. Merging would produce a
     document that is neither, and the reader could not tell how much of it to
     trust."""
-    assert fallback.compose(concerns=CONCERNS, salient=SALIENT).rung == "concerns"
-    assert fallback.compose(salient=SALIENT).rung == "salient"
-    assert fallback.compose().rung == "nothing"
+    assert compose.ladder(concerns=CONCERNS, salient=SALIENT).rung == "concerns"
+    assert compose.ladder(salient=SALIENT).rung == "salient"
+    assert compose.ladder().rung == "nothing"
 
 
 def test_compose_NEVER_raises_even_on_rubbish() -> None:
     """It is the last thing between a villa and silence."""
-    out = fallback.compose(concerns=[{"severity": object()}])  # type: ignore[list-item]
+    out = compose.ladder(concerns=[{"severity": object()}])  # type: ignore[list-item]
     assert out.text and "fallback" in out.text
 
 
@@ -91,7 +91,7 @@ def test_the_output_is_INERT() -> None:
     """⚠️ A delivered brief may contain nothing a notify platform parses as
     markup — the defect that cost a day of deliveries when a friendly name
     carried an underscore."""
-    out = fallback.from_concerns(
+    out = compose.from_concerns(
         [{"severity": "warning", "title": "pump_A is *down*", "body": "[urgent]"}])
     # ⚠️ THE WHOLE OUTPUT, INCLUDING THIS RENDERER'S OWN MARKERS. The first
     # version wrote severities as `[WARNING]` — markup the delivery layer would
@@ -115,7 +115,7 @@ def test_it_does_not_reimplement_the_deterministic_renderer() -> None:
     # not do money ceilings — the FOURTH test in this session to match the
     # prose describing the thing it checks. What is checkable is what it
     # IMPORTS and how big it is.
-    tree = ast.parse(inspect.getsource(fallback))
+    tree = ast.parse(inspect.getsource(compose))
     imported = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
@@ -129,7 +129,7 @@ def test_it_does_not_reimplement_the_deterministic_renderer() -> None:
     # what the bound guards is the design sentence above: plain lists, severity
     # order, no zones, no charts, no money ceilings. If this file cannot say
     # that in ~450 lines, it has started growing the document it replaced.
-    assert len(inspect.getsource(fallback).splitlines()) < 450
+    assert len(inspect.getsource(compose).splitlines()) < 450
 
 
 # ── the ladder is DESCENDED, not merely renderable (TASK-111) ────────────────
@@ -151,7 +151,7 @@ def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
     """One report whose BRIEF COMPOSER raises. Returns the history entry.
 
     ⚠️ REWIRED FOR TASK-073: the failure this simulates is the registered
-    composer (`agent/fallback.brief` in production) falling over, which lands
+    composer (`agent/compose.brief` in production) falling over, which lands
     exactly where the old renderer's exception did — after collect, analyse
     and the concerns join, with a fully populated context in hand — and must
     descend the same ladder.
@@ -166,7 +166,7 @@ def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
 
     source = context_extras.get("concerns")
     pipeline.set_brief_composer(explode)
-    pipeline.set_fallback_composer(fallback.compose)
+    pipeline.set_fallback_composer(compose.ladder)
     pipeline.set_concerns_source((lambda: source) if source else None)
     try:
         return asyncio.run(pipeline.run_report(
@@ -227,7 +227,7 @@ def test_rung_2_carries_the_FLOOR_S_observations_and_no_entity_ids() -> None:
         standing = [{"title": "Gate sensor", "detail": "unavailable for 3 days",
                      "kind": "unavailable"}]
 
-    pipeline.set_fallback_composer(fallback.compose)
+    pipeline.set_fallback_composer(compose.ladder)
     try:
         body, rung = pipeline._degrade(_Context(), "T",  # type: ignore[arg-type]
                                        RuntimeError("x"))
@@ -277,7 +277,7 @@ def test_the_proxy_REGISTERS_the_ladder_at_boot() -> None:
 def test_an_UNREGISTERED_ladder_still_delivers_something() -> None:
     """An embedder without the agent package is a supported state, and it must
     degrade to the old minimal body rather than to an exception on the one path
-    that has no further fallback."""
+    that has no further compose."""
     from vesta.brief import pipeline
 
     class _Context:

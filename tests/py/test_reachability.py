@@ -65,9 +65,9 @@ EXEMPT: Dict[str, str] = {
 
     # ── wired by REFERENCE, which the call-shaped scan cannot see ──
     "brief": "the NORMAL brief's author since TASK-073. The proxy registers it "
-             "at boot (reports_pipeline.set_brief_composer(agent_fallback."
+             "at boot (reports_pipeline.set_brief_composer(agent_compose."
              "brief)) and the pipeline calls it through the hook — the same "
-             "mechanism as `compose`, which this scan only credits because "
+             "mechanism as `ladder`, which this scan only credits because "
              "_degrade's local variable happens to spell the name out. A "
              "registration is a reference, not a call, and renaming pipeline "
              "locals to satisfy a scanner would be gaming the instrument",

@@ -8,7 +8,7 @@ in a villa that may have no WAN at all, and a report subsystem that only
 produces prose when a third party answers is a feature that works on a
 developer's desk and is missing on the wall.
 
-⚠️ THE DETERMINISTIC AUTHOR MOVED (TASK-073): `agent/fallback.py` writes
+⚠️ THE DETERMINISTIC AUTHOR MOVED (TASK-073): `agent/compose.py` writes
 every brief and every rung now, registered into the pipeline at boot. The
 guarantee above is unchanged — fixed code composes the document, a provider
 contributes at most one lead sentence.

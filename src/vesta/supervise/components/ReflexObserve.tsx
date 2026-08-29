@@ -103,9 +103,16 @@ export function ReflexTab({ diagnostics }: {
           the open concerns, the facility ledger and coverage. No blueprint
           output reaches it. */}
       <p className="muted body-text">
-        These act by themselves, with no assistant and no internet. Everything
+        These act by themselves, with no assistant and no internet — the same
+        automations the Briefing dialog lists as instant alerts. Everything
         else the villa notices is judged by the assistant instead.
         <InfoHint label="Why these stay">
+          <p>
+            The supervision switch changes nothing on this tab: these run
+            identically whether supervision is on or off. What the switch
+            decides is everything above this tier — whether the assistant
+            watches, investigates and alerts.
+          </p>
           <p>
             A leak has to close a valve in under a second, with no internet and
             nothing thinking about it first — no assistant can promise that.

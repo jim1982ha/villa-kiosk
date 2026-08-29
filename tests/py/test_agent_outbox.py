@@ -369,11 +369,11 @@ def test_a_concern_reaches_the_briefing() -> None:
     """⚠️ THE DISCREPANCY THIS SUBSYSTEM'S CARDINAL RULE FORBIDS. Until this
     existed the agent filed a Concern, it rendered on the kiosk, and the
     briefing showed a different list about the same villa."""
-    from vesta.supervise.agent import fallback as agent_fallback
+    from vesta.supervise.agent import compose as agent_compose
 
     # ⚠️ RE-POINTED AT THE BRIEF'S NEW AUTHOR (TASK-073); the property is the
     # cardinal rule itself and outlives any renderer.
-    body = agent_fallback.brief(
+    body = agent_compose.brief(
         concerns=[{"title": "Cooling unit short-cycling",
                    "severity": "warning", "age_days": 3.0,
                    "subject_key": "a1"}]).text
@@ -390,9 +390,9 @@ def test_the_worst_first_ordering_is_not_inverted() -> None:
     `reports.contracts` counts UP to critical; `agent.contracts` counts DOWN. A
     sort written from the agent's habit puts the critical line LAST, which reads
     as "nothing much" on a phone."""
-    from vesta.supervise.agent import fallback as agent_fallback
+    from vesta.supervise.agent import compose as agent_compose
 
-    body = agent_fallback.brief(
+    body = agent_compose.brief(
         concerns=[{"title": "Quiet notice", "severity": "notice",
                    "subject_key": "a1"},
                   {"title": "Loud critical", "severity": "critical",

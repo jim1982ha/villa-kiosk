@@ -104,16 +104,16 @@ def test_the_renderer_IS_where_the_prose_lives() -> None:
     stops finding files — a boundary test that cannot see either side reports
     a clean boundary forever.
 
-    ⚠️ THE RENDERER MOVED (TASK-073): `agent/fallback.py` writes every brief
+    ⚠️ THE RENDERER MOVED (TASK-073): `agent/compose.py` writes every brief
     and every rung now. Its vocabulary is plainer — list dashes and f-strings
     rather than BULLET/heading calls — so the guard anchors on the seams that
     define it: the composer, the rungs, and the inert() discipline."""
     renderer = _code(os.path.join(ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
-                                  "fallback.py"))
+                                  "compose.py"))
     assert renderer.count("inert(") > 10, (
         "the renderer no longer routes its strings through inert(), so the "
         "boundary test above is measuring nothing")
-    assert "def brief(" in renderer and "def compose(" in renderer
+    assert "def brief(" in renderer and "def ladder(" in renderer
     assert len(list(_synthesis_files())) >= 8, (
         "the synthesis walk found almost nothing; the boundary test above is "
         "passing because it looked at an empty set")

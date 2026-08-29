@@ -16,7 +16,7 @@ one. Every render here states its own rung in the text a person reads.
 ordering, money ceilings and sparkline assembly, and copying any of it here
 would produce a second renderer to keep in step with the first. This is
 deliberately plainer than the thing it stands in for: HONEST BEATS POLISHED,
-because the point is to be unmistakably a fallback.
+because the point is to be unmistakably a compose.
 
 ⚠️ AND IT NEVER RAISES. It is the last thing between a villa and silence; a
 fallback that can fail has not understood its job.
@@ -234,7 +234,7 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
     return Brief("\n".join(out).rstrip() + "\n", "", complete=True)
 
 
-def compose(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
+def ladder(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
             salient: Optional[Sequence[Mapping[str, Any]]] = None,
             detail: str = "", title: str = "Villa briefing") -> Brief:
     """Descend the ladder until something can be said. Never raises.

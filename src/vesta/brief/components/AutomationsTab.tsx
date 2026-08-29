@@ -82,6 +82,12 @@ export default function AutomationsTab(
             sends — those come from an investigation and appear on the Reason
             tab; these fire directly from your own automations.
           </p>
+          <p>
+            The same automations appear on the VESTA Agent dialog’s Reflex tab,
+            as step 0 of supervision — one list, seen from two doors. They run
+            identically whether supervision is on or off; the switch only
+            decides whether the agent also watches and investigates.
+          </p>
         </InfoHint>
       </p>
 

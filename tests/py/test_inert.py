@@ -38,7 +38,7 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 from vesta.shared import style                              # noqa: E402
-from vesta.supervise.agent import fallback as agent_fallback
+from vesta.supervise.agent import compose as agent_compose
 
 #: The exact name that broke it, kept as the regression case.
 BROKE_IT = "Timmerflotte_8343 Temperature"
@@ -85,7 +85,7 @@ def test_the_composed_body_is_inert_end_to_end() -> None:
         {"kind": "fault", "title": "Gate motor *grinding*", "detail": "Open fault",
          "room": "Entrance [north]"},
     ]
-    body = agent_fallback.brief(
+    body = agent_compose.brief(
         standing=rows,
         concerns=[{"title": "Pump `odd`", "severity": "warning",
                    "body": "cycling <fast>"}],
@@ -147,10 +147,10 @@ def test_the_renderer_does_not_emit_markup_of_its_own() -> None:
     emitted `*bold*`, sanitising the finished message would silently delete it —
     so the claim that there is nothing to damage has to be checked, not assumed.
     `style.py`'s heading rule already forbids it; this is the enforcement."""
-    # ⚠️ THE AUTHOR MOVED (TASK-073): `agent/fallback.py` writes every brief
+    # ⚠️ THE AUTHOR MOVED (TASK-073): `agent/compose.py` writes every brief
     # and every rung now, so it is the tree this claim is checked against.
     source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
-                               "fallback.py"), encoding="utf-8").read()
+                               "compose.py"), encoding="utf-8").read()
     # ⚠️ THE `{...}` HALF OF AN f-STRING IS CODE, NOT OUTPUT. The first version
     # of this flagged `{singular[:-1]}ies` and `{names[0]}` — a subscript inside
     # an interpolation, which never reaches the message as a bracket. Step 7 of

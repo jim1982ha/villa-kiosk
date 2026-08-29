@@ -109,7 +109,7 @@ def set_concerns_source(source: Optional[Any]) -> None:
 
 
 #: The degradation ladder, registered the same way and for the same reason.
-#: ⚠️ A HOOK, NOT AN IMPORT — `agent/fallback.py` is the other side of ARCH-003's
+#: ⚠️ A HOOK, NOT AN IMPORT — `agent/compose.py` is the other side of ARCH-003's
 #: one-way street, so the proxy hands it in. Unregistered means the minimal body
 #: below, which is what an embedder without the agent package gets.
 _FALLBACK_COMPOSER: Optional[Any] = None
@@ -117,7 +117,7 @@ _FALLBACK_COMPOSER: Optional[Any] = None
 
 #: The NORMAL brief's author, registered the same way (TASK-073). The 2,058-line
 #: deterministic renderer was deleted with the blueprint-event taxonomy it
-#: formatted; `agent/fallback.brief` writes the plain replacement, and it
+#: formatted; `agent/compose.brief` writes the plain replacement, and it
 #: arrives by hook because `reports/` may not import `agent/` (ARCH-003).
 _BRIEF_COMPOSER: Optional[Any] = None
 
@@ -137,7 +137,7 @@ def set_fallback_composer(composer: Optional[Any]) -> None:
     """Register the degradation ladder. Called once, at boot.
 
     ⚠️ THE LADDER EXISTED FROM v2.641.0 TO v2.698.0 WITH NOBODY ON IT (TASK-111).
-    `fallback.compose` renders a rung and states which rung it is; REQ-042's
+    `compose.ladder` renders a rung and states which rung it is; REQ-042's
     acceptance was "each rung asserted separately", which is true and is not the
     same as any rung ever being USED. RISK-015 is "a component fails silently
     and the villa looks quiet", and this ladder is its control — so the control
@@ -199,13 +199,16 @@ def _degrade(context: ReportContext, title: str, err: Exception) -> Tuple[str, s
     ladder makes the same promise; this arm covers the case where the hook
     itself is something other than the ladder.
     """
-    compose = _FALLBACK_COMPOSER
-    if compose is None:
+    # ⚠️ Named `ladder` since the 2026-08-30 rename: the module is compose.py
+    # (it authors EVERY brief via `brief`), and this hook is its genuine
+    # fallback half — the rung-renderer used only when the author raises.
+    ladder = _FALLBACK_COMPOSER
+    if ladder is None:
         return "The report could not be composed. See the add-on log.", ""
     try:
         # ⚠️ NO TITLE — the caller delivers one separately, and a header baked
         # into the body arrives as a duplicate first line on every phone.
-        brief = compose(concerns=list(context.concerns),
+        brief = ladder(concerns=list(context.concerns),
                         salient=_salient_rows(context),
                         detail=str(err), title="")
         return str(brief.text), str(brief.rung)
@@ -687,7 +690,7 @@ async def run_report(
     # blueprint-event taxonomy — zones, money columns, sparklines over data
     # whose producers were all retired at the cutover. What a brief says now
     # is what the agent concluded, what is wrong right now, what the checks
-    # measured and what jobs are open; `agent/fallback.brief` says exactly
+    # measured and what jobs are open; `agent/compose.brief` says exactly
     # that, plainly, through the SAME boot-registered hook the rungs use
     # (reports/ may not import agent/ — ARCH-003, pinned).
     # ⚠️ THE SEVERITY IS COMPUTED BEFORE THE TITLE NOW, AND THAT IS THE WHOLE

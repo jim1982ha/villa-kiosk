@@ -65,7 +65,7 @@ def severity_rank(severity: Any) -> int:
     """Worst first: 0 is `critical`. THE ordering, for every renderer.
 
     ⚠️ IT WAS WRITTEN THREE TIMES AND THE TWO COPIES DISAGREED WITH THE
-    PROJECT'S OWN RULE. `fallback.py` and `CockpitConcerns.tsx` each carried
+    PROJECT'S OWN RULE. `compose.py` and `CockpitConcerns.tsx` each carried
     `{critical: 0, warning: 1, notice: 2, info: 3}` with an unknown severity
     defaulting to 9 — so a severity nobody had classified sorted LAST, into the
     quietest position, in both the brief and the wall. `route.py` and

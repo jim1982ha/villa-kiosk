@@ -304,7 +304,7 @@ def test_every_standing_kind_has_a_severity() -> None:
     """A kind with no entry falls to the default. That default is `warning` and
     not `info` on purpose — a kind nobody has classified must not arrive as the
     quietest thing in the report — but every kind the builder actually emits
-    should be classified deliberately rather than by that fallback."""
+    should be classified deliberately rather than by that compose."""
     source = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "brief",
                                "standing.py"), encoding="utf-8").read()
     emitted = set(re.findall(r'kind="(\w+)"', source))
