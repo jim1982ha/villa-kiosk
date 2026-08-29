@@ -1,3 +1,15 @@
+## 2.890.0
+
+### Fixed — the daily briefing arrived as plain text, its VESTA link a raw URL
+Alerts from the agent carry a proper hyperlink; the briefing beside them did not.
+The mechanism shipped in 2.889.0 upgrades a message only where the target service
+publishes a `parse_mode` field, and briefings go out through
+`notify.send_message`, whose schema is `message` and `title` and nothing else —
+no notify service on the reference villa declares that field, so the upgrade
+could never fire on any property. Alerts were unaffected because they never used
+notify: they call the chat integration's own send service, which does publish it.
+A briefing to a chat entity now goes the same way, one dialect on one transport.
+
 ## 2.889.0
 
 ### Changed — repeated automations are one line with a count, and the record pages

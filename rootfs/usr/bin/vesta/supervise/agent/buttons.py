@@ -61,10 +61,10 @@ second implementation to fall out of step with the first.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from vesta.adapters import rich as rich_mod
 from vesta.adapters.log import log, stage, swallow, warn
 
 #: The HA event a press arrives as. ⚠️ ADDED TO THE CHAT SUBSCRIPTION RATHER
@@ -108,14 +108,19 @@ EDIT_MARKUP_SERVICE: Tuple[str, str] = ("telegram_bot", "edit_replymarkup")
 #: EDIT here, so a message and its later rewrite can never disagree about how
 #: they are parsed — which would show as a body that renders on arrival and
 #: turns into raw tags the first time the buttons are redrawn.
-PARSE_MODE: str = "html"
+#: ⚠️ RE-EXPORTED FROM `adapters.rich`, NOT RESTATED (2026-08-29). The briefing
+#: needs the identical dialect on the identical transport, and it lives a layer
+#: below where both callers can reach it — `brief` may import `adapters` and
+#: never `supervise`. Two spellings of "html" is how an alert and a briefing
+#: come to disagree about how they are parsed.
+PARSE_MODE: str = rich_mod.PARSE_MODE
 
 #: ⚠️ THE PLATFORM AS THE ENTITY REGISTRY SPELLS IT. `chat.target_for` matches
 #: the same string for the same reason — a notify entity and a notify service
 #: are the same shape, so only the registry can say which integration is behind
 #: one. Naming a platform is not the hard rule: nothing VILLA-specific may ship,
 #: and "Telegram" is not a fact about anybody's property.
-PLATFORM: str = "telegram_bot"
+PLATFORM: str = rich_mod.PLATFORM
 
 #: ⚠️ ONE CHARACTER OF NAMESPACE, BECAUSE TELEGRAM CAPS `callback_data` AT 64
 #: BYTES and it has to carry an act and an alert id. `v` for VESTA, so a press
@@ -125,15 +130,10 @@ PLATFORM: str = "telegram_bot"
 #: cutover decodes to the act it always meant.
 PREFIX: str = "v"
 
-#: How long the resolved set of Telegram entities is trusted. A registry does
-#: not change often and re-reading it per delivery would put a websocket round
-#: trip in front of every alert.
-REGISTRY_TTL_S: float = 300.0
-
-#: The resolved set and when it was read. ⚠️ A LIST OF ONE TUPLE rather than two
-#: module globals, so the pair can only ever be replaced together — a set
-#: refreshed without its timestamp is a cache that never expires again.
-_ENTITIES: List[Tuple["frozenset[str]", float]] = [(frozenset(), 0.0)]
+#: ⚠️ THE TTL AND THE CACHE MOVED TO `adapters.rich` WITH THE LOOKUP THEY
+#: GUARD (2026-08-29), and are deliberately not re-declared here. Leaving them
+#: behind would have left a second cache that nothing reads and a second TTL
+#: that nothing honours — residue that reads as configuration.
 
 
 @dataclass(frozen=True)
@@ -251,32 +251,24 @@ async def telegram_entities(session: Any, *,
                             now: Optional[float] = None) -> "frozenset[str]":
     """Every notify entity on this platform. Cached; `frozenset()` on failure.
 
+    ⚠️ DELEGATES TO `adapters.rich.capable_entities`, WHICH IS THE SAME
+    QUESTION ASKED BY THE BRIEFING (2026-08-29). "Can this destination render
+    formatted text" and "can it carry buttons" are one registry lookup and one
+    answer; keeping two would mean two caches, two TTLs and two failure
+    directions for one fact. The name stays because this module's callers ask
+    about buttons.
+
     ⚠️ EMPTY ON FAILURE IS THE SAFE DIRECTION. It means "no target can carry
     buttons", so every alert goes out through the ordinary agnostic path — the
     message still arrives, without buttons. Guessing the other way would post an
     `inline_keyboard` to a service that does not take one and lose the alert.
     """
-    at = time.time() if now is None else now
-    cached, read_at = _ENTITIES[0]
-    if cached and (at - read_at) < REGISTRY_TTL_S:
-        return cached
-    try:
-        from vesta.adapters.hass import HassClient
-        async with HassClient(session) as hass:
-            entries = await hass.command("config/entity_registry/list")
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow("could not read the entity registry for button targets", err)
-        return frozenset()
-    ids = frozenset(
-        str(e.get("entity_id") or "") for e in entries if isinstance(e, Mapping)
-        and str(e.get("platform") or "") == PLATFORM and e.get("entity_id"))
-    _ENTITIES[0] = (ids, at)
-    return ids
+    return await rich_mod.capable_entities(session, now=now)
 
 
 def forget_entities() -> None:
     """Drop the cached registry. For tests, and for a registry that changed."""
-    _ENTITIES[0] = (frozenset(), 0.0)
+    rich_mod.forget_entities()
 
 
 def _bare(target: str) -> str:

@@ -827,6 +827,13 @@ def test_the_TELEGRAM_path_sets_its_own_PARSE_MODE() -> None:
     tree = ast.parse(inspect.getsource(deliver_mod))
     for node in ast.walk(tree):
         body = getattr(node, "body", None)
+        # ⚠️ `body` IS NOT ALWAYS A LIST. On `IfExp` (a ternary) and `Lambda` it
+        # is a single expression, so `body[0]` raises — which is how this pin
+        # died the day deliver.py grew its first ternary, reporting a TypeError
+        # rather than a verdict. A test that crashes on ordinary new syntax is
+        # not measuring the thing it names.
+        if not isinstance(body, list):
+            continue
         if (body and isinstance(body[0], ast.Expr)
                 and isinstance(body[0].value, ast.Constant)
                 and isinstance(body[0].value.value, str)):

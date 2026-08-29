@@ -158,11 +158,35 @@ def _payload_for(target: str, title: str, message: str,
 async def deliver_one(session: ClientSession, target: str,
                       title: str, message: str,
                       plain_mode: str = "", html_mode: str = "",
-                      html_message: str = "") -> Dict[str, Any]:
-    """Send to one target. Never raises."""
+                      html_message: str = "", rich_entity: str = "") -> Dict[str, Any]:
+    """Send to one target. Never raises.
+
+    ⚠️ `rich_entity` IS THE ONE UPGRADE PATH, AND IT NAMES NO PLATFORM HERE.
+    When the caller has established that this target's entity can render
+    formatted text, the message goes to `rich.service_path()` with the html
+    body instead of to the intersection payload. Everything else — the
+    ordering, the timeouts, the per-target independence, the result shape — is
+    unchanged, so a villa with no such entity takes byte-identical code.
+    """
+    if rich_entity and html_message:
+        from . import rich as rich_mod
+        url = f"{hass_mod.REST_ROOT}/services/{rich_mod.service_path()}"
+        from vesta.adapters import links as links_mod
+        payload = rich_mod.payload(rich_entity, links_mod.html_escape(title),
+                                   html_message)
+        return await _post(session, target, url, payload)
+
     url = f"{hass_mod.REST_ROOT}/services/{_service_path(target)}"
     payload = _payload_for(target, title, message, plain_mode,
                            html_mode, html_message)
+    return await _post(session, target, url, payload)
+
+
+async def _post(session: ClientSession, target: str, url: str,
+                payload: Dict[str, Any]) -> Dict[str, Any]:
+    """The HTTP half, shared by both paths. ⚠️ EXTRACTED RATHER THAN COPIED —
+    a second try/except with its own timeout handling is how one path quietly
+    stops reporting `failed` the way the other does."""
     try:
         async with session.post(url, headers=hass_mod.AUTH_HEADERS, json=payload,
                                 timeout=None) as response:
@@ -206,11 +230,27 @@ async def deliver(session: ClientSession, targets: Sequence[str],
     html = {str(t.get("service") or ""): str(t.get("html_mode") or "")
             for t in known if isinstance(t, dict)}
 
+    # ⚠️ ASKED ONCE PER DELIVERY, AND ONLY WHEN THERE IS A RICH BODY TO SEND.
+    # A villa that never composes one — or an operator previewing — pays
+    # nothing, which keeps this off the path that must work when Core is busy.
+    # The lookup is cached in `rich` itself, so several sends in one pass cost
+    # one registry read at most.
+    capable: "frozenset[str]" = frozenset()
+    if html_message:
+        from . import rich as rich_mod
+        capable = await rich_mod.capable_entities(session)
+
     results: List[Dict[str, Any]] = []
     for target in targets:
+        # ⚠️ ONLY AN ENTITY TARGET CAN BE UPGRADED. The rich service takes
+        # `entity_id` and has no `target` field, so a legacy notify SERVICE has
+        # no route there and correctly stays on the plain path.
+        bare = (target[len(ENTITY_PREFIX):]
+                if target.startswith(ENTITY_PREFIX) else "")
+        rich_entity = bare if bare and bare in capable else ""
         result = await asyncio.wait_for(
             deliver_one(session, target, title, message, plain.get(target, ""),
-                        html.get(target, ""), html_message),
+                        html.get(target, ""), html_message, rich_entity),
             timeout=DELIVERY_TIMEOUT_S + 5)
         results.append(result)
         if result["status"] == "sent":
