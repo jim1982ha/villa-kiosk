@@ -73,7 +73,8 @@
 // capability instead.
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileText, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, History, ListChecks,
+         Loader2, ShieldQuestion } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -93,7 +94,7 @@ import ModulesTab from "./ModulesTab";
 import RecordTab from "./RecordTab";
 import { TierIntro, STEPS } from "@/vesta/shared/tiers";
 
-type Tab = "briefing";
+type Tab = "watched" | "happened" | "visible" | "briefing";
 
 /** ⚠️ `configure: true` MEANS "THE PROXY WOULD REFUSE THIS TAB TO ANYONE BUT
  *  THE OWNER" — see the endpoint table in this file's header. It is not a
@@ -110,13 +111,16 @@ type Tab = "briefing";
  *  one question asked in two tenses, and separating them made a failed delivery
  *  something you had to go looking for on another tab. */
 const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[] = [
-  // ⚠️ ONE TAB (2026-08-30). It was four, then two; the record collapsed the
-  // second. "Instant alerts" listed automation FAMILIES with descriptions and
-  // no live data — now the same automations appear in "What happened" as what
-  // they actually DID, with their own figures, filterable by source. A filter
-  // replaced a tab, which is the simplification the record earns; the tab's
-  // explanation moved into that section's (i) rather than being deleted.
-  { id: "briefing", label: "Briefing", icon: FileText, configure: true },
+  // ⚠️ ONE TAB PER STEP (2026-08-30, owner's request), and this is the THIRD
+  // arrangement: four tabs → one merged page (2.874.0) → four again. The merge
+  // was right when the page was short; adding the record made it long enough
+  // that a reader scrolled past the thing they came for, and a lone tab chip
+  // over a scrolling page is a control that does nothing. The steps were always
+  // a sequence — they simply need to be reachable as one.
+  { id: "watched", label: "What is watched", icon: ListChecks, configure: true },
+  { id: "happened", label: "What happened", icon: History, configure: true },
+  { id: "visible", label: "What it can see", icon: ShieldQuestion, configure: true },
+  { id: "briefing", label: "The briefing", icon: FileText, configure: true },
 ];
 
 export default function ReportsModal(
@@ -446,8 +450,8 @@ export default function ReportsModal(
               bodies were re-tagged to one tab without being re-ordered, and
               nothing pins a header to its body. `test_briefing_layout` now
               does. */}
-          {tab === "briefing" && <TierIntro tier={STEPS.watched} />}
-          {tab === "briefing" && (
+          {tab === "watched" && <TierIntro tier={STEPS.watched} />}
+          {tab === "watched" && (
             <ModulesTab
               diagnostics={diagnostics}
               config={config}
@@ -457,10 +461,11 @@ export default function ReportsModal(
             />
           )}
 
-          {tab === "briefing" && <RecordTab />}
+          {tab === "happened" && <TierIntro tier={STEPS.happened} />}
+          {tab === "happened" && <RecordTab />}
 
-          {tab === "briefing" && <TierIntro tier={STEPS.visible} />}
-          {tab === "briefing" && (
+          {tab === "visible" && <TierIntro tier={STEPS.visible} />}
+          {tab === "visible" && (
             <CoverageTab
               diagnostics={diagnostics}
               busy={busy}

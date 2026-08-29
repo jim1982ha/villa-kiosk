@@ -22,15 +22,20 @@ REPO_ROOT = os.path.dirname(
 MODAL = os.path.join(REPO_ROOT, "src", "vesta", "brief", "components",
                      "ReportsModal.tsx")
 
-#: ⚠️ `RecordTab` IS EXCLUDED because it is a SECTION, not a step body — it
-#: renders between the composition table and the coverage step and answers to
-#: no TierIntro of its own.
 #: header step id → the component that must be the NEXT body after it.
+#:
+#: ⚠️ `RecordTab` WAS EXCLUDED HERE AND IS NOW A STEP (2026-08-30). It rendered
+#: as a section under the watched step; the owner asked for one tab per step,
+#: so it has its own header and its own body like every other. The exclusion
+#: had a second effect worth remembering: excluding it from the SEQUENCE also
+#: excluded it from being REQUIRED, and deleting its mount left every test
+#: green until a mutation said otherwise.
 #: ⚠️ THE PAIRING IS THE HAND-WRITTEN FACT (a header means one thing); the
 #: ORDER on the page is read from the source, so re-ordering whole sections
 #: stays free — only separating a header from its body fails.
 BODY_OF = {
     "watched": "ModulesTab",
+    "happened": "RecordTab",
     "visible": "CoverageTab",
     "brief": "PreviewTab",
 }
@@ -45,7 +50,7 @@ def _sequence() -> List[Tuple[str, str]]:
             r"TierIntro tier=\{STEPS\.(\w+)\}|<(\w+Tab)\b", source):
         if match.group(1):
             out.append(("step", match.group(1)))
-        elif match.group(2) not in ("RecordTab",):
+        else:
             out.append(("body", match.group(2)))
     return out
 
@@ -84,10 +89,11 @@ def test_the_record_section_is_on_the_page() -> None:
     with open(MODAL, encoding="utf-8") as handle:
         source = handle.read()
     assert "<RecordTab" in source, (
-        "the record section is not mounted — the briefing reads it, and the "
-        "owner asked to be able to see what it will summarise")
-    assert source.index("<RecordTab") < source.index("STEPS.visible"), (
-        "the record renders after the coverage step; it belongs before it")
+        "the record is not mounted — the briefing reads it, and the owner "
+        "asked to be able to see what it will summarise")
+    assert source.index("STEPS.happened") < source.index("STEPS.visible"), (
+        "the record's step renders after the coverage step; what happened "
+        "comes before whether the property could have measured it")
 
 
 def test_the_composing_and_sending_section_is_one_story() -> None:

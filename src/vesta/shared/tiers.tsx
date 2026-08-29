@@ -83,8 +83,15 @@ export const STEPS: Record<string, Tier> = {
     more: "Each check works the same way every time and can be switched off.",
     speed: "each briefing", model: false, offline: true, source: "check",
   },
+  happened: {
+    n: 2, name: "What happened",
+    what: "Everything the next briefing will summarise, newest first.",
+    more: "One record, filled the same way whether Supervision is ON or OFF — "
+      + "what changes is who writes to it.",
+    speed: "as it happens", model: false, offline: true, source: "check",
+  },
   visible: {
-    n: 2, name: "What it can see",
+    n: 3, name: "What it can see",
     what: "Whether this property reports the things a check needs.",
     more: "A check with nothing to read says so rather than passing quietly.",
     speed: "checked live", model: false, offline: false,
@@ -97,7 +104,7 @@ export const STEPS: Record<string, Tier> = {
   // the schedules it rehearses. `sent` is deleted, not aliased — a step id
   // with two names is the drift Part 5 exists for.
   brief: {
-    n: 3, name: "The briefing itself",
+    n: 4, name: "The briefing itself",
     what: "Everything found, written up in one message — and when it goes out, "
       + "to whom.",
     more: "Try a test copy any time; nothing is sent and nothing is recorded. "
