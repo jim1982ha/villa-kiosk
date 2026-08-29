@@ -489,7 +489,6 @@ export default function ReportsModal(
               preview={preview}
               busy={busy}
               onSave={(next) => void save(next)}
-              onRefresh={() => void refresh()}
             />
           )}
 

@@ -3736,6 +3736,16 @@ label.toggle span { user-select: none; line-height: 1.4; }
 /* The delivery record's pager. Buttons are the house ghost buttons, so the
    only rule needed is the row itself: controls at the ends, the count between,
    44px targets inherited from .btn. */
+/* The briefing's composition list: label column + text, ONE grid on the
+   container so every row shares the same columns (a per-row grid is what made
+   the old version read as unaligned clutter). dt/dd are direct children. */
+.reports-ingredients {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px; margin: 0; font-size: var(--text-sm);
+}
+.reports-ingredients > dt { font-weight: 600; }
+.reports-ingredients > dd { margin: 0; color: var(--text-secondary); }
+
 .reports-pager {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.5rem; margin-top: 0.25rem;

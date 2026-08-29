@@ -103,19 +103,19 @@ export function ReflexTab({ diagnostics }: {
           the open concerns, the facility ledger and coverage. No blueprint
           output reaches it. */}
       <p className="muted body-text">
-        These act by themselves, with no assistant and no internet — the same
+        These act by themselves, with no VESTA Agent and no internet — the same
         automations the Briefing dialog lists as instant alerts. Everything
-        else the villa notices is judged by the assistant instead.
+        else the villa notices is judged by the VESTA Agent instead.
         <InfoHint label="Why these stay">
           <p>
-            The supervision switch changes nothing on this tab: these run
-            identically whether supervision is on or off. What the switch
-            decides is everything above this tier — whether the assistant
+            The Supervision switch changes nothing on this tab: these run
+            identically whether Supervision is ON or OFF. What the switch
+            decides is everything above this tier — whether the VESTA Agent
             watches, investigates and alerts.
           </p>
           <p>
             A leak has to close a valve in under a second, with no internet and
-            nothing thinking about it first — no assistant can promise that.
+            nothing thinking about it first — no AI agent can promise that.
           </p>
           <p>
             The rules that only REPORTED have been retired, and nothing is lost:

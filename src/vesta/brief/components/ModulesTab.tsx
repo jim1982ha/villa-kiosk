@@ -62,16 +62,11 @@
 // could only ever report every family as silent. A comment outliving the field
 // it explains is the shape /dry-audit Part 3 exists for.
 
-import { Ban, Check, Info, PlugZap, Radio, RefreshCw } from "lucide-react";
+import { Ban, Check, Info } from "lucide-react";
 import InfoHint from "@/components/common/InfoHint";
 import type { ReportPreview, ReportsDiagnostics } from "@/vesta/brief/reportsApi";
 import type { ReportsConfig } from "@/vesta/shared/reportsTypes";
 
-function when(iso: string): string {
-  if (!iso) return "never";
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleString();
-}
 
 /** What each shipped blueprint family is FOR, and whether it survives.
  *
@@ -100,7 +95,7 @@ function when(iso: string): string {
    one description again. */
 
 export default function ModulesTab({
-  diagnostics, config, preview, busy, onSave, onRefresh,
+  diagnostics, config, preview, busy, onSave,
 }: {
   diagnostics: ReportsDiagnostics | null;
   config: ReportsConfig | null;
@@ -112,18 +107,11 @@ export default function ModulesTab({
   preview: ReportPreview | null;
   busy: boolean;
   onSave: (next: ReportsConfig) => void;
-  /** ⚠️ RE-PROBES LIVE. `/reports-diagnostics` opens a websocket and walks the
-   *  recorder on every request, so this is the real thing rather than a cache
-   *  bust — and it is why nothing here polls. The collector banner is the one
-   *  reading on this tab that can change while the dialog sits open, which is
-   *  why the button came with it from the old Diagnostics tab. */
-  onRefresh: () => void;
 }) {
   if (!diagnostics || !config) {
     return <p className="muted body-text">Reading the check list…</p>;
   }
 
-  const c = diagnostics.collector;
   const slices = config.modules ?? {};
   const isOn = (name: string) => slices[name]?.enabled !== false;
   const ran = new Set(preview?.analysis.ran ?? []);
@@ -156,72 +144,40 @@ export default function ModulesTab({
           </p>
         </InfoHint>
       </p>
-      <dl className="reflex-table">
-        <div className="reflex-row">
+      {/* ⚠️ ONE GRID FOR ALL ROWS (2026-08-30, owner: "columns not adjusted,
+          cluttered"). `.reflex-row` makes each row its own grid, so the label
+          column re-sizes per row; `.reports-ingredients` sets the columns once
+          on the container and every dt/dd shares them. */}
+      <dl className="reports-ingredients">
           <dt>The checks</dt>
-          <dd className="reflex-role">
+          <dd>
             The calculations below, each over its own window of Home
             Assistant’s recorded history — from two weeks to six, stated on
             every card.
           </dd>
-        </div>
-        <div className="reflex-row">
           <dt>Device status</dt>
-          <dd className="reflex-role">
+          <dd>
             What is offline or unavailable at composing time, read live.
           </dd>
-        </div>
-        <div className="reflex-row">
           <dt>To-do items</dt>
-          <dd className="reflex-role">
+          <dd>
             Every list in Home Assistant is scanned at composing time; items
             this system wrote (their name starts with a reference in brackets)
             that are still open are carried into the briefing. Your own
             groceries are never read.
           </dd>
-        </div>
-        <div className="reflex-row">
-          <dt>The agent’s alerts</dt>
-          <dd className="reflex-role">
-            Open alerts from the agent’s investigations, when supervision is
-            on.
+          <dt>The VESTA Agent’s alerts</dt>
+          <dd>
+            Open alerts from the VESTA Agent’s investigations, when
+            Supervision is ON.
           </dd>
-        </div>
       </dl>
 
-      {/* ── 1. Is anything listening? ───────────────────────────────────── */}
-      <div className={`fm-banner ${c.connected ? "" : "warn"}`}>
-        {c.connected ? <Radio size={16} /> : <PlugZap size={16} />}
-        <span>
-          {c.connected
-            ? `Listening since ${when(c.connectedSince)}.`
-            : "Not listening. Findings fired now would not reach a report."}
-          {c.drops > 0 && ` Reconnected ${c.drops} time${c.drops === 1 ? "" : "s"} since this add-on started.`}
-        </span>
-      </div>
-
-      {/* ⚠️ "Alerts held" AND "Last alert" WERE DELETED HERE (2026-08-28), and
-          they are the Observe tab's defect in a second dialog. Both read the
-          COLLECTOR — the blueprint/chat event stream — and since the cutover it
-          carries chat only, so "Last alert" was the last Telegram message and
-          "Alerts held" was a buffer that can no longer grow from anything
-          else. The owner caught the same pair on Observe ("last change seen 34h
-          ago … I can't be true, right?"); I fixed the element that was reported
-          and not its twin, which is this file's own lesson about rolling a fix
-          out by call site.
-          ⚠️ `onlineSince` STAYS, and is the one of the three that was always
-          honest: it answers "how much of the reporting period can this add-on
-          speak for", which is a real precondition for reading any brief. */}
-      <dl className="reports-facts">
-        <div><dt>Listening since first ever</dt><dd>{when(c.onlineSince)}</dd></div>
-      </dl>
-
-      <div>
-        <button className="btn ghost" disabled={busy} onClick={onRefresh}>
-          <RefreshCw size={16} aria-hidden="true" />
-          <span>{busy ? "Checking…" : "Check again"}</span>
-        </button>
-      </div>
+      {/* ⚠️ THE LISTENING BLOCKS LEFT THIS TAB (2026-08-30, owner: "useless
+          and cluttered … redundant". "Listening since" and the last-briefing
+          stamp are one fact family and the coverage section is their one home;
+          two renderings of collector state on one page is the drift this
+          dialog keeps paying for.) */}
 
       {/* ⚠️ "YOUR AUTOMATIONS" IS ITS OWN TAB NOW (2026-08-29, the owner's
           reason): "this tab is about briefing, and reporting/briefing doesn't
@@ -242,6 +198,23 @@ export default function ModulesTab({
           investigating. The (i) says exactly that, because the owner asked
           the question and a reader will too. */}
       <h3 className="settings-section-title">The checks</h3>
+      <p className="muted body-text">
+        Fixed calculations VESTA runs itself, in both Supervision modes.
+        <InfoHint label="The checks">
+          <p>
+            These are not the VESTA Agent’s Observe step. Observe is a journal
+            of what changed in the last day; a check reads weeks of recorded
+            history and looks for slow patterns no single change shows. When
+            the VESTA Agent investigates something, it can run these same
+            checks itself as one of its tools.
+          </p>
+          <p>
+            They ship with the add-on — nothing to install, and no way to add
+            one here. To extend what alerts you, build an automation in Home
+            Assistant: see the Instant alerts tab.
+          </p>
+        </InfoHint>
+      </p>
       {diagnostics.modules.length === 0 && (
         <p className="reports-item sev-warning">
           None are registered. That is a fault in the add-on, not a setting.
@@ -261,7 +234,12 @@ export default function ModulesTab({
         const missing = m.requires.filter((r) => !diagnostics.capabilities.includes(r));
         const reason = skipReason.get(m.name);
         return (
-          <div key={m.name} className="reports-entry">
+          /* ⚠️ `.fm-row` + `.flag-row-main` — the SAME shell Triage's cards
+              use (owner: "cards as styled in the Triage tab — use DRY").
+              `.reports-entry` was this dialog's own variant; one card
+              language per app. */
+          <div key={m.name} className="fm-row">
+          <div className="flag-row-main">
             {/* ⚠️ THE TITLE AND THE SENTENCE COME FROM THE MODULE ITSELF. This
                 showed the identifier with its underscores removed — "level
                 anomaly" — beside "owner and facility · needs 42 days of
@@ -299,14 +277,8 @@ export default function ModulesTab({
                   The chip earns its place where a list MIXES sources; this list
                   has exactly one. */}
             </div>
-            {/* ⚠️ ITS OWN LINE, NOT THE HEAD ROW (2026-08-30, owner: the cards
-                "appear too high and styled differently"). The head is a
-                wrapping flex, so this rode beside a short title and dropped
-                under a long one — sibling cards rendered two different
-                shapes from one component. A fixed line renders identically
-                on every card. */}
-            <p className="reports-item muted">
-              <span>Reads {m.minDays} days of history.</span>
+            <p className="muted flag-row-reason">
+              Reads {m.minDays} days of Home Assistant’s recorded history.
             </p>
             {m.description && (
               <p className="muted body-text">{m.description}</p>
@@ -351,6 +323,7 @@ export default function ModulesTab({
               </p>
             )}
           </div>
+          </div>
         );
       })}
       </div>
@@ -367,31 +340,14 @@ export default function ModulesTab({
           incomplete CRUD screen. The extensible layer really is the blueprint
           one, and it needs no add-on change whatsoever — that is the pivot this
           whole subsystem was rebuilt around. */}
-      {/* ⚠️ REWRITTEN OUT OF DEVELOPER LANGUAGE. It said "any Home Assistant
-          automation that fires a `vesta_*` event is picked up, deduplicated,
-          costed and written into the brief" — four verbs of pipeline internals
-          and a wildcard nobody outside this repo can act on. What the reader
-          needs is: these are not yours to manage, your automations are, and
-          here is how to tell they arrived. The event-name detail belongs in the
-          README with the rest of the integration contract, not on a settings
-          screen. */}
-      <h3 className="settings-section-title">Adding your own checks</h3>
-      <p className="muted body-text">
-          These arrive with the add-on — nothing to install, nothing to delete.
-          <InfoHint label="The checks">
-          <p>
-            These are not the agent’s Observe step. Observe is a journal of
-            what changed in the last day; a check reads weeks of recorded
-            history and looks for slow patterns no single change shows. When
-            the agent investigates something, it can run these same checks
-            itself as one of its tools.
-          </p>
-            Your own Home Assistant automations are what extend a brief: anything they
-            report is grouped, priced and written in automatically. “Your automations”
-            above lists what has been heard, which is how you confirm a rule is
-            actually firing.
-          </InfoHint>
-        </p>
+      {/* ⚠️ "ADDING YOUR OWN CHECKS" IS GONE AS A SECTION (2026-08-30, owner:
+          unclear and inconsistent). Its two facts moved to where each is
+          asked: "ships with the add-on, cannot add one here" is in The
+          checks' (i); "your automations extend alerting" is the Instant
+          alerts tab's whole subject. Along the way this section's InfoHint
+          had silently RECEIVED the checks' (i) content in 2.879.0 — two hints
+          shared the label "The checks" and the patch matched the wrong one, a
+          collision invisible to every gate because both compiled. */}
     </div>
   );
 }

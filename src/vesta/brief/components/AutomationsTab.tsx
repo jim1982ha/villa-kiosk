@@ -29,7 +29,7 @@ import InfoHint from "@/components/common/InfoHint";
 import { FAMILIES } from "@/vesta/shared/tiers";
 import type { ReportsDiagnostics } from "@/vesta/brief/reportsApi";
 
-/** Families that keep a job of their own while VESTA is doing the detecting.
+/** Families that keep a job of their own while Supervision is ON — the VESTA Agent is doing the detecting.
  *
  *  ⚠️ DERIVED FROM THE FAMILY TABLE, NEVER LISTED HERE. A family is superseded
  *  exactly when its role says so — that string is `tiers.tsx`'s to own, and a
@@ -78,15 +78,15 @@ export default function AutomationsTab(
             describes them.
           </p>
           <p>
-            These are also a different thing from the alerts the VESTA agent
+            These are also a different thing from the alerts the VESTA Agent
             sends — those come from an investigation and appear on the Reason
             tab; these fire directly from your own automations.
           </p>
           <p>
             The same automations appear on the VESTA Agent dialog’s Reflex tab,
             as step 0 of supervision — one list, seen from two doors. They run
-            identically whether supervision is on or off; the switch only
-            decides whether the agent also watches and investigates.
+            identically whether Supervision is ON or OFF; the switch only
+            decides whether the VESTA Agent also watches and investigates.
           </p>
         </InfoHint>
       </p>
@@ -97,7 +97,7 @@ export default function AutomationsTab(
           {on
             ? "VESTA is doing the detecting. The automations below still do "
               + "their own job — reacting instantly, which no check can."
-            : "The agent is off. Your automations alert you directly, and "
+            : "Supervision is OFF. Your automations alert you directly, and "
               + "the checks still run for the briefing."}
         </span>
       </div>

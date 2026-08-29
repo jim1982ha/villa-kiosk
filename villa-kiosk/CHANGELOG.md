@@ -1,3 +1,16 @@
+## 2.881.0
+
+### Fixed — the Briefing tab's cards, columns and duplicate blocks; one vocabulary
+
+The check cards now use the same card shell as the Triage tab. The composition
+list shares one label column across all rows instead of re-sizing per row. The
+two "listening since" blocks left this tab — the coverage section was already
+their home. "Adding your own checks" is gone as a section: it had no controls,
+and in 2.879.0 its tooltip had silently received the checks' own (i) content
+because two hints shared one label. Its facts moved into The checks' (i). The
+UI now says "VESTA Agent" wherever it means the agent, and "Supervision is
+ON/OFF" wherever it means the switch.
+
 ## 2.880.0
 
 ### Changed — the briefing's author is named for what it is, and the two alert views name each other
