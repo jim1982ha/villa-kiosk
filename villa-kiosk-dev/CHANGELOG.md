@@ -1,3 +1,15 @@
+## 2.891.0
+
+### Fixed — 🆘 offered on the escalation it produced, stale buttons on older copies, a drill counted once however often it ran
+Three reports from one session on the phone. Asking for help offered 🆘 again on
+the escalation it had just produced: that message is drawn before the rung is
+stamped, so it was built from a row still saying the ladder had not moved — and
+pressing it twice escalated twice, because the path skips the sweep's
+one-step-once guard. Dismissing an alert corrected only the message pressed,
+leaving its other copies in the same chat offering acts the store had already
+refused. And the briefing grouped automation firings as "95 times" while listing
+the agent's own rows one per event, so a drill run twice read as one.
+
 ## 2.890.0
 
 ### Fixed — the daily briefing arrived as plain text, its VESTA link a raw URL
