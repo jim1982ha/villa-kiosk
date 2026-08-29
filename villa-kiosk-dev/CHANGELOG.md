@@ -1,3 +1,14 @@
+## 2.878.0
+
+### Changed — comment only: the routing matrix no longer claims the villa cannot page the facility manager
+
+`route.py`'s header said a critical's owner-AND-facility push "cannot be
+expressed until a distinct facility target exists (DQ-04)" — false since the
+People table shipped: each person carries a role and their own notify targets,
+and the outbox merges the facility targets into a critical's push list. The
+claim survived in the code and was copied into the architecture document as a
+blocking gap, where the owner caught it. No behaviour change.
+
 ## 2.877.0
 
 ### Fixed — the Briefing tab's headings described the wrong sections; the page now reads top to bottom
