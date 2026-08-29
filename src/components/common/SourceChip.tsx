@@ -86,16 +86,17 @@ export const SOURCES: Record<Source, SourceSpec> = {
     // ⚠️ NOR "LEGACY checks", THE OTHER PROPOSAL: it is exactly backwards. The
     // legacy layer is the `maintenance_*`/`roi_*` automations that were
     // RETIRED; these are what replaced them and what runs today.
-    label: "VESTA check",
+    label: "Trend check",
     // ⚠️ THIS HINT HAS NOW BEEN WRONG IN BOTH DIRECTIONS IN ONE DAY. First
     // it implied the toggle stopped the agent (it did not, then); 2.873.0 made
     // the toggle reach the agent — one switch, one meaning — and the correction
     // written hours earlier became the new falsehood. The sentence below is
     // the whole contract and nothing more: off means off, everywhere.
-    hint: "A fixed calculation over weeks of this villa's own history. It "
-      + "always works the same way, runs whether or not supervision is on, "
-      + "and switching it off stops it everywhere — briefings and the agent "
-      + "alike.",
+    hint: "A fixed calculation over weeks of this villa's own history — a "
+      + "slow-pattern detector, distinct from the VESTA Agent's live triage "
+      + "runs. It always works the same way, runs whether Supervision is ON "
+      + "or OFF, and switching it off stops it everywhere — briefings and "
+      + "the VESTA Agent alike.",
     tone: "check",
   },
   triage: {

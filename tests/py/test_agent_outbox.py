@@ -793,15 +793,20 @@ def test_the_RATING_LINK_is_appended_after_plan_in_BOTH_dialects(
 
 def test_the_TELEGRAM_path_sets_its_own_PARSE_MODE() -> None:
     """⚠️ FORMATTING IS SHIPPABLE ONLY BECAUSE WE SET THE MODE OURSELVES. The
-    villa's integration default decides for `notify.send_message` (it publishes
-    no `parse_mode`), so a feature relying on it would render on one property
-    and show raw tags on the next. `telegram_bot.send_message` publishes the
-    field, and `buttons` sets it — which also keeps `deliver.py` free of any
-    platform branch, the negative property that module exists to hold.
+    buttons path proved on hardware (2026-08-28) that HTML renders and Markdown
+    500s with real device names; `buttons` sets html on every send it makes.
 
-    ⚠️ HTML, NEVER MARKDOWN: measured, not preferred. Markdown with a real
-    device name and our own ingress URL returned HTTP 500 (2026-08-28) — both
-    contain underscores, and one unclosed italic kills the send."""
+    ⚠️ HALF OF THIS PIN IS REVERSED, BY THE OWNER (2026-08-30). It used to
+    assert deliver.py contains no "html" anywhere, guarding against a
+    hard-coded platform branch. The owner then ruled "one message model for
+    all notifications" after the briefing's VESTA link arrived as a raw URL
+    beside hyperlinked alerts — and the shipped mechanism is NOT a platform
+    branch: it reads the service's own declared parse_mode options
+    (`discovery._html_mode`, the exact `_plain_mode` mechanism), names no
+    platform, and borrows its escaping from `links` so there is ONE html
+    dialect in the tree. What must stay true is narrower, below: no platform
+    NAME in deliver, and its html branch may not escape by hand.
+    """
     import inspect
     import re as _re
     from vesta.supervise.agent import buttons as buttons_mod
@@ -810,13 +815,27 @@ def test_the_TELEGRAM_path_sets_its_own_PARSE_MODE() -> None:
     assert buttons_mod.PARSE_MODE == "html", (
         f"the send dialect is {buttons_mod.PARSE_MODE!r}; markdown is proven "
         f"fatal with real device names and html is proven safe")
-    send = _re.sub(r"#[^\n]*", "", inspect.getsource(buttons_mod._send_one))
+    send = inspect.getsource(buttons_mod._send_one)
     assert "PARSE_MODE" in send, (
-        "the send no longer states its dialect, so it falls back to the "
-        "villa's integration setting and formatting stops being portable")
-    # ⚠️ AND THE AGNOSTIC SENDER STAYS AGNOSTIC.
-    agnostic = _re.sub(r'"""(?:.|\n)*?"""', "", inspect.getsource(deliver_mod))
-    agnostic = _re.sub(r"#[^\n]*", "", agnostic)
-    assert "html" not in agnostic.lower(), (
-        "an HTML dialect reached reports/deliver.py's CODE, which must stay "
-        "platform-agnostic — put it in agent/buttons.py")
+        "buttons no longer sets the mode it depends on")
+
+    # ⚠️ DOCSTRINGS ARE PROSE TOO — deliver's own history paragraphs recount
+    # the reference villa's Telegram incident, and the first cut of this
+    # assertion failed on them: /dry-audit step 7's comment trap, in its
+    # triple-quoted form. ast strips both comment kinds honestly.
+    import ast
+    tree = ast.parse(inspect.getsource(deliver_mod))
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if (body and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)):
+            node.body = body[1:] or [ast.Pass()]
+    code = ast.unparse(tree)
+    assert not _re.search(r"telegram|whatsapp|signal|discord", code, _re.I), (
+        "deliver.py names a platform — the html branch must key on the "
+        "service's own declared options, never on who made the service")
+    assert "links_mod.html_escape" in code, (
+        "deliver's html branch escapes by hand (or not at all) instead of "
+        "borrowing the one escaper in links")
+

@@ -296,6 +296,7 @@ async def _notify_targets(hass: HassClient) -> List[Dict[str, Any]]:
                                  and ("entity_id" in fields
                                       or service == "send_message")),
                 "plain_mode": _plain_mode(fields),
+                "html_mode": _html_mode(fields),
             })
     targets += await _notify_entities(hass)
     targets.sort(key=lambda row: str(row["service"]))
@@ -367,6 +368,8 @@ async def _notify_entities(hass: HassClient) -> List[Dict[str, Any]]:
             # told not to. That is why the identifiers were taken OUT of the
             # prose rather than defended against: see `readable_label`'s callers.
             "plain_mode": "",
+            # Same reasoning: no parse_mode field means no HTML option either.
+            "html_mode": "",
         })
     return out
 
@@ -408,6 +411,31 @@ def _redundant(domain: str, fields: Dict[str, Any],
     if domain in notify_services:
         return True
     return "entity_id" in fields
+
+
+def _html_mode(fields: Dict[str, Any]) -> str:
+    """The option that tells this service to parse the message as HTML, or "".
+
+    ⚠️ THE OTHER HALF OF `_plain_mode`, ADDED 2026-08-30 (owner: the briefing's
+    VESTA link arrived as a raw URL while every alert carried a hyperlink —
+    "enforce DRY, a single model for all notifications"). The alert path proved
+    on hardware that HTML renders and Markdown 500s; where a service DECLARES
+    an html option, the briefing may use the same dialect the alerts do. Same
+    contract as `_plain_mode`: read the service's own schema, name no platform,
+    return "" when the option is not offered — and "" leaves the caller on the
+    plain path exactly as before.
+    """
+    field = fields.get("parse_mode")
+    if not isinstance(field, dict):
+        return ""
+    selector = field.get("selector") or {}
+    options = ((selector.get("select") or {}).get("options")
+               if isinstance(selector, dict) else None) or []
+    for option in options:
+        value = option.get("value") if isinstance(option, dict) else option
+        if str(value).lower() == "html":
+            return str(value)
+    return ""
 
 
 def _plain_mode(fields: Dict[str, Any]) -> str:

@@ -758,8 +758,18 @@ async def run_report(
     # inside that text. Instead: sanitise everything the villa can influence,
     # then add a line this add-on generated from Home Assistant's own config.
     # See `links.py`, which refuses to produce anything unless it is safe.
-    link = links_mod.footer((found.get("inventory") or {}).get("urls"),
-                            _ingress_entry())
+    # ⚠️ TWO VARIANTS OF ONE MESSAGE, BUILT HERE AND NOWHERE ELSE (2026-08-30,
+    # owner: the briefing's link arrived raw beside alerts carrying a
+    # hyperlink). The html body uses the SAME tools the alert path proved on
+    # hardware — `html_escape` on the already-inert text, `html_line` for the
+    # anchor — and `deliver` uses it only where a service declares an html
+    # parse_mode. Everything else still receives the plain body below,
+    # byte-identical to before.
+    urls = (found.get("inventory") or {}).get("urls")
+    link = links_mod.footer(urls, _ingress_entry())
+    html_link = links_mod.html_line("Open", urls, _ingress_entry())
+    html_body = (f"{links_mod.html_escape(body)}\n\n{html_link}"
+                 if html_link else "")
     if link:
         body = f"{body}\n\n{link}"
 
@@ -771,7 +781,8 @@ async def run_report(
     deliveries = ([] if preview
                   else await deliver(session, targets, title, body,
                                      (found.get("inventory") or {})
-                                     .get("notify_targets") or []))
+                                     .get("notify_targets") or [],
+                                     html_message=html_body))
 
     # ── record ──────────────────────────────────────────────────────────────
     # The report's own severity is the loudest thing in it — a finding or a

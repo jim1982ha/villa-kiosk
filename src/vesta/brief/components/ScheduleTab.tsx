@@ -493,6 +493,20 @@ Off by default. Read one from the Preview tab first — that is what this
               >
                 <Trash2 size={16} />
               </button>
+              {/* ⚠️ ADD RIDES THE LAST ROW (2026-08-30, owner: the full-width
+                  "+ Add a schedule" strip cost a whole row of vertical space
+                  on a dialog that already scrolls too much). Icon-only, to
+                  the right of that row's delete — present on the last row
+                  only, so there is exactly one way in. */}
+              {i === schedules.length - 1 && (
+                <button
+                  className="btn ghost icon-only"
+                  aria-label="Add a schedule"
+                  onClick={() => set({ schedules: [...schedules, newSchedule(reachable)] })}
+                >
+                  <Plus size={16} />
+                </button>
+              )}
             </div>
 
             {/* ⚠️ THE ANSWER TO "WHY HAVE I NOT RECEIVED ANYTHING", STATED
@@ -553,12 +567,16 @@ Off by default. Read one from the Preview tab first — that is what this
         );
       })}
 
-      <button
-        className="btn"
-        onClick={() => set({ schedules: [...schedules, newSchedule(reachable)] })}
-      >
-        <Plus size={16} /><span>Add a schedule</span>
-      </button>
+      {/* ⚠️ ONLY when no schedule exists at all — otherwise Add rides the last
+          row's action cluster (see above) and this full-width strip is gone. */}
+      {schedules.length === 0 && (
+        <button
+          className="btn"
+          onClick={() => set({ schedules: [...schedules, newSchedule(reachable)] })}
+        >
+          <Plus size={16} /><span>Add a schedule</span>
+        </button>
+      )}
 
       <NarrationSection
         draft={draft}

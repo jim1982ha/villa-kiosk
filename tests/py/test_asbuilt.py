@@ -63,7 +63,9 @@ def test_the_document_reads_the_live_modules_not_a_copy() -> None:
 
 def test_the_pdf_builds(tmp_path) -> None:
     out = asbuilt.build(str(tmp_path / "asbuilt.pdf"))
-    # ⚠️ 6,000 IS CALIBRATED, NOT GUESSED: the real document measures ~9.5 KB
-    # and an empty reportlab shell ~2 KB. The first guard said 10,000 — a
-    # round number that failed the genuine artefact on its first run.
-    assert os.path.getsize(out) > 6_000, "the PDF built but is near-empty"
+    # ⚠️ RECALIBRATED after the owner rejected the 2-page first edition: the
+    # expanded document measures ~17 KB over 6 pages; an empty shell ~2 KB.
+    # The floor sits at the midpoint of "skeleton" (~9 KB, the rejected
+    # edition) and the real one, so a regression to bare tables goes red.
+    assert os.path.getsize(out) > 13_000, (
+        "the PDF built but has collapsed back toward the rejected skeleton")

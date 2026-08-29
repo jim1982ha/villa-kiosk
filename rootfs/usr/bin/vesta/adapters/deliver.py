@@ -113,7 +113,8 @@ ENTITY_SERVICE = "notify/send_message"
 
 
 def _payload_for(target: str, title: str, message: str,
-                 plain_mode: str = "") -> Dict[str, Any]:
+                 plain_mode: str = "", html_mode: str = "",
+                 html_message: str = "") -> Dict[str, Any]:
     """The body for one target, and where it is posted.
 
     ⚠️ STILL THE INTERSECTION — `title` plus `message`, plain text — with
@@ -137,17 +138,31 @@ def _payload_for(target: str, title: str, message: str,
     body: Dict[str, Any] = {"title": title, "message": message}
     if target.startswith(ENTITY_PREFIX):
         body["entity_id"] = target[len(ENTITY_PREFIX):]
-    if plain_mode:
+    # ⚠️ HTML WINS WHERE THE SERVICE OFFERS IT AND A RICH BODY EXISTS
+    # (2026-08-30, owner: the briefing's link arrived as a raw URL beside
+    # alerts carrying a hyperlink — one message model for everything). The
+    # caller composes the html variant with the SAME tools the alert path
+    # uses (`links.html_escape` + `links.html_line`), so there is one dialect
+    # and one escaping rule in the tree. No html option, or no rich body
+    # supplied, and this function behaves byte-identically to before.
+    if html_mode and html_message:
+        from vesta.adapters import links as links_mod
+        body["message"] = html_message
+        body["title"] = links_mod.html_escape(title)
+        body["parse_mode"] = html_mode
+    elif plain_mode:
         body["parse_mode"] = plain_mode
     return body
 
 
 async def deliver_one(session: ClientSession, target: str,
                       title: str, message: str,
-                      plain_mode: str = "") -> Dict[str, Any]:
+                      plain_mode: str = "", html_mode: str = "",
+                      html_message: str = "") -> Dict[str, Any]:
     """Send to one target. Never raises."""
     url = f"{hass_mod.REST_ROOT}/services/{_service_path(target)}"
-    payload = _payload_for(target, title, message, plain_mode)
+    payload = _payload_for(target, title, message, plain_mode,
+                           html_mode, html_message)
     try:
         async with session.post(url, headers=hass_mod.AUTH_HEADERS, json=payload,
                                 timeout=None) as response:
@@ -165,7 +180,8 @@ async def deliver_one(session: ClientSession, target: str,
 
 async def deliver(session: ClientSession, targets: Sequence[str],
                   title: str, message: str,
-                  known: Sequence[Dict[str, Any]] = ()) -> List[Dict[str, Any]]:
+                  known: Sequence[Dict[str, Any]] = (),
+                  html_message: str = "") -> List[Dict[str, Any]]:
     """Send to every target, independently.
 
     Sequential rather than gathered, on purpose: a villa has a handful of
@@ -187,11 +203,14 @@ async def deliver(session: ClientSession, targets: Sequence[str],
     # thing to fail while a report is going out.
     plain = {str(t.get("service") or ""): str(t.get("plain_mode") or "")
              for t in known if isinstance(t, dict)}
+    html = {str(t.get("service") or ""): str(t.get("html_mode") or "")
+            for t in known if isinstance(t, dict)}
 
     results: List[Dict[str, Any]] = []
     for target in targets:
         result = await asyncio.wait_for(
-            deliver_one(session, target, title, message, plain.get(target, "")),
+            deliver_one(session, target, title, message, plain.get(target, ""),
+                        html.get(target, ""), html_message),
             timeout=DELIVERY_TIMEOUT_S + 5)
         results.append(result)
         if result["status"] == "sent":

@@ -149,7 +149,7 @@ export default function ModulesTab({
           column re-sizes per row; `.reports-ingredients` sets the columns once
           on the container and every dt/dd shares them. */}
       <dl className="reports-ingredients">
-          <dt>The checks</dt>
+          <dt>Trend checks</dt>
           <dd>
             The calculations below, each over its own window of Home
             Assistant’s recorded history — from two weeks to six, stated on
@@ -197,16 +197,24 @@ export default function ModulesTab({
           in that the agent may run these same checks as a tool while
           investigating. The (i) says exactly that, because the owner asked
           the question and a reader will too. */}
-      <h3 className="settings-section-title">The checks</h3>
+      {/* ⚠️ "Trend checks" (2026-08-30, owner: bare "checks" collides with the
+          VESTA Agent's own vocabulary — "Check the villa now", the Recent
+          checks list — which are triage RUNS, a different thing). "Trend"
+          names what these detect: slow patterns over weeks that no single
+          change shows. One qualifier, collision gone. */}
+      <h3 className="settings-section-title">Trend checks</h3>
       <p className="muted body-text">
-        Fixed calculations VESTA runs itself, in both Supervision modes.
-        <InfoHint label="The checks">
+        Fixed calculations over weeks of history, run by VESTA itself in both
+        Supervision modes.
+        <InfoHint label="Trend checks">
           <p>
-            These are not the VESTA Agent’s Observe step. Observe is a journal
-            of what changed in the last day; a check reads weeks of recorded
-            history and looks for slow patterns no single change shows. When
-            the VESTA Agent investigates something, it can run these same
-            checks itself as one of its tools.
+            Not the VESTA Agent’s work: the Agent’s Observe step journals what
+            changed in the last day, and its triage runs (“Check the villa
+            now”) judge that journal live. A trend check is different — fixed
+            arithmetic over weeks of recorded history, finding slow patterns
+            no single change shows. When the VESTA Agent investigates
+            something, it can run these same trend checks as one of its
+            tools.
           </p>
           <p>
             They ship with the add-on — nothing to install, and no way to add
@@ -271,7 +279,7 @@ export default function ModulesTab({
                   switch it off" is the property that makes that swap
                   acceptable — and it is worth saying on the row. */}
               {/* ⚠️ NO `SourceChip` HERE. Every row in this list sits under a
-                  heading reading "The checks", so a "VESTA check" chip
+                  heading reading "Trend checks", so a "Trend check" chip
                   on each one repeats the section title once per row — the same
                   redundancy the reflex table had, reported in the same breath.
                   The chip earns its place where a list MIXES sources; this list
@@ -330,9 +338,9 @@ export default function ModulesTab({
 
       {!preview && (
         <p className="muted body-text">
-          Compose a brief from the Preview tab to see which of these actually
-          ran and why the others did not — that is decided during a pass, not
-          by these settings alone.
+          Compose a test briefing below to see which of these actually ran
+          and why any other did not — decided while composing, from live
+          data, not by these toggles alone.
         </p>
       )}
 

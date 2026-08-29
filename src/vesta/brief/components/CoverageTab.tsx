@@ -20,6 +20,7 @@
 // was measured reads as current).
 
 import { Check, RefreshCw, X } from "lucide-react";
+import InfoHint from "@/components/common/InfoHint";
 import type { ReportsDiagnostics } from "@/vesta/brief/reportsApi";
 
 /** The probe time as a wall clock, or "" if the server sent nothing usable.
@@ -112,7 +113,21 @@ export default function CoverageTab({
           covered" are a list of what exists, where a card per entry would give
           twenty pieces of furniture the weight of a problem. */}
       <h3 className="settings-section-title">Is anything listening?</h3>
-      <ul className="reports-tasks">
+      <p className="muted body-text">
+        Whether a briefing composed right now could speak for the whole period.
+        <InfoHint label="Is anything listening?">
+          <p>
+            A briefing can only summarise what VESTA was awake to record. If
+            listening started mid-period, the briefing says so rather than
+            pretending it saw everything.
+          </p>
+          <p>
+            Nothing to do here in normal use — it is the fact you check when a
+            briefing seems thinner than expected.
+          </p>
+        </InfoHint>
+      </p>
+      <ul className="reports-tasks two-up">
         {listeningFindings(diagnostics, lastBriefing).map((f, i) => (
           <li key={i} className="reports-task">
             <span className={`reports-task-text${f.tone === "warn" ? " sev-warning" : ""}`}>
@@ -124,7 +139,30 @@ export default function CoverageTab({
 
       {diagnostics.preflight.length > 0 && (
         <>
-          <h3 className="settings-section-title">Needs attention</h3>
+          {/* ⚠️ RENAMED FROM "Needs attention" (2026-08-30, owner: "why do we
+              suddenly see an alert here — shouldn't this be handled as any
+              other alert?"). It looked like one and is not: an alert is a
+              villa condition the VESTA Agent judged, with a lifecycle, acts
+              and delivery. These are SET-UP findings — problems with the
+              configuration itself, computed live each time this screen is
+              probed, gone the moment you fix the setting in Home Assistant.
+              No store, no lifecycle, nothing to acknowledge — so presenting
+              them as alerts would create alerts nobody can act on FROM the
+              alert surfaces. The heading now says what they are. */}
+          <h3 className="settings-section-title">Set-up warnings</h3>
+          <p className="muted body-text">
+            Problems with the configuration itself, found just now — fix them
+            in Home Assistant and they disappear on the next check.
+            <InfoHint label="Set-up warnings">
+              <p>
+                These are not alerts: an alert is something happening at the
+                property, judged by the VESTA Agent, with buttons to act on.
+                A set-up warning is this screen noticing your delivery or
+                measurement configuration could bite later — for example two
+                notify targets sharing one name.
+              </p>
+            </InfoHint>
+          </p>
           <ul className="reports-tasks">
             {diagnostics.preflight.map((p, i) => (
               <li key={i} className="reports-task">
@@ -136,6 +174,9 @@ export default function CoverageTab({
       )}
 
       <h3 className="settings-section-title">Available</h3>
+      <p className="muted body-text">
+        What this property already reports, and what that lets a briefing say.
+      </p>
       <ul className="reports-list">
         {diagnostics.capabilities.map((c) => (
           <li key={c} className="reports-item">
@@ -149,6 +190,10 @@ export default function CoverageTab({
       </ul>
 
       <h3 className="settings-section-title">Not covered</h3>
+      <p className="muted body-text">
+        Not faults — things this property does not measure. Add the metering
+        or setting in Home Assistant and the item moves up on the next check.
+      </p>
       <ul className="reports-list">
         {diagnostics.capabilitiesMissing.map((c) => (
           <li key={c} className="reports-item muted">
