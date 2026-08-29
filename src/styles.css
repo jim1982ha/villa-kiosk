@@ -3797,14 +3797,6 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .flag-row-main > * { margin: 0; }
 /* Two facts of one family on one row (listening + last briefing). Grid, not
    flex, so they stay equal-width and wrap as a pair on a phone. */
-/* the pin test_every_list_class_used_on_a_UL derives every class the markup
-   puts on a <ul> and requires each to reset the marker — including this
-   modifier, which is why it declares its own reset instead of leaning on
-   `.reports-tasks`' one. */
-.two-up { list-style: none; }
-.reports-tasks.two-up { display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-                        gap: 8px; padding: 0; }
 
 .flag-row-reason { font-size: var(--text-sm); }
 /* ⚠️ A LINE IN THE COLUMN NOW, NOT A RIGHT-HAND CELL (2026-08-28, owner's

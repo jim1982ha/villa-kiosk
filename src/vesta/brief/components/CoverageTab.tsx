@@ -47,22 +47,33 @@ function probedAt(iso: string): string {
  *  added to replace. `onlineSince` is only ever printed as "since when",
  *  alongside a `connected` that is true now.
  */
-function listeningFindings(
+/** The listening state as ONE sentence.
+ *
+ *  ⚠️ ONE LINE, NOT TWO CARDS (2026-08-30, owner's second request on this
+ *  spot). The first attempt put two cards in a two-column grid, which is
+ *  still two lines on a phone — the dialog's real width — so it did not
+ *  answer the request at all. Two short related facts do not need two
+ *  bordered boxes: they are one sentence, and a phone renders a sentence.
+ *
+ *  ⚠️ THE WARNING TONE SURVIVES THE MERGE. Either half can be the bad news
+ *  ("not listening", "none sent yet"), and a merged line that dropped the
+ *  colour would hide a real fault to save a box. `warn` if either half is. */
+function listeningLine(
   d: ReportsDiagnostics, lastBriefing: string,
-): { tone: "" | "warn"; text: string }[] {
-  const out: { tone: "" | "warn"; text: string }[] = [];
-  out.push(d.collector.connected
-    ? { tone: "",
-        text: `Listening for alerts${d.collector.onlineSince
-          ? ` since ${new Date(d.collector.onlineSince).toLocaleDateString()}`
-          : ""}.` }
-    : { tone: "warn",
-        text: "Not listening — anything that happens now will be missing from "
-              + "the next briefing." });
-  out.push(lastBriefing
-    ? { tone: "", text: `Last briefing sent ${new Date(lastBriefing).toLocaleString()}.` }
-    : { tone: "warn", text: "No briefing has been sent yet." });
-  return out;
+): { tone: "" | "warn"; text: string } {
+  const since = d.collector.onlineSince
+    ? ` since ${new Date(d.collector.onlineSince).toLocaleDateString()}`
+    : "";
+  const listening = d.collector.connected
+    ? `Listening${since}`
+    : "Not listening — anything happening now will be missing";
+  const sent = lastBriefing
+    ? `last briefing ${new Date(lastBriefing).toLocaleString()}`
+    : "none sent yet";
+  return {
+    tone: (d.collector.connected && lastBriefing) ? "" : "warn",
+    text: `${listening} · ${sent}.`,
+  };
 }
 
 export default function CoverageTab({
@@ -127,15 +138,11 @@ export default function CoverageTab({
           </p>
         </InfoHint>
       </p>
-      <ul className="reports-tasks two-up">
-        {listeningFindings(diagnostics, lastBriefing).map((f, i) => (
-          <li key={i} className="reports-task">
-            <span className={`reports-task-text${f.tone === "warn" ? " sev-warning" : ""}`}>
-              {f.text}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <p className={`reports-item${
+        listeningLine(diagnostics, lastBriefing).tone === "warn"
+          ? " sev-warning" : " muted"}`}>
+        <span>{listeningLine(diagnostics, lastBriefing).text}</span>
+      </p>
 
       {diagnostics.preflight.length > 0 && (
         <>

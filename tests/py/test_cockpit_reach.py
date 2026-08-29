@@ -242,11 +242,27 @@ def test_the_briefing_dialog_reads_the_live_listening_field() -> None:
     this villa ever had a listener", which reads true forever after the first
     connect. That is the precise lie `connected` was added to replace, and
     carrying the block to a new surface is exactly when it would come back."""
+    # ⚠️ ANCHORED ON THE SUBJECT, NOT THE FUNCTION NAME (2026-08-30). This read
+    # `function listeningFindings`, which vanished when the two cards became one
+    # sentence — the guard fired rather than passing blind, which is the guard
+    # working, but a pin that breaks on a rename it does not care about costs a
+    # release. Any function whose name carries "listening" is the block.
     tab = _code(os.path.join(SRC, "vesta", "brief", "components", "CoverageTab.tsx"))
-    block = re.search(r"function listeningFindings(.*?)\n}", tab, re.DOTALL)
-    assert block, "the listening block moved again — this test is blind"
+    block = re.search(r"function \w*[Ll]istening\w*\((.*?)\n}", tab, re.DOTALL)
+    assert block, "no listening block in CoverageTab — this test is blind"
     assert "collector.connected" in block.group(1), (
         "liveness must come from `connected`, not from a persisted timestamp")
+    # ⚠️ THE LIVENESS TEXT ITSELF, NOT A POSITIONAL HEURISTIC. The first cut
+    # asserted `onlineSince` appeared nowhere before `connected` — false by
+    # construction, since the date is FORMATTED first and only then does
+    # `connected` choose the wording. What matters is which field decides:
+    # the line that picks "Listening" vs "Not listening" must read `connected`.
+    decider = [ln for ln in block.group(1).split("\n")
+               if "listening =" in ln or "listening=" in ln]
+    assert decider, "no liveness decision found in the block"
+    assert "connected" in decider[0], (
+        f"liveness is decided by {decider[0].strip()!r} — it must be "
+        "`connected`, the live socket, not a persisted timestamp")
 
 
 def test_the_last_briefing_is_the_NEWEST_entry() -> None:
