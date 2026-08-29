@@ -1,3 +1,16 @@
+## 2.889.0
+
+### Changed — repeated automations are one line with a count, and the record pages
+
+A motion light fires dozens of times a day, so a line per firing made both the
+screen and the briefing a wall nobody reads. Each automation is now one row —
+which it is, how often, and the totals across those firings, summed rather than
+sampled, because one firing's figure printed beside a count is wrong by the size
+of the count. The record's table pages like every other, through one shared
+control the delivery record now uses too: one page size for the app rather than
+one per table. The briefing's own summary counts what a reader sees, not raw
+entries.
+
 ## 2.888.0
 
 ### Changed — one tab per step, so the page stops scrolling past what you came for
