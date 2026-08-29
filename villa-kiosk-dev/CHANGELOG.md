@@ -1,3 +1,16 @@
+## 2.883.0
+
+### Fixed — coverage explains itself; briefings hyperlink where allowed; "Trend checks"
+
+The check cards' height had one root cause: paragraphs carry margins Triage's
+rows never had — the column now owns its rhythm. "Needs attention" is renamed
+"Set-up warnings" and says why it is not an alert: configuration problems,
+gone when fixed, nothing to acknowledge. The listening pair sits on one row.
+Briefings now carry the same hyperlinked VESTA line as alerts wherever the
+notify service itself declares an HTML option — one dialect, one escaper, no
+platform names. The checks are "Trend checks" everywhere, ending the collision
+with the VESTA Agent's "Check the villa now". Add-schedule rides the last row.
+
 ## 2.882.0
 
 ### Added — the As-Built technical authority, generated from the code and pinned
