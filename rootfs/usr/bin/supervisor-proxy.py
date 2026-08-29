@@ -104,7 +104,7 @@ import secrets
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
@@ -126,6 +126,7 @@ if _HERE not in sys.path:
 
 from vesta.shared import contracts as reports_contracts  # noqa: E402  (needs sys.path above)
 from vesta.adapters import collect as reports_collect
+from vesta.adapters import record as vesta_record
 from vesta.adapters import discovery as reports_discovery
 from vesta.brief import pipeline as reports_pipeline
 # ⚠️ BOTH LINES ARE LOAD-BEARING, AND THE SECOND IS THE ONE THAT IS EASY TO
@@ -2569,6 +2570,60 @@ def _journal_facts() -> Dict[str, Any]:
         return {}
 
 
+async def reports_record_handler(request: web.Request) -> web.Response:
+    """The RECORD — what happened at this property, newest first.
+
+    ⚠️ OWNER-ONLY, LIKE DIAGNOSTICS AND FOR THE SAME REASON: it enumerates what
+    the property did and what the agent concluded, which is a fair description
+    of the villa's life. `?days=` windows it; the default matches the longest
+    briefing window so the screen shows what a monthly brief would read.
+
+    ⚠️ NEVER RAISES. A ledger that cannot be read must render as empty-with-a-
+    reason, not as a 500 on a settings screen.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may read the record.")
+    try:
+        days = max(1, min(90, int(request.query.get("days") or 31)))
+    except (TypeError, ValueError):
+        days = 31
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(
+        timespec="seconds")
+    try:
+        rows = vesta_record.since(since)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        print(f"[supervisor-proxy] record read failed: {err}", flush=True)
+        rows = []
+    return web.json_response({"entries": list(reversed(rows)), "days": days},
+                             headers={"Cache-Control": "no-store"})
+
+
+async def reports_record_delete_handler(request: web.Request) -> web.Response:
+    """Delete ONE entry, identified by its time and subject.
+
+    ⚠️ DELETING HISTORY IS A REAL ACT and is owner-only. The briefing composed
+    after this will not mention the entry — which is the owner's intent when
+    they prune, and is why the surface that offers it says so plainly rather
+    than looking like ticking a task off a list.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return _forbidden("Only the owner profile may edit the record.")
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return web.json_response({"error": "invalid json"}, status=400)
+    at = str((body or {}).get("at") or "")
+    subject = str((body or {}).get("subject") or "")
+    if not at:
+        return web.json_response({"error": "name the entry by `at`"}, status=400)
+    removed = vesta_record.remove(at, subject)
+    return web.json_response({"removed": removed})
+
+
 async def reports_diagnostics_handler(request: web.Request) -> web.Response:
     """What this deployment can and cannot analyse.
 
@@ -2998,6 +3053,8 @@ def main() -> None:
     app.router.add_get("/reports-config", reports_config_get_handler)
     app.router.add_put("/reports-config", reports_config_put_handler)
     app.router.add_get("/reports-history", reports_history_get_handler)
+    app.router.add_get("/reports-record", reports_record_handler)
+    app.router.add_post("/reports-record-delete", reports_record_delete_handler)
     app.router.add_get("/reports-diagnostics", reports_diagnostics_handler)
     app.router.add_post("/reports-next-run", reports_next_run_handler)
     app.router.add_get("/reports-secret", reports_secret_get_handler)

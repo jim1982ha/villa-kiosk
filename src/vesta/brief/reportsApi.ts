@@ -608,6 +608,69 @@ export async function saveNarrationSecret(
 
 // ── diagnostics ─────────────────────────────────────────────────────────────
 
+/** One entry in the record — what happened at this property.
+ *
+ *  ⚠️ `ref` IS A POINTER, NOT A COPY. An `agent` row names its alert; the
+ *  Reason tab stays the authority on whether that alert is still open, so this
+ *  screen never renders a lifecycle it does not own. */
+export interface RecordEntry {
+  at: string;
+  source: "automation" | "triage" | "agent" | string;
+  domain: string;
+  subject: string;
+  title: string;
+  detail: string;
+  severity: string;
+  ref: string;
+  outcome: string;
+  fidelity: string;
+}
+
+/** The record over a window, newest first. `null` when it could not be read —
+ *  which the caller must render as "could not ask", never as "nothing
+ *  happened": an empty list and a failed read mean opposite things. */
+export async function fetchRecord(days = 31): Promise<RecordEntry[] | null> {
+  try {
+    const r = await fetch(ingressPath(`reports-record?days=${days}`),
+                          { credentials: "same-origin" });
+    if (!r.ok) return null;
+    const d = obj(await r.json());
+    return arr(d.entries).map((e) => {
+      const row = obj(e);
+      return {
+        at: str(row.at),
+        source: str(row.source),
+        domain: str(row.domain),
+        subject: str(row.subject),
+        title: str(row.title),
+        detail: str(row.detail),
+        severity: str(row.severity),
+        ref: str(row.ref),
+        outcome: str(row.outcome),
+        fidelity: str(row.fidelity),
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Remove one entry. Returns whether the server removed it. */
+export async function deleteRecordEntry(at: string, subject: string): Promise<boolean> {
+  try {
+    const r = await fetch(ingressPath("reports-record-delete"), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ at, subject }),
+    });
+    if (!r.ok) return false;
+    return bool(obj(await r.json()).removed);
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchReportsDiagnostics(): Promise<ReportsDiagnostics | null> {
   try {
     const r = await fetch(ingressPath("reports-diagnostics"), { credentials: "same-origin" });

@@ -73,7 +73,7 @@
 // capability instead.
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileText, Loader2, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Loader2 } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import ModalTabs from "@/components/common/ModalTabs";
 import ModalFooter from "@/components/common/ModalFooter";
@@ -90,10 +90,10 @@ import CoverageTab from "./CoverageTab";
 import ScheduleTab from "./ScheduleTab";
 import HistoryTab from "./HistoryTab";
 import ModulesTab from "./ModulesTab";
-import AutomationsTab from "./AutomationsTab";
+import RecordTab from "./RecordTab";
 import { TierIntro, STEPS } from "@/vesta/shared/tiers";
 
-type Tab = "briefing" | "automations";
+type Tab = "briefing";
 
 /** ⚠️ `configure: true` MEANS "THE PROXY WOULD REFUSE THIS TAB TO ANYONE BUT
  *  THE OWNER" — see the endpoint table in this file's header. It is not a
@@ -110,48 +110,13 @@ type Tab = "briefing" | "automations";
  *  one question asked in two tenses, and separating them made a failed delivery
  *  something you had to go looking for on another tab. */
 const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[] = [
-  // ⚠️ TWO TABS, AND THE LINE BETWEEN THEM IS "IS THIS PART OF A BRIEFING?"
-  // (2026-08-29, owner). It was four: what is watched · what it can see · the
-  // briefing · sending it. All four answer one question in sequence — what a
-  // briefing is built from, whether the property can supply it, what it reads
-  // like, and when it goes — so they are now sections of ONE tab, in that
-  // order, each keeping its step header.
-  //
-  // ⚠️ AUTOMATIONS IS THE SECOND TAB BECAUSE IT IS A DIFFERENT SUBJECT, not
-  // because of the supervision switch. An automation reacts instantly and has
-  // already acted; a briefing summarises a period. The owner's words: "this tab
-  // is about briefing, and reporting/briefing doesn't rely on instant alerts
-  // received from automations".
+  // ⚠️ ONE TAB (2026-08-30). It was four, then two; the record collapsed the
+  // second. "Instant alerts" listed automation FAMILIES with descriptions and
+  // no live data — now the same automations appear in "What happened" as what
+  // they actually DID, with their own figures, filterable by source. A filter
+  // replaced a tab, which is the simplification the record earns; the tab's
+  // explanation moved into that section's (i) rather than being deleted.
   { id: "briefing", label: "Briefing", icon: FileText, configure: true },
-    // ⚠️ "Instant alerts", NOT the owner's proposed bare "Alerts" (2026-08-29):
-  // in the VESTA Agent dialog "alert" already MEANS a delivered concern — "the
-  // alert is still open", "close this alert" — so a bare "Alerts" tab one
-  // dialog over would give the word two referents. The qualifier keeps the
-  // owner's intent (name it for what it does, not for its machinery) while
-  // "instant" is exactly the property that separates this layer from both a
-  // concern and a briefing: it has already acted before anything is composed.
-  { id: "automations", label: "Instant alerts", icon: Zap, configure: true },
-  // ⚠️ "WHAT IT ASKED FOR" IS GONE (2026-08-28), AND ITS PRODUCER WAS RETIRED
-  // BEFORE IT WAS. The tab listed to-do items the villa's own BLUEPRINTS had
-  // raised — `maintenance_*`, `roi_*` and `audit_*` each called `todo.add_item`
-  // alongside their event. The cutover retired all three, so no shipped
-  // blueprint writes a to-do item any more and the tab had no source of its
-  // own left.
-  //
-  // ⚠️ IT DID NOT GO BLANK, WHICH IS WHY IT SURVIVED THE CUTOVER UNNOTICED. It
-  // reads every `todo.*` entity and keeps whatever carries `TASK_PREFIX`, and
-  // since 2.763.0 `agent/task.py` writes exactly that bracket — so it quietly
-  // started listing the AGENT's items under a "Safety reflex" chip and the
-  // sentence "to-do items your automations raised". Both false, and both about
-  // rows already shown, correctly, on Act & Tell. The owner reported it as a
-  // duplicate; it was worse than one.
-  //
-  // ⚠️ AND IT PRINTED THE INTERNAL ID. `ruleId` was rendered beside the text
-  // deliberately, as corroboration — its comment read "an agent-derived row
-  // could not have one", which was true when written and stopped being true
-  // the day the agent started raising to-do items. That is how `c7` reached a
-  // screen. `/reports-tasks` and its client stay: the brief's "Followed up"
-  // section still reconciles against the list.
 ];
 
 export default function ReportsModal(
@@ -408,7 +373,7 @@ export default function ReportsModal(
         aria-label="Briefings"
       >
         <div className="settings-header">
-          <h2>Briefing &amp; Instant alerts</h2>
+          <h2>Briefing</h2>
           {notice && (
             <button
               type="button"
@@ -492,6 +457,8 @@ export default function ReportsModal(
             />
           )}
 
+          {tab === "briefing" && <RecordTab />}
+
           {tab === "briefing" && <TierIntro tier={STEPS.visible} />}
           {tab === "briefing" && (
             <CoverageTab
@@ -528,12 +495,7 @@ export default function ReportsModal(
           )}
           {tab === "briefing" && <HistoryTab entries={history} />}
 
-          {/* ⚠️ ITS OWN SUBJECT, SO ITS OWN BODY. Nothing from the briefing
-              sequence renders here — no step header, no preview, no schedule —
-              because none of it describes what an automation does. */}
-          {tab === "automations" && (
-            <AutomationsTab diagnostics={diagnostics} />
-          )}
+
           {/* ⚠️ HISTORY RENDERS UNDER "Sending it", NOT ON ITS OWN TAB. When a
               brief is sent and what was actually delivered are one question in
               two tenses; splitting them put a FAILED delivery on a tab nobody

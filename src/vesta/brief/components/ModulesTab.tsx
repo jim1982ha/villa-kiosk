@@ -26,7 +26,7 @@
 // — but the deeper problem was that it was on this tab at all: a briefing is a
 // periodic summary and an automation is an instant reaction, so what the
 // automations did is not part of what a briefing is built from. See
-// `AutomationsTab`.
+// `RecordTab`.
 //
 // ⚠️ THE PLAN NAMED THIS TAB AND PHASE 5 SHIPPED WITHOUT IT. The interface
 // phase specified "Overview · Modules · History · Schedule · Diagnostics" and
@@ -91,7 +91,7 @@ import type { ReportsConfig } from "@/vesta/shared/reportsTypes";
 /* ⚠️ `FAMILIES` LEFT WITH THE SECTION IT FED. It was a second copy of
    `shared/tiers.tsx`'s table and the two had already disagreed once — this one
    called maintenance "being replaced by the built-in checks below", which named
-   the wrong successor. `AutomationsTab` reads the shared table, so a family has
+   the wrong successor. `RecordTab` renders firings, so a family has
    one description again. */
 
 export default function ModulesTab({
@@ -138,9 +138,9 @@ export default function ModulesTab({
             reads everything at that moment and writes it up.
           </p>
           <p>
-            Your automations are deliberately not on this list: they alert you
-            on the spot (see the Instant alerts tab) and a briefing never reads
-            them.
+            Your automations ARE on this list now — every firing is recorded, in
+            both modes. They still alert you on the spot; this is the record of
+            what they did.
           </p>
         </InfoHint>
       </p>
@@ -149,6 +149,12 @@ export default function ModulesTab({
           column re-sizes per row; `.reports-ingredients` sets the columns once
           on the container and every dt/dd shares them. */}
       <dl className="reports-ingredients">
+          <dt>What happened</dt>
+          <dd>
+            The record below: everything your automations did, everything the
+            VESTA Agent noticed and concluded — one list, in both Supervision
+            modes.
+          </dd>
           <dt>Trend checks</dt>
           <dd>
             The calculations below, each over its own window of Home
@@ -161,15 +167,8 @@ export default function ModulesTab({
           </dd>
           <dt>To-do items</dt>
           <dd>
-            Every list in Home Assistant is scanned at composing time; items
-            this system wrote (their name starts with a reference in brackets)
-            that are still open are carried into the briefing. Your own
-            groceries are never read.
-          </dd>
-          <dt>The VESTA Agent’s alerts</dt>
-          <dd>
-            Open alerts from the VESTA Agent’s investigations, when
-            Supervision is ON.
+            What is still open on the facility manager’s list right now —
+            state, not events, which is why it is read separately.
           </dd>
       </dl>
 
@@ -187,7 +186,7 @@ export default function ModulesTab({
           belong on a tab about what a briefing is built from — and that holds
           whatever the supervision switch says, which is what makes it a better
           rule than the one I proposed (their counters are frozen, which is only
-          a symptom). See `AutomationsTab`. */}
+          a symptom). See `RecordTab`. */}
 
       {/* ── 2. The checks ──────────────────────────────────────────── */}
       {/* ⚠️ "The checks" — the PDF's word, and its ladder is the contract:

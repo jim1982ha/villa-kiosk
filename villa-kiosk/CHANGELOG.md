@@ -1,3 +1,15 @@
+## 2.886.0
+
+### Added — "What happened" on screen, and the dialog is one tab again
+
+The record is now visible where it is read: everything the next briefing will
+summarise, newest first, filtered by who reported it — your automations, the
+VESTA Agent, or something it noticed but never investigated. Each row can be
+deleted, and the wording says plainly that this deletes history rather than
+ticking a job off a list. The Instant alerts tab is gone: it listed automation
+families with no live data, and those same automations now appear as what they
+actually did, with their own figures. A filter replaced a tab.
+
 ## 2.885.0
 
 ### Added — one record of what happened, and the briefing reads it
