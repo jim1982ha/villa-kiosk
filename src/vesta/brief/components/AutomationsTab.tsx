@@ -61,20 +61,26 @@ export default function AutomationsTab(
 
   return (
     <div className="reports-pane">
+      <h3 className="settings-section-title">Alerts that fire on the spot</h3>
       <p className="muted body-text">
-        Automations you built in Home Assistant. They react the moment something
-        happens — no add-on, no AI, no internet — which is what makes them a
-        different thing from a briefing rather than a smaller one.
-        <InfoHint label="Your automations">
+        Automations you built in Home Assistant. They act and alert you the
+        moment something happens — no VESTA, no AI, no internet needed.
+        <InfoHint label="Alerts that fire on the spot">
           <p>
-            An automation acts, in under a second, and it has already done what
-            it does by the time anyone reads anything. A briefing looks back over
-            a period and summarises. That is why the two are on separate tabs.
+            These react in under a second and have already done their job by
+            the time anyone reads anything — a leak closes a valve, a message
+            reaches your phone. A briefing looks back over a period and
+            summarises. That is why the two are separate tabs.
           </p>
           <p>
-            Nothing here is added or removed from this screen — these are your
-            own Home Assistant automations, and Home Assistant is where you edit
-            them.
+            They are yours: Home Assistant is where you switch one on or off or
+            change what it does. VESTA never touches them, and this page only
+            describes them.
+          </p>
+          <p>
+            These are also a different thing from the alerts the VESTA agent
+            sends — those come from an investigation and appear on the Reason
+            tab; these fire directly from your own automations.
           </p>
         </InfoHint>
       </p>

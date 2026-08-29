@@ -123,7 +123,14 @@ const TABS: { id: Tab; label: string; icon: typeof FileText; configure?: true }[
   // is about briefing, and reporting/briefing doesn't rely on instant alerts
   // received from automations".
   { id: "briefing", label: "Briefing", icon: FileText, configure: true },
-  { id: "automations", label: "Automations", icon: Zap, configure: true },
+    // ⚠️ "Instant alerts", NOT the owner's proposed bare "Alerts" (2026-08-29):
+  // in the VESTA Agent dialog "alert" already MEANS a delivered concern — "the
+  // alert is still open", "close this alert" — so a bare "Alerts" tab one
+  // dialog over would give the word two referents. The qualifier keeps the
+  // owner's intent (name it for what it does, not for its machinery) while
+  // "instant" is exactly the property that separates this layer from both a
+  // concern and a briefing: it has already acted before anything is composed.
+  { id: "automations", label: "Instant alerts", icon: Zap, configure: true },
   // ⚠️ "WHAT IT ASKED FOR" IS GONE (2026-08-28), AND ITS PRODUCER WAS RETIRED
   // BEFORE IT WAS. The tab listed to-do items the villa's own BLUEPRINTS had
   // raised — `maintenance_*`, `roi_*` and `audit_*` each called `todo.add_item`
@@ -466,31 +473,15 @@ export default function ReportsModal(
               is actually built, top down" — which is exactly what a single
               scrolling tab needs; dropping them would have left four bodies
               butted together with nothing saying where one question ends. */}
+          {/* ⚠️ EACH STEP HEADER SITS DIRECTLY OVER ITS OWN BODY, in the
+              order the pipeline runs: what is watched → what it can see → the
+              briefing itself (compose · schedule · record). The 2.874.0 merge
+              scrambled this — the composed brief rendered under "What is
+              watched" and the checks under "What it can see" — because the
+              bodies were re-tagged to one tab without being re-ordered, and
+              nothing pins a header to its body. `test_briefing_layout` now
+              does. */}
           {tab === "briefing" && <TierIntro tier={STEPS.watched} />}
-          {tab === "briefing" && (
-            <PreviewTab
-              preview={preview}
-              busy={busy}
-              narrationMode={config?.narration?.mode ?? "deterministic"}
-              onCompose={() => void compose()}
-            />
-          )}
-          {tab === "briefing" && <TierIntro tier={STEPS.visible} />}
-          {tab === "briefing" && (
-            <CoverageTab
-              diagnostics={diagnostics}
-              busy={busy}
-              onRefresh={() => void refresh()}
-              // ⚠️ `[0]`, BECAUSE `fetchReportsHistory` RETURNS NEWEST FIRST.
-              // The STORE is a ring written oldest-first and the fetcher
-              // reverses it — one line apart in `reportsApi`, and the Cockpit
-              // block this replaces read `[length - 1]` and so printed the
-              // FIRST briefing ever sent under the words "Last briefing". It
-              // was on screen in the owner's own screenshot, dated four days
-              // before the briefing they had just received.
-              lastBriefing={history && history.length > 0 ? history[0].at : ""}
-            />
-          )}
           {tab === "briefing" && (
             <ModulesTab
               diagnostics={diagnostics}
@@ -501,7 +492,30 @@ export default function ReportsModal(
               onRefresh={() => void refresh()}
             />
           )}
-          {tab === "briefing" && <TierIntro tier={STEPS.sent} />}
+
+          {tab === "briefing" && <TierIntro tier={STEPS.visible} />}
+          {tab === "briefing" && (
+            <CoverageTab
+              diagnostics={diagnostics}
+              busy={busy}
+              onRefresh={() => void refresh()}
+              lastBriefing={history && history.length > 0 ? history[0].at : ""}
+            />
+          )}
+
+          {/* ⚠️ ONE SECTION FOR COMPOSING AND SENDING (the owner's merge):
+              the test copy, the narration credit, the schedules and the
+              delivery record are one story — what the message is, when it
+              goes, what actually went. */}
+          {tab === "briefing" && <TierIntro tier={STEPS.brief} />}
+          {tab === "briefing" && (
+            <PreviewTab
+              preview={preview}
+              busy={busy}
+              narrationMode={config?.narration?.mode ?? "deterministic"}
+              onCompose={() => void compose()}
+            />
+          )}
           {tab === "briefing" && (
             <ScheduleTab
               config={config}

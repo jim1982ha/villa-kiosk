@@ -7,6 +7,7 @@
 // nothing and records nothing.
 
 import { FileText, Loader2 } from "lucide-react";
+import InfoHint from "@/components/common/InfoHint";
 import SourceChip from "@/components/common/SourceChip";
 import type { ReportPreview } from "@/vesta/brief/reportsApi";
 import type { NarrationMode } from "@/vesta/shared/reportsTypes";
@@ -26,15 +27,30 @@ export default function PreviewTab({
 }) {
   return (
     <div className="reports-pane">
+      {/* ⚠️ THE SECTION IDIOM THE AGENT DIALOG USES — title, one-line
+          subtitle, (i) for the detail (2026-08-29 revamp). This pane had only
+          a bare paragraph and a button, which read as a control floating in
+          space once the four tabs became sections of one page. */}
+      <h3 className="settings-section-title">Try it now</h3>
       <p className="muted body-text">
-        Composes the brief that would be sent, and sends nothing. Nothing is
-        recorded in the history either — a delivery record for something that
-        was not delivered is worse than no record.
+        See exactly what the next briefing would say, without sending anything.
+        <InfoHint label="Try it now">
+          <p>
+            This composes a full briefing from what the property looks like
+            right now, and shows it to you here — nobody is messaged and
+            nothing is added to the delivery record below.
+          </p>
+          <p>
+            The little tag beside the result says who wrote the words: VESTA
+            itself, or an AI rephrasing VESTA’s findings if you have switched
+            that on. The facts are the same either way.
+          </p>
+        </InfoHint>
       </p>
 
       <button className="btn primary" onClick={onCompose} disabled={busy}>
         {busy ? <Loader2 size={16} className="spin" /> : <FileText size={16} />}
-        <span>{busy ? "Composing…" : "Compose a brief now"}</span>
+        <span>{busy ? "Composing…" : "Compose a test briefing"}</span>
       </button>
 
       {preview && (

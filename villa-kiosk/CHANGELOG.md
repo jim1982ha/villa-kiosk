@@ -1,3 +1,16 @@
+## 2.877.0
+
+### Fixed — the Briefing tab's headings described the wrong sections; the page now reads top to bottom
+
+Merging four tabs into one re-tagged the bodies without re-ordering them, so
+the composed brief sat under "What is watched" and the checks under "What it
+can see". The sections now follow the pipeline — what is watched, what it can
+see, then one merged section for composing and sending: the test copy, the
+schedules and the delivery record are one story. Every section has a title, a
+one-line subtitle and an (i) with the detail; the delivery record shows five
+rows a page. The second tab is renamed "Instant alerts" — "Automations" named
+the machinery, and plain "Alerts" already means an agent alert one dialog over.
+
 ## 2.876.0
 
 ### Changed — a test that had quietly stopped measuring, and two comments describing a deleted rule

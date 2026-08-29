@@ -89,18 +89,21 @@ export const STEPS: Record<string, Tier> = {
     more: "A check with nothing to read says so rather than passing quietly.",
     speed: "checked live", model: false, offline: false,
   },
+  // ⚠️ "The briefing" AND "Sending it" MERGED (2026-08-29, owner's revamp:
+  // "re-organise the sections to logically show next to each other, or merge
+  // some — like the generate test report, configure sender"). Composing a test
+  // copy and choosing when the real one goes are one activity read top to
+  // bottom, and the old split put the compose button a full section away from
+  // the schedules it rehearses. `sent` is deleted, not aliased — a step id
+  // with two names is the drift Part 5 exists for.
   brief: {
-    n: 3, name: "The briefing",
-    what: "Everything found, written up in one message by the add-on itself.",
-    more: "An AI only rewords the finished text, and only if you switch that on.",
+    n: 3, name: "The briefing itself",
+    what: "Everything found, written up in one message — and when it goes out, "
+      + "to whom.",
+    more: "Try a test copy any time; nothing is sent and nothing is recorded. "
+      + "Every real delivery is listed at the bottom, including failures.",
     speed: "on the schedule below", model: false, offline: true,
     source: "check",
-  },
-  sent: {
-    n: 4, name: "Sending it",
-    what: "When a briefing goes out, and to whom.",
-    more: "A record of every delivery is kept, including the ones that failed.",
-    speed: "on schedule", model: false, offline: false, source: "check",
   },
   work: {
     n: 5, name: "What it asked for",

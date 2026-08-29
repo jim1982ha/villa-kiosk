@@ -3733,6 +3733,14 @@ label.toggle span { user-select: none; line-height: 1.4; }
    beside a row that was never meant to have one. Reported from the Handover
    tab's "Recent checks". Four of five agreeing and one not is the applicable-set
    defect /dry-audit exists for: the rule was rolled out by call site. */
+/* The delivery record's pager. Buttons are the house ghost buttons, so the
+   only rule needed is the row itself: controls at the ends, the count between,
+   44px targets inherited from .btn. */
+.reports-pager {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem; margin-top: 0.25rem;
+}
+
 .fm-list { display: flex; flex-direction: column; gap: 8px;
            list-style: none; padding-left: 0; margin: 0; }
 .fm-row {
