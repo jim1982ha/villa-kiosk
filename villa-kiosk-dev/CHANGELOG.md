@@ -1,3 +1,14 @@
+## 2.884.0
+
+### Fixed — the listening state is one sentence, so it is one line on a phone
+
+Two short facts did not need two bordered cards. The previous attempt put them
+in a two-column grid, which is still two lines at the width the dialog actually
+has on a handset — so it did not answer the request at all. They are now a
+single line, and the warning colour survives the merge: if nothing is listening,
+or no briefing has ever been sent, the line still reads as a fault rather than
+losing the signal to save a box.
+
 ## 2.883.0
 
 ### Fixed — coverage explains itself; briefings hyperlink where allowed; "Trend checks"
