@@ -1,3 +1,14 @@
+## 2.897.0
+
+### Fixed — "What happened" claimed to show what the next briefing summarises, and showed a month
+The same automation read 19x on the tab and "12 times" in the message. Both counts
+were right about different windows — the tab lists 31 days, a daily briefing covers
+the current day — under a heading saying they were the same thing. The count line
+underneath had always named the real window; the heading was the liar, and it now
+says so and explains why the message's numbers are smaller. Its help text also
+still described every "Noticed" row as never investigated, which stopped being
+true when a flag gained an outcome: it now names both endings.
+
 ## 2.896.0
 
 ### Fixed — marking a flag as investigated silently did nothing for some subjects
