@@ -1,3 +1,14 @@
+## 2.907.0
+
+### Fixed — the docs stated a deployed version, and it was wrong
+STATUS.md opened with "Villa add-on running 2.903.0 — for once the tree and the
+property are the same build". The property was on 2.905.0. The owner updates the
+add-on whenever they like, so a deployed version transcribed into prose is stale
+the moment they press the button — in the file whose stated job is to be true
+today. The wrong number was the cheap half: it was then amplified into "three
+behind, deliberately, nothing the property executes", wrong in both halves. Live
+documents now say how to READ it and a check fails any that assert it.
+
 ## 2.906.0
 
 ### Changed — the composer's wiring stopped calling itself a fallback

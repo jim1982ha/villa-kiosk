@@ -187,6 +187,72 @@ def test_no_live_document_names_a_module_that_does_not_exist() -> None:
           "named on purpose (a document recording a rename may print the old name).")
 
 
+#: "the villa runs 2.903.0" and every phrasing of it. Deliberately narrow: it
+#: wants a SUBJECT (villa/property/add-on), a PRESENT-TENSE running verb, and a
+#: version, close together. A version alone is fine — documents cite releases
+#: constantly — and so is the past tense, which is how a record of a past
+#: deployment is correctly written.
+#: ⚠️ MATCHED PER PARAGRAPH, NOT PER LINE. The sentence that caused this wrapped
+#: across two lines ("Villa add-on running\n**2.903.0**"), so the first cut of
+#: this check scanned lines and did not catch the very defect it was written
+#: for — measured, not assumed, before it was changed.
+_DEPLOYED_VERSION = re.compile(
+    r"(?:villa|property|add-?on)\b.{0,40}?"
+    r"\b(?:runs?|running|is\s+on|sits\s+on)\b.{0,25}?"
+    r"v?\*{0,2}\d+\.\d+\.\d+",
+    re.IGNORECASE)
+
+
+def _paragraphs(text: str) -> List[str]:
+    """Blank-line-separated blocks, whitespace collapsed, so a claim that wraps
+    is one string rather than two unmatchable halves."""
+    return [re.sub(r"\s+", " ", block).strip()
+            for block in re.split(r"\n\s*\n", text)]
+
+
+def test_no_live_document_states_what_version_the_villa_IS_RUNNING() -> None:
+    """⚠️ A RUNTIME FACT ABOUT A MACHINE THIS REPO DOES NOT CONTROL (2026-08-30).
+
+    `STATUS.md` opened with "Villa add-on running 2.903.0 — deployed and
+    verified this session, so for once the tree and the property are the same
+    build". The property was running 2.905.0. The owner updates the add-on
+    whenever they like, so the number was stale the moment they pressed the
+    button, in the one file whose stated job is to be true today.
+
+    ⚠️ THE COST WAS NOT THE WRONG NUMBER, IT WAS WHAT GOT BUILT ON IT. The stale
+    version was carried into the status memory, repeated the next session, and
+    AMPLIFIED into a derived claim — "three behind, and deliberately: those
+    releases are tests and docs only, nothing the property executes" — which was
+    confidently wrong in both halves and would have justified not deploying.
+
+    The fix is not a fresher number, because a fresher number decays the same
+    way. It is to READ it: `ha_get_addon(source="installed")`, slug
+    `..._villa_kiosk_dev`. A version this repo genuinely owns — what `main` is
+    frozen at, what a changelog entry describes — is untouched by this check.
+    """
+    problems: List[str] = []
+    scanned = 0
+    for name in _docs():
+        if _is_archive(name) or name.split(os.sep)[0] == "generated":
+            continue
+        scanned += 1
+        for para in _paragraphs(_read(name)):
+            found = _DEPLOYED_VERSION.search(para)
+            if found:
+                problems.append(f"{name}: …{found.group(0)[:90]}…")
+    # The same vacuous-pass guard the module check carries, for the same reason:
+    # an empty document list would pass this having measured nothing.
+    assert scanned >= 3, (
+        f"only {scanned} live document(s) scanned — this check has stopped "
+        "reaching them, which is how the docs test went quiet in 2.904.0")
+    assert not problems, (
+        "live document(s) stating what version is DEPLOYED:\n  "
+        + "\n  ".join(sorted(set(problems)))
+        + "\n\nDo not transcribe it — the owner updates the add-on whenever "
+          "they like. Read it with ha_get_addon(source=\"installed\") and cite "
+          "how to read it, not the answer.")
+
+
 def test_the_document_scan_is_not_vacuous() -> None:
     """⚠️ THE GUARD THE RECURSION NEEDS. Every check below iterates `_docs()`;
     all of them pass on an empty list. A renamed folder must fail loudly here
