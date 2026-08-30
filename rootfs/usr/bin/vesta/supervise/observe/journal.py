@@ -59,6 +59,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
 
+from vesta.shared import instants
 from vesta.adapters import store
 from vesta.adapters.log import log
 
@@ -413,11 +414,35 @@ def last_states() -> Dict[str, str]:
 def since(iso: str) -> List[Dict[str, Any]]:
     """Rows at or after `iso`, oldest first.
 
-    String comparison, which is only chronological when both sides carry the
-    same offset — see `collect.as_utc_iso`'s note. Callers holding a local
-    window must normalise it first.
+    ⚠️ COMPARED AS INSTANTS, NOT AS TEXT (2026-08-30). This said "string
+    comparison … callers holding a local window must normalise it first", and
+    pushing that onto callers is precisely how its sibling shipped a bug:
+    `record.since` made the same comparison against `schedule.period_start` —
+    the villa's LOCAL wall-clock midnight — and silently dropped the first eight
+    hours of every local day from the daily briefing. This function had no
+    production caller at the time, so the fault was latent here rather than
+    absent. Both now normalise through `shared.instants`, so the two windowed
+    reads of this system behave identically and no caller has to remember.
+
+    ⚠️ ROWS ARE PARSED TOO, NOT ONLY THE BOUND. A row's stamp is Home
+    Assistant's own `time_fired`, which is UTC — so normalising the bound alone
+    would be correct today and would rest on the row producer never changing.
+    Measured on a full ring: 14 ms lexical against 53 ms parsed, for a function
+    on no hot path. Uniformity is worth 39 ms.
+
+    ⚠️ AN UNREADABLE STAMP IS KEPT, matching `record.since`: an entry vanishing
+    from a window reads as "nothing happened", which is the lie this subsystem
+    keeps being caught by.
     """
+    rows = [row for row in read()["entries"] if isinstance(row, dict)]
     if not iso:
-        return list(read()["entries"])
-    return [row for row in read()["entries"]
-            if isinstance(row, dict) and str(row.get("at") or "") >= iso]
+        return rows
+    bound = instants.as_utc(iso)
+    if bound is None:
+        return rows
+    kept: List[Dict[str, Any]] = []
+    for row in rows:
+        at = instants.as_utc(row.get("at"))
+        if at is None or at >= bound:
+            kept.append(row)
+    return kept

@@ -32,6 +32,7 @@ from typing import (Any, Awaitable, Callable, Dict, List, Mapping, Optional, Seq
 
 from aiohttp import ClientSession
 
+from vesta.shared import instants
 from . import store
 from .hass import HassClient, HassUnavailable
 from .log import log, swallow, warn
@@ -307,14 +308,14 @@ def as_utc_iso(value: str) -> str:
     field: a blueprint's own `now().isoformat()` where it supplied one, and the
     collector's UTC stamp where it did not. Comparing those as raw strings is
     2.528.0 exactly, one field along.
+
+    ⚠️ THE BODY MOVED TO `shared.instants` (2026-08-30) AND THE DOCSTRING STAYED.
+    Two more readers needed this exact conversion — `record.since` and
+    `journal.since` — and one of them shipped the bug this function was written
+    to prevent. The name and the reasoning above are the record of WHY; the
+    implementation is now shared so a fourth reader cannot get it wrong.
     """
-    try:
-        moment = datetime.fromisoformat(value)
-    except ValueError:
-        return value
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return moment.astimezone(timezone.utc).isoformat(timespec="seconds")
+    return instants.as_utc_iso(value)
 
 
 def coverage(since_iso: str) -> Dict[str, Any]:
@@ -481,12 +482,15 @@ def _enrich_latest(record_mod: Any, stem: str, data: Mapping[str, Any]) -> bool:
             continue
         if not str(row.get("subject") or "").startswith(stem):
             continue
-        try:
-            at = datetime.fromisoformat(str(row.get("at") or ""))
-            if (now - at).total_seconds() > ENRICH_WINDOW_SECONDS:
-                break
-        except ValueError:
+        # ⚠️ THROUGH THE SHARED OWNER (2026-08-30). This parsed the stamp
+        # itself, which is the same rule `as_utc_iso` above exists to hold —
+        # and it silently skipped a NAIVE stamp where the owner reads one as
+        # UTC, so an enrichment could be dropped rather than merged.
+        at = instants.as_utc(row.get("at"))
+        if at is None:
             continue
+        if (now - at).total_seconds() > ENRICH_WINDOW_SECONDS:
+            break
         row["fidelity"] = "rich"
         row["detail"] = _figures(data)
         row["payload"] = dict(data)
@@ -693,13 +697,12 @@ def connected_seconds() -> float:
     stamp = str(_LIVE["connected_since"] or "")
     if not stamp:
         return 0.0
-    try:
-        started = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-    except ValueError:
-        return 0.0
-    if started.tzinfo is None:
-        started = started.replace(tzinfo=timezone.utc)
-    return started.timestamp()
+    # ⚠️ THE `Z` WORKAROUND WENT WITH IT (2026-08-30). `fromisoformat` refused a
+    # trailing `Z` before Python 3.11 and this carried a `.replace()` for it;
+    # the shared owner handles the whole grammar, so the special case is gone
+    # rather than duplicated a fourth time.
+    started = instants.as_utc(stamp)
+    return 0.0 if started is None else started.timestamp()
 
 
 # ⚠️ `blueprint_layer_present()` WAS DELETED HERE (2026-08-28). It answered "has

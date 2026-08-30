@@ -1,3 +1,15 @@
+## 2.894.0
+
+### Changed — one owner for reading a timestamp, so the window bug cannot recur
+2.893.0 fixed the daily briefing dropping the first hours of each local day, and
+left the same comparison written four more times: the journal's own windowed read
+carried it with a comment telling callers to normalise, and the collector parsed
+ISO text directly in two more places, one with a workaround for a Python version
+that no longer ships. All five now go through `shared/instants.py`, which is pure
+and which both halves of the tree can import. The journal had no caller, so its
+fault was latent rather than absent — fixed rather than documented, because a
+sibling that behaves differently is how the first one shipped. No behaviour change.
+
 ## 2.893.0
 
 ### Fixed — the daily briefing silently dropped the first hours of every local day

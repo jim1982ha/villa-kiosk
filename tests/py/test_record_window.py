@@ -108,3 +108,56 @@ def test_an_unreadable_bound_or_stamp_fails_OPEN(monkeypatch: Any) -> None:
     monkeypatch.setattr(record_mod, "read", lambda: [{"at": "???", "subject": "odd"}])
     assert len(record_mod.since(LOCAL_MIDNIGHT)) == 1, (
         "a row with an unreadable stamp was dropped rather than kept")
+
+
+# ── the family, closed ──────────────────────────────────────────────────────
+def test_both_windowed_reads_share_one_implementation() -> None:
+    """⚠️ THE POINT OF THE FIX, PINNED. `record.since` and `journal.since` are
+    the two windowed reads in this system and they made the SAME comparison in
+    two places — one correct, one shipping a bug. A third reader must not be
+    able to write a fourth copy."""
+    import inspect
+    from vesta.supervise.observe import journal as journal_mod
+    from vesta.adapters import collect as collect_mod
+    from vesta.shared import instants
+
+    for mod, name in ((record_mod, "record"), (journal_mod, "journal"),
+                      (collect_mod, "collect")):
+        src = inspect.getsource(mod)
+        assert "instants.as_utc" in src, (
+            f"{name} no longer reads its window through the shared owner")
+        assert "datetime.fromisoformat" not in src, (
+            f"{name} parses ISO text itself again — that is the fourth copy")
+
+    # ⚠️ AND THE OWNER ITSELF IS PURE. `shared` ships anywhere, so a clock or a
+    # file read here would break the layer it is in as well as this rule.
+    #
+    # ⚠️ READ FROM THE AST, NOT THE TEXT — the comment trap, hit for the third
+    # time in this session. A substring scan matched `now(` inside the module's
+    # own docstring, where it EXPLAINS that `record.append` uses
+    # `datetime.now(timezone.utc)`. Prose that names a thing is not the tree
+    # calling it.
+    import ast
+    tree = ast.parse(inspect.getsource(instants))
+    called = {
+        (node.func.attr if isinstance(node.func, ast.Attribute)
+         else getattr(node.func, "id", ""))
+        for node in ast.walk(tree) if isinstance(node, ast.Call)
+    }
+    for banned in ("now", "utcnow", "open", "read_json", "write_json"):
+        assert banned not in called, (
+            f"shared.instants calls {banned}() — it must stay pure, or the "
+            "layer it lives in stops being shippable anywhere")
+
+
+def test_the_journal_window_is_an_instant_too(monkeypatch: Any) -> None:
+    """⚠️ IT HAD NO PRODUCTION CALLER, SO THE FAULT WAS LATENT, NOT ABSENT —
+    which is exactly why it is fixed rather than left documented."""
+    from vesta.supervise.observe import journal as journal_mod
+    rows = {"entries": [
+        {"at": "2026-08-29T15:59:00+00:00", "id": "yesterday"},
+        {"at": "2026-08-29T16:52:25+00:00", "id": "today-0052-local"},
+    ]}
+    monkeypatch.setattr(journal_mod, "read", lambda: rows)
+    got = [r["id"] for r in journal_mod.since("2026-08-30T00:00:00+08:00")]
+    assert got == ["today-0052-local"], got

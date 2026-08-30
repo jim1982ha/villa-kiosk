@@ -28,6 +28,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from vesta.shared import instants
 from vesta.adapters import store
 from vesta.adapters.log import swallow
 
@@ -90,18 +91,13 @@ def append(entry: Mapping[str, Any], *, now_iso: str = "") -> bool:
 def _instant(value: Any) -> Optional[datetime]:
     """An ISO-8601 stamp as an aware UTC datetime, or `None` if unreadable.
 
-    ⚠️ A NAIVE VALUE IS READ AS UTC rather than rejected — the same choice
-    `collect.as_utc_iso` makes, and for the same reason: every producer in this
-    package is tz-aware, so a naive stamp can only come from stored data an
-    operator touched, and a briefing must not fail to be delivered over a
-    timestamp.
+    ⚠️ DELEGATES TO `shared.instants` (2026-08-30). This was six local lines to
+    avoid an import cycle — `collect` imports this module, so `collect.as_utc_iso`
+    was unreachable from here — and a second implementation of the one rule that
+    had just been got wrong. The rule now lives in `shared`, which both
+    `adapters` and `supervise` may import and which imports nothing itself.
     """
-    try:
-        dt = datetime.fromisoformat(str(value))
-    except (TypeError, ValueError):
-        return None
-    return dt.astimezone(timezone.utc) if dt.tzinfo \
-        else dt.replace(tzinfo=timezone.utc)
+    return instants.as_utc(value)
 
 
 def since(iso: str, *, sources: Optional[Sequence[str]] = None
