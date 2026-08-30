@@ -1,3 +1,14 @@
+## 2.906.0
+
+### Changed — the composer's wiring stopped calling itself a fallback
+2.905.0 renamed the module and left the hook: `set_fallback_composer` kept the
+word the owner objected to, and four code comments still named
+`agent/fallback.py` — invisible, because the docs check only reads `docs/`.
+That hook was never the module's problem: since authorship split it genuinely
+holds the fallback half, so renaming it toward "compose" would have collided
+with its sibling. Each is now named after what it is handed —
+`set_brief_composer`, `set_ladder_composer`. The stored value `fallback` stays.
+
 ## 2.905.0
 
 ### Added — a document naming a renamed module is now caught
