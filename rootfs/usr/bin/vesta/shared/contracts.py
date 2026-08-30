@@ -121,8 +121,11 @@ NARRATION_MODE: Final[Tuple[str, ...]] = (
 #: button in the settings tab. Splitting them is what keeps the config
 #: vocabulary honest while the audit trail says what actually happened.
 #:
-#: `fallback` means the deterministic renderer RAISED and `agent.fallback`'s
-#: ladder composed the brief instead (TASK-111). Recording `deterministic` there
+#: `fallback` means the deterministic renderer RAISED and `agent/compose.ladder`
+#: composed the brief instead (TASK-111). ⚠️ THE STORED VALUE STAYS `fallback`
+#: through the 2026-08-30 naming pass — it names the EVENT, not the module, and
+#: rewriting it would invalidate every history entry already on disk.
+#: Recording `deterministic` there
 #: would be the field's own docstring — "what actually wrote this one" — lying
 #: about the single case it exists to make visible.
 NARRATION_FALLBACK: Final[str] = "fallback"

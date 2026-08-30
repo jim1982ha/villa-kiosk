@@ -27,7 +27,7 @@ a module is editing one line of the map, not this file's logic.
   host       → everything         wires them; the proxy
 
 ⚠️ `supervise` NEVER IMPORTS `brief`, and that inversion is not new — the host
-registers `set_concerns_source` / `set_fallback_composer` / `set_brief_composer`
+registers `set_concerns_source` / `set_ladder_composer` / `set_brief_composer`
 on the pipeline at boot, which is exactly why ARCH-003 has held. This file
 REPLACES `test_module_conventions.test_reports_never_imports_agent` as the
 boundary's owner (that test guarded one edge of this lattice; the lattice now

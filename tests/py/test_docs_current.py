@@ -105,13 +105,13 @@ def _docs() -> List[str]:
 #: `agent/fallback.brief` and `agent/fallback.py`; the check compares module
 #: identity, so neither matched and both documents failed for the right reason
 #: with the wrong message. One entry covers every way a document names it.
-NAMED_DEAD_MODULES: Dict[str, Set[str]] = {
-    # Both record the SAME rename (`fallback.py` -> `compose.py`, 2026-08-30)
-    # and have to print the old name to describe it. Remove these once the
-    # naming pass lands and the sentences stop mentioning it.
-    "STATUS.md": {"agent/fallback"},
-    "BACKLOG.md": {"agent/fallback"},
-}
+#: ⚠️ EMPTY, AND THAT IS THE POINT (2026-08-30). It held `STATUS.md` and
+#: `BACKLOG.md` while both described the `fallback.py` -> `compose.py` rename in
+#: progress; the naming pass landed and both sentences stopped naming the dead
+#: module, so the exemptions came out with it. An entry here is a debt with a
+#: due date, not a permanent licence — the exemption outliving its rename is the
+#: same defect one level up, a claim in prose outliving the code.
+NAMED_DEAD_MODULES: Dict[str, Set[str]] = {}
 
 #: `pkg/module` or `pkg/module.attr` in backticks.
 _MODULE_REF = re.compile(

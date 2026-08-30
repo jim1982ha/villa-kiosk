@@ -166,7 +166,7 @@ def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
 
     source = context_extras.get("concerns")
     pipeline.set_brief_composer(explode)
-    pipeline.set_fallback_composer(compose.ladder)
+    pipeline.set_ladder_composer(compose.ladder)
     pipeline.set_concerns_source((lambda: source) if source else None)
     try:
         return asyncio.run(pipeline.run_report(
@@ -176,7 +176,7 @@ def _run_with_a_broken_renderer(**context_extras: Any) -> Dict[str, Any]:
             entry_id="ladder:2026-08-24"))
     finally:
         pipeline.set_brief_composer(None)
-        pipeline.set_fallback_composer(None)
+        pipeline.set_ladder_composer(None)
         pipeline.set_concerns_source(None)
 
 
@@ -227,12 +227,12 @@ def test_rung_2_carries_the_FLOOR_S_observations_and_no_entity_ids() -> None:
         standing = [{"title": "Gate sensor", "detail": "unavailable for 3 days",
                      "kind": "unavailable"}]
 
-    pipeline.set_fallback_composer(compose.ladder)
+    pipeline.set_ladder_composer(compose.ladder)
     try:
         body, rung = pipeline._degrade(_Context(), "T",  # type: ignore[arg-type]
                                        RuntimeError("x"))
     finally:
-        pipeline.set_fallback_composer(None)
+        pipeline.set_ladder_composer(None)
     assert rung == "salient"
     assert "triage layer was unreachable" in body and "unjudged" in body
     assert "Pool pump power" in body and "Gate sensor" in body
@@ -269,7 +269,7 @@ def test_the_proxy_REGISTERS_the_ladder_at_boot() -> None:
                             "supervisor-proxy.py"), encoding="utf-8").read()
     code = "\n".join(l for l in src.splitlines()
                      if not l.strip().startswith("#"))
-    assert "set_fallback_composer(" in code, (
+    assert "set_ladder_composer(" in code, (
         "nothing registers the degradation ladder, so a report whose renderer "
         "fails goes out as one sentence apologising")
 
@@ -285,7 +285,7 @@ def test_an_UNREGISTERED_ladder_still_delivers_something() -> None:
         findings: List[Dict[str, Any]] = []
         standing: List[Dict[str, Any]] = []
 
-    pipeline.set_fallback_composer(None)
+    pipeline.set_ladder_composer(None)
     body, rung = pipeline._degrade(_Context(), "T", RuntimeError("x"))  # type: ignore[arg-type]
     assert rung == "" and body
 

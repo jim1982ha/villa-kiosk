@@ -195,7 +195,7 @@ export default function AgentConcerns() {
       // ⚠️ `severityRank`, NOT A LOCAL MAP. This carried its own copy with an
       // unknown severity defaulting to 9 — LAST, the quietest position — which
       // is the opposite of the project's stated rule. Found by /dry-audit
-      // Part 4; the identical map existed in `agent/fallback.py`.
+      // Part 4; the identical map existed in `agent/compose.py`.
       .sort((a, b) => severityRank(String(a.severity))
         - severityRank(String(b.severity))));
   }, []);

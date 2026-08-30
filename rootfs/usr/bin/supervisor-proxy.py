@@ -2975,17 +2975,19 @@ def main() -> None:
         reports_pipeline.set_concerns_source(_agent_concerns_for_reports)
         # ⚠️ AND WHERE A BRIEFING GETS ITS DEGRADATION LADDER, inverted here for
         # exactly the same reason and in the same one process that legally holds
-        # both packages. `agent.fallback` renders four rungs, each STATING which
+        # both packages. `agent/compose.ladder` renders four rungs, each STATING which
         # rung it is, and from v2.641.0 to v2.698.0 nothing called any of them: REQ-042
         # was satisfied by tests asserting each rung in isolation, which is not
         # the same as one ever being used. Without this line a report whose
         # renderer raises is delivered as a single sentence apologising, with
         # every concern, finding and standing fault of the period thrown away —
         # RISK-015, a component failing silently and the villa looking quiet.
-        reports_pipeline.set_fallback_composer(agent_compose.ladder)
+        reports_pipeline.set_ladder_composer(agent_compose.ladder)
         # ⚠️ THE NORMAL BRIEF'S AUTHOR TOO (TASK-073). Same file, same hook
-        # mechanism, different job: `brief` writes the banner-free happy path,
-        # `compose` writes the rungs when it cannot.
+        # mechanism, different job: `compose.brief` writes the banner-free happy
+        # path, `compose.ladder` writes the rungs when it cannot. ⚠️ That second
+        # name read `compose` until 2026-08-30 — the MODULE, not the function,
+        # so the sentence named the file as though it were one of its two halves.
         reports_pipeline.set_brief_composer(agent_compose.brief)
         a["reports_task"] = asyncio.create_task(
             reports_pipeline.run_forever(a["session"]))

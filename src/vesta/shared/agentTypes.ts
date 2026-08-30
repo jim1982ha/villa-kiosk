@@ -80,7 +80,7 @@ export type Severity = (typeof SEVERITY)[number];
  * Worst first: 0 is `critical`. THE ordering, for every renderer.
  *
  * ⚠️ DERIVED FROM `SEVERITY`, NOT A HAND-WRITTEN MAP. Two copies existed —
- * here and in `agent/fallback.py` — each defaulting an unknown severity to 9,
+ * here and in `agent/compose.py` — each defaulting an unknown severity to 9,
  * which sorted it LAST, into the quietest position, in both the brief and the
  * wall. That contradicts the rule `route.py` and `standing.severity_of` both
  * state: an unclassified severity is treated as a WARNING, never as the

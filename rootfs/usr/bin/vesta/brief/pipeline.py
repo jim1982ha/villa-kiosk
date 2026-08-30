@@ -113,7 +113,12 @@ def set_concerns_source(source: Optional[Any]) -> None:
 #: ⚠️ A HOOK, NOT AN IMPORT — `agent/compose.py` is the other side of ARCH-003's
 #: one-way street, so the proxy hands it in. Unregistered means the minimal body
 #: below, which is what an embedder without the agent package gets.
-_FALLBACK_COMPOSER: Optional[Any] = None
+#: ⚠️ NAMED FOR WHAT IT HOLDS, `compose.ladder` — not `_FALLBACK_COMPOSER`, which
+#: it was until 2026-08-30. The owner's complaint was that "fallback" described
+#: the module's rarest job while it authored every brief; that was true of the
+#: MODULE and never of this hook, so the module became `compose.py` and this
+#: pair became `brief`/`ladder` after the thing each is registered with.
+_LADDER_COMPOSER: Optional[Any] = None
 
 
 #: The NORMAL brief's author, registered the same way (TASK-073). The 2,058-line
@@ -134,7 +139,7 @@ def set_brief_composer(composer: Optional[Any]) -> None:
     _BRIEF_COMPOSER = composer
 
 
-def set_fallback_composer(composer: Optional[Any]) -> None:
+def set_ladder_composer(composer: Optional[Any]) -> None:
     """Register the degradation ladder. Called once, at boot.
 
     ⚠️ THE LADDER EXISTED FROM v2.641.0 TO v2.698.0 WITH NOBODY ON IT (TASK-111).
@@ -144,8 +149,8 @@ def set_fallback_composer(composer: Optional[Any]) -> None:
     and the villa looks quiet", and this ladder is its control — so the control
     was asserted and not installed.
     """
-    global _FALLBACK_COMPOSER
-    _FALLBACK_COMPOSER = composer
+    global _LADDER_COMPOSER
+    _LADDER_COMPOSER = composer
 
 
 def _salient_rows(context: ReportContext) -> List[Dict[str, str]]:
@@ -203,7 +208,7 @@ def _degrade(context: ReportContext, title: str, err: Exception) -> Tuple[str, s
     # ⚠️ Named `ladder` since the 2026-08-30 rename: the module is compose.py
     # (it authors EVERY brief via `brief`), and this hook is its genuine
     # fallback half — the rung-renderer used only when the author raises.
-    ladder = _FALLBACK_COMPOSER
+    ladder = _LADDER_COMPOSER
     if ladder is None:
         return "The report could not be composed. See the add-on log.", ""
     try:
