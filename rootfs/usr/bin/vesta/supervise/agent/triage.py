@@ -99,6 +99,13 @@ NOTHING
 Never more than one line per subject. Never a subject you cannot name."""
 
 #: `ESCALATE: subject — reason`, tolerant of the dashes a model actually types.
+#: How much of a device's own name a subject span must be before it may claim
+#: that device, when the span sits INSIDE the label (the model shortening).
+#: ⚠️ DIMENSIONLESS, and it is what stops the word "pump" naming a pump: on the
+#: reference villa five labels end in "Pump Power", so a bare "pump" is inside
+#: all of them and the shortest-label rule would attach one at random.
+REVERSE_MIN_SHARE: float = 0.5
+
 _LINE = re.compile(r"^\s*ESCALATE\s*:\s*(?P<subject>[^—\-:]{1,120}?)\s*"
                    r"(?:—|--|-|:)\s*(?P<reason>.+?)\s*$", re.IGNORECASE)
 
@@ -215,35 +222,80 @@ def _identify(items: Sequence[Escalation], refs: Any) -> None:
         # Jet Pump Power Factor"), and claiming it too would attach a second
         # device to one mention. Devices are ordered by where the subject
         # names them, so the primary is the one the model led with.
-        claimed: list = []          # (start, end) spans already matched
+        claimed: list = []          # (start, end) char spans already matched
         found_at: dict = {}         # entity -> first position in the subject
+
+        def free(start: int, end: int) -> bool:
+            return all(end <= s or start >= e for s, e in claimed)
+
         for label in sorted(known, key=len, reverse=True):
             start = subject.find(label)
             while start >= 0:
                 end = start + len(label)
-                if all(end <= s or start >= e for s, e in claimed):
+                if free(start, end):
                     claimed.append((start, end))
                     found_at.setdefault(known[label], start)
                     break
                 start = subject.find(label, start + 1)
+
+        # ⚠️ THE REVERSE DIRECTION MUST WORK PER-SPAN TOO, AND SHIPPING IT
+        # WHOLE-SUBJECT-ONLY LEFT THE REPORTED BUG OPEN (2026-08-30). Measured
+        # against the villa's own labels: they carry a "Power" suffix the model
+        # drops ("Pool Pump Power" vs "Pool Pump"), so the FORWARD pass above
+        # matches nothing at all and every single-device subject is identified
+        # by this fallback. Testing only the whole subject therefore worked for
+        # "Pool Pump" and could never work for "Pool Pump and Massage Jet
+        # Pump", which is not wholly inside any label — so the compound kept a
+        # `topic:` key, could not merge with either pump's own flag, and the
+        # brief showed one pump twice with opposite verdicts. The first fix
+        # generalised the direction that was NOT doing the work.
+        #
+        # ⚠️ LONGEST SPAN FIRST, and the two directions keep DIFFERENT
+        # tie-breaks because they mean opposite things: a label found inside
+        # the subject is the model padding, so the LONGEST label is the most
+        # specific device meant; a subject span found inside a label is the
+        # model shortening, so the SHORTEST label is the most general name of
+        # the equipment. Collapsing them re-opens whichever case is not tested.
+        starts = []
+        at = 0
+        for word in subject.split():
+            starts.append((at, at + len(word)))
+            at += len(word) + 1
+        for length in range(len(starts), 0, -1):
+            for first in range(0, len(starts) - length + 1):
+                begin, finish = starts[first][0], starts[first + length - 1][1]
+                if not free(begin, finish):
+                    continue
+                span = subject[begin:finish]
+                inside = [l for l in known if span in l]
+                if not inside:
+                    continue
+                best = min(inside, key=lambda l: (len(l), l))
+                # ⚠️ THE SPAN MUST BE MOST OF THE NAME IT CLAIMS. "pump" sits
+                # inside every pump label on this property, and without this a
+                # one-word span would attach whichever device sorted first —
+                # inventing a device the model never named. Dimensionless, so
+                # it carries no assumption about how anyone names equipment.
+                if len(span) < REVERSE_MIN_SHARE * len(best):
+                    continue
+                claimed.append((begin, finish))
+                found_at.setdefault(known[best], begin)
         hits = sorted(found_at, key=lambda entity: found_at[entity])
-        # ⚠️ AND THE REVERSE, BECAUSE A MODEL SHORTENS AS OFTEN AS IT PADS
-        # (2026-08-28). Two live passes logged `0/5 identified`: triage wrote
-        # "Jacuzzi Pump" for devices labelled "Jacuzzi Pump Energy" and
-        # "Jacuzzi Pump Power", and `label in subject` can never match a
-        # subject SHORTER than every label of the device. So when containment
-        # finds nothing, ask which labels contain the subject instead — the
-        # shortest such label wins, deterministically, because it is the most
-        # general name of the equipment ("Jacuzzi Pump Power" beats "Jacuzzi
-        # Pump Power Factor" as the identity of "Jacuzzi Pump"). A subject
-        # contained in labels of UNRELATED devices cannot happen without those
-        # devices sharing a name prefix, in which case the equipment is the
-        # same and either id gives the handover a real key where it had none.
-        if not hits and len(subject) >= 4:
-            containing = sorted((l for l in known if subject in l),
-                                key=lambda l: (len(l), l))
-            if containing:
-                hits = [known[containing[0]]]
+        # ⚠️ THE WHOLE-SUBJECT REVERSE FALLBACK THAT USED TO SIT HERE IS GONE,
+        # AND ITS REASONING LIVES IN THE SPAN LOOP ABOVE (2026-08-30). It was
+        # added on 2026-08-28 for two live passes logging `0/5 identified` —
+        # triage writing "Jacuzzi Pump" for a device labelled "Jacuzzi Pump
+        # Power" — and the span loop is that same rule with the subject's own
+        # spans instead of only the whole string, so the maximal span it tries
+        # FIRST is exactly the case this block used to answer.
+        #
+        # ⚠️ DELETING IT IS PART OF THE FIX, NOT A TIDY-UP. It carried no
+        # share guard, so it happily matched a subject of "pump" against
+        # whichever of this villa's five "… Pump Power" labels sorted shortest
+        # — inventing a device the model never named. Measured: with the span
+        # loop in place and this block still present, `"pump"` resolved to the
+        # pool pump. With it removed, `"pump"` correctly resolves to nothing.
+        # Two rules answering one question, and the weaker one won.
         if hits:
             item.entity_id = hits[0]
             item.entity_ids = tuple(hits)

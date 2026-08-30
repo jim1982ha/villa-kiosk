@@ -78,6 +78,13 @@ ILLUSTRATIVE: Set[str] = {
     # under test. Domains and archetypes only; no property was consulted.
     "switch.pool", "switch.jet", "sensor.jet_power", "sensor.jet_pf",
     "switch.unmapped",
+    # …and its suffixed-label set. A villa commonly labels a pump's power
+    # sensor "<Thing> Pump Power", so the model's subject is SHORTER than every
+    # label — the shape that made the compound case fail. Five of them, because
+    # the guard under test is "a common word must not name a device" and one
+    # label cannot be ambiguous with itself.
+    "sensor.pool_power", "sensor.house_power", "sensor.jacuzzi_power",
+    "sensor.onsen_power",
     # `test_standing_duration`'s fixtures — single letters on purpose. What is
     # under test is the DURATION phrase, so the device is deliberately anonymous
     # and only its domain carries meaning (a media_player is the one that goes

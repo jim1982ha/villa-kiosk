@@ -1,3 +1,15 @@
+## 2.903.0
+
+### Fixed — the multi-device fix could not match this villa's own labels
+2.902.0 taught triage to attach every device an escalation names, and against
+the reference villa it attached none: its labels carry a suffix the model drops
+("Pool Pump Power" vs "Pool Pump"), so no label sits inside the subject and the
+forward match — the half that was generalised — never fires. What identifies a
+device is the reverse rule, which only ever tested the WHOLE subject, never
+inside a label for a compound like "Pool Pump and Massage Jet Pump". It now
+matches per span. The old whole-subject fallback goes with it: lacking a share
+guard, it let "pump" name whichever pump sorted shortest.
+
 ## 2.902.0
 
 ### Fixed — one pump, two names, opposite verdicts in the same brief

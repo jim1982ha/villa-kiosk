@@ -265,3 +265,69 @@ def test_a_single_seed_sentence_is_byte_identical_to_before() -> None:
         "The device this is about is d1 (Pool pump). Use that handle when "
         "you record a concern about it.")
     assert refs.minted == [("switch.pool", "Pool pump")]
+
+
+# ── the shape the reference villa actually has ──────────────────────────────
+#
+# ⚠️ THIS BLOCK EXISTS BECAUSE THE FIRST FIX SHIPPED AND DID NOT WORK
+# (2026-08-30). Every fixture above uses labels the model's subject CONTAINS
+# ("Pool pump" inside "Pool Pump and Massage Jet Pump"), which exercises the
+# forward direction. The reference villa labels its pumps "Pool Pump Power" —
+# the model drops the suffix — so forward matches NOTHING there and every
+# single-device subject is identified by the reverse rule instead. That rule
+# only ever tested the WHOLE subject, so a compound was never inside any label
+# and kept a `topic:` key: the exact reported symptom, still open after a
+# release that only generalised the direction which was not doing the work.
+# Labels here are archetypes with the villa's SHAPE, not its data.
+
+SUFFIXED = _Refs({
+    "Massage Jet Pump Power": "sensor.jet_power",
+    "House Pump Power": "sensor.house_power",
+    "Pool Pump Power": "sensor.pool_power",
+    "Jacuzzi Pump Power": "sensor.jacuzzi_power",
+    "Onsen Pump Power": "sensor.onsen_power",
+})
+
+
+def _suffixed(subject: str) -> Tuple[str, ...]:
+    item = _Esc(subject)
+    triage._identify([item], SUFFIXED)
+    return item.entity_ids
+
+
+def test_a_COMPOUND_subject_resolves_when_labels_carry_a_suffix() -> None:
+    """⚠️ THE REPORTED CASE, WITH THE VILLA'S OWN LABEL SHAPE. No label is
+    inside this subject, so only a per-SPAN reverse match can find either
+    device."""
+    assert _suffixed("Pool Pump and Massage Jet Pump") == (
+        "sensor.pool_power", "sensor.jet_power")
+
+
+def test_single_device_subjects_still_resolve_against_suffixed_labels() -> None:
+    """The case the deleted whole-subject fallback used to answer — the span
+    loop tries the maximal span first, so it answers it too."""
+    assert _suffixed("Pool Pump") == ("sensor.pool_power",)
+    assert _suffixed("House Pump") == ("sensor.house_power",)
+    assert _suffixed("the pool pump circuit") == ("sensor.pool_power",)
+
+
+def test_a_BARE_COMMON_WORD_names_no_device() -> None:
+    """⚠️ THE GUARD THE DELETED FALLBACK LACKED, AND IT MATTERED. Five labels
+    here end in "Pump Power", so "pump" is inside all of them; without a share
+    rule the shortest-label tie-break attaches one at random — inventing a
+    device the model never named. Measured with the old block still present:
+    "pump" resolved to the pool pump."""
+    assert _suffixed("pump") == ()
+    assert _suffixed("the villa") == ()
+
+
+def test_a_suffixed_label_inside_the_subject_still_wins_on_specificity() -> None:
+    """Forward and reverse keep opposite tie-breaks: a label found INSIDE the
+    subject is the model padding, so the longest (most specific) label wins."""
+    assert _suffixed("Massage Jet Pump Power Factor") == ("sensor.jet_power",)
+
+
+def test_the_share_rule_is_dimensionless() -> None:
+    """⚠️ A ratio, never a character count — a threshold in characters is tuned
+    to one property's naming and wrong on the next."""
+    assert 0.0 < triage.REVERSE_MIN_SHARE < 1.0
