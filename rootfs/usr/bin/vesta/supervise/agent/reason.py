@@ -281,7 +281,49 @@ async def investigate_subject(item: Any, *, provider: Provider,
         swallow(f"investigation of {subject!r} raised", err)
         return False
     stage("reason", f"{run_id} {result.status} on {subject!r}")
+
+    # ⚠️ RECORD THAT IT WAS LOOKED AT, NOT ONLY THAT SOMETHING WAS FOUND
+    # (2026-08-30, from a delivered brief). `record.stamp_outcome` was called
+    # from ONE place — `tools/concern.writer`, after `raise_concern` succeeds —
+    # so a triage flag whose investigation concluded "nothing is wrong" kept an
+    # empty outcome, and the briefing printed it as "noticed, not investigated".
+    # That is false, and the tablet disagreed with it: the Triage tab reads the
+    # AUDIT verdict (`escalated`) and correctly says "Investigated … no alert
+    # needed". Two surfaces describing one event differently is the thing this
+    # subsystem exists to prevent.
+    #
+    # ⚠️ THE FACT GOES IN THE RECORD, NOT INTO THE RENDERER'S CLEVERNESS. The
+    # alternative — teaching `compose` to join the audit — makes the brief read
+    # two stores to answer one question, and this project's rule is that "the
+    # data is not there" beats "the filter is careful".
+    #
+    # ⚠️ ONLY WHEN NO CONCERN WAS RAISED. `concern.writer` stamps its own
+    # outcome and its words are better than this sentence; overwriting them
+    # would replace a conclusion with a shrug. `stamp_outcome` takes the newest
+    # UNSTAMPED row, so a concern raised a moment ago has already claimed it.
+    _mark_looked_at(item)
     return True
+
+
+def _mark_looked_at(item: Any) -> None:
+    """Stamp the triage row for `item` as investigated. Never raises."""
+    from vesta.adapters import record as record_mod
+    from vesta.supervise.agent import contracts as agent_contracts
+    try:
+        entity_id = _entity_of(item)
+        key = (agent_contracts.subject_key(entity_id) if entity_id
+               else agent_contracts.subject_key(
+                   "topic:" + str(_subject_of(item)).strip().lower()))
+        record_mod.stamp_outcome(key, INVESTIGATED_NOTHING, source="triage")
+    except Exception as err:  # noqa: BLE001 - a note must never cost the pass
+        swallow("could not mark a flag as investigated", err)
+
+
+#: What a flag's row says once it has been looked at and nothing was wrong.
+#: ⚠️ A SENTENCE, NOT A FLAG, because it is rendered verbatim in a brief and
+#: read by a person — and because "investigated" and "nothing found" are two
+#: facts a reader needs together.
+INVESTIGATED_NOTHING: str = "investigated, nothing to report"
 
 
 def tool_names_for(config: Optional[Mapping[str, Any]] = None

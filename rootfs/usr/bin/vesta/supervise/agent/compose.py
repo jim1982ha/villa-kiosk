@@ -240,7 +240,15 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
     for row in merged:
         if row.get("source") not in ("agent", "triage"):
             continue
-        tail = ("" if row.get("source") == "agent" or row.get("outcome")
+        # ⚠️ THREE STATES, NOT TWO (2026-08-30). This read "no outcome means
+        # nobody looked", which conflated a flag past the per-pass cap with one
+        # that WAS investigated and correctly found nothing — and the delivered
+        # brief said "noticed, not investigated" about two subjects the audit
+        # records as `escalated`. A concern's own words still win; what changed
+        # is that a flag can now say it was looked at.
+        outcome = str(row.get("outcome") or "").strip()
+        tail = ("" if row.get("source") == "agent"
+                else f" — {inert(outcome)}" if outcome
                 else " — noticed, not investigated")
         key = (str(row.get("domain") or ""), str(row.get("title") or "?"), tail)
         looked[key] = looked.get(key, 0) + 1
