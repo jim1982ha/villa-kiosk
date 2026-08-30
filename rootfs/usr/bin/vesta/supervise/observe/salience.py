@@ -16,7 +16,11 @@ is what stops this file growing into a rule engine again.
 
 ⚠️ NO THRESHOLD CONSTANT MAY APPEAR HERE (ARCH-004), AND THE DISTINCTION IS NOT
 PEDANTRY. A threshold answers "how much is too much" and is a per-villa
-judgement wearing a number's clothes. The three constants below are STATISTICAL
+judgement wearing a number's clothes. ⚠️ THIS SAID "THE THREE CONSTANTS BELOW"
+AND THERE ARE NOW EIGHT — a count in prose beside a list in code, which is the
+drift this project has a whole audit part for; the test that pins the list by
+NAME is the copy to trust, and it is why this was caught the day the four
+bimodal ones were added. All of them are STATISTICAL
 VALIDITY requirements — they answer "is this sample big enough to say anything
 at all", which has the same answer at every property because it is a fact about
 arithmetic rather than about plumbing. The test suite greps this module for the
@@ -85,6 +89,68 @@ MIN_SAMPLES_PER_WEEKDAY: Final[int] = 4
 #: A tunable weight here would be the first per-villa constant back in the door.
 _PERSISTENCE_MAX_MULTIPLE: Final[float] = 2.0
 
+#: ⚠️ A DUTY-CYCLED DEVICE HAS TWO POPULATIONS AND NO SINGLE BASELINE, AND
+#: SCORING IT AGAINST ONE IS THE SAME CATEGORY ERROR AS DIVIDING BY A ZERO
+#: SPREAD (2026-08-30, from the field). A pool pump sits at 0 W most of the day
+#: and ~850 W while it runs; the median lands on the RESTING mode (~6 W) and the
+#: MAD collapses toward it, so every ordinary run scored as hundreds of sigma —
+#: the villa's own document said "1704.6 VA against a median of 6.3 VA … 673
+#: sigma" about a pump doing exactly what it should, on three of four passes,
+#: at ~$0.37 an investigation to conclude nothing.
+#:
+#: ⚠️ AND THE NOISE WAS THE LESSER HALF. A pump at 400 W with a failing
+#: capacitor also scores hundreds of sigma, so the number could not separate a
+#: healthy run from a degraded one — the fault worth catching was invisible
+#: underneath the false ones. Scoring against the population the reading
+#: BELONGS TO is what makes 850-vs-848 boring and 400-vs-848 loud.
+#:
+#: A reading is unscorable rather than fabricated when its own side is too thin,
+#: which is the same answer this module already gives for a flat history.
+_BIMODAL_MIN_SAMPLES: Final[int] = 12
+#: Each side must hold this share before two clusters are a real duty cycle
+#: rather than one outlier and the rest.
+_BIMODAL_MIN_SHARE: Final[float] = 0.10
+#: ⚠️ AND AN ABSOLUTE FLOOR, BECAUSE A SHARE ALONE LETS ONE READING BE A
+#: "POPULATION". `int(12 * 0.10)` is 1, so a single spike in a steady series
+#: qualified as a second mode, was given a baseline of its own, and would have
+#: been scored as normal — silencing the one reading that mattered, which is
+#: precisely the inverse of this change's purpose. Caught by its own test.
+_BIMODAL_MIN_COUNT: Final[int] = 3
+#: The empty band between the two, as a fraction of the whole range. Well above
+#: anything a unimodal series produces: a noisy sensor's widest internal gap is
+#: a few percent of its range, not half of it.
+_BIMODAL_MIN_GAP: Final[float] = 0.50
+
+
+def _clusters(values: Sequence[float]
+              ) -> Optional[Tuple[List[float], List[float]]]:
+    """Split a duty-cycled series into (rest, load), or `None` if unimodal.
+
+    ⚠️ THE WIDEST EMPTY BAND, NOT A THRESHOLD. Any fixed wattage would be a
+    villa-specific constant, which this project forbids and which would be
+    wrong for the next device anyway — a lit circuit rests at 0 W and loads at
+    56 W, a pump at 0 and 850. The gap is measured against the series' OWN
+    range, so it carries no units and no assumption about the equipment.
+    """
+    ordered = sorted(values)
+    if len(ordered) < _BIMODAL_MIN_SAMPLES:
+        return None
+    span = ordered[-1] - ordered[0]
+    if span <= 0:
+        return None
+    gap, at = 0.0, 0
+    for i in range(len(ordered) - 1):
+        width = ordered[i + 1] - ordered[i]
+        if width > gap:
+            gap, at = width, i
+    if gap < _BIMODAL_MIN_GAP * span:
+        return None
+    rest, load = ordered[:at + 1], ordered[at + 1:]
+    floor = max(_BIMODAL_MIN_COUNT, int(len(ordered) * _BIMODAL_MIN_SHARE))
+    if len(rest) < floor or len(load) < floor:
+        return None
+    return rest, load
+
 
 @dataclass
 class Salience:
@@ -107,6 +173,10 @@ class Salience:
     persistence: float = 0.0                   # 0..1 of the window off-baseline
     basis: str = ""                            # what BOTH sides are measuring
     weekday_scoped: bool = False               # was the baseline weekday-local
+    #: Was this scored against ONE of two populations — see `_clusters`. A pump
+    #: is either at rest or at load and has no single "normal"; scoring the two
+    #: together is what made every ordinary run read as hundreds of sigma.
+    duty_cycled: bool = False
     novel_state: Optional[str] = None          # categoricals only
     seen_states: Tuple[str, ...] = field(default_factory=tuple)
 
@@ -227,6 +297,38 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
                       f"{floor} needed before a spread means anything")
         return out
 
+    # ⚠️ THE POPULATION THIS READING BELONGS TO, WHERE THERE ARE TWO. Taken
+    # BEFORE the baseline, because the whole point is that the all-samples
+    # median is the wrong number for a duty-cycled device — it lands on
+    # whichever mode is commoner and describes neither.
+    pair = _clusters(values)
+    side = ""
+    if pair is not None:
+        rest, load = pair
+        out.duty_cycled = True
+        if current <= rest[-1]:
+            values, side = rest, "at rest"
+        elif current >= load[0]:
+            values, side = load, "running"
+        else:
+            # ⚠️ IN THE EMPTY BAND — NEITHER OFF NOR AT LOAD, AND THIS IS THE
+            # FAULT THE OLD ARITHMETIC COULD NOT SEE. A pump at 400 W when it
+            # rests at 0 and runs at 850 is the failing-capacitor, blocked-
+            # impeller, cavitating case. Scored against the RUN it should have
+            # been, because that is what it is failing to be — filing it with
+            # the resting readings (the midpoint rule this replaced) buried it
+            # under a flat baseline and returned "no spread to score against".
+            values, side = load, "part-loaded"
+        # ⚠️ TOO THIN TO SCORE IS AN ANSWER, NOT A FAILURE — the same one this
+        # module gives for a flat history. A device seen running twice has no
+        # running baseline, and inventing one is what this change undoes.
+        if len(values) < floor:
+            out.reason = (
+                f"{current:g} is {side}, and only {len(values)} of "
+                f"{out.samples} readings were comparable; "
+                f"{floor} needed before that side has a baseline")
+            return out
+
     baseline = robust.median(values)
     spread = robust.robust_sigma(values)
     if baseline is None or spread is None:
@@ -246,7 +348,8 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
         if current == baseline:
             out.score, out.reason = 0.0, "steady at its usual value"
             return out
-        out.reason = (f"was flat at {baseline:g} across {len(values)} readings "
+        out.reason = (f"was flat at {baseline:g} across {len(values)} "
+                      f"{('readings ' + side) if side else 'readings'} "
                       f"and is now {current:g}; no spread to score against")
         return out
 
@@ -256,9 +359,15 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
     out.score = z * (1.0 + out.persistence * (_PERSISTENCE_MAX_MULTIPLE - 1.0))
     direction = "above" if current > baseline else "below"
     against = f" across {len(values)} {out.basis}s" if out.basis else ""
+    # ⚠️ SAY WHICH POPULATION, OR THE NUMBERS READ AS WRONG. "850 W against a
+    # median of 848" is baffling to a reader who knows the device is off most
+    # of the day; "while running" is what makes it checkable — this module's
+    # founding rule that the reader must be able to argue with the figure.
+    scope = f" while {side}" if side else ""
     out.reason = (f"{current:g} is {z:.1f} sigma {direction} its "
                   f"{'weekday ' if out.weekday_scoped else ''}median of "
-                  f"{baseline:g}{against} (spread {spread:g}, n={len(values)})")
+                  f"{baseline:g}{scope}{against} "
+                  f"(spread {spread:g}, n={len(values)})")
     # ⚠️ OUTSIDE THE WHOLE RANGE IS WORTH SAYING SEPARATELY FROM "n sigma". A
     # value beyond every reading ever recorded is either a genuine extreme or a
     # unit mismatch, and a reader can tell those apart where the arithmetic

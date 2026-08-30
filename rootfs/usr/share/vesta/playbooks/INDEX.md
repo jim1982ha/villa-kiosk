@@ -47,4 +47,4 @@ Add a playbook to its domain directory and regenerate.
 
 - **consumables-and-service** — Run-hour intervals, batteries, filters and anything else that is due.
 - **leak-response** — The follow-up after a leak or tamper sensor has already tripped.
-- **pump-runtime** — A supply or circulation pump running outside its schedule.
+- **pump-runtime** — A supply or circulation pump running outside its schedule, or stopping part-way through it.

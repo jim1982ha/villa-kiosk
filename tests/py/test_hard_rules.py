@@ -72,6 +72,11 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `test_level_shortfall`'s fixtures. Each names the KIND of equipment whose
+    # behaviour the case turns on — a sauna is discretionary, a workshop runs
+    # hard on some weekdays and barely on others — so the id is carrying the
+    # test's premise. No property was consulted; these are archetypes.
+    "sensor.sauna_energy", "sensor.workshop_energy",
     # Placeholders in `clean_summary`'s docstring and its tests: the SHAPE of a
     # redacted line is what is under test, not any villa's device.
     "automation.a", "sensor.a_power_factor", "sensor.b_power_factor",

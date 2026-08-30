@@ -179,7 +179,13 @@ def test_the_duration_term_is_bounded_at_double() -> None:
     """⚠️ Bounded BY CONSTRUCTION so it cannot become a weight. Persistence is a
     fraction in [0,1] and maps to a multiple in [1,2]; an unbounded term is the
     first per-villa constant back in the door."""
-    history = _rows([10] * 6 + [40] * 6)
+    # ⚠️ DRIFTING, NOT SWITCHING. This was `[10]*6 + [40]*6`, which is a
+    # textbook DUTY CYCLE — and once salience learned to see those, the running
+    # side held 6 readings, fell under MIN_SAMPLES and correctly scored `None`,
+    # so a test about the persistence term started failing over something it
+    # does not test. The two features are orthogonal and the fixture now says
+    # so: the same persistence, no clean gap to split on.
+    history = _rows([10, 12, 15, 18, 22, 25, 28, 31, 34, 37, 39, 40])
     out = salience.score_numeric(history, 40, entity_id="sensor.x")
     assert out.score is not None and out.baseline is not None
     assert out.spread is not None and out.spread > 0
@@ -296,7 +302,17 @@ def test_the_module_contains_no_threshold_literal() -> None:
     # threshold exactly as well as a public one.
     declared = set(re.findall(r"^(_?[A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=", body, re.M))
     assert declared == {"WINDOW_DAYS", "MIN_SAMPLES", "MIN_SAMPLES_PER_WEEKDAY",
-                        "_PERSISTENCE_MAX_MULTIPLE"}, (
+                        "_PERSISTENCE_MAX_MULTIPLE",
+                        # ⚠️ THE FOUR BIMODAL CONSTANTS ARE VALIDITY
+                        # REQUIREMENTS, WHICH IS WHY THEY BELONG HERE. Each
+                        # answers "are there two populations in this series at
+                        # all", never "how much is too much": the gap is
+                        # measured against the series' OWN range and the other
+                        # three are sample counts. None carries a unit, so none
+                        # can be right on one property and wrong on the next —
+                        # which is the whole test this list serves.
+                        "_BIMODAL_MIN_SAMPLES", "_BIMODAL_MIN_SHARE",
+                        "_BIMODAL_MIN_COUNT", "_BIMODAL_MIN_GAP"}, (
         f"undeclared module constant(s): {sorted(declared)}. Every constant "
         "here must be a validity requirement, named and justified in the header")
 

@@ -45,6 +45,7 @@ from vesta.supervise.agent.tools.base import fail
 CHECKS: Dict[str, str] = {
     "standby_creep": "equipment drawing more when idle than it used to",
     "level_anomaly": "a reading that has moved away from its own normal range",
+    "level_shortfall": "equipment that used markedly less than it normally does",
     "sensor_health": "sensors that have gone quiet, stuck or unavailable",
 }
 
@@ -57,11 +58,12 @@ MAX_HISTORY_DAYS: int = 90
 
 def _module(name: str) -> Any:
     """The module class for a check name, or None."""
-    from vesta.shared.analysis.modules import (level_anomaly, sensor_health,
-                                          standby_creep)
+    from vesta.shared.analysis.modules import (level_anomaly, level_shortfall,
+                                               sensor_health, standby_creep)
     return {
         "standby_creep": standby_creep.StandbyCreep,
         "level_anomaly": level_anomaly.LevelAnomaly,
+        "level_shortfall": level_shortfall.LevelShortfall,
         "sensor_health": sensor_health.SensorHealth,
     }.get(name)
 
@@ -295,13 +297,18 @@ class LevelAnomaly(AnalysisTool):
     check = "level_anomaly"
 
 
+class LevelShortfall(AnalysisTool):
+    check = "level_shortfall"
+
+
 class SensorHealth(AnalysisTool):
     check = "sensor_health"
 
 
 #: ⚠️ THE EXPORT TUPLE `agent/tools/__init__` FOLDS INTO `ALL_TOOLS`. Every
 #: other module here has one and the contract test requires it.
-ANALYSIS_TOOLS = (StandbyCreep, LevelAnomaly, SensorHealth)
+ANALYSIS_TOOLS = (StandbyCreep, LevelAnomaly, LevelShortfall,
+                  SensorHealth)
 
 
 def analysis_tools(session_source: Any = None,

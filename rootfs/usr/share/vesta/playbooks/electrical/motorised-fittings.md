@@ -17,6 +17,14 @@ symptom worth reading, not just a configuration observation.
 
 ## Check, in order
 
+
+⚠️ **Stopping part-way through travel is its own fault, and the position is the
+evidence.** A cover that halts mid-travel has met something: an obstruction, a
+limit switch that has drifted, or a motor thermal cut-out. Repeatedly stopping
+at the SAME position points at the obstruction or the limit; stopping at a
+different position each time, after roughly the same running interval, points at
+the thermal. A motor that stops and will not restart until it has cooled is the
+thermal case and must not be re-driven — that is how a winding is lost.
 1. **Lost limits.** Most cover motors learn their travel and store it. A loss
    of that calibration shows as travel that is short, long, or refuses to
    complete, often after a power interruption or a manual override at the

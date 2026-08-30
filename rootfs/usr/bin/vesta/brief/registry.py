@@ -275,9 +275,11 @@ def _snapshot() -> Dict[str, Any]:
 # absent one is still visible as an absent skip line.
 def _register_shipped() -> None:
     from vesta.shared.analysis.modules.level_anomaly import LevelAnomaly
+    from vesta.shared.analysis.modules.level_shortfall import LevelShortfall
     from vesta.shared.analysis.modules.sensor_health import SensorHealth
     from vesta.shared.analysis.modules.standby_creep import StandbyCreep
-    for module in (LevelAnomaly(), SensorHealth(), StandbyCreep()):
+    for module in (LevelAnomaly(), LevelShortfall(), SensorHealth(),
+                   StandbyCreep()):
         register(module)
 
 
