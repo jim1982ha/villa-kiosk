@@ -1,3 +1,15 @@
+## 2.905.0
+
+### Added — a document naming a renamed module is now caught
+The docs check resolved dead PATHS (`src/…`, `rootfs/…`) but not the way
+documents actually name code: `agent/fallback.brief`, `analysis/registry.py`.
+So `agent/fallback.py` became `agent/compose.py` and STATUS.md went on saying
+`fallback.brief` writes every briefing — the fourth document in one day to
+outlive its code, and the only one nothing could catch. Live documents now have
+their module references resolved against the tree. Generated and archived
+documents are exempt: a task record naming the module that task deleted is
+correct, not stale.
+
 ## 2.904.0
 
 ### Fixed — three test files went quiet when the folders they read moved

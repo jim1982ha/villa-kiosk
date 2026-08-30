@@ -98,6 +98,95 @@ def _docs() -> List[str]:
     return sorted(out)
 
 
+#: Module references a LIVE document may name although the module is gone —
+#: the same exemption `NAMED_GHOSTS` gives task ids, for the same reason: a
+#: document that RECORDS a rename has to be able to print the old name.
+#: ⚠️ KEYED ON THE MODULE, NOT ON EACH SPELLING OF IT. The first cut listed
+#: `agent/fallback.brief` and `agent/fallback.py`; the check compares module
+#: identity, so neither matched and both documents failed for the right reason
+#: with the wrong message. One entry covers every way a document names it.
+NAMED_DEAD_MODULES: Dict[str, Set[str]] = {
+    # Both record the SAME rename (`fallback.py` -> `compose.py`, 2026-08-30)
+    # and have to print the old name to describe it. Remove these once the
+    # naming pass lands and the sentences stop mentioning it.
+    "STATUS.md": {"agent/fallback"},
+    "BACKLOG.md": {"agent/fallback"},
+}
+
+#: `pkg/module` or `pkg/module.attr` in backticks.
+_MODULE_REF = re.compile(
+    r"`([a-z_][a-z0-9_]*)/([a-z_][a-z0-9_]*)(?:\.[A-Za-z_][A-Za-z0-9_]*)?`")
+
+
+def _modules() -> Dict[str, Set[str]]:
+    """package directory -> the module stems really in it. Derived, never listed."""
+    out: Dict[str, Set[str]] = {}
+    for base in ("rootfs/usr/bin/vesta", "src"):
+        for dirpath, _dirs, files in os.walk(os.path.join(REPO_ROOT, base)):
+            if "node_modules" in dirpath or "__pycache__" in dirpath:
+                continue
+            pkg = os.path.basename(dirpath)
+            for name in files:
+                stem, ext = os.path.splitext(name)
+                if ext in (".py", ".ts", ".tsx"):
+                    out.setdefault(pkg, set()).add(stem)
+    return out
+
+
+def test_no_live_document_names_a_module_that_does_not_exist() -> None:
+    """⚠️ THE BLIND SPOT THE DEAD-PATH CHECK CANNOT SEE (2026-08-30). That one
+    only resolves `src/…`, `rootfs/…`, `tests/…` — a real PATH. But documents
+    mostly name CODE the way engineers speak: `agent/fallback.brief`,
+    `analysis/registry.py`. Rename the module and every document naming it goes
+    on reading as correct, because nothing resolves a symbol.
+
+    `STATUS.md` claimed `agent/fallback.brief` writes every briefing for days
+    after that module became `agent/compose.py`. It was the FOURTH document to
+    outlive its code in one day and the only one no automated check could
+    catch. Measured before writing this: 33 module references in the live docs,
+    20 distinct — small enough to resolve, and 4 of them were dead.
+
+    ⚠️ `generated/` AND `history/` ARE EXEMPT, DELIBERATELY. The development
+    plan's TASK-073 section says it removes `narrate/deterministic.py` — naming
+    a module a task DELETED is the correct prose for a record of that task, and
+    failing it would be demanding that history be rewritten. A correction to a
+    generated document goes into `source/refdata/` anyway, never into the
+    output.
+    """
+    known = _modules()
+    # ⚠️ THE VACUOUS-PASS GUARD, AND MUTATION TESTING IS WHAT DEMANDED IT.
+    # Every reference below is skipped when its package is unknown, so an empty
+    # index means "nothing to check" and the test goes green having measured
+    # nothing. Emptying `_modules()` left all eight tests passing.
+    assert "agent" in known and "brief" in known, (
+        f"the module index found no agent/ or brief/ package: {sorted(known)[:8]}")
+
+    problems: List[str] = []
+    checked = 0
+    for name in _docs():
+        if _is_archive(name) or name.split(os.sep)[0] == "generated":
+            continue
+        allowed = NAMED_DEAD_MODULES.get(os.path.basename(name), set())
+        for pkg, mod in _MODULE_REF.findall(_read(name)):
+            ref = f"{pkg}/{mod}"
+            if pkg not in known:          # not a package in this tree at all
+                continue
+            checked += 1
+            if mod in known[pkg] or ref in allowed:
+                continue
+            problems.append(f"{name}: `{ref}` — no such module")
+    # Measured at 20 distinct references across the live documents when this
+    # was written; a floor well under that fails if the scan stops reaching them.
+    assert checked >= 8, (
+        f"only {checked} module reference(s) resolved — the live documents name "
+        "far more than that, so this check has stopped reaching them")
+    assert not problems, (
+        "live document(s) naming a module that does not exist:\n  "
+        + "\n  ".join(sorted(set(problems)))
+        + "\n\nRename it, or add it to NAMED_DEAD_MODULES with the reason it is "
+          "named on purpose (a document recording a rename may print the old name).")
+
+
 def test_the_document_scan_is_not_vacuous() -> None:
     """⚠️ THE GUARD THE RECURSION NEEDS. Every check below iterates `_docs()`;
     all of them pass on an empty list. A renamed folder must fail loudly here
