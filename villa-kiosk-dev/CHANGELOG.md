@@ -1,15 +1,24 @@
+## 2.896.0
+
+### Fixed — marking a flag as investigated silently did nothing for some subjects
+2.895.0 stamped the flag using its own spelling of the subject key: the writer
+collapses internal whitespace, the stamper only trimmed it. Those agree on "Pool
+Pump" and diverge on any subject with a doubled space or a tab, so the stamp
+matched no row and the previous fix did nothing — for exactly the names nobody
+thinks to test. The derivation now has one home that both the writer and the
+stamper import, and the pin compares it against the key a concern computes
+rather than against itself, which is what the first version of that test failed
+to do.
+
 ## 2.895.0
 
 ### Fixed — the briefing said two subjects were never looked at, and they were
 "What VESTA looked at" listed three pumps as "noticed, not investigated" while
-the audit recorded two of them as investigations that ran and correctly found
-nothing; only the third was genuinely past the per-pass cap. A flag's outcome was
-stamped from one place — after a concern is raised — so "nothing was wrong" and
-"nobody looked" were stored identically. The tablet had it right, reading the
-audit verdict, so the two surfaces described one event differently. An
-investigation now records that it happened, and the brief has three states
-instead of two: a concern's own words, "investigated, nothing to report", or
-"noticed, not investigated".
+the audit recorded two as investigations that ran and correctly found nothing;
+only the third was past the per-pass cap. A flag's outcome was stamped from one
+place — after a concern is raised — so "nothing was wrong" and "nobody looked"
+were stored identically, and the tablet disagreed with the message. An
+investigation now records that it happened, and the brief has three states.
 
 ## 2.894.0
 
