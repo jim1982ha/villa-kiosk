@@ -87,6 +87,23 @@ def append(entry: Mapping[str, Any], *, now_iso: str = "") -> bool:
         return False
 
 
+def _instant(value: Any) -> Optional[datetime]:
+    """An ISO-8601 stamp as an aware UTC datetime, or `None` if unreadable.
+
+    ⚠️ A NAIVE VALUE IS READ AS UTC rather than rejected — the same choice
+    `collect.as_utc_iso` makes, and for the same reason: every producer in this
+    package is tz-aware, so a naive stamp can only come from stored data an
+    operator touched, and a briefing must not fail to be delivered over a
+    timestamp.
+    """
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    return dt.astimezone(timezone.utc) if dt.tzinfo \
+        else dt.replace(tzinfo=timezone.utc)
+
+
 def since(iso: str, *, sources: Optional[Sequence[str]] = None
           ) -> List[Dict[str, Any]]:
     """Every entry at or after `iso`, oldest first, optionally by source.
@@ -102,7 +119,41 @@ def since(iso: str, *, sources: Optional[Sequence[str]] = None
         rows = [r for r in rows if str(r.get("source") or "") in want]
     if not iso:
         return rows
-    return [r for r in rows if str(r.get("at") or "") >= iso]
+
+    # ⚠️ COMPARED AS INSTANTS, NEVER AS STRINGS (2026-08-30). This read
+    # `str(r["at"]) >= iso`, and ordering ISO strings lexicographically is only
+    # chronological when both sides carry the SAME OFFSET. `append` stamps every
+    # entry in UTC; `pipeline` builds its window from `schedule.period_start`,
+    # which is deliberately the villa's LOCAL wall-clock midnight. So on a villa
+    # east of UTC the first hours of every local day sorted BEFORE the bound and
+    # were silently dropped from the daily brief.
+    #
+    # ⚠️ FOUND IN THE FIELD, AND THE RULE ALREADY EXISTED. The owner's watchdog
+    # fired six times at 00:52 local (16:52Z) and the 10:00 briefing did not
+    # mention it; every other line of that report reconciles exactly with this
+    # cut, including two entries stamped 00:00:00Z. `collect.as_utc_iso` was
+    # written for precisely this and says so — "THE ONE LINE THAT MAKES STRING
+    # COMPARISON LEGAL" — and `journal.since` warns callers to normalise. This
+    # ledger was a new consumer of that rule and never joined it, which is
+    # `feedback_audit-applicable-set` in its purest form: roll a rule out by
+    # what it APPLIES to, not by its existing call sites.
+    #
+    # ⚠️ NORMALISED HERE RATHER THAN AT THE CALLER, unlike `journal.since`.
+    # "The caller must remember" is the shape this repository keeps paying for,
+    # and this function's contract is a MOMENT, not a string. It cannot import
+    # `collect` (collect imports this module), so the conversion is local — six
+    # lines, no new dependency, correct for every caller including the SPA's.
+    bound = _instant(iso)
+    if bound is None:
+        return rows
+    kept: List[Dict[str, Any]] = []
+    for row in rows:
+        at = _instant(row.get("at"))
+        # An unparseable stamp is KEPT, for the same reason a bad bound returns
+        # everything: thin-but-honest beats silently empty.
+        if at is None or at >= bound:
+            kept.append(row)
+    return kept
 
 
 def stamp_outcome(subject_key: str, outcome: str, *,
