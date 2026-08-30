@@ -103,7 +103,7 @@ def test_a_seeded_anomaly_ranks_in_the_top_five_of_its_cycle() -> None:
     assert top5[0].entity_id == "sensor.seeded"
 
 
-def test_a_normal_weekday_does_not_rank() -> None:
+def test_an_ordinary_reading_does_not_rank() -> None:
     quiet = [salience.score_numeric(_rows([10, 10.2, 9.8, 10.1, 9.9, 10, 10.3]),
                                     10.0, entity_id=f"sensor.q{i}")
              for i in range(10)]
@@ -194,29 +194,6 @@ def test_the_duration_term_is_bounded_at_double() -> None:
     assert 0.0 <= out.persistence <= 1.0
 
 
-# ── the weekday refinement ─────────────────────────────────────────────────
-
-def test_a_weekday_baseline_is_used_when_the_data_supports_one() -> None:
-    """A villa's Sunday genuinely differs from its Tuesday."""
-    rows: List[Dict[str, Any]] = []
-    for week in range(4):                      # 2026-08-03 is a Monday
-        rows.append({"day": f"2026-08-{3 + week * 7:02d}", "value": 10.0})   # Mon
-        rows.append({"day": f"2026-08-{4 + week * 7:02d}", "value": 10.0})   # Tue
-        rows.append({"day": f"2026-08-{9 + week * 7:02d}", "value": 90.0})   # Sun
-    sunday = salience.score_numeric(rows, 90.0, entity_id="sensor.pool", weekday=6)
-    assert sunday.weekday_scoped is True
-    assert sunday.baseline == 90.0
-    assert sunday.score == 0.0, "90 on a Sunday is this entity's normal Sunday"
-
-
-def test_it_falls_back_to_the_whole_window_when_a_weekday_is_thin() -> None:
-    """⚠️ The fallback is not a failure. A new install has no four-Tuesday
-    history, and that is exactly when it most needs an answer."""
-    rows = _rows([10, 10, 10, 10, 10, 10, 10, 10])
-    out = salience.score_numeric(rows, 10, entity_id="sensor.x", weekday=6)
-    assert out.weekday_scoped is False and out.score is not None
-
-
 # ── categoricals ────────────────────────────────────────────────────────────
 
 def test_a_never_seen_state_is_flagged_with_its_evidence() -> None:
@@ -301,7 +278,7 @@ def test_the_module_contains_no_threshold_literal() -> None:
     # A LEADING UNDERSCORE IS STILL IN SCOPE — a private constant hides a
     # threshold exactly as well as a public one.
     declared = set(re.findall(r"^(_?[A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=", body, re.M))
-    assert declared == {"WINDOW_DAYS", "MIN_SAMPLES", "MIN_SAMPLES_PER_WEEKDAY",
+    assert declared == {"MIN_SAMPLES",
                         "_PERSISTENCE_MAX_MULTIPLE",
                         # ⚠️ THE FOUR BIMODAL CONSTANTS ARE VALIDITY
                         # REQUIREMENTS, WHICH IS WHY THEY BELONG HERE. Each
@@ -343,8 +320,8 @@ def test_the_grep_would_actually_catch_a_smuggled_threshold(
     assert units.search("idle draw above 340 W is waste")
     assert units.search("costs 2380 IDR")
     # ...and does not fire on the module's own legitimate vocabulary.
-    assert not forbidden.search("MIN_SAMPLES_PER_WEEKDAY: Final[int] = 4")
-    assert not units.search("28 days is four of every weekday")
+    assert not forbidden.search("_BIMODAL_MIN_SAMPLES: Final[int] = 12")
+    assert not units.search("seven readings the MAD is dominated")
 
 
 # ── the like-for-like contract · PH-1 checkpoint, Finding 1 ────────────────
@@ -387,3 +364,61 @@ def test_a_value_outside_the_whole_range_is_STATED_not_scored() -> None:
     assert outside.baseline is not None and outside.spread is not None
     z = abs(99.0 - outside.baseline) / outside.spread
     assert outside.score is not None and z <= outside.score <= z * 2.0 + 1e-9
+
+
+# ── the weekday refinement is GONE, and must stay gone ─────────────────────
+
+def test_the_weekday_refinement_appears_NOWHERE_in_shipped_code() -> None:
+    """⚠️ THE SAME DISCIPLINE `test_dedupe` APPLIES TO THE 2.755.0 DELETIONS: a
+    removal that is only a diff comes back one plausible commit at a time.
+
+    `score_numeric` took a `weekday` argument and scoped the baseline to this
+    weekday. It had ONE production caller, which never passed it, so the branch
+    was unreachable outside this file; `WINDOW_DAYS` had no code reader at all
+    and existed only to justify it. The job is not missing — `level_anomaly` and
+    `level_shortfall` do it against Home Assistant statistics over eight weeks,
+    and the right response to wanting it here is to read those, not to rebuild
+    a shorter copy.
+    """
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")
+    dead = ("weekday_scoped", "MIN_SAMPLES_PER_WEEKDAY")
+    offenders: List[str] = []
+    checked = 0
+    for base, _dirs, files in os.walk(root):
+        if "__pycache__" in base:
+            continue
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(base, name)
+            checked += 1
+            body = open(path, encoding="utf-8").read()
+            # ⚠️ `salience.py` MAY NAME THEM — it carries the tombstone saying
+            # what went and why, which is the thing that makes this deletion
+            # survive contact with a future reader.
+            if os.path.basename(path) == "salience.py":
+                continue
+            for token in dead:
+                if token in body:
+                    offenders.append(f"{path}: {token}")
+    assert checked > 50, f"only {checked} modules scanned — the walk is broken"
+    assert not offenders, (
+        "the weekday refinement is being rebuilt:\n  " + "\n  ".join(offenders))
+
+
+def test_score_numeric_takes_no_weekday_ARGUMENT() -> None:
+    """The signature is the contract; a caller passing `weekday=` must fail
+    loudly rather than be silently ignored."""
+    import inspect
+    assert "weekday" not in inspect.signature(salience.score_numeric).parameters
+    with pytest.raises(TypeError):
+        salience.score_numeric(_rows([10] * 8), 10, weekday=6)  # type: ignore[call-arg]
+
+
+def test_salience_declares_no_WINDOW_constant() -> None:
+    """⚠️ IT ASKS "IS THIS READING UNUSUAL FOR THIS ENTITY", over whatever the
+    journal still holds. How far back that reaches is a property of the ring,
+    and a span asserted here would be a claim this module cannot keep — which
+    is exactly what `WINDOW_DAYS = 28` turned out to be."""
+    assert not hasattr(salience, "WINDOW_DAYS")
+    assert not hasattr(salience, "MIN_SAMPLES_PER_WEEKDAY")

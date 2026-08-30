@@ -244,10 +244,13 @@ export function ObserveTab({ diagnostics }: {
           <dd>{num(j?.entities ?? 0)}</dd>
         </div>
         <div>
-          {/* ⚠️ THE DEPTH ON HAND, NOT THE DESIGN FIGURE. `salience` is built
-              around 28 days; what the villa actually holds is whatever fits the
-              ring at its own change rate. Saying the design number here is the
-              claim this screen was corrected for once already. */}
+          {/* ⚠️ THE DEPTH ON HAND, AND SINCE 2026-08-30 THERE IS NO DESIGN
+              FIGURE TO CONFUSE IT WITH. This said "`salience` is built around
+              28 days"; that constant (`WINDOW_DAYS`) has been DELETED, because
+              it had no code reader and existed only to justify a weekday
+              refinement that never ran. Salience needs 7 READINGS, not a span,
+              so what the villa holds is simply what fits the ring — which is
+              what this line has always shown. */}
           <dt>History held</dt>
           <dd>{j?.spanDays
             ? `${j!.spanDays.toFixed(1)} days` : "—"}</dd>
@@ -264,13 +267,16 @@ export function ObserveTab({ diagnostics }: {
         </p>
       )}
       {/* ⚠️ "FOUR WEEKS OF HISTORY" WAS A CLAIM THIS SCREEN CANNOT KEEP, and it
-          was mine. Four weeks is the scoring window's DESIGN figure; what the
-          villa actually holds is whatever fits in the rolling record, which at
-          the reference property's change rate is about two days. Stating the
-          design figure as though it were the depth on hand is the shape of
-          error dry-audit Part 3 exists for — a sentence read as authority that
-          quietly stopped being true. Say the rule, and let the count above say
-          the depth. */}
+          was mine. Stating a design figure as though it were the depth on hand
+          is the shape of error dry-audit Part 3 exists for — a sentence read as
+          authority that quietly stopped being true. Say the rule, and let the
+          count above say the depth.
+
+          ⚠️ THE FOUR WEEKS ARE NOW GONE FROM THE CODE TOO (2026-08-30), which
+          is the stronger fix: the screen was told not to repeat a number that
+          turned out to be justifying a dead branch. The copy below needed no
+          change — it already described the RULE and never the span, which is
+          why it survived the constant it used to sit beside. */}
       <p className="muted body-text">
         Each reading is scored against that device's own past, not against a
         threshold anybody typed in.

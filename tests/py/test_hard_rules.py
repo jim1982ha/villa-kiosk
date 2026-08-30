@@ -192,7 +192,7 @@ ILLUSTRATIVE: Set[str] = {
     "light.n", "lock.c", "switch.a", "switch.new", "lock.front", "lock.a",
     "sensor.pump", "sensor.seeded", "sensor.flat", "sensor.spike",
     "sensor.drift", "sensor.new", "sensor.x", "sensor.q", "sensor.weak",
-    "sensor.quiet", "sensor.loud", "sensor.unscorable", "sensor.pool",
+    "sensor.quiet", "sensor.loud", "sensor.unscorable",
     "light.gone", "light.ok",  # observe/cycle.py's diff fixtures
     # agent tool fixtures and the dotted-path probes. `sensor.probe` is the
     # literal prefix of an f-string (`f"sensor.probe{i}_power"`), which is what

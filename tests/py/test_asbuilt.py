@@ -44,7 +44,7 @@ def test_every_introspected_table_is_populated() -> None:
             "over nothing, which is exactly the silent staleness this "
             "generator exists to end")
     assert f["version"] and f["version"][0].isdigit(), "no add-on version read"
-    assert f["journal_max"] > 0 and f["salience"]["window_days"] > 0
+    assert f["journal_max"] > 0 and f["salience"]["min_samples"] > 0
 
 
 def test_the_document_reads_the_live_modules_not_a_copy() -> None:

@@ -62,7 +62,7 @@ ALLOWED_FIELDS: Tuple[str, ...] = (
     "next_offset", "level", "total_points", "present", "complete", "at_bound",
     "entries", "bound", "online_since", "last_seen", "id", "state_",
     "title", "age_days", "tickets_open", "tickets_resolved",
-    "tickets_resolved_with_entity", "evidence_photos", "weekday_scoped",
+    "tickets_resolved_with_entity", "evidence_photos",
     "novel_state", "seen_states", "points", "runs", "outcome", "error",
     "structural", "temporal", "salient", "unscorable", "concerns", "states",
     "attributes", "counts", "cache_prefix_chars", "limit", "window", "type",

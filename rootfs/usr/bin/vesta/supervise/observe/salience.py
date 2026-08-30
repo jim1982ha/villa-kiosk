@@ -16,11 +16,12 @@ is what stops this file growing into a rule engine again.
 
 ⚠️ NO THRESHOLD CONSTANT MAY APPEAR HERE (ARCH-004), AND THE DISTINCTION IS NOT
 PEDANTRY. A threshold answers "how much is too much" and is a per-villa
-judgement wearing a number's clothes. ⚠️ THIS SAID "THE THREE CONSTANTS BELOW"
-AND THERE ARE NOW EIGHT — a count in prose beside a list in code, which is the
-drift this project has a whole audit part for; the test that pins the list by
-NAME is the copy to trust, and it is why this was caught the day the four
-bimodal ones were added. All of them are STATISTICAL
+judgement wearing a number's clothes. ⚠️ THIS SAID "THE THREE CONSTANTS BELOW",
+THEN "EIGHT", AND THE COUNT IS NOW GONE — a number in prose beside a list in
+code is the drift this project has a whole audit part for, and it went stale
+twice: once when the four bimodal ones arrived, and again when the weekday pair
+was deleted. The test that pins the list by NAME is the copy to trust. All of
+them are STATISTICAL
 VALIDITY requirements — they answer "is this sample big enough to say anything
 at all", which has the same answer at every property because it is a fact about
 arithmetic rather than about plumbing. The test suite greps this module for the
@@ -61,26 +62,46 @@ from dataclasses import dataclass, field
 from typing import (Any, Dict, Final, List, Mapping, Optional, Sequence,
                     Tuple)
 
-from vesta.shared.analysis import robust, series
+from vesta.shared.analysis import robust
 
-# ── the three constants, each a validity requirement rather than a threshold ─
-
-#: The observation window. ADR-002. A WINDOW is not a threshold: it says how far
-#: back to look, not how much is too much, and moving it changes precision
-#: rather than sensitivity. 28 days is four of every weekday, which is the
-#: smallest number that lets the per-weekday refinement below mean anything.
-WINDOW_DAYS: Final[int] = 28
+# ── the constants, each a validity requirement rather than a threshold ──────
 
 #: Below this, a median absolute deviation is not a measurement. With fewer than
 #: seven readings the MAD is dominated by whichever handful arrived, and the
 #: resulting z-score is arithmetic performed on noise. This is a property of the
 #: estimator, identical at every villa.
+#:
+#: ⚠️ SEVEN READINGS, NOT SEVEN DAYS, and that is why this module needs no
+#: window constant. It asks whether THIS reading is unusual for THIS entity over
+#: whatever history the journal still holds; how far back that reaches is a
+#: property of the ring, not a number this file gets to assert.
 MIN_SAMPLES: Final[int] = 7
 
-#: The per-weekday refinement needs its own floor, and it is higher in effect
-#: because it partitions the same data. Four samples is one per week across the
-#: window; below that "Tuesdays look like this" is a sentence about one Tuesday.
-MIN_SAMPLES_PER_WEEKDAY: Final[int] = 4
+# ⚠️ `WINDOW_DAYS` (28) AND `MIN_SAMPLES_PER_WEEKDAY` (4) WERE DELETED HERE ON
+# 2026-08-30 ALONG WITH THE WEEKDAY REFINEMENT THEY EXISTED FOR, and this note
+# is what stops them coming back one plausible commit at a time.
+#
+# `score_numeric` took a `weekday` argument and scoped the baseline to "what
+# this entity does on THIS weekday". It had ONE production caller —
+# `agent/sources.build_salient_source` — which never passed it, so the branch
+# was unreachable outside the test suite; `WINDOW_DAYS` had no code reader at
+# all and existed only to justify the branch. The function's own comment
+# recorded this arm being found dead ONCE BEFORE and fixed inside the function,
+# with nobody wiring the caller: `feedback_pin-the-caller` at the scale of a
+# feature.
+#
+# ⚠️ AND IT IS NOT MISSING — IT LIVES ONE LAYER UP, DONE PROPERLY.
+# `analysis/modules/level_anomaly` and `level_shortfall` already judge a device
+# against "its own same-weekday median", fed by Home Assistant's permanent
+# statistics over `WINDOW_DAYS = 56`, and their own comment says why that is
+# right: "EIGHT WEEKS, NOT FOUR. Four weeks gives four samples of each weekday".
+# Rebuilding it here would be a second implementation of one rule, fed by the
+# same statistics, landing at the horizon the first one examined and rejected.
+#
+# The two layers ask different questions and should keep doing so: this one
+# ranks what is unusual RIGHT NOW to spend a model's attention on, over recent
+# history; that one asks whether this Tuesday is unlike its Tuesdays, over
+# months. Short horizon is correct here.
 
 #: ⚠️ NOT A CONSTANT AND NOT A DIAL — this is the shape of the score, stated so
 #: nobody reintroduces a weight. The duration term MULTIPLIES rather than adds,
@@ -172,7 +193,6 @@ class Salience:
     samples: int = 0
     persistence: float = 0.0                   # 0..1 of the window off-baseline
     basis: str = ""                            # what BOTH sides are measuring
-    weekday_scoped: bool = False               # was the baseline weekday-local
     #: Was this scored against ONE of two populations — see `_clusters`. A pump
     #: is either at rest or at load and has no single "normal"; scoring the two
     #: together is what made every ordinary run read as hundreds of sigma.
@@ -192,8 +212,6 @@ class Salience:
             out["basis"] = self.basis
         if self.persistence:
             out["persistence"] = round(self.persistence, 3)
-        if self.weekday_scoped:
-            out["weekday_scoped"] = True
         if self.novel_state is not None:
             out["novel_state"] = self.novel_state
             out["seen_states"] = list(self.seen_states)
@@ -237,20 +255,9 @@ def _persistence(values: Sequence[float], baseline: float) -> float:
     return same_side / len(values)
 
 
-def _window(samples: Sequence[Mapping[str, Any]],
-            weekday: Optional[int]) -> List[Mapping[str, Any]]:
-    """Rows for one weekday, or all of them when the weekday is unusable."""
-    if weekday is None:
-        return list(samples)
-    out = [row for row in samples
-           if series.weekday_of(str(row.get("day") or "")) == weekday]
-    return out
-
-
 # ── numeric ─────────────────────────────────────────────────────────────────
 def score_numeric(samples: Sequence[Mapping[str, Any]],
                   observed: Any, *, entity_id: str = "",
-                  weekday: Optional[int] = None,
                   basis: str = "") -> Salience:
     """Novelty of `observed` against this entity's own history.
 
@@ -271,30 +278,16 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
         return out
     out.observed = current
 
-    # ⚠️ WEEKDAY FIRST, THEN FALL BACK — and the fallback is not a failure. A
-    # villa's Sunday genuinely differs from its Tuesday (occupancy, pool, staff),
-    # so a weekday-local baseline is the better measure whenever the data
-    # supports one. It usually does not in the first month, which is exactly
-    # when a new install most needs an answer.
-    scoped = _window(samples, weekday)
-    if weekday is not None and len(scoped) >= MIN_SAMPLES_PER_WEEKDAY:
-        rows, out.weekday_scoped, floor = scoped, True, MIN_SAMPLES_PER_WEEKDAY
-    else:
-        rows, floor = list(samples), MIN_SAMPLES
-
-    values = [v for v in (_numeric(r.get("value")) for r in rows) if v is not None]
+    values = [v for v in (_numeric(r.get("value")) for r in samples)
+              if v is not None]
     out.samples = len(values)
-    # ⚠️ THE FLOOR FOLLOWS THE WINDOW, AND GETTING THIS WRONG MADE THE WEEKDAY
-    # PATH DEAD CODE. A 28-day window contains exactly FOUR of each weekday, so
-    # selecting a weekday sample on MIN_SAMPLES_PER_WEEKDAY (4) and then scoring
-    # it against MIN_SAMPLES (7) rejects every weekday baseline that has ever
-    # existed — the branch would set `weekday_scoped = True` and then always
-    # return None, which reads in a capture as "this villa has no weekday
-    # history" rather than "the code cannot reach that answer". Caught by the
-    # test, not by review.
-    if len(values) < floor:
+    # ⚠️ ONE FLOOR, BECAUSE THERE IS ONE POPULATION SINCE 2026-08-30. This used
+    # to pick between `MIN_SAMPLES` and a weekday-local floor, and the weekday
+    # arm was unreachable in production — see the note beside `MIN_SAMPLES` for
+    # why it went and where that job actually lives.
+    if len(values) < MIN_SAMPLES:
         out.reason = (f"only {len(values)} usable reading(s); "
-                      f"{floor} needed before a spread means anything")
+                      f"{MIN_SAMPLES} needed before a spread means anything")
         return out
 
     # ⚠️ THE POPULATION THIS READING BELONGS TO, WHERE THERE ARE TWO. Taken
@@ -322,11 +315,11 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
         # ⚠️ TOO THIN TO SCORE IS AN ANSWER, NOT A FAILURE — the same one this
         # module gives for a flat history. A device seen running twice has no
         # running baseline, and inventing one is what this change undoes.
-        if len(values) < floor:
+        if len(values) < MIN_SAMPLES:
             out.reason = (
                 f"{current:g} is {side}, and only {len(values)} of "
                 f"{out.samples} readings were comparable; "
-                f"{floor} needed before that side has a baseline")
+                f"{MIN_SAMPLES} needed before that side has a baseline")
             return out
 
     baseline = robust.median(values)
@@ -364,8 +357,7 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
     # of the day; "while running" is what makes it checkable — this module's
     # founding rule that the reader must be able to argue with the figure.
     scope = f" while {side}" if side else ""
-    out.reason = (f"{current:g} is {z:.1f} sigma {direction} its "
-                  f"{'weekday ' if out.weekday_scoped else ''}median of "
+    out.reason = (f"{current:g} is {z:.1f} sigma {direction} its median of "
                   f"{baseline:g}{scope}{against} "
                   f"(spread {spread:g}, n={len(values)})")
     # ⚠️ OUTSIDE THE WHOLE RANGE IS WORTH SAYING SEPARATELY FROM "n sigma". A
