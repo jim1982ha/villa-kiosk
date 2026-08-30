@@ -36,7 +36,7 @@ from vesta.supervise.agent.registry import run as run_loop
 from vesta.supervise.agent import sources as sources_mod
 from vesta.supervise.agent.tools import act as act_mod
 from vesta.supervise.agent.tools import concern as concern_mod
-from vesta.adapters.log import log, swallow
+from vesta.adapters.log import log, swallow, tally
 
 #: How long a whole investigation may take, wall clock. ⚠️ NOT A TURN LIMIT —
 #: `policy.max_turns` already bounds those. This bounds the case turns cannot:
@@ -476,6 +476,16 @@ async def investigate(*, provider: Provider,
             used[name] = used.get(name, 0) + 1
     log(f"run {ident} {out.status} in {out.seconds:.1f}s "
         f"({out.turns} turn(s), {out.tool_calls} tool call(s))")
+    # ⚠️ SUMMED ACROSS EVERY RUN OF THE PASS, WHICH IS THE POINT: the per-run
+    # lines above already say this one run's figures, and what no line answered
+    # was "what did the whole pass do". ⚠️ `evidence_rows` IS THE ONE THAT
+    # EXPLAINS A FIGURE REFUSAL — `render.enforce` checks every number against
+    # exactly these rows, so a concern refused for unsourced figures beside a
+    # low evidence count is a run that did not read enough, not a model that
+    # invented things.
+    tally("turns", out.turns)
+    tally("tool_calls", out.tool_calls)
+    tally("evidence_rows", len(out.evidence))
     if used:
         # ⚠️ ITS OWN LINE, so a grep for `tools used` answers "what does this
         # tier actually reach for" across every run without matching the

@@ -37,8 +37,20 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from vesta.adapters import log as log_mod
 from vesta.adapters import store as store_mod
 from vesta.adapters.log import swallow
+
+
+def _add_usd(cost: float) -> None:
+    """Accumulate this pass's spend. ⚠️ A FLOAT SUM, NOT A `tally`, which is
+    integer — rounding each call to whole dollars would report every pass on
+    this villa as costing nothing."""
+    try:
+        book = log_mod.census()
+        log_mod.note("usd", round(float(book.get("usd", 0.0)) + float(cost), 6))
+    except Exception:  # noqa: BLE001 - accounting must not fail the work
+        pass
 
 USAGE_PATH: str = "/data/vesta/usage.json"
 
@@ -151,6 +163,19 @@ def record(*, source: str, model: str, counts: Mapping[str, Any],
                 counts.get("cache_creation_input_tokens") or 0)),
             "cost": round(cost_of(model, counts), 6),
         }
+        # ⚠️ THE PASS CENSUS IS FED FROM HERE BECAUSE EVERY MODEL CALL COMES
+        # THROUGH HERE (2026-08-30), whatever tier made it — so "what did this
+        # run cost" needs no plumbing and cannot miss a caller. Outside a pass
+        # the contextvar is empty and these are silent.
+        # ⚠️ RE-READ FROM `counts`, NOT FROM `row`. `row` is `Dict[str, Any]`
+        # because it also holds strings, so arithmetic on its members is untyped
+        # to mypy — and silencing that with a cast would be hiding the one thing
+        # strict mode is for on a line that does sums.
+        log_mod.tally("tokens_in", int(float(counts.get("input_tokens") or 0))
+                      + int(float(counts.get("cache_read_input_tokens") or 0))
+                      + int(float(counts.get("cache_creation_input_tokens") or 0)))
+        log_mod.tally("tokens_out", int(float(counts.get("output_tokens") or 0)))
+        _add_usd(cost_of(model, counts))
         target = path or USAGE_PATH
         rows = store_mod.read_json(target, {})
         entries = rows.get("rows") if isinstance(rows, Mapping) else None

@@ -43,7 +43,7 @@ from vesta.supervise.agent import playbooks
 from vesta.supervise.agent import runtime
 from vesta.supervise.agent.llm.base import Provider
 from vesta.supervise.agent.registry import REASON_TOOLS
-from vesta.adapters.log import stage, swallow
+from vesta.adapters.log import note, stage, swallow, tally
 
 #: How many investigations one pass may start when config says nothing.
 #: ⚠️ MIRRORS `config.DEFAULTS`, and `test_agent_reason` pins that it does. A
@@ -212,6 +212,12 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
             # the condition has cleared it is simply not flagged again. Nothing
             # resumes a list, which is why the row is a record rather than a
             # work item.
+            # ⚠️ THE CAP'S REMAINDER WAS INVISIBLE IN THE LOG (2026-08-30). It
+            # went into the HTTP response and a DEFERRED audit row, so a reader
+            # of the add-on log saw three escalations become two investigations
+            # with no line saying why. `feedback_two-correct-halves`: recorded
+            # in one place and absent from the one people actually read.
+            note("deferred", len(escalations) - out.started)
             for later, rest in enumerate(escalations[index:], start=index):
                 audit_mod.record_run(_ident(trigger, later, now),
                                      actor="agent", trigger=trigger,
@@ -230,8 +236,10 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
                                      session=session, run_id=run_id):
             out.started += 1
             out.run_ids.append(run_id)
+            tally("investigated")
 
     out.concerns = max(0, _concern_count(config) - before)
+    note("concerns_opened", out.concerns)
     return out
 
 

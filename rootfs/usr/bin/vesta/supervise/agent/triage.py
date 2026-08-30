@@ -31,7 +31,7 @@ from vesta.supervise.agent.llm.base import Provider
 from vesta.supervise.agent.registry import Registry
 from vesta.supervise.agent.registry import build_registry
 from vesta.supervise.agent.registry import narrowed
-from vesta.adapters.log import stage
+from vesta.adapters.log import note, stage
 
 #: The only tool triage may see. ⚠️ A NAME, not a mode: `read_state` is READ too
 #: and would let a cheap pass fan out across the villa one entity at a time.
@@ -380,6 +380,12 @@ async def run(*, provider: Provider, document: str,
         # A MATCH, and they are otherwise indistinguishable from outside.
         + (f", {named}/{len(found)} identified" if found else "")
         + _unidentified_note(found, refs))
+    note("escalated", len(found))
+    note("identified", named)
+    # ⚠️ NO `turns` HERE. Triage reaches the model through `runtime.investigate`,
+    # which already tallies turns and tool calls for EVERY tier — noting them
+    # again would overwrite the pass total with this one tier's figure, which is
+    # the shape of a counter that reads plausibly and is wrong.
     return TriageResult(status="answered", escalations=found,
                         turns=result.turns, usage=result.usage)
 

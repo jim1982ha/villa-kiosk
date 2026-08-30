@@ -23,7 +23,7 @@ import sys
 import time
 import traceback
 from contextvars import ContextVar
-from typing import Any, Iterator
+from typing import Any, Dict, Iterator, List, Tuple
 
 TAG = "[reports]"
 
@@ -63,6 +63,81 @@ def stage(name: str, detail: str) -> None:
     log(f"{name}: {detail}")
 
 
+#: Everything one pass wants to report about itself, printed once at its end.
+#:
+#: ⚠️ A CONTEXTVAR FOR THE SAME REASON `PASS` IS ONE, AND THE ARGUMENT IS THE
+#: FILE'S OWN (2026-08-30). A census assembled by RETURN VALUES would have to
+#: thread a dict through every signature between the scheduler and the tools —
+#: the eight modules `PASS` exists to avoid touching — and the first tier that
+#: forgot to pass it on would drop its facts silently, which is precisely the
+#: failure a census exists to make impossible.
+#:
+#: ⚠️ IT IS FOR NUMBERS AND SHORT WORDS, NEVER PROSE OR IDS. It is printed, so
+#: everything `redact` refuses in a payload is refused here by the same
+#: judgement: an entity id must not reach it, and a device list must be COUNTED
+#: rather than listed.
+_CENSUS: ContextVar[Dict[str, Any]] = ContextVar("vesta_census", default={})
+
+
+def tally(key: str, n: int = 1) -> None:
+    """Add `n` to this pass's counter `key`. Silent outside a pass.
+
+    ⚠️ NEVER RAISES. A census is a diagnostic, and the whole contract of this
+    module is that logging cannot take down the thing it describes.
+    """
+    try:
+        book = _CENSUS.get()
+        if book is not None:
+            book[key] = int(book.get(key, 0)) + int(n)
+    except Exception:  # noqa: BLE001 - a counter must not fail the pass
+        pass
+
+
+def note(key: str, value: Any) -> None:
+    """Record one fact about this pass, replacing any earlier value."""
+    try:
+        book = _CENSUS.get()
+        if book is not None:
+            book[key] = value
+    except Exception:  # noqa: BLE001 - a note must not fail the pass
+        pass
+
+
+def census() -> Dict[str, Any]:
+    """This pass's facts so far. A copy: a reader must not be able to edit it."""
+    try:
+        return dict(_CENSUS.get() or {})
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+#: Order the census prints in — the tier order of the architecture, so a capture
+#: reads down the pipeline. Anything not named here prints after, sorted, so a
+#: new counter is never invisible merely because nobody updated this list.
+CENSUS_ORDER: Tuple[str, ...] = (
+    "doc_salient", "doc_standing", "doc_concerns", "doc_coverage",
+    "escalated", "identified", "deferred",
+    "investigated", "evidence_rows", "turns", "tool_calls", "tool_errors",
+    "concerns_opened", "concerns_refused",
+    "delivered", "tasks", "suppressed",
+    "tokens_in", "tokens_out", "usd",
+)
+
+
+def _census_line(book: Dict[str, Any]) -> str:
+    """The census as one line, or "" when the pass recorded nothing."""
+    if not book:
+        return ""
+    named = [k for k in CENSUS_ORDER if k in book]
+    rest = sorted(k for k in book if k not in CENSUS_ORDER)
+    parts: List[str] = []
+    for key in named + rest:
+        value = book[key]
+        parts.append(f"{key}={value:.4f}" if isinstance(value, float)
+                     else f"{key}={value}")
+    return " ".join(parts)
+
+
 @contextlib.contextmanager
 def pass_scope(kind: str) -> Iterator[str]:
     """Mark every line of one supervision pass with a shared id, and time it.
@@ -88,12 +163,24 @@ def pass_scope(kind: str) -> Iterator[str]:
     # has never heard of it.
     previous = PASS.get()
     PASS.set(ident)
+    # ⚠️ A FRESH DICT PER PASS, SET HERE RATHER THAN DEFAULTED. The ContextVar's
+    # default is a single shared `{}`; contributing to that would accumulate
+    # across every pass in the process and report the sum as one run's figures.
+    previous_book = _CENSUS.get()
+    _CENSUS.set({})
     started = time.monotonic()
     log(f"── {kind} pass begins ──")
     try:
         yield ident
     finally:
+        # ⚠️ BEFORE THE END LINE AND INSIDE THE `finally`, so a pass that RAISED
+        # still reports what it managed to do — which is the case a census is
+        # most worth having, and the one a `try`-suffix version would lose.
+        line = _census_line(_CENSUS.get())
+        if line:
+            log(f"census: {line}")
         log(f"── {kind} pass ends after {time.monotonic() - started:.1f}s ──")
+        _CENSUS.set(previous_book)
         PASS.set(previous)
 
 

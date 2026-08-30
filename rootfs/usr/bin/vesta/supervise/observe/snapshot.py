@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, List, Mapping, Optional, Sequence
 
+from vesta.adapters.log import note
 from vesta.supervise.observe import salience as salience_mod
 
 # ── section headings, fixed so the prefix is stable ──────────────────────────
@@ -254,6 +255,20 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
                  "— equipment absent from this list still exists, and must be "
                  "looked up before saying anything about whether it is here):")
     ranked = [s for s in salient if s.score]
+    # ⚠️ WHAT THE MODEL WAS ACTUALLY GIVEN, recorded where the lists are still
+    # lists (2026-08-30). The pass log said only `document: N chars, N lines`,
+    # which proved the agent was blind once and could never say WHICH input was
+    # empty — and "no salient rows", "no standing faults" and "no coverage" are
+    # three different faults with three different fixes. ⚠️ `ranked`, NOT
+    # `salient`: an unscored row is in the list and not in the document, and
+    # counting the argument would report rows the model never saw.
+    note("doc_salient", len(ranked))
+    note("doc_concerns", len(list(concerns)))
+    note("doc_offline", int(offline_total))
+    note("doc_unscorable", int(unscorable))
+    note("doc_coverage",
+         "unknown" if not coverage else
+         ("complete" if coverage.get("complete") else "partial"))
     if ranked:
         for item in ranked:
             lines.append(f"  {_label_of(item, label_of)} — {item.reason}")

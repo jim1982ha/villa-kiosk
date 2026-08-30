@@ -402,6 +402,12 @@ def describe_document(document: str) -> None:
     """
     chars, lines = len(document), document.count("\n") + 1
     stage("document", f"{chars} chars, {lines} lines")
+    # ⚠️ COMPOSITION IS COUNTED IN `snapshot.delta`, NOT PARSED BACK OUT HERE.
+    # `480c/15L` told us the agent was blind and could not tell us WHICH input
+    # was empty — "no salient rows" and "no standing faults" are different
+    # faults with different fixes. Recovering that by matching the document's
+    # own prose headings would be an instrument that breaks whenever the wording
+    # is improved, so the counts are recorded where the lists are still lists.
     if chars < THIN_DOCUMENT_CHARS:
         warn(f"the villa document is {chars} chars — too thin to be about a "
              "villa; triage is about to run effectively blind")

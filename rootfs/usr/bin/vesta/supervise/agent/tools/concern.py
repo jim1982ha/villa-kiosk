@@ -59,7 +59,7 @@ from vesta.supervise.agent.refs import RefTable
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import fail
 from vesta.supervise.agent.tools.base import text
-from vesta.adapters.log import log, swallow
+from vesta.adapters.log import log, swallow, tally
 
 #: Where a concern lands when the model gives no confidence of its own.
 #: ⚠️ THE MIDDLE, NOT THE TOP. An unstated confidence is an unstated confidence.
@@ -322,6 +322,7 @@ class RaiseConcern(BaseTool):
         makes the line answer "which finding did we lose".
         """
         try:
+            tally("concerns_refused")
             log(f"concern REFUSED ({why}): {title[:80]}")
         except Exception as err:  # noqa: BLE001 - a log must not fail a refusal
             swallow("could not log a refused concern", err)

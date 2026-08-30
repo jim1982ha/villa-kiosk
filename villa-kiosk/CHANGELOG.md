@@ -1,3 +1,14 @@
+## 2.913.0
+
+### Added — one line at the end of a pass saying what the whole run did
+Every check costs money, so a single run should answer as much as possible. The
+per-tier lines each described one step and nothing summed them: what the model
+was given, what it cost, how much evidence an investigation gathered, how many
+escalations the per-pass cap dropped, and how many tool results were discarded
+were all either absent or scattered. A `census:` line now reports them together,
+fed through the pass context so no tier had to change its signature — and a pass
+that raises still prints what it managed before dying.
+
 ## 2.912.0
 
 ### Added — the triage line now says why a subject went unidentified

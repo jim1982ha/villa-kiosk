@@ -42,7 +42,7 @@ from vesta.supervise.agent.tools import ALL_TOOLS
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import fail
 from vesta.adapters import usage as usage_mod
-from vesta.adapters.log import log, swallow
+from vesta.adapters.log import log, swallow, tally
 
 
 class Registry:
@@ -477,6 +477,12 @@ async def invoke(registry: Registry, *, policy: policy_mod.RunPolicy,
         # eight calls in the run produced them — the one fact that turns a
         # sighting into a fix. An instrument that reports a leak without its
         # source is a hunt, not a finding.
+        # ⚠️ COUNTED AS WELL AS LOGGED. A refusal here DISCARDS THE WHOLE TOOL
+        # RESULT, so the run continues blind to whatever that tool was asked
+        # for — and on a quiet pass the only trace is one `swallow` line easily
+        # read as noise. The census makes it a number beside the pass's other
+        # numbers, where "investigated 2, tool_errors 1" reads as a finding.
+        tally("tool_errors")
         swallow(f"result of {tool.name} refused by the redaction audit",
                 RuntimeError("; ".join(problems[:3])))
         return Invocation([fail("internal",
