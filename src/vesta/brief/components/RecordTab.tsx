@@ -123,7 +123,16 @@ export default function RecordTab({ days = 31 }: { days?: number }) {
     <div className="reports-pane">
       <h3 className="settings-section-title">What happened</h3>
       <p className="muted body-text">
-        Everything the next briefing will summarise, newest first.
+        {/* ⚠️ IT SAID "everything the next briefing will summarise" AND SHOWED
+            31 DAYS (2026-08-30, owner: "I am not sure the WHAT HAPPENED is
+            consistent"). It is not: this list is a MONTH and a daily briefing
+            is a DAY, so the same automation read 19× here and "12 times" in
+            the message — both correct, about different windows, under a
+            sentence claiming they were the same. The count line below has
+            always named the real window; this heading was the liar. */}
+        Everything recorded, newest first — a longer view than any one
+        briefing. A daily briefing covers the current day only, so its counts
+        are smaller than these.
         <InfoHint label="What happened">
           <p>
             One record, filled the same way whether Supervision is ON or OFF —
@@ -141,9 +150,12 @@ export default function RecordTab({ days = 31 }: { days?: number }) {
             <strong>VESTA Agent</strong> rows are alerts from its
             investigations, tagged with what they are about — water,
             electrical, security. <strong>Noticed</strong> rows are things its
-            triage thought worth a closer look but never investigated, usually
-            because a budget or per-pass limit stopped it: worth reading if you
-            are deciding how often it should look.
+            triage thought worth a closer look, and each says what became of
+            it: <em>investigated, nothing to report</em> when it was looked at
+            and nothing was wrong, or <em>noticed, not investigated</em> when a
+            budget or per-pass limit stopped it before anyone looked. Only the
+            second is worth reading when you are deciding how often it should
+            look.
           </p>
           <p>
             Deleting a row deletes history — the next briefing will not mention
