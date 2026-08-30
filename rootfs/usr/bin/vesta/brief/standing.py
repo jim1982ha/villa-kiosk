@@ -109,6 +109,18 @@ def _now_ms(now: Optional[datetime] = None) -> float:
 
 
 def _parse_ms(value: Any) -> Optional[float]:
+    """An ISO stamp as epoch ms, or None.
+
+    ⚠️ DELIBERATELY NOT `shared.instants.as_utc`, AND THE DIFFERENCE IS THE
+    NAIVE CASE. That module reads a naive stamp as UTC, which is right for its
+    callers — the journal, the record and the collector are fed by producers
+    that are always tz-aware, so a naive value there can only be stored data
+    somebody edited. This one is fed by the FACILITY LEDGER, where `at` is
+    "when the work was done" and can come from a date picker as local
+    wall-clock; reading that as UTC would move a completion by the villa's whole
+    offset and can flip an overdue boundary. Two questions, two answers.
+    Converging them needs the ledger's stamp format established first.
+    """
     text = str(value or "").strip()
     if not text:
         return None
@@ -116,6 +128,48 @@ def _parse_ms(value: Any) -> Optional[float]:
         return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp() * 1000.0
     except ValueError:
         return None
+
+
+#: Below this, say so in words rather than "for 0 minutes".
+_UNDER_A_MINUTE_MS = 60_000.0
+#: Above this many hours, days read better than hours.
+_DAYS_FROM_HOURS = 48
+
+
+def _for_phrase(elapsed_ms: float) -> str:
+    """"for 7 days" / "for 3 hours" / "for 12 minutes" — how long it has been so.
+
+    ⚠️ THIS EXISTS BECAUSE THE SECTION STATED A FACT WITH NO DURATION, AND A
+    TELEVISION IS WHAT FOUND IT (owner's brief, 2026-08-30). An LG webOS set
+    drops its network connection when it is switched off, so it reports
+    `unavailable` about twelve seconds later — and rendered as the bare word, a
+    TV somebody turned off at bedtime was indistinguishable from two Zigbee
+    sensors that had been dead for a week. All four sat under "needs attention
+    right now" and only three of them did.
+    ⚠️ THE FIX IS INFORMATION, NOT SUPPRESSION. Nothing is hidden and no grace
+    window is applied: deciding a device is "not down enough to mention" is a
+    judgement this tier should not make silently, whereas "down for 2 minutes"
+    lets the reader make it in one glance. The owner chose this over a settling
+    window, and the alternative is recorded here so it is not re-litigated.
+    """
+    if elapsed_ms < _UNDER_A_MINUTE_MS:
+        return "for under a minute"
+    minutes = int(elapsed_ms // 60_000)
+    if minutes < 60:
+        return f"for {minutes} minute{'' if minutes == 1 else 's'}"
+    hours = minutes // 60
+    if hours < _DAYS_FROM_HOURS:
+        return f"for {hours} hour{'' if hours == 1 else 's'}"
+    # ⚠️ ALWAYS PLURAL, AND THAT IS FORCED BY THE CUTOVER ABOVE, NOT AN
+    # OVERSIGHT. We only reach here at `_DAYS_FROM_HOURS` (48) hours or more, so
+    # `days` is never below 2 and a singular branch here could never run.
+    # Mutation testing found the version that had one: deleting the singular
+    # left every test green, which is the signature of an unreachable branch.
+    # This repo's rule is that an unreachable case is worse than an absent one —
+    # it reads as "handled" to the next person. If the cutover ever drops below
+    # 48 hours, the singular comes back WITH a test that reaches it.
+    days = hours // 24
+    return f"for {days} days"
 
 
 def _rows(data: Mapping[str, Any], key: str) -> List[Dict[str, Any]]:
@@ -189,10 +243,23 @@ def build(entities: Mapping[str, Any],
     unavailable = devices_mod.filter_unavailable(selectable, entities)
 
     for entity_id in unavailable:
+        # ⚠️ THE STATE DUMP ALREADY CARRIES `last_changed`, so this is a dict
+        # lookup rather than a second call — the same reason `_labels` reads it
+        # here instead of asking Home Assistant again. A device whose stamp is
+        # missing or unreadable keeps the bare word: an unknown duration must
+        # not be rendered as a short one, which would say the opposite of what
+        # we know. ⚠️ `last_changed` IS RESET BY AN INTEGRATION RELOAD, so a
+        # long-dead device can briefly report a short outage. That is the
+        # honest limit of what a single state dump can say; it recovers by
+        # itself and never over-states how broken something is.
+        raw = entities.get(entity_id)
+        since = _parse_ms(raw.get("last_changed")) if isinstance(raw, dict) else None
+        detail = ("Unavailable" if since is None
+                  else f"Unavailable {_for_phrase(now_ms - since)}")
         items.append(Item(
             subject=f"unavailable:{entity_id}", kind="unavailable",
             title=devices_mod.label_for(entity_id, entity_map, entities),
-            detail="Unavailable", room=str(room_of.get(entity_id) or ""),
+            detail=detail, room=str(room_of.get(entity_id) or ""),
             entity_id=entity_id))
 
     for ticket in _rows(fm_data, "tickets"):

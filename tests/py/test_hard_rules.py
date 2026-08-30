@@ -72,6 +72,12 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `test_standing_duration`'s fixtures — single letters on purpose. What is
+    # under test is the DURATION phrase, so the device is deliberately anonymous
+    # and only its domain carries meaning (a media_player is the one that goes
+    # unavailable simply by being switched off).
+    "sensor.a_temperature", "sensor.b_temperature", "sensor.c_temperature",
+    "sensor.e_temperature", "media_player.d",
     # `test_level_shortfall`'s fixtures. Each names the KIND of equipment whose
     # behaviour the case turns on — a sauna is discretionary, a workshop runs
     # hard on some weekdays and barely on others — so the id is carrying the

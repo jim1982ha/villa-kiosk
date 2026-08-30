@@ -1,3 +1,15 @@
+## 2.901.0
+
+### Fixed — a TV switched off read exactly like a sensor dead for a week
+"Needs attention right now" printed a status word and no duration, so four
+items looked alike and only three were. An LG webOS set drops its network
+connection when powered off and reports unavailable about twelve seconds
+later; beside two Zigbee sensors down since last Sunday it was the same line.
+The section now says how long — "Unavailable for 7 days" against "for under a
+minute". Nothing is hidden and no grace window was added: deciding a device is
+not down enough to mention is a judgement this tier should not make silently.
+The stamp is already in the state dump, so it costs a lookup, not a call.
+
 ## 2.900.0
 
 ### Fixed — five comments said "three modules" the day there were four
