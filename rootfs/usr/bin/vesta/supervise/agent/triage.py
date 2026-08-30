@@ -371,15 +371,56 @@ async def run(*, provider: Provider, document: str,
     # returns, the mapping from the label the model wrote back to an entity id
     # is gone. Doing it in the caller would mean rebuilding a table whose
     # handles no longer mean what they meant.
-    _identify(found, getattr(reg, "refs", None))
+    refs = getattr(reg, "refs", None)
+    _identify(found, refs)
     named = sum(1 for e in found if e.entity_id)
     stage("triage", f"{len(found)} escalation(s) from {result.turns} turn(s)"
         # ⚠️ COUNTED, BECAUSE "identified 0 of 3" AND "identified 3 of 3" ARE
         # THE TWO OUTCOMES THAT DECIDE WHETHER THE HANDOVER PAGE CAN EVER SHOW
         # A MATCH, and they are otherwise indistinguishable from outside.
-        + (f", {named}/{len(found)} identified" if found else ""))
+        + (f", {named}/{len(found)} identified" if found else "")
+        + _unidentified_note(found, refs))
     return TriageResult(status="answered", escalations=found,
                         turns=result.turns, usage=result.usage)
+
+
+#: How many unidentified subjects the log line names before it stops.
+MAX_REPORTED_UNIDENTIFIED: int = 3
+
+
+def _unidentified_note(found: Sequence[Any], refs: Any) -> str:
+    """" (unidentified: 'x'; N candidate label(s))", or "" when all matched.
+
+    ⚠️ IT SEPARATES THE TWO CAUSES, WHICH `N/N identified` CANNOT (2026-08-30).
+    A pass read `0/1 identified` on two consecutive runs for a subject the villa
+    plainly HAS — labels of the shape the reverse rule was built for. That has
+    two completely different explanations needing opposite fixes: the matching
+    rule failed on labels it was given, or NO handle for that device was minted
+    this run and there was nothing to match against. `_identify` only ever sees
+    `refs.known()`, so the second is entirely possible and is invisible to every
+    test of the matcher — those hand it the labels directly, which is
+    `feedback_pin-the-caller` in its usual disguise.
+
+    ⚠️ THE SUBJECT IS THE MODEL'S OWN WORDS AND CARRIES NO ID, so it may be
+    logged; the candidate COUNT is logged rather than the labels, which would
+    put the villa's device list in the log on every quiet pass.
+
+    ⚠️ NEVER RAISES. A diagnostic on the end of a stage line must not be able to
+    fail the pass that produced it.
+    """
+    try:
+        missing = [e for e in found if not getattr(e, "entity_id", "")]
+        if not missing:
+            return ""
+        candidates = len(getattr(refs, "known", lambda: ())()) if refs else 0
+        shown = [f"{str(getattr(e, 'subject', ''))[:40]!r}"
+                 for e in missing[:MAX_REPORTED_UNIDENTIFIED]]
+        more = len(missing) - len(shown)
+        return (f" (unidentified: {', '.join(shown)}"
+                + (f", +{more} more" if more > 0 else "")
+                + f"; {candidates} candidate label(s))")
+    except Exception:  # noqa: BLE001 - a note must not fail the pass
+        return ""
 
 
 def due(config: Optional[Mapping[str, Any]] = None, *,

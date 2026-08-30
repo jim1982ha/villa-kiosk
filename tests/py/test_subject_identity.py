@@ -331,3 +331,57 @@ def test_the_share_rule_is_dimensionless() -> None:
     """⚠️ A ratio, never a character count — a threshold in characters is tuned
     to one property's naming and wrong on the next."""
     assert 0.0 < triage.REVERSE_MIN_SHARE < 1.0
+
+
+# ── the instrument: WHY a subject was not identified ────────────────────────
+
+def test_the_note_separates_a_failed_MATCH_from_an_empty_CANDIDATE_SET() -> None:
+    """⚠️ `N/N identified` CANNOT TELL THESE APART, AND THEY NEED OPPOSITE FIXES
+    (2026-08-30). Two consecutive live passes read `0/1 identified` for a subject
+    the villa plainly has, with labels of the shape the reverse rule was built
+    for. Either the matcher failed on labels it was given, or NO handle was
+    minted for that device this run and there was nothing to match against —
+    `_identify` only ever sees `refs.known()`, so the second is possible and is
+    invisible to every test of the matcher, which hands it the labels directly.
+    """
+    # A populated table: the matcher was given candidates and still missed.
+    matched_nothing = triage._unidentified_note([_Esc("Something Else")], VILLA)
+    assert "'Something Else'" in matched_nothing
+    assert "4 candidate label(s)" in matched_nothing
+
+    # An EMPTY table: nothing could ever have matched, whatever the rule does.
+    nothing_to_match = triage._unidentified_note([_Esc("Pool pump")], _Refs({}))
+    assert "0 candidate label(s)" in nothing_to_match
+
+
+def test_the_note_is_SILENT_when_every_subject_identified() -> None:
+    assert triage._unidentified_note([_identify("Pool pump")], VILLA) == ""
+    assert triage._unidentified_note([], VILLA) == ""
+
+
+def test_the_note_is_CAPPED_and_says_how_many_it_hid() -> None:
+    many = [_Esc(f"Unknown {i}") for i in range(6)]
+    note = triage._unidentified_note(many, VILLA)
+    assert "+3 more" in note, note
+    assert note.count("'Unknown") == triage.MAX_REPORTED_UNIDENTIFIED
+
+
+def test_the_note_carries_NO_entity_id() -> None:
+    """⚠️ THE SUBJECT IS THE MODEL'S OWN WORDS, so it may be logged; the
+    candidate COUNT is logged rather than the labels, which would put the
+    villa's device list into the log on every quiet pass."""
+    from vesta.supervise.agent import refs as refs_mod
+    note = triage._unidentified_note([_Esc("Pool pump circuit")], VILLA)
+    assert refs_mod.entity_ids_in(note) == [], note
+    assert "switch.pool" not in note
+
+
+def test_the_note_never_fails_the_PASS_that_produced_it() -> None:
+    """A diagnostic on the end of a stage line must not be able to raise."""
+    class _Boom:
+        def known(self) -> Any:
+            raise RuntimeError("table gone")
+
+    assert triage._unidentified_note([_Esc("x")], _Boom()) == ""
+    assert triage._unidentified_note([_Esc("x")], None) == (
+        " (unidentified: 'x'; 0 candidate label(s))")

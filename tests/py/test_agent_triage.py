@@ -238,3 +238,21 @@ def test_the_cadence_comes_from_config() -> None:
     assert triage.due(ON, since_minutes=20) is True
     assert triage.due(ON, since_minutes=5) is False
     assert triage.due({"triage_minutes": 0}, since_minutes=999) is False
+
+
+def test_the_pass_LOGS_why_a_subject_was_not_identified(capsys: Any) -> None:
+    """⚠️ `feedback_pin-the-caller`, AND MUTATION TESTING IS WHY THIS EXISTS.
+    `test_subject_identity` exercises `_unidentified_note` directly and stays
+    green when `triage.run` never appends it — deleting the call from the stage
+    line left all 25 of those assertions passing. A diagnostic nobody emits is
+    indistinguishable from no diagnostic, which is the exact shape that left the
+    degradation ladder unreachable for 57 releases.
+
+    The registry here has NO ref table, so nothing can be identified and the
+    note must appear with a candidate count of zero — which is itself the
+    distinction the note was added to make."""
+    _run([says("ESCALATE: house pump — cycling more than usual")])
+    line = capsys.readouterr().out
+    assert "1 escalation(s)" in line and "0/1 identified" in line, line
+    assert "unidentified: 'house pump'" in line, line
+    assert "0 candidate label(s)" in line, line

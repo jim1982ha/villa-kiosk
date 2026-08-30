@@ -1,3 +1,14 @@
+## 2.912.0
+
+### Added — the triage line now says why a subject went unidentified
+Two consecutive passes read "0/1 identified" for a device the villa plainly has,
+with labels of exactly the shape the matching rule was built for. That count
+cannot distinguish its two causes, and they need opposite fixes: the rule failed
+on labels it was given, or no handle was minted for that device in that run and
+there was nothing to match against. The line now names the subjects it could not
+place and how many candidate labels existed — zero being the tell. It carries no
+entity id, and it counts the labels rather than listing them.
+
 ## 2.911.0
 
 ### Added — a refused tool result now says which field tripped it
