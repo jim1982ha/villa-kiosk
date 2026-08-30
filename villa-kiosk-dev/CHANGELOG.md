@@ -1,3 +1,15 @@
+## 2.908.0
+
+### Fixed — an alert named a device by a handle and invented its figures
+A delivered warning read "Device d909 has stopped reporting … it showed
+[unsourced figure removed] against a median of [unsourced figure removed]",
+about a duty-cycled sensor the journal watched change 1,056 times in the 72
+hours it called silent. Three faults: handles are per-run and had no mapping
+back to the villa's label, so one reached the owner already unresolvable; a body
+whose figures cite nothing was stored rather than refused; and no tier compared
+a silence claim against what the villa had observed. Refusals are now logged, so
+a finding dropped this way is visible rather than simply absent.
+
 ## 2.907.0
 
 ### Fixed — the docs stated a deployed version, and it was wrong
