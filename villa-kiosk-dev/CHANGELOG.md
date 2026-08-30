@@ -1,3 +1,15 @@
+## 2.910.0
+
+### Fixed — the agent kept reading "switched off" as "broken"
+Three consecutive live passes invented the same finding: a metered device whose
+power sits at zero reported as offline or not reporting. Every one was healthy —
+in the clearest case a lighting circuit had simply been off for two days, so
+zero was the correct reading. Downstream guards caught them by accident, on
+uncitable numbers rather than on the false claim. The always-loaded evidence
+playbook now separates "the value is zero" from "there is no value", and names
+the three checks that tell them apart. It also said figures were stripped before
+delivery, which stopped being true in 2.908.0 — they now refuse the concern.
+
 ## 2.909.0
 
 ### Fixed — the new silence guard would have refused a real offline alert
