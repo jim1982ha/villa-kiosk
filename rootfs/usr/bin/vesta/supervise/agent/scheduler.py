@@ -420,13 +420,15 @@ def _subject_key_of(esc: Any) -> str:
     cased, whitespace-collapsed. A flag keyed differently from the concern it
     becomes cannot be joined at all, which is the defect 2.752.0 measured as a
     Handover column reading 0 by construction.
+
+    ⚠️ THE BODY MOVED TO `contracts.subject_key_of` (2026-08-30) AND THIS
+    DOCSTRING STAYED, because it is the record of why the spelling matters.
+    `reason` needs the identical key to stamp the row this writes, re-derived
+    it, and got the whitespace rule wrong — so the derivation now has one home
+    that both can import.
     """
     from vesta.supervise.agent import contracts as agent_contracts
-    ref = str(getattr(esc, "entity_id", "") or "").strip()
-    if ref:
-        return agent_contracts.subject_key(ref)
-    topic = " ".join(str(getattr(esc, "subject", "") or "").split()).lower()
-    return agent_contracts.subject_key(f"topic:{topic}")
+    return agent_contracts.subject_key_of(esc)
 
 
 async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:

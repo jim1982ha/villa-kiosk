@@ -196,6 +196,36 @@ def subject_key(subject: str) -> str:
     return _canonical(str(subject))
 
 
+
+def subject_key_of(item: Any) -> str:
+    """The subject key for an ESCALATION — the join between a flag and what
+    becomes of it.
+
+    ⚠️ ONE SPELLING, BECAUSE FOUR READERS NEED IT AND A FOURTH COPY SHIPPED
+    (2026-08-30). `scheduler` derives this when it WRITES a flag's row and
+    `reason` needs the identical key when it STAMPS that row as investigated.
+    My first cut re-derived it in `reason` with `.strip().lower()` where the
+    writer uses `" ".join(split()).lower()` — agreeing on "Pool Pump" and
+    diverging on any subject with a doubled space or a tab, which makes the
+    stamp a silent no-op. That is precisely what `scheduler._subject_key_of`'s
+    own docstring warns about: "a flag keyed differently from the concern it
+    becomes cannot be joined at all".
+
+    ⚠️ IT LIVES HERE because `scheduler` imports `reason`, so `reason` cannot
+    import `scheduler` back, and `contracts` is what both already depend on and
+    what owns `subject_key` itself.
+
+    ⚠️ THE `topic:` FORM IS WHITESPACE-COLLAPSED, copied from
+    `concern._subject`. Three shapes arrive — a `triage.Escalation`, a queued
+    approval, an audit row rebuilt from one — so both fields are read with
+    `getattr` and a missing entity id is "no device", a real answer.
+    """
+    ref = str(getattr(item, "entity_id", "") or "").strip()
+    if ref:
+        return subject_key(ref)
+    topic = " ".join(str(getattr(item, "subject", "") or "").split()).lower()
+    return subject_key(f"topic:{topic}")
+
 def args_digest(args: Any) -> str:
     """CTR-013/CTR-020. A stable fingerprint of a tool call's arguments.
 

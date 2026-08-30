@@ -89,3 +89,73 @@ def test_the_stamp_is_wired_to_the_end_of_an_investigation() -> None:
     assert "_mark_looked_at(item)" in src, (
         "an investigation no longer records that it happened")
     assert "stamp_outcome" in inspect.getsource(reason._mark_looked_at)
+
+
+# ── the writer and the stamper must agree on the key ────────────────────────
+class _Esc:
+    """A `triage.Escalation` as far as the key derivation is concerned."""
+    def __init__(self, subject: str, entity_id: str = "") -> None:
+        self.subject, self.entity_id = subject, entity_id
+
+
+def test_the_writer_and_the_stamper_derive_the_same_key() -> None:
+    """⚠️ THE DEFECT INSIDE THE FIX, FOUND BY THE OWNER ASKING WHAT CHANGED
+    (2026-08-30). `scheduler` writes a flag's row keyed with the topic form
+    whitespace-COLLAPSED; my first stamper used `.strip().lower()`. Those agree
+    on "Pool Pump" and diverge on any subject with a doubled space or a tab —
+    so the stamp silently matched nothing and the fix did nothing, for exactly
+    the subjects nobody would think to test.
+
+    ⚠️ THE CASE THAT DISCRIMINATES IS INTERNAL WHITESPACE. A test using only
+    tidy names passes against both spellings, which is how this got committed.
+    """
+    from vesta.supervise.agent import contracts as agent_contracts
+    from vesta.supervise.agent import scheduler as scheduler_mod
+
+    for subject in ("Pool Pump", "Pool  Pump", "Main Power  Phase B",
+                    "AP\tCorridor 2F", "  padded  name  "):
+        item = _Esc(subject)
+        assert scheduler_mod._subject_key_of(item) == \
+            agent_contracts.subject_key_of(item), (
+                f"the writer and the stamper disagree about {subject!r}, so a "
+                "flag can never be marked investigated")
+
+
+def test_the_topic_form_matches_THE_CONCERN_not_merely_itself() -> None:
+    """⚠️ THE PREVIOUS TEST SURVIVED A MUTATION AND THIS IS WHY. Asserting the
+    writer and the stamper agree proves only that they share a function — swap
+    the spelling inside it and both move together, still agreeing, still wrong.
+    What matters is agreement with `concern._subject`, which is what a flag has
+    to join: it collapses internal whitespace, so a doubled space MUST key the
+    same as a single one. Under `.strip().lower()` it does not."""
+    from vesta.supervise.agent import contracts as agent_contracts
+
+    single = agent_contracts.subject_key_of(_Esc("Pool Pump"))
+    doubled = agent_contracts.subject_key_of(_Esc("Pool  Pump"))
+    tabbed = agent_contracts.subject_key_of(_Esc("Pool\tPump"))
+    assert single == doubled == tabbed, (
+        "the topic key is not whitespace-collapsed, so it cannot match the "
+        "concern raised about the same subject")
+
+    # …and the same string, keyed the way `concern._subject` keys it.
+    expected = agent_contracts.subject_key("topic:pool pump")
+    assert single == expected, (
+        "the flag and the concern would hash one subject to two keys")
+
+
+def test_an_entity_backed_subject_keys_on_the_id() -> None:
+    """⚠️ AND THE ENTITY FORM WINS OVER THE TOPIC FORM, which is what lets a
+    flag join the concern it becomes — the concern hashes the id."""
+    from vesta.supervise.agent import contracts as agent_contracts
+    keyed = agent_contracts.subject_key_of(_Esc("anything at all", "sensor.x"))
+    assert keyed == agent_contracts.subject_key("sensor.x")
+
+
+def test_the_derivation_has_one_home() -> None:
+    """⚠️ `grep -L`. Two spellings of one key is what this whole family of bugs
+    is; the scheduler must delegate rather than keep a copy that ages."""
+    import inspect
+    from vesta.supervise.agent import scheduler as scheduler_mod
+    body = inspect.getsource(scheduler_mod._subject_key_of)
+    assert "subject_key_of(esc)" in body, "the scheduler re-derives the key again"
+    assert '" ".join' not in body, "a second spelling of the topic form is back"

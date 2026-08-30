@@ -310,11 +310,14 @@ def _mark_looked_at(item: Any) -> None:
     from vesta.adapters import record as record_mod
     from vesta.supervise.agent import contracts as agent_contracts
     try:
-        entity_id = _entity_of(item)
-        key = (agent_contracts.subject_key(entity_id) if entity_id
-               else agent_contracts.subject_key(
-                   "topic:" + str(_subject_of(item)).strip().lower()))
-        record_mod.stamp_outcome(key, INVESTIGATED_NOTHING, source="triage")
+        # ⚠️ THE SAME DERIVATION THE WRITER USES, NOT A SECOND ONE. My first
+        # cut spelled the topic form with `.strip().lower()` where `scheduler`
+        # collapses whitespace, so a subject with a doubled space produced a
+        # key nothing could match and the stamp was a silent no-op — the exact
+        # defect `subject_key_of`'s docstring describes, committed in the fix
+        # for it.
+        record_mod.stamp_outcome(agent_contracts.subject_key_of(item),
+                                 INVESTIGATED_NOTHING, source="triage")
     except Exception as err:  # noqa: BLE001 - a note must never cost the pass
         swallow("could not mark a flag as investigated", err)
 
