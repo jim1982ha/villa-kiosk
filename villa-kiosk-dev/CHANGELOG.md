@@ -1,3 +1,15 @@
+## 2.915.0
+
+### Removed — a weekday-aware baseline that never ran, and its 28-day window
+Salience could score a device against what it does on that weekday. It had one
+caller, which never asked for it, so the branch was unreachable outside the
+tests — and the 28-day window existed only to justify it, read by no code at
+all. The job is not lost: the analysis modules already judge a device against
+its own same-weekday median, over eight weeks of Home Assistant statistics,
+having concluded that four weeks is too few. Rebuilding it here would have been
+a second, shorter copy of a rule that already works. The as-built document
+stopped claiming it, and stopped calling seven readings seven days.
+
 ## 2.914.0
 
 ### Fixed — a device name that read as an entity id, and a space before a digit
