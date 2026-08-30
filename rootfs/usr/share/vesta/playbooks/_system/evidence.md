@@ -3,8 +3,8 @@ kind: playbook
 name: evidence
 domain: _system
 description: Every figure cites a tool result. If you cannot cite it, do not say it.
-version: 1
-last_confirmed: 2026-08-23
+version: 2
+last_confirmed: 2026-08-30
 ---
 
 # The rule
@@ -14,10 +14,11 @@ last_confirmed: 2026-08-23
 Not approximately. Not from memory of an earlier turn you are no longer looking
 at. If you write a wattage, a tool result in this run returned that wattage.
 
-The renderer enforces this: a figure that matches no evidence row is stripped
-before anybody reads it, and the strip is counted. That is not a safety net you
-should lean on — it is there because asking nicely does not work, and a stripped
-sentence reads worse than one you never wrote.
+This is enforced, and the enforcement REFUSES the concern: if any figure in it
+matches no evidence row, nothing is recorded and nothing is delivered. Not
+stripped and sent anyway — refused. So an unsourced number does not cost you a
+word, it costs the whole finding, and if you have no turns left to rewrite it
+the finding is simply lost.
 
 # How to cite
 
@@ -57,6 +58,29 @@ do not, equally, and the reader cannot tell them apart.
 
 **Hedge the claim, never the report.** Confidence belongs on the conclusion, not
 sprayed across the evidence.
+
+# A reading of zero is a reading
+
+⚠️ **"The value is zero" and "there is no value" are different findings, and
+treating them as one has repeatedly produced a false alert about healthy
+equipment.** Most metered equipment in a villa is duty-cycled: a lighting
+circuit, a bathroom fan, an irrigation pump draw nothing for most of the day and
+their median is legitimately zero. A meter sitting at zero is reporting, and
+reporting correctly, that the thing it measures is switched off.
+
+Before writing that a device has stopped reporting, gone offline, or has no
+data, establish which of these you are looking at:
+
+* **Was the load ever switched on in the window?** A circuit reading zero while
+  its own switch has been off all week is idle, not broken.
+* **Do the device's OTHER metrics report** — voltage, temperature, link
+  quality? A meter whose siblings are live is a live meter with nothing to
+  measure.
+* **Many devices publish only on CHANGE**, so a steady value produces no new
+  reading for hours. A gap in the record is not silence from the device.
+
+If you cannot separate them, describe what you saw — "drew nothing for two
+days" — and leave the conclusion to a person. That sentence is true either way.
 
 # If you cannot cite it, do not say it
 
