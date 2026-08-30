@@ -69,10 +69,17 @@ DEFAULT_CONFIDENCE: float = 0.5
 #: ⚠️ MATCHED ON THE CLAIM, NOT ON THE SEVERITY OR THE FLAG TYPE. The alert that
 #: caused this was a `warning` about a healthy sensor; nothing about its metadata
 #: was unusual and only the sentence was false.
+#: ⚠️ `offline` AND `unresponsive` ARE BARE, WITH NO VERB IN FRONT (2026-08-30).
+#: The first cut required one — `is offline`, `went offline` — and the very next
+#: live pass produced the titles "Kitchen And Dining Light power meter offline"
+#: and "Bedroom 1 Light: power reading zero but energy accumulating". Neither
+#: matched. A model writes a headline, not a sentence, and the commonest headline
+#: form is the bare adjective.
 _SILENCE_CLAIM = re.compile(
     r"stopped\s+report|no\s+longer\s+report|not\s+report|zero\s+readings?"
-    r"|no\s+readings?|has\s+gone\s+(?:quiet|offline|dark)|is\s+offline"
-    r"|went\s+offline|stopped\s+responding|unavailable\s+for",
+    r"|no\s+readings?|has\s+gone\s+(?:quiet|offline|dark)"
+    r"|\boffline\b|\bunresponsive\b|no\s+data\b"
+    r"|stopped\s+responding|unavailable\s+for",
     re.IGNORECASE)
 
 #: How recently a device must have been observed for a silence claim about it to

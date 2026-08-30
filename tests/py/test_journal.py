@@ -365,13 +365,27 @@ def test_last_report_at_is_EMPTY_for_an_entity_the_journal_never_heard_of() -> N
     assert journal.last_report_at("") == ""
 
 
-def test_a_REMOVAL_still_counts_as_having_been_heard_from() -> None:
-    """⚠️ UNLIKE `last_states`, WHICH DROPS IT. There the question is "what state
-    do I seed"; here it is "did the villa hear from this id", and hearing that it
-    went away is hearing from it."""
+def test_a_row_recording_the_devices_ABSENCE_is_not_a_report() -> None:
+    """⚠️ THE GUARD WOULD OTHERWISE BE INVERTED. A removal and a transition to
+    `unavailable` are the journal recording that the villa STOPPED hearing from
+    this id. Counting them would make a device that went offline twenty minutes
+    ago look freshly seen, and `tools/concern._silence_contradiction` would then
+    refuse the CORRECT alert saying so — the guard turned against the one case it
+    most needs to allow."""
     journal.append([
         _changed("light.gone", at="2026-08-22T08:00:00+00:00"),
         _changed("light.gone", new=None, at="2026-08-22T11:00:00+00:00"),
     ], now_iso="2026-08-22T11:00:00+00:00")
     assert "light.gone" not in journal.last_states()
-    assert journal.last_report_at("light.gone") == "2026-08-22T11:00:00+00:00"
+    assert journal.last_report_at("light.gone") == "2026-08-22T08:00:00+00:00"
+
+    # ⚠️ A DIFFERENT ID PER STATE rather than a reset between them: the journal
+    # has no public truncate and the fixture is per-test, so re-appending would
+    # measure the two states against one accumulating ring.
+    for entity, absent in zip(("light.a", "light.b"), journal.UNAVAILABLE_STATES):
+        journal.append([
+            _changed(entity, new="on", at="2026-08-22T08:00:00+00:00"),
+            _changed(entity, old="on", new=absent,
+                     at="2026-08-22T11:00:00+00:00"),
+        ], now_iso="2026-08-22T11:00:00+00:00")
+        assert journal.last_report_at(entity) == "2026-08-22T08:00:00+00:00", absent

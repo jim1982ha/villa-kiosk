@@ -427,10 +427,19 @@ def last_report_at(entity_id: str) -> str:
     design: a row here means the villa observed this device change, and no
     reading of "it stopped reporting" survives that.
 
-    ⚠️ A REMOVAL ROW STILL COUNTS AS A REPORT, unlike in `last_states`. There the
-    question is "what state do I seed", so a departed entity must be dropped;
-    here the question is "did the villa hear from this id", and hearing that it
-    went away is hearing from it.
+    ⚠️ A ROW RECORDING THE DEVICE'S ABSENCE IS NOT THE DEVICE REPORTING, AND
+    MISSING THAT WOULD HAVE INVERTED THE WHOLE GUARD. A removal (`s` is None) and
+    a transition to `unavailable`/`unknown` are the journal recording that the
+    villa STOPPED hearing from this id — so counting them would make a device
+    that went offline twenty minutes ago look freshly seen, and the one caller
+    would then refuse the correct alert saying so. Found by reasoning about the
+    caller before shipping, not by a test: every fixture had a device reporting a
+    real value, so nothing was red.
+
+    ⚠️ THIS IS THE OPPOSITE CHOICE FROM `last_states` AND BOTH ARE RIGHT. There
+    the question is "what state do I seed" and a departed entity must be dropped;
+    here it is "did the villa hear a READING", and an absence is the absence of
+    one.
     """
     wanted = str(entity_id or "").strip()
     if not wanted:
@@ -438,6 +447,9 @@ def last_report_at(entity_id: str) -> str:
     newest = ""
     for row in read()["entries"]:
         if not isinstance(row, dict) or str(row.get("id") or "") != wanted:
+            continue
+        value = row.get("s")
+        if value is None or str(value).lower() in UNAVAILABLE_STATES:
             continue
         # Entries are chronological, but comparing rather than taking the last
         # costs nothing and survives a ring that is ever written out of order.

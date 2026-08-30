@@ -1,3 +1,14 @@
+## 2.909.0
+
+### Fixed — the new silence guard would have refused a real offline alert
+A device going unavailable journals a row at that moment, and 2.908.0's
+`last_report_at` counted it as the device REPORTING — so one that went offline
+twenty minutes ago read as freshly seen, and the guard would have refused the
+correct alert saying so. Absence rows are now skipped. The claim pattern also
+required a verb (`is offline`), and the next live pass produced the headlines
+"Kitchen And Dining Light power meter offline" and "sensor unresponsive", which
+matched nothing: a model writes a headline, not a sentence.
+
 ## 2.908.0
 
 ### Fixed — an alert named a device by a handle and invented its figures

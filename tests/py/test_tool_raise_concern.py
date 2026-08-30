@@ -705,3 +705,30 @@ def test_a_REFUSED_concern_is_never_lost_silently(
     # ⚠️ A refusal is still a payload: no entity id may ride out on it.
     from vesta.supervise.agent import refs as refs_mod
     assert refs_mod.entity_ids_in(unsourced + silence) == []
+
+
+@pytest.mark.parametrize("title", [
+    # ⚠️ THE TWO REAL TITLES FROM THE LIVE PASS OF 2026-08-30 that the first cut
+    # of _SILENCE_CLAIM did not match, because it required a verb in front of
+    # "offline". A model writes a HEADLINE, not a sentence.
+    "Kitchen And Dining Light power meter offline",
+    "Bedroom 1 Light sensor unresponsive",
+    "Pool pump: no data for three days",
+])
+def test_a_BARE_silence_headline_is_matched_too(title: str) -> None:
+    blocks = _call(_tool(cfg={"shadow": False}, last_seen_hours=lambda _e: 0.05),
+                   title=title, body="The device has not been seen.")
+    assert "error" in blocks[0], (title, blocks)
+    assert concerns.read() == [], title
+
+
+def test_a_device_that_REALLY_went_offline_can_still_be_reported() -> None:
+    """⚠️ THE CASE THE VETO MUST NOT EAT. A device going unavailable journals a
+    row at that moment, so counting it as "a report" would make a device that
+    went offline twenty minutes ago look freshly seen and refuse the correct
+    alert. `journal.last_report_at` skips absence rows for exactly this; here the
+    floor says "last real reading was 9 hours ago" and the concern lands."""
+    blocks = _call(_tool(cfg={"shadow": False}, last_seen_hours=lambda _e: 9.0),
+                   title="Pool pump offline", body="No readings since morning.")
+    assert "error" not in blocks[0], blocks
+    assert len(concerns.read()) == 1
