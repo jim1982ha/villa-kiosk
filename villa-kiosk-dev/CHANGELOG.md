@@ -1,3 +1,14 @@
+## 2.899.0
+
+### Added — a device that runs SHORT can now be reported at all
+Every level check watched for MORE. `level_anomaly` computes a rise and skips
+anything below its threshold, so a pump losing ten minutes off its cycle daily
+was unreportable by construction — the reflex sees the cliff, nothing saw the
+slope. `level_shortfall` is that missing half, and takes over `roi_runtime_cap`,
+retired at the cutover with nothing named to replace it. Salience also read a
+duty-cycled device as one population, scoring an ordinary 850 W pump run as a
+673-sigma event against a mostly-zero median; it now splits rest from load.
+
 ## 2.898.0
 
 ### Added — a pass now says which checks ran, so a finding that stops appearing can be explained
