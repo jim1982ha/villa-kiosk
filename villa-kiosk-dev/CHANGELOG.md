@@ -1,3 +1,16 @@
+## 2.895.0
+
+### Fixed — the briefing said two subjects were never looked at, and they were
+"What VESTA looked at" listed three pumps as "noticed, not investigated" while
+the audit recorded two of them as investigations that ran and correctly found
+nothing; only the third was genuinely past the per-pass cap. A flag's outcome was
+stamped from one place — after a concern is raised — so "nothing was wrong" and
+"nobody looked" were stored identically. The tablet had it right, reading the
+audit verdict, so the two surfaces described one event differently. An
+investigation now records that it happened, and the brief has three states
+instead of two: a concern's own words, "investigated, nothing to report", or
+"noticed, not investigated".
+
 ## 2.894.0
 
 ### Changed — one owner for reading a timestamp, so the window bug cannot recur
