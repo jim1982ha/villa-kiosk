@@ -25,7 +25,7 @@ Imports nothing, by design — see the layering note in `__init__.py`.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Final, List, Tuple
+from typing import Any, Callable, Dict, Final, List, Optional, Tuple
 
 #: Bumped when a value's MEANING changes, never for an addition.
 CONTRACT_VERSION: Final[int] = 1
@@ -195,36 +195,109 @@ def subject_key(subject: str) -> str:
     from vesta.shared.analysis.base import subject_key as _canonical
     return _canonical(str(subject))
 
+# ⚠️ `subject_key_of` (THE SINGULAR) WAS DELETED, NOT MOVED (2026-08-30). It
+# became `subject_keys_of(...)[0]` when subjects learned to carry several
+# devices, and at that point every shipped caller needed the PLURAL — a caller
+# still asking for one key is exactly how a two-device subject loses a device
+# at a hand-off. `test_reachability` is what flagged the orphan the same hour.
+# Its docstring's history (the writer/stamper whitespace divergence) lives on
+# at `subject_keys_of` and in `tests/py/test_flag_outcome.py`.
 
 
-def subject_key_of(item: Any) -> str:
-    """The subject key for an ESCALATION — the join between a flag and what
-    becomes of it.
+def subject_entities(item: Any) -> List[str]:
+    """Every device behind a subject, in the order the subject names them.
 
-    ⚠️ ONE SPELLING, BECAUSE FOUR READERS NEED IT AND A FOURTH COPY SHIPPED
-    (2026-08-30). `scheduler` derives this when it WRITES a flag's row and
-    `reason` needs the identical key when it STAMPS that row as investigated.
-    My first cut re-derived it in `reason` with `.strip().lower()` where the
-    writer uses `" ".join(split()).lower()` — agreeing on "Pool Pump" and
-    diverging on any subject with a doubled space or a tab, which makes the
-    stamp a silent no-op. That is precisely what `scheduler._subject_key_of`'s
-    own docstring warns about: "a flag keyed differently from the concern it
-    becomes cannot be joined at all".
+    ⚠️ THE PLURAL EXISTS BECAUSE THE MODEL WRITES PLURAL SUBJECTS AND THE
+    SINGULAR THREW THE REST AWAY (2026-08-30). A delivered brief carried "Pool
+    Pump and Massage Jet Pump — investigated, nothing to report" NEXT TO "Pool
+    Pump — noticed, not investigated": one escalation named two devices,
+    `_identify` kept whichever label sorted first, and the pool pump's own flag
+    could never be stamped by the investigation that had just covered it — so
+    the brief read as the system disagreeing with itself, about one pump.
 
-    ⚠️ IT LIVES HERE because `scheduler` imports `reason`, so `reason` cannot
-    import `scheduler` back, and `contracts` is what both already depend on and
-    what owns `subject_key` itself.
-
-    ⚠️ THE `topic:` FORM IS WHITESPACE-COLLAPSED, copied from
-    `concern._subject`. Three shapes arrive — a `triage.Escalation`, a queued
-    approval, an audit row rebuilt from one — so both fields are read with
-    `getattr` and a missing entity id is "no device", a real answer.
+    Reads `entity_ids` first and falls back to the singular `entity_id`,
+    because three shapes arrive (a `triage.Escalation`, a `reason.Queued`, an
+    audit row rebuilt from one) and only the newest carries the plural. An
+    empty list is "no device", a real answer — "coverage incomplete" has no
+    equipment behind it and must keep its topic key.
     """
-    ref = str(getattr(item, "entity_id", "") or "").strip()
-    if ref:
-        return subject_key(ref)
+    plural = getattr(item, "entity_ids", None)
+    if isinstance(plural, (list, tuple)):
+        ids = [str(i or "").strip() for i in plural]
+        ids = [i for i in ids if i]
+        if ids:
+            return ids
+    single = str(getattr(item, "entity_id", "") or "").strip()
+    return [single] if single else []
+
+
+def subject_keys_of(item: Any) -> List[str]:
+    """One key per device behind the subject, or the one topic key. Never empty.
+
+    ⚠️ THE FIRST ELEMENT IS EXACTLY WHAT THE OLD SINGULAR `subject_key_of`
+    RETURNED; that function was deleted with its last shipped caller — one
+    derivation, however many devices.
+    Every consumer that joins on the subject (the flag writer, the stamper, the
+    concern, the brief's merge) must iterate THIS list, not re-derive one key,
+    or a multi-device subject joins on one device and silently drops the rest.
+    """
+    keys = [subject_key(i) for i in subject_entities(item)]
+    if keys:
+        return keys
     topic = " ".join(str(getattr(item, "subject", "") or "").split()).lower()
-    return subject_key(f"topic:{topic}")
+    return [subject_key(f"topic:{topic}")]
+
+
+def flag_rows(item: Any, label_of: Optional[Callable[[str], str]] = None
+              ) -> List[Dict[str, Any]]:
+    """The record rows one triage flag writes — THE one shape, one writer rule.
+
+    ⚠️ NAMES ARE THE VILLA'S, NOT THE MODEL'S (2026-08-30). The flag row's
+    `title` used to be the model's own subject phrase, which is spelled
+    differently on every pass ("Pool Pump", "the pool pump circuit", "Pool Pump
+    and Massage Jet Pump") — so one device appeared under several names in the
+    brief and nothing could group them. The rule, stated once: a subject's
+    IDENTITY is its device(s); its DISPLAY NAME is the villa's own label for
+    them (`sources.labeller`, the same ladder the kiosk and the brief already
+    agree on); the model's phrasing is PROVENANCE and survives in `subject`
+    and `detail`, never as the grouping key or the rendered name. A record
+    that shows a single run's transcript (the audit) keeps the model's words;
+    a surface that AGGREGATES (the brief) uses these titles.
+
+    ⚠️ ONE ROW PER DEVICE, because every join downstream is per-device: the
+    concern a follow-up raises carries ONE device's key, `stamp_outcome`
+    stamps per key, and the brief's merge collapses per key. A single row for
+    "Pool Pump and Massage Jet Pump" is a row only one of them can ever join.
+    The escalation EVENT count lives in the audit (`escalated=`), so splitting
+    here double-counts nothing. A subject with no device writes one topic row.
+
+    ⚠️ AN EMPTY LABEL FALLS BACK TO THE MODEL'S TEXT, never to the entity id:
+    the labeller degrades to "" on any failure, and a raw id in a brief is the
+    exact leak `PAYLOAD_ALLOWED_FIELDS` exists to stop one layer later.
+    """
+    subject = " ".join(str(getattr(item, "subject", "") or "").split())
+    detail = str(getattr(item, "reason", "") or "")
+    ids = subject_entities(item)
+    if not ids:
+        return [{
+            "source": "triage", "subject": subject,
+            "subject_key": subject_keys_of(item)[0],
+            "title": subject, "detail": detail, "severity": "notice",
+        }]
+    rows: List[Dict[str, Any]] = []
+    for entity_id in ids:
+        label = ""
+        if label_of is not None:
+            try:
+                label = str(label_of(entity_id) or "")
+            except Exception:  # noqa: BLE001 - a name is not worth a lost flag
+                label = ""
+        rows.append({
+            "source": "triage", "subject": subject,
+            "subject_key": subject_key(entity_id),
+            "title": label or subject, "detail": detail, "severity": "notice",
+        })
+    return rows
 
 def args_digest(args: Any) -> str:
     """CTR-013/CTR-020. A stable fingerprint of a tool call's arguments.

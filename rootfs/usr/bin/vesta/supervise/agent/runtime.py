@@ -147,25 +147,45 @@ class _Bounded:
 
 
 def _seeded(messages: Sequence[Mapping[str, Any]],
-            seed: Optional[Tuple[str, str]],
+            seed: Optional[Tuple[Any, str]],
             refs: Any) -> Sequence[Mapping[str, Any]]:
-    """`messages`, with the subject's freshly-minted handle named up front.
+    """`messages`, with every subject device's freshly-minted handle up front.
 
     ⚠️ UNCHANGED WHEN THERE IS NOTHING TO SEED, byte for byte, so every path
     that does not pass a seed sends exactly what it sent before — including
     chat, which must not acquire a sentence about a device nobody named.
+
+    ⚠️ `seed[0]` MAY BE ONE ID OR A SEQUENCE OF THEM (2026-08-30). An
+    escalation naming a pair used to seed only its first device, so the model
+    investigating "Pool Pump and Massage Jet Pump" was handed one handle and
+    had to rediscover the other through search — the exact tool whose results
+    `redact.audit` refuses. The single-id sentence is byte-identical to what
+    it always was; only a genuinely plural subject reads differently.
     """
     if not seed or refs is None or not messages:
         return messages
-    entity_id, label = str(seed[0] or ""), str(seed[1] or "")
-    if not entity_id:
+    raw, label = seed[0], str(seed[1] or "")
+    ids = ([str(i or "") for i in raw]
+           if isinstance(raw, (list, tuple)) else [str(raw or "")])
+    ids = [i for i in ids if i]
+    if not ids:
         return messages
-    ref = refs.ref_for(entity_id, label)
-    if not ref:
+    # ⚠️ THE LABEL IS THE SUBJECT PHRASE and belongs to the whole subject, not
+    # to any one device — attach it only when there is exactly one, or the pair
+    # would be introduced as two devices each named after both.
+    handles = [refs.ref_for(i, label if len(ids) == 1 else "") for i in ids]
+    handles = [h for h in handles if h]
+    if not handles:
         return messages
-    note = (f"The device this is about is {ref}"
-            + (f" ({label})" if label else "")
-            + ". Use that handle when you record a concern about it.")
+    if len(handles) == 1:
+        note = (f"The device this is about is {handles[0]}"
+                + (f" ({label})" if label else "")
+                + ". Use that handle when you record a concern about it.")
+    else:
+        listed = ", ".join(handles[:-1]) + f" and {handles[-1]}"
+        note = (f"The devices this is about are {listed}"
+                + (f" ({label})" if label else "")
+                + ". Use those handles when you record a concern about them.")
     out = [dict(m) for m in messages]
     out[0]["content"] = f"{note}\n\n{out[0].get('content', '')}"
     return out
@@ -183,7 +203,7 @@ async def investigate(*, provider: Provider,
                       #: `(entity_id, label)` this run is ABOUT, minted into
                       #: the run's handle table before the first turn. See the
                       #: seeding block below.
-                      seed: Optional[Tuple[str, str]] = None,
+                      seed: Optional[Tuple[Any, str]] = None,
                       session: Any = None,
                       tier: str = "reason",
                       trigger: str = "manual",

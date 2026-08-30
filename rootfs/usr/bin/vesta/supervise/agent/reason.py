@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.supervise.agent import audit as audit_mod
+from vesta.supervise.agent import contracts as agent_contracts
 from vesta.supervise.agent import budget as budget_mod
 from vesta.supervise.agent import config as agent_config
 from vesta.supervise.agent import playbooks
@@ -182,6 +183,7 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
                                  actor="agent", trigger=trigger,
                                  verdict=audit_mod.AWAITING,
                                  subject=_subject_of(item),
+                                 entity_ids=_ids_of(item),
                                  detail=str(getattr(item, "reason", "") or ""))
         out.queued = len(escalations)
         stage("reason", f"{out.queued} escalation(s) queued for approval")
@@ -215,6 +217,7 @@ async def follow_up(escalations: Sequence[Any], *, provider: Provider,
                                      actor="agent", trigger=trigger,
                                      verdict=audit_mod.DEFERRED,
                                      subject=_subject_of(rest),
+                                     entity_ids=_ids_of(rest),
                                      detail=str(getattr(rest, "reason", "") or ""))
             break
         money = budget_mod.check(config, kind="run")
@@ -256,6 +259,7 @@ async def investigate_subject(item: Any, *, provider: Provider,
     subject = _subject_of(item)
     audit_mod.record_run(run_id, actor="agent", trigger=trigger,
                          verdict="escalated", subject=subject,
+                         entity_ids=_ids_of(item),
                          detail=str(getattr(item, "reason", "") or ""))
     try:
         result = await runtime.investigate(
@@ -271,10 +275,14 @@ async def investigate_subject(item: Any, *, provider: Provider,
             # measurement and for why the list is what the agent's own trace
             # says it calls rather than what looked useful.
             tool_names=tool_names_for(config),
-            # ⚠️ THE ID TRAVELS, THE HANDLE DOES NOT — see `triage.Escalation`
-            # and `runtime._seeded`. Empty for a subject with no device behind
-            # it ("coverage incomplete"), which correctly keeps a topic key.
-            seed=(_entity_of(item), subject),
+            # ⚠️ THE IDS TRAVEL, THE HANDLES DO NOT — see `triage.Escalation`
+            # and `runtime._seeded`. ALL of them (2026-08-30): an escalation
+            # naming a pair used to seed only the first device, so the model
+            # investigating "Pool Pump and Massage Jet Pump" was handed one
+            # handle and had to rediscover the other or drop it. Empty for a
+            # subject with no device behind it ("coverage incomplete"), which
+            # correctly keeps a topic key.
+            seed=(agent_contracts.subject_entities(item), subject),
             config=config, session=session, tier="reason",
             trigger=trigger, run_id=run_id)
     except Exception as err:  # noqa: BLE001 - the clock must survive this
@@ -308,16 +316,24 @@ async def investigate_subject(item: Any, *, provider: Provider,
 def _mark_looked_at(item: Any) -> None:
     """Stamp the triage row for `item` as investigated. Never raises."""
     from vesta.adapters import record as record_mod
-    from vesta.supervise.agent import contracts as agent_contracts
     try:
         # ⚠️ THE SAME DERIVATION THE WRITER USES, NOT A SECOND ONE. My first
-        # cut spelled the topic form with `.strip().lower()` where `scheduler`
+        # cut spelled the topic form with `.strip().lower()` where the writer
         # collapses whitespace, so a subject with a doubled space produced a
         # key nothing could match and the stamp was a silent no-op — the exact
         # defect `subject_key_of`'s docstring describes, committed in the fix
         # for it.
-        record_mod.stamp_outcome(agent_contracts.subject_key_of(item),
-                                 INVESTIGATED_NOTHING, source="triage")
+        #
+        # ⚠️ EVERY KEY, NOT THE FIRST (2026-08-30). `contracts.flag_rows`
+        # writes one row per device an escalation names, so an investigation
+        # of "Pool Pump and Massage Jet Pump" has TWO rows to stamp — stamping
+        # one left the other reading "noticed, not investigated" in the same
+        # brief that said the pair was investigated. A key whose row a concern
+        # already stamped is skipped by `stamp_outcome` itself (it only takes
+        # unstamped rows), so the concern's words still win.
+        for key in agent_contracts.subject_keys_of(item):
+            record_mod.stamp_outcome(key, INVESTIGATED_NOTHING,
+                                     source="triage")
     except Exception as err:  # noqa: BLE001 - a note must never cost the pass
         swallow("could not mark a flag as investigated", err)
 
@@ -355,10 +371,32 @@ def tool_names_for(config: Optional[Mapping[str, Any]] = None
 
 @dataclass
 class Queued:
-    """One escalation waiting for a person, as the queue hands it back."""
+    """One escalation waiting for a person, as the queue hands it back.
+
+    ⚠️ `entity_ids` IS THE FIELD THAT KEEPS APPROVAL HONEST (2026-08-30). It
+    was absent, so a person approving an escalation about a named device got an
+    investigation whose concern keyed on `topic:<text>` — a key the rules side
+    can never produce, re-opening the handover mismatch through the one path
+    that involves a human explicitly saying yes.
+    """
 
     subject: str = ""
     reason: str = ""
+    entity_ids: Tuple[str, ...] = ()
+
+
+def _queued_from(row: Mapping[str, Any]) -> Queued:
+    """An audit row back into the shape `investigate_subject` takes.
+
+    ⚠️ EXTRACTED so the round-trip (write a row, rebuild it, derive its keys)
+    is testable without running an approval — the defect it guards against is
+    exactly a field silently dropped at this crossing.
+    """
+    ids = tuple(i.strip() for i in
+                str(row.get("entity_ids") or "").split(",") if i.strip())
+    return Queued(subject=str(row.get("subject") or ""),
+                  reason=str(row.get("detail") or ""),
+                  entity_ids=ids)
 
 
 async def approve(run_id: str, *, provider: Provider, session: Any = None,
@@ -389,8 +427,7 @@ async def approve(run_id: str, *, provider: Provider, session: Any = None,
     if not money.allowed:
         return False, money.reason
 
-    item = Queued(subject=str(row.get("subject") or ""),
-                  reason=str(row.get("detail") or ""))
+    item = _queued_from(row)
     ran = await investigate_subject(item, provider=provider, config=config,
                                     document=document, trigger=trigger,
                                     session=session, run_id=wanted)
@@ -428,15 +465,17 @@ def _ident(trigger: str, index: int, now: Optional[float] = None) -> str:
     return f"{trigger}{stamp}-e{index + 1}"
 
 
-def _entity_of(item: Any) -> str:
-    """The entity id behind an escalated subject, or "" when there is none.
+def _ids_of(item: Any) -> str:
+    """The devices behind an escalated subject, comma-joined for an audit row.
 
-    ⚠️ `getattr`, LIKE `_subject_of` BESIDE IT, because three shapes arrive
-    here — a `triage.Escalation`, a `Queued` from the approval path, and the
-    audit row an approval is rebuilt from — and only the first has ever carried
-    this. A missing attribute is "no device", which is a real answer.
+    ⚠️ `getattr` UNDERNEATH, LIKE `_subject_of` BESIDE IT, because three shapes
+    arrive here — a `triage.Escalation`, a `Queued` from the approval path, and
+    the audit row an approval is rebuilt from. An empty string is "no device",
+    which is a real answer. (This replaced `_entity_of`, whose singular answer
+    was the reason an escalation naming two devices lost one of them at every
+    hand-off.)
     """
-    return str(getattr(item, "entity_id", "") or "")
+    return ",".join(agent_contracts.subject_entities(item))
 
 
 def _subject_of(item: Any) -> str:

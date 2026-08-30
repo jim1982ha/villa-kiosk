@@ -69,6 +69,17 @@ ROW_FIELDS: Final[Tuple[str, ...]] = (
     # splitting my own sentence is precisely what the `doc_chars` note above
     # was written about, one release earlier and in this same file.
     "subject",
+    # ⚠️ THE DEVICES BEHIND THE SUBJECT, COMMA-JOINED — because the approval
+    # path was quietly re-opening the handover bug 2.752.0 closed (2026-08-30).
+    # `triage._identify` attaches entity ids so a concern keys on the DEVICE,
+    # but a queued row stored only the subject TEXT, so `reason.approve`
+    # rebuilt an escalation with no ids and the approved investigation filed a
+    # device subject under a `topic:` key nothing else can ever produce — the
+    # exact "matched column is 0 by construction" defect, back through a door
+    # nobody re-tested. The subject stays the MODEL'S words (this file is a
+    # transcript, and rewriting what the model said would be falsifying it);
+    # identity travels beside the words, never instead of them.
+    "entity_ids",
 )
 
 #: Rows describing an intent that never got an outcome. Named because the count
@@ -138,12 +149,18 @@ def _append(row: Mapping[str, Any]) -> bool:
 # ── runs ────────────────────────────────────────────────────────────────────
 def record_run(run_id: str, *, actor: str, trigger: str,
                verdict: str = "started", detail: str = "", subject: str = "",
+               entity_ids: str = "",
                now: Optional[float] = None) -> bool:
-    """One row for a run's start or end. No action_key — a run is not an action."""
+    """One row for a run's start or end. No action_key — a run is not an action.
+
+    `entity_ids` is the comma-joined device list behind the subject — see the
+    ROW_FIELDS note: it is what lets an APPROVED escalation keep its device
+    identity instead of degrading to a topic key.
+    """
     return _append({
         "at": _now_iso(now), "run_id": str(run_id), "actor": str(actor),
         "tool": f"run:{trigger}", "verdict": str(verdict), "detail": detail,
-        "subject": subject,
+        "subject": subject, "entity_ids": entity_ids,
     })
 
 

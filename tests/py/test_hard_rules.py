@@ -72,6 +72,12 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `test_subject_identity`'s fixtures — the pool/jet pair reproduces the
+    # delivered brief's exact shape (one escalation naming two devices, plus a
+    # power and a power-factor sensor whose labels nest), which is the geometry
+    # under test. Domains and archetypes only; no property was consulted.
+    "switch.pool", "switch.jet", "sensor.jet_power", "sensor.jet_pf",
+    "switch.unmapped",
     # `test_standing_duration`'s fixtures — single letters on purpose. What is
     # under test is the DURATION phrase, so the device is deliberately anonymous
     # and only its domain carries meaning (a media_player is the one that goes

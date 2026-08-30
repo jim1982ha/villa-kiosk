@@ -123,6 +123,13 @@ class Escalation:
     #: It is never sent to a model — `reason.investigate_subject` seeds it into
     #: the new run's table and the model only ever sees the new handle.
     entity_id: str = ""
+    #: ⚠️ EVERY device the subject names, in the order it names them; the
+    #: singular above is always the first and stays for its existing readers.
+    #: One escalation routinely covers a pair ("Pool Pump and Massage Jet
+    #: Pump"), and keeping only one device meant the other's flag could never
+    #: be stamped by the investigation that covered it — see
+    #: `contracts.subject_entities` for the delivered-brief symptom.
+    entity_ids: Tuple[str, ...] = ()
 
 
 @dataclass
@@ -196,11 +203,30 @@ def _identify(items: Sequence[Escalation], refs: Any) -> None:
         # every assertion green, which is the definition of a line that is not
         # doing anything. Longest label first, so a specific one beats a
         # substring of it.
-        hit = None
+        #
+        # ⚠️ EVERY NON-OVERLAPPING MATCH IS KEPT, NOT ONLY THE FIRST
+        # (2026-08-30). "Pool Pump and Massage Jet Pump" names two devices, and
+        # keeping one meant the other's flag was never stamped by the
+        # investigation that covered it — the delivered brief then showed the
+        # same pump "noticed, not investigated" beside "investigated". Longest
+        # label first still decides SPECIFICITY: a label whose span sits inside
+        # an already-claimed span is the general name of equipment a more
+        # specific label already matched ("Massage Jet Pump" inside "Massage
+        # Jet Pump Power Factor"), and claiming it too would attach a second
+        # device to one mention. Devices are ordered by where the subject
+        # names them, so the primary is the one the model led with.
+        claimed: list = []          # (start, end) spans already matched
+        found_at: dict = {}         # entity -> first position in the subject
         for label in sorted(known, key=len, reverse=True):
-            if label in subject:
-                hit = known[label]
-                break
+            start = subject.find(label)
+            while start >= 0:
+                end = start + len(label)
+                if all(end <= s or start >= e for s, e in claimed):
+                    claimed.append((start, end))
+                    found_at.setdefault(known[label], start)
+                    break
+                start = subject.find(label, start + 1)
+        hits = sorted(found_at, key=lambda entity: found_at[entity])
         # ⚠️ AND THE REVERSE, BECAUSE A MODEL SHORTENS AS OFTEN AS IT PADS
         # (2026-08-28). Two live passes logged `0/5 identified`: triage wrote
         # "Jacuzzi Pump" for devices labelled "Jacuzzi Pump Energy" and
@@ -213,13 +239,14 @@ def _identify(items: Sequence[Escalation], refs: Any) -> None:
         # contained in labels of UNRELATED devices cannot happen without those
         # devices sharing a name prefix, in which case the equipment is the
         # same and either id gives the handover a real key where it had none.
-        if hit is None and len(subject) >= 4:
+        if not hits and len(subject) >= 4:
             containing = sorted((l for l in known if subject in l),
                                 key=lambda l: (len(l), l))
             if containing:
-                hit = known[containing[0]]
-        if hit:
-            item.entity_id = hit
+                hits = [known[containing[0]]]
+        if hits:
+            item.entity_id = hits[0]
+            item.entity_ids = tuple(hits)
 
 
 def registry_for(full: Optional[Registry] = None, *,

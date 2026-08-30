@@ -1,3 +1,15 @@
+## 2.902.0
+
+### Fixed — one pump, two names, opposite verdicts in the same brief
+"Pool Pump — noticed, not investigated" sat beside "Pool Pump and Massage Jet
+Pump — investigated, nothing to report". Three causes: a flag's title was the
+model's own phrasing, respelled every pass; an escalation naming two devices
+kept only one, so the other's flag was never stamped by the investigation that
+covered it; and an approved escalation dropped its entity ids, re-keying a
+device subject as a topic nothing else can match. One rule, owned by contracts:
+identity is the device(s), the name is the villa's label, the model's words are
+provenance. Flags, stamps, seeds and approval now carry every device.
+
 ## 2.901.0
 
 ### Fixed — a TV switched off read exactly like a sensor dead for a week

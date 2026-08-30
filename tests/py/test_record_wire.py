@@ -110,11 +110,18 @@ def test_the_id_pair_that_prevents_double_counting_is_written_by_both_sides() ->
     triage flag and the concern that resolves it. If either stops writing it,
     the briefing silently counts one story twice; nothing else would notice,
     because both rows render perfectly well on their own."""
-    triage = _py("vesta", "supervise", "agent", "scheduler.py")
+    # ⚠️ THE FLAG WRITER MOVED to `contracts.flag_rows` (2026-08-30), so the
+    # literal is asserted where the row is BUILT and the scheduler is pinned
+    # as its caller — a grep of scheduler.py alone would now match only prose,
+    # which is the comment trap this suite has already been caught by.
+    flags = _py("vesta", "supervise", "agent", "contracts.py")
+    scheduler = _py("vesta", "supervise", "agent", "scheduler.py")
     concern = _py("vesta", "supervise", "agent", "tools", "concern.py")
-    assert '"subject_key"' in triage, "the triage writer dropped the join key"
+    assert '"subject_key"' in flags, "the flag writer dropped the join key"
+    assert "flag_rows(" in scheduler, (
+        "the scheduler no longer writes flags through contracts.flag_rows")
     assert '"subject_key"' in concern, "the concern writer dropped the join key"
-    assert "subject_key(" in triage or "_subject_key_of" in triage, (
+    assert "subject_key(" in flags, (
         "the flag's key is no longer computed from the shared hash — a "
         "hand-spelled copy is how the two sides stop matching")
 

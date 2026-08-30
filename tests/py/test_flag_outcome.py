@@ -110,15 +110,20 @@ def test_the_writer_and_the_stamper_derive_the_same_key() -> None:
     tidy names passes against both spellings, which is how this got committed.
     """
     from vesta.supervise.agent import contracts as agent_contracts
-    from vesta.supervise.agent import scheduler as scheduler_mod
 
     for subject in ("Pool Pump", "Pool  Pump", "Main Power  Phase B",
                     "AP\tCorridor 2F", "  padded  name  "):
         item = _Esc(subject)
-        assert scheduler_mod._subject_key_of(item) == \
-            agent_contracts.subject_key_of(item), (
-                f"the writer and the stamper disagree about {subject!r}, so a "
-                "flag can never be marked investigated")
+        # ⚠️ THE WRITER IS `contracts.flag_rows` NOW (2026-08-30) — the
+        # scheduler's inline dict and its `_subject_key_of` alias were deleted
+        # with the move, so the agreement is asserted where the keys are BORN:
+        # every row a flag writes must carry a key the stamper will derive.
+        written = {row["subject_key"]
+                   for row in agent_contracts.flag_rows(item)}
+        stamped = set(agent_contracts.subject_keys_of(item))
+        assert written == stamped, (
+            f"the writer and the stamper disagree about {subject!r}, so a "
+            "flag can never be marked investigated")
 
 
 def test_the_topic_form_matches_THE_CONCERN_not_merely_itself() -> None:
@@ -130,9 +135,9 @@ def test_the_topic_form_matches_THE_CONCERN_not_merely_itself() -> None:
     same as a single one. Under `.strip().lower()` it does not."""
     from vesta.supervise.agent import contracts as agent_contracts
 
-    single = agent_contracts.subject_key_of(_Esc("Pool Pump"))
-    doubled = agent_contracts.subject_key_of(_Esc("Pool  Pump"))
-    tabbed = agent_contracts.subject_key_of(_Esc("Pool\tPump"))
+    single = agent_contracts.subject_keys_of(_Esc("Pool Pump"))[0]
+    doubled = agent_contracts.subject_keys_of(_Esc("Pool  Pump"))[0]
+    tabbed = agent_contracts.subject_keys_of(_Esc("Pool\tPump"))[0]
     assert single == doubled == tabbed, (
         "the topic key is not whitespace-collapsed, so it cannot match the "
         "concern raised about the same subject")
@@ -147,15 +152,25 @@ def test_an_entity_backed_subject_keys_on_the_id() -> None:
     """⚠️ AND THE ENTITY FORM WINS OVER THE TOPIC FORM, which is what lets a
     flag join the concern it becomes — the concern hashes the id."""
     from vesta.supervise.agent import contracts as agent_contracts
-    keyed = agent_contracts.subject_key_of(_Esc("anything at all", "sensor.x"))
+    keyed = agent_contracts.subject_keys_of(
+        _Esc("anything at all", "sensor.x"))[0]
     assert keyed == agent_contracts.subject_key("sensor.x")
 
 
 def test_the_derivation_has_one_home() -> None:
     """⚠️ `grep -L`. Two spellings of one key is what this whole family of bugs
-    is; the scheduler must delegate rather than keep a copy that ages."""
+    is; the scheduler must call `contracts.flag_rows` rather than keep an
+    inline dict that ages — that inline dict is exactly where `title` was the
+    model's phrasing for a release, so the pin now guards the CALLER
+    (`feedback_pin-the-caller`: a perfect helper nobody calls changes
+    nothing)."""
     import inspect
+    from vesta.supervise.agent import contracts as agent_contracts
     from vesta.supervise.agent import scheduler as scheduler_mod
-    body = inspect.getsource(scheduler_mod._subject_key_of)
-    assert "subject_key_of(esc)" in body, "the scheduler re-derives the key again"
+    body = inspect.getsource(scheduler_mod)
+    assert "flag_rows(" in body, (
+        "the scheduler no longer writes flags through contracts.flag_rows")
+    rows_body = inspect.getsource(agent_contracts.flag_rows)
+    assert "subject_key(" in rows_body and "subject_keys_of(" in rows_body, (
+        "flag_rows re-derives the key instead of using the one owner")
     assert '" ".join' not in body, "a second spelling of the topic form is back"

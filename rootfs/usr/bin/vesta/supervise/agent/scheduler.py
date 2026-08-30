@@ -184,16 +184,19 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     # record carries `subject_key`, the SAME key `raise_concern` stamps on the
     # concern, so the briefing groups a flag and the concern it became into one
     # story rather than counting the event twice.
+    # ⚠️ THE ROWS COME FROM `contracts.flag_rows`, THE ONE SHAPE (2026-08-30).
+    # This loop used to build the dict inline with `title: esc.subject` — the
+    # MODEL'S phrasing, spelled differently every pass, which is why one pump
+    # appeared under three names in a delivered brief. The rule and its
+    # reasons live at `flag_rows`; the labeller is built once per pass, not
+    # per row, because it reads the config file when constructed.
     from vesta.adapters import record as record_mod
+    from vesta.supervise.agent import contracts as contracts_mod
+    from vesta.supervise.agent import sources as sources_mod
+    label_of = sources_mod.labeller()
     for esc in result.escalations:
-        record_mod.append({
-            "source": "triage",
-            "subject": esc.subject,
-            "subject_key": _subject_key_of(esc),
-            "title": esc.subject,
-            "detail": esc.reason,
-            "severity": "notice",
-        })
+        for row in contracts_mod.flag_rows(esc, label_of):
+            record_mod.append(row)
 
     # ⚠️ THE ESCALATIONS ARE FOLLOWED, NOT FORMATTED. This function used to build
     # the sentence below and return — so Tier 2 told Tier 3 nothing, ever, and
@@ -404,31 +407,13 @@ def describe_document(document: str) -> None:
              "villa; triage is about to run effectively blind")
 
 
-def _subject_key_of(esc: Any) -> str:
-    """The join between a flag and the concern it becomes.
-
-    ⚠️ DELEGATES TO `contracts.subject_key`, WHICH IS THE ONE OWNER — my first
-    draft re-spelled `sha256(...)[:16]` inline, which would have been a FOURTH
-    copy of a hash that `analysis.base`, `agent.contracts` and `tools.concern`
-    already share. That file's own docstring records why: two hashes of one
-    string that disagree because one was cut at 16 and the other at 12 is the
-    shape this subsystem keeps paying for, and an independent copy that happens
-    to agree today is worse than one that disagrees, because it drifts the
-    first time either is touched.
-
-    ⚠️ AND THE `topic:` FORM IS COPIED FROM `concern._subject` EXACTLY — lower-
-    cased, whitespace-collapsed. A flag keyed differently from the concern it
-    becomes cannot be joined at all, which is the defect 2.752.0 measured as a
-    Handover column reading 0 by construction.
-
-    ⚠️ THE BODY MOVED TO `contracts.subject_key_of` (2026-08-30) AND THIS
-    DOCSTRING STAYED, because it is the record of why the spelling matters.
-    `reason` needs the identical key to stamp the row this writes, re-derived
-    it, and got the whitespace rule wrong — so the derivation now has one home
-    that both can import.
-    """
-    from vesta.supervise.agent import contracts as agent_contracts
-    return agent_contracts.subject_key_of(esc)
+# ⚠️ `_subject_key_of` LIVED HERE UNTIL 2026-08-30 AND WAS DELETED WITH ITS
+# CALLER, not orphaned: the flag rows are now built by `contracts.flag_rows`,
+# which derives every key through `contracts.subject_keys_of` — the same one
+# home the stamper uses. Its docstring's warning (a flag keyed differently from
+# the concern it becomes cannot be joined at all) moved to `flag_rows`, and
+# `tests/py/test_flag_outcome.py` pins the agreement at that site now. An alias
+# kept only for tests is a reader that measures nothing.
 
 
 async def _pass(session: Any, config: Optional[Mapping[str, Any]]) -> str:
