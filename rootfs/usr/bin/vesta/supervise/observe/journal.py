@@ -80,9 +80,20 @@ JOURNAL_FILE: Final[str] = f"{VESTA_DIR}/journal.json"
 #: The heartbeat measured this property at 7,322 rows/day, so 20,000 held 2.84
 #: DAYS — and salience builds every baseline from whatever is in this ring, so a
 #: three-day memory absorbs slow drift instead of reporting it: a pump degrading
-#: a few percent a week simply becomes its own new normal. 105,000 is ~14 days,
-#: which is longer than the drift timescales that matter (weeks) and is the
-#: largest step defensible without measuring the write cost first.
+#: a few percent a week simply becomes its own new normal.
+#:
+#: ⚠️ "105,000 IS ~14 DAYS" WAS TRUE AT 7,322 ROWS/DAY AND IS NOT NOW. The rate
+#: has been measured at 7,322, then 9,355, then 9,441 across three releases, so
+#: the SAME bound now holds ~11.1 days. Do not quote a day figure from this
+#: comment — the heartbeat prints the live one, and the rate is climbing.
+#:
+#: ⚠️ AND THE 28-DAY TARGET THAT USED TO SIT HERE IS GONE (2026-08-30). It read
+#: "28 days is the spec's intent and is the next step IF the heartbeat shows
+#: this one holding", and that intent was `salience.WINDOW_DAYS`, which was
+#: DELETED once it turned out to have no code reader and to exist only to
+#: justify a weekday refinement that never ran (v2.915.0). Nothing asks this
+#: ring for 28 days any more. What DOES ask, and what the bound must therefore
+#: clear, is `MIN_DAYS_REQUIRED` below.
 #:
 #: ⚠️ THE COST IS PAID 96 TIMES A DAY AND NO SETTING REDUCES IT. `append` is a
 #: whole-file read-modify-write on the OBSERVATION cadence
@@ -99,6 +110,28 @@ JOURNAL_FILE: Final[str] = f"{VESTA_DIR}/journal.json"
 #: journal fills the disk on a property nobody visits, so the bound is asserted
 #: in the tests rather than trusted.
 JOURNAL_MAX_ENTRIES: Final[int] = 105_000
+
+#: The deepest span any reader of this ring actually asks for, in DAYS.
+#:
+#: ⚠️ DERIVED FROM THE READERS ON 2026-08-30, NOT CHOSEN. Two ask for a span and
+#: both ask for the same one — 168 hours: `concerns.VERIFY_AFTER_HOURS`, whose
+#: own comment says it must "sit well inside the observation journal" or every
+#: verdict becomes `cannot_verify` forever; and `tools/read.MAX_WINDOW_HOURS`,
+#: the furthest back the model may ask `read_villa` for coverage. Everything
+#: else needs far less: the villa document's delta is 24 h, the silence veto
+#: looks back 1 h, and `cycle`'s restart baseline wants only the newest row per
+#: entity.
+#:
+#: ⚠️ SALIENCE ASKS FOR NO SPAN AT ALL, which is the correction that produced
+#: this constant. It needs `MIN_SAMPLES` READINGS per entity, so ring depth
+#: changes HOW MANY entities are scorable, never whether the window is long
+#: enough. An entity that never changes is unscorable at any bound.
+#:
+#: ⚠️ IT LIVES HERE BECAUSE `observe` MAY NOT IMPORT `agent`. Restating a number
+#: is normally this project's cardinal sin, so it is PINNED rather than trusted:
+#: `test_journal.test_the_required_span_matches_its_two_sources` reads both real
+#: constants and fails if either moves.
+MIN_DAYS_REQUIRED: Final[float] = 7.0
 
 #: Attribute names admitted by rule 3. Commanded or discrete; never a mirror of
 #: a measurement that has its own entity. Keep it SHORT — every addition is

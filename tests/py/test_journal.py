@@ -389,3 +389,72 @@ def test_a_row_recording_the_devices_ABSENCE_is_not_a_report() -> None:
                      at="2026-08-22T11:00:00+00:00"),
         ], now_iso="2026-08-22T11:00:00+00:00")
         assert journal.last_report_at(entity) == "2026-08-22T08:00:00+00:00", absent
+
+
+# ── the bound is judged against what actually reads the ring ────────────────
+
+def test_the_required_span_matches_its_two_sources() -> None:
+    """⚠️ `MIN_DAYS_REQUIRED` RESTATES A NUMBER THAT LIVES ELSEWHERE, which is
+    normally this project's cardinal sin — so it is PINNED rather than trusted.
+    `observe` may not import `agent`, so the value cannot be derived at runtime;
+    this reads both real constants instead and fails the moment either moves.
+
+    Two readers ask this ring for a SPAN, and both ask for 168 hours:
+    `concerns.VERIFY_AFTER_HOURS`, whose own comment says it must sit inside the
+    journal or every verdict becomes `cannot_verify` forever, and
+    `read.MAX_WINDOW_HOURS`, the furthest back the model may ask `read_villa`
+    for coverage."""
+    from vesta.supervise.agent import concerns
+    from vesta.supervise.agent.tools import read as read_tools
+
+    deepest_hours = max(concerns.VERIFY_AFTER_HOURS,
+                        read_tools.MAX_WINDOW_HOURS)
+    assert journal.MIN_DAYS_REQUIRED == deepest_hours / 24.0, (
+        f"a reader now asks for {deepest_hours} h but the journal still "
+        f"believes {journal.MIN_DAYS_REQUIRED} days is enough")
+
+
+def test_the_bound_CLEARS_the_required_span_at_the_measured_rate() -> None:
+    """⚠️ THE ARITHMETIC THE BOUND EXISTS TO SATISFY, checked rather than
+    asserted in prose. At the rate measured on the reference property
+    (9,441 rows/day on 2026-08-30) the bound must still hold the deepest span
+    any reader asks for — otherwise concern verification silently returns
+    `cannot_verify` forever and nothing connects that to the ring."""
+    measured_rows_per_day = 9_441
+    capacity_days = journal.JOURNAL_MAX_ENTRIES / measured_rows_per_day
+    assert capacity_days >= journal.MIN_DAYS_REQUIRED, (
+        f"the bound holds {capacity_days:.1f} days at the measured rate but "
+        f"{journal.MIN_DAYS_REQUIRED} are required")
+
+
+def test_the_heartbeat_REPORTS_the_margin(capsys: Any) -> None:
+    """⚠️ `feedback_pin-the-caller`: the constant above is worth nothing if no
+    line ever prints it. The margin is what makes a shrinking ring visible
+    BEFORE it starts returning `cannot_verify`."""
+    from vesta.supervise.observe import heartbeat
+
+    lines = heartbeat.report({
+        "entries": 77_000, "bound": journal.JOURNAL_MAX_ENTRIES,
+        "at_bound": False, "span_days": 8.2, "rows_per_day": 9_441,
+        "entities": 1_269, "cycles": 1, "mean_rows": 97.0, "restarts": 1,
+        "seeded": 1_255, "uptime_hours": 0.0, "complete": True,
+        "online_since": "2026-08-25T11:31:02+00:00", "talkers": {},
+    })
+    ring = "\n".join(lines)
+    assert "capacity 11.1d vs 7d needed (1.59x)" in ring, ring
+    assert "TOO SHALLOW" not in ring, ring
+
+
+def test_the_heartbeat_SAYS_SO_when_the_ring_is_too_shallow(capsys: Any) -> None:
+    """A margin under 1 is a silent permanent failure; it must arrive as a
+    fault, not as a statistic a reader might notice."""
+    from vesta.supervise.observe import heartbeat
+
+    lines = heartbeat.report({
+        "entries": 77_000, "bound": journal.JOURNAL_MAX_ENTRIES,
+        "at_bound": True, "span_days": 5.0, "rows_per_day": 30_000,
+        "entities": 1_269, "cycles": 1, "mean_rows": 97.0, "restarts": 1,
+        "seeded": 1_255, "uptime_hours": 0.0, "complete": True,
+        "online_since": "2026-08-25T11:31:02+00:00", "talkers": {},
+    })
+    assert "TOO SHALLOW" in "\n".join(lines)

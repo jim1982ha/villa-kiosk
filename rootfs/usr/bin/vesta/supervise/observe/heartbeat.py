@@ -175,9 +175,28 @@ def report(snap: Mapping[str, Any]) -> List[str]:
     if rate and not snap["at_bound"]:
         days_left = (bound - total) / float(rate)
 
+    # ⚠️ CAPACITY AT THE CURRENT RATE, AGAINST WHAT THE READERS ACTUALLY ASK FOR
+    # (2026-08-30). The span above is what the ring HOLDS TODAY and grows until
+    # it binds; this is what it will hold once it does, which is the number that
+    # decides whether the bound is big enough. Judged against
+    # `journal.MIN_DAYS_REQUIRED` — derived from the two 168-hour readers — and
+    # NOT against 28 days, which was `salience.WINDOW_DAYS` and is deleted.
+    capacity = (bound / float(rate)) if rate else None
+    margin = ""
+    if capacity is not None:
+        need = journal.MIN_DAYS_REQUIRED
+        margin = (f" capacity {capacity:.1f}d vs {need:g}d needed"
+                  f" ({capacity / need:.2f}x)"
+                  # ⚠️ SAID AS A FAULT WHEN IT IS ONE. A margin under 1 means
+                  # concern verification asks `coverage` about a period the ring
+                  # no longer holds, and every verdict is `cannot_verify` — a
+                  # silent, permanent failure nobody would connect to this line.
+                  + (" TOO SHALLOW" if capacity < need else ""))
+
     ring = (f"heartbeat ring {total:,}/{bound:,} ({pct:.1f}%"
             + (" FULL, evicting oldest" if snap["at_bound"] else "")
             + f") span {_num(snap.get('span_days'), 'd', 2)}"
+            + margin
             + f" rate {_num(rate, '/day', 0)}"
             + f" entities {snap['entities']:,}"
             + (f" fills in {days_left:.1f}d" if days_left is not None else "")

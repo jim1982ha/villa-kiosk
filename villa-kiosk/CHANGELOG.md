@@ -1,3 +1,15 @@
+## 2.916.0
+
+### Changed — the observation record is now judged against what reads it
+Its depth was measured against 28 days, a figure that came from the weekday
+baseline deleted in 2.915.0 and that nothing asks for any more. Re-derived from
+the readers: two want a span and both want seven days — concern verification,
+which returns "cannot verify" forever if the record is shorter, and the furthest
+back the assistant may ask about coverage. Everything else needs a day or less,
+and scoring needs a count of readings rather than a span at all. The hourly
+diagnostic line now prints capacity against that requirement and says so when it
+would fall short.
+
 ## 2.915.0
 
 ### Removed — a weekday-aware baseline that never ran, and its 28-day window
