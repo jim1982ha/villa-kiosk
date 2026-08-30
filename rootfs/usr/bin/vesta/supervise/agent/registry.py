@@ -156,9 +156,9 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
         # `build_tools` and lost. It is the run's only ref table: the read tools
         # mint handles into it and `raise_concern` resolves them back out of it.
         # ⚠️ THE SESSION IS FORWARDED (TASK-070). It was omitted while every
-        # tool here read local state only; the three statistical checks read
+        # tool here read local state only; the statistical checks read
         # long-run statistics from Home Assistant, so a session-less build
-        # would publish three tools that can only ever refuse — the exact
+        # would publish tools that can only ever refuse — the exact
         # "wired to nothing" shape this function's own docstring records
         # paying for once already.
         built = list(sources.build_tools(session, config=config, refs=refs))

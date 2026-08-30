@@ -1,3 +1,14 @@
+## 2.900.0
+
+### Fixed — five comments said "three modules" the day there were four
+Adding `level_shortfall` left a count in prose beside a list in code at five
+sites, including the header of the file that publishes the checks as agent
+tools. None is reachable by a test and each reads as authority, which is how a
+doc generalises past its code. The count is now gone rather than corrected, so
+a fifth module cannot restage it — `CHECKS` and `ANALYSIS_TOOLS` are the lists
+and their parity test is the copy to trust. The two genuinely historical
+mentions are marked so the audit stops re-adjudicating them.
+
 ## 2.899.0
 
 ### Added — a device that runs SHORT can now be reported at all

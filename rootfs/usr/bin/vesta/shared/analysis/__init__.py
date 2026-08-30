@@ -1,4 +1,4 @@
-"""The pure half of analysis: contracts, statistics, and the three modules.
+"""The pure half of analysis: contracts, statistics, and the shipped modules.
 
 ⚠️ THE REGISTRY IS NOT HERE, AND THAT IS THE POINT. It gates, skips and runs —
 briefing concerns — and it REGISTERS these modules itself (its

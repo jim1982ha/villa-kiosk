@@ -2667,7 +2667,8 @@ async def reports_diagnostics_handler(request: web.Request) -> web.Response:
         # ⚠️ ASKED OF THE REGISTRY, NEVER HAND-MAINTAINED. This was the literal
         # `[]`, under a comment reading "No modules exist yet — Phase 3 builds
         # the registry. An empty list beside `phase: 1` is a fact, not a
-        # measurement gap." Phase 3 shipped three modules and neither the list
+        # measurement gap." Phase 3 shipped three modules (dry-audit:ok — what
+        # Phase 3 shipped, not how many exist now) and neither the list
         # nor the sentence defending it was updated, so the endpoint reported
         # no analysis modules on a deployment running three — a zero that meant
         # "not measured" while claiming, in writing, that it did not.

@@ -1,4 +1,10 @@
-"""The three statistical checks, as tools the agent calls when it wants them.
+"""The statistical checks, as tools the agent calls when it wants them.
+
+⚠️ NO COUNT IN THIS FILE, DELIBERATELY. It said "the three" in four places
+and `level_shortfall` made it four in v2.899.0 — a number in prose beside a
+list in code, which drifts again at the fifth. `CHECKS` and `ANALYSIS_TOOLS`
+are the lists; `test_every_check_in_CHECKS_has_a_module_and_a_class` is what
+holds them to each other, and it is the copy to trust.
 
 TASK-070, PH-5. Their objective in one line: **keep the statistics, drop the
 gating ceremony.**
@@ -9,7 +15,7 @@ to assemble the `ModuleContext` those classes already take and to turn the
 `Finding`s they already return into tool output. The task's own risk line is
 the reason: *"changing statistics while moving them makes a regression
 unattributable. Move first, tune never."* So `robust.py`, `materiality.py`,
-`series.py` and the three modules are untouched, and the same fixtures prove
+`series.py` and the modules themselves are untouched, and the same fixtures prove
 the same numbers (`test_analysis.py` still runs them directly).
 
 ⚠️ WHAT IS ACTUALLY DROPPED IS THE CEREMONY AROUND THEM. Through the briefing
@@ -313,7 +319,7 @@ ANALYSIS_TOOLS = (StandbyCreep, LevelAnomaly, LevelShortfall,
 
 def analysis_tools(session_source: Any = None,
                    discovery_source: Any = None) -> List[BaseTool]:
-    """The three checks, wired to this villa. One construction site."""
+    """Every check in `ANALYSIS_TOOLS`, wired to this villa. One site."""
     return [cls(session_source=session_source,
                 discovery_source=discovery_source)
             for cls in ANALYSIS_TOOLS]

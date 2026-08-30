@@ -157,7 +157,10 @@ class ModuleContext:
     def zone(self) -> Any:
         """The timezone every day bucket in this pass must be built in.
 
-        ⚠️ ONE ANSWER, NOT THREE. All three modules re-derived this as
+        ⚠️ ONE ANSWER, NOT THREE. (dry-audit:ok — "three" is HISTORY here,
+        not a description of the tree; the fourth module arrived in v2.899.0
+        and did read this property, which is the sentence below coming true.)
+        All three modules re-derived this as
         `getattr(context.now_local, "tzinfo", None)`, and a module that forgets
         buckets its days in UTC — which is not a rounding error but a different
         set of days, silently shifting every reading across a boundary. The
