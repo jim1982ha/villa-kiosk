@@ -49,6 +49,14 @@ def name_of(text: str) -> str:
     return f"'{text}'"
 
 
+#: The `domain.` an entity id starts with, and nothing else. ⚠️ ANCHORED, AND
+#: THE LOOKAHEAD MATTERS: `3.5` and `v2.913` must not lose a "domain", so the
+#: prefix has to start with a letter and be followed by one. Matched only on a
+#: value with NO SPACE, which `readable_label` has already established is an
+#: identifier rather than something a person typed.
+_ENTITY_DOMAIN = re.compile(r"^[a-z][a-z0-9_]*\.(?=[a-z])")
+
+
 def readable_label(value: str) -> str:
     """A name for a reader. An identifier becomes prose; prose is left alone.
 
@@ -83,7 +91,27 @@ def readable_label(value: str) -> str:
     text = str(value or "").strip()
     if not text or " " in text:
         return text
-    if "_" not in text and "--" not in text:
+    # ⚠️ THE DOMAIN IS NOT PART OF A NAME, AND KEEPING IT MANUFACTURED FAKE
+    # ENTITY IDS (2026-08-30). Humanising the whole id turned an `input_number`
+    # helper into "Input number.<first word> <rest>" — underscores replaced,
+    # domain and dot KEPT — so the label contained a real HA domain followed by
+    # a lower-case word, which is exactly an entity id to any reader of one.
+    # The leak detector matched it, the redaction audit refused the whole tool
+    # result, and one live pass discarded FOUR of them (`read_salient` twice,
+    # `read_state` and `read_history` once each), leaving that investigation
+    # blind to the villa's own ranking. Measured, not guessed: the refusal named
+    # the field (`unscorable[N].label`) and printed the text around the match.
+    # ⚠️ NO EXAMPLE ID IS WRITTEN HERE ON PURPOSE — the first draft of this
+    # comment put two REAL ones into tracked source while explaining why ids
+    # must not travel, and the hard-rules gate caught it. Third time.
+    #
+    # ⚠️ AND IT WAS ALWAYS A BAD LABEL. "Electricity tariff kwh" is what a
+    # person calls that helper; the domain is plumbing, and this function's one
+    # job is a name for a READER.
+    stripped = _ENTITY_DOMAIN.sub("", text, count=1)
+    if stripped != text:
+        text = stripped
+    elif "_" not in text and "--" not in text:
         return text
     text = re.sub(r"-{2,}", " — ", text)
     text = re.sub(r"[_\-]+", " ", text).strip()

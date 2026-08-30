@@ -106,6 +106,27 @@ Never more than one line per subject. Never a subject you cannot name."""
 #: all of them and the shortest-label rule would attach one at random.
 REVERSE_MIN_SHARE: float = 0.5
 
+#: A space a person put between a word and a digit, which the villa's own label
+#: does not have. ⚠️ MEASURED, NOT IMAGINED (2026-08-30): triage escalated
+#: "Bedroom 1 Light" against labels reading "Bedroom1 Light Power", and reported
+#: `0/1 identified` on two consecutive passes with 1,269 candidate labels
+#: available — so the candidate set was full and the MATCHER was the problem.
+#: The subject and the label differ by one space.
+_DIGIT_GAP = re.compile(r"(?<=[a-z])\s+(?=\d)")
+
+
+def _comparable(value: Any) -> str:
+    """One spelling for both sides of every subject/label comparison.
+
+    ⚠️ APPLIED TO BOTH SIDES OR IT IS A BUG. It is a normalisation, not a
+    rewrite: making the subject and the label agree is only sound while the same
+    function produces both, which is why there is one of it and both call sites
+    use it. Case and whitespace for the reason every name comparison in this
+    project uses `roomKey`-style folding; the digit rule because a model writes
+    "Bedroom 1" for equipment a villa labels "Bedroom1".
+    """
+    return _DIGIT_GAP.sub("", " ".join(str(value or "").split()).lower())
+
 _LINE = re.compile(r"^\s*ESCALATE\s*:\s*(?P<subject>[^—\-:]{1,120}?)\s*"
                    r"(?:—|--|-|:)\s*(?P<reason>.+?)\s*$", re.IGNORECASE)
 
@@ -193,12 +214,12 @@ def _identify(items: Sequence[Escalation], refs: Any) -> None:
         return
     known = {}
     for ref in getattr(refs, "known", lambda: ())():
-        label = " ".join(str(refs.label(ref) or "").split()).lower()
+        label = _comparable(refs.label(ref))
         entity = refs.resolve(ref)
         if label and entity:
             known.setdefault(label, entity)
     for item in items:
-        subject = " ".join(str(item.subject or "").split()).lower()
+        subject = _comparable(item.subject)
         if not subject:
             continue
         # ⚠️ CONTAINMENT ONLY, AND THE EXACT-MATCH FAST PATH BESIDE IT WAS

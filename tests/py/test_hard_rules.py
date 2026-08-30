@@ -91,6 +91,11 @@ ILLUSTRATIVE: Set[str] = {
     # unavailable simply by being switched off).
     "sensor.a_temperature", "sensor.b_temperature", "sensor.c_temperature",
     "sensor.e_temperature", "media_player.d",
+    # `test_subject_identity`'s digit-gap fixture. What is under test is the ONE
+    # SPACE between a word and a digit — a model writes "Bedroom 1" for
+    # equipment a villa labels "Bedroom1" — so the id is deliberately abbreviated
+    # to `b1`, which no property uses, while keeping the digit the case turns on.
+    "sensor.b1_light_power",
     # `test_journal.last_report_at`'s "an id the journal never heard of". Chosen
     # to be unmistakably not a device — `zzz` names no equipment anywhere — since
     # what is under test is the EMPTY answer and the caller's rule that an absent

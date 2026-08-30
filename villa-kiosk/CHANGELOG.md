@@ -1,3 +1,15 @@
+## 2.914.0
+
+### Fixed — a device name that read as an entity id, and a space before a digit
+Humanising an id kept the domain and the dot, so a helper's label contained a
+real domain followed by a word — an entity id to the leak detector, which
+refused the whole tool result. One pass discarded four of them and investigated
+the villa blind to its own ranking. The domain is now dropped, which is also the
+better name. Separately, triage could not place "Bedroom 1 Light" against a
+villa that labels it "Bedroom1 Light": one space, and 1,269 candidate labels
+were available, so the matcher was at fault rather than the input. Both found by
+the instruments shipped in 2.911.0 and 2.912.0, from one run.
+
 ## 2.913.0
 
 ### Added — one line at the end of a pass saying what the whole run did

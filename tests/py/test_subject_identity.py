@@ -385,3 +385,47 @@ def test_the_note_never_fails_the_PASS_that_produced_it() -> None:
     assert triage._unidentified_note([_Esc("x")], _Boom()) == ""
     assert triage._unidentified_note([_Esc("x")], None) == (
         " (unidentified: 'x'; 0 candidate label(s))")
+
+
+# ── the villa spells a number without a space; the model spells it with one ──
+
+BEDROOM = _Refs({"Bedroom1 Light Power": "sensor.b1_light_power"})
+
+
+def test_a_DIGIT_SPACED_subject_matches_the_villas_own_spelling() -> None:
+    """⚠️ MEASURED ON THE PROPERTY, NOT IMAGINED (2026-08-30). Triage escalated
+    "Bedroom 1 Light" against labels reading "Bedroom1 Light Power" and reported
+    `0/1 identified` on two consecutive passes. The instrument added in 2.912.0
+    settled which half was at fault: **1,269 candidate labels** were available,
+    so the candidate set was full and the MATCHER was the problem. The subject
+    and the label differ by exactly one space."""
+    item = _Esc("Bedroom 1 Light")
+    triage._identify([item], BEDROOM)
+    assert item.entity_id == "sensor.b1_light_power"
+
+
+def test_the_villas_own_spelling_still_matches_itself() -> None:
+    item = _Esc("Bedroom1 Light")
+    triage._identify([item], BEDROOM)
+    assert item.entity_id == "sensor.b1_light_power"
+
+
+def test_the_digit_rule_is_applied_to_BOTH_SIDES() -> None:
+    """⚠️ IT IS A NORMALISATION, NOT A REWRITE, and that is only sound while one
+    function produces both sides. Folding the subject alone would move the
+    mismatch rather than remove it — a villa that labels its equipment with the
+    space would then stop matching."""
+    spaced = _Refs({"Bedroom 1 Light Power": "sensor.b1_light_power"})
+    for subject in ("Bedroom 1 Light", "Bedroom1 Light"):
+        item = _Esc(subject)
+        triage._identify([item], spaced)
+        assert item.entity_id == "sensor.b1_light_power", subject
+
+
+def test_a_digit_that_is_NOT_after_a_word_is_untouched() -> None:
+    """The rule closes a word/digit gap and nothing else: it must not join two
+    numbers, or a digit to a following word."""
+    assert triage._comparable("Pump 2") == "pump2"
+    assert triage._comparable("3 4") == "3 4"
+    assert triage._comparable("2 pumps") == "2 pumps"
+    assert triage._comparable("  Pool   Pump  ") == "pool pump"

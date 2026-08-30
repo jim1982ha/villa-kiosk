@@ -329,3 +329,40 @@ def test_both_readers_of_the_label_map_humanise_it() -> None:
         "a Home Assistant name reaches prose without `readable_label`, so an "
         "identifier-shaped friendly name prints as one:\n  "
         + "\n  ".join(offenders))
+
+
+def test_a_humanised_id_never_manufactures_a_FAKE_ENTITY_ID() -> None:
+    """⚠️ THE FIELD DEFECT (2026-08-30), FOUND BY INSTRUMENT RATHER THAN GUESS.
+    `readable_label` humanised the WHOLE id and kept the domain and the dot, so
+    an `input_number` helper produced a label containing a real HA domain
+    followed by a lower-case word — an entity id to any reader of one. The leak
+    detector matched it, the redaction audit refused the entire tool result, and
+    one live pass discarded FOUR of them; the investigation ran blind to the
+    villa's own salience ranking.
+
+    ⚠️ ASSERTED THROUGH THE DETECTOR, NOT AGAINST A STRING. A test comparing to
+    an expected label would pass while the detector still matched something else
+    in it — this pins the property that actually failed."""
+    from vesta.shared.text import readable_label
+    from vesta.supervise.agent.refs import entity_ids_in
+
+    for domain in ("input_number", "input_datetime", "input_boolean",
+                   "sensor", "binary_sensor", "switch", "automation"):
+        label = readable_label(f"{domain}.alpha_beta_gamma")
+        assert entity_ids_in(label) == [], (domain, label)
+        assert "." not in label, (domain, label)
+        assert label == "Alpha beta gamma", (domain, label)
+
+
+def test_stripping_the_domain_leaves_a_HUMAN_label_alone() -> None:
+    """⚠️ THE HALF THAT MUST NOT REGRESS. `readable_label`'s own rule is that a
+    value with whitespace was written by a person and is returned byte for byte;
+    a version number or a decimal must not lose a "domain" either."""
+    from vesta.shared.text import readable_label
+
+    for human in ("House Pump Power", "Lights - monitored rooms",
+                  "3.5", "v2.913", "Zone 1.5 target"):
+        assert readable_label(human) == human, human
+    # Still humanises a name that has no domain at all.
+    assert readable_label("critical_doorbell---parking_gate") == (
+        "Critical doorbell — parking gate")
