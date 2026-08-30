@@ -142,20 +142,24 @@ SKIP_REASON: Final[Tuple[str, ...]] = (
     # Grouping these by matching on the sentence would be the cross-artefact
     # defect this file exists to prevent, one layer in.
     #
-    # ⚠️ NO PRODUCER SINCE 2.875.0, AND KEPT ANYWAY — the one case where an
-    # unreachable value is right. `gate` lost its stand-down arm entirely (the
-    # briefing never reads an automation's output, so standing a check down
-    # left off-mode with no analysis at all), so nothing can emit this today.
-    # It stays because `entry["_analysis"]["skipped"]` is PERSISTED: history
-    # written before 2.875.0 carries this code, and a reader meeting a value
-    # absent from the contract is the "unlisted kind" failure this project
-    # already pays for in `standing.SEVERITY_OF_KIND`.
+    # ⚠️ `superseded` WAS HERE AND IS GONE (2026-08-30), AND THE REASON IT WAS
+    # KEPT WAS FALSE. The comment said it stayed because
+    # `entry["_analysis"]["skipped"]` is PERSISTED, so history written before
+    # 2.875.0 would carry the code and a reader meeting an unlisted value would
+    # hit the "unlisted kind" failure this project pays for elsewhere.
     #
-    # ⚠️ SO IT IS A VOCABULARY FOR READING, NOT A REASON A CHECK CAN STAND DOWN
-    # TODAY. If a future rule needs to stand a check down, it needs its OWN
-    # value — reusing this one would make old history and new skips
-    # indistinguishable.
-    "superseded",           # historical: no producer since 2.875.0
+    # It is not persisted and never was: `pipeline` writes history through
+    # `{k: v for k, v in entry.items() if not k.startswith("_")}`, which drops
+    # every underscore key. `_analysis` exists only in the run-now RESPONSE,
+    # which is where `ModulesTab` reads `ran`/`skipped` from. So no stored
+    # report has ever carried a skip reason, and the value had no producer, no
+    # persistence, and no phrase in `describe_skips` — it would have printed as
+    # a raw code mid-sentence if it ever appeared.
+    #
+    # ⚠️ FOUND BY BEING ASKED "what do you mean?" ABOUT A VANISHED FINDING. The
+    # claim named something checkable, nothing checked it, and it was the sole
+    # justification for a contract entry. A confidently wrong sentence costs a
+    # wrong decision — here, keeping a value forever on the strength of it.
 )
 
 # ⚠️ THE PRIVACY BOUNDARY (Phase 6). The allow-list of field names that may

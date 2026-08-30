@@ -130,12 +130,12 @@ export const SKIP_REASON = [
   "audience_mismatch",
   "timed_out",
   "errored",
-  // ⚠️ HISTORICAL — NO PRODUCER SINCE 2.875.0. Kept because stored analysis
-  // from before that release carries the code; see `contracts.py` for the full
-  // reasoning, which is the copy to trust. It stays in BOTH lists or neither:
-  // `test_contract_parity` holds the two together, and that is what caught this
-  // value's arrival in the first place.
-  "superseded",
+  // ⚠️ `superseded` WAS HERE AND IS GONE (2026-08-30). It was kept because
+  // stored analysis was said to carry the code — which was false: history
+  // never holds a skip reason at all, because `pipeline` strips every
+  // underscore key on the way in. See `contracts.py`, which is the copy to
+  // trust. It leaves BOTH lists or neither; `test_contract_parity` holds them
+  // together, and that is what caught its arrival in the first place.
 ] as const;
 /* dry-audit:ok — mirror alias; see this file's header. */
 export type SkipReason = (typeof SKIP_REASON)[number];

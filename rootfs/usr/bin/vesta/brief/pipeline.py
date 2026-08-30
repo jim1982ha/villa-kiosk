@@ -547,6 +547,22 @@ async def run_report(
         min_history_days, module_failures,
         supervision_enabled=supervision_enabled)
 
+    # ⚠️ WHICH CHECKS RAN, NOT JUST HOW MANY FINDINGS (2026-08-30, owner: a line
+    # vanished from a delivered brief and the log could not say why). The pass
+    # already printed `N finding(s)`, and a count cannot separate "the check ran
+    # and correctly found nothing" from "the check never ran" — the two answers
+    # an owner needs to tell apart when a finding stops appearing.
+    #
+    # ⚠️ THE APP ALREADY ANSWERS THIS FOR A MANUAL RUN — `ModulesTab` reads
+    # `ran`/`skipped` out of the run-now response and marks each check. What it
+    # cannot answer is a SCHEDULED report, which nobody previews and whose
+    # `_analysis` is dropped on the way into history. This line is that gap and
+    # only that gap, which is why it is a log line rather than a stored field.
+    log("modules: ran " + (", ".join(ran) if ran else "none")
+        + ("" if not skipped else " · skipped "
+           + ", ".join(f"{s.get('module', '?')} ({s.get('reason', '?')})"
+                       for s in skipped)))
+
     # ── synthesise ──────────────────────────────────────────────────────────
     # ⚠️ SCOPED TO THE PERIOD, NOT THE WHOLE BUFFER. The ring holds up to
     # MAX_EVENTS across months; a weekly report assembled from all of it would
