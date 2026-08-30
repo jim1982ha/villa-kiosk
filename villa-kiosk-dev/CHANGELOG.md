@@ -1,3 +1,14 @@
+## 2.898.0
+
+### Added — a pass now says which checks ran, so a finding that stops appearing can be explained
+A line vanished between two reports an hour apart and the log could only say "2
+finding(s)" — a count cannot separate a check that ran and correctly found
+nothing from one that never ran. The app already answers this for a report you
+run yourself; a scheduled one is previewed by nobody and its analysis is not
+kept, so the log is the only place left. Also removes a skip reason kept on a
+false justification: it was said to survive in stored reports, and no stored
+report has ever held a skip reason at all.
+
 ## 2.897.0
 
 ### Fixed — "What happened" claimed to show what the next briefing summarises, and showed a month
