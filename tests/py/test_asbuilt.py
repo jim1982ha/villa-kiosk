@@ -2,7 +2,7 @@
 
 ⚠️ THE OWNER'S RULING, after four review rounds each caught the patched HLD
 lying: the authority document must be "the exact ground truth of what we have
-coded", so `docs/build_asbuilt.py` INTROSPECTS every table from the code and
+coded", so `docs/tools/build_asbuilt.py` INTROSPECTS every table from the code and
 this file holds it to that. A table that comes back empty is the classic
 silent-instrument failure — a document that renders beautifully while
 describing nothing — so every one is guarded, and a handful of spot equalities
@@ -22,7 +22,7 @@ import pytest
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GEN = os.path.join(REPO_ROOT, "docs", "build_asbuilt.py")
+GEN = os.path.join(REPO_ROOT, "docs", "tools", "build_asbuilt.py")
 
 if not os.path.isfile(GEN):
     pytest.skip("docs/ is gitignored and absent here", allow_module_level=True)

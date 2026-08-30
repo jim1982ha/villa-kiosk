@@ -189,7 +189,7 @@ def test_the_RETIRED_tab_is_gone_rather_than_emptied() -> None:
     # ⚠️ AND NO SHIPPED BLUEPRINT MAY QUIETLY BECOME A PRODUCER AGAIN. If one
     # does, this tab's premise returns and the decision to delete it needs
     # revisiting — deliberately noisy rather than silent.
-    blueprints = os.path.join(REPO, "sources", "files", "blueprint")
+    blueprints = os.path.join(REPO, "docs", "helpers", "blueprint")
     if os.path.isdir(blueprints):
         # ⚠️ `._*` EXCLUDED: the blueprint tree comes off a Mac and carries
         # AppleDouble resource forks, which are binary and named `._x.yaml`.

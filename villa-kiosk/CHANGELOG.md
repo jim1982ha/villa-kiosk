@@ -1,3 +1,15 @@
+## 2.904.0
+
+### Fixed — three test files went quiet when the folders they read moved
+`docs/` was reorganised (source / tools / generated / history) and the asset
+tree moved under it. Six tracked tests carry paths into both and none failed:
+`test_docs_current` skipped ENTIRELY, because its "is docs/ present" probe
+named a directory that had moved, and two blueprint checks skipped for the same
+reason — coverage vanishing on a green run. It now walks the tree rather than
+one directory, so a document moved into a subfolder cannot leave its scope
+unnoticed, and archived status is decided by location instead of a hand-kept
+list that had already gone stale twice.
+
 ## 2.903.0
 
 ### Fixed — the multi-device fix could not match this villa's own labels

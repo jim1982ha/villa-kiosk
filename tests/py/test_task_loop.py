@@ -10,7 +10,7 @@ code; it is not, it is a finished feature whose input was switched off.
 
 ⚠️ THE CONTRACT IS WITH A YAML FILE THIS REPO DOES NOT COMPILE, which is why it
 is pinned rather than trusted. `vesta_task_actions.yaml` lives in
-`sources/files/blueprint/` (gitignored, deployed by hand to Home Assistant), and
+`docs/helpers/blueprint/` (gitignored, deployed by hand to Home Assistant), and
 nothing about it type-checks against `agent/task.py`. Three separate string
 agreements have to hold, and each is silent when broken:
 

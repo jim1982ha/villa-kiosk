@@ -38,28 +38,36 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DOCS = os.path.join(REPO_ROOT, "docs")
 
+# ⚠️ THE PROBE FOR "docs/ IS PRESENT" MUST TRACK THE LAYOUT (2026-08-30). This
+# pointed at `docs/refdata`, which the reorganisation moved to
+# `docs/source/refdata` — so the whole module skipped, silently, and reported 7
+# passes as 7 skips. The reorganisation turned this file off and this file is
+# what was supposed to notice reorganisations.
 pytestmark = pytest.mark.skipif(
-    not os.path.isdir(os.path.join(DOCS, "refdata")),
+    not os.path.isdir(os.path.join(DOCS, "source", "refdata")),
     reason="docs/ is gitignored and absent — not an error (ADR-018)")
 
-#: Files that are finished records rather than descriptions of now. ⚠️ THEY ARE
-#: STILL CHECKED for ghost ids and dead paths — an archive naming a task that
-#: never existed is as misleading as a live document doing it — but they are
-#: exempt from the "no stale version" rule, because naming the release they were
-#: written against is the whole point of an archive.
-#: ⚠️ REWRITTEN WHEN `docs/` WAS REORGANISED (2026-08-27), AND THIS TEST IS
-#: WHAT CAUGHT THE REORGANISATION GOING STALE. It named five files that had
-#: just been merged or moved, which is precisely the rot it exists to find —
-#: turned on the list itself rather than on a document.
+#: Finished records are identified by WHERE THEY ARE, not by a list.
+#: ⚠️ THEY ARE STILL CHECKED for ghost ids and dead paths — an archive naming a
+#: task that never existed is as misleading as a live document doing it — but
+#: they are exempt from the "no stale version" rule, because naming the release
+#: they were written against is the whole point of an archive.
 #:
-#: The seven PH1–PH5 checkpoints are now one merged record, and the finished
-#: compliance/validation/rollback documents moved to `docs/archive/`. That
-#: folder needs no entry here: `_docs()` lists the TOP LEVEL only, so anything
-#: moved into it leaves this check's scope entirely — which is the point of
-#: moving it.
-ARCHIVES: Set[str] = {
-    "CHECKPOINTS.md",
-}
+#: ⚠️ THIS WAS A HAND-KEPT SET AND IT WENT STALE TWICE (2026-08-27, 2026-08-30).
+#: It named files that had been merged or moved — the exact rot this file
+#: exists to find, turned on the list itself. Worse, `_docs()` listed only the
+#: TOP LEVEL, so moving a document into `archive/` removed it from every check
+#: here: coverage shrank silently and that was described as "the point of
+#: moving it". It is not — an unchecked archive is where a ghost id goes to
+#: live. `docs/` was reorganised on 2026-08-30 so that LOCATION states status,
+#: and this now walks the whole tree and derives the answer from the path.
+ARCHIVE_DIR: str = "history"
+
+
+def _is_archive(rel: str) -> bool:
+    """Anything under `docs/history/` is a finished record, by location."""
+    return rel.split(os.sep)[0] == ARCHIVE_DIR
+
 
 #: Ids a document may name BECAUSE they do not exist — the finding IS that they
 #: do not. ⚠️ Without this, recording a ghost-id defect would fail the very
@@ -69,13 +77,35 @@ NAMED_GHOSTS: Dict[str, Set[str]] = {
     # scanned, so this entry is inert. Kept rather than deleted: if the file is
     # ever brought back the exemption must come with it, and a dead key here
     # costs nothing — unlike ARCHIVES above, nothing asserts this list is live.
-    "VALIDATION.md": {"TASK-086", "TASK-087"},
+    os.path.join("history", "VALIDATION.md"): {"TASK-086", "TASK-087"},
     "README.md": {"TASK-086", "TASK-087"},
 }
 
 
 def _docs() -> List[str]:
-    return sorted(f for f in os.listdir(DOCS) if f.endswith(".md"))
+    """Every `.md` under `docs/`, as a path relative to it.
+
+    ⚠️ RECURSIVE, AND THAT IS THE WHOLE FIX. It listed one directory, so a
+    document moved into a subfolder left this file's scope without failing
+    anything — an instrument going quiet and reading as health, which is this
+    repository's most repeated defect.
+    """
+    out: List[str] = []
+    for dirpath, _dirs, files in os.walk(DOCS):
+        for name in files:
+            if name.endswith(".md"):
+                out.append(os.path.relpath(os.path.join(dirpath, name), DOCS))
+    return sorted(out)
+
+
+def test_the_document_scan_is_not_vacuous() -> None:
+    """⚠️ THE GUARD THE RECURSION NEEDS. Every check below iterates `_docs()`;
+    all of them pass on an empty list. A renamed folder must fail loudly here
+    rather than quietly stop checking anything."""
+    found = _docs()
+    assert len(found) >= 10, f"only {len(found)} documents found: {found}"
+    assert any(_is_archive(f) for f in found), "no archived document found"
+    assert any(not _is_archive(f) for f in found), "no live document found"
 
 
 def _read(name: str) -> str:
@@ -87,7 +117,7 @@ def _read(name: str) -> str:
 
 
 def _catalogue() -> Dict[str, Set[str]]:
-    sys.path.insert(0, DOCS)
+    sys.path.insert(0, os.path.join(DOCS, "source"))
     from refdata.requirements import REQUIREMENTS
     from refdata.tasks import TASKS
     return {"tasks": {t["id"] for t in TASKS},
@@ -117,7 +147,7 @@ def test_no_live_document_claims_a_version_that_has_not_shipped() -> None:
     ceiling = tuple(int(x) for x in current.split("."))
     problems: List[str] = []
     for name in _docs():
-        if name in ARCHIVES:
+        if _is_archive(name):
             continue
         for found in sorted(set(re.findall(r"\bv(\d+\.\d+\.\d+)\b", _read(name)))):
             parts = tuple(int(x) for x in found.split("."))
@@ -153,17 +183,33 @@ def test_every_archive_says_it_is_one() -> None:
     Five of the twelve documents are finished records, and a reader who cannot
     tell will act on a sentence that was true in August. The banner is cheap;
     the mistake is not."""
-    missing = [name for name in ARCHIVES
-               if name in _docs() and "ARCHIVE" not in _read(name)[:1200]]
-    assert not missing, (
-        f"archive document(s) with no ARCHIVE banner near the top: {missing}. "
-        f"Add one, or take the file out of ARCHIVES because it is live again.")
+    # ⚠️ INVERTED ON 2026-08-30, AND IT IS A STRONGER RULE. It used to demand
+    # a banner inside each archive; the folder now says it, so the banner is a
+    # second spelling of one fact. What CAN go wrong is the other direction —
+    # a document that calls itself an archive while sitting among the live
+    # ones, which is how a reader acts on a finished record.
+    stray = [name for name in _docs()
+             if not _is_archive(name) and "ARCHIVE" in _read(name)[:1200]]
+    assert not stray, (
+        f"document(s) declaring themselves ARCHIVE outside docs/{ARCHIVE_DIR}/: "
+        f"{stray}. Move them there, or drop the banner because they are live.")
 
 
-def test_the_archive_list_does_not_rot() -> None:
-    stale = sorted(n for n in ARCHIVES if n not in _docs())
-    assert not stale, (
-        f"ARCHIVES names document(s) that no longer exist: {stale}")
+def test_the_archive_rule_needs_no_hand_kept_list() -> None:
+    """⚠️ THIS USED TO GUARD A HAND-KEPT SET AND THE SET WENT STALE TWICE. The
+    rule is now LOCATION — `docs/history/` — so "the list names a file that
+    moved" cannot happen: there is no list. What is asserted instead is that
+    the rule still partitions the tree, which is the thing a future
+    reorganisation could break.
+    """
+    docs = _docs()
+    archived = [d for d in docs if _is_archive(d)]
+    live = [d for d in docs if not _is_archive(d)]
+    assert archived, f"docs/{ARCHIVE_DIR}/ holds no documents — has it moved?"
+    assert live, "every document reads as archived — the live set is empty"
+    assert all(os.sep in a for a in archived), (
+        "an archived path with no separator means _is_archive is matching the "
+        "top level, so every document would count as archived")
 
 
 def test_this_check_can_actually_fail() -> None:

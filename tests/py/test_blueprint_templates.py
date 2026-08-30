@@ -39,11 +39,11 @@ import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-BLUEPRINTS = os.path.join(ROOT, "sources", "files", "blueprint")
+BLUEPRINTS = os.path.join(ROOT, "docs", "helpers", "blueprint")
 
 needs_blueprints = pytest.mark.skipif(
     not os.path.isdir(BLUEPRINTS),
-    reason="sources/files/blueprint is gitignored and absent on a fresh clone")
+    reason="docs/helpers/blueprint is gitignored and absent on a fresh clone")
 
 #: Names that LOOK like Home Assistant template functions and are not. Each
 #: renders empty instead of raising, so the automation succeeds and the message
