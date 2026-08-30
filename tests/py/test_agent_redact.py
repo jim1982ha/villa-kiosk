@@ -346,3 +346,50 @@ def test_pseudonymise_leaves_prose_with_no_ids_untouched() -> None:
     from vesta.supervise.agent.refs import pseudonymise
     text = "The living room fan is off and the pump ran for 3 hours."
     assert pseudonymise(text, RefTable()) == text
+
+
+# ── the refusal says WHERE, and still decides the same way ───────────────────
+
+def test_a_refusal_names_the_FIELD_and_shows_the_text() -> None:
+    """⚠️ THE LIVE CASE THIS WAS BUILT FOR (2026-08-30): a whole `read_salient`
+    result refused over 27 matched strings, most of which were not entities at
+    all, with no way to see what text produced them."""
+    problems = redact.audit({"rows": [{"reason": "sensor.hidden_thing drew nothing"}]})
+    leak = [p for p in problems if "entity id(s) present" in p]
+    assert len(leak) == 1, problems
+    assert "in 1 field(s)" in leak[0], leak[0]
+    assert "result.rows[0].reason" in leak[0], leak[0]
+    assert "drew nothing" in leak[0], leak[0]
+
+
+def test_the_sites_note_does_not_change_the_VERDICT() -> None:
+    """⚠️ AN INSTRUMENT THAT CAN CHANGE THE VERDICT IS A SECOND IMPLEMENTATION
+    OF THE RULE. What is refused is still `entity_ids_in`'s answer; only the
+    sentence describing it grew."""
+    clean = {"label": "Sensor.hidden thing", "state": "on"}
+    assert not [p for p in redact.audit(clean) if "entity id(s) present" in p]
+    dirty = {"reason": "sensor.hidden_thing"}
+    assert [p for p in redact.audit(dirty) if "entity id(s) present" in p]
+
+
+def test_the_sites_note_is_CAPPED_and_says_how_many_it_hid() -> None:
+    rows = [{"reason": f"sensor.hidden_thing{i}"} for i in range(9)]
+    leak, = [p for p in redact.audit({"rows": rows}) if "entity id(s) present" in p]
+    assert "in 9 field(s)" in leak, leak
+    assert "+5 more field(s)" in leak, leak
+
+
+def test_a_failure_to_DESCRIBE_a_refusal_still_refuses(
+        monkeypatch: Any) -> None:
+    """⚠️ THE DIAGNOSTIC HALF MUST NEVER BLOCK THE PROTECTIVE HALF. This runs on
+    the path that keeps entity ids away from the model."""
+    from vesta.supervise.agent import refs as refs_mod
+
+    def boom(_payload: Any) -> Any:
+        raise RuntimeError("sites walker failed")
+
+    monkeypatch.setattr(refs_mod, "entity_id_sites", boom)
+    leak = [p for p in redact.audit({"reason": "sensor.hidden_thing"})
+            if "entity id(s) present" in p]
+    assert len(leak) == 1, "the refusal was lost when its description failed"
+    assert "sensor.hidden_thing" in leak[0]

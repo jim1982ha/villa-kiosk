@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from vesta.supervise.agent import contracts
 from vesta.shared.style import inert
@@ -395,5 +395,51 @@ def audit(payload: Any) -> List[str]:
     from vesta.supervise.agent.refs import entity_ids_in
     leaked = entity_ids_in(payload)
     if leaked:
-        problems.append(f"result: entity id(s) present: {', '.join(leaked)}")
+        # ⚠️ THE VERDICT IS STILL `entity_ids_in`'s, AND ONLY THE MESSAGE GREW
+        # (2026-08-30). `entity_id_sites` walks beside it purely to say WHERE;
+        # deciding on it would be a second implementation of the rule, and the
+        # weaker of two copies is the one that ends up being run.
+        #
+        # ⚠️ WHY THE SITES ARE WORTH THE LOG LINE. A live pass refused an entire
+        # `read_salient` result over 27 matches, and 4 of the 6 checked against
+        # Home Assistant DID NOT EXIST — so most were false positives, the whole
+        # tool result was discarded, and the investigation ran blind to salience
+        # with nothing to diagnose from but the strings themselves.
+        problems.append(f"result: entity id(s) present: {', '.join(leaked)}"
+                        + _sites_note(payload))
     return problems
+
+
+#: How many distinct FIELDS the refusal names. ⚠️ FIELDS, NOT MATCHES: the case
+#: this was built for had 27 matches, and they are only worth reading once
+#: grouped by where they came from.
+MAX_REPORTED_SITES: int = 4
+
+
+def _sites_note(payload: Any) -> str:
+    """" — in <n> field(s): <path>: <id> in <snippet>; …", or "" when unknown.
+
+    ⚠️ NEVER RAISES AND NEVER BLOCKS. This is the diagnostic half of a refusal
+    that has already been decided; a failure to describe it must not turn a
+    clean refusal into an exception on the path that protects the boundary.
+
+    ⚠️ IT TAKES THE PAYLOAD, NOT THE SITES, AND THAT IS THE WHOLE POINT. The
+    first cut took the walked sites — so the walk ran in the CALLER's expression,
+    outside this guard, and a failure in it escaped and destroyed the refusal.
+    A test written for exactly that invariant caught it before it shipped.
+    """
+    try:
+        from vesta.supervise.agent.refs import entity_id_sites
+        sites: Sequence[Tuple[str, str, str]] = entity_id_sites(payload)
+        if not sites:
+            return ""
+        by_path: Dict[str, Tuple[str, str]] = {}
+        for path, entity_id, snippet in sites:
+            by_path.setdefault(path, (entity_id, snippet))
+        shown = list(by_path.items())[:MAX_REPORTED_SITES]
+        parts = [f"{path}: {eid} in {snippet!r}" for path, (eid, snippet) in shown]
+        more = len(by_path) - len(shown)
+        return (f" — in {len(by_path)} field(s): " + "; ".join(parts)
+                + (f"; +{more} more field(s)" if more > 0 else ""))
+    except Exception:  # noqa: BLE001 - a description must not break a refusal
+        return ""

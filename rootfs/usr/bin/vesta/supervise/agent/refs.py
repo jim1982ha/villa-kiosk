@@ -183,6 +183,62 @@ def personalise(text: str, table: "RefTable") -> str:
                    swap, str(text))
 
 
+#: How much text either side of a match travels with it. ⚠️ SMALL ON PURPOSE:
+#: this is an instrument, and the whole field would put a tool result into the
+#: log to diagnose a tool result. Enough to see what the match is embedded in.
+SITE_CONTEXT_CHARS: int = 30
+
+
+def entity_id_sites(blob: object) -> List[Tuple[str, str, str]]:
+    """Every entity id, WITH the field it was found in and the text around it.
+
+    Returns `(path, entity_id, snippet)`, ordered as walked.
+
+    ⚠️ THE INSTRUMENT `entity_ids_in` COULD NOT BE (2026-08-30). That one
+    returns a flat sorted SET of matched strings, which is the right answer for
+    "must this be refused" and useless for "why". A live pass refused a whole
+    `read_salient` result over 27 matches, and 4 of the 6 checked against Home
+    Assistant DID NOT EXIST as entities — so most were false positives and there
+    was no way to see what text produced them. `entity_ids_in` keeps its
+    signature because twenty callers depend on it; this walks beside it.
+
+    ⚠️ IT DECIDES NOTHING. `audit` still refuses on `entity_ids_in`, so a bug
+    here cannot make a leak pass — an instrument that can change the verdict is
+    a second implementation of the rule, which is this repo's cardinal sin.
+
+    ⚠️ KEYS AS WELL AS VALUES, mirroring `entity_ids_in`. A payload keyed BY
+    entity id leaks exactly as much as one that lists them, and a value-only
+    scan reports clean.
+    """
+    found: List[Tuple[str, str, str]] = []
+
+    def snippet(text: str, at: int, length: int) -> str:
+        start = max(0, at - SITE_CONTEXT_CHARS)
+        end = min(len(text), at + length + SITE_CONTEXT_CHARS)
+        return (("…" if start else "") + text[start:end]
+                + ("…" if end < len(text) else ""))
+
+    def scan(text: str, path: str) -> None:
+        for match in _ENTITY_ID.finditer(text):
+            found.append((path, match.group(1),
+                          snippet(text, match.start(1), len(match.group(1)))))
+
+    def walk(node: object, path: str) -> None:
+        if isinstance(node, Mapping):
+            for key, value in node.items():
+                if isinstance(key, str):
+                    scan(key, f"{path}.<key>")
+                walk(value, f"{path}.{key}")
+        elif isinstance(node, (list, tuple, set)):
+            for index, item in enumerate(node):
+                walk(item, f"{path}[{index}]")
+        elif isinstance(node, str):
+            scan(node, path)
+
+    walk(blob, "result")
+    return found
+
+
 def entity_ids_in(blob: object) -> List[str]:
     """Every entity id anywhere in a structure. The leak detector.
 

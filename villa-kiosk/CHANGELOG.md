@@ -1,3 +1,15 @@
+## 2.911.0
+
+### Added — a refused tool result now says which field tripped it
+A whole `read_salient` result was discarded over 27 matched strings, and four of
+the six checked against Home Assistant were not entities at all — so an
+investigation ran blind to the villa's own ranking with nothing to diagnose from
+but a flat list. The refusal now names the field and shows the text around each
+match. The verdict is unchanged and still the detector's alone: the new walker
+only describes, and a failure to describe cannot block a refusal. The first
+lead: the shared label rule turns an id into "Sensor.kitchen and dining light
+power", keeping the domain and the dot.
+
 ## 2.910.0
 
 ### Fixed — the agent kept reading "switched off" as "broken"

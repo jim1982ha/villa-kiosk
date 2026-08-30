@@ -443,3 +443,53 @@ def test_personalise_never_yields_an_entity_id() -> None:
     out = refs_mod.personalise(f"{ref} is open", table)
     assert refs_mod.entity_ids_in(out) == []
     assert out == "Bedroom window is open"
+
+
+# ── the instrument ──────────────────────────────────────────────────────────
+
+def test_entity_id_sites_says_WHERE_not_just_what() -> None:
+    """⚠️ THE INSTRUMENT `entity_ids_in` COULD NOT BE (2026-08-30). A live pass
+    refused an entire `read_salient` result over 27 matches, and 4 of the 6
+    checked against Home Assistant DID NOT EXIST — so most were false positives
+    and the flat set of strings gave nothing to diagnose from."""
+    payload = {"rows": [{"reason": "sensor.hidden_thing drew nothing"}]}
+    sites = refs_mod.entity_id_sites(payload)
+    assert len(sites) == 1
+    path, entity_id, snippet = sites[0]
+    assert path == "result.rows[0].reason"
+    assert entity_id == "sensor.hidden_thing"
+    assert "drew nothing" in snippet
+
+
+def test_entity_id_sites_walks_KEYS_as_well_as_values() -> None:
+    """Mirrors `entity_ids_in`: a payload keyed BY entity id leaks exactly as
+    much as one that lists them."""
+    sites = refs_mod.entity_id_sites({"sensor.hidden_thing": {"state": "on"}})
+    assert [p for p, _e, _s in sites] == ["result.<key>"]
+
+
+def test_entity_id_sites_AGREES_with_the_detector_that_decides() -> None:
+    """⚠️ IT DECIDES NOTHING, AND THIS IS WHAT KEEPS IT THAT WAY. `audit`
+    refuses on `entity_ids_in`; if the two ever disagree, the instrument is
+    describing a different rule from the one being enforced — the "two correct
+    halves" defect this repo has produced repeatedly."""
+    for payload in (
+            {"rows": [{"reason": "sensor.hidden_thing idle"}]},
+            {"a": ["switch.buried_thing"]},
+            {"sensor.hidden_thing": 1},
+            {"clean": "nothing to see"},
+            {"label": "Sensor.hidden thing"},          # capitalised: not an id
+    ):
+        flat = set(refs_mod.entity_ids_in(payload))
+        sited = {e for _p, e, _s in refs_mod.entity_id_sites(payload)}
+        assert flat == sited, payload
+
+
+def test_the_snippet_is_BOUNDED_so_a_refusal_does_not_log_the_result() -> None:
+    """⚠️ THIS IS AN INSTRUMENT, and logging the whole field to diagnose a field
+    would put the tool result into the add-on log."""
+    long = "y" * 400 + " sensor.hidden_thing " + "z" * 400
+    (_path, _eid, snippet), = refs_mod.entity_id_sites({"reason": long})
+    assert len(snippet) < len(long)
+    assert len(snippet) <= len("sensor.hidden_thing") + 2 * refs_mod.SITE_CONTEXT_CHARS + 2
+    assert snippet.startswith("…") and snippet.endswith("…")
