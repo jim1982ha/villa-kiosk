@@ -1,3 +1,15 @@
+## 2.893.0
+
+### Fixed — the daily briefing silently dropped the first hours of every local day
+Six device-watchdog alerts fired at 00:52 and the 10:00 briefing did not mention
+them. The entries were in the ledger and correctly stamped in UTC; the window was
+compared as a STRING against the villa's local wall-clock midnight, and ordering
+ISO text is only chronological when both sides carry the same offset. East of UTC
+that drops everything between local midnight and the offset — eight hours a day
+here. Every other line of the report reconciles exactly with the same cut,
+including two entries stamped at the boundary. The window is now compared as an
+instant. `collect.as_utc_iso` existed for this rule; the ledger never joined it.
+
 ## 2.892.0
 
 ### Changed — the chat platform is named in one place, and the two senders build one payload
