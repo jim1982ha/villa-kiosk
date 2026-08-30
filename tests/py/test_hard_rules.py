@@ -91,6 +91,17 @@ ILLUSTRATIVE: Set[str] = {
     # unavailable simply by being switched off).
     "sensor.a_temperature", "sensor.b_temperature", "sensor.c_temperature",
     "sensor.e_temperature", "media_player.d",
+    # `test_journal.last_report_at`'s "an id the journal never heard of". Chosen
+    # to be unmistakably not a device — `zzz` names no equipment anywhere — since
+    # what is under test is the EMPTY answer and the caller's rule that an absent
+    # entity must never be read as a silent one.
+    "light.zzz",
+    # `test_refs.personalise`'s leak case. ⚠️ TAKEN FROM `refs.py`'s OWN HEADER,
+    # which shapes it deliberately rather than really: an id of this form carries
+    # a person's name and a room, which is the privacy argument the whole module
+    # exists for. The test asserts no id of this shape survives into a delivered
+    # message, so it needs one that LOOKS like the thing being protected.
+    "sensor.someones_bedroom_window",
     # `test_level_shortfall`'s fixtures. Each names the KIND of equipment whose
     # behaviour the case turns on — a sauna is discretionary, a workshop runs
     # hard on some weekdays and barely on others — so the id is carrying the

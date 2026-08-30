@@ -391,3 +391,55 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
             args = {"name": "pump-anomaly"}
         leaked = refs_mod.entity_ids_in(_run(tool.call(args)))
         assert leaked == [], f"{tool.name} leaked {leaked}"
+
+
+# ── the return journey ──────────────────────────────────────────────────────
+
+def test_personalise_turns_a_handle_back_into_the_villas_label() -> None:
+    """⚠️ THE OUTBOUND HALF, MISSING UNTIL 2026-08-30. `pseudonymise` mapped ids
+    to handles on the way in and nothing mapped them back, so a delivered alert
+    read "Device d909 has stopped reporting"."""
+    table = refs_mod.RefTable()
+    ref = table.ref_for("sensor.pool_pump_power", "Pool pump")
+    out = refs_mod.personalise(f"Device {ref} is drawing more than usual.", table)
+    assert out == "Device Pool pump is drawing more than usual."
+
+
+def test_personalise_leaves_a_handle_this_run_never_minted() -> None:
+    """Visible nonsense beats a silent deletion — the same reason
+    `tools/concern._subject` refuses an unminted ref instead of hashing it."""
+    table = refs_mod.RefTable()
+    table.ref_for("sensor.a", "A")
+    assert refs_mod.personalise("d47 broke", table) == "d47 broke"
+
+
+def test_personalise_respects_a_NON_DEFAULT_prefix() -> None:
+    """⚠️ THE PATTERN IS BUILT FROM THE TABLE'S OWN PREFIX, not from a literal
+    "d". A hard-coded pattern would silently stop substituting the moment a
+    caller passed a different one — the substitution failing open, which is
+    exactly the defect this function was added to fix."""
+    table = refs_mod.RefTable(prefix="ent")
+    ref = table.ref_for("sensor.a", "Hall light")
+    assert ref.startswith("ent")
+    assert refs_mod.personalise(f"{ref} is off", table) == "Hall light is off"
+
+
+def test_personalise_does_not_match_inside_a_longer_token() -> None:
+    """⚠️ ANCHORED, FOR THE REASON THIS MODULE ALREADY RECORDS TWICE: `\\b` does
+    not help because `_` is a word character. `d1` must not be found inside
+    `d19`, inside `ad1`, or inside `d1_power`."""
+    table = refs_mod.RefTable()
+    table.ref_for("sensor.a", "Hall light")
+    for text in ("d19 is off", "ad1 is off", "d1_power is off", "3.d1 is off"):
+        assert refs_mod.personalise(text, table) == text, text
+
+
+def test_personalise_never_yields_an_entity_id() -> None:
+    """⚠️ IT MAPS TO A LABEL, NEVER TO AN ID, AND MUST NOT BECOME THE INVERSE OF
+    `resolve`. A delivered message is the furthest outward anything travels, so
+    this is the last place an id could leak."""
+    table = refs_mod.RefTable()
+    ref = table.ref_for("sensor.someones_bedroom_window", "Bedroom window")
+    out = refs_mod.personalise(f"{ref} is open", table)
+    assert refs_mod.entity_ids_in(out) == []
+    assert out == "Bedroom window is open"

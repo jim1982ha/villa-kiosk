@@ -341,3 +341,37 @@ def test_since_filters_by_timestamp() -> None:
     ], now_iso="2026-08-22T12:00:00+00:00")
     assert [r["id"] for r in journal.since("2026-08-22T10:00:00+00:00")] == ["light.b"]
     assert len(journal.since("")) == 2
+
+
+# ── last_report_at ──────────────────────────────────────────────────────────
+
+def test_last_report_at_returns_the_newest_stamp_for_that_entity() -> None:
+    journal.append([
+        _changed("light.a", at="2026-08-22T08:00:00+00:00"),
+        _changed("light.b", at="2026-08-22T09:00:00+00:00"),
+        _changed("light.a", at="2026-08-22T12:00:00+00:00"),
+    ], now_iso="2026-08-22T12:00:00+00:00")
+    assert journal.last_report_at("light.a") == "2026-08-22T12:00:00+00:00"
+    assert journal.last_report_at("light.b") == "2026-08-22T09:00:00+00:00"
+
+
+def test_last_report_at_is_EMPTY_for_an_entity_the_journal_never_heard_of() -> None:
+    """⚠️ AND THE CALLER MUST NOT READ THAT AS SILENCE. The journal holds
+    material CHANGES, so a steady device can be healthy and absent from it —
+    `tools/concern._silence_contradiction` may only ever use a PRESENT row to
+    refute a silence claim, never an absent one to support it."""
+    journal.append([_changed("light.a")], now_iso="2026-08-22T10:00:00+00:00")
+    assert journal.last_report_at("light.zzz") == ""
+    assert journal.last_report_at("") == ""
+
+
+def test_a_REMOVAL_still_counts_as_having_been_heard_from() -> None:
+    """⚠️ UNLIKE `last_states`, WHICH DROPS IT. There the question is "what state
+    do I seed"; here it is "did the villa hear from this id", and hearing that it
+    went away is hearing from it."""
+    journal.append([
+        _changed("light.gone", at="2026-08-22T08:00:00+00:00"),
+        _changed("light.gone", new=None, at="2026-08-22T11:00:00+00:00"),
+    ], now_iso="2026-08-22T11:00:00+00:00")
+    assert "light.gone" not in journal.last_states()
+    assert journal.last_report_at("light.gone") == "2026-08-22T11:00:00+00:00"

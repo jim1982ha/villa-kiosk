@@ -146,6 +146,35 @@ class _Bounded:
         return await self._inner.run(**kwargs)
 
 
+def _hours_since_last_report(entity_id: str) -> Optional[float]:
+    """How long since the villa observed this device change, or None.
+
+    ⚠️ `None` MEANS "CANNOT SAY" AND NEVER "SILENT". The journal holds material
+    changes, so an absent entity may be steady and healthy; the only caller
+    (`tools/concern._silence_contradiction`) may use this to refute a silence
+    claim and never to support one.
+
+    ⚠️ `instants.as_utc` DOES THE PARSING, NOT `fromisoformat` HERE. The journal
+    stamps `at` from the event's own `time_fired`, whose offset is whatever Home
+    Assistant sent; comparing that against a local clock is the defect
+    `collect.as_utc_iso` was written for and `shared/instants` now owns for
+    every reader.
+    """
+    from datetime import datetime, timezone
+
+    from vesta.shared import instants
+    from vesta.supervise.observe import journal as journal_mod
+
+    when = instants.as_utc(journal_mod.last_report_at(entity_id))
+    if when is None:
+        return None
+    seconds = (datetime.now(timezone.utc) - when).total_seconds()
+    # A future stamp is clock skew, not a report yet to happen: clamp at 0 so a
+    # skewed villa reads as "just seen" rather than as "seen a long time ago",
+    # which would silently disable the veto.
+    return max(0.0, seconds) / 3600.0
+
+
 def _seeded(messages: Sequence[Mapping[str, Any]],
             seed: Optional[Tuple[Any, str]],
             refs: Any) -> Sequence[Mapping[str, Any]]:
@@ -333,6 +362,14 @@ async def investigate(*, provider: Provider,
                 # untunable, and the thumb tooltips' promise that "the villa
                 # raises this kind more readily" stays the fiction it was.
                 flag_type_of=sources_mod.flag_type_of,
+                # ⚠️ THE OBSERVATION FLOOR VETOES A SILENCE CLAIM IT CONTRADICTS
+                # (2026-08-30). Without this line the reasoning tier could
+                # assert a device had "zero readings in the past 72 hours" about
+                # one the journal watched change 1,056 times in that window, and
+                # nothing between the model and the owner's phone could tell.
+                # Wired here for the same reason as `flag_type_of`: this is the
+                # site that holds the entity id.
+                last_seen_hours=_hours_since_last_report,
                 run_id=ident))
 
         # ⚠️ THE ACTUATOR, AND UNTIL 2.718.0 NOTHING BUILT ONE. `act.build` had

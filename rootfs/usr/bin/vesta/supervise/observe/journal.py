@@ -411,6 +411,42 @@ def last_states() -> Dict[str, str]:
     return out
 
 
+def last_report_at(entity_id: str) -> str:
+    """When this entity last appeared in the journal, or "" if it never has.
+
+    ⚠️ THE OBSERVATION FLOOR'S ANSWER TO "IS THIS DEVICE SILENT?", added so a
+    reasoning tier cannot claim otherwise unchallenged (2026-08-30). A delivered
+    alert said a sensor had "zero readings in the past 72 hours despite complete
+    observation coverage" about a device that recorded 1,056 state changes in
+    that window and was reporting one minute after the pass that condemned it.
+
+    ⚠️ PRESENCE PROVES ACTIVITY; ABSENCE PROVES NOTHING. The journal records
+    MATERIAL CHANGES, not every reading, so a genuinely steady device can be
+    healthy and journal nothing — which is why the caller may only ever use this
+    to REFUTE a silence claim, never to support one. That asymmetry is the whole
+    design: a row here means the villa observed this device change, and no
+    reading of "it stopped reporting" survives that.
+
+    ⚠️ A REMOVAL ROW STILL COUNTS AS A REPORT, unlike in `last_states`. There the
+    question is "what state do I seed", so a departed entity must be dropped;
+    here the question is "did the villa hear from this id", and hearing that it
+    went away is hearing from it.
+    """
+    wanted = str(entity_id or "").strip()
+    if not wanted:
+        return ""
+    newest = ""
+    for row in read()["entries"]:
+        if not isinstance(row, dict) or str(row.get("id") or "") != wanted:
+            continue
+        # Entries are chronological, but comparing rather than taking the last
+        # costs nothing and survives a ring that is ever written out of order.
+        at = str(row.get("at") or "")
+        if at > newest:
+            newest = at
+    return newest
+
+
 def since(iso: str) -> List[Dict[str, Any]]:
     """Rows at or after `iso`, oldest first.
 

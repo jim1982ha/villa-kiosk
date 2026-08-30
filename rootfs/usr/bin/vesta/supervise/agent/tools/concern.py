@@ -47,21 +47,40 @@ in the next concern.
 
 from __future__ import annotations
 
+import re
 from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
                     Tuple)
 
 from vesta.supervise.agent import contracts
+from vesta.supervise.agent import refs as refs_mod
 from vesta.supervise.agent import render
 from vesta.supervise.agent.concerns import Concern
 from vesta.supervise.agent.refs import RefTable
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import fail
 from vesta.supervise.agent.tools.base import text
-from vesta.adapters.log import swallow
+from vesta.adapters.log import log, swallow
 
 #: Where a concern lands when the model gives no confidence of its own.
 #: ⚠️ THE MIDDLE, NOT THE TOP. An unstated confidence is an unstated confidence.
 DEFAULT_CONFIDENCE: float = 0.5
+
+#: A claim that a device has gone quiet, in the words a model actually uses.
+#: ⚠️ MATCHED ON THE CLAIM, NOT ON THE SEVERITY OR THE FLAG TYPE. The alert that
+#: caused this was a `warning` about a healthy sensor; nothing about its metadata
+#: was unusual and only the sentence was false.
+_SILENCE_CLAIM = re.compile(
+    r"stopped\s+report|no\s+longer\s+report|not\s+report|zero\s+readings?"
+    r"|no\s+readings?|has\s+gone\s+(?:quiet|offline|dark)|is\s+offline"
+    r"|went\s+offline|stopped\s+responding|unavailable\s+for",
+    re.IGNORECASE)
+
+#: How recently a device must have been observed for a silence claim about it to
+#: be REFUSED outright. ⚠️ DELIBERATELY SHORT. A device seen three minutes ago is
+#: not offline under any reading of the claim; one last seen nine hours ago might
+#: genuinely have stopped an hour later, and refusing that would be this check
+#: overreaching into a judgement it cannot make. Hours.
+SILENCE_MAX_AGE_HOURS: float = 1.0
 
 
 class RaiseConcern(BaseTool):
@@ -142,8 +161,15 @@ class RaiseConcern(BaseTool):
                  evidence_source: Optional[Callable[[], Sequence[Mapping[str, Any]]]] = None,
                  sink: Optional[Callable[[Concern], Tuple[bool, str]]] = None,
                  flag_type_of: Optional[Callable[[str], str]] = None,
+                 last_seen_hours: Optional[Callable[[str], Optional[float]]] = None,
                  run_id: str = "") -> None:
         self._refs = refs
+        # ⚠️ THE OBSERVATION FLOOR, INJECTED RATHER THAN IMPORTED, so a run
+        # without one simply does not make this check instead of failing — the
+        # same shape as `flag_type_of`. It answers "how many hours since the
+        # villa last observed this device", or None for "cannot say", and None
+        # must never be read as silence: see `journal.last_report_at`.
+        self._last_seen_hours = last_seen_hours
         self._evidence_source = evidence_source
         self._sink = sink
         # ⚠️ INJECTED, AND STAMPED RATHER THAN ACCEPTED — the same rule as
@@ -207,10 +233,52 @@ class RaiseConcern(BaseTool):
                          "is wired to it.")]
 
         rendered = render.enforce(str(args.get("body") or ""), evidence)
+        if rendered.stripped:
+            # ⚠️ REFUSED, NOT DELIVERED WITH THE MARKER IN IT (2026-08-30). This
+            # used to record the stripped body and tell the model afterwards, so
+            # an owner received: "it showed [unsourced figure removed] against a
+            # median of [unsourced figure removed] — a sustained anomaly." That
+            # sentence asserts nothing, and it reads like a redaction of
+            # something real rather than the absence of anything.
+            #
+            # ⚠️ AND THE STRIPPING WAS THE EVIDENCE THE FINDING WAS INVENTED.
+            # Figures that resolve to no tool result are the signal `enforce`
+            # exists to raise; carrying on to store the concern used the signal
+            # as decoration. A refusal is a result the model can act on — the
+            # same argument the duplicate branch below makes.
+            #
+            # ⚠️ LOSING THE FINDING IS THE ACCEPTED COST, AND IT MUST NOT BE A
+            # SILENT ONE. At `depth: brief` — the DEFAULT — a run has 4 turns,
+            # and the investigation that produced this defect used all four, so
+            # a refusal on the last turn leaves no turn to restate in and the
+            # concern simply does not happen. That is the right outcome for an
+            # unsourced claim and the wrong one to hide: `scheduler` states the
+            # same rule for escalations the cap drops ("a flagged item that is
+            # never investigated leaves NO trace anywhere today").
+            #
+            # ⚠️ IT ALSO RESTORES A MEASUREMENT THIS CHANGE BROKE. `figures_stripped`
+            # used to travel with the stored concern so "how often does the agent
+            # invent numbers" was answerable from the record; nothing is stored
+            # now, so the log carries it instead.
+            self._refused("unsourced figures: "
+                          + ", ".join(rendered.removed[:3]), title)
+            return [fail("invalid_args",
+                         f"{rendered.stripped} figure(s) in the body appear in "
+                         f"no tool result from this run "
+                         f"({', '.join(rendered.removed[:3])}). A concern is "
+                         f"not recorded with unsourced numbers in it. Re-read "
+                         f"what you are citing and quote the value exactly, or "
+                         f"state the finding without a number.")]
+
+        silence = self._silence_contradiction(title, rendered.body, entity_id)
+        if silence:
+            self._refused("the villa had just seen the device", title)
+            return [fail("invalid_args", silence)]
+
         concern = Concern(
             subject_key=subject_key,
-            title=title,
-            body=rendered.body,
+            title=refs_mod.personalise(title, self._refs),
+            body=refs_mod.personalise(rendered.body, self._refs),
             severity=severity,
             audience=audience,
             confidence=_confidence(args.get("confidence")),
@@ -233,14 +301,67 @@ class RaiseConcern(BaseTool):
             # different" is an instruction; an exception is a dead run.
             return [fail("invalid_args", reason or "the concern was not recorded")]
 
-        note = f"Recorded a {severity} concern about {label}."
-        if rendered.stripped:
-            note += (
-                f" {rendered.stripped} figure(s) were REMOVED because no tool "
-                f"result in this run contained them "
-                f"({', '.join(rendered.removed[:3])}). Cite what you read, or "
-                f"state the finding without a number.")
-        return [text(note)]
+        # ⚠️ NO "figures were removed" CLAUSE ANY MORE — a stripped body is now
+        # refused above and never reaches here, so a note about it would
+        # describe a branch that cannot happen. It was the whole tail of this
+        # message until 2026-08-30.
+        return [text(f"Recorded a {severity} concern about {label}.")]
+
+    def _refused(self, why: str, title: str) -> None:
+        """One line so a refusal is visible to whoever reads the pass.
+
+        ⚠️ THE MODEL'S TITLE, NOT ITS BODY, and no entity id — a refused concern
+        is still a payload and the same rules apply to it. The title is what
+        makes the line answer "which finding did we lose".
+        """
+        try:
+            log(f"concern REFUSED ({why}): {title[:80]}")
+        except Exception as err:  # noqa: BLE001 - a log must not fail a refusal
+            swallow("could not log a refused concern", err)
+
+    # ── the observation floor's veto ────────────────────────────────────────
+    def _silence_contradiction(self, title: str, body: str,
+                               entity_id: str) -> str:
+        """The refusal when the run claims a device is quiet and the villa
+        watched it report. "" when there is nothing to say.
+
+        ⚠️ THIS IS THE ONE CHECK IN THIS FILE THAT JUDGES THE FINDING, and it
+        earns the exception by comparing the claim against OBSERVED DATA rather
+        than against a preference. Everything else here refuses malformed input;
+        this refuses a statement the journal contradicts.
+
+        ⚠️ ONE DIRECTION ONLY. A device the journal has not heard from is NOT
+        thereby silent — the journal records material changes, so a steady
+        device can be healthy and absent from it (`journal.last_report_at` states
+        this at length). So `None` and "too long ago" both mean "no opinion",
+        and the only outcome available here is refusing a claim that is
+        provably false.
+
+        ⚠️ FOUND IN THE FIELD, ON A DUTY-CYCLED DEVICE. A bathroom light and VMC
+        power sensor reads 0 W most of the day and 30-40 W when the room is in
+        use, so its median is near zero and "zero readings" is a fair
+        description of most of its samples — but not of the device. The model
+        turned "the value is usually zero" into "it has stopped reporting". That
+        is the same misreading `salience._clusters` was built for on the rules
+        side, arriving here through a tier that has no equivalent guard.
+        """
+        if not entity_id or self._last_seen_hours is None:
+            return ""
+        if not _SILENCE_CLAIM.search(f"{title}\n{body}"):
+            return ""
+        try:
+            age = self._last_seen_hours(entity_id)
+        except Exception as err:  # noqa: BLE001 - a veto must not fail the run
+            swallow("could not check when the device last reported", err)
+            return ""
+        if age is None or age > SILENCE_MAX_AGE_HOURS:
+            return ""
+        minutes = int(max(0.0, age) * 60)
+        return (f"this says the device has stopped reporting, but the villa "
+                f"recorded a change from it {minutes} minute(s) ago, so that "
+                f"is not true. If the reading is often ZERO, say that instead "
+                f"— a value of zero is not a missing reading. Re-read its "
+                f"recent history before raising this.")
 
     # ── the subject ─────────────────────────────────────────────────────────
     def _subject(self, args: Mapping[str, Any]) -> Tuple[str, str, str, str]:

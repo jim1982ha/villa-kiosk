@@ -67,12 +67,13 @@ def _refs() -> RefTable:
 
 
 def _tool(*, cfg: Any = None, pol: Any = None, evidence: Any = None,
-          refs: Any = None) -> RaiseConcern:
+          refs: Any = None, last_seen_hours: Any = None) -> RaiseConcern:
     run_policy = pol if pol is not None else policy.for_run(
         cfg, tier="reason", tool_names=["raise_concern"])
     return RaiseConcern(
         refs=_refs() if refs is None else refs,
         evidence_source=lambda: EVIDENCE if evidence is None else evidence,
+        last_seen_hours=last_seen_hours,
         sink=writer(run_policy, cfg))
 
 
@@ -254,16 +255,22 @@ def test_a_second_concern_on_an_open_subject_must_supersede() -> None:
 
 
 # ── the evidence rule ───────────────────────────────────────────────────────
-def test_an_unsourced_figure_is_stripped_and_the_model_is_told() -> None:
-    """⚠️ THE COUNT COMES BACK. A silent strip teaches the model nothing and it
-    writes the same unsourced sentence into the next concern."""
+def test_an_unsourced_figure_REFUSES_the_concern_and_the_model_is_told() -> None:
+    """⚠️ REFUSED SINCE 2026-08-30, NOT STORED WITH THE MARKER IN IT. This used
+    to strip the figure, store the body and tell the model afterwards, so an
+    owner received "it showed [unsourced figure removed] against a median of
+    [unsourced figure removed] — a sustained anomaly": a sentence asserting
+    nothing, which reads like a redaction of something real.
+
+    ⚠️ THE INVARIANT THE OLD TEST PROTECTED SURVIVES — the model is still told,
+    and still told WHICH figure, because a silent refusal teaches it as little
+    as a silent strip did. What changed is that nothing is delivered."""
     blocks = _call(_tool(cfg={"shadow": False}),
                    body="The pump drew 340 W, up from 95 W last month.")
-    said = str(blocks[0].get("text") or "")
-    assert "REMOVED" in said and "95" in said
-    stored = concerns.read()[0]["body"]
-    assert "340 W" in stored, "a figure the run DID read must survive"
-    assert "95 W" not in stored
+    said = str(_err(blocks).get("message") or "")
+    assert "95" in said, said
+    assert "no tool result" in said, said
+    assert concerns.read() == [], "a concern with an unsourced figure must not be stored"
 
 
 def test_a_figure_past_the_summary_cutoff_is_still_sourced() -> None:
@@ -288,12 +295,84 @@ def test_the_whole_tool_result_is_not_stored_with_the_concern() -> None:
     """⚠️ `cited` IS FOR THE CHECK AND STAYS IN MEMORY. Up to 8 KB a row into a
     store bounded at 2,000 concerns is two orders of magnitude past what that
     bound was set against."""
+    # ⚠️ `cited` HAS TO SOURCE THE DEFAULT BODY'S 340 W since 2026-08-30, or the
+    # concern is refused for an unsourced figure and this test asserts against an
+    # empty store — measuring the new refusal rather than what it is named for.
     row = [{"tool": "read_salient", "args_digest": "d", "summary": "short",
-            "cited": "y" * 5000}]
+            "cited": "y" * 5000 + " the reading was 340 W"}]
     _call(_tool(cfg={"shadow": False}, evidence=row))
     stored = concerns.read()[0]["evidence"][0]
     assert "cited" not in stored, stored
     assert stored["summary"] == "short"
+
+
+# ── the handle must not reach the reader ────────────────────────────────────
+def test_a_run_HANDLE_in_the_prose_becomes_the_villas_own_label() -> None:
+    """⚠️ FOUND IN A DELIVERED ALERT (2026-08-30): "Device d909 has stopped
+    reporting". `pseudonymise` turned ids into handles on the way in and nothing
+    turned them back on the way out, so a handle the model wrote into its PROSE
+    reached the owner's phone.
+
+    ⚠️ THE HANDLE WAS ALREADY UNRESOLVABLE WHEN IT ARRIVED. The ref table is
+    per-run and in memory, so `d909` names a different device next run and
+    nothing outside the run can resolve it — the message named a device by an
+    identifier that had ceased to exist."""
+    blocks = _call(_tool(cfg={"shadow": False}),
+                   title="d1 is drawing more than usual",
+                   body="Device d1 has been at 340 W for 6 hours.")
+    assert "error" not in blocks[0], blocks
+    row = concerns.read()[0]
+    assert row["title"] == "Pool pump is drawing more than usual", row["title"]
+    assert "Pool pump" in row["body"] and "d1" not in row["body"], row["body"]
+
+
+def test_a_handle_this_run_never_minted_is_LEFT_ALONE() -> None:
+    """⚠️ VISIBLE NONSENSE BEATS A SILENT DELETION, the same rule `_subject`
+    follows when it REFUSES an unminted ref rather than hashing it. `d47` here
+    is not a device this run saw, so there is no label to substitute and
+    inventing one would be the tool agreeing with a hallucination."""
+    blocks = _call(_tool(cfg={"shadow": False}),
+                   body="Device d47 has been at 340 W for 6 hours.")
+    assert "error" not in blocks[0], blocks
+    assert "d47" in concerns.read()[0]["body"]
+
+
+# ── the observation floor's veto ────────────────────────────────────────────
+def test_a_silence_claim_is_REFUSED_when_the_villa_just_saw_the_device() -> None:
+    """⚠️ THE FIELD DEFECT THIS EXISTS FOR (2026-08-30). A delivered alert said a
+    sensor had "zero readings in the past 72 hours despite complete observation
+    coverage" about a device that recorded 1,056 state changes in that window and
+    reported again one minute after the pass that condemned it. It is duty-cycled
+    — 0 W most of the day — and the model turned "the value is usually zero" into
+    "it has stopped reporting"."""
+    blocks = _call(_tool(cfg={"shadow": False}, last_seen_hours=lambda _e: 0.05),
+                   body="It has stopped reporting: zero readings in 72 hours.")
+    said = str(_err(blocks).get("message") or "")
+    assert "3 minute(s) ago" in said, said
+    assert "a value of zero is not a missing reading" in said, said
+    assert concerns.read() == []
+
+
+def test_a_silence_claim_about_a_GENUINELY_quiet_device_still_lands() -> None:
+    """⚠️ ONE DIRECTION ONLY. The journal records material CHANGES, so an absent
+    device may be steady and healthy — "cannot say" and "long ago" both mean no
+    opinion, and the only outcome this check can produce is refusing a claim the
+    villa's own record disproves."""
+    for age in (None, 9.0):
+        concerns._write([])
+        blocks = _call(_tool(cfg={"shadow": False},
+                             last_seen_hours=lambda _e, a=age: a),
+                       body="It has stopped reporting; last seen days ago.")
+        assert "error" not in blocks[0], (age, blocks)
+        assert len(concerns.read()) == 1, age
+
+
+def test_an_ORDINARY_concern_is_untouched_by_the_silence_veto() -> None:
+    """The veto reads the CLAIM, not the severity or the flag type: the alert it
+    was built for was an unremarkable `warning` and only its sentence was false."""
+    blocks = _call(_tool(cfg={"shadow": False}, last_seen_hours=lambda _e: 0.0))
+    assert "error" not in blocks[0], blocks
+    assert len(concerns.read()) == 1
 
 
 # ── the delivery class ──────────────────────────────────────────────────────
@@ -385,7 +464,13 @@ def test_investigate_records_a_concern_the_model_asks_for() -> None:
 
 
 def test_a_figure_the_run_never_read_does_not_reach_the_store() -> None:
-    """The evidence rule, enforced through the real loop rather than in a unit."""
+    """The evidence rule, enforced through the real loop rather than in a unit.
+
+    ⚠️ THE WHOLE CONCERN IS NOW REFUSED, not stored with the bad figure removed
+    (2026-08-30) — so "does not reach the store" is satisfied by there being no
+    concern at all. The sourced figure beside it goes too, and that is the
+    accepted cost: the run had one more turn to restate the finding without the
+    number it could not cite, and chose to say "filed" instead."""
     provider = FakeProvider([
         asks("read_state", {}, "tu_1"),
         asks("raise_concern", {
@@ -397,9 +482,7 @@ def test_a_figure_the_run_never_read_does_not_reach_the_store() -> None:
     asyncio.run(runtime.investigate(
         provider=provider, system=[], messages=[], config=ENABLED,
         registry=_reason_registry(), tier="reason"))
-    body = concerns.read()[0]["body"]
-    assert "340 W" in body
-    assert "12000" not in body
+    assert concerns.read() == [], "an unsourced figure must refuse the write"
 
 
 def test_triage_is_never_offered_the_write_tool() -> None:
@@ -564,3 +647,61 @@ def test_a_concern_records_WHICH_investigation_produced_it() -> None:
     assert "run_id=ident" in call, (
         "runtime.investigate no longer hands RaiseConcern the run id, so every "
         f"concern is written with an empty origin. The call reads: {call!r}")
+
+
+def test_investigate_WIRES_the_observation_floor_into_the_write_tool(
+        monkeypatch: Any) -> None:
+    """⚠️ `feedback_pin-the-caller`, FOR THE FIFTEENTH TIME IN THIS REPO. Every
+    test above builds `RaiseConcern` directly and passes `last_seen_hours`
+    itself, so all of them stay green if `runtime.investigate` never passes it —
+    and an unwired veto is indistinguishable from no veto at all. That is
+    exactly how the degradation ladder sat unreachable from v2.641.0 to
+    v2.698.0 with each rung asserted in isolation.
+
+    The patch is picked up because `runtime` looks the function up when it
+    CONSTRUCTS the tool; if the argument is dropped, `last_seen_hours` is None,
+    the veto never runs and the concern lands."""
+    monkeypatch.setattr(runtime, "_hours_since_last_report", lambda _e: 0.05)
+    provider = FakeProvider([
+        asks("read_state", {}, "tu_1"),
+        asks("raise_concern", {
+            "title": "Pool pump offline",
+            "body": "It has stopped reporting: zero readings in 72 hours.",
+            "severity": "warning", "ref": "d1"}, "tu_2"),
+        says("filed"),
+    ])
+    asyncio.run(runtime.investigate(
+        provider=provider, system=[], messages=[], config=ENABLED,
+        registry=_reason_registry(), tier="reason"))
+    assert concerns.read() == [], (
+        "runtime.investigate did not pass last_seen_hours, so a silence claim "
+        "the villa's own journal disproves was stored and would be delivered")
+
+
+def test_a_REFUSED_concern_is_never_lost_silently(
+        monkeypatch: Any, capsys: Any) -> None:
+    """⚠️ THE ACCEPTED COST OF REFUSING MUST BE VISIBLE. At `depth: brief` — the
+    DEFAULT — a run has 4 turns, and the investigation that produced this defect
+    used all four; a refusal on the last turn leaves no turn to restate in, so
+    the finding simply does not happen. That is correct for an unsourced claim
+    and wrong to hide, the same rule `scheduler` states for escalations the
+    per-pass cap drops.
+
+    ⚠️ IT ALSO REPLACES A MEASUREMENT THIS CHANGE BROKE — `figures_stripped` used
+    to travel with the stored concern, so "how often does the agent invent
+    numbers" was answerable from the record. Nothing is stored now, so the log
+    is where that lives."""
+    _call(_tool(cfg={"shadow": False}),
+          body="The pump drew 340 W, up from 95 W last month.")
+    unsourced = capsys.readouterr().out
+    assert "concern REFUSED" in unsourced, unsourced
+    assert "95 W" in unsourced, unsourced
+
+    _call(_tool(cfg={"shadow": False}, last_seen_hours=lambda _e: 0.05),
+          body="It has stopped reporting: zero readings in 72 hours.")
+    silence = capsys.readouterr().out
+    assert "concern REFUSED" in silence, silence
+    assert "just seen the device" in silence, silence
+    # ⚠️ A refusal is still a payload: no entity id may ride out on it.
+    from vesta.supervise.agent import refs as refs_mod
+    assert refs_mod.entity_ids_in(unsourced + silence) == []

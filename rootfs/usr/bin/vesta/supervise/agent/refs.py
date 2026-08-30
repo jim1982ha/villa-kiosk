@@ -74,6 +74,12 @@ class RefTable:
         self._labels[ref] = str(label) if label else readable_label(key)
         return ref
 
+    @property
+    def prefix(self) -> str:
+        """What this run's handles start with. Read by `personalise`, which has
+        to build a pattern and must not assume the default."""
+        return self._prefix
+
     def resolve(self, ref: str) -> Optional[str]:
         """The entity id behind a handle, or None. VESTA-side only."""
         return self._to_id.get(str(ref or "").strip())
@@ -139,6 +145,42 @@ def pseudonymise(text: str, table: "RefTable") -> str:
         return match.group(0).replace(entity_id, table.ref_for(entity_id))
 
     return _ENTITY_ID.sub(swap, str(text))
+
+
+def personalise(text: str, table: "RefTable") -> str:
+    """Every handle THIS RUN MINTED, replaced by the villa's own label.
+
+    ⚠️ THE RETURN JOURNEY, AND IT DID NOT EXIST UNTIL 2026-08-30 — a delivered
+    alert read "Device d909 has stopped reporting". `pseudonymise` is the
+    inbound half (ids -> handles) and had no outbound counterpart, so a handle
+    the model wrote into its PROSE travelled all the way to the owner's phone.
+
+    ⚠️ THE HANDLE WAS ALREADY MEANINGLESS WHEN IT ARRIVED, WHICH IS WHAT MAKES
+    THIS WORSE THAN UGLY. The table is per-run and in memory by design (see this
+    module's header): `d909` names a different device next run and nothing
+    outside the run can resolve it at all. So the message named a device by an
+    identifier that had ceased to exist before it was read — neither the owner
+    nor VESTA can say afterwards which device it meant.
+
+    ⚠️ ONLY HANDLES THIS TABLE KNOWS ARE SUBSTITUTED. A model that invents `d47`
+    leaves it in the text, where it is visible as nonsense, rather than having it
+    silently deleted — the same reason `tools/concern._subject` REFUSES an
+    unminted ref instead of hashing it. And prose legitimately containing
+    something shaped like a handle is left alone.
+
+    ⚠️ NOT THE INVERSE OF `resolve`, AND MUST NOT BECOME ONE. This maps a handle
+    to a LABEL, never to an entity id — the boundary this module exists to hold
+    is that ids do not travel outward, and a delivered message is the furthest
+    outward anything goes.
+    """
+    if table is None:
+        return str(text)
+
+    def swap(match: "_re.Match[str]") -> str:
+        return table.label(match.group(1)) or match.group(0)
+
+    return _re.sub(rf"(?<![\w.])({_re.escape(table.prefix)}\d+)(?![\w])",
+                   swap, str(text))
 
 
 def entity_ids_in(blob: object) -> List[str]:
