@@ -1,3 +1,14 @@
+## 2.917.0
+
+### Fixed — one tool call was carrying 52,000 tokens through a whole run
+Asked for the entities it could not assess, the salience tool returned every one
+of them — 820 on this property — because its row limit bounded only the ranking
+beside it. A tool result is re-sent on every later turn, so a single call early
+in an investigation carried about 157,000 tokens and took a scheduled pass from
+roughly five cents to thirteen. The list now follows the same limit and reports
+how many were left out, so "I could not assess N of your devices" is still
+sayable — that count, not the rows, was always what made it honest.
+
 ## 2.916.0
 
 ### Changed — the observation record is now judged against what reads it

@@ -165,9 +165,32 @@ class ReadSalient(BaseTool):
             # your devices and here is why" is the honest half of any coverage
             # claim, and the pipeline's inability to say it is what the old
             # blueprint stand-down papered over (deleted in 2.755.0).
+            #
+            # ⚠️ AND IT IS CLAMPED BY `limit` LIKE THE RANKING ABOVE, WHICH IT
+            # WAS NOT UNTIL 2026-08-30. `limit` bounded only `ranked`, so this
+            # block returned EVERY unscorable entity — 820 of them on the
+            # reference property. Measured: the result went from 2,474 tokens to
+            # 52,319, and a tool result is re-sent on every later turn of the
+            # run, so one call at turn 2 of 4 carried ~157k tokens and took a
+            # scheduled pass from ~$0.05 to $0.13.
+            #
+            # ⚠️ THE HONEST CLAIM SURVIVES BECAUSE `count` IS THE TOTAL. What
+            # makes "I could not assess N of your devices" sayable is the
+            # NUMBER, not N rows of evidence for it; the rows are examples of
+            # WHY, and 25 examples say what 820 say. Truncating without the
+            # total would have traded a cost bug for a correctness one.
+            #
+            # ⚠️ `count`/`returned`/`more` ARE ON `redact.ALLOWED_FIELDS`
+            # ALREADY. A freshly-invented key here would be scrubbed out of the
+            # transcript and the model would receive a truncated list with no
+            # sign it was truncated — the allow-list working exactly as designed
+            # and deleting the fix.
             missing = salience_mod.unscorable(list(scored))
-            blocks.append(data({"unscorable":
-                                [self._as_row(m.as_dict()) for m in missing]}))
+            shown = missing[:limit]
+            blocks.append(data({
+                "unscorable": [self._as_row(m.as_dict()) for m in shown],
+                "count": len(missing), "returned": len(shown),
+                "more": max(0, len(missing) - len(shown))}))
         return blocks
 
     def _as_row(self, row: Dict[str, Any]) -> Dict[str, Any]:

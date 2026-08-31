@@ -488,3 +488,41 @@ def test_an_UNWIRED_tool_REFUSES_rather_than_returning_empty() -> None:
             f"from a quiet villa")
         assert blocks[0]["error"]["code"] == "unavailable"
         assert "not connected" in blocks[0]["error"]["message"]
+
+
+def test_the_unscorable_block_is_CLAMPED_but_still_states_the_total() -> None:
+    """⚠️ MEASURED ON THE PROPERTY (2026-08-30), NOT IMAGINED. `limit` bounded
+    only the ranking, so this block returned EVERY unscorable entity — 820 of
+    them — and the result went from 2,474 tokens to 52,319. A tool result is
+    re-sent on every later turn, so one call at turn 2 of 4 carried ~157k tokens
+    and took a scheduled pass from ~$0.05 to $0.13.
+
+    ⚠️ THE HONEST CLAIM IS THE COUNT, NOT THE ROWS. What makes "I could not
+    assess N of your devices" sayable is the NUMBER; the rows are examples of
+    WHY, and truncating without the total would have traded a cost bug for a
+    correctness one — the exact thing this block was added to prevent."""
+    from vesta.supervise.agent.tools import read as read_tools
+    from vesta.supervise.agent.refs import RefTable
+    from vesta.supervise.observe import salience as sal
+
+    thin = []
+    for i in range(60):
+        row = sal.Salience(entity_id=f"sensor.a{i}_power", kind="numeric")
+        row.reason = "only 3 usable reading(s); 7 needed"
+        thin.append(row)
+
+    tool = read_tools.ReadSalient(scorer=lambda: thin, refs=RefTable())
+    body = _run(tool.call({"limit": 5, "include_unscorable": True}))[1]["json"]
+    assert len(body["unscorable"]) == 5, "the rows must follow `limit`"
+    assert body["count"] == 60, "the TOTAL is what keeps the claim honest"
+    assert body["returned"] == 5 and body["more"] == 55
+
+
+def test_the_unscorable_TOTALS_survive_the_redaction_scrub() -> None:
+    """⚠️ A FRESHLY-INVENTED KEY WOULD BE SCRUBBED AND THE MODEL WOULD RECEIVE A
+    TRUNCATED LIST WITH NO SIGN IT WAS TRUNCATED — the allow-list working as
+    designed and silently deleting the fix. `count`/`returned`/`more` are on
+    `redact.ALLOWED_FIELDS` already, and this is what says so."""
+    from vesta.supervise.agent import redact
+    for key in ("count", "returned", "more"):
+        assert key in redact.ALLOWED_FIELDS, key
