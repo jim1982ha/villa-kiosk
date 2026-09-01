@@ -1,3 +1,14 @@
+## 2.920.0
+
+### Changed — the circuit breaker that stops a failing provider existed twice
+The briefing's narration layer and the agent's budget module each carried their
+own copy: the same four methods, the same code, the same two constants for how
+many failures open the circuit and how long it rests. One said so in a comment,
+but that explained why the numbers were chosen, never why there had to be two —
+so nothing kept the pair in step. There is now one, in the shared layer both may
+import. The Home Assistant client keeps its own on purpose: it comes back
+half-open so a single trial call decides, which is different behaviour.
+
 ## 2.919.0
 
 ### Fixed — a shared helper's docstring named three files, none of which resolve
