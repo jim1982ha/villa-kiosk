@@ -144,7 +144,17 @@ CONFIG_DEFAULTS: Final[Dict[str, Any]] = {
     # a month with no acknowledgement" is the workbook's number for ONE
     # property; a busier or quieter villa needs a different one, and a tuning
     # constant baked into a redistributable add-on is CLAUDE.md's first hard
-    # rule broken. See `noise.py` for what they gate.
+    # rule broken.
+    #
+    # ⚠️ NOTHING READS THESE TWO ANY MORE (/dry-audit, 2026-09-01). The module
+    # that gated on them went with the blueprint-event machinery, and the only
+    # other place either name appears is `reportsApi.ts`'s wire map. So they are
+    # seeded into every villa's config document, mapped to camelCase for a
+    # client that never asks for them, and an owner who sets one gets no
+    # behaviour. Left in place rather than deleted because removing a shipped
+    # config key is the owner's call, not an audit's — this comment is the
+    # finding until then. NOT an example of the rule above: the rationale is
+    # sound, its consumer is what disappeared.
     "noise_threshold_fires": 20,
     "noise_window_days": 30,
     # ⚠️ THE OBSERVATION FLOOR'S CADENCE, AND IT IS CONFIG FOR THE SAME REASON

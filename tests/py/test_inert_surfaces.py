@@ -108,9 +108,11 @@ def test_the_brief_dims_nothing_at_all_any_more() -> None:
     now run in both modes, so there is NOTHING mode-dependent left on the
     briefing's checks tab, and this pin holds the whole tab to that.
 
-    `.reports-standing-down` itself survives — `AutomationsTab` uses it for
-    the families the owner has switched off, and `AgentActSettings` for the
-    to-do field under "Alert only". Those ARE genuinely idle. This pin is
+    `.reports-standing-down` itself survives — `AgentActSettings` uses it for
+    the to-do field under "Alert only", which IS genuinely idle. (It also had
+    a second user, `AutomationsTab`, for families the owner had switched off;
+    that tab is deleted, so grep for the class rather than trusting this list
+    — naming users is a claim that rots, see `shared/text.py`.) This pin is
     about the checks tab only.
     """
     path = os.path.join(REPO_ROOT, "src", "vesta", "brief", "components",

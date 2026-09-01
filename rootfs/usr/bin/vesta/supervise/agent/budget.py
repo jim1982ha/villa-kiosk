@@ -35,6 +35,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Final, Mapping, Optional
 
+from vesta.shared.breaker import Breaker, BREAKER_FAILURES, BREAKER_RESET_S
 from vesta.supervise.agent import config as agent_config
 from vesta.adapters import store
 from vesta.adapters import usage as usage_mod
@@ -48,11 +49,6 @@ BUDGET_FILE: Final[str] = f"{store.DATA_DIR}/vesta/budget.json"
 #: a villa on a 30-minute cadence wants half of it.
 DEFAULT_MONTHLY_LIMIT: Final[int] = 4_000
 
-#: Same shape and same numbers as `providers.Breaker`, for the same reason: a
-#: provider that is down stays down for minutes, and retrying every cycle is how
-#: a rate limit becomes a ban.
-BREAKER_FAILURES: Final[int] = 3
-BREAKER_RESET_S: Final[float] = 1800.0
 
 #: A hard stop on one run, independent of the month. The monthly ceiling cannot
 #: catch a single run that loops, because it is one run.
@@ -287,38 +283,6 @@ def status(config: Optional[Mapping[str, Any]] = None,
     }
 
 
-class Breaker:
-    """Open after N consecutive failures; closes again after a rest.
-
-    ⚠️ IN MEMORY ON PURPOSE, WHICH IS THE OPPOSITE CALL FROM THE COUNTER ABOVE,
-    and the difference is the point. The counter guards a MONTH and must survive
-    a restart. The breaker guards MINUTES — a provider that is down right now —
-    and a restart is exactly the moment it is worth trying again. Persisting it
-    would keep the agent silent after a reboot that might have fixed things.
-    """
-
-    def __init__(self, failures: int = BREAKER_FAILURES,
-                 reset_s: float = BREAKER_RESET_S) -> None:
-        self.failures, self.reset_s = failures, reset_s
-        self._count = 0
-        self._opened_at = 0.0
-
-    def is_open(self, now: Optional[float] = None) -> bool:
-        moment = time.monotonic() if now is None else now
-        if self._count < self.failures:
-            return False
-        if moment - self._opened_at >= self.reset_s:
-            self._count = 0
-            return False
-        return True
-
-    def record_failure(self, now: Optional[float] = None) -> None:
-        self._count += 1
-        if self._count >= self.failures:
-            self._opened_at = time.monotonic() if now is None else now
-
-    def record_success(self) -> None:
-        self._count = 0
 
 
 #: ⚠️ ONE PROCESS-WIDE BREAKER, for the reason `providers.shared()` records: a

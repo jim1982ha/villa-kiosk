@@ -685,9 +685,11 @@ def verification_sweep(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
         elif verdict.verdict == "recurred":
             out.recurred += 1
         else:
-            # ⚠️ WRITTEN DOWN SO IT IS NOT ASKED AGAIN, and `verify` is left
-            # alone: its contract is that an unverifiable concern does not move
-            # STATE, which is right and is separately pinned. This records the
+            # ⚠️ WRITTEN DOWN SO IT IS NOT ASKED AGAIN. The verification step
+            # was left alone: its contract was that an unverifiable concern
+            # does not move STATE, which is right and is separately pinned.
+            # (`verify.py` itself has since been deleted with the
+            # blueprint-event machinery; the contract outlived the module.) This records the
             # attempt beside the state, the way an acknowledgement does.
             transition(str(row.get("id")), str(row.get("state")), now=now,
                        outcome=f"{UNVERIFIABLE} — {verdict.reason}")

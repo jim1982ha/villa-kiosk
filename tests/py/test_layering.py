@@ -250,13 +250,22 @@ def test_the_SHARED_layer_is_pure() -> None:
     shared = {m: s for m, s in mods.items() if _layer(m) == "shared"}
     assert len(shared) >= 6, (
         f"only {len(shared)} shared modules — the map or the walk is broken")
-    banned = ("open(", "HassClient", "ClientSession", "DATA_DIR",
+    # ⚠️ `open(` NEEDS A WORD BOUNDARY; THE REST DO NOT (/dry-audit, 2026-09-02).
+    # Substring matching flagged `shared/breaker.py` for its `is_open()` method,
+    # which opens nothing — the token was meant to catch the BUILTIN. `\bopen\(`
+    # still matches `open(path)`, `= open(`, `(open(`; it stops matching an
+    # identifier that merely ends in the word. The other tokens are type and
+    # module names where a substring is exactly right, so they stay literal —
+    # loosening those would be a real hole rather than a false-positive fix.
+    banned = (r"\bopen\(", "HassClient", "ClientSession", "DATA_DIR",
               "os.environ", "aiohttp", "socket.")
     offenders = []
     for rel, source in sorted(shared.items()):
         body = re.sub(r'"""[\s\S]*?"""|#[^\n]*', "", source)
         for token in banned:
-            if token in body:
+            found = (re.search(token, body) if token.startswith(r"\b")
+                     else token in body)
+            if found:
                 offenders.append(f"{rel}: {token}")
     assert not offenders, (
         "the shared layer touches the environment:\n  "

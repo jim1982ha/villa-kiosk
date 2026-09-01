@@ -116,7 +116,14 @@ class ReportContext:
     #: printed "current value 1694.7" and was asked what it meant.
     units: Dict[str, str] = field(default_factory=dict)
     #: The operator's own currency, from Home Assistant's `get_config`.
-    #: Empty prints amounts bare — see `_amount`.
+    #: ⚠️ POPULATED BUT UNREAD (/dry-audit, 2026-09-01). `pipeline` sets this
+    #: from the discovery layer, and the formatter it was for — `_amount` —
+    #: no longer exists anywhere in the tree, so nothing consumes the field
+    #: and no amount is currency-labelled. Left plumbed rather than removed
+    #: because deleting a populated field is a behaviour call, not an audit's;
+    #: `ledger` still warns that a number labelled with the wrong currency is
+    #: worse than a bare one, which is the reason to re-attach a formatter
+    #: rather than drop the field.
     currency: str = ""
 
 

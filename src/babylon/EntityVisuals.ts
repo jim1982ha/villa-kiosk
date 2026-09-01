@@ -206,8 +206,9 @@ const POOL_MIN_RADIUS = 0.4;
 /** Closer than this to its own fixture, a pool is not on a floor — it is on the
  *  ceiling the fixture hangs from. Half a metre is below any real mounting
  *  height (a table lamp clears its floor by more) and far above the few
- *  centimetres a ceiling lamp clears its slab by. See `airborne` in
- *  reshapeLightPools. */
+ *  centimetres a ceiling lamp clears its slab by. `airborne` is the floor
+ *  probe's own counter — see `floorProbe.ts`, not this file; the pointer
+ *  named `reshapeLightPools`, which has never contained it. */
 /** The comparison key of the no-room bucket, normalised ONCE at module level —
  *  `roomOf` hands out the LABEL and every map here is keyed by `roomKey`, so
  *  the two must be related in exactly one place. See chipRoom, which refuses

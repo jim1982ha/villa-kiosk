@@ -40,6 +40,7 @@ import time
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from aiohttp import ClientSession
+from vesta.shared.breaker import Breaker, BREAKER_FAILURES, BREAKER_RESET_S
 from vesta.adapters import secrets
 from vesta.adapters import usage
 from vesta.shared.contracts import NARRATION_MODE
@@ -57,8 +58,6 @@ REQUEST_TIMEOUT_S = 20.0
 #: long that is. Same shape as `hass.py`'s breaker, for the same reason: a
 #: provider that is down stays down for minutes, and retrying every report is
 #: how a rate limit becomes a ban.
-BREAKER_FAILURES = 3
-BREAKER_RESET_S = 1800.0
 
 #: ⚠️ THE COST CEILING IS COUNTED IN REQUESTS, NOT TOKENS, AND THAT IS
 #: DELIBERATE. Token accounting needs the provider's own reply to be trusted for
@@ -105,31 +104,6 @@ class Budget:
         return self._used
 
 
-class Breaker:
-    """Open after N consecutive failures; closes again after a rest."""
-
-    def __init__(self, failures: int = BREAKER_FAILURES,
-                 reset_s: float = BREAKER_RESET_S) -> None:
-        self.failures, self.reset_s = failures, reset_s
-        self._count = 0
-        self._opened_at = 0.0
-
-    def is_open(self, now: Optional[float] = None) -> bool:
-        moment = time.monotonic() if now is None else now
-        if self._count < self.failures:
-            return False
-        if moment - self._opened_at >= self.reset_s:
-            self._count = 0
-            return False
-        return True
-
-    def record_failure(self, now: Optional[float] = None) -> None:
-        self._count += 1
-        if self._count >= self.failures:
-            self._opened_at = time.monotonic() if now is None else now
-
-    def record_success(self) -> None:
-        self._count = 0
 
 
 #: A provider adapter: given a session and a payload, return prose or None.

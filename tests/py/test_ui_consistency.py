@@ -619,7 +619,7 @@ def test_a_field_puts_its_NAME_directly_under_its_CONTROL() -> None:
 
 
 def test_the_triage_tab_is_never_a_heading_over_nothing() -> None:
-    """⚠️ `AgentQueue` RETURNS null IN `auto` MODE, CORRECTLY — its own comment
+    """⚠️ THE DELETED `AgentQueue` RETURNED null IN `auto` MODE, CORRECTLY — its
     says an empty approval queue on a villa that investigates by itself is the
     permanent and correct state. True in the Cockpit, where it is one block among
     many; on a tab whose entire job is this tier it left a step header over an

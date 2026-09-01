@@ -238,7 +238,7 @@ export default function CockpitTab({
           they are "what is the supervision layer doing about it?". The owner
           asked twice where Concerns were shown; they were fourth of nine
           sections in a tab about equipment. Nothing was deleted and no
-          component changed — see `SupervisionTab`. */}
+          component changed. */}
 
       {/* ── Room / floor / category breakdown ──────────────────── */}
       {/* One selector, one section — category used to be its own
