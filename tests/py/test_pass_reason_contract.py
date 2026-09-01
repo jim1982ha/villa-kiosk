@@ -159,3 +159,40 @@ def test_the_panel_shows_the_investigation_yield_the_clause_carries() -> None:
         "the spend went is invisible")
     assert re.search(r'investigated \\s\*\(\\d\+\)|investigated \(\\d\+\)|/investigated', panel), (
         "nothing parses `investigated N` out of the reason")
+
+
+def test_a_run_now_with_NO_MODE_refuses_instead_of_spending() -> None:
+    """A bodyless `/agent-run-now` must answer 4xx, never start a paid pass.
+
+    ⚠️ THE HANDLER USED TO FALL OFF ITS OWN END AND RETURN None (/dry-audit,
+    2026-09-01), which aiohttp turns into a 500 — a server fault reported for
+    what is a malformed request. `mypy --strict` names that class of defect
+    and had been pointed at a deleted directory for months, so nothing did.
+    The missing-return rule now belongs to the restored gate (`test_ci_paths`
+    keeps it pointed at a real path); what the gate CANNOT express is the
+    choice made when the branch was added, which is what this pins.
+
+    ⚠️ THE CHOICE IS BUDGET SAFETY, NOT TIDINESS. The two guards at the top of
+    that handler normalise an unparseable or non-object body to `{}`, so the
+    only realistic way to reach the end is a BROKEN request — and this endpoint
+    spends the LLM budget. Making "no mode" mean `triage`, or a full pass,
+    would promote a JSON parse failure into a paid provider call. This project
+    has already paid for one unnoticed spend ($8.55/day on a villa nobody was
+    talking to), and a comment saying "deliberately not a run" is the exact
+    shape of unchecked prose dry-audit Part 3 exists to catch.
+    """
+    api = _read(os.path.join(ROOT, "rootfs", "usr", "bin", "vesta",
+                             "supervise", "api.py"))
+    start = api.index("async def agent_run_now_handler")
+    end = api.index("async def ", start + 1)
+    handler = api[start:end]
+
+    assert "status=400" in handler, (
+        "the no-mode path no longer answers 400 — a body naming none of "
+        "preview/drill/triage must be refused, not guessed at")
+
+    tail = handler[handler.rindex("if body.get(\"triage\")"):]
+    for spender in ("agent_scheduler.dispatch", "run_once", "anthropic_sdk.build"):
+        assert spender not in tail.split("status=400")[-1], (
+            f"{spender!r} is reachable AFTER the no-mode refusal, so an empty "
+            f"or malformed body can still reach a paid provider call")

@@ -121,7 +121,10 @@ class Followup:
 
 def cap_of(config: Optional[Mapping[str, Any]] = None) -> int:
     """How many investigations this pass may start. Never negative."""
-    raw = agent_config.view(config).get("max_investigations_per_pass")
+    # ⚠️ `Any` for the same reason as `registry.max_output_tokens`: the
+    # try/except below IS the validation, and None is one of the inputs it
+    # is written to absorb.
+    raw: Any = agent_config.view(config).get("max_investigations_per_pass")
     try:
         return max(0, int(raw))
     except (TypeError, ValueError, OverflowError):

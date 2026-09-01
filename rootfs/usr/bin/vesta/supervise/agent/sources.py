@@ -891,13 +891,13 @@ def _stamp_of(at: float) -> str:
 #: Names already reported, so the warning is once per process rather than once
 #: per run. ⚠️ A per-run warning would print the same line eight times an hour
 #: and train a reader to skip it.
-_UNWIRED_SEEN: set = set()
+_UNWIRED_SEEN: set[str] = set()
 
 #: The TOOL names withheld, as the model would have seen them. ⚠️ Separate from
 #: `_UNWIRED_SEEN`, which holds CLASS names for the once-only warning: a test
 #: comparing against `Registry.names` needs the published name, and deriving one
 #: from the other by convention is how the two drift.
-_UNWIRED_SEEN_NAMES: set = set()
+_UNWIRED_SEEN_NAMES: set[str] = set()
 
 
 def _warn_unwired(name: str) -> None:

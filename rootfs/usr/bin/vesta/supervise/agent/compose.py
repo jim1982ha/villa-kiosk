@@ -206,6 +206,13 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
     # count-vs-body mismatch, one release later, in the one case the first fix
     # did not cover. Everything the lead counts is now derived once, here.
     tally: Dict[str, Dict[str, Any]] = {}
+    # ⚠️ DECLARED ONCE FOR ALL SIX LOOPS IN THIS FUNCTION. `row` is rebound by
+    # six `for` statements over different sequences; mypy types it from the
+    # FIRST, so the four that iterate `Sequence[Mapping[str, Any]]` read as
+    # assigning a Mapping to a dict. Every use is `.get()` — `row` is never
+    # written through — so `Mapping` is the honest type and the annotation is a
+    # runtime no-op (/dry-audit, 2026-09-01).
+    row: Mapping[str, Any]
     for row in merged:
         if str(row.get("source") or "") != "automation":
             continue
@@ -250,8 +257,12 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
         tail = ("" if row.get("source") == "agent"
                 else f" — {inert(outcome)}" if outcome
                 else " — noticed, not investigated")
-        key = (str(row.get("domain") or ""), str(row.get("title") or "?"), tail)
-        looked[key] = looked.get(key, 0) + 1
+        # ⚠️ NOT `key` — that name is already bound to a `str` earlier in this
+        # function (the `subject_key` loop), and rebinding it to a 3-tuple made
+        # `--strict` read every use here against the wrong type. Runtime was
+        # always correct; the name was doing two jobs (/dry-audit, 2026-09-01).
+        story = (str(row.get("domain") or ""), str(row.get("title") or "?"), tail)
+        looked[story] = looked.get(story, 0) + 1
 
     #: What a reader will actually SEE: one line per story, one per automation.
     #: ⚠️ GROUPS, NOT ROWS — the lead must equal the number of lines below it,

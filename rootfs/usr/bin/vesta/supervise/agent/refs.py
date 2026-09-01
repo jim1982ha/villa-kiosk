@@ -147,7 +147,7 @@ def pseudonymise(text: str, table: "RefTable") -> str:
     return _ENTITY_ID.sub(swap, str(text))
 
 
-def personalise(text: str, table: "RefTable") -> str:
+def personalise(text: str, table: Optional["RefTable"]) -> str:
     """Every handle THIS RUN MINTED, replaced by the villa's own label.
 
     ⚠️ THE RETURN JOURNEY, AND IT DID NOT EXIST UNTIL 2026-08-30 — a delivered

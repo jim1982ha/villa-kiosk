@@ -267,7 +267,11 @@ def _output_ceiling(config: Optional[Mapping[str, Any]]) -> int:
     loses the state they were watching.
     """
     from vesta.supervise.agent import config as agent_config
-    raw = agent_config.view(config).get("max_output_tokens")
+    # ⚠️ `Any`, NOT A SUPPRESSION. A config value is genuinely arbitrary, and
+    # the `int()` below is deliberate EAFP — `int(None)` raises TypeError,
+    # which the except clause catches and answers with the default. Declaring
+    # the local says that; a `type: ignore` would hide it (/dry-audit).
+    raw: Any = agent_config.view(config).get("max_output_tokens")
     try:
         return max(1024, int(raw))
     except (TypeError, ValueError):

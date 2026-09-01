@@ -43,7 +43,16 @@ from typing import Dict, List
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-COMPONENTS = os.path.join(REPO_ROOT, "src", "components")
+#: ⚠️ `src`, NOT `src/components` (/dry-audit, 2026-09-01). This was scoped to
+#: `src/components` and the TASK-115 restructure moved three dialogs out of it —
+#: ReportsModal, AgentModal and AgentAdvancedModal now live under `src/vesta/`.
+#: The walk found 5 of 8 and stayed green, and the one it stopped watching is
+#: `ReportsModal`, THE dialog whose missing Close button is the incident this
+#: whole file was written for. The vacuous-pass guard below could not see it:
+#: it asserts the set is non-empty, and 5 is not empty — a PARTIAL scope
+#: collapse passes every binary guard. `feedback_moving-files-silences-guards`.
+#: Scoping to `src` needs no edit the next time a folder is renamed.
+COMPONENTS = os.path.join(REPO_ROOT, "src")
 
 #: The marker that puts a dialog in this family. `.modal.settings-modal` is a
 #: centred card with a pinned header and footer and a scrolling body; a dialog

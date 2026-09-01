@@ -97,7 +97,7 @@ def severity_rank(severity: Any) -> int:
 #: ⚠️ AN AUDIENCE IS WHO A FINDING IS WRITTEN FOR; A ROLE IS WHO IS LOGGED IN.
 #: The owner may perfectly well read the facility brief, which is exactly why
 #: the two sets are separate and neither may be derived from the other.
-from vesta.shared.contracts import AUDIENCE  # noqa: E402  (re-exported, not copied)
+from vesta.shared.contracts import AUDIENCE as AUDIENCE  # noqa: E402  (re-exported, not copied)
 
 #: Who may be a SENDER — the app's own profiles, and the only three there are.
 #: ⚠️ MIRRORS `supervisor-proxy.AUTH_ROLES`, which is the authority, and

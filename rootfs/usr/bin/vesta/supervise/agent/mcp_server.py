@@ -38,7 +38,17 @@ from __future__ import annotations
 
 import hmac
 from dataclasses import replace
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import (Any, Dict, List, Mapping, Optional, Sequence, Tuple,
+                    TYPE_CHECKING)
+
+if TYPE_CHECKING:  # pragma: no cover
+    # ⚠️ TYPE-ONLY, BECAUSE `http_handler` IMPORTS aiohttp LAZILY ON PURPOSE.
+    # This module is imported by the in-process agent, which never serves HTTP;
+    # hoisting the real import would make every agent run pay for aiohttp. The
+    # handler's return type still has to be nameable at module scope, and
+    # `from __future__ import annotations` makes the annotation a string, so
+    # this block costs nothing at runtime (/dry-audit, 2026-09-01).
+    from aiohttp import web
 
 from vesta.supervise.agent import contracts
 from vesta.supervise.agent import policy as policy_mod
@@ -249,7 +259,7 @@ def _run_id() -> str:
 
 
 # ── the aiohttp handler ─────────────────────────────────────────────────────
-async def http_handler(request: Any) -> Any:
+async def http_handler(request: Any) -> web.Response:
     """POST /agent-mcp. Streamable HTTP: one JSON-RPC message, one reply.
 
     ⚠️ REGISTERED ON THE PROXY BUT DELIBERATELY GIVEN NO NGINX `location`, WHICH

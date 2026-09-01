@@ -68,7 +68,7 @@ TIMEOUT_S: float = 20.0
 
 
 # ── discovery ───────────────────────────────────────────────────────────────
-async def _get(session: Any, url: str) -> Optional[Dict[str, Any]]:
+async def _get(session: Any, url: str) -> Optional[Mapping[str, Any]]:
     """One Supervisor GET, degrading to None. Never raises."""
     try:
         async with session.get(url, headers=AUTH, timeout=TIMEOUT_S) as resp:
@@ -144,7 +144,7 @@ async def endpoint(session: Any,
 
 # ── the wire ────────────────────────────────────────────────────────────────
 async def rpc(session: Any, url: str, method: str,
-              params: Optional[Mapping[str, Any]] = None) -> Optional[Dict[str, Any]]:
+              params: Optional[Mapping[str, Any]] = None) -> Optional[Mapping[str, Any]]:
     """One JSON-RPC call. Returns the `result` object, or None. Never raises.
 
     ⚠️ THE RESPONSE MAY BE JSON *OR* AN SSE FRAME, and handling only the first

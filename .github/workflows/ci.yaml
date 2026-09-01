@@ -59,7 +59,27 @@ jobs:
         # gate by a long way and is not annotated; retrofitting it is a
         # separate piece of work, and holding NEW code to the higher standard
         # from its first line is what stops that gap widening.
-        run: mypy --strict rootfs/usr/bin/reports
+        #
+        # ⚠️ THIS PATH WENT STALE AND THE GATE CHECKED NOTHING FOR MONTHS
+        # (/dry-audit, 2026-09-01). `rootfs/usr/bin/reports` was deleted by
+        # TASK-115 step 3c and this line was not repointed, so mypy exited 2
+        # with "Cannot read file" — the gate was not lenient, it was ABSENT.
+        # The reports package is now `vesta/adapters` + `vesta/brief`; those
+        # are the SAME scope, restored, and they pass clean.
+        # ⚠️ THE WHOLE `vesta` PACKAGE, WHICH IS WIDER THAN THIS GATE HAS EVER
+        # BEEN, AND THAT IS THE FIX (/dry-audit, 2026-09-01). `supervise/` was
+        # created 2026-08-28, EIGHT DAYS AFTER this gate landed — it is exactly
+        # the "NEW code" the paragraph above says to hold to the standard from
+        # its first line, and it escaped only because this line named a
+        # directory TASK-115 had deleted, so mypy exited 2 and checked nothing
+        # for months. It had accumulated 59 --strict errors by the time anyone
+        # looked; all 59 are now fixed and the package is clean.
+        # ⚠️ NAME THE PACKAGE, NOT ITS PARTS. The previous form listed two
+        # subdirectories, which is a list that silently narrows the day a third
+        # is added — the same defect one level down. `tests/py/test_ci_paths.py`
+        # pins that every path here exists AND that the gate still covers the
+        # reports package, so neither failure can return quietly.
+        run: mypy --strict rootfs/usr/bin/vesta
 
       - name: The proxy still parses
         # Cheap, and it catches the one class of breakage that would take the

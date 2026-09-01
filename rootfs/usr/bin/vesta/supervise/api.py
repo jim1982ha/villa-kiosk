@@ -32,7 +32,7 @@ import json
 import os
 import time
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol, cast
 
 from aiohttp import web
 
@@ -48,8 +48,42 @@ from vesta.supervise.agent import config as agent_config
 #: of the rule stays `actions.MAY_ACT`.
 TASK_ACK_ROLES = agent_actions.MAY_ACT
 
+class _Deps(Protocol):
+    """The shape `bind()` receives — declared so the two auth helpers keep
+    their return type across the injection boundary.
+
+    ⚠️ THE INJECTION ERASED A TYPE THE HOST ALREADY HAD (/dry-audit,
+    2026-09-01). The proxy annotates `_unauthorized() -> web.Response` and
+    `_forbidden(message: str = ...) -> web.Response` correctly, but they
+    arrived here through `bind(*, unauthorized: Any, ...)` into a
+    `SimpleNamespace`, so every `return deps.unauthorized()` / `.forbidden()`
+    returned `Any` from a handler declared `-> web.Response`. `--strict`
+    reported 34 of them; the fix belongs at this boundary, not at each site.
+
+    ⚠️ CALLABLE ATTRIBUTES, NOT `def` MEMBERS. `deps` is a `SimpleNamespace`
+    holding plain functions as INSTANCE attributes, which are not descriptors
+    and never bind `self`. Declaring these as methods would type the calls one
+    argument off. Everything the agent does not need narrowed stays `Any` —
+    this is a type fix, not a retyping of the host.
+    """
+
+    unauthorized: Callable[[], web.Response]
+    forbidden: Callable[..., web.Response]
+    authorized: Any
+    role_for: Any
+    read_json_store: Any
+    agent_config_file: str
+    config_get: Any
+    config_put: Any
+    concerns_get: Any
+
+
 #: The host's auth machinery and store paths, injected once via `bind()`.
-deps: Any = None
+#: ⚠️ `cast` IS A RUNTIME NO-OP and the `None` start is deliberate — `routes()`
+#: raises if `bind()` has not run, which is the existing contract. Typing this
+#: `_Deps | None` instead would put a null check on all 60 attribute reads to
+#: describe a state only a caller who ignored that contract can reach.
+deps: _Deps = cast("_Deps", None)
 
 
 def bind(*, authorized: Any, unauthorized: Any, forbidden: Any, role_for: Any,
@@ -65,12 +99,12 @@ def bind(*, authorized: Any, unauthorized: Any, forbidden: Any, role_for: Any,
     # fm-data with it; injecting the two handlers keeps the TABLE complete
     # (one mount covers the agent's whole surface) without splitting the
     # factory's ownership.
-    deps = SimpleNamespace(
+    deps = cast("_Deps", SimpleNamespace(
         authorized=authorized, unauthorized=unauthorized, forbidden=forbidden,
         role_for=role_for, read_json_store=read_json_store,
         agent_config_file=agent_config_file,
         config_get=config_get, config_put=config_put,
-        concerns_get=concerns_get)
+        concerns_get=concerns_get))
 
 
 def routes() -> List[Any]:
@@ -893,6 +927,24 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
         return web.json_response({"ok": not reason, "status": "triaged",
                                   "reason": reason})
 
+    # ⚠️ THIS HANDLER FELL OFF ITS OWN END AND RETURNED None (/dry-audit,
+    # 2026-09-01), which aiohttp turns into a 500 that reads as a server fault
+    # for what is a malformed request. Every one of the three modes above
+    # returns; a body naming none of them reached here and nothing caught it,
+    # because `--strict` was pointed at a deleted directory and never ran.
+    #
+    # ⚠️ 400, AND DELIBERATELY NOT "just run a pass". The two guards at the top
+    # of this handler normalise an unparseable or non-object body to `{}`, so
+    # the ONLY realistic way to arrive here is a broken request — and this
+    # endpoint spends the LLM budget, as its own docstring says. Treating an
+    # empty body as a run (or as `triage`) would promote a JSON parse failure
+    # into a paid provider call, which is the shape of overspend this project
+    # has already paid for once. A caller that means "run" says which mode.
+    return web.json_response(
+        {"ok": False, "status": "no_mode",
+         "reason": "specify one of preview, drill or triage"},
+        status=400)
+
 
 async def agent_queue_get_handler(request: web.Request) -> web.Response:
     """Escalations waiting for a person. Owner-only, like every agent control.
@@ -953,9 +1005,24 @@ async def agent_queue_post_handler(request: web.Request) -> web.Response:
     # button presses and four refusals that came of assuming a callee builds
     # one. The document is assembled the same way every other agent entry point
     # assembles it, through `sources.build_document`.
+    # ⚠️ NAMED AND CHECKED, NOT INLINED (/dry-audit, 2026-09-01). `build()`
+    # returns None for an unknown adapter name; this call passes NO name, and
+    # `DEFAULT_PROVIDER = next(iter(ADAPTERS))` is derived from ADAPTERS itself,
+    # so today the lookup cannot miss and `approve(provider: Provider)` is
+    # satisfied by construction — which the type checker cannot see.
+    # ⚠️ A GUARD RATHER THAN AN `assert`: an assert answers a configuration
+    # problem with a 500 and vanishes under `-O`, and this branch is one commit
+    # from being reachable — the day a second adapter is added, DEFAULT_PROVIDER
+    # stops being the only key. Declining in words is what `run_once` already
+    # does with a missing provider; this is the same answer at the door.
+    provider = anthropic_sdk.build(api_key=reports_secrets.get("anthropic") or "")
+    if provider is None:
+        return web.json_response(
+            {"ok": False, "reason": "no provider adapter is available"},
+            status=503)
     ran, why = await agent_reason.approve(
         run_id,
-        provider=anthropic_sdk.build(api_key=reports_secrets.get("anthropic") or ""),
+        provider=provider,
         config=deps.read_json_store(deps.agent_config_file, {}),
         # ⚠️ THE APP'S SESSION, so an APPROVED investigation reaches Home
         # Assistant's own tools exactly as the automatic arm does. Approval and

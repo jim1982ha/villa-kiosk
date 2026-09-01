@@ -22,11 +22,21 @@ statistical finding carries a baseline; a Concern carries an investigation.
 Collapsing them onto one shape would delete the fields several sections render,
 which is accuracy lost to tidiness.
 
+⚠️ BOTH FILES NAMED ABOVE HAVE SINCE BEEN DELETED, AND THE PARAGRAPH IS KEPT AS
+A DATED RECORD, NOT A DESCRIPTION OF THE TREE. `narrate/deterministic.py` and
+`aggregate.py` are gone; the rendering vocabulary now lives in `shared/style.py`.
+The FINDING is what survives and is why this is kept — D12 was carried for
+months as the last open item and was never true. CLAUDE.md's copy of this
+paragraph was moved to the past tense on 2026-08-30 and this one was not, which
+/dry-audit caught on 2026-09-01: the same sentence in two homes drifted in one
+of them. Do not "refresh" the 2026-08-26 measurements above; they are history.
+
 ⚠️ WHAT WAS ACTUALLY WORTH DOING IS THIS FILE. The claim was prose, so nothing
 could tell anyone it was false, and nothing stops the boundary eroding either —
-one `f"• {name} ..."` in `aggregate.py` and the property quietly becomes untrue
-with no test to notice. A checked boundary is the durable version of the
-sentence D12 was trying to be.
+one `f"• {name} ..."` in any synthesis module and the property quietly becomes
+untrue with no test to notice. The set is DERIVED from the tree below, so the
+pin outlived both files it was written about. A checked boundary is the durable
+version of the sentence D12 was trying to be.
 """
 
 from __future__ import annotations

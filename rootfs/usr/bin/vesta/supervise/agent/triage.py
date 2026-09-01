@@ -212,7 +212,7 @@ def _identify(items: Sequence[Escalation], refs: Any) -> None:
     """
     if refs is None:
         return
-    known = {}
+    known: Dict[str, str] = {}
     for ref in getattr(refs, "known", lambda: ())():
         label = _comparable(refs.label(ref))
         entity = refs.resolve(ref)
@@ -243,8 +243,8 @@ def _identify(items: Sequence[Escalation], refs: Any) -> None:
         # Jet Pump Power Factor"), and claiming it too would attach a second
         # device to one mention. Devices are ordered by where the subject
         # names them, so the primary is the one the model led with.
-        claimed: list = []          # (start, end) char spans already matched
-        found_at: dict = {}         # entity -> first position in the subject
+        claimed: List[Tuple[int, int]] = []   # char spans already matched
+        found_at: Dict[str, int] = {}         # entity -> first position
 
         def free(start: int, end: int) -> bool:
             return all(end <= s or start >= e for s, e in claimed)

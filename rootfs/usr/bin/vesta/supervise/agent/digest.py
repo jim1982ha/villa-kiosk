@@ -34,7 +34,7 @@ the first time they disagreed the digest would describe work that is not there.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from vesta.supervise.agent import budget as budget_mod
 from vesta.supervise.agent import config as agent_config
@@ -125,7 +125,7 @@ def _line(item: Mapping[str, Any]) -> str:
     return "- " + " ".join(str(item.get("text") or "").split())
 
 
-def compose(items: List[Mapping[str, Any]]) -> str:
+def compose(items: Sequence[Mapping[str, Any]]) -> str:
     """The body. Separated from sending so it can be read without a villa."""
     shown = items[:MAX_LISTED]
     lines = [_line(i) for i in shown]
