@@ -6,8 +6,9 @@ not a tidying one. `analysis/__init__` states the layering it depends on —
 a blueprint in prose it writes for the reader. Importing `aggregate` from
 `registry` would have reversed an arrow the package docstring promises points
 the other way, so the shared rule moved DOWN to where both layers can reach it
-rather than one layer reaching up. `aggregate` re-exports it, so its existing
-readers are unchanged.
+rather than one layer reaching up. `aggregate` re-exported it at the time, so
+its readers were unchanged by the move; that module has since been deleted
+(TASK-115) and everything imports this directly.
 """
 
 from __future__ import annotations
@@ -71,13 +72,28 @@ def readable_label(value: str) -> str:
     defect: /dry-audit's opening sentence, paid for again.
 
     ⚠️ SO IT IS APPLIED WHERE A NAME IS READ, NOT WHERE ONE IS BUILT, and there
-    is ONE of it. Ten call sites across `aggregate`, `narrate.deterministic` and
-    `analysis.registry` — the count is not the point and will drift; the point
-    is that no reader may humanise a name any other way, because the two spellings
-    then differ by which code path a name arrived through. (This docstring said
-    "`to_findings` and the renderer's `_name` both call this" and was already
-    wrong by eight sites when it moved here — a list of call sites is a claim
-    that rots, so this one names the files instead.)
+    is ONE of it. The point is that no reader may humanise a name any other way,
+    because the two spellings then differ by which code path a name arrived
+    through. The readers are whatever imports this — `grep -rn readable_label`
+    is the enumeration, and it is always right.
+
+    ⚠️ THIS PARAGRAPH HAS NOW ROTTED TWICE, EACH TIME IN THE FORM THAT WAS
+    ADOPTED TO STOP IT ROTTING (/dry-audit, 2026-09-01). First it said
+    "`to_findings` and the renderer's `_name` both call this" and was wrong by
+    eight sites when it moved here; so it was rewritten to name FILES instead,
+    on the reasoning that a list of call sites is a claim that rots. Then every
+    file it named stopped resolving: `aggregate` was deleted with the
+    blueprint-event machinery (2.797.0), `narrate.deterministic` went with the
+    renderer, and `analysis.registry` was RENAMED by TASK-115 into
+    `brief/registry.py` — which still imports this, so that entry was not even
+    wrong, merely unfindable.
+
+    ⚠️ THE RENAME IS THE INTERESTING HALF. Deletion at least makes a list
+    obviously stale; a rename leaves it looking plausible while pointing at
+    nothing, and a reader greps the old name, finds none, and concludes the
+    helper has no readers. A file list is a census with different nouns and it
+    rots by MOVE as well as by delete. Name the RULE and the way to enumerate
+    it; never the members.
 
     ⚠️ AND IT MUST NOT TOUCH A HUMAN LABEL. Blanket humanising would turn the
     same property's real "Lights - monitored rooms" into "Lights monitored
