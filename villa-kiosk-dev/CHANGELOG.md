@@ -1,3 +1,15 @@
+## 2.919.0
+
+### Fixed — a shared helper's docstring named three files, none of which resolve
+It documented its readers by listing the modules that call it. Two were later
+deleted with the machinery that used them and the third was renamed by the layer
+restructure, so a reader greps the named files, finds nothing, and concludes the
+helper is unused. The docstring had already rotted once as a list of call-site
+names and was rewritten to name files instead, on the reasoning that files are
+stabler — they are not, because a rename leaves a list looking plausible while
+pointing at nothing. It now names the rule and the command that enumerates the
+readers, which is correct by construction.
+
 ## 2.918.1
 
 ### Fixed — a hand-written count of this project's own checks, in three places
