@@ -10,10 +10,10 @@ only two automated gates this project has beyond the security suite.
 
 ⚠️ IT IS THE SHAPE dry-audit PART 5 EXISTS FOR: a rule whose two halves live in
 different files, in different languages, joined by nothing but a string literal
-— here a YAML scalar and a directory. The four existing cross-artefact pins
-cover the store envelope, the nginx routes, the modal shell and the consistency
-parity; the workflow was the one contract of that shape with nothing watching
-it. A path that drifts is silent by construction, because the step that would
+— here a YAML scalar and a directory. Its siblings cover the store envelope,
+the nginx routes, the modal shell, the consistency parity and several wire
+contracts; the workflow was the one contract of that shape with nothing
+watching it. A path that drifts is silent by construction, because the step that would
 have complained is the step that stopped running.
 
 ⚠️ AND IT IS `feedback_moving-files-silences-guards` IN ITS MOST LITERAL FORM.

@@ -1,3 +1,13 @@
+## 2.918.1
+
+### Fixed — a hand-written count of this project's own checks, in three places
+The cross-artefact check family was described as having four members. It had
+five before today and six after the previous release added one, so the number
+was wrong before it was touched and wrong differently afterwards. Replaced with
+the rule and a way to enumerate them, because a count written beside the thing
+it counts has nothing to turn it red when it drifts — which the same file says
+twice, and which had already produced a stale dialog count that morning.
+
 ## 2.918.0
 
 ### Fixed — the backend's type gate had been checking nothing for months
