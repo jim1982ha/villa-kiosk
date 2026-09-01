@@ -1,3 +1,15 @@
+## 2.918.0
+
+### Fixed — the backend's type gate had been checking nothing for months
+It ran against a directory a restructure deleted, so instead of being lenient it
+exited immediately with "cannot read file" and never examined a line. The
+supervision package was written eight days after that gate was added and so had
+never once been checked: it had accumulated 59 strict-mode faults, among them a
+handler that fell off its own end and answered a malformed request with a server
+error, and a helper whose signature refused the empty value its own first line
+handles. All 59 are fixed and the gate now covers the whole package. A new check
+fails the build if any path a CI step names stops existing.
+
 ## 2.917.0
 
 ### Fixed — one tool call was carrying 52,000 tokens through a whole run
