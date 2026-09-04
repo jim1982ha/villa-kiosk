@@ -1,3 +1,15 @@
+## 2.925.0
+
+### Fixed — the agent's ranked excerpt was all energy, every pass
+The villa document shows the model a limited excerpt of what is most unusual, and
+the energy sensors alone filled it on every pass: a lock, a light or a climate
+unit reached the model only by out-scoring a power meter, which a state never
+does. The excerpt is now drawn fairly across the kiosk's six categories within
+each lens, so access control, comfort and lighting are represented whenever they
+have something to say. To do that the add-on needed the kiosk's own category
+rule; it is a second implementation, pinned id-by-id against the shipped
+TypeScript by the same parity harness that holds the device list equal.
+
 ## 2.924.0
 
 ### Added — a check on the rules themselves, before they alert falsely
