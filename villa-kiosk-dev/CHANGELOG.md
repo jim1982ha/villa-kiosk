@@ -1,3 +1,15 @@
+## 2.923.0
+
+### Fixed — the agent's three Home Assistant tools were connected to nothing
+`read_state`, `read_history` and `read_automation_trace` were constructed
+without a data source for the whole of their life, and did not even refuse:
+they answered with empty data — no states, no points, "no runs recorded" — which
+reads exactly like a quiet villa, on every investigation, in the reason tier's
+prompt. Each now has a session-bound reader, refuses plainly when it has none and
+is withheld from the model rather than published. `read_schedule` joins them: a
+device that "failed to start" is judged against the moment its schedule opened,
+and no tool could say when that was.
+
 ## 2.922.0
 
 ### Fixed — the agent was never shown what its own layer had said or done
