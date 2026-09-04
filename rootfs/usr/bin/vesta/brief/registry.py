@@ -118,10 +118,18 @@ def gate(module: AnalysisModule, context: ModuleContext,
         return (False, "errored",
                 f"disabled after {FAILURES_BEFORE_DISABLE} consecutive failures")
 
-    needed = max(module.min_days, context.min_history_days)
-    if history_days < needed:
-        return (False, "insufficient_history",
-                f"needs {needed} days of history, has {history_days}")
+    # ⚠️ A MODULE WITH `min_days == 0` READS NO BASELINE AND HAS NO HISTORY
+    # REQUIREMENT (2026-09-04). `history_days` is measured from the ENERGY
+    # statistics, and `min_history_days` is the operator's "how many days is
+    # enough" for a baseline; `rule_calibration` judges a rule's CONFIGURATION,
+    # which is as wrong on the day it is written as a month later, and on a
+    # villa with no metered device it must not be skipped with "needs 14 days
+    # of history, has 0" — a sentence about a recorder it never reads.
+    if module.min_days > 0:
+        needed = max(module.min_days, context.min_history_days)
+        if history_days < needed:
+            return (False, "insufficient_history",
+                    f"needs {needed} days of history, has {history_days}")
 
     if context.audience not in module.audiences:
         return (False, "audience_mismatch",
@@ -159,6 +167,7 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             settings=settings if isinstance(settings, dict) else {},
             min_history_days=context.min_history_days,
             stats=context.stats, labels=context.labels,
+            automations=context.automations,
             # ⚠️ EVERY FIELD, AND THE RULE STILL MATTERS WITH ONE LEFT.
             # This re-assembles the context per module, so a field added to the
             # dataclass and not copied HERE arrives at the gate as its DEFAULT —
@@ -276,10 +285,11 @@ def _snapshot() -> Dict[str, Any]:
 def _register_shipped() -> None:
     from vesta.shared.analysis.modules.level_anomaly import LevelAnomaly
     from vesta.shared.analysis.modules.level_shortfall import LevelShortfall
+    from vesta.shared.analysis.modules.rule_calibration import RuleCalibration
     from vesta.shared.analysis.modules.sensor_health import SensorHealth
     from vesta.shared.analysis.modules.standby_creep import StandbyCreep
-    for module in (LevelAnomaly(), LevelShortfall(), SensorHealth(),
-                   StandbyCreep()):
+    for module in (LevelAnomaly(), LevelShortfall(), RuleCalibration(),
+                   SensorHealth(), StandbyCreep()):
         register(module)
 
 

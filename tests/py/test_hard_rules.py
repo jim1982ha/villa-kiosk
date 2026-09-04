@@ -264,6 +264,9 @@ FIXTURES: Set[str] = {
     # slot-reservation test fills a document with (the regex sees `sensor.n`).
     "lock.x", "lock.gate", "lock.words", "binary_sensor.gate",
     "sensor.n", "sensor.fine", "sensor.flat", "switch.q",
+    # The rule-calibration fixtures (2026-09-04): a watched phase and two
+    # automations that must NOT be surveyed.
+    "sensor.phase_c", "automation.b", "automation.c",
     # Named for the behaviour under test, not for a device.
     "sensor.debris", "sensor.ghost", "sensor.odd", "sensor.ok",
     "sensor.other", "sensor.mesh_only", "sensor.total",

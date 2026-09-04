@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from aiohttp import ClientSession
 
+from . import automations as automations_mod
 from . import collect, ledger
 from .hass import HassClient, HassUnavailable, statistic_ids_of
 from .log import log
@@ -48,6 +49,9 @@ CAP_ENERGY_WATER = "energy_water"
 CAP_LEDGER = "ledger"
 CAP_NOTIFY = "notify"
 CAP_AREAS = "areas"
+#: At least one automation built from a VESTA `critical_*` blueprint exists, so
+#: `rule_calibration` has a rule to judge. See `adapters/automations`.
+CAP_AUTOMATIONS = "automations"
 # ⚠️ `CAP_BLUEPRINTS` WAS DELETED HERE (2026-08-28). It meant "this property has
 # its own automation layer", and it decided whether the built-in analysis
 # modules stood aside — a real question while `maintenance_*` and `roi_*`
@@ -72,7 +76,7 @@ MAX_LISTED_STATISTICS = 10
 
 ALL_CAPABILITIES = (
     CAP_STATISTICS, CAP_ENERGY_GRID, CAP_ENERGY_DEVICES, CAP_ENERGY_COST,
-    CAP_ENERGY_WATER, CAP_LEDGER, CAP_NOTIFY, CAP_AREAS,
+    CAP_ENERGY_WATER, CAP_LEDGER, CAP_NOTIFY, CAP_AREAS, CAP_AUTOMATIONS,
 )
 
 # Why each capability matters, in the operator's terms. Shown in the UI beside
@@ -87,6 +91,8 @@ CAPABILITY_MEANING: Dict[str, str] = {
     CAP_LEDGER: "Maintenance and cost records exist, so findings can cite work done.",
     CAP_NOTIFY: "At least one delivery target exists, so a report can be sent.",
     CAP_AREAS: "Devices are assigned to areas, so findings can name a room.",
+    CAP_AUTOMATIONS: "VESTA critical rules are installed, so their settings "
+                     "can be checked against what the villa actually does.",
 }
 
 # ⚠️ THE SAME FACTS IN THE ABSENT VOICE, AND THE TWO TABLES ARE NOT
@@ -111,6 +117,8 @@ CAPABILITY_ABSENT: Dict[str, str] = {
     CAP_NOTIFY: "No delivery target is configured.",
     CAP_AREAS: "Devices are not assigned to areas, so findings cannot name a "
                "room.",
+    CAP_AUTOMATIONS: "No VESTA critical rule is installed, so there is no rule "
+                     "whose settings could be checked.",
 }
 
 
@@ -607,6 +615,16 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
             if area_count:
                 capabilities.add(CAP_AREAS)
             inventory["area_count"] = area_count
+
+            # ⚠️ IDS, NOT NAMES, AND THE SAME PRE-FILTER THE SURVEY USES. The
+            # survey later confirms each against `use_blueprint.path`; this
+            # only decides whether a rule-judging module has anything to do.
+            states = await hass.command("get_states")
+            critical = automations_mod.critical_automation_ids(
+                states if isinstance(states, list) else [])
+            if critical:
+                capabilities.add(CAP_AUTOMATIONS)
+            inventory["critical_automations"] = len(critical)
 
             targets = await _notify_targets(hass)
             if targets:

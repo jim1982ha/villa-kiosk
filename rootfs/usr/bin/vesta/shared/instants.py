@@ -30,7 +30,7 @@ over a timestamp.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 
 def as_utc(value: Any) -> Optional[datetime]:
@@ -59,3 +59,35 @@ def as_utc_iso(value: str, *, timespec: str = "seconds") -> str:
     """
     moment = as_utc(value)
     return value if moment is None else moment.isoformat(timespec=timespec)
+
+
+#: Home Assistant's own keys for a schedule helper's days, in week order —
+#: `datetime.weekday()` indexes it. ⚠️ IN `shared` BECAUSE THREE LAYERS READ
+#: IT (2026-09-04): the adapter that fetches a helper's week, the agent tool
+#: that decides what a block is, and the calibration module that walks the
+#: week — and `shared` is the only layer all three may import.
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday",
+            "saturday", "sunday")
+
+
+def seconds_of(duration: Any) -> float:
+    """A blueprint duration input as seconds.
+
+    `{"hours", "minutes", "seconds"}` (and `days`) is how Home Assistant's
+    duration selector stores one; a bare number is taken as seconds; anything
+    else is 0, which every reader treats as "not set".
+    """
+    if isinstance(duration, bool):
+        return 0.0
+    if isinstance(duration, (int, float)):
+        return max(0.0, float(duration))
+    if not isinstance(duration, Mapping):
+        return 0.0
+    total = 0.0
+    for key, factor in (("days", 86_400.0), ("hours", 3_600.0),
+                        ("minutes", 60.0), ("seconds", 1.0)):
+        try:
+            total += float(duration.get(key) or 0) * factor
+        except (TypeError, ValueError):
+            pass
+    return max(0.0, total)

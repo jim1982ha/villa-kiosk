@@ -649,27 +649,38 @@ def test_a_module_is_switched_off_by_a_SLICE_not_by_a_bare_boolean() -> None:
             return [Finding(ref="p0", kind="OBSERVATION", severity="info",
                             label="ran", detail="")]
 
+    # ⚠️ REMOVED AGAIN IN `finally` (2026-09-04). This probe LEAKED into the
+    # registry for the rest of the session and nothing noticed, because the
+    # gate demanded 14 days of history from every module and the ladder tests
+    # run with none — the probe was registered, gated out, and invisible. The
+    # moment a baseline-free module was allowed through, `probe_module` ran
+    # inside `test_compose`'s "nothing to say" case and produced a finding.
+    from vesta.brief import registry as registry_mod
+    before = dict(registry_mod._REGISTRY)
     register(_Probe())  # type: ignore[arg-type]
+    try:
+        def _ctx(settings: dict) -> ModuleContext:
+            from datetime import datetime, timezone
+            return ModuleContext(
+                audience="owner", cadence="weekly",
+                now_local=datetime.now(timezone.utc), capabilities=[],
+                inventory={}, settings=settings, min_history_days=0,
+                stats=None, labels={})
 
-    def _ctx(settings: dict) -> ModuleContext:
-        from datetime import datetime, timezone
-        return ModuleContext(
-            audience="owner", cadence="weekly",
-            now_local=datetime.now(timezone.utc), capabilities=[],
-            inventory={}, settings=settings, min_history_days=0,
-            stats=None, labels={})
+        def _ran(settings: dict) -> bool:
+            _f, _s, _c, ran = asyncio.run(run_all(_ctx(settings), {}, 999))
+            return "probe_module" in ran
 
-    def _ran(settings: dict) -> bool:
-        _f, _s, _c, ran = asyncio.run(run_all(_ctx(settings), {}, 999))
-        return "probe_module" in ran
-
-    assert _ran({}), "a module with no settings must run"
-    assert not _ran({"probe_module": {"enabled": False}}), (
-        "the slice form is what the gate reads")
-    assert _ran({"probe_module": False}), (
-        "a BARE BOOLEAN is discarded as not-a-dict and the module runs anyway — "
-        "this is the shape the client must NOT write, pinned so the type "
-        "cannot drift back to it silently")
+        assert _ran({}), "a module with no settings must run"
+        assert not _ran({"probe_module": {"enabled": False}}), (
+            "the slice form is what the gate reads")
+        assert _ran({"probe_module": False}), (
+            "a BARE BOOLEAN is discarded as not-a-dict and the module runs anyway — "
+            "this is the shape the client must NOT write, pinned so the type "
+            "cannot drift back to it silently")
+    finally:
+        registry_mod._REGISTRY.clear()
+        registry_mod._REGISTRY.update(before)
 
 
 # ── the cutover gate: a retired blueprint is not coverage ───────────────────

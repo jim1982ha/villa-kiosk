@@ -32,6 +32,7 @@ from aiohttp import ClientSession
 # `vesta_*` blueprint events; the last emitter stopped on the same day and a
 # parser with no producer is the machinery this phase exists to remove.
 from . import standing as standing_mod, trend as trend_mod
+from vesta.adapters import automations as automations_mod
 from vesta.adapters import stats as stats_mod
 from vesta.adapters import collect
 from vesta.adapters import record as record_mod
@@ -419,6 +420,13 @@ async def analyse(
         settings=settings, min_history_days=min_history_days,
         stats=_statistics_fetcher(session, now_local, tally),
         labels={},
+        # ⚠️ THE SECOND INJECTED FETCHER, SAME SHAPE AS `stats` (2026-09-04).
+        # `rule_calibration` reads automation configs, a schedule helper's
+        # week and a power sensor's raw history — none reachable from a module
+        # by design. Omitting this line leaves the field at its default and
+        # the module silently returns nothing: the `supervision_enabled` trap
+        # below, one field over.
+        automations=automations_mod.fetcher(session, now_local, tally),
         # ⚠️ FROM THE COLLECTOR, NOT FROM DISCOVERY. Discovery answers "does
         # this property HAVE a detection layer"; only the event buffer knows
         # which parts of it have ever spoken, and that is the difference

@@ -119,6 +119,15 @@ class ModuleContext:
     stats: Any = None
     #: Injected by the pipeline: labels for statistic ids, from the registry.
     labels: Dict[str, str] = field(default_factory=dict)
+    #: Injected by the pipeline: `await automations(band_days=, start_days=)`
+    #: -> the villa's own VESTA rules with what judging them needs — see
+    #: `adapters/automations.survey`. ⚠️ THE SAME SHAPE AS `stats`, FOR THE
+    #: SAME REASON (2026-09-04): the calibration module needs automation
+    #: configs, a schedule helper's week and a power sensor's raw history, and
+    #: none of those were reachable from a module by design. The pipeline
+    #: fetches; the module reads. `None` on a path that never surveyed, and
+    #: the module returns nothing rather than guessing.
+    automations: Any = None
     #: Installed VESTA blueprints that have never produced an event, by stem.
     #: ⚠️ THE GATE USES THIS TO QUALIFY A STAND-DOWN, NEVER TO REVERSE ONE.
     #: ⚠️ THIS USED TO CITE `collect.blueprint_layer_present` for why a quiet,

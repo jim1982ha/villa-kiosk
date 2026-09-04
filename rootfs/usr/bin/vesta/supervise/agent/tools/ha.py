@@ -34,6 +34,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
+from vesta.shared import instants
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import data
 from vesta.supervise.agent.tools.base import fail
@@ -264,11 +265,11 @@ class ReadSchedule(BaseTool):
         })]
 
 
-#: Home Assistant's own keys for a schedule helper's days, in week order. ⚠️
-#: DEFINED HERE, READ BY `sources.schedule_reader` — the tool decides what a
-#: block is, and the reader that fetches one must agree with it.
-WEEKDAYS: Tuple[str, ...] = ("monday", "tuesday", "wednesday", "thursday",
-                             "friday", "saturday", "sunday")
+#: ⚠️ THE SHARED TUPLE, NOT A COPY: `adapters/automations.schedule_blocks`
+#: is the one reader of a schedule helper's week and walks the same tuple, so
+#: the tool that decides what a block is and the reader that fetches one
+#: cannot disagree.
+WEEKDAYS = instants.WEEKDAYS
 #: A clock time as a schedule helper stores it: `07:15:00`, seconds optional.
 _CLOCK = re.compile(r"^\d{2}:\d{2}(?::\d{2})?$")
 

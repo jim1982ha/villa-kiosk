@@ -1058,28 +1058,16 @@ def state_reader(session: Any) -> Optional[Callable[..., Any]]:
 
 
 def history_reader(session: Any) -> Optional[Callable[..., Any]]:
-    """`read(entity_id, window_hours) -> [{at, state}]` for `read_history`.
-
-    ⚠️ `minimal_response` AND `no_attributes`, BECAUSE THE TOOL DOWNSAMPLES
-    ANYWAY. A power sensor changes hundreds of times a day; the full history
-    row carries an attribute map per change, and every byte fetched here is a
-    byte the tool then throws away. The shape kept is what `read_history`
-    promises: when, and what the state was.
-    """
+    """`read(entity_id, window_hours) -> [{at, state}]` for `read_history`,
+    through `adapters/automations.fetch_history` — the one history fetch the
+    agent's tool and the calibration survey share."""
     if session is None:
         return None
 
     async def read(entity_id: str, window_hours: int) -> List[Dict[str, Any]]:
-        from vesta.adapters.hass import rest_get
-        start = _since_iso(None, int(window_hours))
-        rows = await rest_get(
-            session, f"history/period/{start}?filter_entity_id={entity_id}"
-            "&minimal_response&no_attributes")
-        series = rows[0] if isinstance(rows, list) and rows else []
-        return [{"at": str(r.get("last_changed") or r.get("last_updated") or ""),
-                 "state": r.get("state")}
-                for r in (series if isinstance(series, list) else [])
-                if isinstance(r, Mapping)]
+        from vesta.adapters import automations as automations_mod
+        return await automations_mod.fetch_history(
+            session, entity_id, _since_iso(None, int(window_hours)))
 
     return read
 
@@ -1128,40 +1116,20 @@ def trace_reader(session: Any) -> Optional[Callable[..., Any]]:
 
 
 def schedule_reader(session: Any) -> Optional[Callable[..., Any]]:
-    """`read(entity_id) -> [{day, from, to}]` for `read_schedule`.
-
-    ⚠️ JOINED THROUGH THE ENTITY REGISTRY'S `unique_id`, NOT THE NAME. A
-    schedule helper's `schedule/list` item is keyed by its storage id and the
-    entity id is a slug of whatever the helper was called when it was made;
-    renaming the helper changes neither, so the registry's unique_id is the one
-    join that survives a rename.
-    """
+    """`read(entity_id) -> [{day, from, to}]` for `read_schedule`, through
+    `adapters/automations.schedule_blocks` — the registry-unique_id join lives
+    there, once, for this reader and the calibration survey alike."""
     if session is None:
         return None
 
     async def read(entity_id: str) -> List[Dict[str, Any]]:
+        from vesta.adapters import automations as automations_mod
         from vesta.adapters.hass import HassClient
-        from vesta.supervise.agent.tools import ha as ha_tools
         async with HassClient(session) as hass:
-            entry = await hass.command("config/entity_registry/get",
-                                       entity_id=entity_id)
-            items = await hass.command("schedule/list")
-        unique = str(entry.get("unique_id") or "") if isinstance(entry, Mapping) else ""
-        for item in (items if isinstance(items, list) else []):
-            if not isinstance(item, Mapping) or str(item.get("id") or "") != unique:
-                continue
-            out: List[Dict[str, Any]] = []
-            for day in ha_tools.WEEKDAYS:
-                for block in (item.get(day) or []):
-                    if isinstance(block, Mapping):
-                        out.append({"day": day, "from": str(block.get("from") or ""),
-                                    "to": str(block.get("to") or "")})
-            return out
-        return []
+            return [dict(b) for b in
+                    await automations_mod.schedule_blocks(hass, entity_id)]
 
     return read
-
-
 
 
 #: Names already reported, so the warning is once per process rather than once
