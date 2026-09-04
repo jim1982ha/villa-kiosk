@@ -68,6 +68,10 @@ ALLOWED_FIELDS: Tuple[str, ...] = (
     "attributes", "counts", "cache_prefix_chars", "limit", "window", "type",
     "text", "json", "temperature", "hvac_action", "hvac_mode", "preset_mode",
     "fan_mode", "battery_level", "current_position",
+    # `read_schedule`'s block rows (2026-09-04): a weekday name, two clock
+    # times. Keyed this way rather than by weekday precisely because this
+    # list is flat and by NAME — see the tool.
+    "blocks", "day", "from", "to",
     "error",
 )
 

@@ -16,15 +16,28 @@ anchored regex rather than a promise in this docstring.
 deciding whether it is unusual is `read_salient`'s job, two modules away and
 against the entity's own distribution. A wrapper that started judging would be a
 threshold, and thresholds are what this redesign exists to remove.
+
+⚠️ THEY WERE BUILT WITH NO SOURCE FOR THE WHOLE OF THEIR LIFE, AND THE VILLA
+COULD NOT TELL (2026-09-04). `sources.build_tools` constructed every one of
+them as `cls(refs=refs)` — the defect that module's own header describes for
+`read_salient`, one line further down and never fixed — so `read_state`
+answered `{"states": [], "count": 0}` and `read_automation_trace` answered
+"no runs recorded" about every automation on the property. Not a refusal: a
+DATA block, indistinguishable from an empty villa, published in the reason
+tier's prefix on every investigating pass. `sources.ha_readers` is the wire;
+an unwired tool now REFUSES like `read_logs` does and is withheld from the
+model, so the failure is loud to the operator rather than quiet to the agent.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import data
 from vesta.supervise.agent.tools.base import fail
+from vesta.supervise.agent.tools.base import resolved
 
 MAX_ENTITIES = 60
 MAX_HISTORY_POINTS = 200
@@ -63,6 +76,8 @@ class ReadState(BaseTool):
                          f"{len(wanted)} were given")]
         if self._refs is None:
             return [fail("internal", "no handle table for this run")]
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
 
         unknown = [str(r) for r in wanted if not self._refs.resolve(str(r))]
         if unknown:
@@ -70,7 +85,7 @@ class ReadState(BaseTool):
                          f"no such handle(s): {', '.join(sorted(unknown))}")]
         ids = [self._refs.resolve(str(r)) for r in wanted]
         try:
-            states = self._source(ids) if callable(self._source) else []
+            states = await resolved(self._source(ids))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
 
@@ -120,9 +135,11 @@ class ReadHistory(BaseTool):
         entity_id = self._refs.resolve(ref) if self._refs else None
         if not entity_id:
             return [fail("not_found", f"no such handle: {ref!r}")]
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
         hours = _clamp(args.get("window_hours"), 24, 1, 720)
         try:
-            points = self._source(entity_id, hours) if callable(self._source) else []
+            points = await resolved(self._source(entity_id, hours))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         series = list(points) if isinstance(points, Sequence) else []
@@ -166,9 +183,11 @@ class ReadAutomationTrace(BaseTool):
         entity_id = self._refs.resolve(ref) if self._refs else None
         if not entity_id:
             return [fail("not_found", f"no such handle: {ref!r}")]
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
         limit = _clamp(args.get("limit"), 5, 1, 20)
         try:
-            traces = self._source(entity_id, limit) if callable(self._source) else []
+            traces = await resolved(self._source(entity_id, limit))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         rows = [r for r in (traces if isinstance(traces, Sequence) else [])
@@ -184,6 +203,79 @@ class ReadAutomationTrace(BaseTool):
                      "bounded number of traces per automation."
                      if not rows else ""),
         })]
+
+
+class ReadSchedule(BaseTool):
+    name = "read_schedule"
+    description = (
+        "The weekly time blocks a schedule helper is configured with — when a "
+        "window opens and closes on each day. This is CONFIGURATION, which "
+        "read_state cannot show: a device that 'failed to start' is judged "
+        "against the moment its schedule opened, and without these blocks "
+        "that moment is unknowable.")
+    inputSchema = {
+        "type": "object",
+        "properties": {
+            "ref": {"type": "string",
+                    "description": "A schedule helper's handle."},
+        },
+        "required": ["ref"],
+    }
+    mode = "READ"
+
+    def __init__(self, source: Any = None, refs: Any = None) -> None:
+        self._source = source
+        self._refs = refs
+
+    async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        ref = str(args.get("ref") or "")
+        entity_id = self._refs.resolve(ref) if self._refs else None
+        if not entity_id:
+            return [fail("not_found", f"no such handle: {ref!r}")]
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
+        try:
+            blocks = await resolved(self._source(entity_id))
+        except Exception as err:  # noqa: BLE001
+            return [fail("unavailable", f"Home Assistant did not answer: {err}")]
+        # ⚠️ KEPT BY SHAPE, NOT BY TRUST. A block is a weekday and two clock
+        # times, and nothing else can ever be one — so a value that is not a
+        # weekday or not `HH:MM[:SS]` is dropped here, whatever the source
+        # said. That is what makes this the one tool whose text fields cannot
+        # carry an entity id or a person's words into the transcript by
+        # construction; `test_refs`' leak sweep feeds it an id and expects
+        # nothing back.
+        rows = [b for b in (blocks if isinstance(blocks, Sequence) else [])
+                if isinstance(b, Mapping)
+                and str(b.get("day") or "") in WEEKDAYS
+                and _CLOCK.match(str(b.get("from") or ""))
+                and _CLOCK.match(str(b.get("to") or ""))]
+        return [data({
+            "ref": ref, "label": self._refs.label(ref),
+            # ⚠️ ONE ROW PER BLOCK, KEYED day/from/to — never a dict keyed by
+            # weekday. `redact.ALLOWED_FIELDS` is a flat allow-list of KEYS,
+            # so `{"monday": [...]}` would be scrubbed to nothing on the way
+            # into the transcript and the model would read an empty schedule.
+            "blocks": [{"day": str(b["day"]), "from": str(b["from"]),
+                        "to": str(b["to"])} for b in rows],
+            "count": len(rows),
+            "note": ("This helper has no time blocks configured, so nothing "
+                     "is scheduled by it." if not rows else ""),
+        })]
+
+
+#: Home Assistant's own keys for a schedule helper's days, in week order. ⚠️
+#: DEFINED HERE, READ BY `sources.schedule_reader` — the tool decides what a
+#: block is, and the reader that fetches one must agree with it.
+WEEKDAYS: Tuple[str, ...] = ("monday", "tuesday", "wednesday", "thursday",
+                             "friday", "saturday", "sunday")
+#: A clock time as a schedule helper stores it: `07:15:00`, seconds optional.
+_CLOCK = re.compile(r"^\d{2}:\d{2}(?::\d{2})?$")
+
+#: ⚠️ THE SAME SENTENCE `read_logs` REFUSES WITH, for the same reason: an empty
+#: result and "nobody connected me" are opposite facts that read alike.
+_UNWIRED = ("this tool is not connected to Home Assistant, so an empty "
+            "result here would mean a fault rather than a quiet villa")
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -209,4 +301,4 @@ def _clamp(value: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, out))
 
 
-HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace)
+HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule)

@@ -224,6 +224,14 @@ REASON_TOOLS: Tuple[str, ...] = (
     "read_villa", "read_state", "read_history", "read_salient",
     "read_coverage", "read_concerns", "read_playbook", "read_ledger",
     "read_automation_trace", "read_logs",
+    # ⚠️ ADDED 2026-09-04, AND ITS COST IS MEASURED, NOT ESTIMATED. Tool
+    # schemas were 84% of the prefix during the $8.55/day incident and are
+    # ~25% of a reason-tier call now; one more schema is read off `prefix`'s
+    # own per-tool line, and if it costs more than it earns the honest
+    # alternative is folding schedule blocks into `read_state`. What it
+    # buys: a device that "failed to start" is judged against the moment its
+    # schedule opened, and no other tool can say when that was.
+    "read_schedule",
 )
 
 

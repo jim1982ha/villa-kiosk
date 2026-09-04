@@ -1009,6 +1009,161 @@ def _stamp_of(at: float) -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(at))
 
 
+# ── the Home Assistant readers · TOOL sources, session-bound ────────────────
+def ha_readers(session: Any) -> Dict[Any, Optional[Callable[..., Any]]]:
+    """One reader per HA tool class, or None for each when there is no session.
+
+    ⚠️ ONE TABLE, SO A FIFTH TOOL IS WIRED BY BEING NAMED HERE — and so that
+    `build_tools` cannot construct one of them without a source again, which is
+    what it did for the whole life of the first three. The mapping is by CLASS
+    because the tool decides its own argument shape; the readers here promise
+    only what each tool's docstring asks for.
+
+    ⚠️ NONE WHEN THERE IS NO SESSION, never a reader that returns `[]` — the
+    `log_reader` rule. The document preview and the MCP server build without
+    a session and must get a withheld tool, not a lying one.
+    """
+    from vesta.supervise.agent.tools import ha as ha_tools
+    if session is None:
+        return {cls: None for cls in ha_tools.HA_TOOLS}
+    return {
+        ha_tools.ReadState: state_reader(session),
+        ha_tools.ReadHistory: history_reader(session),
+        ha_tools.ReadAutomationTrace: trace_reader(session),
+        ha_tools.ReadSchedule: schedule_reader(session),
+    }
+
+
+def state_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(ids) -> [state rows]` for `read_state`.
+
+    ⚠️ ONE REST CALL PER ID, NOT `get_states` FOR THE VILLA. The tool caps a
+    call at `MAX_ENTITIES`, an investigation asks for one or two, and fetching
+    1,270 states to answer for two is the fan-out `refresh_measures` pays on
+    purpose once a day and this must not pay per turn.
+    """
+    if session is None:
+        return None
+
+    async def read(ids: Sequence[str]) -> List[Dict[str, Any]]:
+        from vesta.adapters.hass import rest_get
+        out: List[Dict[str, Any]] = []
+        for entity_id in ids:
+            row = await rest_get(session, f"states/{entity_id}")
+            if isinstance(row, Mapping):
+                out.append(dict(row))
+        return out
+
+    return read
+
+
+def history_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(entity_id, window_hours) -> [{at, state}]` for `read_history`.
+
+    ⚠️ `minimal_response` AND `no_attributes`, BECAUSE THE TOOL DOWNSAMPLES
+    ANYWAY. A power sensor changes hundreds of times a day; the full history
+    row carries an attribute map per change, and every byte fetched here is a
+    byte the tool then throws away. The shape kept is what `read_history`
+    promises: when, and what the state was.
+    """
+    if session is None:
+        return None
+
+    async def read(entity_id: str, window_hours: int) -> List[Dict[str, Any]]:
+        from vesta.adapters.hass import rest_get
+        start = _since_iso(None, int(window_hours))
+        rows = await rest_get(
+            session, f"history/period/{start}?filter_entity_id={entity_id}"
+            "&minimal_response&no_attributes")
+        series = rows[0] if isinstance(rows, list) and rows else []
+        return [{"at": str(r.get("last_changed") or r.get("last_updated") or ""),
+                 "state": r.get("state")}
+                for r in (series if isinstance(series, list) else [])
+                if isinstance(r, Mapping)]
+
+    return read
+
+
+def trace_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(entity_id, limit) -> [{at, outcome, error}]` for
+    `read_automation_trace`.
+
+    ⚠️ TWO CALLS, BECAUSE A TRACE IS KEYED BY THE AUTOMATION'S CONFIG `id`, NOT
+    ITS ENTITY ID. The entity's state carries that id as an attribute, so the
+    reader asks for the state first and the trace list second; an automation
+    with no `id` attribute (YAML-defined without one) has no traces to list,
+    and the tool's own note already says what an empty list does and does not
+    mean.
+    """
+    if session is None:
+        return None
+
+    async def read(entity_id: str, limit: int) -> List[Dict[str, Any]]:
+        from vesta.adapters.hass import HassClient, rest_get
+        state = await rest_get(session, f"states/{entity_id}")
+        attrs = state.get("attributes") if isinstance(state, Mapping) else None
+        item_id = str(attrs.get("id") or "") if isinstance(attrs, Mapping) else ""
+        if not item_id:
+            return []
+        async with HassClient(session) as hass:
+            traces = await hass.command("trace/list", domain="automation",
+                                        item_id=item_id)
+        out: List[Dict[str, Any]] = []
+        for row in (traces if isinstance(traces, list) else []):
+            if not isinstance(row, Mapping):
+                continue
+            stamp = row.get("timestamp")
+            out.append({
+                "at": str(stamp.get("start") or "")
+                if isinstance(stamp, Mapping) else "",
+                "outcome": str(row.get("script_execution")
+                               or row.get("state") or ""),
+                "error": str(row.get("error") or ""),
+            })
+        # Newest first, as the tool's `limit` means "the most recent N".
+        out.sort(key=lambda r: r["at"], reverse=True)
+        return out[:max(1, int(limit))]
+
+    return read
+
+
+def schedule_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(entity_id) -> [{day, from, to}]` for `read_schedule`.
+
+    ⚠️ JOINED THROUGH THE ENTITY REGISTRY'S `unique_id`, NOT THE NAME. A
+    schedule helper's `schedule/list` item is keyed by its storage id and the
+    entity id is a slug of whatever the helper was called when it was made;
+    renaming the helper changes neither, so the registry's unique_id is the one
+    join that survives a rename.
+    """
+    if session is None:
+        return None
+
+    async def read(entity_id: str) -> List[Dict[str, Any]]:
+        from vesta.adapters.hass import HassClient
+        from vesta.supervise.agent.tools import ha as ha_tools
+        async with HassClient(session) as hass:
+            entry = await hass.command("config/entity_registry/get",
+                                       entity_id=entity_id)
+            items = await hass.command("schedule/list")
+        unique = str(entry.get("unique_id") or "") if isinstance(entry, Mapping) else ""
+        for item in (items if isinstance(items, list) else []):
+            if not isinstance(item, Mapping) or str(item.get("id") or "") != unique:
+                continue
+            out: List[Dict[str, Any]] = []
+            for day in ha_tools.WEEKDAYS:
+                for block in (item.get(day) or []):
+                    if isinstance(block, Mapping):
+                        out.append({"day": day, "from": str(block.get("from") or ""),
+                                    "to": str(block.get("to") or "")})
+            return out
+        return []
+
+    return read
+
+
+
+
 #: Names already reported, so the warning is once per process rather than once
 #: per run. ⚠️ A per-run warning would print the same line eight times an hour
 #: and train a reader to skip it.
@@ -1078,7 +1233,19 @@ def build_tools(session: Any = None, *,
     for cls in read_tools.READ_TOOLS:
         if cls not in _wired:
             made.append(cls())
-    made.extend(cls(refs=refs) for cls in ha_tools.HA_TOOLS)
+    # ⚠️ WIRED SINCE 2026-09-04 — THIS LINE READ `cls(refs=refs)` FOR EVERY HA
+    # TOOL, WHICH IS THE DEFECT THIS MODULE'S HEADER DESCRIBES, one paragraph
+    # down from the paragraph describing it. `read_state`, `read_history` and
+    # `read_automation_trace` answered as DATA about an empty villa on every
+    # investigating pass; the ed8d pass on 2026-09-04 shows them in the prefix.
+    # Same treatment as the log tools below: a reader per tool from
+    # `ha_readers`, withheld when there is no session.
+    for ha_cls, reader in ha_readers(session).items():
+        if reader is None:
+            _warn_unwired(ha_cls.__name__)
+            _UNWIRED_SEEN_NAMES.add(ha_cls.name)
+            continue
+        made.append(ha_cls(source=reader, refs=refs))
     # ⚠️ AN UNWIRED TOOL IS NO LONGER PUBLISHED, AND WHAT CHANGED IS THE
     # CONSEQUENCE, NOT THE CODE BEING WRONG BEFORE. The note above says a
     # source-less tool "REFUSES and says so, so an unwired member is loudly

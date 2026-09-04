@@ -23,12 +23,12 @@ with every appearance of rigour.
 
 from __future__ import annotations
 
-import inspect
 from typing import Any, Dict, List, Mapping, Sequence
 
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import data
 from vesta.supervise.agent.tools.base import fail
+from vesta.supervise.agent.tools.base import resolved
 from vesta.supervise.agent.tools.base import text
 from vesta.supervise.agent.tools.base import truncate
 
@@ -118,14 +118,9 @@ class ReadLogs(BaseTool):
                          f"level must be one of {', '.join(LOG_LEVELS)}")]
 
         try:
-            lines = self._source(hours)
-            # ⚠️ AWAITED WHEN IT IS AWAITABLE, because reading Home Assistant's
-            # log is an HTTP round trip while every earlier stand-in for this
-            # source was a plain list. Testing the RESULT rather than declaring
-            # the source async keeps a synchronous fixture — a list of lines —
-            # a legal source, which is what the tests here use.
-            if inspect.isawaitable(lines):
-                lines = await lines
+            # ⚠️ AWAITED WHEN IT IS AWAITABLE — see `base.resolved`, which is
+            # where the reasoning moved when the HA tools needed the same idiom.
+            lines = await resolved(self._source(hours))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"the log is unreadable: {err}")]
         if not isinstance(lines, Sequence):

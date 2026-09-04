@@ -59,6 +59,21 @@ def fail(code: str, message: str) -> Dict[str, Any]:
     return {"error": {"code": safe, "message": str(message)}}
 
 
+async def resolved(value: Any) -> Any:
+    """`value`, awaited if it is awaitable. The one idiom every tool with an
+    injected source uses.
+
+    ⚠️ THE RESULT IS TESTED, NOT THE SOURCE DECLARED ASYNC, and that is what
+    keeps a synchronous fixture — a list, a lambda — a legal source: every unit
+    test of a tool constructs it with one, while the villa hands it a
+    coroutine that talks to Home Assistant. `tools/logs.py` had this inline;
+    the four HA tools each needed it on 2026-09-04, and four more inline copies
+    is how one of them would have forgotten to await.
+    """
+    import inspect
+    return await value if inspect.isawaitable(value) else value
+
+
 def flatten_blocks(blocks: Any) -> List[Dict[str, Any]]:
     """Our block vocabulary reduced to TEXT ONLY, for a wire that has no others.
 

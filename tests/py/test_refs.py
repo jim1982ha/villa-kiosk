@@ -339,6 +339,12 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
         ha.ReadHistory(source=lambda e, h: [1, 2, 3], refs=table),
         ha.ReadAutomationTrace(source=lambda e, n: [{"at": "x", "outcome": "ok"}],
                                refs=table),
+        # ⚠️ A BLOCK THAT CARRIES AN ID IN ITS TEXT, for the reason stated of
+        # every other leaky source here: a source that returns nothing an id
+        # could hide in is a leak test that cannot fail.
+        ha.ReadSchedule(source=lambda e: [{"day": "monday", "from": "07:15:00",
+                                           "to": "sensor.pool_pump_power"}],
+                        refs=table),
         # ⚠️ A LINE WITH A REAL ENTITY ID IN IT, for the reason stated eight
         # lines above about `read_salient`: this fixture read
         # `["2026 INFO nothing here"]`, so the one tool whose source is written
