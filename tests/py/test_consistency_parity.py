@@ -68,6 +68,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 from vesta.adapters import devices as devices_mod
 from vesta.brief import standing as standing_mod
 from vesta.adapters import ledger as ledger_mod
+from vesta.adapters import categories as categories_mod
 
 FIXTURE_NAMES = ["bare", "pack-only", "blueprints-live", "both"]
 
@@ -128,6 +129,10 @@ def _addon(name: str) -> Dict[str, Any]:
             str(t.get("id"))
             for t in (fm.get("tickets") or [])
             if isinstance(t, dict) and ledger_mod.ticket_is_open(t)),
+        "categories": categories_mod.categories_for(
+            devices_mod.selectable_device_ids(entity_map, groups, mesh, entities,
+                                              dismissed),
+            entity_map, entities),
     }
 
 
@@ -462,3 +467,99 @@ def test_the_fixtures_can_actually_catch_the_divergence() -> None:
     assert not missing, (
         f"no fixture exercises {missing}; the parity test above would pass "
         f"against either of the rules it exists to tell apart")
+
+
+# ── the category twin (2026-09-04) ──────────────────────────────────────────
+
+@pytest.mark.parametrize("name", FIXTURE_NAMES)
+def test_both_sides_put_each_device_in_the_same_category(name: str) -> None:
+    """⚠️ THE AGENT'S RANKED EXCERPT IS NOW RESERVED ACROSS CATEGORIES, so the
+    add-on has to know which category a device is in — a second implementation
+    of `effectiveCategory`, permitted on `devices.py`'s terms: equal, id by id,
+    on every fixture."""
+    kiosk, addon = _kiosk(name), _addon(name)
+    assert addon["categories"] == kiosk["categories"], (
+        f"[{name}] the tablet and the add-on file a device under different "
+        f"categories:\n  "
+        + "\n  ".join(f"{k}: kiosk {kiosk['categories'].get(k)!r}, "
+                      f"add-on {addon['categories'].get(k)!r}"
+                      for k in sorted(set(kiosk["categories"]) | set(addon["categories"]))
+                      if kiosk["categories"].get(k) != addon["categories"].get(k)))
+
+
+def test_the_both_fixture_exercises_every_category_rule_on_a_REPORTED_device() -> None:
+    """⚠️ THE FRAGILE HALF, AGAIN. Five of nine mutations of `devices.py` once
+    survived because no fixture reached the rule; a category corpus of lights
+    and sensors would agree with any twin. Each rule below is asserted to be
+    reached by a SELECTABLE id in `both`, and the expected answer is the
+    kiosk's own, so the vacuous pass is closed on both sides."""
+    view = _kiosk("both")
+    cats = view["categories"]
+    expected = {
+        "switch.garden_lamp": "light",               # switch name hint
+        "switch.gate_release": "access_control",     # switch name hint, earlier row wins
+        "switch.wall_outlet": "energy",              # switch device_class outlet
+        "binary_sensor.patio_door": "access_control",  # OPENING_DEVICE_CLASSES
+        "sensor.hall_temperature": "comfort",        # sensor id hint
+        "sensor.router_status": "network",           # sensor device_class enum
+        "fan.study": "comfort",                      # type default
+        "camera.drive": "access_control",            # stored LEGACY default ignored
+        "light.porch": "energy",                     # stored owner choice wins
+    }
+    missing = sorted(k for k in expected if k not in cats)
+    assert not missing, f"not selectable in `both`, so no rule is reached: {missing}"
+    wrong = {k: cats[k] for k, v in expected.items() if cats[k] != v}
+    assert not wrong, f"the kiosk itself disagrees with the fixture's intent: {wrong}"
+    assert len(set(cats.values())) >= 5, "the corpus does not span the categories"
+
+
+def test_the_category_tables_match_the_kiosks_character_for_character() -> None:
+    """⚠️ SOURCE PINS ON EVERY TABLE, because the id-by-id parity above only
+    reaches the rules the fixture reaches. A regex rewritten "equivalently"
+    on one side goes red here, which is the point."""
+    source = _ts_source(os.path.join("config", "EntityCategories.ts"))
+
+    def _table(name: str) -> Dict[str, str]:
+        block = re.search(name + r"[^=]*=\s*\{(.*?)\};", source, re.DOTALL)
+        assert block, f"{name} moved — this test is blind"
+        return dict(re.findall(r"(\w+):\s*\"(\w+)\"", block.group(1)))
+
+    assert _table("DEFAULT_CATEGORY_BY_TYPE") == categories_mod.DEFAULT_CATEGORY_BY_TYPE
+    assert _table("LEGACY_DEFAULT_CATEGORY_BY_TYPE") == categories_mod.LEGACY_DEFAULT_CATEGORY_BY_TYPE
+
+    def _set(name: str) -> set:
+        block = re.search(name + r"\s*=\s*new Set\(\[(.*?)\]\)", source, re.DOTALL)
+        assert block, f"{name} moved — this test is blind"
+        return set(re.findall(r"\"(\w+)\"", block.group(1)))
+
+    assert _set("COMFORT_SENSOR_DC") == set(categories_mod.COMFORT_SENSOR_DC)
+    assert _set("ACCESS_BINARY_DC") == set(categories_mod.ACCESS_BINARY_DC)
+    opening = _ts_source(os.path.join("config", "BinarySensorClasses.ts"))
+    block = re.search(r"OPENING_DEVICE_CLASSES[^=]*=\s*new Set\(\[(.*?)\]\)", opening, re.DOTALL)
+    assert block, "OPENING_DEVICE_CLASSES moved — this test is blind"
+    assert set(re.findall(r"\"(\w+)\"", block.group(1))) == set(categories_mod.OPENING_DEVICE_CLASSES)
+
+    hints = re.search(r"SWITCH_PURPOSE_HINTS[^=]*=\s*\[(.*?)\n\];", source, re.DOTALL)
+    assert hints, "SWITCH_PURPOSE_HINTS moved — this test is blind"
+    rows = re.findall(r"\[/(.*?)/i,\s*\"(\w+)\",", hints.group(1))
+    assert rows, "could not read the hint rows — this test is blind"
+    assert [tuple(r) for r in rows] == list(categories_mod.SWITCH_PURPOSE_HINTS)
+
+    inline = re.findall(r"/([^/\n]+)/\.test\(id\)", source)
+    assert set(inline) == {categories_mod.COMFORT_SENSOR_ID.pattern,
+                           categories_mod.ACCESS_BINARY_ID.pattern}, inline
+
+
+def test_the_python_twin_applies_the_rules_in_the_kiosks_order() -> None:
+    """Behavioural spot checks that need no node: the precedence the twin
+    must keep even where the fixture does not reach it."""
+    f = categories_mod.effective_category
+    assert f("switch.pool_light", "switch") == "energy", "system keyword beats fixture keyword"
+    assert f("switch.outdoor_light", "switch") == "light"
+    assert f("switch.aggregate_power", "switch") == "others", "no `gate` inside aggregate"
+    assert f("binary_sensor.front_door", "binary_sensor") == "access_control"
+    assert f("sensor.x", "sensor", None, "enum") == "network"
+    assert f("camera.x", "camera", "network") == "access_control", "legacy default is not a choice"
+    assert f("camera.x", "camera", "energy") == "energy", "a real choice wins"
+    assert f("input_boolean.gate_open", "input_boolean") == "access_control"
+    assert f("weird.thing", "weird") == "others"

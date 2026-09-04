@@ -652,3 +652,40 @@ def test_the_unscorable_census_says_WHY_not_only_how_many() -> None:
         "flat=1,not_numeric=1,too_few=1")
     assert all(s.why in salience.WHY for s in (thin, words, flat))
     assert fine.why == "", "a scored row carries no why"
+
+
+# ── category fairness within a lens ────────────────────────────────────────
+
+def test_a_lens_is_drawn_round_robin_across_categories_when_asked() -> None:
+    """⚠️ THE ENERGY-CROWDS-OUT-EVERYTHING DEFECT. Twenty power sensors at
+    30+ sigma and one lock at 5 sigma: ranked by size the lock never fits in
+    a limit of 5; drawn across categories it is second."""
+    loud = _many_numeric(20)                      # the numbered sensors, all "energy"
+    held = salience.score_numeric(_rows([10, 11, 9, 10, 11, 9, 10, 15]), 15,
+                                  entity_id="lock.x")
+    assert held.score and held.score < (loud[0].score or 0)
+
+    def category_of(entity_id: str) -> str:
+        return "access_control" if entity_id.startswith("lock.") else "energy"
+
+    by_size = [s.entity_id for s in salience.rank(loud + [held], limit=5)]
+    assert "lock.x" not in by_size
+    fair = [s.entity_id for s in salience.rank(loud + [held], limit=5,
+                                               category_of=category_of)]
+    assert "lock.x" in fair and fair.index("lock.x") == 1
+    assert fair[0].startswith("sensor.n"), "best energy row still leads"
+
+
+def test_without_a_categoriser_the_ranking_is_by_size_as_before() -> None:
+    loud = _many_numeric(6)
+    ordered = [s.score for s in salience.rank(loud)]
+    assert ordered == sorted(ordered, reverse=True)
+
+
+def test_a_categoriser_that_raises_costs_no_row() -> None:
+    loud = _many_numeric(4)
+
+    def broken(entity_id: str) -> str:
+        raise RuntimeError("no config")
+
+    assert len(salience.rank(loud, category_of=broken)) == 4

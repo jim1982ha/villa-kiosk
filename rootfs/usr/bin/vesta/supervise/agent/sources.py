@@ -103,6 +103,37 @@ def labeller() -> Callable[[str], str]:
     return name
 
 
+def categoriser() -> Callable[[str], str]:
+    """"Which of the six categories is this device in", for the ranking —
+    THE kiosk's rule, through its pinned twin, never a third one.
+
+    ⚠️ `adapters/categories.py` IS THAT TWIN and `test_consistency_parity`
+    holds it equal to `effectiveCategory` id by id. The inputs are the ones
+    the kiosk uses: the owner's entity map (type, a stored category) from
+    `/data/device-config.json`, and the device_class the daily measures
+    survey already keeps per entity — no network, no second reading of the
+    villa, and the same answer the Cockpit's category tiles give.
+    """
+    try:
+        from vesta.adapters import devices as devices_mod
+        entity_map = devices_mod.read_config().get("entityMap") or {}
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not read the device map for categories", err)
+        entity_map = {}
+    classes: Dict[str, str] = {}
+    try:
+        from vesta.adapters import store
+        raw = store.read_json(MEASURES_FILE, {})
+        measures = raw.get("measures") if isinstance(raw, Mapping) else {}
+        for entity_id, row in (measures.items() if isinstance(measures, Mapping) else []):
+            if isinstance(row, Mapping) and row.get("c"):
+                classes[str(entity_id)] = str(row.get("c"))
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read the measures for categories", err)
+    from vesta.adapters import categories as categories_mod
+    return categories_mod.categoriser(entity_map, classes)
+
+
 def build_refs(rows: Optional[Sequence[Mapping[str, Any]]] = None) -> RefTable:
     """A ref table covering every entity the journal has seen.
 
@@ -523,7 +554,8 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
         swallow("could not apply the owner's flag-type weights", err)
 
     try:
-        ranked = salience_mod.rank(scored, limit=DOCUMENT_SALIENT_LIMIT)
+        ranked = salience_mod.rank(scored, limit=DOCUMENT_SALIENT_LIMIT,
+                                   category_of=categoriser())
         unscorable = len(salience_mod.unscorable(scored))
         # ⚠️ THE TWO CENSUS LINES STEP 0 OF THE 2026-09-04 PLAN ASKED FOR, noted
         # beside the ranking they describe rather than inside `delta`, which
@@ -1187,7 +1219,8 @@ def build_tools(session: Any = None, *,
         # may last a minute.
         read_tools.ReadVilla(
             document_source=lambda hours=None: build_document(window_hours=hours)),
-        read_tools.ReadSalient(scorer=build_scorer(rows), refs=refs),
+        read_tools.ReadSalient(scorer=build_scorer(rows), refs=refs,
+                               category_of=categoriser()),
         read_tools.ReadConcerns(store=concern_rows(config)),
     ]
     # ⚠️ THE REST KEEP THEIR CURRENT SOURCES UNTIL EACH HAS ONE. A tool with no

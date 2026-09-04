@@ -26,6 +26,7 @@ import { selectableDeviceIds, unavailableDeviceIds } from "../../src/config/devi
 // so comparing this is comparing that report against the brief.
 import { isTicketOpen, ticketStats } from "../../src/fm/fmEngine.ts";
 import { buildAttentionItems, villaHealthFrom } from "../../src/components/cockpit/cockpitData.ts";
+import { effectiveCategory } from "../../src/config/EntityCategories.ts";
 import type { AppConfig } from "../../src/config/AppConfig.ts";
 import type { FmData } from "../../src/fm/fmTypes.ts";
 import type { HassEntity } from "../../src/types/ha.types.ts";
@@ -104,4 +105,18 @@ process.stdout.write(JSON.stringify({
   // cleanly. A count is the weakest possible pin because it survives a swap.
   faultsOpenIds: fmData.tickets.filter(isTicketOpen)
     .map((t) => String(t.id)).sort(),
+  // ⚠️ THE CATEGORY OF EVERY DEVICE, BY ID (2026-09-04). `adapters/
+  // categories.py` is a second implementation of `effectiveCategory` — the
+  // agent needs it to keep its ranked excerpt from being all energy — and this
+  // is what pins the two together. Inputs as `buildCategoryTiles` passes
+  // them, with the domain standing in for `type` when the map has no row.
+  categories: Object.fromEntries([...selectable].sort().map((id) => [
+    id,
+    effectiveCategory(
+      id,
+      entityMap[id]?.type ?? (id.split(".")[0] as EntityMapping["type"]),
+      entityMap[id]?.category,
+      fx.states[id]?.attributes?.device_class as string | undefined,
+    ),
+  ])),
 }, null, 2) + "\n");

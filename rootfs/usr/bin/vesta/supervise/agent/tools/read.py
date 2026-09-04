@@ -121,8 +121,13 @@ class ReadSalient(BaseTool):
     mode = "READ"
 
     def __init__(self, scorer: Optional[Any] = None,
-                 refs: Optional[Any] = None) -> None:
+                 refs: Optional[Any] = None,
+                 category_of: Optional[Any] = None) -> None:
         self._scorer = scorer
+        #: The same categoriser the document is ranked by, so `read_salient`
+        #: and the excerpt above it cannot draw different sets from one score
+        #: list. None (tests, the MCP surface) ranks by lens alone.
+        self._category_of = category_of
         #: ⚠️ IT HAD NO REF TABLE UNTIL 2.650.0, AND THAT MADE ITS ROWS
         #: UNATTRIBUTABLE. `salience.Item.as_dict` emits `entity_id`; every
         #: other tool emits the `ref`/`label` pair instead, so the scrub on the
@@ -157,7 +162,8 @@ class ReadSalient(BaseTool):
             return [fail("unavailable", "salience produced no ranking")]
         limit = _clamp_int(args.get("limit"), DEFAULT_SALIENT_LIMIT,
                            1, MAX_SALIENT_LIMIT)
-        ranked = salience_mod.rank(list(scored), limit=limit)
+        ranked = salience_mod.rank(list(scored), limit=limit,
+                                   category_of=self._category_of)
         rows = [self._as_row(item.as_dict()) for item in ranked]
         blocks: List[Dict[str, Any]] = [data({"salient": rows, "limit": limit})]
         if args.get("include_unscorable"):

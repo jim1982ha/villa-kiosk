@@ -1344,3 +1344,30 @@ def test_the_document_builder_passes_BOTH_halves_of_the_loop() -> None:
     import inspect
     src = inspect.getsource(sources.build_document)
     assert "firings=_recent_firings(" in src and "settled=_settled_outcomes(" in src
+
+
+# ── the categoriser · the kiosk's rule through its pinned twin ─────────────
+
+def test_the_categoriser_reads_the_map_and_the_measures(monkeypatch: Any) -> None:
+    from vesta.adapters import devices as devices_mod
+    from vesta.adapters import store
+    monkeypatch.setattr(devices_mod, "read_config", lambda *a, **k: {"entityMap": {
+        "light.porch": {"entityId": "light.porch", "type": "light", "category": "energy"},
+        "camera.drive": {"entityId": "camera.drive", "type": "camera", "category": "network"},
+    }})
+    monkeypatch.setattr(store, "read_json", lambda path, default=None: {
+        "measures": {"binary_sensor.patio_door": {"c": "door", "u": ""}}}
+        if path == sources.MEASURES_FILE else (default or {}))
+    category_of = sources.categoriser()
+    assert category_of("light.porch") == "energy", "a stored choice wins"
+    assert category_of("camera.drive") == "access_control", "a legacy default is ignored"
+    assert category_of("binary_sensor.patio_door") == "access_control", "device_class from measures"
+    assert category_of("sensor.unknown_thing") == "energy", "domain stands in for type"
+
+
+def test_the_document_and_read_salient_rank_by_the_SAME_categoriser() -> None:
+    """⚠️ PIN THE CALLER, BOTH OF THEM. A categoriser the document uses and
+    the tool does not would draw two different excerpts from one score list."""
+    import inspect
+    assert "category_of=categoriser()" in inspect.getsource(sources.build_document)
+    assert "category_of=categoriser()" in inspect.getsource(sources.build_tools)

@@ -60,8 +60,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import (Any, Dict, Final, List, Mapping, Optional, Sequence,
-                    Tuple)
+from typing import (Any, Callable, Dict, Final, List, Mapping, Optional,
+                    Sequence, Tuple)
 
 from vesta.shared import instants
 from vesta.shared.analysis import robust
@@ -645,10 +645,21 @@ def score_frequency(rows: Sequence[Mapping[str, Any]], now: float, *,
 
 
 # ── ranking ─────────────────────────────────────────────────────────────────
-def rank(scored: Sequence[Salience], *, limit: Optional[int] = None
-         ) -> List[Salience]:
+def rank(scored: Sequence[Salience], *, limit: Optional[int] = None,
+         category_of: Optional[Callable[[str], str]] = None) -> List[Salience]:
     """Most novel first, one block per lens. Unscorable entities keep their
     place at the end.
+
+    ⚠️ AND, GIVEN `category_of`, FAIR ACROSS CATEGORIES WITHIN A LENS
+    (2026-09-04). The numeric lens on the reference villa is hundreds of
+    energy sensors; ranked by sigma alone, its share of the excerpt was all
+    energy on every pass and a lock, a light or a climate unit reached the
+    model only if it out-scored a power meter — which a state never does. So
+    within each lens the rows are taken round-robin across the kiosk's own
+    six categories (best of each category, then second best, …), and the
+    kind's block is presented in that order. No quota, no weight: a category
+    with nothing to say yields its turn, and the reason on every row still
+    carries its own sigma so the reader can see the order is not by size.
 
     ⚠️ THE LENSES ARE RANKED SEPARATELY AND PRESENTED AS BLOCKS, because a
     sigma, a boolean and a log-time ratio have no common unit. A novel state
@@ -680,8 +691,8 @@ def rank(scored: Sequence[Salience], *, limit: Optional[int] = None
         return (magnitude, item.entity_id)
 
     blocks: Dict[str, List[Salience]] = {
-        kind: sorted((s for s in scored if s.kind == kind and s.score),
-                     key=_key)
+        kind: _fair(sorted((s for s in scored if s.kind == kind and s.score),
+                           key=_key), category_of)
         for kind in KINDS}
     quiet = sorted((s for s in scored if s.score == 0.0),
                    key=lambda s: s.entity_id)
@@ -708,6 +719,29 @@ def rank(scored: Sequence[Salience], *, limit: Optional[int] = None
     for kind in KINDS:
         out.extend(chosen[kind])
     return out + rest
+
+
+def _fair(ordered: Sequence[Salience],
+          category_of: Optional[Callable[[str], str]]) -> List[Salience]:
+    """`ordered`, re-drawn round-robin across categories, best first within
+    each. Identity when no categoriser is given."""
+    if category_of is None or not ordered:
+        return list(ordered)
+    lanes: Dict[str, List[Salience]] = {}
+    for item in ordered:
+        try:
+            lane = str(category_of(item.entity_id) or "")
+        except Exception:  # noqa: BLE001 - a category is not worth a lost row
+            lane = ""
+        lanes.setdefault(lane, []).append(item)
+    out: List[Salience] = []
+    turn = 0
+    while len(out) < len(ordered):
+        for rows in lanes.values():
+            if turn < len(rows):
+                out.append(rows[turn])
+        turn += 1
+    return out
 
 
 def kind_census(ranked: Sequence[Salience]) -> str:

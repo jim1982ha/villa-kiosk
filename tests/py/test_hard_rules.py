@@ -267,6 +267,14 @@ FIXTURES: Set[str] = {
     # The rule-calibration fixtures (2026-09-04): a watched phase and two
     # automations that must NOT be surveyed.
     "sensor.phase_c", "automation.b", "automation.c",
+    # The category-parity rows of `both.json` (2026-09-04), each reaching one
+    # rule of `effectiveCategory` on a selectable id; and the spot-check ids.
+    "switch.garden_lamp", "switch.gate_release", "switch.wall_outlet",
+    "binary_sensor.patio_door", "sensor.hall_temperature", "sensor.router_status",
+    "fan.study", "camera.drive", "light.porch",
+    "switch.pool_light", "switch.outdoor_light", "switch.aggregate_power",
+    "binary_sensor.front_door", "camera.x", "input_boolean.gate_open",
+    "sensor.unknown_thing",
     # Named for the behaviour under test, not for a device.
     "sensor.debris", "sensor.ghost", "sensor.odd", "sensor.ok",
     "sensor.other", "sensor.mesh_only", "sensor.total",
