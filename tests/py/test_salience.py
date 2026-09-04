@@ -289,7 +289,18 @@ def test_the_module_contains_no_threshold_literal() -> None:
                         # can be right on one property and wrong on the next —
                         # which is the whole test this list serves.
                         "_BIMODAL_MIN_SAMPLES", "_BIMODAL_MIN_SHARE",
-                        "_BIMODAL_MIN_COUNT", "_BIMODAL_MIN_GAP"}, (
+                        "_BIMODAL_MIN_COUNT", "_BIMODAL_MIN_GAP",
+                        # ⚠️ THREE MORE ON 2026-09-04, AND NONE IS A NUMBER
+                        # ANYONE COULD TUNE. `KINDS` and `WHY` are closed
+                        # vocabularies — tuples of names the ranking and the
+                        # census iterate. `_DAY_S` is a UNIT (one day in
+                        # seconds), the same kind of thing `MIN_SAMPLES` is
+                        # about readings: the frequency lens bins per day
+                        # because a routine repeats daily, and how many days
+                        # it looks back is the ring's decision, not a number
+                        # here. The forbidden-shape regex below still applies
+                        # to all three.
+                        "KINDS", "WHY", "_DAY_S"}, (
         f"undeclared module constant(s): {sorted(declared)}. Every constant "
         "here must be a validity requirement, named and justified in the header")
 
@@ -422,3 +433,222 @@ def test_salience_declares_no_WINDOW_constant() -> None:
     is exactly what `WINDOW_DAYS = 28` turned out to be."""
     assert not hasattr(salience, "WINDOW_DAYS")
     assert not hasattr(salience, "MIN_SAMPLES_PER_WEEKDAY")
+
+
+# ── duration · the lens categorical declines to be ─────────────────────────
+
+def _journal(states: List[Any], *, start: float = 1_700_000_000.0
+             ) -> List[Dict[str, Any]]:
+    """Journal rows oldest first: `(state, seconds held)` pairs become a row per
+    transition, timestamped from `start`."""
+    from datetime import datetime, timezone
+    rows: List[Dict[str, Any]] = []
+    at = start
+    for state, held in states:
+        rows.append({"at": datetime.fromtimestamp(at, timezone.utc).isoformat(),
+                     "id": "lock.x", "s": state})
+        at += held
+    return rows
+
+
+def _lock_history(unlocked_holds: List[float]) -> List[Dict[str, Any]]:
+    """locked / unlocked alternating, each unlocked hold from the list, the
+    lock re-locked for an hour between them, ending UNLOCKED."""
+    pairs: List[Any] = []
+    for held in unlocked_holds:
+        pairs.append(("locked", 3600.0))
+        pairs.append(("unlocked", held))
+    pairs.append(("locked", 3600.0))
+    pairs.append(("unlocked", 0.0))
+    return _journal(pairs)
+
+
+def _end(rows: List[Dict[str, Any]]) -> float:
+    from vesta.shared import instants
+    moment = instants.as_utc(rows[-1]["at"])
+    assert moment is not None
+    return moment.timestamp()
+
+
+def test_a_hold_longer_than_every_earlier_one_scores_and_says_so() -> None:
+    rows = _lock_history([80, 95, 90, 100, 85, 92, 88])
+    out = salience.score_duration(rows, _end(rows) + 38 * 60, entity_id="lock.x")
+    assert out.kind == "duration" and out.state == "unlocked"
+    assert out.score is not None and out.score > 3.0, out.reason
+    assert "for 38 minutes" in out.reason and "longer than any" in out.reason
+    assert out.samples == 7 and out.why == ""
+
+
+def test_a_hold_within_its_own_range_is_quiet_not_novel() -> None:
+    """⚠️ A gate propped open for an hour on Sundays must not be the villa's most
+    unusual thing every Sunday. Within the range already seen is this entity
+    doing something it has done before."""
+    rows = _lock_history([80, 95, 90, 3600, 85, 92, 88])
+    out = salience.score_duration(rows, _end(rows) + 38 * 60, entity_id="lock.x")
+    assert out.score == 0.0 and "within its usual range" in out.reason
+
+
+def test_too_few_earlier_holds_is_the_cold_start_answer() -> None:
+    """⚠️ THE COLD-START CONTRACT. Three unlocked holds are not a distribution
+    of unlocked holds, whatever a person guesses about locks in general."""
+    rows = _lock_history([80, 95, 90])
+    out = salience.score_duration(rows, _end(rows) + 3600, entity_id="lock.x")
+    assert out.score is None and out.why == "too_few"
+    assert "3 usable earlier hold(s) of 'unlocked'" in out.reason
+    assert str(salience.MIN_SAMPLES) in out.reason
+
+
+def test_only_holds_of_the_SAME_state_are_the_population() -> None:
+    """Seven locked holds say nothing about how long it is usually unlocked."""
+    rows = _lock_history([80, 95])
+    out = salience.score_duration(rows, _end(rows) + 3600, entity_id="lock.x")
+    assert out.samples == 2 and out.why == "too_few"
+
+
+def test_a_timer_driven_hold_beyond_its_fixed_length_is_flat_not_infinite() -> None:
+    rows = _lock_history([90.0] * 8)
+    out = salience.score_duration(rows, _end(rows) + 600, entity_id="lock.x")
+    assert out.score is None and out.why == "flat", out.reason
+    assert "exactly" in out.reason
+
+
+def test_duration_scores_in_log_time_so_a_long_tail_cannot_produce_673_sigma() -> None:
+    """⚠️ Hold lengths are heavy-tailed. A linear MAD on seconds turns one
+    long hold into hundreds of sigma — the pump defect with a clock."""
+    rows = _lock_history([60, 70, 65, 80, 75, 62, 68, 71])
+    out = salience.score_duration(rows, _end(rows) + 6 * 3600, entity_id="lock.x")
+    assert out.score is not None and 3.0 < out.score < 60.0, out.score
+
+
+def test_duration_with_no_rows_is_no_history() -> None:
+    out = salience.score_duration([], 0.0, entity_id="lock.x")
+    assert out.score is None and out.why == "no_history"
+
+
+# ── frequency · both tails, one estimator ───────────────────────────────────
+
+def _daily(counts_per_day: List[int], *, today: int,
+           start: float = 1_700_000_000.0) -> Any:
+    """Journal rows with `counts_per_day[i]` changes on day i (oldest first)
+    and `today` changes in the last 24 h. Returns `(rows, now)`."""
+    from datetime import datetime, timezone
+    rows: List[Dict[str, Any]] = []
+    day = 86_400.0
+    for i, n in enumerate(counts_per_day):
+        for k in range(n):
+            at = start + i * day + (k + 1) * (day / (n + 1))
+            rows.append({"at": datetime.fromtimestamp(at, timezone.utc).isoformat(),
+                         "id": "binary_sensor.gate", "s": "on" if k % 2 else "off"})
+    now = start + (len(counts_per_day) + 1) * day
+    for k in range(today):
+        at = now - day + (k + 1) * (day / (today + 1))
+        rows.append({"at": datetime.fromtimestamp(at, timezone.utc).isoformat(),
+                     "id": "binary_sensor.gate", "s": "on" if k % 2 else "off"})
+    rows.sort(key=lambda r: r["at"])
+    rows.insert(0, {"at": datetime.fromtimestamp(start - 1, timezone.utc).isoformat(),
+                    "id": "binary_sensor.gate", "s": "off"})
+    return rows, now
+
+
+def test_a_chattering_day_scores_high() -> None:
+    rows, now = _daily([4, 5, 4, 6, 5, 4, 5, 4, 5], today=40)
+    out = salience.score_frequency(rows, now, entity_id="binary_sensor.gate")
+    assert out.kind == "frequency" and out.score and out.score > 5.0, out.reason
+    assert "changed 40 times in the last day" in out.reason
+
+
+def test_a_day_with_NO_change_where_it_usually_changes_is_ABSENCE() -> None:
+    """⚠️ The thing that reliably happens did not. The low tail of the same
+    comparison — no rule per device, no schedule to configure."""
+    rows, now = _daily([4, 5, 4, 6, 5, 4, 5, 4, 5], today=0)
+    out = salience.score_frequency(rows, now, entity_id="binary_sensor.gate")
+    assert out.score and out.score > 2.0, out.reason
+    assert out.reason.startswith("no change in the last day")
+
+
+def test_an_ordinary_day_is_quiet() -> None:
+    rows, now = _daily([4, 5, 4, 6, 5, 4, 5, 4, 5], today=5)
+    out = salience.score_frequency(rows, now, entity_id="binary_sensor.gate")
+    assert out.score == 0.0 and "as often as it usually does" in out.reason
+
+
+def test_frequency_keeps_score_numerics_floor_rather_than_its_own() -> None:
+    """⚠️ ONE ESTIMATOR, ONE FLOOR. Six complete days is below MIN_SAMPLES, and
+    the answer is `score_numeric`'s `too_few`, not a second copy of it."""
+    rows, now = _daily([4, 5, 4, 6, 5, 4], today=40)
+    out = salience.score_frequency(rows, now, entity_id="binary_sensor.gate")
+    assert out.score is None and out.why == "too_few"
+    assert "6 usable complete day(s) of change counts" in out.reason
+
+
+# ── ranking · every lens gets a share ──────────────────────────────────────
+
+def _many_numeric(n: int) -> List[salience.Salience]:
+    return [salience.score_numeric(_rows([10, 11, 9, 10, 11, 9, 10, 30 + i]),
+                                   30 + i, entity_id=f"sensor.n{i:03d}")
+            for i in range(n)]
+
+
+def test_a_novel_state_survives_a_limit_the_numeric_block_alone_would_fill() -> None:
+    """⚠️ THE DEFECT MEASURED ON THE VILLA (2026-09-04): `doc_salient=25`, the
+    limit exactly, on eight passes out of eight — and the ranking used to be
+    `numeric + novel + …` then `[:25]`, so no novel state had reached the
+    document since the categorical scorer shipped. A lens is represented by
+    being reserved a slot, or it is invisible by construction."""
+    loud = _many_numeric(40)
+    novel = salience.score_categorical(["locked"], "jammed", entity_id="lock.a")
+    rows = _lock_history([80, 95, 90, 100, 85, 92, 88])
+    held = salience.score_duration(rows, _end(rows) + 3600, entity_id="lock.x")
+    assert held.score
+    ranked = salience.rank(loud + [novel, held], limit=25)
+    assert len(ranked) == 25
+    ids = [s.entity_id for s in ranked]
+    assert "lock.a" in ids, "the novel state was cut by the numeric block"
+    assert "lock.x" in ids, "the duration row was cut by the numeric block"
+
+
+def test_blocks_are_presented_in_KINDS_order_not_interleaved() -> None:
+    """The reservation decides WHICH rows fit; the document still reads as one
+    block per lens, because a sigma next to a boolean reads as a comparison."""
+    loud = _many_numeric(5)
+    novel = salience.score_categorical(["locked"], "jammed", entity_id="lock.a")
+    ranked = salience.rank(loud + [novel], limit=4)
+    kinds = [s.kind for s in ranked]
+    assert kinds == sorted(kinds, key=salience.KINDS.index)
+    assert kinds.count("categorical") == 1 and kinds.count("numeric") == 3
+
+
+def test_a_lens_with_nothing_to_say_yields_its_slots() -> None:
+    loud = _many_numeric(10)
+    assert len(salience.rank(loud, limit=6)) == 6
+    assert all(s.kind == "numeric" for s in salience.rank(loud, limit=6))
+
+
+def test_no_limit_shows_every_scored_row_of_every_lens() -> None:
+    loud = _many_numeric(3)
+    novel = salience.score_categorical(["locked"], "jammed", entity_id="lock.a")
+    assert len(salience.rank(loud + [novel])) == 4
+
+
+# ── the two census lines ────────────────────────────────────────────────────
+
+def test_the_kind_census_counts_what_the_document_was_given() -> None:
+    loud = _many_numeric(3)
+    novel = salience.score_categorical(["locked"], "jammed", entity_id="lock.a")
+    quiet = salience.score_categorical(["on"], "on", entity_id="switch.q")
+    assert salience.kind_census(salience.rank(loud + [novel, quiet])) == (
+        "numeric=3,categorical=1")
+    assert salience.kind_census([]) == "none"
+
+
+def test_the_unscorable_census_says_WHY_not_only_how_many() -> None:
+    """⚠️ `doc_unscorable` counted two thirds of a villa and could not say
+    whether a new lens would reach any of them. This can."""
+    thin = salience.score_numeric(_rows([1, 2]), 9, entity_id="sensor.thin")
+    words = salience.score_numeric([], "unlocked", entity_id="lock.words")
+    flat = salience.score_numeric(_rows([10] * 8), 11, entity_id="sensor.flat")
+    fine = salience.score_numeric(_rows([10] * 8), 10, entity_id="sensor.fine")
+    assert salience.unscorable_census([thin, words, flat, fine]) == (
+        "flat=1,not_numeric=1,too_few=1")
+    assert all(s.why in salience.WHY for s in (thin, words, flat))
+    assert fine.why == "", "a scored row carries no why"

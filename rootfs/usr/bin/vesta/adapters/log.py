@@ -115,12 +115,16 @@ def census() -> Dict[str, Any]:
 #: reads down the pipeline. Anything not named here prints after, sorted, so a
 #: new counter is never invisible merely because nobody updated this list.
 CENSUS_ORDER: Tuple[str, ...] = (
-    "doc_salient", "doc_standing", "doc_concerns", "doc_coverage",
+    "doc_salient", "doc_kinds", "doc_standing", "doc_concerns", "doc_coverage",
     "escalated", "identified", "deferred",
     "investigated", "evidence_rows", "turns", "tool_calls", "tool_errors",
     "concerns_opened", "concerns_refused",
     "delivered", "tasks", "suppressed",
     "tokens_in", "tokens_out", "usd",
+    # ⚠️ AFTER THE BILL, ON PURPOSE. The census line is read left to right and
+    # the two composition breakdowns are long; they belong where a reader who
+    # wants them scrolls to, not in front of `escalated` and `usd`.
+    "doc_offline", "doc_unscorable", "doc_unscorable_why",
 )
 
 

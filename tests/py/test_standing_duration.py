@@ -24,13 +24,14 @@ sys.path.insert(0, os.path.join(
     "rootfs", "usr", "bin"))
 
 from vesta.brief import standing  # noqa: E402
+from vesta.shared import text as text_mod  # noqa: E402
 
 NOW = datetime(2026, 8, 30, 13, 39, tzinfo=timezone.utc)
 
 
 def _phrase(**delta: float) -> str:
     """The phrase for a device that went down `delta` ago."""
-    return standing._for_phrase(timedelta(**delta).total_seconds() * 1000.0)
+    return text_mod.for_phrase(timedelta(**delta).total_seconds() * 1000.0)
 
 
 def test_a_WEEK_reads_in_days_and_a_MINUTE_reads_in_minutes() -> None:
@@ -135,7 +136,7 @@ def test_the_DAYS_branch_can_never_say_ONE() -> None:
     that, by deleting one and staying green. This pin is what makes its absence
     a decision rather than an omission, and it fails the moment the cutover
     moves below two days."""
-    for hours in range(standing._DAYS_FROM_HOURS, standing._DAYS_FROM_HOURS + 240):
+    for hours in range(text_mod.DAYS_FROM_HOURS, text_mod.DAYS_FROM_HOURS + 240):
         phrase = _phrase(hours=hours)
         if phrase.endswith("days"):
             count = int(phrase.split()[1])

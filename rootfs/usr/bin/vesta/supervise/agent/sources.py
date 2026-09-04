@@ -48,7 +48,7 @@ from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
 from vesta.supervise.agent import flagtypes as flagtypes_mod
 from vesta.supervise.agent.refs import RefTable
 from vesta.supervise.agent.tools.base import BaseTool
-from vesta.adapters.log import swallow, warn
+from vesta.adapters.log import note, swallow, warn
 
 #: ⚠️ THE WINDOW AND THE SAMPLE MINIMUMS BELONG TO `observe/salience.py` AND ARE
 #: NOT RESTATED HERE. This module decides what to feed it, never what counts as
@@ -128,7 +128,8 @@ def _numeric(value: Any) -> Optional[float]:
     return out if out == out and abs(out) != float("inf") else None
 
 
-def build_scorer(rows: Optional[Sequence[Mapping[str, Any]]] = None
+def build_scorer(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
+                 now: Optional[float] = None
                  ) -> Callable[[], List[salience_mod.Salience]]:
     """A callable returning one `Salience` per entity the journal knows.
 
@@ -142,9 +143,21 @@ def build_scorer(rows: Optional[Sequence[Mapping[str, Any]]] = None
     numbers and cannot tell a daily mean from an instantaneous reading; the PH-1
     checkpoint ranked "the pumps are running" as a top finding for exactly that
     reason. `basis` is printed in the reason so a mismatch is visible.
+
+    ⚠️ ONE ROW PER ENTITY, AND THE LENS IS CHOSEN BY PRECEDENCE (2026-09-04).
+    A numeric entity is scored by `score_numeric` and nothing else — a sensor
+    stuck at one value is `sensor_health`'s question, not a duration. An entity
+    whose state is a WORD is offered three lenses in order: a state never seen
+    before (`score_categorical`) beats a state held longer than ever before
+    (`score_duration`), which beats a day with an unusual number of changes
+    (`score_frequency`). The first lens with a score wins; failing that, a lens
+    the duration lens's answer is the row, quiet or unscorable — never
+    categorical's "one of its usual states", which is true of everything and
+    says nothing. `_best` is that rule, stated once.
     """
     def scorer() -> List[salience_mod.Salience]:
         entries = list(rows) if rows is not None else _journal_rows()
+        moment = time.time() if now is None else float(now)
         by_entity: Dict[str, List[Dict[str, Any]]] = {}
         for row in entries:
             entity_id = str(row.get("id") or "")
@@ -167,13 +180,38 @@ def build_scorer(rows: Optional[Sequence[Mapping[str, Any]]] = None
                         basis="journalled reading"))
                 else:
                     seen = [r.get("s") for r in history[:-1]]
-                    out.append(salience_mod.score_categorical(
-                        seen, history[-1].get("s"), entity_id=entity_id))
+                    out.append(_best(
+                        salience_mod.score_categorical(
+                            seen, history[-1].get("s"), entity_id=entity_id),
+                        salience_mod.score_duration(
+                            history, moment, entity_id=entity_id),
+                        salience_mod.score_frequency(
+                            history, moment, entity_id=entity_id)))
             except Exception as err:  # noqa: BLE001 - one bad entity is not a
                 swallow(f"could not score {entity_id}", err)   # failed pass
         return out
 
     return scorer
+
+
+def _best(*candidates: salience_mod.Salience) -> salience_mod.Salience:
+    """The one row an entity gets, from the lenses offered to it in order.
+
+    The first lens with a SCORE wins, in the order offered. When none scores,
+    the row is the SECOND candidate's — the duration lens — whatever it says.
+    ⚠️ NOT THE CATEGORICAL LENS'S QUIET ANSWER, although it usually has one:
+    "'unlocked' is one of its usual states" is true of nearly every word
+    entity on every pass and tells the reader nothing, while the duration
+    lens's answer in the same situation is either "within its usual range
+    (longest seen 1 hour)" or "only 3 earlier holds; 7 needed" — the reader's
+    next question answered, or the exact thing time will supply named. It is
+    also what makes `unscorable_census` honest about locks and lights: filed
+    under categorical-quiet they would never appear in it at all.
+    """
+    for item in candidates:
+        if item.score:
+            return item
+    return candidates[1] if len(candidates) > 1 else candidates[0]
 
 
 def build_profile_source(rows: Optional[Sequence[Mapping[str, Any]]] = None
@@ -455,7 +493,7 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
 
     scored: List[salience_mod.Salience] = []
     try:
-        scored = list(build_scorer(entries)())
+        scored = list(build_scorer(entries, now=now)())
     except Exception as err:  # noqa: BLE001
         swallow("could not rank the villa's novelty", err)
 
@@ -479,6 +517,15 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     try:
         ranked = salience_mod.rank(scored, limit=DOCUMENT_SALIENT_LIMIT)
         unscorable = len(salience_mod.unscorable(scored))
+        # ⚠️ THE TWO CENSUS LINES STEP 0 OF THE 2026-09-04 PLAN ASKED FOR, noted
+        # beside the ranking they describe rather than inside `delta`, which
+        # receives a count and a cut list and could not derive either. `doc_
+        # kinds` says which lens the 25 rows the model saw came from — the
+        # figure that proves or kills "novel states never reach the document".
+        # `doc_unscorable_why` says whether the ~two thirds that cannot be
+        # scored are waiting on history or on a lens that does not exist.
+        note("doc_kinds", salience_mod.kind_census(ranked))
+        note("doc_unscorable_why", salience_mod.unscorable_census(scored))
     except Exception as err:  # noqa: BLE001
         swallow("could not rank the villa's novelty", err)
         ranked, unscorable = [], 0

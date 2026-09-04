@@ -1,3 +1,15 @@
+## 2.921.0
+
+### Fixed — a lock left unlocked, or a gate that never opened today, could not reach the agent
+The observation ranking scored numbers only in practice: a word-state device was
+asked one question — has it ever been in this state before — so a lock unlocked
+for forty minutes read as "one of its usual states". And the document's excerpt
+was cut AFTER the numeric block, which fills it every pass, so even a never-seen
+state never reached the model. Two lenses now score how long a state has been
+held against the device's own holds, and how often it changed today against its
+own days; every lens is reserved a share of the excerpt; and the census line says
+why each unscorable device is unscorable, so a lens that lands can be seen to.
+
 ## 2.920.0
 
 ### Changed — the circuit breaker that stops a failing provider existed twice

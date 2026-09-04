@@ -63,7 +63,7 @@ ALLOWED_FIELDS: Tuple[str, ...] = (
     "entries", "bound", "online_since", "last_seen", "id", "state_",
     "title", "age_days", "tickets_open", "tickets_resolved",
     "tickets_resolved_with_entity", "evidence_photos",
-    "novel_state", "seen_states", "points", "runs", "outcome", "error",
+    "novel_state", "seen_states", "why", "points", "runs", "outcome", "error",
     "structural", "temporal", "salient", "unscorable", "concerns", "states",
     "attributes", "counts", "cache_prefix_chars", "limit", "window", "type",
     "text", "json", "temperature", "hvac_action", "hvac_mode", "preset_mode",

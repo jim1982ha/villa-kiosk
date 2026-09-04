@@ -259,6 +259,11 @@ FIXTURES: Set[str] = {
     "sensor.p_energy", "sensor.s", "sensor.s0", "sensor.x",
     "sensor.x_energy", "sensor.new_energy", "sensor.old_energy",
     "binary_sensor.leak_x", "light.a",
+    # The duration / frequency lens fixtures (2026-09-04): a lock held open,
+    # a gate that changes N times a day, and the `sensor.n000…` family the
+    # slot-reservation test fills a document with (the regex sees `sensor.n`).
+    "lock.x", "lock.gate", "lock.words", "binary_sensor.gate",
+    "sensor.n", "sensor.fine", "sensor.flat", "switch.q",
     # Named for the behaviour under test, not for a device.
     "sensor.debris", "sensor.ghost", "sensor.odd", "sensor.ok",
     "sensor.other", "sensor.mesh_only", "sensor.total",

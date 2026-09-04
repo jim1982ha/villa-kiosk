@@ -58,11 +58,14 @@ because it ranks, and whatever it displaces was real.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import (Any, Dict, Final, List, Mapping, Optional, Sequence,
                     Tuple)
 
+from vesta.shared import instants
 from vesta.shared.analysis import robust
+from vesta.shared.text import for_phrase
 
 # ── the constants, each a validity requirement rather than a threshold ──────
 
@@ -184,9 +187,18 @@ class Salience:
     """
 
     entity_id: str
-    kind: str                                  # "numeric" | "categorical"
+    kind: str                                  # one of KINDS
     score: Optional[float] = None              # None means "cannot say"
     reason: str = ""
+    #: WHY it could not be scored, as one of `WHY`, or "" when it was. The
+    #: `reason` above is a sentence with the entity's own numbers in it; this
+    #: is the same fact as a token a census can count. Added 2026-09-04 because
+    #: `doc_unscorable` said HOW MANY entities were unscorable (~two thirds of
+    #: the reference villa) and nothing could say why, so nothing could say
+    #: whether a new lens would reach any of them.
+    why: str = ""
+    #: The state being held, for `kind == "duration"` — printed, never keyed on.
+    state: Optional[str] = None
     observed: Optional[float] = None
     baseline: Optional[float] = None           # median of the window
     spread: Optional[float] = None             # robust sigma
@@ -210,12 +222,54 @@ class Salience:
         }
         if self.basis:
             out["basis"] = self.basis
+        if self.why:
+            out["why"] = self.why
+        if self.state is not None:
+            out["state"] = self.state
         if self.persistence:
             out["persistence"] = round(self.persistence, 3)
         if self.novel_state is not None:
             out["novel_state"] = self.novel_state
             out["seen_states"] = list(self.seen_states)
         return out
+
+
+#: The lenses, in the order the document presents them. ⚠️ A TUPLE, NOT A
+#: COMMENT ON A FIELD — `rank` reserves a slot per kind by iterating this, so a
+#: fifth lens is represented in the document by being named here and nowhere
+#: else. "numeric" and "categorical" were the only two until 2026-09-04;
+#: "duration" and "frequency" are the lenses that reach the two thirds of a
+#: villa that has no number to score — a lock, a light, a cover, a door.
+KINDS: Final[Tuple[str, ...]] = ("numeric", "categorical", "duration",
+                                  "frequency")
+
+#: Why a scorer declined, as tokens a census can count. Every unscorable
+#: `Salience` carries exactly one of these in `why`; `unscorable_census`
+#: aggregates them. ⚠️ THE VOCABULARY IS CLOSED ON PURPOSE: a free-text reason
+#: cannot be counted, and the whole point of the token is to answer "would a
+#: new lens reach these" — `too_few` says yes-with-time, `not_numeric` says a
+#: different lens, `flat` says nothing will and that is an answer.
+WHY: Final[Tuple[str, ...]] = ("not_numeric", "too_few", "too_few_on_side",
+                                "no_baseline", "flat", "no_history",
+                                "no_change_yet")
+
+
+def _thin(out: "Salience", have: int, what: str) -> "Salience":
+    """The cold-start answer, stated once for every lens.
+
+    ⚠️ ONE FLOOR, ONE SENTENCE, THREE SCORERS. `MIN_SAMPLES` is a property of
+    the MAD estimator every lens here uses, not of any particular scorer, so a
+    per-scorer floor would be a second copy of one validity requirement — the
+    duplication this project audits for. What IS per-scorer is the NOUN: seven
+    readings, seven earlier holds of this state, seven days of counts. The
+    contract every scorer keeps is that below the floor it returns THIS, with
+    `score=None` and `why="too_few"`, never a number computed from too little.
+    """
+    out.score = None
+    out.why = "too_few"
+    out.reason = (f"only {have} usable {what}; {MIN_SAMPLES} needed before "
+                  f"a spread means anything")
+    return out
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -274,7 +328,7 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
     out = Salience(entity_id=entity_id, kind="numeric", basis=str(basis or ""))
     current = _numeric(observed)
     if current is None:
-        out.reason = "the current reading is not numeric"
+        out.reason, out.why = "the current reading is not numeric", "not_numeric"
         return out
     out.observed = current
 
@@ -286,9 +340,7 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
     # arm was unreachable in production — see the note beside `MIN_SAMPLES` for
     # why it went and where that job actually lives.
     if len(values) < MIN_SAMPLES:
-        out.reason = (f"only {len(values)} usable reading(s); "
-                      f"{MIN_SAMPLES} needed before a spread means anything")
-        return out
+        return _thin(out, len(values), "reading(s)")
 
     # ⚠️ THE POPULATION THIS READING BELONGS TO, WHERE THERE ARE TWO. Taken
     # BEFORE the baseline, because the whole point is that the all-samples
@@ -320,12 +372,13 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
                 f"{current:g} is {side}, and only {len(values)} of "
                 f"{out.samples} readings were comparable; "
                 f"{MIN_SAMPLES} needed before that side has a baseline")
+            out.why = "too_few_on_side"
             return out
 
     baseline = robust.median(values)
     spread = robust.robust_sigma(values)
     if baseline is None or spread is None:
-        out.reason = "no baseline could be computed"
+        out.reason, out.why = "no baseline could be computed", "no_baseline"
         return out
     out.baseline, out.spread = baseline, spread
 
@@ -344,6 +397,7 @@ def score_numeric(samples: Sequence[Mapping[str, Any]],
         out.reason = (f"was flat at {baseline:g} across {len(values)} "
                       f"{('readings ' + side) if side else 'readings'} "
                       f"and is now {current:g}; no spread to score against")
+        out.why = "flat"
         return out
 
     z = abs(current - baseline) / spread
@@ -390,7 +444,7 @@ def score_categorical(seen: Sequence[Any], observed: Any, *,
     out.seen_states, out.samples = history, len(history)
 
     if not history:
-        out.reason = "no history for this entity yet"
+        out.reason, out.why = "no history for this entity yet", "no_history"
         return out
     if current in history:
         out.score, out.reason = 0.0, f"{current!r} is one of its usual states"
@@ -405,34 +459,284 @@ def score_categorical(seen: Sequence[Any], observed: Any, *,
     return out
 
 
+# ── duration ────────────────────────────────────────────────────────────────
+def _instant_s(value: Any) -> Optional[float]:
+    moment = instants.as_utc(value)
+    return None if moment is None else moment.timestamp()
+
+
+def _holds(rows: Sequence[Mapping[str, Any]]) -> List[Tuple[str, float, float]]:
+    """`(state, started_s, ended_s)` for every COMPLETED hold, oldest first.
+
+    A hold is one contiguous run of the same journalled state. Two consecutive
+    rows with the same state (an attribute-only change) extend a hold rather
+    than closing it, because the state did not change.
+    """
+    out: List[Tuple[str, float, float]] = []
+    state: Optional[str] = None
+    since: Optional[float] = None
+    for row in rows:
+        at = _instant_s(row.get("at"))
+        if at is None:
+            continue
+        current = "" if row.get("s") is None else str(row.get("s"))
+        if state is None:
+            state, since = current, at
+            continue
+        if current != state:
+            assert since is not None
+            out.append((state, since, at))
+            state, since = current, at
+    return out
+
+
+def score_duration(rows: Sequence[Mapping[str, Any]], now: float, *,
+                   entity_id: str = "") -> Salience:
+    """How long THIS state has been held, against this entity's own holds of it.
+
+    ⚠️ THE LENS `score_categorical` DECLINES TO BE, AND FOR A GOOD REASON THAT
+    THIS DOES NOT CONTRADICT. That scorer refuses to rank states because they
+    are unordered — "how unusual is `jammed`" has no arithmetic. A DURATION is
+    ordered: forty minutes unlocked is more than ninety seconds unlocked, and
+    the entity's own past holds of the same state are the population. So this
+    scores a number, and the number is time.
+
+    ⚠️ ONLY THE CURRENT HOLD, AND ONLY WHEN IT IS LONGER THAN EVERY EARLIER
+    ONE. A hold still in progress is a lower bound — a lock unlocked for five
+    minutes may be about to close, so "shorter than usual" is never a finding.
+    And a hold within the range already seen is this entity doing something it
+    has done before: a gate the owner props open for an hour on Sundays must
+    not be the most unusual thing in the villa every Sunday. So the novelty
+    condition is the same one `score_categorical` uses — never seen before —
+    applied to the length rather than the label, and the score is how far
+    beyond the population it has gone, in log-time: hold lengths are
+    heavy-tailed (seconds most of the time, hours occasionally), and a linear
+    MAD on them is the 673-sigma pump again with a clock instead of a wattage.
+
+    ⚠️ THE COLD-START CONTRACT IS `_thin`, THE SAME FLOOR EVERY LENS USES. A
+    lock the ring has seen unlocked three times has no distribution of unlocked
+    holds, whatever a person might guess about locks in general.
+
+    `rows` are ONE entity's journal rows, oldest first; `now` is epoch seconds.
+    """
+    out = Salience(entity_id=entity_id, kind="duration")
+    if not rows:
+        out.reason, out.why = "no history for this entity yet", "no_history"
+        return out
+    last = rows[-1]
+    current = "" if last.get("s") is None else str(last.get("s"))
+    out.state = current
+    holds = _holds(rows)
+    # The current hold began when the state last CHANGED, which is the end of
+    # the last completed hold — or the first row, if it never has.
+    started = holds[-1][2] if holds else _instant_s(rows[0].get("at"))
+    if started is None:
+        out.reason, out.why = "no readable timestamps", "no_history"
+        return out
+    held = max(0.0, float(now) - started)
+    out.observed = held
+    earlier = [b - a for state, a, b in holds if state == current and b > a]
+    out.samples = len(earlier)
+    if len(earlier) < MIN_SAMPLES:
+        return _thin(out, len(earlier), f"earlier hold(s) of {current!r}")
+
+    logs = [math.log(d) for d in earlier]
+    baseline = robust.median(logs)
+    spread = robust.robust_sigma(logs)
+    if baseline is None or spread is None:
+        out.reason, out.why = "no baseline could be computed", "no_baseline"
+        return out
+    usual = math.exp(baseline)
+    out.baseline, out.spread = usual, spread
+    longest = max(earlier)
+    phrase = for_phrase(held * 1000.0)
+    if held <= longest:
+        out.score = 0.0
+        out.reason = (f"{current!r} {phrase}, within its usual range "
+                      f"(longest seen {for_phrase(longest * 1000.0)[4:]}, "
+                      f"n={len(earlier)})")
+        return out
+    if spread == 0.0:
+        # Every earlier hold was identical to the second — a timer, not a
+        # person. Beyond it is novel and stated; a sigma against zero is not.
+        out.reason = (f"{current!r} {phrase}; every earlier hold was "
+                      f"{for_phrase(usual * 1000.0)[4:]} exactly, so there "
+                      f"is no spread to score against")
+        out.why = "flat"
+        return out
+    z = (math.log(held) - baseline) / spread
+    out.score = z
+    out.reason = (f"{current!r} {phrase} — {z:.1f} sigma beyond its usual "
+                  f"{for_phrase(usual * 1000.0)[4:]} in log-time, and longer "
+                  f"than any of its {len(earlier)} earlier holds (longest "
+                  f"{for_phrase(longest * 1000.0)[4:]})")
+    return out
+
+
+# ── frequency ───────────────────────────────────────────────────────────────
+#: One day, in seconds. ⚠️ A UNIT, NOT A WINDOW CONSTANT — the same distinction
+#: `MIN_SAMPLES` draws about readings. `score_frequency` bins transitions per
+#: day because a day is the period a villa's routine repeats on, and the number
+#: of days it looks back is whatever the ring holds, never a number here.
+_DAY_S: Final[float] = 86_400.0
+
+
+def score_frequency(rows: Sequence[Mapping[str, Any]], now: float, *,
+                    entity_id: str = "") -> Salience:
+    """How often this entity changed in the last day, against its own days.
+
+    ⚠️ BOTH TAILS ARE THE SIGNAL, AND THE LOW ONE IS ABSENCE. A door cycling
+    thirty times in an hour is the high tail (a relay chattering, a latch not
+    catching). A gate that opens every day and has not opened today is the low
+    tail — and that is the only way "the thing that reliably happens did not"
+    can be said without a rule per device. Both fall out of one comparison:
+    today's count against the entity's own daily counts.
+
+    ⚠️ IT IS `score_numeric` OVER DAILY COUNTS, NOT A THIRD ESTIMATOR. The
+    population is one number per day, the observation is today's number, and
+    the floor, the duty-cycle split, the flat-history guard and the reason
+    format are all the ones that module already has. Writing a second z-score
+    here would be the second copy this repository keeps paying for.
+
+    Days are counted BACK FROM `now`, so "today" is the last twenty-four
+    hours rather than the calendar day — a check at 09:00 comparing "since
+    midnight" against whole days would find every entity quiet every morning.
+    Only days the journal fully covers are population; the partial oldest one
+    is dropped rather than counted short.
+    """
+    out = Salience(entity_id=entity_id, kind="frequency")
+    stamps = [t for t in (_instant_s(r.get("at")) for r in rows) if t is not None]
+    if not stamps:
+        out.reason, out.why = "no history for this entity yet", "no_history"
+        return out
+    first = min(stamps)
+    span_days = int((float(now) - first) // _DAY_S)
+    counts = [0] * (span_days + 1)
+    for t in stamps:
+        age = int((float(now) - t) // _DAY_S)
+        if 0 <= age <= span_days:
+            counts[age] += 1
+    # counts[0] is the last 24 h; counts[1..span_days-1] are complete days;
+    # counts[span_days] is the partial oldest day and is dropped.
+    complete = counts[1:span_days]
+    samples = [{"day": f"-{i + 1}d", "value": float(c)}
+               for i, c in enumerate(complete)]
+    scored = score_numeric(samples, float(counts[0]), entity_id=entity_id,
+                           basis="daily change count")
+    scored.kind = "frequency"
+    if scored.score is None:
+        if scored.why == "too_few":
+            # The floor is `score_numeric`'s; the NOUN is this lens's — see
+            # `_thin`. "6 readings" would send a reader looking at a sensor.
+            return _thin(scored, len(samples), "complete day(s) of change counts")
+        return scored
+    if scored.score == 0.0:
+        scored.reason = "changed about as often as it usually does today"
+        return scored
+    direction = "more" if counts[0] > (scored.baseline or 0) else "fewer"
+    if counts[0] == 0:
+        scored.reason = (f"no change in the last day; it usually changes "
+                        f"{scored.baseline:g} times a day ({scored.reason})")
+    else:
+        scored.reason = (f"changed {counts[0]} times in the last day, "
+                        f"{direction} than its usual {scored.baseline:g} "
+                        f"({scored.reason})")
+    return scored
+
+
 # ── ranking ─────────────────────────────────────────────────────────────────
 def rank(scored: Sequence[Salience], *, limit: Optional[int] = None
          ) -> List[Salience]:
-    """Most novel first. Unscorable entities keep their place at the end.
+    """Most novel first, one block per lens. Unscorable entities keep their
+    place at the end.
 
-    ⚠️ NUMERIC AND CATEGORICAL ARE RANKED SEPARATELY AND THEN INTERLEAVED
-    NUMERIC-FIRST, because a sigma and a boolean have no common unit. A novel
-    categorical state scores 1.0; treating that as "less salient than 1.1 sigma"
-    would be a units error with a straight face. Every novel state reaches the
-    agent, after the numeric ranking, and the agent sees both lists with their
-    reasons attached.
+    ⚠️ THE LENSES ARE RANKED SEPARATELY AND PRESENTED AS BLOCKS, because a
+    sigma, a boolean and a log-time ratio have no common unit. A novel state
+    scores 1.0; treating that as "less salient than 1.1 sigma" would be a units
+    error with a straight face. Blocks appear in `KINDS` order and every block
+    that has something to say gets a share of the limit.
+
+    ⚠️ THE SHARE IS RESERVED BY ROUND-ROBIN, AND THIS IS WHY (2026-09-04).
+    Until this date the blocks were CONCATENATED and then cut: `numeric +
+    novel + …` then `[:limit]`. On the reference villa the numeric block alone
+    exceeds the document's limit on every pass — `doc_salient=25`, the limit
+    exactly, eight passes out of eight — so no novel state ever reached the
+    model, and a lock entering a state it had never been in was invisible to
+    triage by construction from the day the categorical scorer shipped. A lens
+    added after that would have shipped invisible the same way. So the set that
+    fits is chosen by taking the best of each lens in turn until the limit is
+    met; a lens with fewer candidates than its turn yields its slots to the
+    others. Nothing here is a weight or a quota — no constant decides the
+    split, and there is no constant to tune per villa.
 
     ⚠️ `limit` TRUNCATES THE SHOWN SET, WHICH IS THIS MODULE'S ONLY JOB — it
     does not discard anything. The caller keeps the full list; salience decides
     what fits in a context window, and that is a budget, not a judgement.
     """
-    numeric = sorted(
-        (s for s in scored if s.kind == "numeric" and s.score),
-        key=lambda s: (-(s.score or 0.0), s.entity_id))
-    novel = sorted(
-        (s for s in scored if s.kind == "categorical" and s.novel_state is not None),
-        key=lambda s: s.entity_id)
-    quiet = sorted(
-        (s for s in scored if s.score == 0.0), key=lambda s: s.entity_id)
-    unscored = sorted(
-        (s for s in scored if s.score is None), key=lambda s: s.entity_id)
-    out = numeric + novel + quiet + unscored
-    return out if limit is None else out[:limit]
+    def _key(item: Salience) -> Tuple[float, str]:
+        # ⚠️ NOVEL STATES SORT BY NAME: their score is a boolean, so ordering
+        # them by it would be ordering by nothing.
+        magnitude = 0.0 if item.kind == "categorical" else -(item.score or 0.0)
+        return (magnitude, item.entity_id)
+
+    blocks: Dict[str, List[Salience]] = {
+        kind: sorted((s for s in scored if s.kind == kind and s.score),
+                     key=_key)
+        for kind in KINDS}
+    quiet = sorted((s for s in scored if s.score == 0.0),
+                   key=lambda s: s.entity_id)
+    unscored = sorted((s for s in scored if s.score is None),
+                      key=lambda s: s.entity_id)
+
+    if limit is None:
+        chosen = {kind: list(rows) for kind, rows in blocks.items()}
+        rest = quiet + unscored
+    else:
+        chosen = {kind: [] for kind in KINDS}
+        taken, turn = 0, 0
+        while taken < limit and any(turn < len(blocks[k]) for k in KINDS):
+            for kind in KINDS:
+                if taken >= limit:
+                    break
+                if turn < len(blocks[kind]):
+                    chosen[kind].append(blocks[kind][turn])
+                    taken += 1
+            turn += 1
+        rest = (quiet + unscored)[:max(0, limit - taken)]
+
+    out: List[Salience] = []
+    for kind in KINDS:
+        out.extend(chosen[kind])
+    return out + rest
+
+
+def kind_census(ranked: Sequence[Salience]) -> str:
+    """`numeric=23,categorical=2` — what the document was actually given,
+    per lens. ⚠️ THE INSTRUMENT THAT SETTLES WHETHER A LENS IS VISIBLE: a lens
+    whose count reads 0 here on a villa where it scores something is a lens
+    the ranking is cutting, and `doc_salient` alone could never say so."""
+    counts: Dict[str, int] = {}
+    for item in ranked:
+        if item.score:
+            counts[item.kind] = counts.get(item.kind, 0) + 1
+    return ",".join(f"{k}={counts[k]}" for k in KINDS if k in counts) or "none"
+
+
+def unscorable_census(scored: Sequence[Salience]) -> str:
+    """`too_few=790,not_numeric=12` — WHY the unscorable were unscorable.
+
+    ⚠️ THE QUESTION `doc_unscorable` COULD NOT ANSWER. It counted ~two thirds
+    of the reference villa as unscorable and nothing said whether a new lens
+    would reach any of them: `too_few` is history that time will supply,
+    `not_numeric` is a lens that did not exist, `flat` is an entity nothing
+    will ever score and that is an answer. Read this once before building a
+    lens, and again after — it is what says whether the lens landed.
+    """
+    counts: Dict[str, int] = {}
+    for item in unscorable(scored):
+        key = item.why or "unstated"
+        counts[key] = counts.get(key, 0) + 1
+    return ",".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none"
 
 
 def unscorable(scored: Sequence[Salience]) -> List[Salience]:

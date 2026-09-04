@@ -1199,3 +1199,79 @@ def test_an_empty_journal_does_not_report_the_WHOLE_VILLA_as_offline(
     assert sources._offline_count() == 0, (
         "with no observations yet, the villa was reported as entirely offline "
         "— a cold start would alarm about every device it has")
+
+
+# ── the lens precedence · one row per entity (2026-09-04) ──────────────────
+
+def _lock_rows(unlocked_holds: List[float], *, final: str = "unlocked",
+               start: float = 1_700_000_000.0) -> List[Dict[str, Any]]:
+    from datetime import datetime, timezone
+    rows: List[Dict[str, Any]] = []
+    at = start
+    for held in unlocked_holds:
+        rows.append({"at": datetime.fromtimestamp(at, timezone.utc).isoformat(),
+                     "id": "lock.gate", "s": "locked"})
+        at += 3600.0
+        rows.append({"at": datetime.fromtimestamp(at, timezone.utc).isoformat(),
+                     "id": "lock.gate", "s": "unlocked"})
+        at += held
+    rows.append({"at": datetime.fromtimestamp(at, timezone.utc).isoformat(),
+                 "id": "lock.gate", "s": "locked"})
+    at += 3600.0
+    rows.append({"at": datetime.fromtimestamp(at, timezone.utc).isoformat(),
+                 "id": "lock.gate", "s": final})
+    return rows
+
+
+def _last(rows: List[Dict[str, Any]]) -> float:
+    from vesta.shared import instants
+    moment = instants.as_utc(rows[-1]["at"])
+    assert moment is not None
+    return moment.timestamp()
+
+
+def test_a_word_state_held_longer_than_ever_becomes_a_DURATION_row() -> None:
+    rows = _lock_rows([80, 95, 90, 100, 85, 92, 88])
+    scored = {s.entity_id: s for s in
+              sources.build_scorer(rows, now=_last(rows) + 40 * 60)()}
+    assert scored["lock.gate"].kind == "duration"
+    assert scored["lock.gate"].score and scored["lock.gate"].score > 0
+
+
+def test_a_NEVER_SEEN_state_beats_a_long_hold() -> None:
+    """⚠️ Precedence: a lock reporting `jammed` for the first time is the novel
+    fact even if it has also been in that state for a while."""
+    rows = _lock_rows([80, 95, 90, 100, 85, 92, 88], final="jammed")
+    scored = {s.entity_id: s for s in
+              sources.build_scorer(rows, now=_last(rows) + 40 * 60)()}
+    assert scored["lock.gate"].kind == "categorical"
+    assert scored["lock.gate"].novel_state == "jammed"
+
+
+def test_still_one_row_per_entity_with_three_lenses_offered() -> None:
+    rows = _lock_rows([80, 95, 90, 100, 85, 92, 88])
+    scored = sources.build_scorer(rows, now=_last(rows) + 10)()
+    assert [s.entity_id for s in scored] == ["lock.gate"]
+
+
+def test_an_unscorable_word_entity_keeps_the_DURATION_reason() -> None:
+    """⚠️ NOT categorical's "'unlocked' is one of its usual states" — true of
+    everything, says nothing, and would hide every lock and light from the
+    unscorable census. "2 earlier holds; 7 needed" names what time supplies."""
+    rows = _lock_rows([80, 95])
+    scored = sources.build_scorer(rows, now=_last(rows) + 10)()
+    assert scored[0].score is None and scored[0].kind == "duration"
+    assert scored[0].why == "too_few"
+
+
+def test_a_numeric_entity_is_offered_no_word_lens() -> None:
+    scored = {s.entity_id: s for s in sources.build_scorer(ROWS)()}
+    assert scored["sensor.probe_power"].kind == "numeric"
+
+
+def test_the_two_census_lines_are_noted_by_the_document_builder() -> None:
+    """⚠️ PIN THE CALLER. The census helpers are pure and a perfect one that
+    nothing notes is a line nobody will ever read."""
+    import inspect
+    src = inspect.getsource(sources.build_document)
+    assert 'note("doc_kinds"' in src and 'note("doc_unscorable_why"' in src
