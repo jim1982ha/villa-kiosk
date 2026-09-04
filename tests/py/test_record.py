@@ -132,3 +132,48 @@ def test_removing_an_entry_is_exact() -> None:
     assert record.remove("2026-08-30T11:00:00+00:00", "drop") is True
     assert [r["subject"] for r in record.read()] == ["keep"]
     assert record.remove("nope", "drop") is False
+
+
+# ── tally_automations · one grouping for the brief and the document ─────────
+
+def test_the_tally_groups_sums_and_counts_phases() -> None:
+    """⚠️ FIGURES SUMMED, PHASES COUNTED, FIRINGS COUNTED ONCE. An incident
+    that opened and later timed out is one firing with two rows."""
+    from vesta.adapters import record as record_mod
+    rows = [
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "opened"}},
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "timeout"}},
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "opened"}},
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "cleared"}},
+        {"source": "automation", "subject": "idle load",
+         "payload": {"kwh": 0.3, "cost_local": 12}},
+        {"source": "automation", "subject": "idle load",
+         "payload": {"kwh": 0.4, "cost_local": 10}},
+        {"source": "agent", "subject": "not an automation"},
+    ]
+    tally = record_mod.tally_automations(rows)
+    assert set(tally) == {"phase overload", "idle load"}
+    assert tally["phase overload"]["times"] == 2
+    assert tally["phase overload"]["phases"] == {"opened": 2, "timeout": 1,
+                                                 "cleared": 1}
+    assert tally["idle load"]["times"] == 2
+    assert abs(tally["idle load"]["kwh"] - 0.7) < 1e-9
+    assert tally["idle load"]["cost"] == 22 and tally["idle load"]["phases"] == {}
+
+
+def test_a_rule_that_sends_no_phase_tallies_by_count_alone() -> None:
+    from vesta.adapters import record as record_mod
+    rows = [{"source": "automation", "subject": "motion light"}] * 14
+    assert record_mod.tally_automations(rows)["motion light"]["times"] == 14
+
+
+def test_an_unknown_phase_is_neither_counted_nor_a_firing() -> None:
+    """A payload the blueprint vocabulary does not name is not silently a
+    firing; `PHASES` is the contract and `record` is its one reader."""
+    from vesta.adapters import record as record_mod
+    rows = [{"source": "automation", "subject": "x", "payload": {"phase": "maybe"}}]
+    assert record_mod.tally_automations(rows)["x"]["times"] == 0

@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from vesta.adapters import record as record_mod
 from vesta.shared.style import inert
 
 #: The rungs, worst-informed last. ⚠️ NAMED, because "which rung produced this"
@@ -205,29 +206,19 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
     # loose and the lead counted 17 firings above two rendered lines — the same
     # count-vs-body mismatch, one release later, in the one case the first fix
     # did not cover. Everything the lead counts is now derived once, here.
-    tally: Dict[str, Dict[str, Any]] = {}
-    # ⚠️ DECLARED ONCE FOR ALL SIX LOOPS IN THIS FUNCTION. `row` is rebound by
-    # six `for` statements over different sequences; mypy types it from the
-    # FIRST, so the four that iterate `Sequence[Mapping[str, Any]]` read as
+    # ⚠️ THROUGH THE RECORD'S OWN GROUPING (2026-09-04): the loop that lived
+    # here is `record.tally_automations`, because the villa document needed the
+    # same rows grouped the same way and a second loop is how the brief and
+    # the agent would come to disagree about how many times a rule fired.
+    tally = record_mod.tally_automations(merged)
+
+    # ⚠️ DECLARED ONCE FOR ALL THE LOOPS IN THIS FUNCTION. `row` is rebound by
+    # several `for` statements over different sequences; mypy types it from the
+    # FIRST, so the ones that iterate `Sequence[Mapping[str, Any]]` read as
     # assigning a Mapping to a dict. Every use is `.get()` — `row` is never
     # written through — so `Mapping` is the honest type and the annotation is a
     # runtime no-op (/dry-audit, 2026-09-01).
     row: Mapping[str, Any]
-    for row in merged:
-        if str(row.get("source") or "") != "automation":
-            continue
-        name = str(row.get("subject") or row.get("title") or "?")
-        held = tally.setdefault(name, {"times": 0, "kwh": 0.0, "cost": 0.0,
-                                       "mins": 0.0})
-        held["times"] += 1
-        payload = row.get("payload")
-        if isinstance(payload, Mapping):
-            for key, into in (("kwh", "kwh"), ("cost_local", "cost"),
-                              ("wasted_minutes", "mins")):
-                try:
-                    held[into] += float(payload.get(key) or 0)
-                except (TypeError, ValueError):
-                    pass
 
     # ⚠️ GROUPED EXACTLY AS THE AUTOMATIONS ARE (2026-08-29, owner: "I don't see
     # the number of drill message incremented by one … can you consistently
@@ -355,6 +346,14 @@ def brief(*, concerns: Optional[Sequence[Mapping[str, Any]]] = None,
                     bits.append(f"{held['kwh']:.1f} kWh total")
                 if held["cost"]:
                     bits.append(f"about {round(held['cost'])} total")
+                # ⚠️ HOW THE INCIDENTS ENDED, WHEN THE RULE SAYS (2026-09-04).
+                # "3 times" for a phase-overload rule reads the same whether
+                # every incident cleared or none did, and the difference is
+                # whether the rule is calibrated. Only `timeout` is worth a
+                # word: cleared is the expected end and opened is the count.
+                ended = held.get("phases") or {}
+                if ended.get("timeout"):
+                    bits.append(f"{int(ended['timeout'])} ended by timeout")
                 clause = " · ".join(bits)
                 out.append(f"- {inert(name)}" + (f" — {clause}" if clause else ""))
             out.append("")

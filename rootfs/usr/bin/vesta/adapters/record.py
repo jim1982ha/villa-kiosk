@@ -152,6 +152,57 @@ def since(iso: str, *, sources: Optional[Sequence[str]] = None
     return kept
 
 
+#: How a `critical_*` incident ended, as the blueprint reports it in its own
+#: event's `phase` field: `opened` when it alerted, `cleared` when the all-clear
+#: went out, `timeout` when "Repeat after" closed a run whose condition was
+#: still true. ⚠️ THE BLUEPRINT'S VOCABULARY, READ HERE AND NOWHERE ELSE — a
+#: villa whose rules send no phase tallies plainly by count, which is why
+#: every reader of this tuple treats an absent phase as "not said".
+PHASES = ("opened", "cleared", "timeout")
+
+
+def tally_automations(entries: Sequence[Mapping[str, Any]]
+                      ) -> Dict[str, Dict[str, Any]]:
+    """Firings grouped by automation, figures SUMMED, phases COUNTED.
+
+    ⚠️ ONE RULE, TWO READERS (2026-09-04). The brief composer had this inline
+    and the villa document needed the same grouping — "which rules fired this
+    window, how often, and how did the incidents end" is the one sentence the
+    model has never been shown. A second loop over the same rows in `sources`
+    would be the duplicate this repository audits for, so the grouping moved
+    here, to the module that owns the rows, and both readers call it.
+
+    ⚠️ FIGURES ARE SUMMED, NEVER SAMPLED (2026-08-30). One firing's "0.3 kWh"
+    printed beside "14 times" is wrong by a factor of fourteen. And a firing is
+    counted ONCE whatever its phase: an incident that opened and later timed
+    out is one rule firing once, with two rows — `times` counts the `opened`
+    rows (or every row, for a rule that sends no phase), and `phases` says how
+    the incidents ended.
+    """
+    tally: Dict[str, Dict[str, Any]] = {}
+    for row in entries:
+        if str(row.get("source") or "") != "automation":
+            continue
+        name = str(row.get("subject") or row.get("title") or "?")
+        held = tally.setdefault(name, {"times": 0, "kwh": 0.0, "cost": 0.0,
+                                       "mins": 0.0, "phases": {}})
+        payload = row.get("payload")
+        phase = ""
+        if isinstance(payload, Mapping):
+            phase = str(payload.get("phase") or "")
+            for key, into in (("kwh", "kwh"), ("cost_local", "cost"),
+                              ("wasted_minutes", "mins")):
+                try:
+                    held[into] += float(payload.get(key) or 0)
+                except (TypeError, ValueError):
+                    pass
+        if phase in PHASES:
+            held["phases"][phase] = int(held["phases"].get(phase, 0)) + 1
+        if phase in ("", "opened"):
+            held["times"] += 1
+    return tally
+
+
 def stamp_outcome(subject_key: str, outcome: str, *,
                   source: str = "triage") -> int:
     """Stamp the newest un-stamped entry for this subject. Returns how many.

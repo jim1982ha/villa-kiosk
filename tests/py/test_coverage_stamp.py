@@ -68,7 +68,7 @@ def test_an_UNSTAMPED_append_is_what_produced_the_false_alarm() -> None:
 
 def test_the_LOOP_passes_a_stamp_and_it_is_UTC() -> None:
     """⚠️ PIN THE CALLER. `run_once` has always accepted `now_iso`; nothing
-    passed one. And the format is load-bearing: `sources._coverage` builds its
+    passed one. And the format is load-bearing: `sources._since_iso` builds the
     window as `%Y-%m-%dT%H:%M:%S+00:00` and calls `journal.coverage` with no
     normaliser, so the two are compared as RAW STRINGS. A local-offset stamp
     would swap a permanent false alarm for an intermittent one."""
@@ -77,7 +77,10 @@ def test_the_LOOP_passes_a_stamp_and_it_is_UTC() -> None:
         "the loop still calls run_once without a stamp")
     assert '"%Y-%m-%dT%H:%M:%S+00:00"' in src, "the stamp is not explicit UTC"
     assert "time.gmtime()" in src, "the stamp is not built from UTC"
-    doc = inspect.getsource(sources._coverage)
+    # ⚠️ THE FORMAT LIVES IN `_since_iso` SINCE 2026-09-04 — the one derivation
+    # `_coverage` and `_recent_firings` both call — so that is where it is
+    # read; a pin on `_coverage` would pass on a copy that had quietly changed.
+    doc = inspect.getsource(sources._since_iso)
     assert '"%Y-%m-%dT%H:%M:%S+00:00"' in doc, (
         "the reader's window format moved; the writer must follow it")
 

@@ -424,3 +424,48 @@ def test_the_offline_line_is_in_the_DELTA_and_never_the_profile() -> None:
     profile_text = snapshot.profile(**dict(VILLA))
     assert "Not reporting right now" not in profile_text
     assert "Not reporting right now" in snapshot.delta()
+
+
+# ── the loop the document never closed (2026-09-04) ─────────────────────────
+
+def test_firings_reach_the_delta_with_how_their_incidents_ended() -> None:
+    text = snapshot.delta(
+        coverage={"complete": True},
+        firings={"Mains phase overload": {"times": 3, "phases": {
+                     "opened": 3, "timeout": 2, "cleared": 1}},
+                 "Night lighting": {"times": 14, "phases": {}}})
+    assert "Mains phase overload — 3 times, 1 ended by cleared, 2 ended by timeout" in text
+    assert "Night lighting — 14 times" in text
+    assert "miscalibrated" in text, "the reader is told what a timeout means"
+
+
+def test_an_EMPTY_window_says_none_and_an_ABSENT_record_says_nothing() -> None:
+    """⚠️ "No automation fired" is a finding; a section that vanishes when all
+    is well is indistinguishable from one that is broken."""
+    empty = snapshot.delta(coverage={"complete": True}, firings={})
+    assert "Automations that fired" in empty and "  None." in empty
+    absent = snapshot.delta(coverage={"complete": True}, firings=None)
+    assert "Automations that fired" not in absent
+
+
+def test_settled_concerns_reach_the_delta_per_kind() -> None:
+    text = snapshot.delta(
+        coverage={"complete": True},
+        settled={"power above baseline": {"dismissed": 3, "closed": 1},
+                 "coverage incomplete": {"verified": 2}})
+    assert "power above baseline — closed 1, dismissed 3" in text
+    assert "coverage incomplete — verified 2" in text
+    assert "raise that kind less readily" in text
+
+
+def test_nothing_settled_yet_is_said_not_omitted() -> None:
+    text = snapshot.delta(coverage={"complete": True}, settled={})
+    assert "None settled yet." in text
+    assert "What became of earlier concerns" not in snapshot.delta(
+        coverage={"complete": True}, settled=None)
+
+
+def test_a_single_firing_reads_as_one_time() -> None:
+    text = snapshot.delta(coverage={"complete": True},
+                          firings={"Doorbell": {"times": 1, "phases": {}}})
+    assert "Doorbell — 1 time\n" in text and "1 times" not in text

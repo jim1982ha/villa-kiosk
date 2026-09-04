@@ -70,3 +70,20 @@ def test_an_uninvestigated_FLAG_is_never_merged_with_a_CONCLUDED_one() -> None:
     assert "- [water] Leak\n" in text
     assert "- [water] Leak — noticed, not investigated" in text
     assert text.startswith("2 thing(s) happened")
+
+
+def test_the_brief_says_how_many_incidents_ended_by_timeout() -> None:
+    """⚠️ "3 times" reads the same whether every incident cleared or none did,
+    and the difference is whether the rule is calibrated (2026-09-04)."""
+    rows = [
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "opened"}},
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "timeout"}},
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "opened"}},
+        {"source": "automation", "subject": "phase overload",
+         "payload": {"phase": "cleared"}},
+    ]
+    text = compose.brief(record=rows).text
+    assert "- phase overload — 2 times · 1 ended by timeout" in text, text

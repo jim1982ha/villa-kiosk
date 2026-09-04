@@ -265,6 +265,14 @@ DOCUMENT_SALIENT_LIMIT: int = 25
 #: sentence every other line below it is supposed to be read against.
 DOCUMENT_WINDOW_HOURS: int = 24
 
+#: How many grouped automation lines, and how many concern kinds, the delta
+#: carries. ⚠️ THE SAME KIND OF BUDGET AS `DOCUMENT_SALIENT_LIMIT` AND FOR THE
+#: SAME REASON: these two blocks sit below the cache breakpoint and are paid
+#: on every turn of every pass, and a motion light that fired ninety times is
+#: one line however many times it fired — but a villa with two hundred rules
+#: is not going to have all of them in the prompt. Busiest first, then cut.
+DOCUMENT_RECORD_LIMIT: int = 25
+
 
 #: Where the last capability survey is kept. ⚠️ A FILE, NOT A PROCESS CACHE. The
 #: triage clock and the proxy's document preview are different call paths and,
@@ -535,6 +543,8 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
         offline_total=_offline_count(),
         concerns=_open_concerns(), ledger=_facility_record(),
         coverage=_coverage(now=now, window_hours=window_hours),
+        firings=_recent_firings(now=now, window_hours=window_hours),
+        settled=_settled_outcomes(),
         label_of=labeller())
     return snapshot_mod.villa_document(profile_text=profile_text,
                                        delta_text=delta_text)
@@ -617,6 +627,21 @@ def _offline_count() -> int:
     return len(unavailable)
 
 
+def _since_iso(now: Optional[float], window_hours: Optional[int]) -> str:
+    """The delta's window start, as the UTC stamp every ring compares against.
+
+    ⚠️ ONE DERIVATION FOR EVERY READER OF THE WINDOW. `_coverage` had this
+    inline; the record reader needed the same bound, and two copies of "now
+    minus the window, in UTC" is how the coverage line and the automation
+    tally would come to describe different periods in one document.
+    """
+    hours = int(window_hours or DOCUMENT_WINDOW_HOURS)
+    return time.strftime(
+        "%Y-%m-%dT%H:%M:%S+00:00",
+        time.gmtime((now if now is not None else time.time())
+                    - max(1, hours) * 3600))
+
+
 def _coverage(*, now: Optional[float] = None,
               window_hours: Optional[int] = None) -> Dict[str, Any]:
     """Was the journal listening for the delta's window? Degrades to silence.
@@ -628,15 +653,64 @@ def _coverage(*, now: Optional[float] = None,
     """
     from vesta.supervise.observe import journal
     try:
-        hours = int(window_hours or DOCUMENT_WINDOW_HOURS)
-        since_iso = time.strftime(
-            "%Y-%m-%dT%H:%M:%S+00:00",
-            time.gmtime((now if now is not None else time.time())
-                        - max(1, hours) * 3600))
-        return dict(journal.coverage(since_iso))
+        return dict(journal.coverage(_since_iso(now, window_hours)))
     except Exception as err:  # noqa: BLE001
         swallow("could not establish observation coverage", err)
         return {"complete": False}
+
+
+def _recent_firings(*, now: Optional[float] = None,
+                    window_hours: Optional[int] = None
+                    ) -> Optional[Dict[str, Dict[str, Any]]]:
+    """The record's automation tally for the delta's window, busiest first.
+
+    ⚠️ THE FIRST TIME THE MODEL IS TOLD A RULE FIRED (2026-09-04). The record
+    has held every `automation_triggered` since 2026-08-30 and the delta never
+    received it, so "the phase-overload rule fired three times this week and
+    two of those ended by timeout" — a pure count over data on disk — was not a
+    sentence the agent could form. `None` when the record cannot be read, so
+    the section is absent rather than falsely empty; grouped through
+    `record.tally_automations`, the same rule the brief prints by.
+    """
+    try:
+        from vesta.adapters import record as record_mod
+        rows = record_mod.since(_since_iso(now, window_hours),
+                                sources=("automation",))
+        tally = record_mod.tally_automations(rows)
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read the record's automation firings", err)
+        return None
+    busiest = sorted(tally.items(), key=lambda kv: -int(kv[1]["times"]))
+    return dict(busiest[:DOCUMENT_RECORD_LIMIT])
+
+
+def _settled_outcomes() -> Optional[Dict[str, Dict[str, int]]]:
+    """What became of settled concerns, counted per kind and per state.
+
+    ⚠️ THE OTHER HALF OF THE LOOP. `_open_concerns` excludes every settled row
+    by design, so the model saw what was open and never once what happened to
+    anything it raised: a concern the owner dismissed three times was raised a
+    fourth time with the same confidence. Keyed by `flag_type` — the kind the
+    owner's thumbs already tune (`agent/flagtypes.py`) — with the title as the
+    key for a concern about a topic rather than a device. Counts only; no
+    bodies, no ids. Most-settled kinds first, then cut.
+    """
+    try:
+        from vesta.supervise.agent import concerns as concerns_mod
+        rows = [r for r in concerns_mod.read()
+                if str(r.get("state") or "open") in concerns_mod.SETTLED]
+    except Exception as err:  # noqa: BLE001
+        swallow("could not read the settled concerns", err)
+        return None
+    out: Dict[str, Dict[str, int]] = {}
+    for row in rows:
+        kind = (str(row.get("flag_type") or "").strip()
+                or str(row.get("title") or "").strip() or "(untitled)")
+        state = str(row.get("state") or "")
+        held = out.setdefault(kind, {})
+        held[state] = held.get(state, 0) + 1
+    busiest = sorted(out.items(), key=lambda kv: -sum(kv[1].values()))
+    return dict(busiest[:DOCUMENT_RECORD_LIMIT])
 
 
 def _open_concerns() -> List[Dict[str, Any]]:

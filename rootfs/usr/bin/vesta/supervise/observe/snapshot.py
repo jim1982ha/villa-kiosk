@@ -197,8 +197,23 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
           coverage: Optional[Mapping[str, Any]] = None,
           unscorable: int = 0,
           offline_total: int = 0,
+          firings: Optional[Mapping[str, Mapping[str, Any]]] = None,
+          settled: Optional[Mapping[str, Mapping[str, int]]] = None,
           label_of: Optional[Callable[[str], str]] = None) -> str:
     """The fresh half. Everything here is allowed — required — to change.
+
+    ⚠️ `firings` AND `settled` ARE THE LOOP THIS DOCUMENT NEVER CLOSED
+    (2026-09-04). Every input above them describes the villa; neither of these
+    does — they describe what the SUPERVISION LAYER ITSELF has said. `firings`
+    is the record's automation tally for the window (which rules fired, how
+    often, how their incidents ended) and `settled` is what became of the
+    concerns this tier raised (closed, dismissed, verified, per kind). Until
+    now the model was handed the open concerns and nothing else about its own
+    output, so it could not know that a rule had fired three times and timed
+    out twice, or that the owner had dismissed the last three concerns of one
+    kind. `None` prints nothing — a caller with no record is a caller with no
+    record — while an EMPTY mapping prints "none", because "no automation fired
+    this window" is a finding and a vanishing section is not.
 
     ⚠️ COVERAGE IS NOT OPTIONAL AND GOES NEAR THE TOP. "I was not listening for
     six hours of this window" changes how every line below it should be read,
@@ -377,6 +392,38 @@ def delta(*, salient: Sequence[salience_mod.Salience] = (),
     if ledger:
         lines.append("Facility record: "
                      + ", ".join(f"{k} {v}" for k, v in sorted(ledger.items())))
+        lines.append("")
+
+    if firings is not None:
+        note("doc_firings", len(firings))
+        lines.append("Automations that fired in this window (the villa's own "
+                     "rules; a rule whose incidents end by timeout rather than "
+                     "all-clear may be miscalibrated rather than the villa "
+                     "abnormal):")
+        if firings:
+            for name, held in firings.items():
+                bits = [f"{int(held.get('times') or 0)} time"
+                        + ("" if int(held.get("times") or 0) == 1 else "s")]
+                ended = held.get("phases") or {}
+                for phase in ("cleared", "timeout"):
+                    if ended.get(phase):
+                        bits.append(f"{int(ended[phase])} ended by {phase}")
+                lines.append(f"  {name} — {', '.join(bits)}")
+        else:
+            lines.append("  None.")
+        lines.append("")
+
+    if settled is not None:
+        note("doc_settled", sum(sum(v.values()) for v in settled.values()))
+        lines.append("What became of earlier concerns, by kind (dismissed "
+                     "means a person said it did not matter — raise that kind "
+                     "less readily):")
+        if settled:
+            for kind, counts in settled.items():
+                lines.append(f"  {kind} — " + ", ".join(
+                    f"{state} {n}" for state, n in sorted(counts.items())))
+        else:
+            lines.append("  None settled yet.")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

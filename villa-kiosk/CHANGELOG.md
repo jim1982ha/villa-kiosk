@@ -1,3 +1,15 @@
+## 2.922.0
+
+### Fixed — the agent was never shown what its own layer had said or done
+The triage document carried the open concerns and nothing else about the
+supervision layer itself: not which automations had fired in the window, not how
+their incidents ended, not what became of concerns it had raised earlier. So "this
+rule fired three times and timed out twice" was not a sentence it could form, and
+a kind of concern the owner had dismissed three times was raised a fourth time
+with the same confidence. Both now reach the document as bounded counts, grouped
+by the same rule the brief already prints firings by; and the brief says how many
+incidents ended by timeout where the rule reports it.
+
 ## 2.921.0
 
 ### Fixed — a lock left unlocked, or a gate that never opened today, could not reach the agent

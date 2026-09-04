@@ -99,44 +99,15 @@ def severity_line(severity: str, word: str, subject: str) -> str:
     return f"{mark} {label} · {topic}" if topic else f"{mark} {label}"
 
 
-#: One marker per section of the brief, keyed by `SECTIONS_FOR`'s own names so
-#: a section cannot gain a heading here and be absent there.
-SECTION_MARK: Dict[str, str] = {
-    # ⚠️ A BELL, NOT A SECOND WARNING SIGN. This section and `critical` sit
-    # next to each other and answer different questions — what is wrong NOW
-    # against what went wrong THIS PERIOD — so they must not open with the same
-    # glyph. A reader skimming a phone notification distinguishes them by that
-    # character before they read either heading.
-    "standing": "\U0001F514",      # bell
-    "critical": "⚠️",     # warning sign
-    "money": "\U0001F4B0",          # money bag
-    # ⚠️ THE `fixed` SECTION RENDERS THREE HEADINGS AND THEY HAD ONE GLYPH
-    # BETWEEN THEM. "Followed up", "Closed by itself" and "For the facility
-    # manager" all came out as 🔧, so two consecutive headings in one section
-    # were visually identical and the reader had only the words to separate
-    # them — reported as exactly that. A marker whose whole job is to be findable
-    # without reading cannot be shared by the things it distinguishes.
-    "fixed": "\U0001F527",          # wrench — the tasks somebody has been given
-    "verified": "\u2611\ufe0f",         # ballot box with check — confirmed over
-    "selfclear": "\U0001F504",     # arrows counterclockwise — resolved on its own
-    "preventive": "\U0001F4C5",     # calendar
-    # ⚠️ ITS OWN MARK. "Still open from earlier" and "Maintenance signals"
-    # are both `preventive` sections and so BOTH rendered as the calendar —
-    # two consecutive headings a reader could not tell apart by scanning,
-    # which is the one job a marker has. Found in a delivered brief while
-    # redesigning the layout; the rule it breaks (one glyph per HEADING,
-    # not per section) was written three releases earlier.
-    "preventive_open": "\U0001F5C2",   # card index dividers — still filed
-
-    "trends": "\U0001F4C8",         # chart increasing
-    "health": "\U0001FA7A",         # stethoscope
-    # ⚠️ A SUB-HEADING INSIDE `health` STILL NEEDS ITS OWN GLYPH. It first
-    # rendered under the stethoscope — the same mark as the section that
-    # contains it — because the 2.577.0 rule was read as "one glyph per
-    # SECTION" rather than per HEADING. Broken in the release that wrote it.
-    "waiting": "\u23f3",           # hourglass — installed, never fired
-    "coverage": "\U0001F6AB",       # prohibited
-}
+# ⚠️ `SECTION_MARK` AND `heading()` WERE DELETED HERE ON 2026-09-04. They were
+# the deterministic renderer's section glyphs, and that renderer went with
+# TASK-073; the composer that replaced it writes plain "Needs attention right
+# now:" lines and `test_one_renderer` FORBIDS these names in the synthesis
+# layer. What survived was a table nothing read, a function nothing called,
+# and two comments citing `SECTIONS_FOR`, a symbol that had not existed for a
+# month — the 2.919.0 shape. `severity_line` above is the one marker rule the
+# live brief and the alerts share; the per-section bell/wrench/calendar
+# vocabulary is in git if a renderer ever wants it back.
 
 
 #: Characters a notify platform may read as MARKUP. See `inert`.
@@ -211,18 +182,6 @@ def inert(text: str) -> str:
     damage, and after it there is no site left that can forget.
     """
     return "".join(_MARKUP_ACTIVE.get(character, character) for character in text)
-
-
-def heading(section: str, text: str) -> str:
-    """A section heading: marker, then the words, then nothing else.
-
-    ⚠️ NO COLON AND NO UNDERLINE. A colon reads as "a list follows" and the
-    line beneath already is one; an underline of dashes is markdown's `setext`
-    heading on the platforms that parse. The blank line above a heading is what
-    separates sections, and it works everywhere.
-    """
-    mark = SECTION_MARK.get(section, "")
-    return f"{mark} {text}".strip()
 
 
 def title_mark(severity: str) -> str:

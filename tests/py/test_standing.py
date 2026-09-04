@@ -28,7 +28,6 @@ from vesta.brief import standing as standing_mod
 from vesta.supervise.agent import compose as agent_compose
 from vesta.brief.narrate import ReportContext
 from vesta.shared.style import BULLET                    # noqa: E402
-from vesta.shared.style import SECTION_MARK               # noqa: E402
 
 FIXTURES = os.path.join(REPO_ROOT, "tests", "consistency", "fixtures")
 

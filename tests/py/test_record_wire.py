@@ -139,12 +139,19 @@ def test_both_sides_group_repeated_firings_rather_than_listing_them() -> None:
     printed beside "14 times" is wrong by a factor of fourteen.
     """
     composer = _py("vesta", "supervise", "agent", "compose.py")
+    record = _py("vesta", "adapters", "record.py")
     with open(os.path.join(REPO_ROOT, "src", "vesta", "brief", "components",
                            "RecordTab.tsx"), encoding="utf-8") as fh:
         tab = fh.read()
 
-    assert "tally" in composer and 'held["times"] += 1' in composer, (
-        "the composer lists every firing again instead of grouping by automation")
+    # ⚠️ THE GROUPING MOVED TO `record.tally_automations` (2026-09-04) so the
+    # villa document could share it; the composer is pinned as its CALLER and
+    # the record as its home, for the reason the tablet assertion below gives:
+    # a name proves a definition exists, only a call proves it runs.
+    assert "record_mod.tally_automations(merged)" in composer, (
+        "the composer no longer groups firings through the record's own tally")
+    assert 'held["times"] += 1' in record, (
+        "the record lists every firing again instead of grouping by automation")
     # ⚠️ THE CALL, NOT THE NAME. Asserting `"sumFigures" in tab` passed when the
     # function was renamed `sumFiguresUnused` — a substring match on a symbol,
     # the same trap this file's own client parser was fixed for one commit
@@ -155,6 +162,6 @@ def test_both_sides_group_repeated_firings_rather_than_listing_them() -> None:
         "the tablet no longer sums a grouped row's figures — one firing's "
         "number beside a count is wrong by the size of the count")
 
-    for side, src in (("composer", composer), ("tablet", tab)):
+    for side, src in (("record", record), ("tablet", tab)):
         assert "kwh" in src and "cost_local" in src, (
             f"the {side} stopped carrying the blueprint's own figures")

@@ -1275,3 +1275,72 @@ def test_the_two_census_lines_are_noted_by_the_document_builder() -> None:
     import inspect
     src = inspect.getsource(sources.build_document)
     assert 'note("doc_kinds"' in src and 'note("doc_unscorable_why"' in src
+
+
+# ── the record and the outcomes reach the document (2026-09-04) ─────────────
+
+def test_recent_firings_read_the_record_for_the_deltas_window(monkeypatch: Any) -> None:
+    """⚠️ THROUGH `record.since` WITH THE SAME BOUND `_coverage` USES, and
+    grouped by `record.tally_automations` — never a second loop."""
+    from vesta.adapters import record as record_mod
+    seen: Dict[str, Any] = {}
+
+    def since(iso: str, *, sources: Any = None) -> List[Dict[str, Any]]:
+        seen["iso"], seen["sources"] = iso, sources
+        return [{"source": "automation", "subject": "phase overload",
+                 "payload": {"phase": "opened"}},
+                {"source": "automation", "subject": "phase overload",
+                 "payload": {"phase": "timeout"}}]
+
+    monkeypatch.setattr(record_mod, "since", since)
+    now = 1_700_000_000.0
+    out = sources._recent_firings(now=now, window_hours=24)
+    assert seen["sources"] == ("automation",)
+    assert seen["iso"] == sources._since_iso(now, 24)
+    assert out == {"phase overload": {"times": 1, "kwh": 0.0, "cost": 0.0,
+                                      "mins": 0.0,
+                                      "phases": {"opened": 1, "timeout": 1}}}
+
+
+def test_the_window_bound_has_ONE_derivation(monkeypatch: Any) -> None:
+    """⚠️ `_coverage` and `_recent_firings` must describe the same period, so
+    both go through `_since_iso`; a second strftime is how they drift."""
+    import inspect
+    for fn in (sources._coverage, sources._recent_firings):
+        src = inspect.getsource(fn)
+        assert "_since_iso(" in src and "strftime" not in src, fn.__name__
+
+
+def test_recent_firings_are_cut_busiest_first(monkeypatch: Any) -> None:
+    from vesta.adapters import record as record_mod
+    rows = []
+    for i in range(sources.DOCUMENT_RECORD_LIMIT + 5):
+        rows += [{"source": "automation", "subject": f"rule {i:02d}"}] * (i + 1)
+    monkeypatch.setattr(record_mod, "since", lambda iso, sources=None: rows)
+    out = sources._recent_firings(now=0.0, window_hours=24)
+    assert out is not None and len(out) == sources.DOCUMENT_RECORD_LIMIT
+    assert "rule 00" not in out and f"rule {sources.DOCUMENT_RECORD_LIMIT + 4:02d}" in out
+
+
+def test_settled_outcomes_are_grouped_by_the_kind_the_owner_tunes(monkeypatch: Any) -> None:
+    from vesta.supervise.agent import concerns as concerns_mod
+    rows = [
+        {"state": "dismissed", "flag_type": "power above baseline", "title": "a"},
+        {"state": "dismissed", "flag_type": "power above baseline", "title": "b"},
+        {"state": "closed", "flag_type": "power above baseline", "title": "c"},
+        {"state": "verified", "flag_type": "", "title": "coverage incomplete"},
+        {"state": "open", "flag_type": "power above baseline", "title": "d"},
+    ]
+    monkeypatch.setattr(concerns_mod, "read", lambda: rows)
+    out = sources._settled_outcomes()
+    assert out == {"power above baseline": {"dismissed": 2, "closed": 1},
+                   "coverage incomplete": {"verified": 1}}, (
+        "an OPEN concern is not an outcome and must not be counted")
+
+
+def test_the_document_builder_passes_BOTH_halves_of_the_loop() -> None:
+    """⚠️ PIN THE CALLER. Two perfect readers nothing passes to `delta` are the
+    fourteenth instance of this repository's most repeated defect."""
+    import inspect
+    src = inspect.getsource(sources.build_document)
+    assert "firings=_recent_firings(" in src and "settled=_settled_outcomes(" in src
