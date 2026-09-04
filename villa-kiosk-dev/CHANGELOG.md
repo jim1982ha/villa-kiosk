@@ -1,3 +1,15 @@
+## 2.924.0
+
+### Added — a check on the rules themselves, before they alert falsely
+Every alert of the last three days came from a critical rule whose settings could
+not work: a start check tighter than the pump's own start time, an all-clear
+judged at the number it trips at, incidents ending by timeout in silence. Nothing
+watched the rules; each diagnosis took a person twenty calls. A new check reads
+each VESTA critical rule's settings against what the villa does — the grace window
+against the starts actually seen, the clear margin, the limit against the days it
+is crossed, how incidents end — and says so in the daily brief. Two of its four
+findings need no history at all, so they work on a villa installed this morning.
+
 ## 2.923.0
 
 ### Fixed — the agent's three Home Assistant tools were connected to nothing
