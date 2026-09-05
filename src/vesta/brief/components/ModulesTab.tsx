@@ -66,6 +66,7 @@ import { Ban, Check, Info } from "lucide-react";
 import InfoHint from "@/components/common/InfoHint";
 import type { ReportPreview, ReportsDiagnostics } from "@/vesta/brief/reportsApi";
 import type { ReportsConfig } from "@/vesta/shared/reportsTypes";
+import { isModuleEnabled, setModuleEnabled } from "@/vesta/shared/reportsTypes";
 
 
 /** What each shipped blueprint family is FOR, and whether it survives.
@@ -112,14 +113,13 @@ export default function ModulesTab({
     return <p className="muted body-text">Reading the check list…</p>;
   }
 
-  const slices = config.modules ?? {};
-  const isOn = (name: string) => slices[name]?.enabled !== false;
+  const isOn = (name: string) => isModuleEnabled(config, name);
   const ran = new Set(preview?.analysis.ran ?? []);
   const skipReason = new Map(
     (preview?.analysis.skipped ?? []).map((s) => [s.module, s.reason]));
 
   const toggle = (name: string, on: boolean) =>
-    onSave({ ...config, modules: { ...slices, [name]: { ...slices[name], enabled: on } } });
+    onSave(setModuleEnabled(config, name, on));
 
   return (
     <div className="reports-pane">

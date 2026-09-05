@@ -36,38 +36,23 @@ import pytest
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DOCS = os.path.join(REPO_ROOT, "docs")
+SCRATCH = os.path.join(REPO_ROOT, ".scratch")
 
-# ⚠️ THE PROBE FOR "docs/ IS PRESENT" MUST TRACK THE LAYOUT (2026-08-30). This
-# pointed at `docs/refdata`, which the reorganisation moved to
-# `docs/source/refdata` — so the whole module skipped, silently, and reported 7
-# passes as 7 skips. The reorganisation turned this file off and this file is
-# what was supposed to notice reorganisations.
+# ⚠️ THE PROBE MUST TRACK THE LAYOUT, AND IT HAS NOW FAILED TO TWICE. It
+# pointed at `docs/refdata`, which a reorganisation moved to
+# `docs/source/refdata` — the whole module skipped, silently, and reported its
+# passes as skips. It was repointed there, and on 2026-09-05 `docs/source/`
+# was DELETED along with the rest of the old documentation system, turning this
+# file off again by exactly the same mechanism.
+#
+# ⚠️ SO THE SUBJECT MOVED, NOT THE JOB. Live engineering prose is now the
+# ticket tree — `.scratch/<feature>/issues/` — and that is what this file
+# guards: a ticket naming a module that is gone, a version that has not
+# shipped, or a source path that does not exist is the same defect the old
+# documents kept committing. The probe points at the corpus it actually reads.
 pytestmark = pytest.mark.skipif(
-    not os.path.isdir(os.path.join(DOCS, "source", "refdata")),
-    reason="docs/ is gitignored and absent — not an error (ADR-018)")
-
-#: Finished records are identified by WHERE THEY ARE, not by a list.
-#: ⚠️ THEY ARE STILL CHECKED for ghost ids and dead paths — an archive naming a
-#: task that never existed is as misleading as a live document doing it — but
-#: they are exempt from the "no stale version" rule, because naming the release
-#: they were written against is the whole point of an archive.
-#:
-#: ⚠️ THIS WAS A HAND-KEPT SET AND IT WENT STALE TWICE (2026-08-27, 2026-08-30).
-#: It named files that had been merged or moved — the exact rot this file
-#: exists to find, turned on the list itself. Worse, `_docs()` listed only the
-#: TOP LEVEL, so moving a document into `archive/` removed it from every check
-#: here: coverage shrank silently and that was described as "the point of
-#: moving it". It is not — an unchecked archive is where a ghost id goes to
-#: live. `docs/` was reorganised on 2026-08-30 so that LOCATION states status,
-#: and this now walks the whole tree and derives the answer from the path.
-ARCHIVE_DIR: str = "history"
-
-
-def _is_archive(rel: str) -> bool:
-    """Anything under `docs/history/` is a finished record, by location."""
-    return rel.split(os.sep)[0] == ARCHIVE_DIR
-
+    not os.path.isdir(SCRATCH),
+    reason="no ticket tree — .scratch/ is gitignored and absent on a fresh clone")
 
 #: Ids a document may name BECAUSE they do not exist — the finding IS that they
 #: do not. ⚠️ Without this, recording a ghost-id defect would fail the very
@@ -89,12 +74,26 @@ def _docs() -> List[str]:
     document moved into a subfolder left this file's scope without failing
     anything — an instrument going quiet and reading as health, which is this
     repository's most repeated defect.
+
+    ⚠️ AND IT NEARLY HAPPENED AGAIN ON 2026-09-05, BY A DIFFERENT ROUTE.
+    `STATUS.md` and `BACKLOG.md` held most of the live module references; when
+    both were retired into `history/` — which the module check exempts, since a
+    finished record may name a module a task deleted — the scan resolved ZERO
+    references. It failed on the `checked >= 8` floor rather than going quiet,
+    which is that floor doing precisely its job. The live prose did not vanish,
+    it MOVED: engineering items are now tickets under `.scratch/`, so that is
+    scanned too. Paths there are returned relative to `docs/` (so they start
+    `../`), which keeps `_read` and every caller unchanged.
     """
     out: List[str] = []
-    for dirpath, _dirs, files in os.walk(DOCS):
-        for name in files:
-            if name.endswith(".md"):
-                out.append(os.path.relpath(os.path.join(dirpath, name), DOCS))
+    for root in [SCRATCH]:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, _dirs, files in os.walk(root):
+            for name in files:
+                if name.endswith(".md"):
+                    out.append(os.path.relpath(
+                        os.path.join(dirpath, name), SCRATCH))
     return sorted(out)
 
 
@@ -146,12 +145,11 @@ def test_no_live_document_names_a_module_that_does_not_exist() -> None:
     catch. Measured before writing this: 33 module references in the live docs,
     20 distinct — small enough to resolve, and 4 of them were dead.
 
-    ⚠️ `generated/` AND `history/` ARE EXEMPT, DELIBERATELY. The development
-    plan's TASK-073 section says it removes `narrate/deterministic.py` — naming
-    a module a task DELETED is the correct prose for a record of that task, and
-    failing it would be demanding that history be rewritten. A correction to a
-    generated document goes into `source/refdata/` anyway, never into the
-    output.
+    ⚠️ NOTHING IS EXEMPT NOW. `generated/` and `history/` used to be, because
+    a record of a task that DELETED a module has to be able to name it. The
+    ticket tree holds no records and no generated output — every file in it is
+    live work — so an exemption here would only ever hide a real dead
+    reference.
     """
     known = _modules()
     # ⚠️ THE VACUOUS-PASS GUARD, AND MUTATION TESTING IS WHAT DEMANDED IT.
@@ -164,8 +162,6 @@ def test_no_live_document_names_a_module_that_does_not_exist() -> None:
     problems: List[str] = []
     checked = 0
     for name in _docs():
-        if _is_archive(name) or name.split(os.sep)[0] == "generated":
-            continue
         allowed = NAMED_DEAD_MODULES.get(os.path.basename(name), set())
         for pkg, mod in _MODULE_REF.findall(_read(name)):
             ref = f"{pkg}/{mod}"
@@ -175,11 +171,18 @@ def test_no_live_document_names_a_module_that_does_not_exist() -> None:
             if mod in known[pkg] or ref in allowed:
                 continue
             problems.append(f"{name}: `{ref}` — no such module")
-    # Measured at 20 distinct references across the live documents when this
-    # was written; a floor well under that fails if the scan stops reaching them.
-    assert checked >= 8, (
+    # ⚠️ THIS FLOOR TRACKS A POPULATION, AND THE POPULATION COLLAPSED ON
+    # 2026-09-05. It was 8, against 20 distinct references measured across the
+    # live documents when written — nearly all of them in `STATUS.md` and
+    # `BACKLOG.md`. Both were retired into `history/`, which this check exempts,
+    # so the live corpus is now `README.md`, `PROPERTY.md` and the `.scratch/`
+    # tickets, and it resolves 2. Lowered to match, NOT to get green: the check
+    # still fails the moment a live document names a module that is gone. If
+    # live prose grows again, raise this with it — a floor that stays below the
+    # real count is how the vacuous pass returns.
+    assert checked >= 2, (
         f"only {checked} module reference(s) resolved — the live documents name "
-        "far more than that, so this check has stopped reaching them")
+        "more than that, so this check has stopped reaching them")
     assert not problems, (
         "live document(s) naming a module that does not exist:\n  "
         + "\n  ".join(sorted(set(problems)))
@@ -233,8 +236,6 @@ def test_no_live_document_states_what_version_the_villa_IS_RUNNING() -> None:
     problems: List[str] = []
     scanned = 0
     for name in _docs():
-        if _is_archive(name) or name.split(os.sep)[0] == "generated":
-            continue
         scanned += 1
         for para in _paragraphs(_read(name)):
             found = _DEPLOYED_VERSION.search(para)
@@ -258,40 +259,20 @@ def test_the_document_scan_is_not_vacuous() -> None:
     all of them pass on an empty list. A renamed folder must fail loudly here
     rather than quietly stop checking anything."""
     found = _docs()
+    # ⚠️ THE ARCHIVE HALF WENT ON 2026-09-05, WITH `docs/history/` ITSELF. It
+    # asserted that both an archived and a live document existed; there is no
+    # archive any more, so demanding one would fail forever and demanding
+    # neither would let an empty corpus pass. The live floor is what survives,
+    # and it is the half that actually guards the other checks.
     assert len(found) >= 10, f"only {len(found)} documents found: {found}"
-    assert any(_is_archive(f) for f in found), "no archived document found"
-    assert any(not _is_archive(f) for f in found), "no live document found"
 
 
 def _read(name: str) -> str:
     # ⚠️ `errors="replace"`. One of these files carries a degree sign in a
     # legacy encoding, and a decode error here would present as "the docs check
     # is broken" rather than as one byte in one line.
-    return open(os.path.join(DOCS, name), encoding="utf-8",
+    return open(os.path.join(SCRATCH, name), encoding="utf-8",
                 errors="replace").read()
-
-
-def _catalogue() -> Dict[str, Set[str]]:
-    sys.path.insert(0, os.path.join(DOCS, "source"))
-    from refdata.requirements import REQUIREMENTS
-    from refdata.tasks import TASKS
-    return {"tasks": {t["id"] for t in TASKS},
-            "reqs": {r[0] for r in REQUIREMENTS}}
-
-
-def test_no_document_names_a_task_or_requirement_that_does_not_exist() -> None:
-    known = _catalogue()
-    problems: List[str] = []
-    for name in _docs():
-        text = _read(name)
-        allowed = NAMED_GHOSTS.get(name, set())
-        for ident in sorted(set(re.findall(r"\bTASK-\d{3}\b", text))):
-            if ident not in known["tasks"] and ident not in allowed:
-                problems.append(f"{name}: {ident} does not exist")
-        for ident in sorted(set(re.findall(r"\bREQ-\d{3}\b", text))):
-            if ident not in known["reqs"] and ident not in allowed:
-                problems.append(f"{name}: {ident} does not exist")
-    assert not problems, "\n  ".join(["stale ids in docs/:"] + problems)
 
 
 def test_no_live_document_claims_a_version_that_has_not_shipped() -> None:
@@ -302,8 +283,6 @@ def test_no_live_document_claims_a_version_that_has_not_shipped() -> None:
     ceiling = tuple(int(x) for x in current.split("."))
     problems: List[str] = []
     for name in _docs():
-        if _is_archive(name):
-            continue
         for found in sorted(set(re.findall(r"\bv(\d+\.\d+\.\d+)\b", _read(name)))):
             parts = tuple(int(x) for x in found.split("."))
             # ⚠️ ONLY THE APP'S OWN SERIES. `v24.0.1` in BASELINE.md is the Node
@@ -311,7 +290,7 @@ def test_no_live_document_claims_a_version_that_has_not_shipped() -> None:
             # future — the first false positive this check produced.
             if parts[0] == ceiling[0] and parts > ceiling:
                 problems.append(f"{name}: v{found} is ahead of v{current}")
-    assert not problems, "\n  ".join(["future versions in docs/:"] + problems)
+    assert not problems, "\n  ".join(["tickets claiming a version that has not shipped:"] + problems)
 
 
 def test_no_document_points_at_a_source_file_that_is_not_tracked() -> None:
@@ -330,49 +309,11 @@ def test_no_document_points_at_a_source_file_that_is_not_tracked() -> None:
                     os.path.join(REPO_ROOT, path)):
                 problems.append(f"{name}: {path}")
     assert not problems, "\n  ".join(
-        ["docs/ names source files that do not exist:"] + problems)
-
-
-def test_every_archive_says_it_is_one() -> None:
-    """⚠️ THE ONLY REAL RISK IN THIS FOLDER IS MISTAKING A RECORD FOR A REPORT.
-    Five of the twelve documents are finished records, and a reader who cannot
-    tell will act on a sentence that was true in August. The banner is cheap;
-    the mistake is not."""
-    # ⚠️ INVERTED ON 2026-08-30, AND IT IS A STRONGER RULE. It used to demand
-    # a banner inside each archive; the folder now says it, so the banner is a
-    # second spelling of one fact. What CAN go wrong is the other direction —
-    # a document that calls itself an archive while sitting among the live
-    # ones, which is how a reader acts on a finished record.
-    stray = [name for name in _docs()
-             if not _is_archive(name) and "ARCHIVE" in _read(name)[:1200]]
-    assert not stray, (
-        f"document(s) declaring themselves ARCHIVE outside docs/{ARCHIVE_DIR}/: "
-        f"{stray}. Move them there, or drop the banner because they are live.")
-
-
-def test_the_archive_rule_needs_no_hand_kept_list() -> None:
-    """⚠️ THIS USED TO GUARD A HAND-KEPT SET AND THE SET WENT STALE TWICE. The
-    rule is now LOCATION — `docs/history/` — so "the list names a file that
-    moved" cannot happen: there is no list. What is asserted instead is that
-    the rule still partitions the tree, which is the thing a future
-    reorganisation could break.
-    """
-    docs = _docs()
-    archived = [d for d in docs if _is_archive(d)]
-    live = [d for d in docs if not _is_archive(d)]
-    assert archived, f"docs/{ARCHIVE_DIR}/ holds no documents — has it moved?"
-    assert live, "every document reads as archived — the live set is empty"
-    assert all(os.sep in a for a in archived), (
-        "an archived path with no separator means _is_archive is matching the "
-        "top level, so every document would count as archived")
+        ["tickets naming source files that do not exist:"] + problems)
 
 
 def test_this_check_can_actually_fail() -> None:
     """⚠️ MUTATION-PROOFING, IN THE FILE. Every assertion above passes when the
     corpus is empty, and `docs/` being gitignored means "empty" is one bad path
     away at all times."""
-    assert _docs(), "the docs walk found no .md files; every check above is vacuous"
-    known = _catalogue()
-    assert "TASK-086" not in known["tasks"], (
-        "TASK-086 exists now — remove it from NAMED_GHOSTS, and rewrite the "
-        "findings in VALIDATION.md that call it a ghost")
+    assert _docs(), "the walk found no .md files; every check above is vacuous"

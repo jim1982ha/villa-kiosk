@@ -449,43 +449,27 @@ async def handle(event: Mapping[str, Any], *, session: Any,
         # one rule was applied at one of its two call sites. The owner asked the
         # question that found it: "if I click stop chasing, I should still see
         # the done and thumb up/down buttons, right?" (2026-08-28).
+        # ⚠️ ONE THREE-WAY QUESTION, ASKED ONCE (2026-09-06). This block used
+        # to recompute `available_for`, build the keyboard, restate-or-retire
+        # and stamp-or-forget — every step of it `reconcile`'s own job, written
+        # a second time, in the module whose docstring says not to. What a
+        # press actually knows that a tick does not is the RECEIPT: this
+        # message, these words, this person. So that is all it supplies.
+        #
+        # ⚠️ AND IT COVERS EVERY COPY, WHICH THE OLD ORDER DID NOT DO FIRST.
+        # An alert delivered twice — a primary send and an escalation — has
+        # other messages in the same chat still showing the act set the store
+        # has just changed. Waiting for the chase tick meant up to 15 minutes
+        # of a message offering ✅ on an alert already dismissed: the "two
+        # surfaces disagree" defect this module exists to prevent, inside ONE
+        # surface.
         from vesta.supervise.agent import concerns as concerns_mod
         row = next((r for r in concerns_mod.read()
                     if str(r.get("id")) == str(concern_id)), {})
-        remaining = actions_mod.available_for(row, config)
-        ref = Ref(await _entity_of(session, data), message_id)
-        if remaining:
-            # ⚠️ THE TEXT IS REWRITTEN TOO, AND MUST CARRY THE ALERT'S OWN BODY.
-            # Editing replaces everything the message showed, and for an alert
-            # still open the body IS the content somebody acts on — dropping it
-            # for a one-line receipt would leave live buttons under a message
-            # that no longer says what they are for.
-            keyboard = keyboard_for(row, config)
-            if await restate(session, ref, _acted_text(row, outcome.note, who),
-                             keyboard):
-                concerns_mod.stamp_message(concern_id, message_id,
-                                           acts_of(keyboard))
-        # ⚠️ A RETIRED REF IS FORGOTTEN, BECAUSE RETIRING IS PERMANENT. A ref
-        # exists only so a message can be edited later; this one has just had
-        # its buttons removed and its text replaced, so there is nothing left to
-        # keep in step. `reconcile` has always forgotten a ref it retired and
-        # this path never did — harmless while reconciliation only ever REMOVED
-        # buttons, and a live defect the moment it could also PUT THEM BACK.
-        elif await retire(session, ref, _closing_line(data, outcome.note)):
-            concerns_mod.forget_message(concern_id, message_id)
-        # ⚠️ AND EVERY OTHER COPY OF THIS ALERT, NOW. The block above edits the
-        # message the press came from; an alert that was delivered twice — a
-        # primary send and an escalation copy — has others in the same chat
-        # still showing the act set the store has just changed. Waiting for the
-        # chase tick meant up to 15 minutes of a message offering ✅ on an alert
-        # already dismissed, which is the "two surfaces disagree" defect this
-        # module exists to prevent, inside ONE surface.
-        #
-        # ⚠️ IT RUNS `reconcile`, NOT A COPY OF IT, and it is safely idempotent
-        # over the message just handled: that ref has either been re-stamped
-        # with what it now draws (so it compares equal and is left alone) or
-        # been forgotten (so there is nothing left to visit).
-        await reconcile(session, config=config, only=str(concern_id))
+        await reconcile(
+            session, config=config, only=str(concern_id),
+            receipt=(str(message_id), _acted_text(row, outcome.note, who),
+                     _closing_line(data, outcome.note)))
     stage("button", f"{concern_id} {action_id} by {who}: "
                     f"{'ok' if outcome.ok else outcome.note}")
     return "" if outcome.ok else outcome.note
@@ -656,7 +640,8 @@ async def redraw(session: Any, ref: "Ref",
 # ── keeping the phone in step with the tablet ───────────────────────────────
 async def reconcile(session: Any, *,
                     config: Optional[Mapping[str, Any]] = None,
-                    only: str = "") -> int:
+                    only: str = "",
+                    receipt: Optional[Tuple[str, str, str]] = None) -> int:
     """Bring every message back into step with its alert. Never raises.
 
     Returns the number of messages CHANGED — retired plus redrawn.
@@ -701,6 +686,19 @@ async def reconcile(session: Any, *,
     ⚠️ IT RIDES THE CHASE CLOCK RATHER THAN OWNING ONE, exactly as the daily
     digest does. It decides its own work from the store, so all a loop provides
     is somewhere to ask often enough.
+
+    ⚠️ `receipt` IS THE ONE FACT A PRESS KNOWS AND A TICK DOES NOT (2026-09-06):
+    `(message_id, acted_text, closing_line)` — this particular message was just
+    pressed, so its text should say what happened and by whom, rather than the
+    neutral line a background sweep would write. Everything else about a press
+    is this function's own three-way question, and `handle` used to ask it a
+    second time: recompute `available_for`, build the keyboard, restate or
+    retire, stamp or forget. This module's own docstring already named that as
+    the thing not to do — "the alternative was a second retire loop next to the
+    press; that is this module's own three-way question written twice" — and it
+    was written twice anyway. The copies had already drifted once: `reconcile`
+    forgot a ref it retired and the press path never did, which was harmless
+    only while reconciliation could not also put buttons BACK.
     """
     from vesta.supervise.agent import concerns as concerns_mod
     from vesta.supervise.agent import actions as actions_mod
@@ -734,7 +732,14 @@ async def reconcile(session: Any, *,
                 kept.append(dict(raw))      # in step; leave the message alone
                 continue
             if want:
-                ok = await redraw(session, ref, keyboard)
+                # ⚠️ THE PRESSED MESSAGE GETS WORDS; EVERY OTHER COPY GETS ONLY
+                # NEW BUTTONS. Editing replaces everything a message showed, so
+                # for an alert still open the body IS the content somebody acts
+                # on — dropping it for a one-line receipt would leave live
+                # buttons under a message that no longer says what they are for.
+                ok = (await restate(session, ref, receipt[1], keyboard)
+                      if receipt and ref.message_id == receipt[0]
+                      else await redraw(session, ref, keyboard))
                 redrawn += 1 if ok else 0
                 # ⚠️ THE STAMP GOES ON ONLY IF THE EDIT LANDED. Recording what
                 # we MEANT to draw would make the next tick believe a message
@@ -742,7 +747,10 @@ async def reconcile(session: Any, *,
                 # look like agreement" rule the retire path states below.
                 kept.append({**dict(raw), "acts": drawn} if ok else dict(raw))
                 continue
-            ok = await retire(session, ref, closing)
+            ok = await retire(
+                session, ref,
+                receipt[2] if receipt and ref.message_id == receipt[0]
+                else closing)
             retired += 1 if ok else 0
             # ⚠️ A RETIRED MESSAGE IS FORGOTTEN, which is what stops this
             # rewriting the same message on every tick for the life of the

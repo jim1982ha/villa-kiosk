@@ -137,7 +137,18 @@ export default function ReportsModal(
   // ⚠️ THE DEFAULT TAB IS THE FIRST VISIBLE ONE, NOT A LITERAL. Hard-coding
   // "preview" opened a facility manager on a tab that is not in their list, so
   // the body rendered nothing while every tab button looked unselected.
-  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? "tasks");
+  // ⚠️ `Tab | null`, AND THE NULL IS THE POINT (2026-09-06). This read
+  // `useState<Tab>(tabs[0]?.id ?? "tasks")` — and `"tasks"` has not been a
+  // member of `Tab` since the tabs were rearranged. `tsc` could not see it:
+  // `tabs[0]?.id` is non-nullable, so the `??` right-hand type is discarded
+  // and the literal is never checked against `Tab`. It was reachable, not
+  // merely dead: every entry in `TABS` carries `configure: true`, so a
+  // facility manager — who opens this modal on `manageFacility` but gets
+  // `canConfigure: false` from `editConfig` — filtered `tabs` to EMPTY and
+  // landed on a tab that matches no body branch. That is precisely the defect
+  // the comment above says was fixed once already, reintroduced through the
+  // fallback rather than through a hard-coded id.
+  const [tab, setTab] = useState<Tab | null>(tabs[0]?.id ?? null);
 
   const [config, setConfig] = useState<ReportsConfig | null>(null);
   const [rev, setRev] = useState<string | null>(null);
@@ -401,15 +412,32 @@ export default function ReportsModal(
           )}
         </div>
 
-        <ModalTabs
-          tabs={tabs}
-          active={tab}
-          onSelect={setTab}
-          commit={commit}
-          label="Briefing sections"
-        />
+        {tab !== null && (
+          <ModalTabs
+            tabs={tabs}
+            active={tab}
+            onSelect={(id) => setTab(id as Tab)}
+            commit={commit}
+            label="Briefing sections"
+          />
+        )}
 
         <div className="settings-body">
+          {/* ⚠️ AN EMPTY TAB LIST MUST SAY SO, NOT RENDER NOTHING. Every entry
+              in `TABS` is `configure: true`, so a reader without `editConfig`
+              filters the list to empty. Before 2026-09-06 that produced a modal
+              with no chips and no body — indistinguishable from a load that had
+              silently failed. It is still the wrong OUTCOME for a facility
+              manager, who is admitted here precisely to reach the tasks a brief
+              raised: whether one of these steps should stop being owner-only is
+              a ruling, not a rendering decision, so this states the situation
+              rather than guessing at it. */}
+          {tab === null && (
+            <p className="fm-empty">
+              Every section here is owner-only, so there is nothing to show for
+              your role. Ask the owner if you need one of these opened up.
+            </p>
+          )}
           {notice && noticeOpen && (
             <div className={`fm-banner${notice.bad ? " warn" : ""}`}>
               {notice.text}

@@ -29,6 +29,7 @@
 // actions that let somebody in or silence an alarm.
 
 import { useCallback, useEffect, useState } from "react";
+import { useRemoteList } from "@/hooks/useRemoteList";
 import { Check, ShieldAlert, X } from "lucide-react";
 import SourceChip from "@/components/common/SourceChip";
 
@@ -53,17 +54,13 @@ function left(seconds: number): string {
 export default function AgentProposals() {
   const { role } = useProfile();
   const mayConfirm = role != null && hasCapability(role, "editConfig");
-  const [rows, setRows] = useState<Proposal[] | null>(null);
+  // ⚠️ THE CAPABILITY GATE LIVES IN THE FETCHER, not in a branch inside the
+  // load: "a reader who may not confirm sees an empty list" is a fact about
+  // what to fetch, so it belongs where the fetching is decided.
+  const { rows, busy, error, run } = useRemoteList<Proposal>(
+    () => (mayConfirm ? loadProposals() : Promise.resolve([])), [mayConfirm]);
   const [now, setNow] = useState(() => Date.now() / 1000);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!mayConfirm) { setRows([]); return; }
-    setRows(await loadProposals());
-  }, [mayConfirm]);
-
-  useEffect(() => { void load(); }, [load]);
 
   // ⚠️ THE CLOCK RUNS ONLY WHILE SOMETHING IS WAITING. A one-second interval on
   // a wall tablet that renders on demand is a real cost for a list that is
@@ -78,16 +75,15 @@ export default function AgentProposals() {
   const decide = useCallback(async (
     proposal: Proposal, decision: "confirm" | "decline",
   ) => {
-    setBusy(proposal.action_key);
-    setError(null);
-    const result = await decideProposal(proposal.action_key, decision);
-    setBusy(null);
-    // ⚠️ RELOAD EITHER WAY. A refusal is usually "this expired while you were
-    // reading it" or "another device answered first", and both mean the list on
-    // screen is describing a past that no longer exists.
-    if (!result.ok) setError(result.error);
-    await load();
-  }, [load]);
+    // ⚠️ RELOAD EITHER WAY, which is `run`'s contract and was this panel's
+    // ruling first: a refusal is usually "this expired while you were reading
+    // it" or "another device answered first", and both mean the list on screen
+    // is describing a past that no longer exists.
+    await run(proposal.action_key, async () => {
+      const result = await decideProposal(proposal.action_key, decision);
+      if (!result.ok) throw new Error(result.error);
+    });
+  }, [run]);
 
   if (rows === null) {
     return (

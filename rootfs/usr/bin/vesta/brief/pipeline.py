@@ -800,8 +800,7 @@ async def run_report(
     urls = (found.get("inventory") or {}).get("urls")
     link = links_mod.footer(urls, _ingress_entry())
     html_link = links_mod.html_line("Open", urls, _ingress_entry())
-    html_body = (f"{links_mod.html_escape(body)}\n\n{html_link}"
-                 if html_link else "")
+    html_body = links_mod.rich_body(body, html_link)
     if link:
         body = f"{body}\n\n{link}"
 

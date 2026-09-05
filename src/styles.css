@@ -35,13 +35,21 @@
 
   --radius-badge: 12px;
   --radius-pill: 999px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
+  /* ⚠️ DECLARED 2026-09-06, AFTER BEING REFERENCED AT EIGHT SITES WITH NO
+     DECLARATION ANYWHERE. It resolved only because every site carried a
+     `, 8px` fallback — the exact failure this file documents further down:
+     a `var()` with no declaration and no fallback is an INVALID value,
+     silent, and invisible to tsc and to review. */
+  --radius-md: 8px;
+  /* Same class of defect as --radius-md, found by the same probe on its
+     first run: one caller, one `, rgba(...)` fallback, no declaration. */
+  --border-subtle: rgba(128, 128, 128, 0.18);
+  /* ⚠️ THE --space-* SCALE WAS DELETED 2026-09-06: seven tokens, ZERO
+     callers, measured. The stylesheet had meanwhile drifted to a finer
+     rhythm the scale did not contain (8px x53, 10px x38, 6px x21 — and
+     neither 10 nor 6 was on it). A declared scale nobody calls is a
+     shallow interface that reads as a convention people believe exists.
+     Reinstate it only against the measured rhythm, and with callers. */
   --elev-1: 0 1px 2px var(--shadow);
   --elev-2: 0 4px 16px var(--shadow);
   --elev-3: 0 18px 48px var(--shadow);

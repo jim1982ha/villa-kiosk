@@ -144,8 +144,14 @@ def test_ESCALATION_re_sends_without_raising_a_SECOND_job() -> None:
     The chasing is the BLUEPRINT's job (re-ask, then escalate, then leave open);
     this side raises the job exactly once, when it is first delivered.
     """
+    # ⚠️ THE VACUITY GUARD FOLLOWS THE SEND (2026-09-06). It asserted that
+    # `_escalate_one` names `deliver_mod.deliver`, which was true while the
+    # composition was inlined; the send now goes through `_send_alert`, shared
+    # with the first-send path. The guard's job is unchanged — prove this path
+    # still sends, so "it raises no second job" is not measured on a function
+    # that does nothing.
     src = inspect.getsource(outbox._escalate_one)
-    assert "deliver_mod.deliver" in src, (
+    assert "_send_alert" in src, (
         "the escalation path no longer sends, so this test is measuring nothing")
     assert "raise_for" not in src and "task_mod" not in src, (
         "escalation raises a second facility manager job for a concern that already "

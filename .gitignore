@@ -60,3 +60,8 @@ certs/
 # sources/ and tests/. Regenerate the workbook with:
 #   .venv/bin/python docs/build_reference_workbook.py
 docs/
+
+# The mattpocock engineering skills' issue tree (docs/agents/issue-tracker.md).
+# Local-only on purpose: test_hard_rules.py freezes the entity ids in TRACKED
+# source, and a bug note pasted in verbatim carries real ones.
+.scratch/

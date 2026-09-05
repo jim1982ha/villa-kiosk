@@ -210,6 +210,19 @@ export interface Concern {
    *  escalated, never pushed, and no to-do job was raised — nothing is asked
    *  of the reader. Absent on concerns raised before this existed. */
   informational?: boolean;
+  /** The acts this concern currently offers, served by `/agent-concerns`.
+   *
+   * ⚠️ AUTHORITY, NOT DECORATION (2026-09-06). `agent/actions.available_for`
+   * decides what a concern offers — settled state, FYI, rate-once, ladder
+   * position. Telegram always asked it and this surface never did: it drew a
+   * fixed row gated on the reader's ROLE, so on an informational concern it
+   * offered ✅ while the server refused the press with a sentence that
+   * misdescribed why. Read this; do not re-derive it from `state` or
+   * `informational`, or the two drift again.
+   *
+   * The GLYPH and the wording stay on this side: policy is served, the
+   * sentences a person reads are presentation and belong with the markup. */
+  acts?: { id: string; glyph: string }[];
   /** "This was worth telling me." ⚠️ NOT A STATE, and it used to be one: the
    *  thumb up wrote `state: "verified"`, which is SETTLED, so a compliment
    *  paid to the supervisor made the card disappear (reported 2026-08-27).

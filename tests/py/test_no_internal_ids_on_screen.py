@@ -164,9 +164,29 @@ def test_the_TUNING_PANEL_can_SEE_why_it_is_empty() -> None:
         "`flag_type` is not mirrored, so no screen can explain why judging an "
         "alert taught the villa nothing")
     panel = _tsx()["src/vesta/supervise/components/FlagTypesPanel.tsx"]
-    assert "flag_type" in panel, (
-        "the tuning panel no longer reads the kind, so its empty state is "
-        "guessing at its own cause again")
+    # ⚠️ THE PANEL MAY READ THE KIND THROUGH THE SHARED PREDICATE (2026-09-06).
+    # `awaitsFlagType` in `vesta/shared/concern.ts` is "rated, but nobody has
+    # said what KIND of thing it was" — the queue this panel drains — and it is
+    # where the rule now lives, so the panel naming the field itself is no
+    # longer required. What still must hold is that the knowledge is consulted
+    # somewhere the panel actually calls, rather than guessed at.
+    concern = _tsx()["src/vesta/shared/concern.ts"]
+    # ⚠️ THE PREDICATE'S BODY, NOT THE FILE. The first version of this asked
+    # whether `flag_type` appeared anywhere in `concern.ts` — and the module's
+    # own header comment LISTS the snake_case fields, so the check passed on
+    # prose. Mutation testing found it immediately: deleting the field from
+    # `awaitsFlagType` left this green. A test satisfied by a comment measures
+    # the comment.
+    body = ""
+    if "export const awaitsFlagType" in concern:
+        body = concern[concern.index("export const awaitsFlagType"):]
+        body = body[:body.index(";")]
+    reads_kind = "flag_type" in panel or (
+        "awaitsFlagType" in panel and "flag_type" in body)
+    assert reads_kind, (
+        "the tuning panel no longer reads the kind, directly or through "
+        "`awaitsFlagType`, so its empty state is guessing at its own cause "
+        "again")
     assert "after this update" not in panel, (
         "the empty state names 'raised before this feature' as the only reason "
         "a verdict teaches nothing; a topic-level alert is the other one")

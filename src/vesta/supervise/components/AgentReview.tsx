@@ -33,7 +33,8 @@
 // `AgentConcerns` does. It is cosmetic either way: the proxy refuses a guest's
 // decision whatever the browser sends.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useRemoteList } from "@/hooks/useRemoteList";
 import InfoHint from "@/components/common/InfoHint";
 import { Check, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import SourceChip from "@/components/common/SourceChip";
@@ -46,7 +47,8 @@ import Loading from "@/components/common/Loading";
 export default function AgentReview() {
   const { role } = useProfile();
   const canReview = role != null && hasCapability(role, "manageFacility");
-  const [rows, setRows] = useState<ReviewDraft[] | null>(null);
+  // ⚠️ THE LIFECYCLE IS THE HOOK'S; the per-draft state below is this panel's.
+  const { rows, busy, error, run } = useRemoteList<ReviewDraft>(loadReviewDrafts);
   /** Which draft is open, and the reviewer's working copy of its body.
    *  ⚠️ ONE AT A TIME: two open procedures on a tablet is a wall of prose, and
    *  the decision is made about one draft by definition. */
@@ -56,11 +58,7 @@ export default function AgentReview() {
    *  Approve. Kept per slug rather than as one flag so closing a draft does not
    *  un-read it, and so approving one does not unlock the next. */
   const [read, setRead] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => { setRows(await loadReviewDrafts()); }, []);
-  useEffect(() => { void load(); }, [load]);
 
   const expand = (draft: ReviewDraft) => {
     const next = open === draft.slug ? null : draft.slug;
@@ -74,21 +72,21 @@ export default function AgentReview() {
   const decide = useCallback(async (
     draft: ReviewDraft, decision: "approve" | "discard",
   ) => {
-    setBusy(draft.slug);
-    setError(null);
-    // ⚠️ THE EDITED BODY ONLY WHEN IT IS THE ONE ON SCREEN. `edited` belongs to
-    // whichever draft is open, so sending it for a row the reviewer never
-    // expanded would write one draft's text into another's file.
-    const ok = await decideReviewDraft(draft.slug, decision,
-      decision === "approve" && open === draft.slug ? { body: edited } : {});
-    setBusy(null);
-    if (!ok) {
-      setError("That decision was not recorded. The draft is unchanged.");
-      return;
-    }
-    setOpen(null);
-    void load();
-  }, [edited, open, load]);
+    // ⚠️ `decideReviewDraft` RETURNS A BOOLEAN, so the failure is turned into a
+    // throw for `run` to catch. The sentence is unchanged; what changes is that
+    // the panel no longer owns the setBusy/clear/reload sandwich.
+    await run(draft.slug, async () => {
+      // ⚠️ THE EDITED BODY ONLY WHEN IT IS THE ONE ON SCREEN. `edited` belongs
+      // to whichever draft is open, so sending it for a row the reviewer never
+      // expanded would write one draft's text into another's file.
+      const ok = await decideReviewDraft(draft.slug, decision,
+        decision === "approve" && open === draft.slug ? { body: edited } : {});
+      if (!ok) {
+        throw new Error("That decision was not recorded. The draft is unchanged.");
+      }
+      setOpen(null);
+    });
+  }, [edited, open, run]);
 
   if (rows === null) {
     return (

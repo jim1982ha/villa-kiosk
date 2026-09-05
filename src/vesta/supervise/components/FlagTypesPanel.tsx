@@ -34,6 +34,7 @@ import { Download, Minus, Plus, Trash2, Upload } from "lucide-react";
 import InfoHint from "@/components/common/InfoHint";
 import { loadConcerns, loadFlagTypes, tuneFlagTypes,
          type FlagTypeWeight } from "@/vesta/supervise/agentApi";
+import { awaitsFlagType } from "@/vesta/shared/concern";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 import { downloadFile } from "@/utils/download";
@@ -73,7 +74,7 @@ export default function FlagTypesPanel() {
   const countSilentVerdicts = useCallback(async () => {
     const concerns = await loadConcerns().catch(() => []);
     setJudgedButSilent(concerns.filter(
-      (c) => String(c.useful_at ?? "").trim() && !String(c.flag_type ?? "").trim()
+      awaitsFlagType
     ).length);
   }, []);
 

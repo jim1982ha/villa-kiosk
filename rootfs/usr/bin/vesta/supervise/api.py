@@ -107,6 +107,52 @@ def bind(*, authorized: Any, unauthorized: Any, forbidden: Any, role_for: Any,
         concerns_get=concerns_get))
 
 
+
+async def agent_concerns_shaped_handler(request: "web.Request") -> "web.Response":
+    """`/agent-concerns`, with each row carrying the acts it currently offers.
+
+    ⚠️ THE ACT SET IS SERVED, NOT TRANSCRIBED (2026-09-06). `available_for` is
+    the authority on which acts an alert offers — it encodes the settled-state
+    rule, the FYI rule, rate-once, and the ladder position. Telegram has always
+    asked it (`buttons.keyboard_for`) and the tablet never did: it drew a fixed
+    row of buttons gated only on the reader's ROLE. The two drifted, and the
+    drift was reachable — on an informational concern `available_for` returns no
+    `done`, while the tablet drew ✅ anyway and `actions.apply` refused the press
+    with "that has already been dealt with", a sentence that misdescribes why.
+
+    ⚠️ THIS IS NOT THE `adapters/devices.py` SITUATION. That is a deliberate
+    second implementation pinned by `test_consistency_parity`, justified because
+    the briefing composes with nobody at the tablet. An act set is only ever
+    rendered against a live server response, so serving it costs one field and
+    removes the whole class of divergence — a parity pin here would be paying
+    to keep a duplicate honest instead of not having one.
+
+    ⚠️ IT WRAPS THE INJECTED STORE HANDLER RATHER THAN REPLACING IT. The
+    revision/409 machinery, the role check and the envelope stay where they are;
+    a non-200 passes through untouched, so an unauthorized read is still the
+    store's answer and not this function's opinion of it.
+    """
+    if deps is None:
+        raise RuntimeError("supervise.api.bind() must run before routes()")
+    resp = await deps.concerns_get(request)
+    if getattr(resp, "status", 500) != 200 or not getattr(resp, "body", None):
+        return resp
+    try:
+        payload = json.loads(resp.body)
+    except (ValueError, TypeError):
+        return resp
+    doc = payload.get("concerns")
+    rows = doc.get("concerns") if isinstance(doc, dict) else None
+    if not isinstance(rows, list):
+        return resp
+    for row in rows:
+        if isinstance(row, dict):
+            row["acts"] = [
+                {"id": act.id, "glyph": act.label}
+                for act in agent_actions.available_for(row)
+            ]
+    return web.json_response(payload)
+
 def routes() -> List[Any]:
     """The agent's route table, ready for `app.add_routes`.
 
@@ -118,7 +164,7 @@ def routes() -> List[Any]:
         raise RuntimeError("supervise.api.bind() must run before routes()")
     return [
         web.get("/agent-config", deps.config_get),
-        web.get("/agent-concerns", deps.concerns_get),
+        web.get("/agent-concerns", agent_concerns_shaped_handler),
         web.get("/agent-chats", agent_chats_handler),
         web.post("/agent-feedback", agent_feedback_handler),
         web.post("/agent-action", agent_action_handler),

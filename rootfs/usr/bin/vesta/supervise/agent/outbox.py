@@ -293,11 +293,6 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # copies are redrawn and retired by the same sweep as every other.
     import dataclasses
     from vesta.adapters import links as links_mod
-    plain_line, html_line = await _rating_link(session)
-    # ⚠️ THE ESCALATION GETS THE SAME TREATMENT AS THE FIRST MESSAGE — it is the
-    # one most worth acting on, so it must not be the plain one.
-    rich_body = (f"{links_mod.html_escape(plan.body)}\n\n{html_line}"
-                 if html_line else plan.body)
     # ⚠️ REBUILT, NOT PREFIXED. `plan.title` is ALREADY a header line, so
     # "Still open: 🟠 WARNING · …" would stack two of them. The escalation keeps
     # the alert's severity MARK — it is the same problem — and replaces the WORD,
@@ -305,8 +300,6 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     escalated = style_mod.severity_line(
         str(concern.get("severity") or "notice"), "STILL OPEN",
         str(concern.get("title") or ""))
-    plan2 = dataclasses.replace(
-        plan, title=f"<b>{links_mod.html_escape(escalated)}</b>", body=rich_body)
     # ⚠️ DRAWN FROM THE POST-ESCALATION VIEW, WHICH IS THE WHOLE FIX (2026-08-29).
     # `_mark_escalated` runs AFTER the send — deliberately, so a failed send does
     # not lose the escalation — so `concern` here still carries the step this
@@ -317,15 +310,12 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # untouched and makes the two agree.
     drawn_as = dict(concern)
     drawn_as["escalated_step"] = verdict.step
-    results = await _send_with_buttons(session, drawn_as, plan2, config=config)
-    plain = [r.get("target") for r in results
-             if isinstance(r, Mapping) and str(r.get("status")) != "sent"]
-    if plain:
-        from vesta.adapters import deliver as deliver_mod
-        results += await deliver_mod.deliver(
-            session, [str(t) for t in plain if t],
-            escalated,
-            f"{plan.body}\n\n{plain_line}" if plain_line else plan.body)
+    # ⚠️ THE SAME COMPOSITION AS THE FIRST SEND, which is the whole point of
+    # `_send_alert`. This path used to derive its plain fallback from `results`
+    # rather than from `plan.targets`, so a buttons send that returned nothing
+    # sent nothing at all.
+    results = await _send_alert(session, drawn_as, plan,
+                               title=escalated, config=config)
     if not any(str(r.get("status")) == "sent" for r in results
                if isinstance(r, Mapping)):
         return False
@@ -344,20 +334,18 @@ def _mark_escalated(concern_id: str, step: str, *,
     and for the identical reason: marking first loses the escalation entirely
     when the send fails, and at worst marking second escalates twice, which a
     person notices and can say something about."""
-    if not concern_id:
-        return False
-    try:
-        rows = concerns_mod.read()
-        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ",
-                              time.gmtime(now if now is not None else time.time()))
-        for row in rows:
-            if str(row.get("id")) == concern_id:
-                row["escalated_step"] = str(step)
-                row["escalated_at"] = stamp
-                _record_send(row, profile, stamp)
-                return concerns_mod._write(rows)
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow(f"could not stamp concern {concern_id} as escalated", err)
+    # ⚠️ THROUGH `concerns.edit`, NOT `concerns._write` (2026-09-06). This
+    # reached across the seam for the store's PRIVATE writer and carried its own
+    # `time.strftime` — a second spelling of `concerns._now_iso`, in a second
+    # module, which is the shape `_minutes_since` was already fixed for here.
+    stamp = concerns_mod._now_iso(now)
+
+    def _mark(row: Dict[str, Any]) -> None:
+        row["escalated_step"] = str(step)
+        row["escalated_at"] = stamp
+        _record_send(row, profile, stamp)
+
+    return concerns_mod.edit(concern_id, _mark, now=now)
     return False
 
 
@@ -618,27 +606,6 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     # THEN append the line this add-on generated from Home Assistant's own
     # config. Appending before `plan` would put the URL through `inert()`,
     # which strips underscores, and an ingress path has underscores.
-    plain_line, html_line = await _rating_link(session)
-    import dataclasses
-    rich = plan
-    if html_line:
-        # ⚠️ THE RICH BODY IS ESCAPED FIRST, THEN OUR MARKUP IS ADDED — the same
-        # order `inert` established and for the same reason. `inert` has already
-        # removed `<` and `>` from villa strings at the routing boundary; this
-        # catches an `&` it does not touch, and covers anything a later renderer
-        # adds. Escaping AFTER appending would eat our own link.
-        from vesta.adapters import links as links_mod
-        # ⚠️ THE HEADER IS BOLDED WHOLE, AFTER ESCAPING. `severity_line` returns
-        # plain text on purpose: markup returned from there would be escaped by
-        # the very call that protects the villa's half of the line. Escape
-        # first, wrap second — and the emoji is unaffected by the weight.
-        rich = dataclasses.replace(
-            plan,
-            title=f"<b>{links_mod.html_escape(plan.title)}</b>",
-            body=f"{links_mod.html_escape(plan.body)}\n\n{html_line}")
-    if plain_line:
-        plan = dataclasses.replace(plan, body=f"{plan.body}\n\n{plain_line}")
-
     # ⚠️ THE ROUTING VERDICT IS SAID OUT LOUD, AND `Delivery.reason` IS WHY IT
     # CAN BE. Every branch below was already decided correctly and reported only
     # as a tally — `considered 1, sent 0, suppressed 1` — so the two questions an
@@ -677,13 +644,8 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     # every target it cannot serve — which is all of them on a villa that does
     # not use a chat platform. That villa's delivery is byte-identical to what
     # it was before this existed.
-    results = await _send_with_buttons(session, concern, rich, config=config)
-    plain = [t for t in plan.targets
-             if not any(str(r.get("target")) == t
-                        and str(r.get("status")) == "sent" for r in results)]
-    if plain:
-        results += await deliver_mod.deliver(session, plain,
-                                             plan.title, plan.body)
+    results = await _send_alert(session, concern, plan,
+                               title=plan.title, config=config)
     landed = [str(r.get("target")) for r in results
               if isinstance(r, Mapping) and str(r.get("status")) == "sent"]
     if not landed:
@@ -712,6 +674,59 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
         from vesta.supervise.agent import task as task_mod
         await task_mod.raise_for(session, concern, config=config)
     return "sent"
+
+
+async def _send_alert(session: Any, drawn_as: Mapping[str, Any], plan: Any, *,
+                      title: str,
+                      config: Optional[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Compose one alert and get it to everybody it is addressed to.
+
+    ⚠️ ONE COMPOSITION, TWO CALLERS, AND THEY HAD DRIFTED (2026-09-06). The
+    first send and the escalation both did: fetch the rating line in both
+    dialects, escape the already-inert body, append our own markup, try the
+    buttons, then send whatever declined as plain text. Written twice, they
+    disagreed about the step that matters most.
+
+    ⚠️ THE LEFTOVERS ARE COMPUTED FROM `plan.targets`, NEVER FROM `results`,
+    AND THAT IS THE FIX. `_send_with_buttons` returns an EMPTY LIST when it
+    cannot serve the buttons at all — a Telegram that refused a keyboard, a
+    registry that could not be read — and its own docstring is explicit that
+    such a case "must all end with the owner still being told". The first send
+    honoured that. The escalation derived its fallback list from `results`, so
+    an empty result meant an empty fallback: nothing was sent, and the function
+    reported failure. The rung of the ladder that exists BECAUSE nobody
+    answered was the one that went silent when the chat platform faltered.
+
+    ⚠️ ESCAPE FIRST, APPEND SECOND. `inert` has already removed `<` and `>`
+    from villa strings at the routing boundary; this catches an `&` it does not
+    touch. Escaping after appending would eat our own link. The header is
+    escaped and then bolded whole, because `severity_line` returns plain text
+    on purpose — markup from it would be escaped by the very call protecting
+    the villa's half of the line.
+    """
+    import dataclasses
+
+    from vesta.adapters import deliver as deliver_mod
+    from vesta.adapters import links as links_mod
+
+    plain_line, html_line = await _rating_link(session)
+    rich = plan
+    if html_line:
+        rich = dataclasses.replace(
+            plan,
+            title=f"<b>{links_mod.html_escape(title)}</b>",
+            body=links_mod.rich_body(plan.body, html_line))
+    plain_body = f"{plan.body}\n\n{plain_line}" if plain_line else plan.body
+
+    results = await _send_with_buttons(session, drawn_as, rich, config=config)
+    leftover = [t for t in plan.targets
+                if not any(str(r.get("target")) == t
+                           and str(r.get("status")) == "sent"
+                           for r in results if isinstance(r, Mapping))]
+    if leftover:
+        results += await deliver_mod.deliver(session, leftover,
+                                             title, plain_body)
+    return results
 
 
 async def _send_with_buttons(session: Any, concern: Mapping[str, Any],
@@ -778,17 +793,11 @@ def _mark_delivered(concern_id: str, *, now: Optional[float] = None,
     say something about. The audit's own intent/outcome pairing makes the same
     choice for the same reason.
     """
-    if not concern_id:
-        return False
-    try:
-        rows = concerns_mod.read()
-        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ",
-                              time.gmtime(now if now is not None else time.time()))
-        for row in rows:
-            if str(row.get("id")) == concern_id:
-                row["delivered_at"] = stamp
-                _record_send(row, profile, stamp)
-                return concerns_mod._write(rows)
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow(f"could not stamp concern {concern_id} as delivered", err)
+    stamp = concerns_mod._now_iso(now)
+
+    def _mark(row: Dict[str, Any]) -> None:
+        row["delivered_at"] = stamp
+        _record_send(row, profile, stamp)
+
+    return concerns_mod.edit(concern_id, _mark, now=now)
     return False

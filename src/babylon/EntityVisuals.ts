@@ -131,7 +131,7 @@ import {
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
-import { COSMETIC_MAPPING_FIELDS, entityMapDelta } from "./entityMapDiff";
+import { COSMETIC_MAPPING_FIELDS, entityMapDelta, sliceChanged } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
@@ -1762,9 +1762,7 @@ export class EntityVisuals {
     // from the same pull — it is a SHARED_CONFIG_KEY too, so it also arrives
     // freshly parsed on every focus. badgeStyle is a per-device string and
     // compares by value already.
-    const groupsChanged =
-      config.deviceGroups !== prevGroups
-      && JSON.stringify(config.deviceGroups) !== JSON.stringify(prevGroups);
+    const groupsChanged = sliceChanged(prevGroups, config.deviceGroups);
     if (needsRepaint || groupsChanged || config.badgeStyle !== prevBadgeStyle) {
       this.rebuildLabels();
     }

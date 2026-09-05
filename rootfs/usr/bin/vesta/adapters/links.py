@@ -256,3 +256,22 @@ def footer(ha_config: Any, ingress_entry: str) -> str:
     the job of nine.
     """
     return line("Open", ha_config, ingress_entry)
+
+
+def rich_body(text: str, html_line: str) -> str:
+    """The villa's text, made safe, with our own markup appended after it.
+
+    ⚠️ THE ORDER IS THE WHOLE RULE, AND IT WAS WRITTEN OUT THREE TIMES
+    (2026-09-06): in the alert's first send, in its escalation, and in the
+    briefing. `inert()` has already removed `<` and `>` from villa strings at
+    the routing boundary; `html_escape` catches an `&` it does not touch, and
+    covers whatever a later renderer adds. Escaping AFTER appending would eat
+    our own anchor and deliver `&lt;a href&gt;` as literal text.
+
+    ⚠️ AN EMPTY `html_line` RETURNS AN EMPTY STRING, not the escaped text. A
+    villa with no external URL configured has no rich dialect to offer, and
+    every caller here treats "" as "send the plain body instead" — returning
+    escaped-but-unlinked text would send HTML entities to a transport that was
+    never going to parse them.
+    """
+    return f"{html_escape(text)}\n\n{html_line}" if html_line else ""

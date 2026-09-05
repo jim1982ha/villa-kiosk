@@ -78,7 +78,7 @@ import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
-import { entityMapDelta } from "./entityMapDiff";
+import { entityMapDelta, sliceChanged } from "./entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
 import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 import { cameraFrame } from "./cameraFrame";
@@ -4336,9 +4336,7 @@ export class SceneManager {
     // there's no cosmetic/structural split to make here — any REAL change to
     // which mesh is which entity is inherently structural — so this only
     // needs a same-content check, not a delta classifier.
-    const meshBindingsChanged =
-      prev.meshBindings !== config.meshBindings &&
-      JSON.stringify(prev.meshBindings) !== JSON.stringify(config.meshBindings);
+    const meshBindingsChanged = sliceChanged(prev.meshBindings, config.meshBindings);
     const cosmeticOnly =
       mapDelta === "cosmetic" &&
       !meshBindingsChanged &&
@@ -4392,8 +4390,7 @@ export class SceneManager {
     // old height until a reload. Same class of defect from the other side: a
     // consumer that does not re-run when one of its inputs moves.
     const roomPointsChanged =
-      (prev.teleportPoints !== config.teleportPoints
-        && JSON.stringify(prev.teleportPoints) !== JSON.stringify(config.teleportPoints))
+      sliceChanged(prev.teleportPoints, config.teleportPoints)
       || prev.eyeHeight !== config.eyeHeight;
     if (roomPointsChanged) {
       this.syncRoomPoints();

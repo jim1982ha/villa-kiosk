@@ -29,9 +29,11 @@ signal alert-fatigue measurement has.
 from __future__ import annotations
 
 import calendar
+import json
 import time
 from dataclasses import dataclass, field
-from typing import (Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple)
+from typing import (Any, Callable, Dict, List, Mapping, Optional, Sequence,
+                    Set, Tuple)
 
 from vesta.supervise.agent import contracts
 from vesta.adapters import store
@@ -224,6 +226,52 @@ def _write(rows: Sequence[Mapping[str, Any]]) -> bool:
     return True
 
 
+def edit(concern_id: str, mutate: Callable[[Dict[str, Any]], Any], *,
+         now: Optional[float] = None, touch: bool = True) -> bool:
+    """Find one concern, change it, write the store once.
+
+    ⚠️ THE ONE WRITING VERB, AND `_write` IS PRIVATE FOR A REASON (2026-09-06).
+    Before this, "read → scan for the id → mutate → `_write`" was hand-written
+    at every mutator in this module AND at two sites in `outbox.py`, which
+    reached across the seam for the private writer and then re-implemented the
+    timestamp with their own `time.strftime(...)` — a second spelling of
+    `_now_iso`, which is exactly the defect `_minutes_since` was fixed for one
+    module over. A store whose write path has two entrances has no place to put
+    a rule that must hold for every write.
+
+    `mutate` receives the row and may change it in place. Returning `False`
+    abandons the edit and writes nothing; anything else (including `None`)
+    commits. The row is stamped `updated_at` unless `touch=False` — the one
+    caller that must not touch it is a correction of a stamp that already
+    happened.
+
+    ⚠️ NO WRITE WHEN NOTHING MOVED. A no-op edit used to cost a full
+    read-modify-write of the whole store, and the suppression was hand-checked
+    at one mutator out of nine.
+
+    Returns whether anything was actually written. Never raises: a store that
+    cannot be written degrades, exactly as `read` and `_write` already do.
+    """
+    if not concern_id:
+        return False
+    try:
+        rows = read()
+        for row in rows:
+            if str(row.get("id")) != str(concern_id):
+                continue
+            before = json.dumps(row, sort_keys=True, default=str)
+            if mutate(row) is False:
+                return False
+            if json.dumps(row, sort_keys=True, default=str) == before:
+                return False
+            if touch:
+                row["updated_at"] = _now_iso(now)
+            return _write(rows)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow(f"could not edit concern {concern_id}", err)
+    return False
+
+
 def open_for(subject_key: str, rows: Optional[Sequence[Mapping[str, Any]]] = None
              ) -> List[Dict[str, Any]]:
     """Concerns about this subject that are still live.
@@ -406,50 +454,13 @@ def note_message(concern_id: str, entity_id: str, message_id: str,
     return False
 
 
-def stamp_message(concern_id: str, message_id: str, acts: str) -> bool:
-    """Record what ONE message is now showing, after its buttons were changed.
-
-    ⚠️ THE PAIR OF `forget_message`: a press either ends a message (forget) or
-    changes what it offers (stamp). Leaving the old stamp behind would make
-    `buttons.reconcile` believe the phone is a set of buttons behind, and redraw
-    it on the next tick for no reason, for the life of the alert.
-    """
-    if not str(message_id or "").strip():
-        return False
-    for row in read():
-        if str(row.get("id")) != str(concern_id):
-            continue
-        refs = row.get("messages")
-        if not isinstance(refs, list):
-            return False
-        return set_messages(concern_id,
-                            [{**r, "acts": str(acts or "")}
-                             if str(r.get("message_id") or "") == str(message_id)
-                             else r
-                             for r in refs if isinstance(r, Mapping)])
-    return False
-
-
-def forget_message(concern_id: str, message_id: str) -> bool:
-    """Stop tracking ONE message — it has been retired and cannot change again.
-
-    ⚠️ ONE, NOT ALL. An escalated alert has a message in more than one chat, and
-    a press in the facility manager's chat says nothing about the copy in the
-    owner's: that one still carries live buttons and must still be reconciled.
-    Clearing the list here would abandon it.
-    """
-    if not str(message_id or "").strip():
-        return False
-    for row in read():
-        if str(row.get("id")) != str(concern_id):
-            continue
-        refs = row.get("messages")
-        if not isinstance(refs, list):
-            return False
-        return set_messages(concern_id,
-                            [r for r in refs if isinstance(r, Mapping)
-                             and str(r.get("message_id") or "") != str(message_id)])
-    return False
+# ⚠️ `stamp_message` AND `forget_message` LIVED HERE AND WERE DELETED
+# (2026-09-06). Each read the store, scanned for the id, then delegated to
+# `set_messages` — which read and scanned again — and both had exactly one
+# caller: the block in `buttons.handle` that re-asked `reconcile`'s three-way
+# question. Collapsing that duplication left them with no shipped caller at all,
+# which `test_reachability` reported the same minute. `reconcile` keeps every
+# message in step through `set_messages` in ONE write per concern.
 
 
 def set_messages(concern_id: str,

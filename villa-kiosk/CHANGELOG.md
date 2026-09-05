@@ -1,3 +1,28 @@
+## 2.926.0
+
+### Fixed — four ways a screen or a message said the wrong thing
+An "Alert only" notice offered a ✅ close button on the tablet that the add-on
+then refused, with a message about the alert already being dealt with; the phone
+never offered it. Which buttons an alert offers is now decided in one place and
+sent to the tablet, so the two surfaces cannot drift apart again.
+
+When the add-on could not be reached, the alert list read "No alerts right now"
+— the villa looked quiet because nothing could be asked. It now says it could
+not reach the assistant, and says it is not claiming the villa is quiet.
+
+A Facility Manager opening Briefings saw an empty panel with no sections,
+because every section is owner-only. It now explains that rather than looking
+broken. ⚠️ Whether one of those steps should open up to the Facility Manager is
+still an open question for the owner.
+
+### Fixed — an escalation could go silent exactly when it was needed
+An escalation is the message sent because nobody answered the first one. When
+the chat platform refused the buttons — a Telegram error, an unreadable device
+registry — the escalation sent nothing at all and recorded a failure, instead of
+falling back to a plain message the way the first send always did. Both now
+compose and send through the same path, so a chat platform that falters costs
+the buttons and never the message.
+
 ## 2.925.0
 
 ### Fixed — the agent's ranked excerpt was all energy, every pass

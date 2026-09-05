@@ -225,12 +225,19 @@ def test_the_OUTBOX_sends_plainly_whatever_the_buttons_did_not_take() -> None:
     that the plain list is computed from what did NOT land, rather than from
     whether buttons were attempted at all."""
     from vesta.supervise.agent import outbox
-    code = _code(outbox._deliver_one)
+    # ⚠️ THE FALLBACK MOVED TO `_send_alert` (2026-09-06), shared with the
+    # escalation — which used to derive this list from `results` rather than
+    # from `plan.targets`, so a buttons send that returned NOTHING fell back to
+    # NOBODY. `test_alert_composition` now asserts the behaviour directly; this
+    # keeps the structural half, that the choice is made from the addressed
+    # targets and not from whatever the buttons path happened to return.
+    code = _code(outbox._send_alert)
     assert "_send_with_buttons" in code
-    plain = code[code.index("plain = "):code.index("landed = ")]
-    assert '"sent"' in plain and "not any" in plain, (
-        "the plain send is chosen by something other than which targets "
-        "actually received the alert")
+    leftover = code[code.index("leftover = "):code.index("if leftover:")]
+    assert "plan.targets" in leftover and "not any" in leftover, (
+        "the plain send is chosen by something other than which addressed "
+        "targets actually received the alert")
+    assert '"sent"' in leftover
 
 
 def test_a_BUTTON_FAILURE_never_costs_the_ALERT() -> None:

@@ -25,6 +25,7 @@
 // noticing an absence.
 
 import type { Concern, ConcernState } from "@/vesta/shared/agentTypes";
+import { stateOf } from "@/vesta/shared/concern";
 import InfoHint from "@/components/common/InfoHint";
 import { downloadFile, filenameSlug } from "@/utils/download";
 
@@ -169,7 +170,7 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
   // success rate of 100% by construction. The two are produced by the same
   // sweep, in the same pass, from the same evidence.
   const isCameBack = (c: Concern) =>
-    String(c.state ?? "") === "closed"
+    stateOf(c) === "closed"
     && String(c.outcome ?? "").startsWith("the fix did not hold");
   const cameBack = concerns.filter(isCameBack).length;
   const closed = by("closed") - cameBack;
@@ -192,7 +193,7 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
   // thing in this whole lifecycle an owner must not discover by accident.
   const perSubject = new Map<string, number>();
   for (const c of concerns) {
-    if (String(c.state ?? "") !== "dismissed") continue;
+    if (stateOf(c) !== "dismissed") continue;
     const k = String(c.subjectKey ?? "");
     if (k) perSubject.set(k, (perSubject.get(k) ?? 0) + 1);
   }
@@ -258,7 +259,7 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
                     disabled={verified === 0}
                     title="Download these as a spreadsheet"
                     onClick={() => save("Fixed and confirmed",
-                      concerns.filter((c) => String(c.state ?? "") === "verified"))}>
+                      concerns.filter((c) => stateOf(c) === "verified"))}>
               Fixed and confirmed
             </button>
           </dt>
@@ -280,7 +281,7 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
             <button type="button" className="link-count"
                     disabled={dismissed === 0}
                     title="Download these as a spreadsheet"
-                    onClick={() => save("Judged not useful", concerns.filter((c) => String(c.state ?? "") === "dismissed"))}>
+                    onClick={() => save("Judged not useful", concerns.filter((c) => stateOf(c) === "dismissed"))}>
               Judged not useful
             </button>
           </dt>
@@ -291,7 +292,7 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
             <button type="button" className="link-count"
                     disabled={closed === 0}
                     title="Download these as a spreadsheet"
-                    onClick={() => save("Closed", concerns.filter((c) => String(c.state ?? "") === "closed" && !isCameBack(c)))}>
+                    onClick={() => save("Closed", concerns.filter((c) => stateOf(c) === "closed" && !isCameBack(c)))}>
               Closed
             </button>
           </dt>

@@ -313,3 +313,39 @@ export interface ReportsHistory {
   version: number;
   entries: ReportHistoryEntry[];
 }
+
+
+// ── Whether a module runs, and how to change it ─────────────────────────────
+// ⚠️ "ABSENT MEANS ON" IS A RULE THE BACKEND GATE ALSO OWNS, so it must be
+// written down once on this side rather than re-derived per surface. It lived
+// inline in `ModulesTab`, which read `config.modules ?? {}` and spread a whole
+// `ReportsConfig` to flip one boolean — a leaf tab doing document surgery, and
+// carrying the invariant with it. Any second surface that toggles a module
+// (the agent's own module switch reaches the same flag) would have had to
+// reimplement both.
+
+/** Is this module enabled? ⚠️ ABSENT MEANS ON — a config written before a
+ *  module existed must not silently disable it. */
+export function isModuleEnabled(
+  config: Pick<ReportsConfig, "modules"> | null | undefined,
+  name: string,
+): boolean {
+  return config?.modules?.[name]?.enabled !== false;
+}
+
+/** Turn one module on or off, preserving everything else in the document.
+ *
+ * ⚠️ IT RETURNS A NEW DOCUMENT AND KEEPS EVERY OTHER KEY. Rebuilding
+ * `modules` from scratch, or dropping a sibling slice, is how an operator's
+ * other settings vanish on a save that looked like it touched one checkbox. */
+export function setModuleEnabled<T extends Pick<ReportsConfig, "modules">>(
+  config: T,
+  name: string,
+  on: boolean,
+): T {
+  const slices = config.modules ?? {};
+  return {
+    ...config,
+    modules: { ...slices, [name]: { ...slices[name], enabled: on } },
+  };
+}

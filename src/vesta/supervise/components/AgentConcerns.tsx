@@ -29,11 +29,14 @@ import { useProfile } from "@/auth/ProfileContext";
 import SourceChip from "@/components/common/SourceChip";
 import { SettledSummary } from "@/vesta/supervise/components/ConcernLifecycle";
 import { ACT_GLYPH, severityRank, type Concern } from "@/vesta/shared/agentTypes";
+import {
+  isSeenButOpen, isSettled, needsAttention, wasJudged,
+} from "@/vesta/shared/concern";
 import Loading from "@/components/common/Loading";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
  *  record, not the state of the villa. */
-const LIVE = new Set(["open", "acted"]);
+
 
 /** Is this still asking for the reader's attention?
  *
@@ -50,8 +53,22 @@ const LIVE = new Set(["open", "acted"]);
  *  answered here, and not a fifth lifecycle state. An acknowledged concern
  *  that is still open is counted below rather than dropped, or "I have seen
  *  it" would silently mean "it is gone". */
-const needsAttention = (c: Concern) =>
-  LIVE.has(String(c.state ?? "open")) && !String(c.acknowledged_at ?? "").trim();
+/** Does the server currently offer this act on this concern?
+ *
+ * ⚠️ THE SERVER DECIDES, AND THAT IS THE WHOLE POINT. `agent/actions.available_for`
+ * is the one authority; `/agent-concerns` serves its answer per row. Anything
+ * this file worked out for itself from `state`/`informational` would be a
+ * second implementation of a rule that has already drifted once — the ✅ drawn
+ * on an FYI and refused with "that has already been dealt with".
+ *
+ * ⚠️ ABSENT `acts` MEANS NO ACTS, DELIBERATELY. The tablet and the add-on ship
+ * as one image, so the field is always present; if it ever is not, a row with
+ * no buttons is visibly wrong and reports itself, whereas defaulting to "draw
+ * everything" would silently restore exactly the defect this removed. */
+const offers = (c: Concern, id: string) =>
+  (c.acts ?? []).some((a) => a && a.id === id);
+
+
 
 /** The escalation bands, from `agent/route.py`'s `BANDS`. ⚠️ MINUTES FROM
  *  `delivered_at`, NOT from `opened_at` — you cannot acknowledge something you
@@ -170,6 +187,12 @@ export default function AgentConcerns() {
   const [settled, setSettled] = useState<Concern[]>([]);
   const [seen, setSeen] = useState<Concern[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  // ⚠️ THREE STATES, NOT TWO (2026-09-06). `null` rows = not loaded yet;
+  // `[]` = loaded and the villa is quiet; `unreachable` = we could not ask.
+  // Collapsing the third into the second is what made an add-on that was down
+  // render as "No alerts right now" — the reading the empty-state block below
+  // exists to prevent.
+  const [unreachable, setUnreachable] = useState(false);
 
   const load = useCallback(async () => {
     // ⚠️ NO MODE FLAG ANY MORE (2026-08-28, owner's ruling). Every mode now
@@ -177,20 +200,28 @@ export default function AgentConcerns() {
     // arrives stamped `informational` instead of being hidden in a separate
     // shadow file — so an empty list means exactly one thing: nothing was
     // raised. The whole "stay silent" empty-state branch left with it.
-    const found = await loadConcerns();
+    let found: Concern[];
+    try {
+      found = await loadConcerns();
+    } catch {
+      // ⚠️ KEEP WHATEVER IS ALREADY ON SCREEN. A refresh that fails should say
+      // it failed, not blank a wall of real alerts the reader was looking at.
+      setUnreachable(true);
+      return;
+    }
+    setUnreachable(false);
     // ⚠️ THE SETTLED ONES ARE KEPT NOW, NOT DISCARDED. They were filtered out
     // at the door on the reasoning that "closed, verified and dismissed are the
     // record, not the state of the villa" — true of the LIST, and it threw away
     // the record entirely. The HLD reads verification, noise measurement and
     // time-to-clear off exactly those rows, so they are summarised below the
     // list instead of being dropped.
-    setSettled(found.filter((c) => !LIVE.has(String(c.state ?? "open"))));
+    setSettled(found.filter(isSettled));
     // ⚠️ SEEN BUT STILL OPEN IS ITS OWN GROUP, NOT A DELETION. Acknowledging
     // takes a card off the wall (owner's ruling) and the villa is still
     // carrying the problem, so these are counted below the list. Dropping them
     // silently would make "I have seen it" mean "it is gone".
-    setSeen(found.filter((c) => LIVE.has(String(c.state ?? "open"))
-      && String(c.acknowledged_at ?? "").trim()));
+    setSeen(found.filter(isSeenButOpen));
     setRows(found.filter(needsAttention)
       // ⚠️ `severityRank`, NOT A LOCAL MAP. This carried its own copy with an
       // unknown severity defaulting to 9 — LAST, the quietest position — which
@@ -226,6 +257,24 @@ export default function AgentConcerns() {
    *  what stops the escalation ladder. Until TASK-112 nothing in this system
    *  could say it, so escalation could only ever run forever — the precise
    *  failure alert fatigue names. */
+  // ⚠️ UNREACHABLE IS ANSWERED BEFORE BOTH — before the spinner, or a villa
+  // with no LAN path to the add-on spins for ever; and before the empty state,
+  // or it claims the villa is quiet on the strength of a question nobody
+  // managed to ask.
+  if (unreachable) {
+    return (
+      <>
+        <div className="settings-section-title">
+          Alerts — what the villa concluded
+        </div>
+        <p className="muted body-text">
+          Cannot reach the villa assistant, so this list is not current — it is
+          not saying the villa is quiet. Check the add-on is running, then
+          reopen this tab.
+        </p>
+      </>
+    );
+  }
   if (rows === null) {
     return (
       <Loading />
@@ -454,7 +503,7 @@ export default function AgentConcerns() {
                     `useful` is `false` both when somebody said "less like this"
                     and when nobody has said anything. The timestamp is the only
                     field that separates "judged" from "not judged". */}
-                {String(c.useful_at ?? "").trim() && (
+                {wasJudged(c) && (
                   <span className="muted concern-chase">
                     {c.useful
                       ? "You asked for more like this."
@@ -569,24 +618,34 @@ export default function AgentConcerns() {
                     that a reader should be able to say WHICH kind of ending
                     this was — the history keeps `closed` and `dismissed`
                     apart because a person did. */}
-                <button
-                  type="button" className="row-action"
-                  disabled={busy === c.id}
-                  aria-label={`The work is finished, close this: ${c.title}`}
-                  title="The work is finished. The job is ticked off, nobody will chase you about this again, and it leaves this list and the next briefing."
-                  onClick={() => void act(c.id, "done")}
-                >
-                  <span className="concern-tally" aria-hidden>{ACT_GLYPH.done}</span>
-                </button>
-                <button
-                  type="button" className="row-action"
-                  disabled={busy === c.id}
-                  aria-label={`This did not need raising, clear it: ${c.title}`}
-                  title="This did not need raising. It is cleared the same way — job ticked, no chasing — and the record says dismissed. It does NOT make this kind rarer; use ⬇️ for that."
-                  onClick={() => void act(c.id, "dismiss")}
-                >
-                  <span className="concern-tally" aria-hidden>{ACT_GLYPH.dismiss}</span>
-                </button>
+                {/* ⚠️ GATED ON WHAT THE SERVER OFFERS (2026-09-06). Drawn
+                    unconditionally under `canJudge` — a ROLE check — this was
+                    shown on informational concerns, where `available_for`
+                    returns no `done` and `actions.apply` refuses the press with
+                    "that has already been dealt with": a true sentence about
+                    the wrong thing. */}
+                {offers(c, "done") && (
+                  <button
+                    type="button" className="row-action"
+                    disabled={busy === c.id}
+                    aria-label={`The work is finished, close this: ${c.title}`}
+                    title="The work is finished. The job is ticked off, nobody will chase you about this again, and it leaves this list and the next briefing."
+                    onClick={() => void act(c.id, "done")}
+                  >
+                    <span className="concern-tally" aria-hidden>{ACT_GLYPH.done}</span>
+                  </button>
+                )}
+                {offers(c, "dismiss") && (
+                  <button
+                    type="button" className="row-action"
+                    disabled={busy === c.id}
+                    aria-label={`This did not need raising, clear it: ${c.title}`}
+                    title="This did not need raising. It is cleared the same way — job ticked, no chasing — and the record says dismissed. It does NOT make this kind rarer; use ⬇️ for that."
+                    onClick={() => void act(c.id, "dismiss")}
+                  >
+                    <span className="concern-tally" aria-hidden>{ACT_GLYPH.dismiss}</span>
+                  </button>
+                )}
                 {/* ⚠️ TWO QUESTIONS, TWO GROUPS, AND THE SPLIT IS THE WHOLE
                     POINT (2026-08-28, owner's ruling). The rating says how good
                     the alert was and LEAVES IT ALONE; the act beside it says
@@ -607,7 +666,11 @@ export default function AgentConcerns() {
                     same conflation that hid the receipt for a `-1` one release
                     earlier, in this very block. The line above the buttons
                     replaces them, so the row does not simply go quiet. */}
-                {!String(c.useful_at ?? "").trim() && (
+                {/* ⚠️ WAS `!String(c.useful_at ?? "").trim()` — a second
+                    implementation of the rate-once rule, which `available_for`
+                    already owns and states in one place. The stamp is still the
+                    discriminator; this side simply stops re-deriving it. */}
+                {offers(c, "useful") && (
                   <span className="concern-rating">
                     <button
                       type="button" className="row-action"

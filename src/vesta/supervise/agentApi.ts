@@ -20,6 +20,7 @@
 
 import { ingressPath, postJson, putJson } from "@/ha/ingress";
 import type { Concern } from "@/vesta/shared/agentTypes";
+import { normalizeConcerns } from "../shared/concern";
 import { ROLE_ORDER, type Role } from "@/auth/roles";
 
 /** Wire name (what the store stores) → client name (what this app calls it). */
@@ -290,13 +291,23 @@ export async function loadAgentConfig(
  */
 export async function loadConcerns(): Promise<Concern[]> {
   const r = await fetch(ingressPath("agent-concerns"), { credentials: "same-origin" });
-  if (!r.ok) return [];
+  // ⚠️ THROWS RATHER THAN RETURNING `[]` (2026-09-06). It used to swallow the
+  // failure, and the alert wall renders an empty list as "No alerts right now"
+  // — so an add-on that was down reported a quiet villa. That is precisely the
+  // reading `AgentConcerns`' own empty-state comment spends fifteen lines
+  // forbidding: "silence is only honest when it means nothing was raised".
+  // Unreachable is a THIRD state, and a caller that genuinely wants to treat it
+  // as empty (a supplementary list beside a primary one) now says so with its
+  // own `.catch`, where a reader can see the decision.
+  if (!r.ok) throw new Error(`agent-concerns unreachable: ${r.status}`);
   const d = (await r.json().catch(() => ({}))) as { concerns?: unknown };
   const inner = (d.concerns && typeof d.concerns === "object")
     ? (d.concerns as { concerns?: unknown })
     : {};
-  const rows = Array.isArray(inner.concerns) ? inner.concerns : [];
-  return rows.filter((c): c is Concern => !!c && typeof c === "object");
+  // ⚠️ WAS `rows.filter((c): c is Concern => ...)` — a type predicate that
+  // narrowed NOTHING, in the file whose own `peopleOf` docstring states that
+  // EVERY READ NARROWS. Six consumers paid for it in `String(x ?? "").trim()`.
+  return normalizeConcerns(inner.concerns);
 }
 
 /**

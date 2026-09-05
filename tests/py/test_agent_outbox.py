@@ -742,35 +742,51 @@ def test_the_RATING_LINK_is_appended_after_plan_in_BOTH_dialects(
     import re as _re
     from vesta.supervise.agent import outbox as outbox_mod
 
-    body = _re.sub(r"#[^\n]*", "", inspect.getsource(outbox_mod._deliver_one))
+    # ⚠️ THE COMPOSITION MOVED TO `_send_alert` (2026-09-06), SHARED WITH THE
+    # ESCALATION. It was written twice before that, and the copies disagreed —
+    # so these properties are now asserted once, on the one function, and hold
+    # for both paths instead of for whichever one a test happened to read.
+    body = _re.sub(r"#[^\n]*", "", inspect.getsource(outbox_mod._send_alert))
+    caller = _re.sub(r"#[^\n]*", "", inspect.getsource(outbox_mod._deliver_one))
+
     assert "_rating_link(" in body, (
         "the delivery path no longer appends the rating link, so the phone "
         "has NO rating surface at all — the keyboard stopped drawing the pair")
-    assert body.index("route_mod.plan(") < body.index("_rating_link("), (
+    # ⚠️ THE ORDERING IS STRUCTURAL NOW, NOT TEXTUAL. It used to be two string
+    # offsets inside one function; the link is fetched inside `_send_alert`,
+    # which the caller reaches only after `route_mod.plan()` has sanitised the
+    # body. Comparing the CALL ORDER in the caller says the same thing without
+    # depending on where the lines happen to sit.
+    assert caller.index("route_mod.plan(") < caller.index("_send_alert("), (
         "the link is added before plan(), so inert() strips the underscores "
         "out of the ingress URL — links.py rule 5, already paid for once")
-    assert "html_escape(" in body, (
-        "the rich body is not escaped, so an `&` in a device name can break "
-        "an HTML-parsed message")
-    # ⚠️ THE VILLA'S TEXT IS ESCAPED; OUR LINK IS NOT. Stated as the two things
-    # that must be true rather than as an ordering of first occurrences — the
-    # variable `html_line` is bound long before the expression that uses it, so
-    # an index comparison measured the wrong pair and failed on correct code.
-    assert "html_escape(plan.body)" in body, (
-        "the villa-derived body is not escaped before our markup is added")
-    assert "html_escape(f" not in body and "html_escape(rich" not in body, (
-        "the COMPOSED string is escaped, which turns our own link into "
-        "literal &lt;a href&gt; — escape the villa's text, never the markup")
+    # ⚠️ THE ESCAPE-THEN-APPEND RULE IS NOW A PURE FUNCTION, so it is asserted
+    # by CALLING it rather than by reading for `html_escape(`. It was written
+    # out three times — first send, escalation, briefing — and `links.rich_body`
+    # is the one home; what a reader has to trust is that this path uses it and
+    # that it does the right thing.
+    assert "rich_body(plan.body" in body, (
+        "the villa-derived body no longer goes through `links.rich_body`, so "
+        "the escape-then-append order is being re-decided here")
+    from vesta.adapters import links as _links
+    assert _links.rich_body("a & b", "<a href='x'>L</a>") == (
+        "a &amp; b\n\n<a href='x'>L</a>"), (
+        "the villa's text is not escaped before our markup is added, or the "
+        "COMPOSED string is escaped — which turns our own link into literal "
+        "&lt;a href&gt;")
+    assert _links.rich_body("a & b", "") == "", (
+        "a villa with no external URL gets escaped-but-unlinked text, which "
+        "sends HTML entities to a transport that will not parse them")
 
     # ⚠️ AND THE BUTTONED SEND MUST RECEIVE THE RICH BODY. Building it and then
     # handing the plain one to the transport that can parse it is the whole
     # feature quietly not happening — a mutation doing exactly that survived
     # the first round, because every other assertion here is about how the
     # bodies are BUILT and none about which one is SENT.
-    assert "_send_with_buttons(session, concern, rich" in body, (
+    assert "_send_with_buttons(session, drawn_as, rich" in body, (
         "the Telegram path is given the plain body, so the hyperlink is built "
         "and thrown away — VESTA arrives as a bare URL")
-    assert "deliver_mod.deliver(" not in body or "plan.body" in body, (
+    assert "plain_body" in body, (
         "the plain fallback no longer sends the plain body")
 
     helper = _re.sub(r"#[^\n]*", "",

@@ -312,7 +312,10 @@ export default function RecentChecks({ passes, empty, mode, canAct, action,
 
   const load = useCallback(async () => {
     const [f, c, q] = await Promise.all([
-      loadCheckFlags(), loadConcerns(), loadApprovalQueue()]);
+      loadCheckFlags(),
+      // Supplementary here: this panel is about the CHECKS, so an unreachable
+      // concern store must not blank the whole view. Stated, not implied.
+      loadConcerns().catch(() => [] as Concern[]), loadApprovalQueue()]);
     setFlags(f);
     setConcerns(c);
     setPending(new Set((q?.pending ?? []).map((p) => p.runId)));

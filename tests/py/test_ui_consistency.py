@@ -1062,17 +1062,34 @@ def test_only_ACKNOWLEDGING_takes_a_concern_off_the_wall() -> None:
     A delivered concern stays on the list until somebody says they have SEEN
     it — no other verdict, opinion or count may remove it. Pinned on the
     predicate rather than on the JSX, because the filter is the rule.
+
+    ⚠️ THE PREDICATE MOVED OUT OF THE COMPONENT ON 2026-09-06 AND THE RULE GOT
+    STRONGER, so this follows it rather than holding it in place. It used to
+    require `const needsAttention` INSIDE `AgentConcerns.tsx` — which pinned a
+    location, not a rule, and was satisfied by a component that owned the only
+    copy. It now lives in `vesta/shared/concern.ts` with the surfaces that
+    re-derived it (`ConcernLifecycle`, `FlagTypesPanel`) reading the same
+    module. What is asserted is unchanged: one predicate, keyed on
+    acknowledgement, and the wall built from it.
     """
+    module = _read(os.path.join(SRC, "vesta", "shared", "concern.ts"))
     panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
-    assert "const needsAttention" in panel, (
-        "the wall no longer has one predicate for 'is this still asking for "
-        "attention', so the rule lives in whichever filter is read next")
-    body = panel[panel.index("const needsAttention"):]
+    assert "export const needsAttention" in module, (
+        "there is no longer one shared predicate for 'is this still asking "
+        "for attention', so the rule lives in whichever filter is read next")
+    body = module[module.index("export const needsAttention"):]
     body = body[:body.index(";")]
-    assert "acknowledged_at" in body, (
+    assert "wasSeen" in body, (
         "acknowledgement is not what removes a card — some other verdict is")
+    seen = module[module.index("export const wasSeen"):]
+    assert "acknowledged_at" in seen[:seen.index(";")], (
+        "`wasSeen` no longer reads the acknowledgement stamp, so the rule "
+        "above is keyed on something else")
     assert "setRows(found.filter(needsAttention)" in panel, (
         "the list is built from some other filter than the shared predicate")
+    assert 'from "@/vesta/shared/concern"' in panel, (
+        "the wall has stopped importing the shared predicate, so it is "
+        "deciding for itself again")
 
 
 def test_an_acknowledged_but_OPEN_concern_is_counted_not_dropped() -> None:

@@ -114,7 +114,11 @@ def test_the_escalation_message_is_drawn_as_though_the_step_had_landed() -> None
     # that explains this projection, so a bare `index()` measured the prose and
     # reported the order backwards — /dry-audit step 7's comment trap, hit while
     # writing the pin that guards against getting this order wrong.
-    send_at = src.index("_send_with_buttons(session, drawn_as")
+    # ⚠️ THE COMPOSITION MOVED TO `_send_alert` ON 2026-09-06 and this follows
+    # it. What is asserted is unchanged — the send precedes the stamp, so a
+    # failed send cannot lose the escalation — and the call it names is simply
+    # the one that now does the sending.
+    send_at = src.index("_send_alert(session, drawn_as")
     mark_at = src.index("_mark_escalated(str(concern")
     assert send_at < mark_at, (
         "the stamp now precedes the send — if that is deliberate the "
@@ -123,5 +127,5 @@ def test_the_escalation_message_is_drawn_as_though_the_step_had_landed() -> None
         "the escalation is drawn from the stored row, which still says the "
         "ladder has not moved — so the message offers 🆘 for the escalation it "
         "already is")
-    assert "_send_with_buttons(session, drawn_as" in src, (
+    assert "_send_alert(session, drawn_as" in src, (
         "the projected row is built and then not used for the draw")

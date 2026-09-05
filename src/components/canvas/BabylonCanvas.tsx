@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
+import { sliceChanged } from "@/babylon/entityMapDiff";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -280,8 +281,13 @@ export default function BabylonCanvas({
       // arrays every open, so a reference check would force the
       // rebuild on every load even when nothing actually changed.
       const cur = configRef.current;
-      const sameRooms = JSON.stringify(cur.sh3dRooms ?? []) === JSON.stringify(rooms);
-      const sameEnts = JSON.stringify(cur.sh3dEntities ?? []) === JSON.stringify(sh3dEntities);
+      // ⚠️ `sliceChanged` IS THE SHARED RULE, and this site is why it is worth
+      // naming: sh3dRooms/sh3dEntities are NOT shared config keys, but they
+      // have the identical hazard — `parseRoomData` returns fresh arrays every
+      // open, so a reference check rebuilds on every load. The rule is about
+      // fresh objects, not about the sync layer.
+      const sameRooms = !sliceChanged(cur.sh3dRooms ?? [], rooms);
+      const sameEnts = !sliceChanged(cur.sh3dEntities ?? [], sh3dEntities);
       if (sameRooms && sameEnts) return; // the common re-open case — nothing to do
       // If the central plan's room SET changed (admin swapped the
       // file), drop stale rooms so only the new plan's remain — the

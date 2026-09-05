@@ -79,3 +79,46 @@ export function entityMapDelta(
   }
   return cosmeticChanged ? "cosmetic" : "identical";
 }
+
+// ── The same question for every shared key ──────────────────────────────────
+// ⚠️ WHY THIS LIVES HERE AND NOT IN A NEW FILE (2026-09-06). The predicate
+// below has to stay runtime-import-free, because that is the only reason this
+// module can be tested at all — `npm run test:config-delta` is bare `node` with
+// type stripping, no runner and no dependencies, exactly like geometry and
+// placement. A new file importing `entityMapDelta` would have added the one
+// import edge that ends that, so the classifier joins the classifier.
+
+/** Has a shared config slice actually changed?
+ *
+ * ⚠️ REFERENCE FIRST, CONTENT SECOND, AND BOTH ARE LOAD-BEARING.
+ * `DeviceConfigSync.pull()` runs on every window focus and visibilitychange and
+ * hands back freshly `JSON.parse`d objects, so a shared key is `!==` its
+ * predecessor on every no-op pull — a bare `!==` is a bug, never a fast path.
+ * The reference check is not redundant with the content check: it is the cheap
+ * exit for the overwhelmingly common case where nothing was pulled at all, and
+ * without it every focus stringifies the whole entity map.
+ *
+ * This was fixed FOUR separate times in the field, once per key — `entityMap`,
+ * then `meshBindings`, then `deviceGroups` (which disposed and recreated ~420
+ * GUI controls on every focus), then `teleportPoints` — because each fix was
+ * written at the site that had been reported rather than at the rule.
+ */
+export function sliceChanged(a: unknown, b: unknown): boolean {
+  return a !== b && JSON.stringify(a) !== JSON.stringify(b);
+}
+
+// ⚠️ AN AGGREGATE `configDelta(prev, next)` WAS WRITTEN HERE AND DELETED THE
+// SAME DAY (2026-09-06). It returned one verdict for every shared key at once,
+// which reads well and had ZERO callers it could actually serve: the decision
+// it was meant to own is `cosmeticOnly`, and that also depends on `sh3dChanged`
+// — and `sh3dRooms`/`sh3dEntities` are deliberately NOT shared keys, so an
+// aggregate over the shared set cannot answer the question the caller is
+// asking. Shipping it anyway would have left a function whose interface was
+// wider than any caller's need, which is the same shallow-interface defect as
+// the `--space-*` scale that was deleted from `styles.css` on the same day for
+// having no callers at all.
+//
+// `sliceChanged` is the part that earns its keep: one rule, five call sites.
+// If a future caller does want the aggregate, the honest version takes the
+// sh3d pair too — which would also pull the guard in `BabylonCanvas.tsx` back
+// to the module whose invariant it is upholding.

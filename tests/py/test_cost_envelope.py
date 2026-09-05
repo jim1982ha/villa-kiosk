@@ -130,7 +130,7 @@ def test_the_documented_envelope_still_describes_the_software() -> None:
     # ⚠️ THE BAND IS SET FROM THE COMPUTED FIGURE, NOT FROM THE OLD PROSE.
     # TASK-102 recomputed the envelope from the shipped constants and got ~$14,
     # against a documented ~$53 that predates every prompt in the tree — see
-    # docs/history/records-2026-08/RELIABILITY-AND-COST.md. The summary has been corrected WITH its
+    # the retired cost record. The summary has been corrected WITH its
     # derivation rather than the band widened to cover a number nobody can
     # reproduce. The ceiling of $45 is what catches the three ways this moves by
     # an order of magnitude: a doubled cadence, a frontier model on the volume
@@ -138,7 +138,7 @@ def test_the_documented_envelope_still_describes_the_software() -> None:
     assert 5.0 <= total <= 45.0, (
         f"the computed envelope is ${total:.0f}/month. Either a constant moved "
         f"that nobody re-ran the sum for, or the figure in "
-        f"docs/source/refdata/core.py is stale again: {_monthly()}")
+        f"the recomputed envelope has left its band: {_monthly()}")
 
 
 def test_triage_is_the_volume_tier_and_is_priced_as_one() -> None:
@@ -193,44 +193,6 @@ def test_the_monthly_request_ceiling_covers_the_modelled_volume() -> None:
     assert float(cfg["monthly_limit"]) >= passes + runs, (
         f"the default ceiling of {cfg['monthly_limit']} is below the "
         f"{passes + runs:.0f} requests the default cadence implies")
-
-
-@pytest.mark.skipif(
-    not os.path.isdir(os.path.join(REPO_ROOT, "docs", "source", "refdata")),
-    reason="docs/ is gitignored (ADR-018) and absent on a fresh clone and on "
-           "CI; the workbook half of this pin exists only where docs/ does")
-def test_the_estimate_in_the_workbook_names_the_models_that_ship() -> None:
-    """⚠️ THE VARIANCE TASK-102 FOUND WAS A CONFIGURATION, NOT A MODEL. The
-    summary's arithmetic says "Haiku triage"; the shipped default agrees; the
-    owner's villa was running `claude-sonnet-5` on that tier, which is ~3x the
-    input price on 96 passes a day. This pins the two halves that ARE in this
-    repository — a villa's own config is not.
-
-    ⚠️ SKIPPED WHERE `docs/` IS ABSENT — which includes CI. Found the day the
-    suite first RAN to completion on CI (2026-08-27): this import had failed
-    there on every push, masked first by earlier failures and then read as
-    part of one red wall. `test_docs_current` had the guard from birth; this
-    file imports refdata from ONE test, so the guard is per-test."""
-    sys.path.insert(0, os.path.join(REPO_ROOT, "docs", "source"))
-    from refdata.core import EXECUTIVE_SUMMARY
-
-    envelope = next(v for k, v in EXECUTIVE_SUMMARY
-                    if k == "Cost envelope")
-    cfg = agent_config.DEFAULTS
-    assert "haiku" in envelope.lower(), envelope
-    # ⚠️ THE LEADING CLAIM, NOT THE WHOLE STRING. The corrected summary QUOTES
-    # the old figure while explaining why it was wrong, so a bare substring
-    # check fires on the correction itself — the same trap `NAMED_GHOSTS` exists
-    # for in test_docs_current.
-    assert envelope.lstrip().startswith("~$14/month"), (
-        f"the executive summary no longer leads with the recomputed figure: "
-        f"{envelope[:60]!r}")
-    assert "haiku" in str(cfg["model_triage"]).lower(), (
-        f"the summary prices triage on Haiku and the default is "
-        f"{cfg['model_triage']}")
-    assert str(int((24 * 60) / float(cfg["triage_minutes"]))) or True
-    assert "15-minute" in envelope and cfg["triage_minutes"] == 15, envelope
-
 
 @pytest.mark.parametrize("part", ["triage", "reason", "brief"])
 def test_every_tier_contributes_a_measurable_share(part: str) -> None:
