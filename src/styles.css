@@ -44,6 +44,26 @@
   /* Same class of defect as --radius-md, found by the same probe on its
      first run: one caller, one `, rgba(...)` fallback, no declaration. */
   --border-subtle: rgba(128, 128, 128, 0.18);
+
+  /* ── The row family ──────────────────────────────────────────────────────
+     Four row shells exist and they are four different THINGS, not four
+     spellings of one: `.fm-row` is a bordered card, `.reports-entry` a stacked
+     entry with a left accent, `.cockpit-attention-row` a clickable <button>,
+     `.editable-row` a top-aligned form row. Merging them would change the
+     appearance of every surface, so they stay distinct — but the geometry they
+     each re-decided in raw literals now has one home, which is where 21 of the
+     last 120 commits landed.
+
+     ⚠️ NAMED FOR THE ROW, NOT BORROWED FROM A VALUE THAT MATCHES. `12px` is
+     also `--radius-badge` and `10px 12px` is also the padding of several
+     non-row controls; reusing those tokens here would mean a badge tweak
+     reshapes every list in the app. Same value is not the same reason. */
+  --row-radius: 12px;
+  --row-radius-tight: 10px;
+  --row-pad: 12px 14px;
+  --row-pad-tight: 10px 12px;
+  --row-gap: 12px;
+  --row-gap-tight: 10px;
   /* ⚠️ THE --space-* SCALE WAS DELETED 2026-09-06: seven tokens, ZERO
      callers, measured. The stylesheet had meanwhile drifted to a finer
      rhythm the scale did not contain (8px x53, 10px x38, 6px x21 — and
@@ -3787,8 +3807,8 @@ label.toggle span { user-select: none; line-height: 1.4; }
 .fm-list { display: flex; flex-direction: column; gap: 8px;
            list-style: none; padding-left: 0; margin: 0; }
 .fm-row {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 12px 14px; border-radius: 12px;
+  display: flex; align-items: center; gap: var(--row-gap); flex-wrap: wrap;
+  padding: var(--row-pad); border-radius: var(--row-radius);
   background: var(--bg-card); border: 1px solid var(--hairline);
 }
 .fm-row.state-overdue, .fm-row.state-never {
@@ -4359,8 +4379,9 @@ label.toggle span { user-select: none; line-height: 1.4; }
 
 .cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .cockpit-attention-row {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 10px 12px; border-radius: 10px; text-align: left;
+  display: flex; align-items: center; gap: var(--row-gap-tight); width: 100%;
+  padding: var(--row-pad-tight); border-radius: var(--row-radius-tight);
+  text-align: left;
   background: var(--bg-input); border: none; color: inherit; font: inherit;
 }
 button.cockpit-attention-row.tappable { cursor: pointer; }
@@ -4740,7 +4761,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .reports-body {
   margin: 0;
   padding: 12px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   /* ⚠️ `--hairline`, NOT `--border`. This stylesheet's own comment at
      .spark-grid records that `--border` was never defined in either theme —
@@ -4783,7 +4804,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 }
 .reports-facts > div {
   padding: 8px 10px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   background: var(--bg-input);
 }
 .reports-facts dt { font-size: var(--text-xs, 11px); color: var(--text-secondary); }
@@ -4818,8 +4839,8 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md, 8px);
+  padding: var(--row-pad-tight);
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   border-left: 3px solid var(--hairline);
 }
@@ -5224,7 +5245,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    fields rather than centred against a two-line group. */
 .editable-row {
   display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 8px;
-  padding: 8px; border-radius: var(--radius-md, 8px); background: var(--bg-input);
+  padding: 8px; border-radius: var(--radius-md); background: var(--bg-input);
 }
 .editable-row-fields {
   flex: 1 1 auto; min-width: 0;
@@ -5278,7 +5299,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .editable-row-fields > input[type="time"] {
   font: inherit; font-size: var(--text-sm);
   padding: 0 10px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--hairline);
   background: var(--bg-input); color: var(--text-primary);
 }
@@ -5403,7 +5424,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .reports-payload {
   margin: 8px 0 0;
   padding: 10px 12px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   background: var(--bg-input);
   border: 1px solid var(--hairline);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -5581,7 +5602,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 .editable-row-card {
   display: flex; flex-direction: column; gap: 8px;
   padding: 10px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--hairline);
 }
 /* The controls row inside a card sits flush — the card already provides the
@@ -5613,7 +5634,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   display: flex; flex-direction: column; gap: 8px; }
 .reports-task {
   display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 10px;
-  padding: 10px 12px; border-radius: var(--radius-md, 8px);
+  padding: 10px 12px; border-radius: var(--radius-md);
   background: var(--bg-input); border-left: 3px solid var(--hairline);
 }
 .reports-task-text { flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); }

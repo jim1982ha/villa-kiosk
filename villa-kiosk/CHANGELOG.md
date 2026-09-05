@@ -1,3 +1,19 @@
+## 2.927.0
+
+### Changed — one place to change what a list row looks like
+Four kinds of row exist across the app — a bordered card, a stacked entry with a
+coloured edge, a tappable row and a form row — and each had its own copy of the
+same spacing and corner values written out by hand. Nothing looks different:
+every measurement is unchanged to the pixel. What changed is that those values
+now have one home, so adjusting how a list feels is one edit rather than four,
+and a row that drifts away from the family is caught by a test.
+
+⚠️ The four were NOT merged into one. They differ in direction, alignment and
+edge treatment because they are four different things; collapsing them would
+have changed how every list on the wall tablet looks, to satisfy a resemblance
+rather than a shared rule. A test now also fails if a later change quietly makes
+them identical, so that stays a decision somebody makes on purpose.
+
 ## 2.926.0
 
 ### Fixed — four ways a screen or a message said the wrong thing
