@@ -427,15 +427,22 @@ export default function ReportsModal(
               in `TABS` is `configure: true`, so a reader without `editConfig`
               filters the list to empty. Before 2026-09-06 that produced a modal
               with no chips and no body — indistinguishable from a load that had
-              silently failed. It is still the wrong OUTCOME for a facility
-              manager, who is admitted here precisely to reach the tasks a brief
-              raised: whether one of these steps should stop being owner-only is
-              a ruling, not a rendering decision, so this states the situation
-              rather than guessing at it. */}
+              silently failed.
+              ⚠️ AND IT IS A SIGNPOST, NOT AN APOLOGY. The first version said
+              "ask the owner if you need one of these opened up", which reads as
+              a dead end and is wrong: a facility manager is NOT missing
+              anything. This modal admitted them when it held the "What it asked
+              for" list; that list moved to Act & Tell in the agent's own modal,
+              which opens on `manageFacility` — theirs — and `AgentTodo` reads
+              the same capability for its Done button. Nothing here needs
+              un-gating: every step IS owner configuration, and one opened up
+              would offer a save that `PUT /reports-config` refuses. What was
+              missing is the sentence telling them where their jobs are. */}
           {tab === null && (
             <p className="fm-empty">
-              Every section here is owner-only, so there is nothing to show for
-              your role. Ask the owner if you need one of these opened up.
+              Every section here is a setting only the owner can change. The
+              jobs a briefing raised for you are not here — open VESTA Agent
+              and go to “Act &amp; Tell”, where you can tick them off.
             </p>
           )}
           {notice && noticeOpen && (

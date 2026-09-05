@@ -1,3 +1,17 @@
+## 2.928.0
+
+### Fixed — Briefings now tells the Facility Manager where their jobs are
+Opening Briefings as a Facility Manager showed an explanation that every section
+is owner-only, and left it there. That was a dead end: their jobs are not
+missing, they are one door along, on VESTA Agent under "Act & Tell", where they
+can already tick them off. The panel now says so.
+
+⚠️ Nothing was opened up, and that is deliberate. Every step in Briefings is a
+setting only the owner can save — un-gating one would offer a save the add-on
+refuses. The list a Facility Manager was originally admitted for was retired on
+purpose when the automations that fed it were, and it has since been replaced by
+the agent's own jobs list.
+
 ## 2.927.0
 
 ### Changed — one place to change what a list row looks like
