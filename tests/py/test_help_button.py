@@ -48,7 +48,7 @@ def test_the_help_rung_is_a_band_the_ladder_actually_has() -> None:
     """⚠️ A STEP NOTHING RECOGNISES WOULD SILENTLY DISABLE THE WITHDRAWAL —
     `_help_is_spent` returns False for an unknown step, by design, so a typo
     here fails OPEN and 🆘 is drawn forever with nothing to say why."""
-    assert route_mod.HELP_STEP in [name for _, name in route_mod.BANDS]
+    assert route_mod.HELP_STEP in [band.step for band in route_mod.BANDS]
 
 
 def test_help_is_offered_while_the_ladder_has_not_reached_its_rung() -> None:
@@ -169,3 +169,84 @@ def test_the_escalation_message_is_drawn_as_though_the_step_had_landed() -> None
         "already is")
     assert "_send_alert(session, drawn_as" in src, (
         "the projected row is built and then not used for the draw")
+
+
+# ── A rung carries who it reaches ──────────────────────────────────────────
+
+def test_a_rung_says_who_it_reaches_rather_than_being_matched_by_NAME() -> None:
+    """⚠️ RENAMING A RUNG USED TO BE A SILENT ROUTING CHANGE.
+
+    `outbox._escalate_one` derived the role by comparing `verdict.step` against
+    two of the three band names as bare string literals. Rename a rung in
+    `route.BANDS` and it compiled, passed mypy, and sent the FIRST rung to the
+    owner instead of back to whoever was already told — "a louder copy of
+    something already ignored", which is what the ladder exists to avoid.
+    """
+    from vesta.supervise.agent import route as route_mod
+
+    assert [b.reaches for b in route_mod.BANDS] == ["same", "owner", "all"], (
+        "the rungs no longer say who they reach in order")
+    for band in route_mod.BANDS:
+        assert band.reaches, "%r reaches nobody" % (band,)
+
+
+def test_the_escalate_verdict_carries_the_reach() -> None:
+    from vesta.supervise.agent import route as route_mod
+
+    first = route_mod.escalate(minutes_open=20, acknowledged=False,
+                               condition_cleared=False)
+    assert first.act and first.reaches == "same", first
+    last = route_mod.escalate(minutes_open=200, acknowledged=False,
+                              condition_cleared=False)
+    assert last.act and last.reaches == "all", last
+    quiet = route_mod.escalate(minutes_open=1, acknowledged=False,
+                               condition_cleared=False)
+    assert not quiet.act and quiet.reaches == "", quiet
+
+
+def test_outbox_no_longer_matches_a_band_by_its_NAME() -> None:
+    """Pins the direction this was fixed in."""
+    import inspect
+
+    from conftest import strip_prose
+    from vesta.supervise.agent import outbox as outbox_mod
+
+    code = strip_prose(inspect.getsource(outbox_mod))
+    for name in ("resend to the same target", "every configured target, once"):
+        assert name not in code, (
+            "outbox matches the band name %r again, so renaming that rung is a "
+            "silent routing change" % name)
+
+
+def test_the_audience_to_role_inversion_has_ONE_home() -> None:
+    """⚠️ IT WAS HAND-INVERTED TWICE IN ONE MODULE, once under a comment saying
+    "`people` OWNS THE MAPPING ... which is why this is a lookup" — directly
+    above an inline conditional that was not a lookup."""
+    import inspect
+
+    from conftest import strip_prose
+    from vesta.supervise.agent import outbox as outbox_mod
+    from vesta.supervise.agent import route as route_mod
+
+    assert route_mod.role_for_audience("facility") == "ops"
+    assert route_mod.role_for_audience("owner") == "owner"
+    assert route_mod.role_for_audience("") == "owner"
+
+    code = strip_prose(inspect.getsource(outbox_mod))
+    assert '"ops" if audience == "facility"' not in code, (
+        "outbox hand-inverts AUDIENCE_OF_ROLE again")
+    assert 'str(concern.get("audience")) == "facility"' not in code, (
+        "outbox hand-inverts AUDIENCE_OF_ROLE again, in _escalate_one")
+
+
+def test_role_for_audience_is_derived_from_the_table_not_restated() -> None:
+    """A restated inverse drifts; a derived one cannot."""
+    from vesta.adapters import people as people_mod
+    from vesta.supervise.agent import route as route_mod
+
+    for role, audience in people_mod.AUDIENCE_OF_ROLE.items():
+        if role == "guest":
+            continue          # guest shares the owner audience; see CONTEXT.md
+        assert route_mod.role_for_audience(audience) == role, (
+            "role_for_audience disagrees with people.AUDIENCE_OF_ROLE for %r"
+            % role)

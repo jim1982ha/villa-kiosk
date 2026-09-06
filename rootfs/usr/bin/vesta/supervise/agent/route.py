@@ -66,12 +66,36 @@ MATRIX: Dict[str, Row] = {
 #: rule `standing.severity_of` states for kinds.
 DEFAULT_ROW: Row = MATRIX["warning"]
 
+@dataclass(frozen=True)
+class Band:
+    """One rung of the Chase: when it fires, what it is called, and WHO IT
+    REACHES.
+
+    ⚠️ `reaches` IS NEW (2.951.0) AND IT CLOSES A SILENT ROUTING HAZARD. A rung
+    used to be `(minutes, name)`, so its name was its only identity — and
+    `outbox._escalate_one` derived the role by matching two of the three names
+    as bare string literals. Renaming a rung in this table compiled, passed
+    mypy, and quietly sent the first rung to the owner instead of back to the
+    Facility Manager: "a louder copy of something already ignored", which is
+    exactly what `help_counterpart`'s comment says the ladder exists to avoid.
+
+    `reaches` is one of:
+      "same"  — resend to whoever was already told
+      "owner" — add the owner to the existing target
+      "all"   — every configured target, once
+    """
+
+    after_minutes: int
+    step: str
+    reaches: str
+
+
 #: The escalation bands, in minutes. ⚠️ TIME IS THE LAST QUESTION ASKED, not
 #: the first — see `escalate`.
-BANDS: Tuple[Tuple[int, str], ...] = (
-    (15, "resend to the same target"),
-    (45, "add the owner"),
-    (90, "every configured target, once"),
+BANDS: Tuple[Band, ...] = (
+    Band(15, "resend to the same target", "same"),
+    Band(45, "add the owner", "owner"),
+    Band(90, "every configured target, once", "all"),
 )
 
 #: The rung 🆘 jumps straight to. ⚠️ NAMED HERE, BESIDE THE LADDER IT INDEXES,
@@ -81,7 +105,7 @@ BANDS: Tuple[Tuple[int, str], ...] = (
 #: literal in each would be two spellings of one rung, and the button set would
 #: stop matching the act the moment either moved. `test_help_button` pins that it
 #: is a real band rather than a string nothing recognises.
-HELP_STEP: str = "add the owner"
+HELP_STEP: str = BANDS[1].step
 
 #: What 🆘 writes into `escalated_step`, per counterpart.
 #:
@@ -100,6 +124,28 @@ HELP_STEPS: Dict[str, str] = {
     "owner": "asked the owner for help",
     "ops": "asked the facility manager for help",
 }
+
+
+def role_for_audience(audience: str) -> str:
+    """The profile that reads a finding written for this audience.
+
+    ⚠️ THE INVERSE OF `people.AUDIENCE_OF_ROLE`, AND IT LIVES BESIDE
+    `help_counterpart` BECAUSE THEY ARE THE SAME FACT (2.951.0). `outbox`
+    hand-inverted the table in TWO places, once with a comment claiming
+    "`people` OWNS THE MAPPING ... which is why this is a lookup and not the
+    audience string" directly above an inline conditional that is not a lookup.
+
+    ⚠️ DERIVED FROM THE TABLE, NOT RESTATED. CONTEXT.md is emphatic that
+    Audience and Role deliberately do not map one-to-one — two roles share the
+    owner audience — so the inverse is only well-defined in the direction that
+    matters here: which profile is TOLD about a finding of this audience.
+    """
+    from vesta.adapters import people as people_mod
+    want = str(audience or "owner").strip().lower()
+    for role, aud in people_mod.AUDIENCE_OF_ROLE.items():
+        if aud == want and role != "guest":
+            return role
+    return "owner"
 
 
 def help_counterpart(audience: str) -> str:
@@ -126,7 +172,7 @@ def help_counterpart(audience: str) -> str:
 #: printed "by 14:32 it is re-sent to the same place". Found by /dry-audit's
 #: claim audit after the owner asked how to test the ladder — a promise on a
 #: screen, a constant nobody read, and no clock between them.
-SWEEP_MINUTES: int = BANDS[0][0]
+SWEEP_MINUTES: int = BANDS[0].after_minutes
 
 
 @dataclass
@@ -354,6 +400,9 @@ def _held_informational(*, occupied: Optional[bool], quiet_hours: bool
 class Escalation:
     act: bool
     step: str
+    #: WHO this rung reaches — "same", "owner", "all", or "" when no rung fired.
+    #: ⚠️ CARRIED, NOT INFERRED FROM `step` (2.951.0). See `Band`.
+    reaches: str
     reason: str
     #: ⚠️ WHO TO TELL, WHEN THE STEP ALONE DOES NOT SAY (2026-09-06). The
     #: automatic ladder leaves this empty and `_escalate_one` derives the role
@@ -385,18 +434,24 @@ def escalate(*, minutes_open: float, acknowledged: bool,
     4. **Only then, the time bands.**
     """
     if str(severity).lower() != "critical":
-        return Escalation(False, "", "only a critical escalates")
+        return Escalation(False, "", "", "only a critical escalates")
     if condition_cleared:
-        return Escalation(False, "stand down",
+        return Escalation(False, "stand down", "",
                           "the condition cleared on its own; escalating a "
                           "problem that fixed itself is how trust is lost")
     if acknowledged:
-        return Escalation(False, "acknowledged", "somebody has it")
+        return Escalation(False, "acknowledged", "", "somebody has it")
     if guests_present and not facility_reachable:
-        return Escalation(True, "add the owner",
+        # ⚠️ THE CONSTANT, NOT THE LITERAL. This line spelled "add the owner"
+        # by hand 311 lines below the declaration that names it — in the very
+        # module whose comment says "a literal in each would be two spellings
+        # of one rung, and the button set would stop matching the act the
+        # moment either moved".
+        return Escalation(True, HELP_STEP, BANDS[1].reaches,
                           "the facility manager is not reachable and guests are "
                           "in residence, so this does not wait for a band")
-    for after, step in reversed(BANDS):
-        if minutes_open >= after:
-            return Escalation(True, step, f"unacknowledged for {after}+ minutes")
-    return Escalation(False, "", "inside the first band")
+    for band in reversed(BANDS):
+        if minutes_open >= band.after_minutes:
+            return Escalation(True, band.step, band.reaches,
+                              f"unacknowledged for {band.after_minutes}+ minutes")
+    return Escalation(False, "", "", "inside the first band")

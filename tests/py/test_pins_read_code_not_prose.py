@@ -95,7 +95,6 @@ KNOWN_RAW: Set[str] = {
     "test_dedupe.py",
     "test_flag_outcome.py",
     "test_heartbeat.py",
-    "test_help_button.py",
     "test_materiality.py",
     "test_module_visibility.py",
     "test_narrate_and_deliver.py",

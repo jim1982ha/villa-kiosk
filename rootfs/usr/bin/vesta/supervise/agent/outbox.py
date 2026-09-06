@@ -271,11 +271,16 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # `to_role` empty and the band decides, exactly as before. 🆘 sets it,
     # because "ask for help" means the OTHER channel and no band name can say
     # which that is — it depends on who was told first.
+    # ⚠️ THE RUNG CARRIES WHO IT REACHES (2.951.0). This used to match two of
+    # the three BAND NAMES as bare string literals, so renaming a rung in
+    # `route.BANDS` compiled, passed mypy, and quietly sent the first rung to
+    # the owner instead of back to the Facility Manager — "a louder copy of
+    # something already ignored", which is the thing the ladder exists to avoid.
     role = verdict.to_role or (
-        "owner" if verdict.step != "resend to the same target" else (
-            "ops" if str(concern.get("audience")) == "facility" else "owner"))
+        route_mod.role_for_audience(str(concern.get("audience") or "owner"))
+        if verdict.reaches == "same" else "owner")
     targets = people_mod.targets_for_role(config, role)
-    if verdict.step == "every configured target, once":
+    if verdict.reaches == "all":
         targets = list(dict.fromkeys(
             list(targets) + list(people_mod.targets_for_role(config, "ops"))))
     if not targets:
@@ -566,12 +571,14 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     from vesta.adapters import people as people_mod
 
     audience = str(concern.get("audience") or "owner")
-    # ⚠️ THE AUDIENCE IS A PROFILE HERE, AND `people` OWNS THE MAPPING. An
-    # audience is who a finding is WRITTEN FOR; a role is who is logged in, and
-    # `contracts` keeps the two vocabularies apart for good reasons. `ops` is
-    # the Facility Manager's profile id, which is why this is a lookup and not
-    # the audience string.
-    role = "ops" if audience == "facility" else "owner"
+    # ⚠️ NOW ACTUALLY A LOOKUP. An audience is who a finding is WRITTEN FOR; a
+    # role is who is logged in, and `contracts` keeps the two vocabularies apart
+    # for good reasons. This comment used to claim "`people` OWNS THE MAPPING
+    # ... which is why this is a lookup and not the audience string" directly
+    # above an inline conditional that was not a lookup — and the same
+    # hand-inversion appeared again in `_escalate_one`. `route.role_for_audience`
+    # derives it from `people.AUDIENCE_OF_ROLE`, beside its own inverse.
+    role = route_mod.role_for_audience(audience)
     targets = people_mod.targets_for_role(config, role)
     if not targets:
         # ⚠️ THE SAME FALLBACK THE BRIEFING HAS HAD ALL ALONG, and its absence

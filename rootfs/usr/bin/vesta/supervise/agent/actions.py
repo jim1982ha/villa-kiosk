@@ -289,7 +289,7 @@ def _help_is_spent(concern: Mapping[str, Any]) -> bool:
         return True
     # ⚠️ AND SO IS "EVERYBODY HAS BEEN TOLD". `route.BANDS` is ordered, so the
     # last rung — every configured target, once — leaves 🆘 nobody left to ask.
-    order = [name for _, name in route_mod.BANDS]
+    order = [band.step for band in route_mod.BANDS]
     if step not in order or route_mod.HELP_STEP not in order:
         return False
     return order.index(step) >= order.index(route_mod.HELP_STEP)

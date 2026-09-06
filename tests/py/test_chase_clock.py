@@ -44,14 +44,14 @@ def test_the_sweep_cadence_is_DERIVED_from_the_first_band() -> None:
     """⚠️ ONE RHYTHM, ONE NUMBER (owner's instruction). Two independent
     literals for the same cadence is how a 15-minute promise comes to be
     checked on a 5-minute clock — or, as it shipped, on none."""
-    assert route.SWEEP_MINUTES == route.BANDS[0][0]
+    assert route.SWEEP_MINUTES == route.BANDS[0].after_minutes
 
 
 def test_the_cadence_is_not_a_LITERAL_that_happens_to_match() -> None:
     """A hard-coded 15 would pass the test above and drift the day somebody
     retunes the first band, which is the whole failure being fixed."""
     src = strip_prose(inspect.getsource(route))
-    assert "SWEEP_MINUTES: int = BANDS[0][0]" in src, (
+    assert "SWEEP_MINUTES: int = BANDS[0].after_minutes" in src, (
         "the sweep cadence is written as a number rather than derived from the "
         "band it must match")
 

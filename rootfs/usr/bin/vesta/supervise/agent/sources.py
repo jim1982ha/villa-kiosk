@@ -55,6 +55,7 @@ from vesta.adapters.log import note, swallow, warn
 #: enough — a second copy of `MIN_SAMPLES` is how the two would drift.
 from vesta.supervise.observe import salience as salience_mod
 from vesta.supervise.observe import snapshot as snapshot_mod
+from vesta.supervise.agent import survey as survey_mod
 # ⚠️ MODULE LEVEL, NOT INSIDE THE FUNCTION. The path constants below are
 # rooted on DATA_DIR at import so `store.configure()` reaches them; a
 # deferred import cannot serve a module-level f-string. store imports
@@ -186,10 +187,10 @@ def build_scorer(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     whose state is a WORD is offered three lenses in order: a state never seen
     before (`score_categorical`) beats a state held longer than ever before
     (`score_duration`), which beats a day with an unusual number of changes
-    (`score_frequency`). The first lens with a score wins; failing that, a lens
-    the duration lens's answer is the row, quiet or unscorable — never
-    categorical's "one of its usual states", which is true of everything and
-    says nothing. `_best` is that rule, stated once.
+    (`score_frequency`). The first lens with a score wins; when NONE scores, the
+    DURATION lens's answer is the row, quiet or unscorable — never categorical's
+    "one of its usual states", which is true of everything and says nothing.
+    `_best` is that rule, stated once.
     """
     def scorer() -> List[salience_mod.Salience]:
         entries = list(rows) if rows is not None else _journal_rows()
@@ -230,7 +231,9 @@ def build_scorer(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     return scorer
 
 
-def _best(*candidates: salience_mod.Salience) -> salience_mod.Salience:
+def _best(categorical: salience_mod.Salience,
+          duration: salience_mod.Salience,
+          frequency: salience_mod.Salience) -> salience_mod.Salience:
     """The one row an entity gets, from the lenses offered to it in order.
 
     The first lens with a SCORE wins, in the order offered. When none scores,
@@ -244,10 +247,15 @@ def _best(*candidates: salience_mod.Salience) -> salience_mod.Salience:
     also what makes `unscorable_census` honest about locks and lights: filed
     under categorical-quiet they would never appear in it at all.
     """
-    for item in candidates:
+    # ⚠️ NAMED, NOT INDEXED (2.951.0). This was `candidates[1]` over a `*args`,
+    # so "the duration lens" was true only because of the CALLER's argument
+    # order — reordering the three `score_*` calls in `build_scorer`, a change
+    # that reads as cosmetic, silently made the fallback the frequency lens,
+    # which the paragraph above argues at length is the wrong answer.
+    for item in (categorical, duration, frequency):
         if item.score:
             return item
-    return candidates[1] if len(candidates) > 1 else candidates[0]
+    return duration
 
 
 def build_profile_source(rows: Optional[Sequence[Mapping[str, Any]]] = None
@@ -322,7 +330,11 @@ CAPABILITIES_FILE: str = f"{store_mod.DATA_DIR}/vesta/capabilities.json"
 #: something, not on a cadence. Surveying per triage pass is ~96 fan-outs a day
 #: across Home Assistant's registries for an answer that moves a few times a
 #: year, and that cost is the whole reason this was left unwired.
-CAPABILITY_MAX_AGE_H: int = 24
+#: ⚠️ THE SHARED SURVEY CLOCK (2.951.0). Three surveys read this — the room
+#: layout, the capabilities and the measurement classes — so a constant
+#: named after ONE of them governed all three, while `upstream` declared an
+#: identical 24 of its own.
+CAPABILITY_MAX_AGE_H: int = survey_mod.MAX_AGE_H
 
 
 def absent_capability_sentences() -> Optional[List[str]]:
@@ -405,12 +417,12 @@ async def refresh_layout(session: Any, *, now: Optional[float] = None,
     if session is None:
         return False
     stamp = time.time() if now is None else now
-    hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
     try:
         from vesta.adapters import store
-        raw = store.read_json(LAYOUT_FILE, {})
-        at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
-        if stamp - at < max(1, hours) * 3600.0:
+        # The clock and the store are `agent/survey`; what stays here is
+        # the fetch, the shaping, and this survey's own "is this answer
+        # real" refusal below.
+        if survey_mod.is_fresh(LAYOUT_FILE, now=stamp, max_age_h=max_age_h):
             return False
 
         # ⚠️ THESE TWO LINES ARE AN INTERIM TRANSPORT AND TASK-113 REPLACES
@@ -442,8 +454,8 @@ async def refresh_layout(session: Any, *, now: Optional[float] = None,
             # "this villa has no rooms" as a finding, which is the exact
             # sentence that started this.
             return False
-        store.write_json(LAYOUT_FILE,
-                         {"at": stamp, "areas": names, "floors": levels})
+        survey_mod.save(LAYOUT_FILE, {"areas": names, "floors": levels},
+                        now=stamp)
     except Exception as err:  # noqa: BLE001 - a survey is not worth a failed pass
         swallow("could not read the villa's layout", err)
         return False
@@ -467,12 +479,12 @@ async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
     if session is None:
         return False
     stamp = time.time() if now is None else now
-    hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
     try:
         from vesta.adapters import store
-        raw = store.read_json(CAPABILITIES_FILE, {})
-        at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
-        if stamp - at < max(1, hours) * 3600.0:
+        # The clock and the store are `agent/survey`; what stays here is
+        # the fetch, the shaping, and this survey's own "is this answer
+        # real" refusal below.
+        if survey_mod.is_fresh(CAPABILITIES_FILE, now=stamp, max_age_h=max_age_h):
             return False
 
         from vesta.adapters import discovery as discovery_mod
@@ -482,8 +494,8 @@ async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
             # would record "no capabilities" as a finding about the villa.
             return False
         sentences = snapshot_mod.absent_sentences(found)
-        store.write_json(CAPABILITIES_FILE,
-                         {"at": stamp, "sentences": list(sentences)})
+        survey_mod.save(CAPABILITIES_FILE, {"sentences": list(sentences)},
+                        now=stamp)
     except Exception as err:  # noqa: BLE001 - a survey is not worth a failed pass
         swallow("could not survey the villa's capabilities", err)
         return False
@@ -893,12 +905,12 @@ async def refresh_measures(session: Any, *, now: Optional[float] = None,
     if session is None:
         return False
     stamp = time.time() if now is None else now
-    hours = CAPABILITY_MAX_AGE_H if max_age_h is None else max_age_h
     try:
         from vesta.adapters import store
-        raw = store.read_json(MEASURES_FILE, {})
-        at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
-        if stamp - at < max(1, hours) * 3600.0:
+        # The clock and the store are `agent/survey`; what stays here is
+        # the fetch, the shaping, and this survey's own "is this answer
+        # real" refusal below.
+        if survey_mod.is_fresh(MEASURES_FILE, now=stamp, max_age_h=max_age_h):
             return False
         from vesta.adapters.hass import HassClient
         async with HassClient(session) as hass:
@@ -921,7 +933,7 @@ async def refresh_measures(session: Any, *, now: Optional[float] = None,
             # concern under "reading", quietly merging kinds an owner has
             # already tuned apart.
             return False
-        store.write_json(MEASURES_FILE, {"at": stamp, "measures": found})
+        survey_mod.save(MEASURES_FILE, {"measures": found}, now=stamp)
     except Exception as err:  # noqa: BLE001
         swallow("could not read what the villa's entities measure", err)
         return False

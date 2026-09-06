@@ -72,6 +72,15 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `test_naming`'s label table. Shaped like the reference villa's — a
+    # "Power" suffix the model drops, and a compound naming two devices — so
+    # the two OPPOSITE tie-breaks and the share guard have something to bite
+    # on. `switch.short`/`switch.long` exist only to make "which of these two
+    # wins" answerable in each direction.
+    "switch.jet_pf", "switch.short", "switch.long",
+    # `test_survey_clock`'s fake HA reply — one row, so the stale path has
+    # something to shape.
+    "sensor.y",
     # `test_flag_type_cost`'s journal fixture. Numbered probes, generated in a
     # loop — the test asserts that journal reads do NOT scale with the number of
     # devices, so the ids exist only to make that number vary (2 against 40).

@@ -1130,7 +1130,11 @@ def test_the_chase_line_matches_the_bands_the_BACKEND_actually_uses() -> None:
     # configured target, once") — a pin that silently measured a subset and
     # reported the code as wrong. The instrument, not the code: this file's own
     # header records the same mistake being made with an end-marker regex.
-    backend = [int(m) for m in _re.findall(r"\((\d+), \"[^\"]+\"\)", route)]
+    # ⚠️ A RUNG IS A `Band(minutes, step, reaches)` SINCE 2.951.0, not a bare
+    # tuple. When that landed this scan matched nothing and the `assert backend
+    # and shown` below caught it — which is the guard this file's own header
+    # says an instrument needs, and the reason the empty case is asserted.
+    backend = [int(m) for m in _re.findall(r"Band\((\d+), \"[^\"]+\", \"[^\"]+\"\)", route)]
     shown = [int(m) for m in _re.findall(r"\[(\d+), \"", panel)]
     assert backend and shown, (backend, shown)
     assert shown == backend, (

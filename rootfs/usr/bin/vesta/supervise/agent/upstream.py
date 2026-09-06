@@ -46,6 +46,7 @@ from vesta.adapters.log import log, swallow
 # deferred import cannot serve a module-level f-string. store imports
 # nothing from this package, so there is no cycle to avoid here.
 from vesta.adapters import store as store_mod
+from vesta.supervise.agent import survey as survey_mod
 
 SUPERVISOR = "http://supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -63,7 +64,11 @@ SLUG_SUFFIX: str = "_ha_mcp"
 #: round trips a day for an answer that moves monthly is the cost that left
 #: this unwired in the first place.
 CATALOGUE_FILE: str = f"{store_mod.DATA_DIR}/vesta/upstream.json"
-CATALOGUE_MAX_AGE_H: int = 24
+#: ⚠️ THE SHARED SURVEY CLOCK (2.951.0). This was an identical 24 declared
+#: separately, beside three other surveys reading a constant named after a
+#: fourth thing (`CAPABILITY_MAX_AGE_H`). Four surveys, two constants, one
+#: number — now one constant.
+CATALOGUE_MAX_AGE_H: int = survey_mod.MAX_AGE_H
 
 #: ⚠️ THE TIMEOUT IS SHORT ON PURPOSE. This sits between a person's question and
 #: its answer, and the upstream is one hop further away than the websocket it
@@ -360,12 +365,12 @@ async def refresh(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     if session is None:
         return False
     stamp = time.time() if now is None else now
-    hours = CATALOGUE_MAX_AGE_H if max_age_h is None else max_age_h
     try:
         from vesta.adapters import store
-        raw = store.read_json(CATALOGUE_FILE, {})
-        at = float(raw.get("at") or 0) if isinstance(raw, Mapping) else 0.0
-        if stamp - at < max(1, hours) * 3600.0:
+        # The clock and the store are `agent/survey` — the same ones the other
+        # three surveys use. `CATALOGUE_MAX_AGE_H` was an identical 24 declared
+        # separately here.
+        if survey_mod.is_fresh(CATALOGUE_FILE, now=stamp, max_age_h=max_age_h):
             return False
 
         url = await endpoint(session, config)
@@ -390,8 +395,8 @@ async def refresh(session: Any, *, config: Optional[Mapping[str, Any]] = None,
             # "Home Assistant offers no tools", and the fallback readers would
             # look like a deliberate choice rather than a failure.
             return False
-        store.write_json(CATALOGUE_FILE,
-                         {"at": stamp, "url": url, "tools": list(tools)})
+        survey_mod.save(CATALOGUE_FILE, {"url": url, "tools": list(tools)},
+                        now=stamp)
         log(f"upstream: {len(tools)} tool(s) catalogued from ha_mcp")
     except Exception as err:  # noqa: BLE001 - a survey is not worth a failed pass
         swallow("could not read the upstream tool catalogue", err)
