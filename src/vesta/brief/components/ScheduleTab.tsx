@@ -1,4 +1,4 @@
-// src/components/reports/ScheduleTab.tsx
+// src/vesta/brief/components/ScheduleTab.tsx
 // When a report arrives, for whom, and where it goes.
 //
 // ⚠️ THE HOUR IS WALL-CLOCK, IN THE VILLA'S OWN TIMEZONE — never UTC. An owner

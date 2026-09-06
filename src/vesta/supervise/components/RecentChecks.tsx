@@ -1,4 +1,4 @@
-// src/components/agent/RecentChecks.tsx
+// src/vesta/supervise/components/RecentChecks.tsx
 //
 // The triage trace: did the villa look, what did it flag, and what became of it.
 //

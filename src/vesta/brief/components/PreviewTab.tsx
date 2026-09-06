@@ -1,4 +1,4 @@
-// src/components/reports/PreviewTab.tsx
+// src/vesta/brief/components/PreviewTab.tsx
 // Compose a report and read it, before deciding to receive them.
 //
 // ⚠️ THIS TAB IS WHY THE `preview` FLAG EXISTS. "Enable it and see what

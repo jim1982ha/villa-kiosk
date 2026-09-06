@@ -1,4 +1,4 @@
-// src/components/settings/FlagTypesPanel.tsx
+// src/vesta/supervise/components/FlagTypesPanel.tsx
 //
 // What the villa has been taught to raise more, or less, readily.
 //

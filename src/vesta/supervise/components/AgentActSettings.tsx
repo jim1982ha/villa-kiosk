@@ -1,4 +1,4 @@
-// src/components/settings/AgentActSettings.tsx
+// src/vesta/supervise/components/AgentActSettings.tsx
 //
 // What the villa is PERMITTED to do: when it may interrupt you, where jobs go,
 // and whether it may touch anything.

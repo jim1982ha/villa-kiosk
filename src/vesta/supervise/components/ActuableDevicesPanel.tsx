@@ -1,4 +1,4 @@
-// src/components/settings/ActuableDevicesPanel.tsx
+// src/vesta/supervise/components/ActuableDevicesPanel.tsx
 //
 // WHICH devices the villa may operate on its own. The second half of the
 // actuation switch, and until v2.718.0 there was no way to fill it in.

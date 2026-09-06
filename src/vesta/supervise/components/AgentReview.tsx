@@ -1,4 +1,4 @@
-// src/components/agent/AgentReview.tsx
+// src/vesta/supervise/components/AgentReview.tsx
 //
 // The half of TASK-094 that makes the queue reachable: procedures the agent has
 // proposed, and a person deciding on each one.

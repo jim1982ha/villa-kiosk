@@ -1,4 +1,4 @@
-// src/components/reports/CoverageTab.tsx
+// src/vesta/brief/components/CoverageTab.tsx
 // What this property can be asked about, and what it cannot.
 //
 // ⚠️ THE ABSENT VOICE, NEVER `capabilityMeaning`. That table says what a

@@ -1,4 +1,4 @@
-// src/components/agent/ConcernLifecycle.tsx
+// src/vesta/supervise/components/ConcernLifecycle.tsx
 //
 // Where a concern is in its life, and what the settled ones are worth.
 //

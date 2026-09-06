@@ -1,4 +1,4 @@
-// src/agent/AgentConfigDraft.tsx
+// src/vesta/supervise/AgentConfigDraft.tsx
 //
 // ONE draft of `/agent-config`, shared by every panel that edits a slice of it,
 // and committed by the dialog's own Save button.

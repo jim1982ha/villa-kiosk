@@ -1,4 +1,4 @@
-// src/components/settings/ApiKeyPanel.tsx
+// src/vesta/brief/components/ApiKeyPanel.tsx
 //
 // The provider credential, in the tab that spends it.
 //

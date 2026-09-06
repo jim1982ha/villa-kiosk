@@ -558,7 +558,8 @@ def test_a_surface_is_reachable_by_the_role_it_was_built_for() -> None:
     feature was unreachable by the only person it existed for.
 
     ⚠️ FIXED ON THE DIALOG, NOT ON THIS TEST (2026-08-22). It passed throughout
-    the bug, because `FacilityModal` renders TasksTab too and IS gated on
+    the bug, because `FacilityModal` ALSO rendered the task list of the day
+    (`TasksTab`, since retired with the blueprints that fed it) and IS gated on
     `manageFacility` — one reachable host satisfies it, so a second host being
     walled off was invisible here. The owner reported the wall directly: "the
     Facility Manager role don't have access to the Briefings modal". Briefings

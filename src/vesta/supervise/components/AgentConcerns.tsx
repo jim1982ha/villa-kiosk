@@ -1,4 +1,4 @@
-// src/components/agent/AgentConcerns.tsx
+// src/vesta/supervise/components/AgentConcerns.tsx
 //
 // What the agent has concluded, on the wall. TASK-061, TASK-062.
 //

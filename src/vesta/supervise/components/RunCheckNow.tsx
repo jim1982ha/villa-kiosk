@@ -1,4 +1,4 @@
-// src/components/agent/RunCheckNow.tsx
+// src/vesta/supervise/components/RunCheckNow.tsx
 //
 // The one control that makes any of this testable without waiting six hours.
 //

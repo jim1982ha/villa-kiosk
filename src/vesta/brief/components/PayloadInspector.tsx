@@ -1,4 +1,4 @@
-// src/components/reports/PayloadInspector.tsx
+// src/vesta/brief/components/PayloadInspector.tsx
 // Exactly what would leave this property, shown rather than promised.
 //
 // ⚠️ THE PLAN PUT THIS AT THE END OF ONBOARDING, BEFORE "ENABLE" IS OFFERED,

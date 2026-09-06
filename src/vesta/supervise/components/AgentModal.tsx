@@ -1,4 +1,4 @@
-// src/components/agent/AgentModal.tsx
+// src/vesta/supervise/components/AgentModal.tsx
 //
 // Everything the agent produces, and nothing else. The whole reasoning layer in
 // one dialog.

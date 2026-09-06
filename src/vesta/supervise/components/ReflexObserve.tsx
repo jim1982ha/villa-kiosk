@@ -1,4 +1,4 @@
-// src/components/agent/ReflexObserve.tsx
+// src/vesta/supervise/components/ReflexObserve.tsx
 //
 // The two deterministic tiers underneath the agent: what acts by itself, and
 // what is being recorded. Neither involves a model and both work with no

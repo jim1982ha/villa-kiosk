@@ -1,4 +1,4 @@
-// src/reports/reportsApi.ts
+// src/vesta/brief/reportsApi.ts
 // Client for the reports subsystem's endpoints, served from the add-on's own
 // /data volume like every other shared store: /reports-config, -history,
 // -diagnostics, -run-now and -secret.

@@ -1,4 +1,4 @@
-// src/components/agent/ActDeliverySection.tsx
+// src/vesta/supervise/components/ActDeliverySection.tsx
 //
 // What the villa is permitted to do, stated rather than edited.
 //

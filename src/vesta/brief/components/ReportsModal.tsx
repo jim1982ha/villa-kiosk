@@ -1,4 +1,4 @@
-// src/components/reports/ReportsModal.tsx
+// src/vesta/brief/components/ReportsModal.tsx
 // The Briefings workspace — one modal, six tabs, opened by the owner and by the
 // facility manager.
 //

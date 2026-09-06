@@ -1,4 +1,4 @@
-// src/components/reports/NarrationSection.tsx
+// src/vesta/brief/components/NarrationSection.tsx
 // Who writes the prose: the add-on itself, or an LLM provider.
 //
 // ⚠️ THE BUILT-IN WRITER IS THE PRODUCT AND THIS SECTION SAYS SO. Everything

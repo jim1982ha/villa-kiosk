@@ -1,4 +1,4 @@
-// src/components/settings/AgentTuningPanel.tsx
+// src/vesta/supervise/components/AgentTuningPanel.tsx
 //
 // The agent's cadence, budget and models — the settings that decide what it
 // costs and how loudly it speaks.

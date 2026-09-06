@@ -1,4 +1,4 @@
-// src/components/agent/AgentMemories.tsx
+// src/vesta/supervise/components/AgentMemories.tsx
 //
 // What the villa believes, and the one way to tell it otherwise. TASK-110,
 // REQ-056.

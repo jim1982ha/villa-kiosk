@@ -1,4 +1,4 @@
-// src/components/agent/tiers.tsx
+// src/vesta/shared/tiers.tsx
 //
 // The five tiers of the target architecture, as the UI's own vocabulary.
 // One definition, used by every tab, so no two describe the same tier

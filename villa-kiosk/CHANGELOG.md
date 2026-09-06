@@ -1,3 +1,13 @@
+## 2.931.0
+
+### Fixed — thirty files said they were somewhere they are not
+Most files here open with a comment naming their own path. The move into
+`src/vesta/` left thirty of those lines pointing at the old location, and four
+of the old folders survived the move as empty directories — so following a
+header led to a path that existed with no file in it, which reads as something
+deleted rather than something moved. Headers now name their real location, the
+empty folders are gone, and a test keeps both true.
+
 ## 2.930.0
 
 ### Fixed — 🆘 now asks somebody who has not seen the alert

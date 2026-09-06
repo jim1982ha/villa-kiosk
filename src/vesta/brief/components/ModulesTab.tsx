@@ -1,4 +1,4 @@
-// src/components/reports/ModulesTab.tsx
+// src/vesta/brief/components/ModulesTab.tsx
 // The whole detection picture on one tab: whether anything is listening, what
 // this property's own automations have reported, which built-in checks are
 // switched on, and — for every one that will not run — the reason.

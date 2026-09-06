@@ -1,4 +1,4 @@
-// src/components/agent/AgentProposals.tsx
+// src/vesta/supervise/components/AgentProposals.tsx
 //
 // The confirm turn, on the wall. TASK-083, REQ-029, ARCH-007.
 //

@@ -1,4 +1,4 @@
-// src/components/agent/AgentAdvancedModal.tsx
+// src/vesta/supervise/components/AgentAdvancedModal.tsx
 //
 // The agent's occasional settings, one door back from the daily ones.
 //

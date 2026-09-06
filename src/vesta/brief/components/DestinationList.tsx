@@ -1,4 +1,4 @@
-// src/components/reports/DestinationList.tsx
+// src/vesta/brief/components/DestinationList.tsx
 // Who receives one schedule's briefing: an inline button showing the current
 // choice, and a tick list behind it.
 //

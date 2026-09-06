@@ -1,4 +1,4 @@
-// src/components/settings/UsagePanel.tsx
+// src/vesta/supervise/components/UsagePanel.tsx
 // Where the API key's money went, per request, with the actor attached.
 //
 // ⚠️ IT IS NOT SCOPED TO THE NARRATION TOGGLE, AND THAT IS THE WHOLE REASON IT
