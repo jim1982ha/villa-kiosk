@@ -93,7 +93,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: No provider hostname reachable from the SPA bundle
-        # CLAUDE.md hard rule #2: the target is an iPad in a villa that may have
+        # The second hard rule: the target is an iPad in a villa that may have
         # no internet at all. LLM narration is an optional enhancement and ALL
         # of its traffic originates in the proxy — so a provider hostname
         # appearing under src/ means the browser would try to reach it, which on

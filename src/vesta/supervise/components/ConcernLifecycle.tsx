@@ -167,7 +167,8 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
       "text/csv;charset=utf-8");
   };
 
-  // ⚠️ RATINGS, NEVER DISMISSALS — see ADR 0002 and `silencedSubjects`. This
+  // ⚠️ RATINGS, NEVER DISMISSALS: five dismissals of one subject suppress
+  // nothing; three ⬇️ suppress it. See `silencedSubjects`. This
   // counted `stateOf(c) === "dismissed"` under a comment claiming it was
   // "computed the same way the backend counts them". It was not: three 🚫
   // announced a silencing that had not happened, and three ⬇️ said nothing

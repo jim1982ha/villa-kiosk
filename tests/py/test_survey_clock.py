@@ -288,3 +288,87 @@ def test_both_weekday_modules_degrade_the_same_way_on_a_bad_index():
     assert level_anomaly._weekday_name(0) == level_shortfall.WEEKDAY_NAME[0]
     assert level_anomaly._weekday_name(99) == "that day"
     assert level_anomaly._weekday_name(-1) == "that day"
+
+
+def test_an_outage_is_NOT_cached_as_an_empty_answer(monkeypatch):
+    """⚠️ A FAILURE IS NOT AN ANSWER.
+
+    Three of the four modules ask `context.stats` with byte-identical arguments
+    — that is the cache's whole justification — so caching `{}` on
+    `HassUnavailable` fanned ONE outage out to the other two as a successful
+    empty result. They took the early-return path, reported nothing, and
+    counted a cache hit. Before the cache each would have opened its own client
+    and could have succeeded on a transient failure.
+
+    Same confusion `total_change` returns `None` for rather than `0.0`: "this
+    meter recorded no consumption" and "this meter reported nothing at all" are
+    different findings.
+    """
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+    from vesta.adapters.hass import HassUnavailable
+
+    calls = {"n": 0}
+
+    async def flaky(hass, ids, start, period=None, types=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise HassUnavailable("core restarting")
+        return {i: [{"start": "x", "change": 1.0}] for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", flaky)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    tally: dict = {}
+    fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), tally)
+    first = asyncio.run(fetch(["sensor.one"], 56))
+    assert first == {}, "an outage yields nothing"
+
+    second = asyncio.run(fetch(["sensor.one"], 56))
+    assert second, (
+        "the second module inherited the first's outage from the cache — it "
+        "must be free to try again")
+    assert calls["n"] == 2, "the retry never reached Home Assistant"
+    assert "cache_hits" not in tally, "an outage was counted as a cache hit"
+
+
+def test_a_SUCCESS_is_still_cached_after_an_outage(monkeypatch):
+    """The other half: recovering must not disable the cache for the pass."""
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+    from vesta.adapters.hass import HassUnavailable
+
+    calls = {"n": 0}
+
+    async def flaky(hass, ids, start, period=None, types=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise HassUnavailable("core restarting")
+        return {i: [] for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", flaky)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), {})
+    asyncio.run(fetch(["sensor.one"], 56))     # fails
+    asyncio.run(fetch(["sensor.one"], 56))     # succeeds, caches
+    asyncio.run(fetch(["sensor.one"], 56))     # served from cache
+    assert calls["n"] == 2, calls

@@ -76,7 +76,8 @@ export const wasRatedDown = (c: Concern): boolean =>
 /**
  * The subjects the villa has stopped raising.
  *
- * ⚠️ RATINGS, NEVER A LIFECYCLE ACT — see ADR 0002, and the sentence this
+ * ⚠️ RATINGS, NEVER A LIFECYCLE ACT. Five dismissals of one subject suppress
+ * nothing; three ⬇️ suppress it. That is the sentence this
  * function exists to make true: "Five dismissals of one subject suppress
  * nothing; three ⬇️ suppress it." `ConcernLifecycle` counted `dismissed` here
  * and told the owner, in warning colour, that dismissing had silenced a

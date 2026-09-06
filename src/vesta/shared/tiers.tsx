@@ -261,7 +261,7 @@ export function TierIntro({ tier, speed, children }: {
  *  two copies would disagree the first time the cutover moved — which is the
  *  whole point of the table.
  *
- *  ⚠️ DERIVED FROM THE CUTOVER ORDER IN `docs/PROGRESS.md`, NOT FROM TASTE.
+ *  ⚠️ DERIVED FROM THE CUTOVER ORDER, NOT FROM TASTE.
  *  `maintenance_*` retires first, then `roi_*`, then `audit_*` EXCEPT
  *  `audit_notification_path`. `critical_*` was never on that list: the HLD §5
  *  keeps ~6 as reflexes because "a model in the path of a leak sensor is a
@@ -298,7 +298,7 @@ export const FAMILIES: Record<string, {
   // ⚠️ `analysis/modules/level_anomaly.py` still carries
   // `superseded_by: ("roi_baseline_deviation",)`, but only to NAME the rule in
   // the skip line an owner reads when supervision is off.
-  // True, and a second-order detail: it explains why `docs/PROGRESS.md` calls
+  // True, and a second-order detail: it explains why the cutover record calls
   // maintenance "the only family with upside", not who takes over the job.
   maintenance: { role: "superseded — the assistant now spots this itself" },
   roi: { role: "superseded — the assistant now spots this itself" },

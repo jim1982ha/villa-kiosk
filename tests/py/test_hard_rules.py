@@ -72,6 +72,12 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `badge_placement_test.ts`'s two badges. ⚠️ NEWLY VISIBLE, NOT NEW: the
+    # node oracles moved from the gitignored `tests/` root into the tracked
+    # `tests/consistency/` in 2.956.0, so this scan reaches them for the first
+    # time. A generic room and a generic domain, which is what a placement
+    # fixture needs and all it needs.
+    "light.living", "sensor.kitchen",
     # `villa_rules.ts`'s power-unit fixtures. `sensor.mains` is the whole-house
     # meter that reports kW — the case that made the Energy tile add 3.2 to a
     # watt total — and the rest are the units beside it.

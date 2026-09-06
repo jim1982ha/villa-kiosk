@@ -19,7 +19,7 @@
 // everywhere at once and a seventh source is one entry rather than six edits.
 //
 // ⚠️ AND THE SET IS DERIVED FROM THE FINAL ARCHITECTURE, NOT THE CURRENT ONE.
-// `docs/PROGRESS.md` fixes the cutover: `maintenance_*`, `roi_*` and `audit_*`
+// The cutover order is fixed: `maintenance_*`, `roi_*` and `audit_*`
 // (minus `audit_notification_path`) retire, leaving the `critical_*` reflexes
 // and the channel heartbeat as the ONLY automations. So `blueprint` here means
 // "a reflex that acts in under a second with no model in the path" — its

@@ -28,19 +28,37 @@ import pytest
 
 from conftest import REPO_ROOT
 
-#: Files a reader of a fresh clone does not have. Keep this list in step with
-#: .gitignore for anything source is tempted to point at.
-UNTRACKED_DOCS = ("CLAUDE.md", "AGENTS.md")
+#: What a reader of a fresh clone does not have.
+#:
+#: ⚠️ `docs/` WAS MISSING AND THE OMISSION COST A DAY (2.956.0). The whole
+#: directory is gitignored — `git ls-files docs` returns nothing, ADRs
+#: included — and the very next commit after this guard shipped cited
+#: "ADR 0002" from `shared/concern.ts`, which is the same defect the guard was
+#: written for, one document later. A hand-frozen pair of FILENAMES could not
+#: see a directory.
+UNTRACKED_DOCS = ("CLAUDE.md", "AGENTS.md", "docs/")
 
 #: Where shipped source lives. `tests/` is excluded: a test may name the
 #: developer's own tooling, because its reader is the developer.
-SOURCE_ROOTS = ("rootfs", "src")
+#:
+#: ⚠️ `rootfs` AND `src` ARE NOT ALL OF IT. `index.html` is shipped to the
+#: browser and its reader is not the developer; `.github/workflows/` is read by
+#: anyone diagnosing a failed build. Both cited CLAUDE.md while this guard
+#: reported clean.
+SOURCE_ROOTS = ("rootfs", "src", ".github")
+
+#: Tracked shipped files that live at the repository root.
+SOURCE_FILES = ("index.html", "vite.config.ts")
 
 SKIP_DIRS = {"__pycache__", "node_modules", "dist", ".git"}
 SOURCE_EXT = (".py", ".ts", ".tsx", ".js", ".jsx", ".css", ".html", ".yaml", ".yml")
 
 
 def _source_files():
+    for name in SOURCE_FILES:
+        full = os.path.join(REPO_ROOT, name)
+        if os.path.exists(full):
+            yield name, full
     for root in SOURCE_ROOTS:
         base = os.path.join(REPO_ROOT, root)
         for dirpath, dirs, files in os.walk(base):

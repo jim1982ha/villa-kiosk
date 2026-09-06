@@ -71,7 +71,7 @@ import { isModuleEnabled, setModuleEnabled } from "@/vesta/shared/reportsTypes";
 
 /** What each shipped blueprint family is FOR, and whether it survives.
  *
- *  ⚠️ DERIVED FROM THE CUTOVER ORDER IN `docs/PROGRESS.md`, NOT FROM TASTE.
+ *  ⚠️ DERIVED FROM THE CUTOVER ORDER, NOT FROM TASTE.
  *  `maintenance_*` retires first (two of its rules suppress the very checks
  *  that replace them), then `roi_*` starting with `roi_baseline_deviation`
  *  (zero instances, suppressing `level_anomaly` for nothing), then `audit_*`

@@ -229,9 +229,22 @@ def statistics_fetcher(session: Any, now_local: Any,
                 series = await statistics_during_period(
                     hass, list(ids), start, period="hour", types=("change",))
         except HassUnavailable as err:
+            # ⚠️ A FAILURE IS NOT AN ANSWER, AND MUST NOT BE CACHED (2.956.0).
+            # Three of the four modules ask with byte-identical arguments —
+            # that is this cache's whole justification — so caching `{}` here
+            # fanned ONE outage out to the other two as a successful empty
+            # result. They took the early-return path, reported nothing, and
+            # counted a cache hit; before the cache each would have opened its
+            # own client and could have succeeded on a transient failure.
+            #
+            # This is the confusion the whole tree is written against:
+            # `total_change` returns None rather than 0.0 because "this meter
+            # recorded no consumption" and "this meter reported nothing at all"
+            # are different findings. Returning early leaves the key unset, so
+            # the next module retries.
             warn(f"statistics unavailable for this pass: {err}")
             tally["error"] = str(err)
-            series = {}
+            return {}
         # ⚠️ RECORDED, NOT ASSUMED. "The module found nothing" and "the module
         # received nothing" produce an identical report, and telling them apart
         # by reading the code is guesswork. A live preview that returns no
