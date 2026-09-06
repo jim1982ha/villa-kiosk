@@ -206,23 +206,49 @@ def test_the_nginx_exemptions_do_not_rot() -> None:
         "SERVED_BY_NGINX names locations that no longer exist: %s" % stale)
 
 
-def test_every_cache_control_location_includes_the_security_headers() -> None:
+#: Locations that set their own `add_header` and deliberately do NOT include
+#: the shared snippet. ⚠️ A DECISION PER ENTRY, like every other exemption map
+#: in this suite.
+OWN_HEADERS = {
+    "/": "re-adds the CSP itself; the snippet carries the other five",
+}
+
+
+def test_every_location_that_sets_ANY_add_header_includes_the_shared_set() -> None:
     """⚠️ nginx DOES NOT MERGE `add_header` ACROSS LEVELS, so a location that
-    sets its own suppresses every server-level header. The note in the config
-    said "the locations that set Cache-Control (/, /assets/)" and there were
-    THREE — `/model/`, the villa's floor plan and the one static route behind
-    `auth_request`, carried none of them."""
+    sets ITS OWN suppresses every server-level header.
+
+    ⚠️ THIS CHECKED `add_header Cache-Control` UNTIL 2.959.0, which is what the
+    three known offenders happened to have — the rule rolled out at the sites
+    where it was found rather than across what it applies to, which is the
+    defect this suite is full of guards against. The day a location added
+    `add_header X-Request-Id` it would have lost nosniff, Referrer-Policy,
+    X-Frame-Options, Permissions-Policy and HSTS, silently, with this green.
+    """
     text = _read(NGINX_PATH)
     blocks = re.split(r"^\s*location\s+", text, flags=re.MULTILINE)[1:]
     missing = []
     for block in blocks:
         head = block.split("{", 1)[0].strip()
+        head = head.replace("= ", "")
         body = block.split("{", 1)[1] if "{" in block else ""
         body = body.split("\n    }", 1)[0]
-        if "add_header Cache-Control" not in body:
+        if "add_header" not in body:
+            continue                       # inherits the server level cleanly
+        if head in OWN_HEADERS:
             continue
         if "security-headers.conf" not in body:
             missing.append(head)
     assert not missing, (
-        "these locations set Cache-Control and so suppress the server-level "
-        "security headers, without including them back: %s" % missing)
+        "these locations set their own add_header — which suppresses ALL of "
+        "the server-level security headers — without including them back: %s.\n"
+        "Add the include, or name the location in OWN_HEADERS with its reason."
+        % missing)
+
+
+def test_the_own_header_exemptions_do_not_rot() -> None:
+    text = _read(NGINX_PATH)
+    heads = {m.group(1).replace("= ", "").strip()
+             for m in re.finditer(r"^\s*location\s+([^{]+)\{", text, re.MULTILINE)}
+    stale = sorted(h for h in OWN_HEADERS if h not in heads)
+    assert not stale, "OWN_HEADERS names locations that no longer exist: %s" % stale

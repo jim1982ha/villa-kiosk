@@ -227,7 +227,7 @@ def test_ids_removed_mid_sentence_do_not_strand_their_separator() -> None:
         deliberate, intentional decision.
 
     An instruction to re-enable nothing in particular. The stored item was
-    complete — it named `automation.outdoor_unified_doorbell_call_and_unlock` —
+    complete — it named `automation.example_critical_entry` —
     so this was the redaction, not the blueprint, and `clean_summary`'s own
     docstring said the senders write "two shapes" while this was the third.
 
@@ -239,7 +239,7 @@ def test_ids_removed_mid_sentence_do_not_strand_their_separator() -> None:
     from vesta.adapters import ledger
 
     line = ("Critical automation(s) found OFF: "
-            "automation.outdoor_unified_doorbell_call_and_unlock. "
+            "automation.example_critical_entry. "
             "Re-enable, or document as a deliberate, intentional decision.")
     out = ledger.clean_summary(line)
     assert "OFF: ." not in out and ": ." not in out, out

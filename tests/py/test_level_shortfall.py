@@ -55,7 +55,7 @@ def _context(series: Dict[str, List[Dict[str, Any]]]) -> ModuleContext:
         audience="owner", cadence="daily", now_local=None,
         capabilities=["statistics", "energy_devices"],
         inventory={"energy": {"devices": list(series)}},
-        stats=stats, labels={"sensor.pool_pump_energy": "Pool Pump"})
+        stats=stats, labels={"sensor.example_pump_energy": "Example Pump"})
 
 
 def _run(series: Dict[str, List[Dict[str, Any]]]) -> List[Any]:
@@ -68,7 +68,7 @@ STEADY = [5.6, 5.5, 5.7, 5.6, 5.5, 5.6, 5.7] * 7
 
 def test_a_device_that_ran_short_is_reported() -> None:
     daily = STEADY + [3.0, 3.1, 2.9, 3.0, 3.1, 2.9, 3.0]
-    found = _run({"sensor.pool_pump_energy": _rows(daily)})
+    found = _run({"sensor.example_pump_energy": _rows(daily)})
 
     assert found, "a device using half its usual energy was not reported"
     detail = found[0].detail
@@ -86,14 +86,14 @@ def test_a_device_that_ran_short_is_reported() -> None:
 def test_a_device_running_NORMALLY_is_silent() -> None:
     """⚠️ THE COMMON CASE IS SILENCE, and a check that reports every week is one
     nobody reads by the second week."""
-    assert _run({"sensor.pool_pump_energy": _rows(STEADY + STEADY[:7])}) == []
+    assert _run({"sensor.example_pump_energy": _rows(STEADY + STEADY[:7])}) == []
 
 
 def test_a_RISE_is_not_this_module_s_business() -> None:
     """⚠️ `level_anomaly` OWNS "MORE". Reporting it here would double every
     finding on the page — the two modules must not overlap."""
     daily = STEADY + [11.0, 11.2, 10.9, 11.1, 11.0, 11.2, 10.9]
-    assert _run({"sensor.pool_pump_energy": _rows(daily)}) == []
+    assert _run({"sensor.example_pump_energy": _rows(daily)}) == []
 
 
 def test_INTERMITTENT_equipment_is_refused() -> None:
@@ -144,7 +144,7 @@ def test_a_drop_on_a_device_s_QUIET_day_is_not_worth_a_morning() -> None:
 def test_it_reports_the_WORST_day_not_every_day() -> None:
     """One pump stopping early all week is one finding, not seven."""
     daily = STEADY + [3.0, 2.0, 3.1, 3.0, 2.9, 3.0, 3.1]
-    found = _run({"sensor.pool_pump_energy": _rows(daily)})
+    found = _run({"sensor.example_pump_energy": _rows(daily)})
     assert len(found) == 1, f"{len(found)} findings for one device"
 
 
@@ -175,7 +175,7 @@ def test_a_SHALLOW_drop_is_below_the_threshold() -> None:
     and it is still the kind of variation a villa produces by living in it. The
     threshold is what says so, and this is the only test it can fail."""
     daily = STEADY + [4.5, 4.4, 4.5, 4.5, 4.4, 4.5, 4.5]
-    assert _run({"sensor.pool_pump_energy": _rows(daily)}) == []
+    assert _run({"sensor.example_pump_energy": _rows(daily)}) == []
 
 
 def test_the_WORST_day_is_the_one_reported() -> None:
@@ -188,7 +188,7 @@ def test_the_WORST_day_is_the_one_reported() -> None:
     noticed. An owner acting on this reads the day."""
     # Tuesday is the deep one; Sunday is last in the window and shallower.
     daily = STEADY + [3.0, 1.2, 3.1, 3.0, 2.9, 3.0, 3.1]
-    found = _run({"sensor.pool_pump_energy": _rows(daily)})
+    found = _run({"sensor.example_pump_energy": _rows(daily)})
     assert len(found) == 1, f"{len(found)} findings for one device"
     assert "Tuesday" in found[0].detail, found[0].detail
     assert (found[0].observed or 0) < 2.0, found[0].observed

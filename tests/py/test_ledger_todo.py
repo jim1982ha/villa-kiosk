@@ -6,7 +6,7 @@ on 2026-08-21. Two shapes are in use across the nine blueprints that call
 (`[id] entities - task`) silently mishandles the other. That is the mistake
 2.511.0 was made of, and the reason these are copied rather than invented.
 
-⚠️ AND THE ITEMS CARRY ENTITY IDS. `sensor.house_pump_power_factor` names a
+⚠️ AND THE ITEMS CARRY ENTITY IDS. `sensor.example_house_pump_pf` names a
 device in somebody's home; entity ids routinely name rooms and people, and this
 text is destined for prose a person reads and for a Phase 6 payload. Stripping
 them is the point of `clean_summary`, not a nicety.
@@ -28,8 +28,8 @@ PM01 = ("[PM-01] sensor.house_pump_power has drifted -99.9% from baseline. "
 PM02 = ("[PM-02] sensor.house_pump_power has flapped 7 times recently "
         "(threshold 6). Check for a stuck check valve, pressure switch fault, "
         "or air in the line.")
-PM04 = ("[PM-04] sensor.house_pump_power_factor, sensor.pool_pump_power_factor, "
-        "sensor.jacuzzi_pump_power_factor, "
+PM04 = ("[PM-04] sensor.example_house_pump_pf, sensor.example_pool_pump_pf, "
+        "sensor.example_spa_pump_pf, "
         "sensor.swimming_pool_massage_jet_pump_power_factor - Check the pump "
         "for a failing capacitor, worn bearing, or partial blockage causing "
         "reactive load.")

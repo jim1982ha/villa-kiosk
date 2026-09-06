@@ -165,35 +165,68 @@ def test_the_task_is_raised_AFTER_the_send_and_only_on_success(
     result = asyncio.run(outbox_mod.sweep(None, config=config))
     assert result.sent == 1, result
 
+    # ⚠️ AND THE STEPS THEMSELVES, which the v2.956.0 note claimed this test
+    # read and it did not. `Delivery.steps` was production state whose only
+    # reader was a `.index()` over source text.
+    delivery = asyncio.run(outbox_mod._deliver_one(
+        None, concerns_mod.read()[0], config=config, quiet=False,
+        occupied=None, now=None))
+    assert delivery.steps == (outbox_mod.STEP_SENT, outbox_mod.STEP_MARKED,
+                              outbox_mod.STEP_RAISED), delivery.steps
+
     # ⚠️ THE ORDER, AS A VALUE. Not a character offset in another file.
     assert raised and raised[0], (
         "the job was raised before the concern was stamped delivered — a task "
         "on somebody's list with no message behind it")
 
 
-def test_the_delivery_reports_its_steps_in_order(
+def test_an_early_exit_records_NO_steps(
         tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The same rule from the other side: `Delivery.steps` is the interface."""
+    """A held or failed delivery cannot have raised a job.
+
+    ⚠️ THIS TEST USED TO BE UNFALSIFIABLE. It asserted
+    `list(steps) == sorted(steps, key=lambda s: [...].index(s))` — a tuple
+    sorted by its own index in itself, which is True for any values, scrambled
+    included — and then constructed a fresh `Delivery("held")` and asserted its
+    field default. `_deliver_one` was never called. Its docstring said
+    "`Delivery.steps` is the interface"; nothing read it.
+    """
+    from vesta.supervise.agent import concerns as concerns_mod
     from vesta.supervise.agent import outbox as outbox_mod
+    from vesta.adapters import deliver as deliver_mod
+    from vesta.adapters import people as people_mod
 
-    steps = (outbox_mod.STEP_SENT, outbox_mod.STEP_MARKED, outbox_mod.STEP_RAISED)
-    assert list(steps) == sorted(steps, key=lambda s: [
-        outbox_mod.STEP_SENT, outbox_mod.STEP_MARKED, outbox_mod.STEP_RAISED].index(s))
-    held = outbox_mod.Delivery("held")
-    assert held.steps == (), "a held concern took no steps"
-    assert outbox_mod.Delivery("failed").steps == (), (
-        "a failed delivery took no steps, so it cannot have raised a job")
+    monkeypatch.setattr(concerns_mod, "CONCERNS_FILE", str(tmp_path / "c.json"))
 
-    # ⚠️ `return "suppressed"` left with shadow delivery (2026-08-28):
-    # observe-mode concerns are delivered as FYIs now, so that early return no
-    # longer exists to order against. The FYI's own no-job rule is pinned in
-    # `test_agent_outbox`. What remains is that every early exit leaves the
-    # steps EMPTY, which is the same claim the old character-offset scan was
-    # making and could not actually check.
-    code = strip_prose(inspect.getsource(outbox._deliver_one))
-    for early in ('return Delivery("held"', 'return Delivery("failed"'):
-        assert code.index(early) < code.index("STEP_RAISED"), (
-            f"a concern that takes `{early}` would still raise a job")
+    async def refuse(session: Any, targets: Any, title: str, message: str,
+                     known: Any = ()) -> List[Dict[str, Any]]:
+        return [{"target": t, "status": "failed"} for t in targets]
+
+    async def occ(session: Any) -> Any:
+        return None
+
+    monkeypatch.setattr(deliver_mod, "deliver", refuse)
+    monkeypatch.setattr(people_mod, "targets_for_role",
+                        lambda cfg, role: ["notify.owner"])
+    monkeypatch.setattr(outbox_mod, "occupancy_now", occ)
+
+    stored, why = concerns_mod.raise_concern(concerns_mod.Concern(
+        subject_key="a1b2c3d4a1b2c3d4", title="Cooling unit short-cycling",
+        body="It has been at 340 W.", severity="critical", audience="owner",
+        evidence=[{"tool": "history", "summary": "340 W for six hours"}]))
+    assert stored is not None, why
+
+    config = {"enabled": True, "shadow": False,
+              "people": [{"role": "owner", "telegram": "123",
+                          "targets": ["notify.owner"]}]}
+    delivery = asyncio.run(outbox_mod._deliver_one(
+        None, concerns_mod.read()[0], config=config, quiet=False,
+        occupied=None, now=None))
+    assert delivery.outcome == "failed", delivery
+    assert outbox_mod.STEP_RAISED not in delivery.steps, (
+        "a delivery that never landed raised a job anyway — a task on "
+        "somebody's list with no message behind it")
+    assert delivery.steps == (), delivery.steps
 
 
 def test_delivery_is_the_ONLY_bar_and_there_is_no_second_one() -> None:

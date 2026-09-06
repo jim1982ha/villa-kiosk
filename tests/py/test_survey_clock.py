@@ -372,3 +372,80 @@ def test_a_SUCCESS_is_still_cached_after_an_outage(monkeypatch):
     asyncio.run(fetch(["sensor.one"], 56))     # succeeds, caches
     asyncio.run(fetch(["sensor.one"], 56))     # served from cache
     assert calls["n"] == 2, calls
+
+
+def test_a_cached_ASK_is_still_recorded(monkeypatch):
+    """⚠️ "THE MODULE FOUND NOTHING" vs "THE MODULE RECEIVED NOTHING".
+
+    The tally's own ⚠️ calls those three numbers the only way to tell a live
+    preview's empty result apart from a broken one — and a cache hit used to
+    return ABOVE them. The modules the cache exists to serve are exactly the
+    three that ask identically, so exactly those asks went unrecorded.
+    """
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+
+    async def ok(hass, ids, start, period=None, types=None):
+        return {i: [{"start": "x", "change": 1.0}] for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", ok)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    tally: dict = {}
+    fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), tally)
+    asyncio.run(fetch(["sensor.one", "sensor.two"], 56))
+    asyncio.run(fetch(["sensor.one", "sensor.two"], 56))     # cached
+    assert tally["requested"] == 4, (
+        "a cached ask was not recorded: %r" % tally.get("requested"))
+    assert tally["fetched_ids"] == 2, (
+        "the fetch side counted a cache hit as a fetch: %r" % tally.get("fetched_ids"))
+    assert tally["cache_hits"] == 1
+    assert tally["days_asked"] == 56
+
+
+def test_a_cached_answer_is_copied_not_shared(monkeypatch):
+    """Before the cache each caller owned its dict. A shared reference would
+    make one module's mutation another module's input."""
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+
+    async def ok(hass, ids, start, period=None, types=None):
+        return {i: [{"start": "x", "change": 1.0}] for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", ok)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), {})
+
+    # ⚠️ BOTH PATHS. The MISS returns the object it just cached; the HIT returns
+    # the cached object. I tested only the first and a mutation of the hit path
+    # survived — so each result is clobbered in turn and the next one checked.
+    first = asyncio.run(fetch(["sensor.one"], 56))
+    first["sensor.one"] = "clobbered by the miss path"
+    second = asyncio.run(fetch(["sensor.one"], 56))
+    assert second["sensor.one"] != "clobbered by the miss path", (
+        "the miss path handed out the object it cached")
+
+    second["sensor.one"] = "clobbered by the hit path"
+    third = asyncio.run(fetch(["sensor.one"], 56))
+    assert third["sensor.one"] != "clobbered by the hit path", (
+        "the hit path handed out the cache's own dict, so one module edited "
+        "another module's data")

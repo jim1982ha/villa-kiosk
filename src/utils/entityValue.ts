@@ -13,7 +13,7 @@
 // a number.
 //
 // ⚠️ IMPORTS NOTHING AT RUNTIME except a `.ts`-suffixed sibling, so `node
-// tests/entity_value_test.ts` can strip the types and run it with no bundler
+// test:entity-value` can strip the types and run it with no bundler
 // and no GPU. Keep it that way: an `@/`-aliased runtime import silently takes
 // the whole module out of the test harness.
 

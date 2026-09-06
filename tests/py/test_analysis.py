@@ -369,7 +369,7 @@ def test_a_boolean_annotation_is_not_a_threshold() -> None:
 
 
 def test_label_never_prints_an_entity_id() -> None:
-    assert label_for("sensor.pool_pump_energy", {}) == "Pool Pump"
+    assert label_for("sensor.example_pump_energy", {}) == "Example Pump"
     assert label_for("sensor.x", {"sensor.x": "Chest Freezer"}) == "Chest Freezer"
 
 

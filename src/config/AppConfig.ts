@@ -34,7 +34,7 @@ export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
  * Render-quality / look knobs. Every effect is independently toggle-able and
  * tunable so the look can be iterated at runtime (Settings → Render quality)
  * without a rebuild. Mirrors the optional flags in the Blender GLB pipeline
- * (sources/blender_pipeline.py) so the same dials exist offline and online.
+ * (the Blender bake pipeline) so the same dials exist offline and online.
  *
  * Fixed at the "high" look by design (see DEFAULT_RENDER) — there used to be
  * a Settings picker for three tiers (performance/balanced/high), removed as

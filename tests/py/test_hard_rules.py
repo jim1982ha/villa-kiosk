@@ -81,7 +81,7 @@ ILLUSTRATIVE: Set[str] = {
     # `villa_rules.ts`'s power-unit fixtures. `sensor.mains` is the whole-house
     # meter that reports kW — the case that made the Energy tile add 3.2 to a
     # watt total — and the rest are the units beside it.
-    "sensor.mains", "sensor.lamp", "sensor.plug", "sensor.a", "sensor.b",
+    "sensor.mains", "sensor.lamp", "sensor.plug",
     # `villa_rules.ts`'s summary-tile fixtures. Each names a RULE:
     # `switch.spartan_gym_relay` is the substring collision POOL_WORD is
     # anchored against ("spa" inside "spartan"), `switch.filter_pump_2` is a
@@ -89,7 +89,6 @@ ILLUSTRATIVE: Set[str] = {
     # "unavailable is not unlocked" pair — the tile's own comment calls
     # reporting that "a plain lie about a door".
     "switch.spartan_gym_relay", "switch.filter_pump_2",
-    "lock.a", "lock.b", "climate.a", "climate.b", "sensor.p",
     # `test_survey_clock`'s statistics-cache fixtures. Two ids, so "the same
     # window twice" and "a different id" are distinguishable.
     "sensor.one", "sensor.two",
@@ -106,12 +105,10 @@ ILLUSTRATIVE: Set[str] = {
     "switch.jet_pf", "switch.short", "switch.long",
     # `test_survey_clock`'s fake HA reply — one row, so the stale path has
     # something to shape.
-    "sensor.y",
     # `test_flag_type_cost`'s journal fixture. Numbered probes, generated in a
     # loop — the test asserts that journal reads do NOT scale with the number of
     # devices, so the ids exist only to make that number vary (2 against 40).
     # `sensor.probe_` is the bare stem of `"sensor.probe_%02d" % i`.
-    "sensor.probe_one", "sensor.probe_",
     # `tests/consistency/villa_rules.ts`'s fixtures. All invented, and each one
     # exists to name a RULE rather than a device:
     #   • `sensor.combo_temp`/`combo_hum` are the two-entity combo sensor that
@@ -145,7 +142,7 @@ ILLUSTRATIVE: Set[str] = {
     # and only its domain carries meaning (a media_player is the one that goes
     # unavailable simply by being switched off).
     "sensor.a_temperature", "sensor.b_temperature", "sensor.c_temperature",
-    "sensor.e_temperature", "media_player.d",
+    "sensor.e_temperature",
     # `test_subject_identity`'s digit-gap fixture. What is under test is the ONE
     # SPACE between a word and a digit — a model writes "Bedroom 1" for
     # equipment a villa labels "Bedroom1" — so the id is deliberately abbreviated
@@ -169,25 +166,24 @@ ILLUSTRATIVE: Set[str] = {
     "sensor.sauna_energy", "sensor.workshop_energy",
     # Placeholders in `clean_summary`'s docstring and its tests: the SHAPE of a
     # redacted line is what is under test, not any villa's device.
-    "automation.a", "sensor.a_power_factor", "sensor.b_power_factor",
+    "sensor.a_power_factor", "sensor.b_power_factor",
     "binary_sensor.motion0", "binary_sensor.motion1",
-    "camera.driveway", "sensor.hallway_temperature",  # the two above, replaced
-    "cover.x", "cover.x__closed", "cover.x__half", "cover.x__open",
+    "camera.driveway", "sensor.hallway_temperature",
+    "cover.x__closed", "cover.x__half", "cover.x__open",
     "light.y__half", "lock.foo", "lock.foo__locked", "lock.y__locked",
-    "sensor.a", "sensor.b", "sensor.moon_phase",
-    "fan.ceiling_fan_",  # a PREFIX in a matcher, not an id
-    "todo.shopping_list",  # HA's own default list name
+    "sensor.moon_phase",
+    "fan.ceiling_fan_",
+    "todo.shopping_list",
     # ⚠️ A ONE-LETTER STAND-IN IN `test_task_loop`, chosen so it CANNOT be
     # mistaken for a device: the test needs some non-empty list id to prove the
     # loop refuses a concern with no id, and which list it is has no bearing.
-    "todo.x",
     # The upstream ref-boundary fixtures (v2.711.0). ⚠️ `fan.a` is NOT a fifth
     # placeholder — it is what `inert` MAKES of `fan.a_first_unit` by turning
     # the underscores into spaces, and the shortened form still matches the
     # detector. That is the defect those tests pin, so the manufactured id has
     # to be classified alongside the real one. The first draft of them used
     # this villa's actual fan ids, and this pin caught it.
-    "fan.a", "fan.a_first_unit", "fan.b_second_unit", "light.y_main",
+    "fan.a_first_unit", "fan.b_second_unit", "light.y_main",
     # `test_journal.py`'s ring fixtures and `test_agent_proposals.py`'s. Named
     # for what they DO to the ring — one chatty, one quiet — because the
     # property under test is which of the two survives eviction, and a real
@@ -201,15 +197,11 @@ ILLUSTRATIVE: Set[str] = {
     # `feedback_stage-before-gating` records, and the sequence repeated anyway:
     # the honest fix is that a new test file's ids get classified here in the
     # SAME change that writes them, not after the pin catches up.
-    "sensor.example_pump_power",
     # `test_security_validation.py` (TASK-101). ⚠️ INVENTED, and it went red one
     # release late AGAIN — the note above says in as many words that a new test
     # file's ids must be classified in the SAME change that writes them, and I
     # wrote that note and then repeated the sequence. The `example_` prefix is
     # the convention: none of these is a device anywhere.
-    "lock.example_front_gate", "switch.example_door_1_relay",
-    "switch.example_intercom", "switch.example_thing",
-    "light.example_outdoor_path",
     "lock.side_gate",
     # `test_read_logs_source.py`. ⚠️ CLASSIFIED IN THE SAME CHANGE THAT WROTE
     # THE FILE, which is what the two notes above ask for and which had not yet
@@ -219,7 +211,6 @@ ILLUSTRATIVE: Set[str] = {
     # A SECOND id is what a log line looks like when an integration names a
     # device it could not reach, which is the most id-dense text this add-on
     # handles and the reason `read_logs` has to pseudonymise at all.
-    "light.example_patio_string",
     # `test_agent_mcp.py`. A deliberately fictional id, and the test's whole
     # point is that a tool result carrying ANY raw id is refused — so the id
     # must be a real-SHAPED one and must not be a real device.
@@ -227,13 +218,11 @@ ILLUSTRATIVE: Set[str] = {
     # `test_agent_sources.py`. Journal fixtures for the wiring tests, named
     # `probe`/`new_thing` so they are obviously invented — the SHAPE of a
     # journal row is what is under test, and a row needs an id to have a shape.
-    "sensor.probe_power", "binary_sensor.probe_door", "sensor.new_thing",
+    "sensor.new_thing",
     # `test_agent_route.py` and `test_agent_act.py`. Single-letter and `probe`
     # placeholders — the SHAPE of an occupancy answer and of a door relay that
     # is an ordinary `switch.*` is what is under test, and both need an id to
     # have a shape.
-    "person.a", "device_tracker.b", "light.x",
-    "light.probe_lamp", "switch.probe_door_relay",
     # `observe/journal.py` and its tests. Every one is a placeholder chosen to
     # be obviously fictional — the SHAPE of a state_changed event is what is
     # under test, and the allow-list comment needs *an* entity to point at.
@@ -242,20 +231,19 @@ ILLUSTRATIVE: Set[str] = {
     # was run. The commit is what made them visible. A new module therefore
     # passes this rule right up until it is committed, which is the one moment
     # nobody re-runs the suite — see the note in `_tracked_source`.
-    "climate.lounge", "climate.x", "light.a", "light.b", "light.c",
+    "climate.lounge",
     "light.quiet", "light.hall",
-    "light.n", "lock.c", "switch.a", "switch.new", "lock.front", "lock.a",
+    "switch.new", "lock.front",
     "sensor.pump", "sensor.seeded", "sensor.flat", "sensor.spike",
-    "sensor.drift", "sensor.new", "sensor.x", "sensor.q", "sensor.weak",
-    "sensor.quiet", "sensor.loud", "sensor.unscorable",
-    "light.gone", "light.ok",  # observe/cycle.py's diff fixtures
+    "sensor.drift", "sensor.new", "sensor.weak",
+    "sensor.loud", "sensor.unscorable",
+    "light.gone", "light.ok",
     # agent tool fixtures and the dotted-path probes. `sensor.probe` is the
     # literal prefix of an f-string (`f"sensor.probe{i}_power"`), which is what
     # the scanner sees — a real id never has that shape.
     "sensor.thin", "sensor.a_thing", "sensor.b_thing", "sensor.x_thing",
     "sensor.hidden_thing", "switch.buried_thing", "sensor.probe",
-    "sensor.probe_temperature", "binary_sensor.probe_moisture",
-    "lock.probe_entrance", "automation.a_rule",
+    "automation.a_rule",
     # agent/policy.py fixtures. Every one is shaped to isolate ONE rule of the
     # harm gate — the domain probes carry no access word, and the anchor probes
     # carry "outdoor"/"indoor" precisely to prove `door` does not match inside
@@ -355,11 +343,32 @@ FIXTURES: Set[str] = {
     # The shortened-label identification fixture (test_agent_cost) uses the
     # exact label shapes the reference villa's 0/5 was logged against.
     "sensor.jacuzzi_pump_energy", "sensor.jacuzzi_pump_power",
-    "sensor.onsen_pump_power",
-    "sensor.jacuzzi_pump_power_factor", "sensor.pool_pump_power",
+    "sensor.onsen_pump_power", "sensor.pool_pump_power",
     "sensor.swimming_pool_massage_jet_pump_power_factor",
     "light.master_bedroom_master_bedroom_light_ceiling",
 }
+
+#: An id that is illustrative BY SHAPE, needing no line in any list.
+#:
+#: ⚠️ THE LIST'S OWN HEADER ALREADY CALLED THIS THE CONVENTION — "the
+#: `example_` prefix is the convention: none of these is a device anywhere" —
+#: and then every new fixture still had to be appended by hand. `ILLUSTRATIVE`
+#: was edited EIGHT times in one session, always immediately after a blocked
+#: commit, and four ids ended up in it twice because nobody read it before
+#: appending. That is a decision list decaying into a suppression list.
+#:
+#: Making the convention structural removes the pressure at its source: a test
+#: that names its fixtures this way never touches the list at all.
+_ILLUSTRATIVE_SHAPE = re.compile(
+    r"^[a-z_]+\.("
+    r"example_|probe_|fixture_|spy_"       # explicit fixture prefixes
+    r"|[a-z][0-9]?$"                       # single letter, optionally numbered
+    r")")
+
+
+def _is_illustrative_by_shape(entity_id: str) -> bool:
+    return bool(_ILLUSTRATIVE_SHAPE.match(entity_id))
+
 
 KNOWN = NOT_ENTITY_IDS | ILLUSTRATIVE | ACCEPTED_IN_COMMENTS | FIXTURES
 
@@ -400,11 +409,13 @@ def _found() -> Dict[str, List[str]]:
 
 def test_no_unclassified_entity_id_reaches_tracked_source() -> None:
     found = _found()
-    unknown = sorted(set(found) - KNOWN)
+    unknown = sorted(i for i in set(found) - KNOWN
+                     if not _is_illustrative_by_shape(i))
     assert not unknown, (
         "entity ids in tracked source that nobody has classified. This repo is "
         "PUBLIC and CLAUDE.md's first hard rule is that nothing villa-specific "
-        "ships — so each of these is either a placeholder (add to ILLUSTRATIVE), "
+        "ships — so each of these is either a placeholder (name it `example_*`, "
+        "`probe_*` or a single letter and no list entry is needed), "
         "not an entity at all (NOT_ENTITY_IDS), or a real device whose id you "
         "must decide to keep (ACCEPTED_IN_COMMENTS) or replace:\n  "
         + "\n  ".join(f"{u}  <- {', '.join(found[u])}" for u in unknown))
@@ -416,6 +427,7 @@ def test_the_allow_list_has_no_dead_entries() -> None:
     whoever adds it back."""
     found = set(_found())
     dead = sorted(KNOWN - found)
+    dead = [d for d in dead if not _is_illustrative_by_shape(d)]
     assert not dead, (
         "these are allow-listed but appear nowhere in tracked source — remove "
         f"them, or the list grants permission nobody asked for: {dead}")
@@ -446,3 +458,45 @@ def test_no_real_entity_id_is_rendered_as_product_copy() -> None:
     assert not offenders, (
         "a real entity id in rendered TSX — this ships to every install:\n  "
         + "\n  ".join(offenders))
+
+
+def test_an_ACCEPTED_id_appears_only_in_a_COMMENT() -> None:
+    """⚠️ THE GROUP'S OWN INVARIANT, MADE EXECUTABLE.
+
+    Its header reads "REAL DEVICES OF THE REFERENCE DEPLOYMENT, **IN COMMENTS**
+    THAT RECORD A MEASURED BUG … A NEW ENTRY IN THIS GROUP IS A DECISION, NOT A
+    FORMALITY." That was prose, and `KNOWN` is a flat union of ids, so the
+    check could only ask WHETHER an id was listed — never WHERE it appears.
+
+    In v2.948.0 `switch.outdoor_swimming_pool_light_patio_top` moved from a
+    comment in `EntityCategories.ts` into an executable argument in a newly
+    tracked oracle, and nothing objected. A real device of the reference
+    deployment was one `git push` from being a shipped literal.
+    """
+    from conftest import strip_prose, strip_tsx_prose
+
+    # ⚠️ PROSE IS DECIDED BY `strip_prose`, NOT BY A LINE PREFIX. A docstring is
+    # prose and its lines do not start with a comment marker — my first version
+    # used a prefix test and reported seven docstring sites as code. The repo
+    # already owns this question; this asks it.
+    offenders = []
+    for rel in _tracked_source():
+        full = os.path.join(REPO_ROOT, rel)
+        try:
+            text = open(full, encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        if not any(a in text for a in ACCEPTED_IN_COMMENTS):
+            continue
+        code = strip_prose(text) if rel.endswith(".py") else strip_tsx_prose(text)
+        for accepted in ACCEPTED_IN_COMMENTS:
+            if accepted in code:
+                line = next((n for n, l in enumerate(code.splitlines(), 1)
+                             if accepted in l), 0)
+                offenders.append("%s:%d %s is in CODE, not prose"
+                                 % (rel, line, accepted))
+    assert not offenders, (
+        "these are real devices of the reference deployment, permitted only in "
+        "a comment that records a measured bug:\n  " + "\n  ".join(offenders)
+        + "\n\nUse a synthetic id that reproduces the same shape — the rule "
+          "under test cannot tell them apart.")

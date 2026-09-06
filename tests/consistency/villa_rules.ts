@@ -45,6 +45,7 @@ import {
   pageOf, clampPage, lastPageOf, PAGE_SIZES,
 } from "../../src/components/common/paging.ts";
 import { deriveTiles } from "../../src/components/hud/summaryTiles.ts";
+import { toBaseUnit } from "../../src/config/SensorClasses.ts";
 import { toCsv, cell } from "../../src/utils/csv.ts";
 import { isMotionDetector, ACCESS_BINARY_DC } from "../../src/config/EntityCategories.ts";
 import {
@@ -153,8 +154,15 @@ console.log("\n— what IS this device: one table, two surfaces —");
 // ═══════════════════════════════════════════════════════════════════════════
 {
   // ⚠️ THE TWO REVERTED SUBSTRING COLLISIONS, from the table's own comment.
+  // ⚠️ A SYNTHETIC ID REPRODUCING THE COLLISION, NOT THE REAL DEVICE. This
+  // named `switch.outdoor_swimming_pool_light_patio_top` — an actual device of
+  // the reference deployment, listed in `ACCEPTED_IN_COMMENTS`, whose header
+  // says those ids are permitted "IN COMMENTS THAT RECORD A MEASURED BUG". It
+  // was in an executable argument in a tracked file, and the gate could not
+  // see the difference because it matched a flat set of ids. The rule under
+  // test is the REGEX, and the regex cannot tell these two apart.
   eq("a pool light switch is ENERGY, not light (table order + anchoring)",
-    effectiveCategory("switch.outdoor_swimming_pool_light_patio_top", "switch"), "energy");
+    effectiveCategory("switch.example_pool_light_patio", "switch"), "energy");
   eq("a plain outdoor light switch is still LIGHT",
     effectiveCategory("switch.outdoor_light", "switch"), "light");
   eq("'door' does not match inside 'outdoor'",
@@ -501,6 +509,31 @@ console.log("\n— the wall tablet's bottom strip —");
                                               unit_of_measurement: "W" }),
   }), "__energy");
   eq("kilowatts and watts sum in ONE unit", mixed ? mixed.value : "(none)", "3 kW");
+
+  // ⚠️ SI PREFIXES ARE CASE, AND LOWER-CASING THEM COST 10⁹. `mW` (milliwatt)
+  // and `MW` (megawatt) folded onto one key that resolved to 1_000_000, four
+  // lines above `ma: 0.001` — one table, two meanings for `m`. A 500 mW sensor
+  // read "500000 kW" on the wall tablet. Shipped in the commit that fixed a
+  // 1000× error, by the identical mistake: throwing case away on a unit string.
+  eq("mW is MILLIwatt", toBaseUnit(500, "mW"), 0.5);
+  eq("MW is MEGAwatt", toBaseUnit(500, "MW"), 500_000_000);
+  // ⚠️ 5000 mW, NOT 500 — `formatUnitValue` rounds watts to whole numbers, so
+  // 0.5 W renders "1 W" and the assertion would be about the FORMATTER rather
+  // than the scale. (I wrote 500 first and the suite told me.)
+  const milliTile = find(tiles({
+    "sensor.probe_tiny": ent("sensor.probe_tiny", "5000", { device_class: "power",
+                                                unit_of_measurement: "mW" }),
+  }), "__energy");
+  eq("…and a 5000 mW sensor is 5 W, not 5 gigawatts",
+     milliTile ? milliTile.value : "(none)", "5 W");
+
+  // ⚠️ THE UNAMBIGUOUS UNITS STILL FOLD, so a villa whose integration writes
+  // "w" or "KW" is not silently under-counted.
+  eq("a lower-case w still counts", toBaseUnit(500, "w"), 500);
+  eq("KW folds too", toBaseUnit(2, "KW"), 2000);
+  // ⚠️ …AND THE AMBIGUOUS ONE REFUSES rather than guessing. "cannot say" is
+  // not zero, and it is certainly not a number in the wrong unit.
+  eq("a lower-case mw is refused, not guessed", toBaseUnit(500, "mw"), null);
 
   // A sensor with no device_class but a power unit is still a power sensor.
   const byUnit = find(tiles({

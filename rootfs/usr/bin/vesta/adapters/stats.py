@@ -209,6 +209,10 @@ def statistics_fetcher(session: Any, now_local: Any,
     # this the recorder answered the same query twice per Brief and the daily
     # bucketing ran twice over identical rows.
     #
+    # ⚠️ THE CACHED DICT IS COPIED OUT. Before the cache each caller owned its
+    # own dict; a shared reference would make one module's mutation another's
+    # input, and nothing states that rule for a caller to follow.
+    #
     # ⚠️ PER FETCHER, NOT MODULE-LEVEL. A fetcher is built once per pass
     # (`_statistics_fetcher(session, now_local, tally)`), so the cache dies with
     # the pass and cannot serve a later Brief a stale window — which is the
@@ -219,10 +223,19 @@ def statistics_fetcher(session: Any, now_local: Any,
         if not ids:
             return {}
         key = (tuple(ids), int(days))
+        # ⚠️ WHAT WAS ASKED IS RECORDED BEFORE THE CACHE ANSWERS (2.959.0). The
+        # `requested` / `days_asked` counters guard the distinction the whole
+        # tally exists for — "the module found nothing" versus "the module
+        # received nothing" — and a cache hit used to return ABOVE them. The
+        # modules the cache exists to serve are precisely the three that ask
+        # identically, so exactly those asks went unrecorded and a live preview
+        # could not reconstruct what a cached module had wanted.
+        tally["requested"] = tally.get("requested", 0) + len(ids)
+        tally["days_asked"] = days
         hit = cache.get(key)
         if hit is not None:
             tally["cache_hits"] = tally.get("cache_hits", 0) + 1
-            return hit
+            return dict(hit)
         start = start_of_day(now_local, days)
         try:
             async with HassClient(session) as hass:
@@ -249,10 +262,12 @@ def statistics_fetcher(session: Any, now_local: Any,
         # received nothing" produce an identical report, and telling them apart
         # by reading the code is guesswork. A live preview that returns no
         # findings is uninterpretable without these three numbers.
-        tally["requested"] = tally.get("requested", 0) + len(ids)
+        # ⚠️ THE FETCH SIDE, KEPT APART FROM THE ASK SIDE. `requested` counts
+        # what modules wanted; these count what Home Assistant actually
+        # returned, so a cached ask no longer looks like a fetch that happened.
+        tally["fetched_ids"] = tally.get("fetched_ids", 0) + len(ids)
         tally["returned"] = tally.get("returned", 0) + len(series)
         tally["rows"] = tally.get("rows", 0) + sum(len(v) for v in series.values())
-        tally["days_asked"] = days
         tally["empty_ids"] = sorted(i for i in ids if not series.get(i))[:5]
         # ⚠️ THE RAW SHAPE, verbatim. The `start` field's type is the whole
         # reason Phase 3's first live run found nothing, and a tally of counts
@@ -263,7 +278,10 @@ def statistics_fetcher(session: Any, now_local: Any,
             if rows:
                 tally["sample_row"] = rows[0]
                 break
+        # ⚠️ COPIED ON BOTH PATHS. Returning `series` here hands the FIRST
+        # caller the very object the cache holds, so its edit reaches everyone
+        # after it — I copied only the hit path first and the test caught it.
         cache[key] = series
-        return series
+        return dict(series)
 
     return fetch

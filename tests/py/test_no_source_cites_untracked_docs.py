@@ -97,3 +97,38 @@ def test_no_tracked_source_points_at_an_untracked_doc(doc):
         "%d reference(s) to %s, which is gitignored — a reader of a fresh "
         "clone cannot follow any of them. State the fact instead of citing "
         "the file:\n  %s" % (len(offenders), doc, "\n  ".join(offenders)))
+
+
+def test_no_tracked_source_cites_a_PATH_a_clone_does_not_have():
+    """⚠️ DERIVED, NOT LISTED — because the frozen tuple has been wrong twice in
+    two days.
+
+    `UNTRACKED_DOCS` started as two filenames, missed `docs/` entirely (a whole
+    gitignored directory, ADRs included), and its own docstring asserted that
+    `tests/security_test.py` is "in the repository, so a reader can follow" —
+    `git ls-files` says otherwise, and three shipped files cited it. The guard's
+    worked counter-example was an instance of the defect it guards.
+
+    This asks the thing that decides what a reader has.
+    """
+    import re
+    import subprocess
+
+    tracked = set(subprocess.run(["git", "ls-files"], cwd=REPO_ROOT,
+                                 capture_output=True, text=True).stdout.splitlines())
+    # Path-shaped citations only: a slash, a known source extension, no spaces.
+    shape = re.compile(r"\b((?:tests|docs|scripts|sources)/[\w./-]+"
+                       r"\.(?:py|ts|tsx|md|json|mjs|conf|yaml|yml))\b")
+    offenders = []
+    for rel, full in _source_files():
+        try:
+            text = io.open(full, encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            for path in shape.findall(line):
+                if path not in tracked:
+                    offenders.append("%s:%d cites %s" % (rel, n, path))
+    assert not offenders, (
+        "tracked source cites path(s) a fresh clone does not have — state the "
+        "fact, or name something tracked:\n  " + "\n  ".join(offenders))

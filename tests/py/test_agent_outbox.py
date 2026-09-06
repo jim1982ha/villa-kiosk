@@ -37,8 +37,14 @@ EVIDENCE = [{"tool": "read_state", "summary": "340 W"}]
 
 
 @pytest.fixture(autouse=True)
-def _isolated(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(concerns, "CONCERNS_FILE", str(tmp_path / "c.json"))
+def _isolated(isolated_stores: Any) -> None:
+    """⚠️ THE SHARED FIXTURE, NOT ONE CONSTANT (2.959.0). This repointed
+    `concerns.CONCERNS_FILE` and nothing else, while the file exercises the
+    Chase sweep and the delivery path — so `audit.AUDIT_FILE` and
+    `usage.USAGE_PATH` stayed at their real `/data/vesta/...` defaults. It is
+    the file `conftest.isolated_stores`' own docstring names as the harm, and
+    it is the first caller: a shared rule with no readers is a 22nd answer, not
+    a convergence."""
 
 
 class _Sender:

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import ast
 import os
-from typing import List, Set
+from typing import Dict, List, Set
 
 from conftest import strip_prose
 
@@ -82,140 +82,125 @@ KNOWN_OWN_TSX_STRIPPER: Set[str] = {
 #: the rule it guards reversed, with the whole suite green.
 #:
 #: ⚠️ THIS LIST MUST ONLY SHRINK. `test_the_frozen_list_does_not_rot` fails on a
-#: stale entry, so converting a pin to `code_of` forces its line out. Line
-#: numbers move when a file is edited — that is deliberate friction: touching a
-#: file with raw pins makes you look at them.
+#: stale entry, so converting a pin to `code_of` forces its entry out.
+#:
+#: ⚠️ KEYED ON THE ENCLOSING FUNCTION, NOT THE LINE. Line numbers were the
+#: first key and they churned: any edit to a file shifted its own entries, so
+#: an unrelated change made this "only shrinks" list rewrite itself. A function
+#: name survives edits above it and still names exactly one site.
 KNOWN_RAW: Set[str] = {
-    'test_act_availability.py:130',
-    'test_agent_act.py:226',
-    'test_agent_act_allowlist.py:115',
-    'test_agent_budget.py:258',
-    'test_agent_chat.py:1070',
-    'test_agent_chat.py:226',
-    'test_agent_chat.py:245',
-    'test_agent_chat.py:893',
-    'test_agent_concerns.py:357',
-    'test_agent_concerns.py:358',
-    'test_agent_contracts.py:91',
-    'test_agent_cost.py:138',
-    'test_agent_cost.py:149',
-    'test_agent_cost.py:199',
-    'test_agent_cost.py:221',
-    'test_agent_cost.py:81',
-    'test_agent_cost.py:86',
-    'test_agent_llm.py:151',
-    'test_agent_llm.py:161',
-    'test_agent_llm.py:177',
-    'test_agent_llm.py:430',
-    'test_agent_llm.py:433',
-    'test_agent_outbox.py:328',
-    'test_agent_outbox.py:331',
-    'test_agent_outbox.py:702',
-    'test_agent_outbox.py:835',
-    'test_agent_outbox.py:852',
-    'test_agent_policy.py:61',
-    'test_agent_policy.py:90',
-    'test_agent_route.py:194',
-    'test_agent_route.py:328',
-    'test_agent_runtime.py:360',
-    'test_agent_scheduler.py:116',
-    'test_agent_session.py:107',
-    'test_agent_session.py:115',
-    'test_agent_sources.py:1164',
-    'test_agent_sources.py:1276',
-    'test_agent_sources.py:1310',
-    'test_agent_sources.py:1345',
-    'test_agent_sources.py:1372',
-    'test_agent_sources.py:1373',
-    'test_agent_sources.py:634',
-    'test_agent_sources.py:786',
-    'test_agent_sources.py:808',
-    'test_agent_triage.py:144',
-    'test_agent_triage.py:153',
-    'test_analysis.py:422',
-    'test_analysis.py:443',
-    'test_buttons.py:204',
-    'test_buttons.py:210',
-    'test_check_switch.py:139',
-    'test_collect.py:385',
-    'test_compose.py:118',
-    'test_compose.py:132',
-    'test_coverage_claim.py:99',
-    'test_coverage_stamp.py:108',
-    'test_coverage_stamp.py:75',
-    'test_coverage_stamp.py:83',
-    'test_dedupe.py:175',
-    'test_dedupe.py:200',
-    'test_flag_outcome.py:170',
-    'test_flag_outcome.py:173',
-    'test_flag_outcome.py:88',
-    'test_flag_outcome.py:91',
-    'test_heartbeat.py:192',
-    'test_heartbeat.py:226',
-    'test_help_button.py:151',
-    'test_help_button.py:88',
-    'test_materiality.py:112',
-    'test_module_visibility.py:29',
-    'test_module_visibility.py:41',
-    'test_module_visibility.py:97',
-    'test_narrate_and_deliver.py:141',
-    'test_narrate_and_deliver.py:164',
-    'test_narrate_and_deliver.py:528',
-    'test_narration_provider.py:301',
-    'test_narration_provider.py:324',
-    'test_pass_trace.py:171',
-    'test_playbooks.py:384',
-    'test_playbooks.py:461',
-    'test_prefix.py:137',
-    'test_prefix.py:218',
-    'test_prefix.py:244',
-    'test_record.py:119',
-    'test_record_window.py:126',
-    'test_record_window.py:141',
-    'test_rich_delivery.py:175',
-    'test_rich_delivery.py:257',
-    'test_rule_calibration.py:252',
-    'test_rule_calibration.py:257',
-    'test_security_validation.py:355',
-    'test_security_validation.py:464',
-    'test_stats_and_ledger.py:190',
-    'test_task_loop.py:204',
-    'test_task_loop.py:226',
-    'test_task_loop.py:435',
-    'test_task_loop.py:451',
-    'test_task_loop.py:87',
-    'test_tool_raise_concern.py:642',
-    'test_triage_clock.py:74',
-    'test_upstream.py:164',
-    'test_upstream.py:172',
-    'test_upstream.py:377',
-    'test_upstream.py:425',
-    'test_upstream.py:472',
-    'test_verification_sweep.py:359',
-    'test_verification_sweep.py:445',
+    'test_act_availability.py::test_clearing_an_alert_does_not_claim_to_silence_its_kind',
+    'test_agent_act.py::test_it_carries_no_policy_of_its_own',
+    'test_agent_act_allowlist.py::test_investigate_BUILDS_the_actuator_when_the_policy_allows_it',
+    'test_agent_budget.py::test_the_breaker_is_deliberately_NOT_persisted',
+    'test_agent_chat.py::_imported_names',
+    'test_agent_chat.py::test_nothing_in_this_module_writes_to_disk',
+    'test_agent_chat.py::test_the_chat_path_HAS_a_system_prompt',
+    'test_agent_chat.py::test_the_refusal_NAMES_WHICH_RULE_fired_and_by_how_much',
+    'test_agent_concerns.py::test_suppression_and_the_GATE_have_different_owners',
+    'test_agent_contracts.py::test_subject_key_is_the_SAME_EXPRESSION_as_the_report_pipeline_s',
+    'test_agent_cost.py::test_an_escalated_device_carries_its_ENTITY_ID_not_its_handle',
+    'test_agent_cost.py::test_identification_reports_how_many_it_could_name',
+    'test_agent_cost.py::test_narrowing_happens_at_the_ONE_construction_site',
+    'test_agent_cost.py::test_spend_is_read_from_the_ledger_and_never_recounted',
+    'test_agent_cost.py::test_the_daily_ceiling_is_money_and_covers_EVERYTHING',
+    'test_agent_llm.py::test_base_imports_nothing_third_party',
+    'test_agent_llm.py::test_the_SDK_import_is_DEFERRED_not_module_level',
+    'test_agent_llm.py::test_the_adapter_executes_no_tool_and_imports_no_policy',
+    'test_agent_llm.py::test_the_flattener_has_exactly_one_implementation',
+    'test_agent_policy.py::_executable_source',
+    'test_agent_policy.py::test_no_model_call_exists_anywhere_in_this_module',
+    'test_agent_route.py::test_BOTH_delivery_paths_tell_route_which_profile_they_used',
+    'test_agent_route.py::test_route_contains_NO_MODEL_CALL',
+    'test_agent_runtime.py::test_the_OUTPUT_CEILING_is_passed_on_every_request',
+    'test_agent_scheduler.py::test_the_config_is_a_READER_not_a_value',
+    'test_agent_session.py::test_investigate_FORWARDS_it_rather_than_accepting_it_politely',
+    'test_agent_session.py::test_the_SCHEDULER_hands_its_session_to_both_tiers',
+    'test_agent_sources.py::test_a_MANUAL_brief_is_attributed_to_the_person_who_pressed_it',
+    'test_agent_sources.py::test_no_agent_entry_point_hardcodes_a_trigger_it_was_given',
+    'test_agent_sources.py::test_the_adapter_does_NOT_hand_roll_retries',
+    'test_agent_sources.py::test_the_document_and_read_salient_rank_by_the_SAME_categoriser',
+    'test_agent_sources.py::test_the_document_builder_passes_BOTH_halves_of_the_loop',
+    'test_agent_sources.py::test_the_offline_count_uses_the_SHARED_predicate_not_a_fourth_copy',
+    'test_agent_sources.py::test_the_two_census_lines_are_noted_by_the_document_builder',
+    'test_agent_sources.py::test_the_window_bound_has_ONE_derivation',
+    'test_agent_triage.py::test_the_narrowed_registry_comes_FROM_the_real_one',
+    'test_analysis.py::test_no_analysis_module_contains_a_physical_constant',
+    'test_analysis.py::test_the_stripper_still_sees_real_code',
+    'test_buttons.py::test_DELIVER_stays_the_INTERSECTION_of_every_platform',
+    'test_check_switch.py::test_only_the_operators_arm_crosses_over',
+    'test_collect.py::test_no_automation_instance_name_appears_in_the_collector',
+    'test_compose.py::test_it_does_not_reimplement_the_deterministic_renderer',
+    'test_coverage_claim.py::test_run_all_cannot_drop_a_context_field',
+    'test_coverage_stamp.py::test_an_unwired_tool_is_withheld_rather_than_left_to_refuse',
+    'test_coverage_stamp.py::test_the_LOOP_passes_a_stamp_and_it_is_UTC',
+    'test_dedupe.py::test_the_gate_asks_ONE_question_and_the_machinery_is_GONE',
+    'test_dedupe.py::test_the_two_keys_share_one_hash_expression',
+    'test_flag_outcome.py::test_the_derivation_has_one_home',
+    'test_flag_outcome.py::test_the_stamp_is_wired_to_the_end_of_an_investigation',
+    'test_heartbeat.py::test_the_CYCLE_actually_calls_the_heartbeat',
+    'test_heartbeat.py::test_the_report_does_not_recompute_what_snapshot_already_decided',
+    'test_help_button.py::test_a_second_help_is_refused_by_apply_not_only_undrawn',
+    'test_help_button.py::test_the_escalation_message_is_drawn_as_though_the_step_had_landed',
+    'test_materiality.py::test_every_analysis_module_imports_the_shared_rule',
+    'test_module_visibility.py::test_a_skip_is_logged_with_its_reason',
+    'test_module_visibility.py::test_history_really_does_drop_the_analysis',
+    'test_module_visibility.py::test_the_pass_names_the_checks_that_ran',
+    'test_narrate_and_deliver.py::test_a_history_ENTRY_carries_its_findings_not_just_a_count',
+    'test_narrate_and_deliver.py::test_no_platform_name_appears_in_the_delivery_module',
+    'test_narrate_and_deliver.py::test_the_stripper_can_still_see_real_code',
+    'test_narration_provider.py::_provider_hosts',
+    'test_narration_provider.py::test_the_only_hostname_lives_in_its_adapter',
+    'test_pass_trace.py::test_the_outbox_reports_even_when_there_is_NOTHING_to_carry',
+    'test_playbooks.py::test_a_playbook_NAME_cannot_traverse_the_filesystem',
+    'test_playbooks.py::test_the_system_playbooks_are_ACTUALLY_LOADED_by_a_prompt',
+    'test_prefix.py::test_a_run_LOGS_THE_TOOLS_IT_USED_not_just_how_many',
+    'test_prefix.py::test_the_LOG_LINE_and_the_DATA_are_one_computation',
+    'test_prefix.py::test_the_RUN_LOOP_actually_logs_it',
+    'test_record.py::test_the_module_never_consults_the_supervision_switch',
+    'test_record_window.py::test_both_windowed_reads_share_one_implementation',
+    'test_rich_delivery.py::test_the_button_only_services_stay_out_of_adapters',
+    'test_rich_delivery.py::test_the_registry_lookup_has_exactly_one_implementation',
+    'test_rule_calibration.py::test_the_pipeline_injects_the_fetcher_and_the_registry_copies_it',
+    'test_security_validation.py::test_no_path_leads_from_a_tool_result_into_the_memory_store',
+    'test_security_validation.py::test_the_policy_module_contains_no_provider_call',
+    'test_stats_and_ledger.py::test_ledger_module_cannot_read_evidence_bytes',
+    'test_task_loop.py::test_ESCALATION_re_sends_without_raising_a_SECOND_job',
+    'test_task_loop.py::test_THE_TICK_HAS_ONE_OWNER',
+    'test_task_loop.py::test_a_concern_with_no_ID_is_REFUSED_rather_than_written',
+    'test_task_loop.py::test_delivery_is_the_ONLY_bar_and_there_is_no_second_one',
+    'test_task_loop.py::test_the_SWEEP_is_REACHED_from_the_chase_clock',
+    'test_tool_raise_concern.py::test_a_concern_records_WHICH_investigation_produced_it',
+    'test_triage_clock.py::test_the_LOOP_consults_the_clock_and_records_every_pass',
+    'test_upstream.py::test_a_MISSING_upstream_is_reported_rather_than_silent',
+    'test_upstream.py::test_build_registry_PASSES_the_ref_table_to_the_upstream_tools',
+    'test_upstream.py::test_no_install_specific_slug_is_hardcoded',
+    'test_upstream.py::test_the_endpoint_is_the_SECRET_PATH_with_no_suffix',
+    'test_upstream.py::test_the_hint_reaches_the_TRUNCATION_NOTE_and_not_just_the_helper',
+    'test_verification_sweep.py::test_the_screen_and_the_store_agree_on_what_a_FAILED_FIX_LOOKS_LIKE',
+    'test_verification_sweep.py::test_the_sweep_is_reached_from_the_villa_s_own_clock',
 }
 
 
 def _raw_sites() -> Set[str]:
-    """Every `inspect.getsource(...)` whose result is NOT stripped, as
-    `file.py:line`.
+    """Every unstripped `getsource(...)`, as `file.py::enclosing_function`.
 
-    ⚠️ SITE-SCOPED, NOT FILE-SCOPED (2.956.0), AND THAT CHANGE IS WHY THIS
-    EXISTS AT ALL. The old detector asked whether the WHOLE FILE mentioned
-    `strip_prose` or `code_of` anywhere, so one import bought blanket immunity
-    for every other pin in it. Measured when this was fixed: 136 `getsource`
-    call sites across 57 files, with files like `test_task_loop.py` (6 sites, 2
-    mentions) fully exempt.
+    ⚠️ SITE-SCOPED, NOT FILE-SCOPED. The old detector asked whether the WHOLE
+    FILE mentioned `strip_prose` or `code_of` anywhere, so one import bought
+    blanket immunity for every other pin in it — 136 call sites across 57 files
+    reported as 37 filenames. That exemption hid `test_task_loop`'s ordering
+    pin, which matched a COMMENT and passed with the rule it guards reversed
+    while the whole suite stayed green.
 
-    That exemption hid a real defect. `test_task_loop`'s ordering pin compared
-    two `str.index()` offsets over raw source, and `_mark_delivered` appears
-    TWICE in its subject — once as code, once in the comment below it. The pin
-    matched the PROSE and passed with the two calls reversed; the whole 2,313
-    test suite stayed green. See `outbox.Delivery`.
+    ⚠️ KEYED ON THE ENCLOSING FUNCTION, NOT THE LINE. I froze `file.py:line`
+    first and every unrelated edit to a file shifted its own entries, so the
+    "only shrinks" list churned on edits that changed nothing about the pins.
+    A function name is stable across edits above it and still names one site.
 
-    ⚠️ A CALL IS "STRIPPED" ONLY IF ITS RESULT GOES STRAIGHT INTO `strip_prose`
-    OR `code_of`. Assigning it and stripping later is not recognised, on
-    purpose: the pin that bit us assigned first.
+    ⚠️ `ast.Name` AS WELL AS `ast.Attribute`. Matching only the attribute form
+    meant `from inspect import getsource` was invisible — not flagged, not
+    frozen, not counted — so a one-line import could move a pin out from under
+    a list advertised as a floor.
     """
     found: Set[str] = set()
     for name in sorted(os.listdir(HERE)):
@@ -225,24 +210,38 @@ def _raw_sites() -> Set[str]:
             tree = ast.parse(_code(name))
         except SyntaxError:                                # pragma: no cover
             continue
+
+        # Where a bare `getsource` came from, if it was imported directly.
+        bare_is_getsource = any(
+            isinstance(node, ast.ImportFrom) and node.module == "inspect"
+            and any(a.name == "getsource" for a in node.names)
+            for node in ast.walk(tree))
+
         wrapped: Set[int] = set()
         for node in ast.walk(tree):
-            # `strip_prose(inspect.getsource(x))` / `code_of(x)` — the argument
-            # of a stripping call is the one place a raw read is fine.
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
                     and node.func.id in ("strip_prose", "strip_tsx_prose"):
                 for arg in node.args:
                     for inner in ast.walk(arg):
                         if isinstance(inner, ast.Call):
                             wrapped.add(id(inner))
+
+        # Which function each line sits in, so a site keeps its name.
+        owner: Dict[int, str] = {}
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                    owner.setdefault(line, node.name)
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or id(node) in wrapped:
                 continue
             func = node.func
-            is_getsource = (isinstance(func, ast.Attribute)
-                            and func.attr == "getsource")
-            if is_getsource and id(node) not in wrapped:
-                found.add(f"{name}:{node.lineno}")
+            is_raw = (isinstance(func, ast.Attribute) and func.attr == "getsource") \
+                or (bare_is_getsource and isinstance(func, ast.Name)
+                    and func.id == "getsource")
+            if is_raw:
+                found.add("%s::%s" % (name, owner.get(node.lineno, "<module>")))
     return found
 
 

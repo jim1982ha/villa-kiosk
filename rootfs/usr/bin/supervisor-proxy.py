@@ -113,7 +113,7 @@ from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 # `reports/` is a package sitting beside this file (Dockerfile: `COPY rootfs /`,
 # so both land in /usr/bin). Running as a script would put that directory on
 # sys.path for free — but this module is ALSO loaded by file path, via
-# importlib.spec_from_file_location, by tests/security_test.py, and there it
+# importlib.spec_from_file_location, by the security regression suite, and there it
 # would not be. State the location rather than depend on how we were started.
 #
 # Appended rather than inserted at 0 on purpose: /usr/bin is a directory full of
@@ -2140,7 +2140,8 @@ def _reports_config_guard(request: web.Request, body, old, new):
 
     A convenience for the operator, NOT a security boundary — the factory's own
     role gate is what stops a non-owner writing here (RBAC is decided server-side,
-    and `tests/security_test.py` is what holds that line). This exists so a malformed schedule fails at the moment it is
+    and the security regression suite is what holds that line). This exists so
+    a malformed schedule fails at the moment it is
     saved, with a message naming the field, instead of silently never firing
     and being debugged weeks later from an add-on log.
     """

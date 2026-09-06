@@ -151,21 +151,88 @@ def test_an_UNAUTHENTICATED_caller_is_refused_by_every_handler():
         "these handlers answered an unauthenticated caller: %s" % served)
 
 
-def test_the_owner_only_routes_refuse_a_facility_role():
-    """The asymmetry `/agent-runs`' deleted sibling documented: some of this
-    surface is readable by any session, some is the owner's alone."""
+#: Routes a Facility Manager session may read. ⚠️ A DECISION PER ENTRY, with
+#: its reason — the same discipline `test_nginx_routes.SERVED_BY_NGINX` and
+#: `test_reachability.EXEMPT` use. Anything NOT here must refuse a non-owner.
+READABLE_BY_FACILITY = {
+    "GET /agent-concerns": "the Concern list is what a facility manager acts on",
+    "GET /agent-config": "the injected store handler; the host's own role gate",
+    "PUT /agent-config": "the injected store handler; the host's own role gate",
+    "GET /agent-flag-types": "reading the taught kinds names no device",
+    "POST /agent-feedback": "a Rating is exactly what a reader is asked for",
+    "POST /agent-action": "the Acts on a card, which both surfaces offer",
+    "POST /agent-acknowledge": "acknowledging is the point of being told",
+    "GET /agent-review": "the learned playbook queue is facility work",
+    "POST /agent-review": "…and acting on it is too",
+    "GET /agent-memory": "gated on TASK_ACK_ROLES — 'the same pair that may "
+                         "judge a Concern or a draft'",
+    "POST /agent-memory": "correcting a villa document is facility work, and "
+                          "the correction appends rather than overwrites",
+    "POST /agent-mcp": "authenticates itself with a bearer token — see OWN_AUTH",
+}
+
+
+def test_every_owner_only_route_refuses_a_facility_role():
+    """⚠️ DERIVED, NOT SAMPLED, AND THE SAMPLE MISSED FIVE OF EIGHT.
+
+    This selected its subjects with `if "audit" in k or "queue" in k` — three
+    routes, while `api.py` gates EIGHT on `role_for(request) != "owner"`. The
+    five it missed were flag-types POST, usage, proposals, chats and — the one
+    that matters — `/agent-run-now`, which starts a PAID provider pass and is
+    the endpoint `test_pass_reason_contract` guards for budget safety because
+    this project has already paid for one unnoticed spend.
+
+    ⚠️ AND IT WAS A SUBSTRING READ, in the file whose own header opens "EVERY
+    CLAIM ABOUT THEM WAS A SUBSTRING READ". The sibling test above drives every
+    handler; this one picked three by name.
+
+    Inverted now: drive them ALL as `ops`, and anything that does not refuse
+    must be a named decision. A new owner-only route is covered the day it is
+    written; a new facility-readable one is a sentence somebody had to write.
+    """
     refusals = _bind("ops")
+    served = []
+    for key, handler in _handlers().items():
+        if key in READABLE_BY_FACILITY:
+            continue
+        refusals.clear()
+        try:
+            asyncio.run(handler(FakeRequest()))
+        except Exception:
+            # Past the guard and then failing on its own missing inputs is
+            # still past the guard.
+            pass
+        if not any(r.startswith("forbidden") for r in refusals):
+            served.append(key)
+    assert not served, (
+        "these routes served a Facility Manager session: %s.\nEither add the "
+        "owner gate, or add the route to READABLE_BY_FACILITY with the reason "
+        "a non-owner may read it." % served)
+
+
+def test_the_facility_exemptions_do_not_rot():
+    """A named exemption for a route that no longer exists is a stale decision,
+    and a route that has SINCE been owner-gated must leave the list."""
     handlers = _handlers()
-    owner_only = [k for k in handlers if "audit" in k or "queue" in k]
-    assert owner_only, "no owner-only route found — the scan is blind"
-    for key in owner_only:
+    stale = sorted(k for k in READABLE_BY_FACILITY if k not in handlers)
+    assert not stale, (
+        "READABLE_BY_FACILITY names routes that are not mounted: %s" % stale)
+
+    refusals = _bind("ops")
+    now_gated = []
+    for key in READABLE_BY_FACILITY:
+        if key.endswith("/agent-mcp"):
+            continue                       # authenticates itself; see OWN_AUTH
         refusals.clear()
         try:
             asyncio.run(handlers[key](FakeRequest()))
         except Exception:
             pass
-        assert any(r.startswith("forbidden") for r in refusals), (
-            "%s served a non-owner role" % key)
+        if any(r.startswith("forbidden") for r in refusals):
+            now_gated.append(key)
+    assert not now_gated, (
+        "these are gated to the owner now, so their exemption is stale: %s"
+        % now_gated)
 
 
 def test_the_role_is_never_taken_from_anything_the_caller_can_assert():

@@ -248,7 +248,7 @@ def validate_config(value: Any) -> List[str]:
     ⚠️ This is a convenience for the operator, NOT a security boundary. The
     proxy's own role gate is what stops a non-owner writing this store, exactly
     as with every other shared store — RBAC is decided server-side, and
-    `tests/security_test.py` holds that line.
+    The security regression suite holds that line.
     """
     problems: List[str] = []
     if not isinstance(value, dict):
