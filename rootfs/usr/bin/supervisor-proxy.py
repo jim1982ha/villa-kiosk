@@ -3041,8 +3041,11 @@ def main() -> None:
     agent_api.bind(
         authorized=_authorized, unauthorized=_unauthorized,
         forbidden=_forbidden, role_for=_role_for,
-        read_json_store=_read_json_store,
-        agent_config_file=AGENT_CONFIG_FILE,
+        # ⚠️ THE SAME CALLABLE THE LOOPS GET, and for the same reason: a
+        # cadence change or a kill switch must take effect on the next read,
+        # not on the next restart. The routes used to be handed the file path
+        # and a reader instead, and reassembled the config six times.
+        config_now=_agent_config_now,
         config_get=agent_config_get_handler,
         config_put=agent_config_put_handler,
         concerns_get=agent_concerns_get_handler)

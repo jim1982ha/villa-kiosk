@@ -114,7 +114,7 @@ def test_the_footer_would_be_destroyed_by_inert_which_is_why_it_is_appended() ->
     This test asserts the DAMAGE, so if someone ever routes the footer through
     `inert` it fails with the reason written down.
     """
-    from vesta.shared.style import _MARKUP_ACTIVE, inert
+    from vesta.shared.style import MARKUP_ACTIVE, inert
     url = links.kiosk_url("cockpit", EXTERNAL, ENTRY)
 
     # ⚠️ THE INVARIANT GOT STRONGER AFTER A DELIVERED BRIEF PROVED THE OLD ONE
@@ -124,7 +124,7 @@ def test_the_footer_would_be_destroyed_by_inert_which_is_why_it_is_appended() ->
     # not `inert`: that maps `_` to a SPACE and would have left "hassio ingress",
     # which is how the cause was identified.) So the URL now carries no
     # markup-active character at all, and is safe from every parser including ours.
-    surviving = [c for c in url if c in _MARKUP_ACTIVE]
+    surviving = [c for c in url if c in MARKUP_ACTIVE]
     assert not surviving, (
         f"the URL still carries {surviving} — a platform that parses markdown "
         f"will consume them and deliver a dead link")
@@ -259,3 +259,83 @@ def test_the_LINK_LINE_carries_NO_MARKUP() -> None:
             f"the link line contains {ch!r}, which either arrives literally "
             f"(parsing is off) or is stripped by `style.inert` — see "
             f"`links.line`'s docstring for the two failures behind that")
+
+
+# ── The host facts the callers used to each fetch themselves ────────────────
+# ⚠️ THREE CALLERS, THREE WAYS. `pipeline` wrapped os.environ["VK_INGRESS_ENTRY"]
+# in a documented helper and called it twice on adjacent lines; `outbox
+# ._rating_link` read the same variable inline with an `import os` buried inside
+# the function; and the invariant that makes either work — the proxy publishes
+# the variable at boot — was stated in the proxy, restated in pipeline, and not
+# stated at all in outbox. An ordering rule was crossing the seam by
+# environment variable.
+
+def test_the_entry_is_read_per_call_not_captured_at_import(monkeypatch):
+    """The proxy publishes it during startup, and `links` may be imported
+    first — a value captured at import would be the empty string forever."""
+    from vesta.adapters import links
+
+    monkeypatch.setattr(links, "_ENTRY_OVERRIDE", "")
+    monkeypatch.delenv("VK_INGRESS_ENTRY", raising=False)
+    assert links.line("Open", {"external_url": "https://x.example"}) == ""
+
+    monkeypatch.setenv("VK_INGRESS_ENTRY", "/api/hassio_ingress/tok")
+    assert "x.example" in links.line("Open", {"external_url": "https://x.example"})
+
+
+def test_configure_serves_an_export_with_no_supervisor_environment(monkeypatch):
+    from vesta.adapters import links
+
+    monkeypatch.delenv("VK_INGRESS_ENTRY", raising=False)
+    monkeypatch.setattr(links, "_ENTRY_OVERRIDE", "")
+    try:
+        links.configure(ingress_entry="/kiosk")
+        assert links.line("Open", {"external_url": "https://x.example"}).endswith("/kiosk")
+    finally:
+        monkeypatch.setattr(links, "_ENTRY_OVERRIDE", "")
+
+
+def test_an_explicit_entry_still_wins(monkeypatch):
+    """The parameter did not vanish — it became optional, so a caller that has
+    a better answer than the environment can still say so."""
+    from vesta.adapters import links
+
+    monkeypatch.setenv("VK_INGRESS_ENTRY", "/from-env")
+    url = links.line("Open", {"external_url": "https://x.example"}, "/explicit")
+    assert "/explicit" in url and "/from-env" not in url
+
+
+def test_no_caller_reaches_for_the_environment_variable_itself():
+    """Pins the direction: one producer (the proxy), one consumer (`links`)."""
+    import io
+    import os
+
+    from conftest import REPO_ROOT, strip_prose
+
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin")
+    offenders = []
+    for dirpath, _dirs, files in os.walk(root):
+        if "__pycache__" in dirpath:
+            continue
+        for fn in files:
+            if not fn.endswith(".py"):
+                continue
+            full = os.path.join(dirpath, fn)
+            rel = os.path.relpath(full, root)
+            if rel in ("supervisor-proxy.py", os.path.join("vesta", "adapters", "links.py")):
+                continue
+            if "VK_INGRESS_ENTRY" in strip_prose(io.open(full, encoding="utf-8").read()):
+                offenders.append(rel)
+    assert not offenders, (
+        "these read the ingress entry directly instead of letting `links` do "
+        "it: %s" % offenders)
+
+
+def test_the_markup_set_is_public_now():
+    """`links` derived its percent-encoding set from `style._MARKUP_ACTIVE`, a
+    private of another module. The intent was right — derive, don't retype —
+    so `style` exports it instead."""
+    from vesta.shared import style
+
+    assert hasattr(style, "MARKUP_ACTIVE")
+    assert not hasattr(style, "_MARKUP_ACTIVE")

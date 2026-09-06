@@ -65,6 +65,7 @@ owner's home instance for no benefit at all. `test_links` asserts it is absent.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict
 from urllib.parse import urlsplit
 
@@ -84,6 +85,47 @@ PAGES: Dict[str, str] = {
 #: rule 3 — but it needs a caller in the same change.
 
 
+#: An explicit ingress entry, set once at startup by an export that has no
+#: Supervisor environment to read. Empty means "ask the environment", which is
+#: what the add-on does.
+_ENTRY_OVERRIDE: str = ""
+
+
+def configure(*, ingress_entry: str = "") -> None:
+    """Tell this module the kiosk's own ingress path. Startup-only, like
+    `hass.configure` and `store.configure`.
+
+    ⚠️ THE ADD-ON NEVER CALLS THIS. `supervisor-proxy.py` publishes
+    `VK_INGRESS_ENTRY` into the environment at boot and `_entry()` reads it per
+    call, so the shipped path is byte-identical. What this adds is the seam an
+    export needs, and what it REMOVES is the reason three callers each had to
+    know the variable's name: `pipeline` wrapped it in a documented helper and
+    called that helper twice on adjacent lines, while `outbox._rating_link`
+    read it inline with an `import os` buried inside the function. An ordering
+    rule ("the proxy must have set this at boot") was crossing the seam by
+    environment variable, stated in two of the three places that depended on
+    it.
+    """
+    global _ENTRY_OVERRIDE
+    if ingress_entry:
+        _ENTRY_OVERRIDE = ingress_entry
+
+
+def _entry(explicit: str = "") -> str:
+    """This add-on's own ingress path, as the Supervisor reports it.
+
+    ⚠️ FROM THE ENVIRONMENT, NOT GUESSED FROM THE SLUG. The entry contains a
+    per-installation token segment, so it cannot be derived — and a guessed
+    path would produce a link that 404s, which is worse than no link because
+    the reader concludes the kiosk is broken. Absent means no link, per the
+    fail-closed rule above.
+
+    ⚠️ READ PER CALL, NOT CAPTURED AT IMPORT. The proxy publishes the variable
+    during startup, and this module may well be imported before that runs.
+    """
+    return explicit or _ENTRY_OVERRIDE or os.environ.get("VK_INGRESS_ENTRY", "")
+
+
 def _base(ha_config: Any, ingress_entry: str) -> str:
     """The kiosk's own address, or "" when it cannot be given out safely.
 
@@ -101,13 +143,13 @@ def _base(ha_config: Any, ingress_entry: str) -> str:
     # Rule 2: https only. Rule 1: nothing else is offered as a substitute.
     if parts.scheme != "https" or not parts.netloc:
         return ""
-    entry = str(ingress_entry or "").strip()
+    entry = str(_entry(ingress_entry)).strip()
     if not entry.startswith("/"):
         return ""
     return f"{parts.scheme}://{parts.netloc}{entry.rstrip('/')}"
 
 
-def reason(ha_config: Any, ingress_entry: str) -> str:
+def reason(ha_config: Any, ingress_entry: str = "") -> str:
     """Why no link was produced — one short, FIXABLE sentence, or "".
 
     ⚠️ FAIL-CLOSED WITHOUT THIS IS FAIL-SILENT, AND THAT IS A DIFFERENT BUG.
@@ -140,7 +182,7 @@ def reason(ha_config: Any, ingress_entry: str) -> str:
 
 
 #: Characters a notify platform may parse as markup, percent-encoded so it
-#: cannot. ⚠️ DERIVED FROM `style._MARKUP_ACTIVE` RATHER THAN RETYPED — the two
+#: cannot. ⚠️ DERIVED FROM `style.MARKUP_ACTIVE` RATHER THAN RETYPED — the two
 #: must name the same set, and a second hand-written list is how they drift.
 def _safe_url(url: str) -> str:
     """A URL no markdown dialect can chew on.
@@ -149,14 +191,14 @@ def _safe_url(url: str) -> str:
     produce something no client resolves; those cannot contain a markup-active
     character in a valid URL anyway.
     """
-    from vesta.shared.style import _MARKUP_ACTIVE
+    from vesta.shared.style import MARKUP_ACTIVE
     parts = urlsplit(url)
-    tail = "".join(f"%{ord(c):02X}" if c in _MARKUP_ACTIVE else c
+    tail = "".join(f"%{ord(c):02X}" if c in MARKUP_ACTIVE else c
                    for c in parts.path)
     return f"{parts.scheme}://{parts.netloc}{tail}"
 
 
-def kiosk_url(page: str, ha_config: Any, ingress_entry: str) -> str:
+def kiosk_url(page: str, ha_config: Any, ingress_entry: str = "") -> str:
     """An absolute link to one kiosk page, or "" if it cannot be built safely."""
     if page not in PAGES:
         return ""
@@ -167,7 +209,7 @@ def kiosk_url(page: str, ha_config: Any, ingress_entry: str) -> str:
     return _safe_url(f"{base}/{path.lstrip('/')}" if path else base)
 
 
-def line(prompt: str, ha_config: Any, ingress_entry: str) -> str:
+def line(prompt: str, ha_config: Any, ingress_entry: str = "") -> str:
     """`<prompt> VESTA: <url>` — the ONE shape every notification uses, or "".
 
     ⚠️ ONE RULE FOR EVERY MESSAGE (owner, 2026-08-28: "make sure all the
@@ -200,7 +242,7 @@ def line(prompt: str, ha_config: Any, ingress_entry: str) -> str:
     return f"{text} VESTA: {url}" if url and text else ""
 
 
-def html_line(prompt: str, ha_config: Any, ingress_entry: str) -> str:
+def html_line(prompt: str, ha_config: Any, ingress_entry: str = "") -> str:
     """`<prompt> <a href="url">VESTA</a>` — the same line, as a real hyperlink.
 
     ⚠️ ONLY FOR A TRANSPORT WHOSE PARSE MODE WE SET OURSELVES, which today means
@@ -246,7 +288,7 @@ def html_escape(text: str) -> str:
             .replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def footer(ha_config: Any, ingress_entry: str) -> str:
+def footer(ha_config: Any, ingress_entry: str = "") -> str:
     """The one line a brief appends, or "" when no safe link exists.
 
     ⚠️ ONE LINK, NOT ONE PER SECTION. A notification is read in a list preview

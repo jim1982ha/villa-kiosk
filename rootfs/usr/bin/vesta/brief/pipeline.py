@@ -490,18 +490,6 @@ def _withheld_fields(context: ReportContext,
     return sorted(source - set(PAYLOAD_ALLOWED_FIELDS))
 
 
-def _ingress_entry() -> str:
-    """This add-on's own ingress path, as the Supervisor reports it.
-
-    ⚠️ FROM THE ENVIRONMENT, NOT GUESSED FROM THE SLUG. The entry contains a
-    per-installation token segment, so it cannot be derived — and a guessed path
-    would produce a link that 404s, which is worse than no link because the
-    reader concludes the kiosk is broken. Absent means no link, per `links`'
-    fail-closed rule.
-    """
-    return os.environ.get("VK_INGRESS_ENTRY", "")
-
-
 async def run_report(
     session: ClientSession,
     audience: str,
@@ -804,8 +792,11 @@ async def run_report(
     # parse_mode. Everything else still receives the plain body below,
     # byte-identical to before.
     urls = (found.get("inventory") or {}).get("urls")
-    link = links_mod.footer(urls, _ingress_entry())
-    html_link = links_mod.html_line("Open", urls, _ingress_entry())
+    # ⚠️ THE ENTRY IS THE MODULE'S OWN BUSINESS NOW (2.943.0). This used to
+    # wrap os.environ["VK_INGRESS_ENTRY"] in a local helper and call it twice
+    # on adjacent lines; `links` reads it per call and an export configures it.
+    link = links_mod.footer(urls)
+    html_link = links_mod.html_line("Open", urls)
     html_body = links_mod.rich_body(body, html_link)
     if link:
         body = f"{body}\n\n{link}"

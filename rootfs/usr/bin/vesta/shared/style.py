@@ -116,7 +116,7 @@ def severity_line(severity: str, word: str, subject: str) -> str:
 #: chosen so a real name stays readable. `Timmerflotte_8343` becoming
 #: `Timmerflotte 8343` is what a person would have written anyway; becoming
 #: `Timmerflotte8343` is a different string.
-_MARKUP_ACTIVE = {
+MARKUP_ACTIVE = {
     "_": " ",    # Markdown italic. THE ONE THAT BROKE A DELIVERY — see `inert`.
     "*": "",     # Markdown bold/italic.
     "`": "'",    # Markdown code.
@@ -181,7 +181,7 @@ def inert(text: str) -> str:
     intentional markup anywhere, so there is nothing for a whole-message pass to
     damage, and after it there is no site left that can forget.
     """
-    return "".join(_MARKUP_ACTIVE.get(character, character) for character in text)
+    return "".join(MARKUP_ACTIVE.get(character, character) for character in text)
 
 
 def title_mark(severity: str) -> str:

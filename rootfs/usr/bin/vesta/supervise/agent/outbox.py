@@ -538,7 +538,6 @@ async def _rating_link(session: Any) -> Tuple[str, str]:
     """
     from vesta.adapters import links as links_mod
     from vesta.adapters.hass import HassClient
-    import os
     try:
         async with HassClient(session) as hass:
             ha_config = await hass.command("get_config")
@@ -554,9 +553,8 @@ async def _rating_link(session: Any) -> Tuple[str, str]:
     # hyperlink (proven on the owner's phone, 2026-08-28); `notify.send_message`
     # publishes none, so that path shows the address itself, which Telegram
     # auto-links. Same words, same destination, whichever way it goes out.
-    entry = os.environ.get("VK_INGRESS_ENTRY", "")
-    return (links_mod.line("Rate this alert in", urls, entry),
-            links_mod.html_line("Rate this alert in", urls, entry))
+    return (links_mod.line("Rate this alert in", urls),
+            links_mod.html_line("Rate this alert in", urls))
 
 
 async def _deliver_one(session: Any, concern: Mapping[str, Any], *,

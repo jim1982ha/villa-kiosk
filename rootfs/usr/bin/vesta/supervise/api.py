@@ -67,12 +67,25 @@ class _Deps(Protocol):
     this is a type fix, not a retyping of the host.
     """
 
+    #: ⚠️ THE DEEP FUNCTION, NOT TWO FILESYSTEM PRIMITIVES (2.943.0). This
+    #: pair used to be `read_json_store` + `agent_config_file`, and six
+    #: handlers each reassembled the agent config from them — TWO applying
+    #: `agent_config.view()` and FOUR handing the raw sparse overlay
+    #: downstream. Meanwhile the host already owned the correct version and
+    #: passed it to the agent's LOOPS as a callable, with a docstring
+    #: explaining that passing its RESULT froze every kill switch at boot. So
+    #: one `main()` gave the loops a config source and the routes a file path.
+    #: `view()` is idempotent (`reason.auto` re-applies it itself), so the
+    #: raw/viewed split was defence-in-depth rather than a live bug — but it
+    #: was an ordering rule a caller had to know, and four of six did not
+    #: follow it. Naming a path here also made the export seam demand that an
+    #: external deployment store its agent config as a JSON document at a
+    #: path, which is a filesystem invariant no handler needs.
     unauthorized: Callable[[], web.Response]
     forbidden: Callable[..., web.Response]
     authorized: Any
     role_for: Any
-    read_json_store: Any
-    agent_config_file: str
+    config_now: Callable[[], Dict[str, Any]]
     config_get: Any
     config_put: Any
     concerns_get: Any
@@ -87,7 +100,7 @@ deps: _Deps = cast("_Deps", None)
 
 
 def bind(*, authorized: Any, unauthorized: Any, forbidden: Any, role_for: Any,
-         read_json_store: Any, agent_config_file: str,
+         config_now: Callable[[], Dict[str, Any]],
          config_get: Any, config_put: Any, concerns_get: Any) -> None:
     """Give the handlers their host. Called once, at startup, by whoever
     mounts `routes()` — the proxy in the add-on, the entrypoint in an export."""
@@ -101,8 +114,7 @@ def bind(*, authorized: Any, unauthorized: Any, forbidden: Any, role_for: Any,
     # factory's ownership.
     deps = cast("_Deps", SimpleNamespace(
         authorized=authorized, unauthorized=unauthorized, forbidden=forbidden,
-        role_for=role_for, read_json_store=read_json_store,
-        agent_config_file=agent_config_file,
+        role_for=role_for, config_now=config_now,
         config_get=config_get, config_put=config_put,
         concerns_get=concerns_get))
 
@@ -246,7 +258,7 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
         request.app.get("session"),
         "useful" if useful else "not_useful", concern_id,
         by=str(deps.role_for(request) or ""),
-        config=agent_config.view(deps.read_json_store(deps.agent_config_file, {})),
+        config=deps.config_now(),
         reason=str(body.get("reason") or "")[:500])
     if not outcome.ok:
         return web.json_response({"error": outcome.note}, status=400)
@@ -304,7 +316,7 @@ async def agent_action_handler(request: web.Request) -> web.Response:
     outcome = await agent_actions.perform(
         request.app.get("session"), action_id, concern_id,
         by=str(deps.role_for(request) or ""),
-        config=agent_config.view(deps.read_json_store(deps.agent_config_file, {})),
+        config=deps.config_now(),
         reason=str(body.get("reason") or "")[:500])
     if not outcome.ok:
         return web.json_response({"error": outcome.note}, status=400)
@@ -801,7 +813,7 @@ async def _agent_drill(request: web.Request,
     from vesta.supervise.agent import scheduler as agent_scheduler
     from vesta.supervise.agent.tools import concern as concern_tool
 
-    stored = deps.read_json_store(deps.agent_config_file, {})
+    stored = deps.config_now()
     # ⚠️ THE OWNER CHOOSES THE SEVERITY, because it selects which downstream
     # rules run: only a `critical` pushes and only a `critical` is ever chased
     # by the escalation ladder. Defaulting to `warning` keeps the common drill
@@ -932,7 +944,7 @@ async def agent_run_now_handler(request: web.Request) -> web.Response:
         # reporting that nothing changed. The reason was in the response body
         # the whole time and the panel showed it; I did not ask for it and read
         # the add-on log instead, which is where the byte count gave it away.
-        stored = deps.read_json_store(deps.agent_config_file, {})
+        stored = deps.config_now()
         provider = anthropic_sdk.build(
             api_key=reports_secrets.get("anthropic") or "")
         # ⚠️ THE SAME SCOPE THE CLOCK USES, so a button press and a scheduled
@@ -992,7 +1004,7 @@ async def agent_queue_get_handler(request: web.Request) -> web.Response:
         return deps.forbidden("Only the owner profile may read the approval queue.")
     from vesta.supervise.agent import audit as agent_audit
     from vesta.supervise.agent import reason as agent_reason
-    config = deps.read_json_store(deps.agent_config_file, {})
+    config = deps.config_now()
     return web.json_response({
         "pending": agent_audit.pending_escalations(),
         # ⚠️ THE MODE TRAVELS WITH THE QUEUE so the panel can say WHY the list is
@@ -1055,7 +1067,7 @@ async def agent_queue_post_handler(request: web.Request) -> web.Response:
     ran, why = await agent_reason.approve(
         run_id,
         provider=provider,
-        config=deps.read_json_store(deps.agent_config_file, {}),
+        config=deps.config_now(),
         # ⚠️ THE APP'S SESSION, so an APPROVED investigation reaches Home
         # Assistant's own tools exactly as the automatic arm does. Approval and
         # the scheduler share one body (`reason.investigate_subject`) precisely
