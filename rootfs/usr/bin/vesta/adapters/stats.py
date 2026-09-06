@@ -23,7 +23,7 @@ power draw), where a delta would be meaningless.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from vesta.adapters.hass import HassClient, HassUnavailable
 from vesta.adapters.log import warn
@@ -202,9 +202,27 @@ def statistics_fetcher(session: Any, now_local: Any,
     from .hass import HassClient, HassUnavailable
     from .log import warn
 
+    # ⚠️ ONE ANSWER PER (ids, days) PER PASS (2.953.0). Four modules call this
+    # and three ask for the SAME 56-day hourly window over overlapping ids —
+    # `level_anomaly` and `level_shortfall` ask for byte-identical arguments,
+    # because they are two directions of one weekday-baseline question. Without
+    # this the recorder answered the same query twice per Brief and the daily
+    # bucketing ran twice over identical rows.
+    #
+    # ⚠️ PER FETCHER, NOT MODULE-LEVEL. A fetcher is built once per pass
+    # (`_statistics_fetcher(session, now_local, tally)`), so the cache dies with
+    # the pass and cannot serve a later Brief a stale window — which is the
+    # defect `rejected` had when it lived on a long-lived module instance.
+    cache: Dict[Tuple[Tuple[str, ...], int], Dict[str, List[Dict[str, Any]]]] = {}
+
     async def fetch(ids: Sequence[str], days: int) -> Dict[str, List[Dict[str, Any]]]:
         if not ids:
             return {}
+        key = (tuple(ids), int(days))
+        hit = cache.get(key)
+        if hit is not None:
+            tally["cache_hits"] = tally.get("cache_hits", 0) + 1
+            return hit
         start = start_of_day(now_local, days)
         try:
             async with HassClient(session) as hass:
@@ -232,6 +250,7 @@ def statistics_fetcher(session: Any, now_local: Any,
             if rows:
                 tally["sample_row"] = rows[0]
                 break
+        cache[key] = series
         return series
 
     return fetch

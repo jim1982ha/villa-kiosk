@@ -68,6 +68,19 @@ WEEKDAY_NAME = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
                 "Saturday", "Sunday")
 
 
+def _weekday_name(weekday: int) -> str:
+    """The day's name, or a phrase when the index is out of range.
+
+    ⚠️ THE SAME DEGRADATION `level_shortfall` HAS. These two modules are two
+    directions of one weekday-baseline rule and share 67% of their code; this
+    one indexed `WEEKDAY_NAME[weekday]` unguarded while its twin wrote
+    `... if 0 <= weekday < 7 else "that day"`. A finding is not worth an
+    IndexError, and a rule stated twice had drifted in exactly the place a
+    reader would assume it had not.
+    """
+    return WEEKDAY_NAME[weekday] if 0 <= weekday < 7 else "that day"
+
+
 class LevelAnomaly:
     """Consumption well above this device's own normal for that weekday."""
 
@@ -191,9 +204,14 @@ class LevelAnomaly:
                     kind="ANOMALY",
                     severity="warning" if rise >= rise_threshold * 2 else "notice",
                     label=label_for(statistic_id, context.labels),
+                    # ⚠️ GUARDED, LIKE ITS TWIN (2.953.0). `level_shortfall`
+                    # writes `WEEKDAY_NAME[weekday] if 0 <= weekday < 7 else
+                    # "that day"`; this indexed unguarded, so the two halves of
+                    # one weekday-baseline rule disagreed about what an
+                    # out-of-range weekday does — one degrades, one raises.
                     detail=(f"used about {round(rise * 100)}% more on "
-                            f"{WEEKDAY_NAME[weekday]} than it normally does on a "
-                            f"{WEEKDAY_NAME[weekday]} ({len(samples)} compared)"),
+                            f"{_weekday_name(weekday)} than it normally does on a "
+                            f"{_weekday_name(weekday)} ({len(samples)} compared)"),
                     metric="energy",
                     unit="kWh",
                     observed=round(observed, 4),

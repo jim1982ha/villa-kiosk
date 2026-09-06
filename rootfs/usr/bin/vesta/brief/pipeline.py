@@ -31,7 +31,7 @@ from aiohttp import ClientSession
 # (TASK-071/074, 2026-08-27). They parsed, counted and cross-checked the
 # `vesta_*` blueprint events; the last emitter stopped on the same day and a
 # parser with no producer is the machinery this phase exists to remove.
-from . import standing as standing_mod, trend as trend_mod
+from . import standing as standing_mod
 from vesta.adapters import automations as automations_mod
 from vesta.brief.request import BriefRequest
 from vesta.adapters import stats as stats_mod
@@ -320,25 +320,8 @@ def _entity_labels(states: Any) -> Dict[str, str]:
             for entity_id in entities}
 
 
-def _entity_units(states: Any) -> Dict[str, str]:
-    """entity_id -> `unit_of_measurement`, for every entity that declares one.
-
-    ⚠️ FROM THE SAME STATE DUMP `_entity_labels` READS. A blueprint reports the
-    NUMBER it measured and the report has to say what it is a number OF; only
-    the sensor knows. Costs a dict comprehension over data already in hand.
-    """
-    if not isinstance(states, list):
-        return {}
-    out: Dict[str, str] = {}
-    for entity in states:
-        if not isinstance(entity, dict):
-            continue
-        attributes = entity.get("attributes")
-        unit = (attributes or {}).get("unit_of_measurement") \
-            if isinstance(attributes, dict) else None
-        if unit and entity.get("entity_id"):
-            out[str(entity["entity_id"])] = str(unit)
-    return out
+# ⚠️ `_entity_units` DELETED (2.953.0) with `ReportContext.units`, which was
+# annotated "POPULATED BUT UNREAD" once the blueprint-event renderer left.
 
 
 def _standing_rows(states: Any) -> List[Dict[str, Any]]:
@@ -619,7 +602,6 @@ async def run_report(
     verified: List[Any] = []
     standing: List[Dict[str, Any]] = []
     labels: Dict[str, str] = {}
-    units: Dict[str, str] = {}
     try:
         async with HassClient(session) as hass:
             lists = await ledger.todo_lists(hass)
@@ -641,7 +623,6 @@ async def run_report(
             states = await hass.command("get_states")
             standing = _standing_rows(states)
             labels = _entity_labels(states)
-            units = _entity_units(states)
         # ⚠️ EVERY OPEN TO-DO IS CARRIED, DIRECTLY. This was
         # `ledger.reconcile(todo, [])` — a dedupe against "tasks this period's
         # blueprint events already stated", called with a hard-coded EMPTY
@@ -727,10 +708,8 @@ async def run_report(
         findings=findings + [f.as_dict() for f in verified],
         skipped=skipped, ran=ran,
         collector=collect.state(),
-        carried_tasks=carried, standing=standing, labels=labels, units=units,
+        carried_tasks=carried, standing=standing, labels=labels,
         record=record_mod.since(since),
-        history=_history_series(cadence),
-        currency=str(found.get("currency") or ""),
         # ⚠️ DEDUPED AGAINST THIS BRIEF'S OWN FINDINGS, AND NOTHING ELSE NOW.
         # A device the built-in checks already reported could otherwise appear
         # TWICE in one brief — once as a finding and once as a Concern, in
@@ -1039,25 +1018,11 @@ def usable_lead(prose: Optional[str]) -> str:
     return lead if len(lead) <= MAX_LEAD_CHARS else ""
 
 
-def _history_series(cadence: str) -> Dict[str, List[float]]:
-    """Past values this report may compare itself against.
-
-    ⚠️ READ BEFORE THIS REPORT IS APPENDED, which is what makes "previous"
-    true — `append_history` runs after delivery. Non-fatal like every other
-    read here: no history means no trend line, and a brief without one is
-    exactly what every brief was until now.
-    """
-    try:
-        document = store.history_view(
-            store.read_json(store.REPORTS_HISTORY_FILE, store.EMPTY_HISTORY))
-        entries = list(document.get("entries") or [])
-        return {
-            field: trend_mod.series_from_history(entries, field, cadence)
-            for field in ("avoidableCost", "findingCount")
-        }
-    except Exception as err:  # noqa: BLE001 - a trend is never worth a report
-        swallow("could not read history for trends", err)
-        return {}
+# ⚠️ `_history_series` DELETED (2.953.0). It read the whole reports history per
+# Brief to build two series for `ReportContext.history`, which nothing read —
+# and one of the two fields was `"avoidableCost": 0.0`, a literal zero since
+# TASK-071 because the savings column summed blueprint-event money and nothing
+# emits one. A store read, to produce a list of zeros, into a dead field.
 
 
 def append_history(entry: Dict[str, Any]) -> None:

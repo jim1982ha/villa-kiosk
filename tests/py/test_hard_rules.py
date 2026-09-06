@@ -72,6 +72,9 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `test_survey_clock`'s statistics-cache fixtures. Two ids, so "the same
+    # window twice" and "a different id" are distinguishable.
+    "sensor.one", "sensor.two",
     # `test_module_labels`'s two shapes. `sensor.some_device_energy` shows the
     # `_energy` suffix being stripped; the bedroom-window one shows what the
     # humanised fallback DOES to an id that contains a person's name — which is

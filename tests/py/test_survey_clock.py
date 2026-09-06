@@ -178,3 +178,113 @@ def test_refresh_measures_keeps_the_old_answer_when_the_villa_is_unreachable(
     kept = store.read_json(path, {})
     assert kept.get("measures") == {"sensor.x": {"u": "W"}}, (
         "an unreachable villa erased the measurement classes it already had")
+
+
+# ── One statistics answer per pass ─────────────────────────────────────────
+
+def test_the_same_window_is_fetched_ONCE_per_pass(monkeypatch):
+    """⚠️ FOUR MODULES ASK, AND TWO ASK IDENTICALLY. `level_anomaly` and
+    `level_shortfall` are two directions of one weekday-baseline question and
+    call `context.stats(ids, 56)` with byte-identical arguments, against a
+    fetcher that had no cache — so the recorder answered the same 56-day hourly
+    query twice per Brief and the daily bucketing ran twice over identical rows.
+    """
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+
+    calls = {"n": 0}
+
+    async def fake(hass, ids, start, period=None, types=None):
+        calls["n"] += 1
+        return {i: [{"start": "x", "change": 1.0}] for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", fake)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    tally: dict = {}
+    fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), tally)
+    ids = ["sensor.one", "sensor.two"]
+    asyncio.run(fetch(ids, 56))
+    asyncio.run(fetch(ids, 56))
+    assert calls["n"] == 1, (
+        "the same window was fetched %d times in one pass" % calls["n"])
+    assert tally.get("cache_hits") == 1
+
+
+def test_a_DIFFERENT_window_is_still_fetched(monkeypatch):
+    """The cache must not answer a question nobody asked."""
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+
+    calls = {"n": 0}
+
+    async def fake(hass, ids, start, period=None, types=None):
+        calls["n"] += 1
+        return {i: [] for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", fake)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), {})
+    asyncio.run(fetch(["sensor.one"], 56))
+    asyncio.run(fetch(["sensor.one"], 14))
+    asyncio.run(fetch(["sensor.two"], 56))
+    assert calls["n"] == 3, calls
+
+
+def test_the_cache_dies_with_the_pass(monkeypatch):
+    """⚠️ PER FETCHER, NOT MODULE-LEVEL — the defect `rejected` had. A fetcher is
+    built once per pass, so a later Brief must not be served this one's window."""
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+
+    calls = {"n": 0}
+
+    async def fake(hass, ids, start, period=None, types=None):
+        calls["n"] += 1
+        return {i: [] for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", fake)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    for _ in range(2):
+        fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), {})
+        asyncio.run(fetch(["sensor.one"], 56))
+    assert calls["n"] == 2, "a new pass reused the previous pass's answer"
+
+
+def test_both_weekday_modules_degrade_the_same_way_on_a_bad_index():
+    """⚠️ ONE RULE, TWO MODULES, AND THE DEGRADATION HAD DRIFTED.
+    `level_shortfall` guarded the index; `level_anomaly` did not."""
+    from vesta.shared.analysis.modules import level_anomaly, level_shortfall
+
+    assert level_anomaly._weekday_name(0) == level_shortfall.WEEKDAY_NAME[0]
+    assert level_anomaly._weekday_name(99) == "that day"
+    assert level_anomaly._weekday_name(-1) == "that day"
