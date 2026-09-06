@@ -132,7 +132,7 @@ import {
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
 import { ALERT_RED, ALERT_RED_HEX, UNAVAILABLE_AMBER, AVAILABLE_GREEN_HEX } from "./colors";
-import { COSMETIC_MAPPING_FIELDS, entityMapDelta, sliceChanged } from "./entityMapDiff";
+import { COSMETIC_MAPPING_FIELDS, sceneConfigDelta } from "./entityMapDiff";
 // Pose-word resolution (which "__<word>" mesh variant a live state asks for)
 // — pure logic, extracted to keep this file to the things that actually touch
 // the scene. See meshVariants.ts for the vocabulary rules themselves.
@@ -1676,9 +1676,12 @@ export class EntityVisuals {
   }
 
   updateConfig(config: AppConfig): void {
-    const prevGroups = this.config.deviceGroups;
-    const prevBadgeStyle = this.config.badgeStyle;
-    const prevEntityMap = this.config.entityMap;
+    // ⚠️ THE SAME CLASSIFIER SceneManager USES (2.941.0). This method used to
+    // derive its own `mapDelta` from a line identical to the one in
+    // SceneManager.updateConfig, plus two more predicates of its own — the
+    // policy transcribed rather than shared. See sceneConfigDelta's docstring
+    // for why every one of these needs a CONTENT comparison.
+    const d = sceneConfigDelta(this.config, config);
     this.config = config;
     // hiddenCategories gates the layout pass's first cull and badgeStyle
     // switches labelBoxes to a different geometry entirely — neither is
@@ -1710,10 +1713,7 @@ export class EntityVisuals {
     // widths reconstructed from the jump distances came back as their real
     // label widths, and `top` never moved because `height` is set in explicit
     // pixels and needs no children.
-    // Reuses the shared classifier rather than a third stringify idiom.
-    const mapDelta = config.entityMap === prevEntityMap
-      ? "identical" : entityMapDelta(prevEntityMap, config.entityMap);
-    if (mapDelta !== "identical") {
+    if (d.mapDelta !== "identical") {
       // The per-entity mappings cached here are built ONLY by indexMeshes()
       // — the structural pass a cosmetic edit deliberately skips — so every
       // consumer of this.mapping kept reading the values from the last
@@ -1757,8 +1757,7 @@ export class EntityVisuals {
     // from the same pull — it is a SHARED_CONFIG_KEY too, so it also arrives
     // freshly parsed on every focus. badgeStyle is a per-device string and
     // compares by value already.
-    const groupsChanged = sliceChanged(prevGroups, config.deviceGroups);
-    if (needsRepaint || groupsChanged || config.badgeStyle !== prevBadgeStyle) {
+    if (needsRepaint || d.groupsChanged || d.badgeStyleChanged) {
       this.rebuildLabels();
     }
     // A per-light override changed. Nothing will emit a state_changed for

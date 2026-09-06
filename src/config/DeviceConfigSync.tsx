@@ -308,12 +308,19 @@ export default function DeviceConfigSync() {
     // there, SceneManager) a BRAND NEW object reference for every field in
     // `server` on every call, even when its content is byte-identical to what
     // config already holds — a fresh JSON parse can never be `===` the
-    // existing object. SceneManager's structural-change gate content-diffs
-    // entityMap (entityMapDelta) but compares meshBindings by REFERENCE, so
-    // an unconditional update() here forced a full mesh re-index — visible as
-    // covers/locks snapping back to their hardcoded default pose mid-rebuild,
-    // and the multi-second freeze the rebuild itself costs — on literally
-    // every focus regain, whether or not anything had actually changed.
+    // existing object. An unconditional update() here forced a full mesh
+    // re-index — visible as covers/locks snapping back to their hardcoded
+    // default pose mid-rebuild, and the multi-second freeze the rebuild itself
+    // costs — on literally every focus regain, whether or not anything had
+    // actually changed.
+    //
+    // ⚠️ DO NOT RESTATE THE SCENE'S GATING RULE HERE. This comment used to,
+    // and it went stale: it claimed the gate "content-diffs entityMap but
+    // compares meshBindings by REFERENCE" long after meshBindings had gained
+    // the same content check. A third copy of a policy is a third thing to
+    // keep in step, and this one was wrong in the direction that makes a
+    // reader relax. The rule, and every field narrative behind it, lives in
+    // `entityMapDiff.sceneConfigDelta`.
     if (mergedJson === JSON.stringify(localRef.current)) return;
 
     update(fromServer);

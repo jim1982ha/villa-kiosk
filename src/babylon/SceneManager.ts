@@ -78,7 +78,7 @@ import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
-import { entityMapDelta, sliceChanged } from "./entityMapDiff";
+import { sceneConfigDelta } from "@/babylon/entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
 import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 import { cameraFrame } from "./cameraFrame";
@@ -4289,72 +4289,25 @@ export class SceneManager {
     // like "show labels" / "highlight clickable". Re-running the lighting pass
     // (which rewrites scene.clearColor + the sky) and the structural pass (which
     // re-clones materials and recreates per-light PointLights) on every toggle
-    // is what made the background flicker and the scene visibly hitch. Each heavy
-    // subsystem now only re-runs when an input it actually depends on changed.
-    // Config objects are recreated immutably by ConfigContext.update(), so a
-    // reference change reliably marks "this slice was touched".
-    const renderChanged =
-      prev.render !== config.render ||
-      prev.latitude !== config.latitude ||
-      prev.longitude !== config.longitude;
-
-    // A freshly (re)uploaded central .sh3d lands here asynchronously — see
-    // BabylonCanvas's background "central SH3D refresh", which fetches +
-    // parses it AFTER first paint and just calls update({ sh3dRooms,
-    // sh3dEntities }), with no full remount to force a re-fit. Without this,
-    // the new room names/shapes sat in config but nothing ever re-ran
-    // calibrateRooms() to pick them up — the Rooms menu kept showing
-    // whatever was calibrated at the PREVIOUS model load until a second full
-    // reload happened to already have the fresh data cached from last time.
-    const sh3dChanged =
-      prev.sh3dRooms !== config.sh3dRooms || prev.sh3dEntities !== config.sh3dEntities;
-
-    // A COSMETIC per-entity edit (label, room, category, badge colour, linked/
-    // motion entity, light intensity) changes entityMap by reference like any
-    // other edit, but needs only a cheap glyph repaint — NOT the full
-    // indexMeshes re-clone/relight pass, whose multi-second hitch is what made
-    // both the colour modal and every Advanced Settings device card feel
-    // laggy. Detect that case and route it to repaintBadges() below instead of
-    // the structural branch. See COSMETIC_MAPPING_FIELDS for why these
-    // specific fields are safe to skip re-indexing for.
-    // Three outcomes, not two — see entityMapDelta. A same-content replacement
-    // ("identical") must be neither cosmetic NOR structural, or every
-    // DeviceConfigSync focus-pull buys a full multi-second re-index for a
-    // config that did not change.
-    const mapDelta = prev.entityMap === config.entityMap
-      ? "identical"
-      : entityMapDelta(prev.entityMap, config.entityMap);
-    // meshBindings needs the SAME same-content-different-reference guard as
-    // entityMap just above, for the identical reason: DeviceConfigSync's
-    // pull() hands both fields a freshly JSON-parsed (so never `===` the
-    // existing one) object on every call, including a no-op pull that ran
-    // purely because the tab regained focus/visibility. Missed when
-    // entityMapDelta was introduced — meshBindings sat right next to it,
-    // still comparing by bare reference, so a config that hadn't changed at
-    // all still tripped `structuralChanged` (a full indexMeshes/
-    // applyStructure pass) on every single focus regain. Unlike entityMap
-    // there's no cosmetic/structural split to make here — any REAL change to
-    // which mesh is which entity is inherently structural — so this only
-    // needs a same-content check, not a delta classifier.
-    const meshBindingsChanged = sliceChanged(prev.meshBindings, config.meshBindings);
-    const cosmeticOnly =
-      mapDelta === "cosmetic" &&
-      !meshBindingsChanged &&
-      !sh3dChanged;
-
-    // indexMeshes()/applyStructure() only read entity↔mesh bindings; everything
-    // else (glass hints, grass, model transform) takes effect on the next
-    // model load, not here.
-    const structuralChanged =
-      mapDelta === "structural" ||
-      meshBindingsChanged ||
-      sh3dChanged;
+    // is what made the background flicker and the scene visibly hitch.
+    //
+    // ⚠️ THE RULE LIVES IN entityMapDiff.sceneConfigDelta, NOT HERE (2.941.0).
+    // Ten predicates used to be derived inline in this method and two more in
+    // EntityVisuals.updateConfig, with one line identical in both and a THIRD
+    // statement of the policy in prose in DeviceConfigSync.tsx — which had
+    // already gone stale, still claiming meshBindings was compared by
+    // reference after that stopped being true here. Every field narrative
+    // moved to that function's docstring, where it documents the rule instead
+    // of one call site, and `npm run test:config-delta` now pins the policy
+    // rather than only the primitive underneath it.
+    const d = sceneConfigDelta(prev, config);
+    const structuralChanged = d.structuralChanged;
 
     // renderFx first (sets base IBL + builds/clears the env texture), THEN the
     // sun pass so SunController has the final word on the fill light + day/night
     // IBL scaling it owns. Same ordering as setRenderConfig() — keeping the two
     // call sites consistent is what stops the night fill from flickering.
-    if (renderChanged) {
+    if (d.renderChanged) {
       this.renderFx.apply(this.deviceRenderConfig(config.render));
       this.sun.updateConfig(config);
     }
@@ -4366,33 +4319,14 @@ export class SceneManager {
     this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
     this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
-    if (cosmeticOnly) this.visuals.repaintBadges(); // cheap glyph-only refresh
+    if (d.cosmeticOnly) this.visuals.repaintBadges(); // cheap glyph-only refresh
 
     // A room added/renamed/removed via the Rooms menu ("Add room here") should
     // start glowing (or stop) immediately — no model reload needed, unlike the
-    // real room polygons which only change on a full recalibration.
-    //
-    // ⚠️ CONTENT, NOT REFERENCE — the FOURTH shared key to need this, and the
-    // last one that lacked it (/dry-audit). entityMap, meshBindings and
-    // deviceGroups each got the guard after the same bug was reported in the
-    // field; teleportPoints is a SHARED_CONFIG_KEY too, so DeviceConfigSync's
-    // pull() hands back a freshly JSON-parsed (never `===`) array on every
-    // window focus and visibilitychange. What that bought on each one was not
-    // cheap: syncRoomPoints → setPointRooms disposes EVERY point-room glow and
-    // rebuilds it, and each rebuild casts a floor probe and either builds a
-    // decal against real geometry or triangulates a clipped polygon into a
-    // fresh Mesh + material. Focus the tab, rebuild the lot, for a config that
-    // did not change.
-    //
-    // `eyeHeight` is in the predicate because syncRoomPoints READS it (a point
-    // stores the eye position, so the patch's floorY is `y - eyeHeight`) —
-    // moving the slider in Settings used to leave every point-room glow at its
-    // old height until a reload. Same class of defect from the other side: a
-    // consumer that does not re-run when one of its inputs moves.
-    const roomPointsChanged =
-      sliceChanged(prev.teleportPoints, config.teleportPoints)
-      || prev.eyeHeight !== config.eyeHeight;
-    if (roomPointsChanged) {
+    // real room polygons which only change on a full recalibration. Why this
+    // needs a content comparison, and why eyeHeight is part of the question,
+    // are in sceneConfigDelta's docstring.
+    if (d.roomPointsChanged) {
       this.syncRoomPoints();
     }
 
@@ -4422,7 +4356,7 @@ export class SceneManager {
       const entityDelta = newEntityCount - prevEntityCount;
 
       const needsRecalibration =
-        sh3dChanged ||
+        d.sh3dChanged ||
         entityDelta > 0;  // new entities improve the plan→world fit
 
       if (needsRecalibration) {
@@ -4436,9 +4370,8 @@ export class SceneManager {
 
     if (
       this.loadedMeshes.length &&
-      (structuralChanged || // a disabled/rebound entity must lose/gain its outline
-        prev.highlightInteractive !== config.highlightInteractive ||
-        prev.hiddenCategories.join() !== config.hiddenCategories.join())
+      // a disabled/rebound entity must lose/gain its outline
+      (structuralChanged || d.highlightChanged)
     ) {
       this.applyHighlight(this.loadedMeshes);
     }
