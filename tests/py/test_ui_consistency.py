@@ -1503,26 +1503,51 @@ def test_a_FROZEN_COUNT_is_never_drawn_as_live_status() -> None:
 def test_an_act_from_the_UI_updates_the_CHAT_MESSAGE_immediately() -> None:
     """⚠️ THE OWNER'S REQUIREMENT, VERBATIM (2026-08-28): "when I click 'done'
     in vesta UI, the button in the associated notification shall update
-    accordingly". The chase-clock sweep already reconciles — up to FIFTEEN
-    MINUTES later, which is fifteen minutes of a phone offering acts the store
-    would refuse. So both act-performing handlers kick the sweep the moment an
-    act succeeds; the clock stays as the net for whatever this misses.
+    accordingly". The chase sweep already did it — up to fifteen minutes later,
+    which is fifteen minutes of a phone offering acts the store would refuse.
+
+    ⚠️ ASSERTED BY CALLING IT, NOT BY READING IT (2026-09-06). This used to
+    slice two handlers' source and compare the INDEX of `_sync_chat_messages(`
+    against the index of `status=400` — a test of where two substrings sit,
+    which is the shape you get when a rule has nowhere to live. It has a home
+    now: `actions.perform` applies the act AND reconciles, so the obligation
+    belongs to the function rather than to each of its four callers, and it can
+    be exercised.
+
+    ⚠️ AND `only=` IS THE HALF THAT WAS ACTUALLY BROKEN. Both handlers called
+    `reconcile()` with no concern id, so one tablet press rewrote the message
+    refs of EVERY concern in the store — they had no way to say which one had
+    moved, though they obviously knew.
     """
-    import inspect
-    import re as _re
-    from vesta.supervise import api as agent_api
+    import asyncio
 
-    sync = strip_prose(inspect.getsource(agent_api._sync_chat_messages))
-    assert "reconcile(" in sync, (
-        "_sync_chat_messages no longer reconciles, so the kick is a no-op and "
-        "the phone waits for the clock again")
+    from vesta.supervise.agent import actions as actions_mod
+    from vesta.supervise.agent import buttons as buttons_mod
 
-    for handler_name in ("agent_action_handler", "agent_feedback_handler"):
-        body = strip_prose(inspect.getsource(getattr(agent_api, handler_name)))
-        assert "_sync_chat_messages(" in body, (
-            f"{handler_name} does not sync the chat after an act, so a press "
-            f"on the tablet leaves the phone stale for up to 15 minutes")
-        # ⚠️ AFTER the refusal return, so a refused act does not rewrite
-        # anything — the store did not move.
-        assert body.index("_sync_chat_messages(") > body.index('status=400'), (
-            f"{handler_name} syncs before the act is known to have succeeded")
+    seen: Dict[str, Any] = {}
+
+    async def fake_reconcile(session, *, config=None, only="", receipt=None):
+        seen["only"] = only
+        return 0
+
+    async def fake_apply(session, action_id, concern_id, **kw):
+        return actions_mod.Outcome(bool(seen["ok"]), "note")
+
+    saved = (buttons_mod.reconcile, actions_mod.apply)
+    buttons_mod.reconcile = fake_reconcile          # type: ignore[assignment]
+    actions_mod.apply = fake_apply                  # type: ignore[assignment]
+    try:
+        seen["ok"] = True
+        asyncio.run(actions_mod.perform(None, "done", "c42", by="Jm"))
+        assert seen.get("only") == "c42", (
+            "an act reconciled something other than the concern it acted on — "
+            "with no `only` it rewrites every message ref in the store")
+
+        seen.clear()
+        seen["ok"] = False
+        asyncio.run(actions_mod.perform(None, "done", "c42", by="Jm"))
+        assert "only" not in seen, (
+            "a REFUSED act still rewrote the chat; the store did not move, so "
+            "there is nothing to bring into step")
+    finally:
+        buttons_mod.reconcile, actions_mod.apply = saved

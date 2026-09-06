@@ -1,3 +1,17 @@
+## 2.937.0
+
+### Fixed — ticking a job in Home Assistant now updates your phone straight away
+Pressing an alert's button on the tablet, pressing it in the chat, and ticking
+its job in Home Assistant's own to-do panel are meant to be the same act. Two of
+those updated the chat message immediately; the third waited for the next check,
+up to fifteen minutes, leaving a message offering buttons that no longer worked.
+All three now do the same thing.
+
+### Changed — a press updates one alert's messages, not every alert's
+Acting from the tablet rewrote the message record of every alert in the store,
+because the screen had no way to say which one had just changed. It now updates
+only the alert you acted on.
+
 ## 2.936.0
 
 ### Fixed — "sent to nobody" no longer reads as success

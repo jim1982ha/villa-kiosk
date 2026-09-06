@@ -78,9 +78,13 @@ def test_BOTH_surfaces_reach_the_same_function() -> None:
     carefully the two were written."""
     from vesta.supervise.agent import buttons
     proxy = _read(API_PATH)
-    assert "agent_actions.apply(" in proxy, \
+    # ⚠️ `perform` WRAPS `apply` (2026-09-06) — the shared definition did not
+    # move, it grew the reconcile that every caller previously owed by hand.
+    assert ("agent_actions.perform(" in proxy
+            or "agent_actions.apply(" in proxy), \
         "the tablet no longer performs acts through the shared definition"
-    assert "actions_mod.apply(" in _code(buttons.handle), \
+    assert ("actions_mod.perform(" in _code(buttons.handle)
+            or "actions_mod.apply(" in _code(buttons.handle)), \
         "a button press no longer performs acts through the shared definition"
 
 

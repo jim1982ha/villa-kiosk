@@ -445,49 +445,18 @@ async def handle(event: Mapping[str, Any], *, session: Any,
         return "presser may not act"
 
     who = str(data.get("from_first") or "").strip() or role
-    outcome = await actions_mod.apply(session, action_id, concern_id,
-                                      by=who, config=config)
+    # ⚠️ ONE CALL DOES BOTH (2026-09-06). This used to `apply` and then run its
+    # own reconcile, which is the same ordering obligation the two HTTP
+    # handlers each answered differently and `task.reconcile_done` answered not
+    # at all. `perform` owns it; what a press supplies is the receipt, and only
+    # the receipt.
+    outcome = await actions_mod.perform(
+        session, action_id, concern_id, by=who, config=config,
+        receipt_of=lambda row, out: (
+            str(message_id), _acted_text(row, out.note, who),
+            _closing_line(data, out.note)))
     await _answer(session, query_id, outcome.note or
                   ("Done" if outcome.ok else "That did not work"))
-    if outcome.ok or outcome.spent:
-        # ⚠️ ACTED ON A REFUSAL TOO, and that is the point rather than an
-        # oversight: `spent` means the store says this alert is already dealt
-        # with, so the buttons the presser is looking at are the stale ones. The
-        # press that discovered it is the best moment to correct them.
-        #
-        # ⚠️ AND WHAT THE MESSAGE BECOMES IS DECIDED BY WHAT THE ALERT STILL
-        # OFFERS — the SAME three-way question `reconcile` asks, because it is
-        # the same question. This path retired the whole keyboard after ANY
-        # press, which is right only for an act that DISCHARGES the alert.
-        # `Seen — stop chasing` withdrew itself and left the other acts live
-        # (it has since merged into the closer, and a RATING is what withdraws a
-        # pair today); the tablet went on offering them while the phone offered
-        # none, so the two surfaces disagreed again — the mirror image
-        # of the defect fixed hours earlier, and the THIRD time in one day that
-        # one rule was applied at one of its two call sites. The owner asked the
-        # question that found it: "if I click stop chasing, I should still see
-        # the done and thumb up/down buttons, right?" (2026-08-28).
-        # ⚠️ ONE THREE-WAY QUESTION, ASKED ONCE (2026-09-06). This block used
-        # to recompute `available_for`, build the keyboard, restate-or-retire
-        # and stamp-or-forget — every step of it `reconcile`'s own job, written
-        # a second time, in the module whose docstring says not to. What a
-        # press actually knows that a tick does not is the RECEIPT: this
-        # message, these words, this person. So that is all it supplies.
-        #
-        # ⚠️ AND IT COVERS EVERY COPY, WHICH THE OLD ORDER DID NOT DO FIRST.
-        # An alert delivered twice — a primary send and an escalation — has
-        # other messages in the same chat still showing the act set the store
-        # has just changed. Waiting for the chase tick meant up to 15 minutes
-        # of a message offering ✅ on an alert already dismissed: the "two
-        # surfaces disagree" defect this module exists to prevent, inside ONE
-        # surface.
-        from vesta.supervise.agent import concerns as concerns_mod
-        row = next((r for r in concerns_mod.read()
-                    if str(r.get("id")) == str(concern_id)), {})
-        await reconcile(
-            session, config=config, only=str(concern_id),
-            receipt=(str(message_id), _acted_text(row, outcome.note, who),
-                     _closing_line(data, outcome.note)))
     stage("button", f"{concern_id} {action_id} by {who}: "
                     f"{'ok' if outcome.ok else outcome.note}")
     return "" if outcome.ok else outcome.note

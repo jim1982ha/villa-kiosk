@@ -188,29 +188,13 @@ def routes() -> List[Any]:
     ]
 
 
-async def _sync_chat_messages(request: web.Request) -> None:
-    """Bring every chat message into step NOW, not at the next chase tick.
-
-    ⚠️ THE OWNER'S REQUIREMENT, VERBATIM (2026-08-28): "when I click 'done' in
-    vesta UI, the button in the associated notification shall update
-    accordingly". The chase-clock sweep already does this — up to fifteen
-    minutes later, which is fifteen minutes of a phone offering acts the store
-    would refuse. An act performed HERE is the one moment we know the state
-    just moved, so the sweep is kicked immediately.
-
-    ⚠️ NEVER RAISES AND NEVER BLOCKS THE VERDICT: the press has already been
-    recorded, and a Telegram outage must not turn a successful act into an HTTP
-    error. The clock remains the net for anything this misses.
-    """
-    try:
-        from vesta.supervise.agent import buttons as agent_buttons
-        await agent_buttons.reconcile(
-            request.app.get("session"),
-            config=agent_config.view(
-                deps.read_json_store(deps.agent_config_file, {})))
-    except Exception as err:  # noqa: BLE001 - a sync is never worth a 500
-        from vesta.adapters.log import swallow
-        swallow("could not sync the chat buttons after a UI act", err)
+# ⚠️ `_sync_chat_messages` LIVED HERE AND WAS DELETED (2026-09-06). It carried
+# the owner's requirement verbatim — "when I click done in vesta UI, the button
+# in the associated notification shall update accordingly" — and it kicked the
+# chase sweep for the WHOLE STORE, because a handler had no way to say which
+# concern had just moved. `actions.perform` owns that now and reconciles only
+# the concern that was acted on; the requirement is unchanged and is stated at
+# `perform`, beside the act that creates the obligation.
 
 
 async def agent_feedback_handler(request: web.Request) -> web.Response:
@@ -258,7 +242,7 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
     from vesta.supervise.agent import actions as agent_actions
     from vesta.supervise.agent import concerns as agent_concerns
     useful = bool(body["useful"])
-    outcome = await agent_actions.apply(
+    outcome = await agent_actions.perform(
         request.app.get("session"),
         "useful" if useful else "not_useful", concern_id,
         by=str(deps.role_for(request) or ""),
@@ -266,7 +250,6 @@ async def agent_feedback_handler(request: web.Request) -> web.Response:
         reason=str(body.get("reason") or "")[:500])
     if not outcome.ok:
         return web.json_response({"error": outcome.note}, status=400)
-    await _sync_chat_messages(request)
 
     taught = ""
     for row in agent_concerns.read():
@@ -314,14 +297,17 @@ async def agent_action_handler(request: web.Request) -> web.Response:
         return web.json_response({"error": "an id and an action are required"},
                                  status=400)
 
-    outcome = await agent_actions.apply(
+    # ⚠️ `perform`, NOT `apply` + a sync (2026-09-06). The act now owns the
+    # reconcile, so this handler stops rewriting the message refs of EVERY
+    # concern in the store on each press — it never had a way to say WHICH
+    # concern moved, though it obviously knew.
+    outcome = await agent_actions.perform(
         request.app.get("session"), action_id, concern_id,
         by=str(deps.role_for(request) or ""),
         config=agent_config.view(deps.read_json_store(deps.agent_config_file, {})),
         reason=str(body.get("reason") or "")[:500])
     if not outcome.ok:
         return web.json_response({"error": outcome.note}, status=400)
-    await _sync_chat_messages(request)
     return web.json_response({"ok": True, "note": outcome.note})
 
 

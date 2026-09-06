@@ -41,7 +41,8 @@ is drawing. This module answers "what does this act do", once.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import (Any, Callable, Dict, List, Mapping, Optional,
+                    Sequence, Tuple)
 
 from vesta.adapters.log import stage, swallow
 
@@ -297,6 +298,67 @@ def _help_is_spent(concern: Mapping[str, Any]) -> bool:
 def _spent(concern_id: str, config: Optional[Mapping[str, Any]]) -> bool:
     row = _row(concern_id)
     return not available_for(row, config) if row is not None else True
+
+
+async def perform(session: Any, action_id: str, concern_id: str, *,
+                  by: str, config: Optional[Mapping[str, Any]] = None,
+                  reason: str = "", now: Optional[float] = None,
+                  receipt_of: Optional[Callable[[Mapping[str, Any], "Outcome"],
+                                                Tuple[str, str, str]]] = None,
+                  ) -> Outcome:
+    """Perform one act AND leave every surface saying the same thing.
+
+    ⚠️ `apply` MOVES THE STORE; IT DOES NOT OWN WHAT THAT OBLIGES (found by an
+    architecture review, 2026-09-06). Its interface silently included an
+    ordering constraint — after a successful act you must reconcile the chat —
+    and its four callers each answered differently:
+
+      * `buttons.handle`      reconcile(only=this concern, receipt=the press)
+      * the two HTTP handlers reconcile() with NO `only`, so a tablet press
+                              rewrote the message refs of EVERY concern in the
+                              store
+      * `task.reconcile_done` nothing at all — correct only because
+                              `scheduler.dispatch` happens to call it before
+                              `buttons.reconcile` in the same sweep, which is
+                              documented as a sweep concern rather than as this
+                              act's contract
+
+    A rule that four callers must remember, and that one of them gets right by
+    accident of ordering, belongs inside the thing that creates the obligation.
+
+    ⚠️ `receipt_of` IS A FACTORY, NOT A VALUE, AND THAT IS FORCED BY THE FACTS.
+    The receipt is the only thing a caller knows that the act cannot derive —
+    which message was pressed, what it should now say, and by whom — but its
+    TEXT depends on the row AFTER the act, which does not exist when the caller
+    is invoking this. So it is handed a function of `(row, outcome)`. A tablet
+    press passes None and every copy gets the neutral redraw; a chat press
+    passes a factory and the message it came from says what happened.
+
+    ⚠️ RECONCILING IS NEVER WORTH FAILING THE ACT. The press is already
+    recorded; a chat outage must not turn a successful act into an error. The
+    chase clock remains the net.
+    """
+    outcome = await apply(session, action_id, concern_id, by=by, config=config,
+                          reason=reason, now=now)
+    # ⚠️ ACTED ON A REFUSAL TOO, and deliberately: `spent` means the store says
+    # this is already dealt with, so the buttons the presser is looking at are
+    # the stale ones. The press that discovered it is the best moment to
+    # correct them.
+    if outcome.ok or outcome.spent:
+        from vesta.supervise.agent import buttons as buttons_mod
+        from vesta.supervise.agent import concerns as concerns_mod
+        try:
+            receipt = None
+            if receipt_of is not None:
+                row = next((r for r in concerns_mod.read()
+                            if str(r.get("id")) == str(concern_id)), {})
+                receipt = receipt_of(row, outcome)
+            await buttons_mod.reconcile(session, config=config,
+                                        only=str(concern_id), receipt=receipt)
+        except Exception as err:  # noqa: BLE001 - a sync never costs an act
+            swallow(f"could not sync the chat after {action_id} on "
+                    f"{concern_id}", err)
+    return outcome
 
 
 async def apply(session: Any, action_id: str, concern_id: str, *,

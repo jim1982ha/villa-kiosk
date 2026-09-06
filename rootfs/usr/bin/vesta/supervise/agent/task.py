@@ -302,10 +302,16 @@ async def reconcile_done(session: Any, *,
         # completes the item first; this one is already completed, so it is not
         # among the open rows and the act proceeds to the settle. Cheaper to let
         # that happen than to add a "skip the tick" flag nobody else needs.
+        # ⚠️ `perform`, SO THE CHAT FOLLOWS (2026-09-06). This called `apply`
+        # and reconciled NOTHING — correct only because `scheduler.dispatch`
+        # happens to call this before `buttons.reconcile` in the same sweep,
+        # which is documented as a sweep concern rather than as this act's
+        # contract. Ticking an item in Home Assistant's own panel outside a
+        # sweep left the phone stale until the clock came round.
         from vesta.supervise.agent import actions as actions_mod
-        outcome = await actions_mod.apply(session, "done", str(row.get("id")),
-                                          by="the job was ticked",
-                                          config=config, now=now)
+        outcome = await actions_mod.perform(session, "done", str(row.get("id")),
+                                            by="the job was ticked",
+                                            config=config, now=now)
         marked += 1 if outcome.ok else 0
     if marked:
         stage("task", f"{marked} alert(s) closed — their job was ticked")

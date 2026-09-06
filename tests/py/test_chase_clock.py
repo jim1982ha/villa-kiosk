@@ -140,7 +140,11 @@ def test_a_TICKED_JOB_RUNS_THE_SAME_ACT_AS_THE_BUTTON() -> None:
     from vesta.supervise.agent import task
     assert hasattr(task, "reconcile_done")
     code = strip_prose(inspect.getsource(task.reconcile_done))
-    assert 'apply(' in code and '"done"' in code, (
+    # ⚠️ `perform` WRAPS `apply` since 2026-09-06 — the shared act did not move,
+    # it grew the reconcile this path previously owed and never paid: it relied
+    # on `scheduler.dispatch` calling `buttons.reconcile` later in the same
+    # sweep, so a tick made outside a sweep left the phone stale.
+    assert ('perform(' in code or 'apply(' in code) and '"done"' in code, (
         "a ticked job no longer runs the shared act, so Home Assistant's own "
         "panel and the phone's button do different things")
     assert "transition(" not in code, (

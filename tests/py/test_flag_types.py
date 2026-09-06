@@ -373,7 +373,9 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
     # that the handler DELEGATES (below) and that the thing it delegates to
     # still does both (further down) — asserting only the first would go green
     # on an `apply` that had quietly stopped teaching anything.
-    assert "actions" in code and "apply(" in code, (
+    # ⚠️ `perform` WRAPS `apply` since 2026-09-06: the shared definition did
+    # not move, it grew the reconcile every caller previously owed by hand.
+    assert "actions" in code and ("perform(" in code or "apply(" in code), (
         "the thumb handler no longer delegates to the one place an act is "
         "defined, so the tablet and the phone can drift apart")
     import inspect
