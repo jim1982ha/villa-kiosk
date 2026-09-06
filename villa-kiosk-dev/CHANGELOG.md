@@ -1,3 +1,29 @@
+## 2.969.0
+
+### Changed — the rule for "this alert was rated unhelpful" is written once
+Two places counted negative ratings — one per subject, one deciding which
+subjects go quiet — and each spelled the rule out separately. They agreed, but
+nothing held them together, and the code's own note records a past change to one
+of them going unnoticed by every test. One rule now, asked by both.
+
+### Changed — a supervision pass reads the villa's journal once, not twice
+Each pass loaded the journal — up to 105,000 entries — and then loaded it again
+to work out a single number it could already have counted. It reads it once.
+
+### Changed — the four timings behind reconnecting to Home Assistant are readable together
+How long before retrying, how fast that backs off, how often the tablet checks
+the connection is alive and how long it waits for an answer were four unlabelled
+numbers in three different places. They are named and in one file now, with the
+relationships between them checked — a tablet that has silently lost Home
+Assistant must notice no later than one that lost it loudly.
+
+### Changed — the Flag history on the Reason screen can now be tested
+Turning the audit trail into one entry per investigation is a real piece of
+reasoning — who settled it, when, whether it is still waiting — and it sat
+inside the function that fetches, so it could only run against a live server.
+It is separated now, and the specific fault it was written after — one
+investigation appearing twice, both marked settled — is checked on every change.
+
 ## 2.968.0
 
 ### Fixed — one oddly-written notification service could stop the villa being surveyed
