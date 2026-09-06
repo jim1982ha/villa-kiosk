@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import os
 import re
+
+from conftest import strip_prose  # noqa: E402
 from typing import Dict, List
 
 REPO_ROOT = os.path.dirname(
@@ -77,29 +79,69 @@ def _call_sites(source: str, func: str) -> List[str]:
     return calls
 
 
-def test_every_caller_of_run_report_passes_the_master_switch() -> None:
-    sources = _python_sources()
+def test_every_caller_of_run_report_resolves_ONE_request() -> None:
+    """⚠️ THE SHAPE THAT MADE THE DEFECT POSSIBLE IS GONE (2026-09-06).
 
-    # ⚠️ VACUOUS-PASS GUARD, BOTH HALVES. If the walk finds no files, or the
-    # function is renamed, this compares two empty sets and reports health for
-    # ever — the failure four counters in this project have already had.
-    assert len(sources) >= 20, f"only {len(sources)} python sources found"
+    This test used to `os.walk` every `.py` under `rootfs/usr/bin`, extract the
+    argument text of every `run_report(` call and grep it for the flag — 143
+    lines to check that two callers each remembered a keyword. Its own docstring
+    named why: "the third one is written by somebody who copies the second, and
+    copying is how this defect was made."
 
-    found: List[str] = []
-    offenders: List[str] = []
-    for path, source in sources.items():
-        for call in _call_sites(source, "run_report"):
-            found.append(path)
-            if "supervision_enabled" not in call:
-                offenders.append(path)
+    A caller cannot forget a field it does not pass. `run_report` now takes ONE
+    resolved `BriefRequest`, and `from_config` is the only place the config's
+    shape is read — so what is left to check is that the callers build one, and
+    that building one is correct.
+    """
+    for name, text in _python_sources().items():
+        # ⚠️ PROSE REMOVED FIRST. The first version of this scan flagged
+        # `request.py` itself, because its docstring EXPLAINS the `run_report(`
+        # calls it replaced — the same trap that has now bitten four separate
+        # pins in this suite, which is why `conftest.strip_prose` exists.
+        # ⚠️ CALLS, NOT THE DEFINITION. The capture starts AFTER the paren, so
+        # a `if "def run_report" in call` guard never sees the keyword — the
+        # look-behind is what excludes it.
+        for call in re.findall(r"(?<!def )run_report\(([^;]*?)\)\n",
+                               strip_prose(text), re.S):
+            assert "request=" in call, (
+                f"{name} calls run_report without a resolved request, so it is "
+                "back to threading the config's shape by hand — which is how "
+                "`supervision_enabled` came to be missing for releases")
 
-    assert len(found) >= 2, (
-        f"only {len(found)} call site(s) of run_report found — the anchor has "
-        "moved and this test is measuring nothing")
-    assert not offenders, (
-        "these callers of run_report do not pass supervision_enabled, so the "
-        f"gate sees its default of False and stands down every covered check: {offenders}")
 
+def test_the_request_resolves_the_switch_and_the_defaults() -> None:
+    """⚠️ THE FLAG ITSELF, ASSERTED BY CALLING RATHER THAN BY GREPPING. A
+    default of False is a VALID value, which is why nothing raised, nothing
+    typed wrong and nothing went red when it was omitted."""
+    import sys as _sys
+
+    _sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from vesta.brief.request import BriefRequest
+
+    on = BriefRequest.from_config({}, {"enabled": True}, {})
+    off = BriefRequest.from_config({}, {"enabled": False}, {})
+    assert on.supervision_enabled is True and off.supervision_enabled is False, (
+        "the master switch is no longer read from the agent config, so every "
+        "brief runs one side of the gate whatever the villa is set to")
+
+    # ⚠️ `settings` IS THE `modules` SLICE, NOT THE CONFIG. Threading the whole
+    # document here is the original confusion that forced `min_history_days`
+    # and the switch to travel separately in the first place.
+    req = BriefRequest.from_config(
+        {"modules": {"weather": {}}, "min_history_days": "7",
+         "narration": {"mode": "x"}},
+        {"enabled": True}, {"moduleFailures": {"weather": 2}})
+    assert req.settings == {"weather": {}}, "settings is not the modules slice"
+    assert req.min_history_days == 7, "min_history_days is not coerced to int"
+    assert req.narration == {"mode": "x"}
+    assert req.module_failures == {"weather": 2}
+
+    # ⚠️ NEVER `None`: every consumer treats a missing slice as "nothing
+    # configured", and a None reaching them is an AttributeError inside a
+    # background sweep.
+    empty = BriefRequest.from_config({}, {}, {})
+    assert empty.settings == {} and empty.narration == {}
+    assert empty.module_failures == {} and empty.min_history_days == 14
 
 def test_the_gate_no_longer_reads_the_switch_at_all() -> None:
     """⚠️ THE PREMISE OF THIS FILE REVERSED FOUR DAYS AFTER IT WAS WRITTEN,

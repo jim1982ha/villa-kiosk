@@ -1,3 +1,13 @@
+## 2.938.0
+
+### Changed — a briefing is composed from one resolved request
+The function that builds a briefing took fourteen separate values, and the two
+places that call it wrote the same five conversions by hand. One of them once
+missed a setting, so previews and manual sends quietly ran a different pipeline
+from the scheduled brief for several releases. There is now a single place that
+reads the villa's configuration, so a caller cannot forget a field it does not
+pass.
+
 ## 2.937.0
 
 ### Fixed — ticking a job in Home Assistant now updates your phone straight away

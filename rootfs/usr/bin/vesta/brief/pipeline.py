@@ -33,6 +33,7 @@ from aiohttp import ClientSession
 # parser with no producer is the machinery this phase exists to remove.
 from . import standing as standing_mod, trend as trend_mod
 from vesta.adapters import automations as automations_mod
+from vesta.brief.request import BriefRequest
 from vesta.adapters import stats as stats_mod
 from vesta.adapters import collect
 from vesta.adapters import record as record_mod
@@ -509,21 +510,9 @@ async def run_report(
     now_local: datetime,
     found: Optional[Dict[str, Any]] = None,
     entry_id: Optional[str] = None,
-    settings: Optional[Dict[str, Any]] = None,
-    min_history_days: int = 14,
-    #: ⚠️ ITS OWN PARAMETER, NOT READ OFF `settings` — `settings` here is the
-    #: `modules` SLICE of the config (see the call site), so a top-level key
-    #: looked up there is always None and the flag would never reach the gate.
-    #: Threaded exactly like `min_history_days` above, which is the same shape
-    #: of top-level value and already had to be passed separately.
-    supervision_enabled: bool = False,
-    module_failures: Optional[Dict[str, int]] = None,
+    *,
+    request: Optional["BriefRequest"] = None,
     preview: bool = False,
-    narration: Optional[Dict[str, Any]] = None,
-    #: ⚠️ WHO CAUSED THIS BRIEF. Defaults to the schedule so the clock's rows
-    #: are byte-identical; the owner-only "run now" handler passes "owner".
-    #: The narration's usage row is filed under it, and that row is the whole
-    #: reason the ledger exists — the provider's own console cannot say WHO.
     actor: str = "schedule",
 ) -> Dict[str, Any]:
     """Produce and deliver one report. Returns the history entry.
@@ -545,6 +534,23 @@ async def run_report(
     purpose — so it gets the clock, and says `manual` so the record shows which
     reports a person asked for rather than the schedule.
     """
+    # ⚠️ FIVE PARAMETERS BECAME ONE `request` (2026-09-06). Both callers wrote
+    # the identical coercions — `settings` is the config's `modules` SLICE, not
+    # the config; `min_history_days` and `supervision_enabled` therefore had to
+    # be threaded separately — and one of them omitted `supervision_enabled`
+    # for releases, so preview and manual sends ran a different pipeline from
+    # the scheduler. `BriefRequest.from_config` is the one place that shape is
+    # read. A `None` request resolves to the documented defaults so a test can
+    # still call this with a schedule and nothing else.
+    from vesta.brief.request import BriefRequest as _BriefRequest
+
+    req = request if request is not None else _BriefRequest.from_config({}, {}, {})
+    settings: Dict[str, Any] = dict(req.settings)
+    min_history_days = req.min_history_days
+    supervision_enabled = req.supervision_enabled
+    module_failures: Dict[str, Any] = dict(req.module_failures)
+    narration: Dict[str, Any] = dict(req.narration)
+
     generated_at = now_local.isoformat(timespec="seconds")
     period = period_key(cadence, now_local)
     settings = settings or {}
@@ -1234,22 +1240,11 @@ async def tick(session: ClientSession, now_utc: datetime) -> int:
         for entry in ready:
             targets = targets_for(config, entry, agent_cfg)
             warn_if_broadcast(targets)
-            modules_cfg = config.get("modules")
             record = await run_report(
                 session, audience_of(entry, agent_cfg),
                 str(entry.get("cadence")),
                 targets, now_local, found, entry_id=str(entry["key"]),
-                settings=modules_cfg if isinstance(modules_cfg, dict) else {},
-                min_history_days=int(config.get("min_history_days") or 14),
-                # ⚠️ THE MASTER SWITCH, AND NOTHING ELSE (2.755.0). It used to
-                # read `agent_owns_analysis`, a second flag that existed only
-                # to override a stand-down that no longer exists.
-                supervision_enabled=bool(agent_cfg.get("enabled")),
-                module_failures=(state.get("moduleFailures")
-                                 if isinstance(state.get("moduleFailures"), dict)
-                                 else {}),
-                narration=(config.get("narration")
-                           if isinstance(config.get("narration"), dict) else {}))
+                request=BriefRequest.from_config(config, agent_cfg, state))
             # ⚠️ Persisted so "three consecutive failures" survives a restart.
             # Counted in memory only, a module that fails on every boot would
             # never reach three and would be retried forever.

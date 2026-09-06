@@ -129,6 +129,7 @@ from vesta.adapters import collect as reports_collect
 from vesta.adapters import record as vesta_record
 from vesta.adapters import discovery as reports_discovery
 from vesta.brief import pipeline as reports_pipeline
+from vesta.brief import request as reports_request
 # ⚠️ BOTH LINES ARE LOAD-BEARING, AND THE SECOND IS THE ONE THAT IS EASY TO
 # DROP. A module registers itself at IMPORT TIME, and `analysis/__init__`
 # imports `base` and `registry` but NOT `modules` — so importing the registry
@@ -2876,39 +2877,15 @@ async def reports_run_now_handler(request: web.Request) -> web.Response:
         entry = await reports_pipeline.run_report(
             request.app["session"], audience, cadence,
             [str(t) for t in targets], now_local,
-            settings=modules_cfg if isinstance(modules_cfg, dict) else {},
-            min_history_days=int(config.get("min_history_days") or 14),
-            # ⚠️ THE MASTER SWITCH, AND OMITTING IT MADE THIS ENDPOINT A
-            # DIFFERENT PIPELINE FROM THE SCHEDULED ONE (2026-08-29, reported
-            # from the tablet: "it doesn't make sense to see this screen while
-            # supervision is on"). It defaults to False, so EVERY check that
-            # declares a `superseded_by` stood down as `superseded` on every
-            # preview and every manual send, while the scheduled brief at
-            # `pipeline.tick` passed the flag and ran them. (No count here on
-            # purpose: the set is whatever declares the field, and a number in
-            # a comment beside it goes stale in silence — this file carried two
-            # such counts within the hour of that rule being written down.) Two visible
-            # consequences, one cosmetic and one not: the Modules tab printed
-            # "Last preview: Roi baseline deviation" on rows that are live, which
-            # reads as "this check is not used"; and a brief sent by hand was
-            # MISSING every covered check the scheduled one contains.
-            #
-            # ⚠️ `registry.run_all` carries a comment warning about exactly this
-            # defect one level further in — a field not copied arrives at the
-            # gate as its default, silently, because the default is valid. The
-            # warning was there and the CALLER was never checked, which is
-            # `feedback_pin-the-caller`. `test_supervision_reaches_the_gate`
-            # now derives every `run_report(` call site from the tree.
-            supervision_enabled=bool(agent_cfg.get("enabled")),
-            module_failures=(state.get("moduleFailures")
-                             if isinstance(state.get("moduleFailures"), dict) else {}),
-            narration=(config.get("narration")
-                       if isinstance(config.get("narration"), dict) else {}),
-            # ⚠️ A PERSON PRESSED THIS. The narration's usage row was filed
-            # under the literal "schedule" until 2.686.0, so an owner testing a
-            # brief had the spend attributed to the villa acting on its own —
-            # in the one breakdown ("by who caused it") the ledger exists for.
-            # This route is owner-only, so the attribution is known, not guessed.
+            # ⚠️ ONE RESOLVED REQUEST (2026-09-06). The five coercions written
+            # here were character-identical to the scheduler's, and one of them
+            # — `supervision_enabled` — was MISSING from this call for
+            # releases, so preview and manual sends ran a different pipeline
+            # from the scheduled brief. `BriefRequest.from_config` is now the
+            # only place that shape is read, so a third caller cannot copy a
+            # fourth field wrongly.
+            request=reports_request.BriefRequest.from_config(
+                config, agent_cfg, state),
             actor="owner",
             preview=preview)
         if not preview:

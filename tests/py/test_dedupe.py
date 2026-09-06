@@ -269,22 +269,30 @@ def test_nothing_in_the_tree_still_reads_the_deleted_machinery() -> None:
 def test_the_pipeline_reads_the_MASTER_SWITCH_and_not_a_constant() -> None:
     """⚠️ FOUND BY MUTATION, NOT BY REVIEW. Replacing the pipeline's
     `supervision_enabled=bool(agent_cfg.get("enabled"))` with a literal `False`
-    left all 1,877 tests green — every gate test builds its own context, so
-    nothing checked that the one production caller passes the real value. The
-    whole rule would have been correct and the villa would have stood every
-    covered check down forever.
+    left every test green — each gate test builds its own context, so nothing
+    checked that the one production caller passed the real value. The rule
+    would have been correct and the villa would have stood every covered check
+    down for ever.
 
     That is `feedback_pin-the-caller`, and this repo's `two correct halves`
     defect for the fourteenth time: the helper is tested, the call is not.
+
+    ⚠️ THE READ MOVED TO `BriefRequest.from_config` (2026-09-06), which is the
+    one place the config's shape is now read — so this asserts on the value it
+    RESOLVES rather than on the text of a keyword argument. Same mutation, same
+    catch, and it no longer depends on how the call happens to be spelled.
     """
-    src = inspect.getsource(pipeline_mod)
-    call = re.search(r"supervision_enabled=([^,\n]+)", src)
-    assert call, "the pipeline no longer passes supervision_enabled at all"
-    reads = [m.group(1) for m in re.finditer(r"supervision_enabled=([^,\n]+)", src)]
-    assert any('agent_cfg.get("enabled")' in r for r in reads), (
-        "the pipeline passes something other than the villa's master switch: "
-        f"{reads}")
-    for r in reads:
-        assert r.strip() not in ("False", "True"), (
-            f"supervision_enabled is hard-coded to {r.strip()} somewhere in the "
-            "pipeline, so the switch decides nothing")
+    import sys as _sys
+
+    _sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    from vesta.brief.request import BriefRequest
+
+    assert BriefRequest.from_config({}, {"enabled": True}, {}).supervision_enabled, (
+        "the villa's master switch no longer reaches a brief, so every covered "
+        "check stands down whatever the villa is set to")
+    assert not BriefRequest.from_config({}, {"enabled": False}, {}).supervision_enabled
+    # ⚠️ AND IT IS THE AGENT CONFIG'S FLAG, NOT THE REPORTS CONFIG'S. Reading
+    # the wrong document would pass both assertions above on a villa where the
+    # two happen to agree.
+    assert not BriefRequest.from_config({"enabled": True}, {}, {}).supervision_enabled, (
+        "the switch is being read from the reports config, not the agent's")
