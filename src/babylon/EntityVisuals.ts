@@ -115,6 +115,8 @@ import { beginSpan } from "@/utils/perfSpans";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { compactValue, clampToLabelWidth } from "@/utils/entityValue";
+import { checkPlacement, onScreen,
+         type ScreenBox, type ViewportRect } from "./placementCheck";
 import { cssToGui, effectiveScale, cardBudget, isPhoneWidth, cellCapFor,
          badgeBox, type BadgeViewport } from "./badgeViewport";
 import { RoomHighlight } from "./RoomHighlight";
@@ -6248,19 +6250,17 @@ export class EntityVisuals {
     // construction: Vector3.Project works in the global viewport, and
     // effectiveScale() carries cssToGui() — the render-pixel conversion —
     // so `boxes` and the card layout are already in the same space as `p`.
-    interface ScreenBox { cx: number; cy: number; hw: number; hh: number }
-    const onScreen = (b: ScreenBox) =>
-      b.cx + b.hw >= vp.x && b.cx - b.hw <= vp.x + vp.width
-      && b.cy + b.hh >= vp.y && b.cy - b.hh <= vp.y + vp.height;
-    // Ink on ink. No gap, no minimum pitch, no tolerance: two things either
-    // cover the same pixels or they don't, and that is the one claim about
-    // this subsystem nobody can argue with from a screenshot.
-    const hits = (a: ScreenBox, b: ScreenBox) =>
-      Math.abs(a.cx - b.cx) < a.hw + b.hw && Math.abs(a.cy - b.cy) < a.hh + b.hh;
-
+    // ⚠️ THE PREDICATES AND THE FIVE COUNTING FAMILIES MOVED TO
+    // babylon/placementCheck.ts (2.946.0). What stays here is the ADAPTER: the
+    // projection (Babylon's own `Vector3.Project`, which is what makes this
+    // input independent of the solver) and the reporting. The oracle itself is
+    // now `npm run test:placement`, so the subsystem this app has rewritten six
+    // times stops being verified only by a human holding a tablet with a debug
+    // flag on.
     const scale = this.effectiveScale();
     const focus = this.focusedRooms;
     const p = new Vector3();
+    const view: ViewportRect = { x: vp.x, y: vp.y, width: vp.width, height: vp.height };
 
     // `container.isVisible` rather than a reconstruction of the same decision
     // from entityGrouped/roomClustered: the renderer's own answer to "is this
@@ -6268,23 +6268,22 @@ export class EntityVisuals {
     const badgeBoxes: ScreenBox[] = [];
     const badgeExempt: boolean[] = [];
     for (let i = 0; i < shown.length; i++) {
-      const s = shown[i];
-      if (!s.inFront || !s.lbl.container.isVisible) continue;
+      const s2 = shown[i];
+      if (!s2.inFront || !s2.lbl.container.isVisible) continue;
       const b: ScreenBox = {
-        cx: s.x, cy: s.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH,
+        cx: s2.x, cy: s2.y + boxes[i].cy, hw: boxes[i].halfW, hh: boxes[i].halfH,
       };
-      if (!onScreen(b)) continue; // off-screen overlap is not something anyone sees
+      if (!onScreen(b, view)) continue;
       badgeBoxes.push(b);
-      badgeExempt.push(focus.has(roomKey(this.roomOf(s.id))));
+      badgeExempt.push(focus.has(roomKey(this.roomOf(s2.id))));
     }
 
     // A card is drawn ENTIRELY ABOVE its anchor — updateEntityGroups sets
-    // linkOffsetYInPixels = -(lay.height / 2) * scale so the card's bottom
-    // edge lands on the anchor, exactly as a badge's does. The LAYOUT models
-    // the same card as a disc centred ON the anchor (cardHalfOf), a documented
-    // asymmetry; using the layout's model here would report overlaps nobody
-    // can see and miss the ones they can, which is the whole failure mode this
-    // method just stopped repeating.
+    // linkOffsetYInPixels = -(lay.height / 2) * scale so the card's bottom edge
+    // lands on the anchor, exactly as a badge's does. The LAYOUT models the same
+    // card as a disc centred ON the anchor (cardHalfOf), a documented asymmetry;
+    // using the layout's model here would report overlaps nobody can see and
+    // miss the ones they can.
     const cardBoxes: ScreenBox[] = [];
     const cardInk: ScreenBox[] = [];
     const cardFocused: boolean[] = [];
@@ -6296,106 +6295,47 @@ export class EntityVisuals {
       const hw = (lay.width / 2) * scale;
       const hh = (lay.height / 2) * scale;
       const box: ScreenBox = { cx: p.x, cy: p.y - hh, hw, hh };
-      if (!onScreen(box)) continue;
+      if (!onScreen(box, view)) continue;
       cardBoxes.push(box);
       // The square INSCRIBED in the card — "is this badge under my ink", the
-      // question absorb exists to answer, and a different question from "do we
-      // clear each other". Same distinction cardInscribedHalf draws.
+      // question absorb exists to answer. Same distinction cardInscribedHalf
+      // draws.
       const inner = Math.min(hw, hh);
       cardInk.push({ cx: box.cx, cy: box.cy, hw: inner, hh: inner });
       cardFocused.push(g.focused);
     }
 
-    // (a) Drawn badge vs drawn badge. The headline number.
-    //
-    // The accessibility PITCH is counted separately from visual overlap on
-    // purpose: they mean different things (one is a tap-target rule, the other
-    // is legibility) and one of them is much more likely to be non-zero for a
-    // legitimate reason. Rolled together, the first excusable case would
-    // teach whoever reads this to ignore the line.
-    //
-    // Focused-room badges get their own bucket rather than being dropped:
-    // their overlap is DELIBERATE (the exemption stacks them, which is exactly
-    // why pairFocusedRoom exists), so mixing them in would poison the number
-    // that matters while hiding the one case where the pairing failed.
-    const minSepPx = clearance.minSep;
-    let overlaps = 0, tooClose = 0, focusOverlaps = 0;
-    for (let i = 0; i < badgeBoxes.length; i++) {
-      for (let j = i + 1; j < badgeBoxes.length; j++) {
-        const a = badgeBoxes[i], b = badgeBoxes[j];
-        const ink = hits(a, b);
-        if (badgeExempt[i] || badgeExempt[j]) { if (ink) focusOverlaps++; continue; }
-        if (ink) overlaps++;
-        else if (Math.hypot(a.cx - b.cx, a.cy - b.cy) < minSepPx) tooClose++;
-      }
+    const chipBoxes: ScreenBox[] = [];
+    for (const c of chips) {
+      const box: ScreenBox = { cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH };
+      if (onScreen(box, view)) chipBoxes.push(box);
     }
+
+    const counts = checkPlacement({
+      badges: badgeBoxes, badgeExempt,
+      cards: cardBoxes, cardInk, cardFocused,
+      chips: chipBoxes, minSepPx: clearance.minSep,
+    });
+    const {
+      overlaps, tooClose, focusOverlaps, buried, overhung, focusCardHits,
+      summaryOverlaps, summaryFocusOverlaps, chipHits, chipHitsFocused, chipPairs,
+    } = counts;
+    const minSepPx = clearance.minSep;
+
+    // ── (a) badge vs badge ────────────────────────────────────────────────
     if (overlaps) placeDebug(`PLACEMENT: ${overlaps} drawn badge pair(s) OVERLAP on screen`);
     if (tooClose) placeDebug(`PLACEMENT: ${tooClose} drawn badge pair(s) closer than the ${Math.round(minSepPx)}px tap pitch`);
     if (focusOverlaps) placeDebug(`PLACEMENT: ${focusOverlaps} overlapping pair(s) inside the FOCUSED room (expected; pairFocusedRoom's leftovers)`);
 
-    // (b) Drawn badge vs summary card, split in two — and the split is what
-    // makes the line actionable. `overhung` is expressly allowed: a card MAY be
-    // drawn over a badge outside its ink, because gating a card's existence on
-    // its full width sends groups to room chips instead (see `fits`). A single
-    // undifferentiated counter would be permanently non-zero for a documented
-    // reason, and a permanently non-zero assertion is a disabled one.
-    //
-    // ⚠️ `buried` IS NOT AN INVARIANT VIOLATION EITHER, AND CALLING IT ONE COST
-    // TWO ROUNDS OF CHASING (2.428.0). It is measured in a DIFFERENT SPACE from
-    // the decision it appears to contradict:
-    //
-    //   * absorb decides in the ORTHOGRAPHIC view plane at the QUANTISED rung
-    //     (`g.sx` vs `shown[j].sx`), which is what makes grouping invariant to
-    //     camera position at all;
-    //   * these boxes come from `Vector3.ProjectToRef(…, tm, vp, …)` — TRUE
-    //     PERSPECTIVE at the LIVE camera — which is deliberate, because the
-    //     assertion's job is to check the renderer's own output, not to re-run
-    //     the solver's arithmetic.
-    //
-    // The gap between those two spaces is the orthographic-vs-perspective
-    // residual CLAUDE.md documents as the ACCEPTED COST of
-    // GROUP_OVERLAP_ALLOW_WIDTHS = 0, "always in the direction of the plane
-    // over-estimating separation, and always for objects further from the camera
-    // than the zoom rung's reference depth" — which is exactly a badge absorb
-    // believed was clear being drawn under the ink. Its own list of what the old
-    // margin covered includes "one or two things over a room chip": same family.
-    //
-    // So a small, transient `buried` is a MEASUREMENT. The invariant that really
-    // must hold is the other side of the same absorb block — `seat REFUSED …
-    // blocked by badge`, which cannot happen because the absorb box strictly
-    // contains the refusal box on every axis — and every capture since 2.415.0
-    // shows zero of those. Do NOT reinstate a margin on sight of this counter;
-    // the honest mitigation is that a covered badge is still reachable, because
-    // tap and long-press both ask pickBadgeAt first. The one dial, if it ever
-    // costs more than the early grouping did, is GROUP_OVERLAP_ALLOW_WIDTHS at
-    // -0.075 (half the old margin).
-    // ── BUCKET, DO NOT DROP (2.432.0) ─────────────────────────────────────
-    // These two `continue`s USED to skip every pair involving a focused card or
-    // a focused badge, which made this test blind in exactly the state every
-    // reported overlap has come from. The exemption is NOT the same condition as
-    // "all other rooms are chipped": cullLabels computes `suppressOthers`
-    // separately (`focusedRooms.size > 0 && z <= focusedAtZoom`), so a focus can
-    // be live while other rooms still draw their own badges and cards — a
-    // capture caught precisely that, `exempt=12` beside `chips=1`.
-    //
-    // So focused pairs go in their own bucket, which is the pattern the
-    // badge-vs-badge test two tiers up already uses (`focusOverlaps`). Dropping
-    // them is what made `chipHits` report 0 for the case a screenshot showed
-    // plainly (2.430.0), and /dry-audit found the same shape here. A counter
-    // must never be blind to the case it exists to see; if a category is
-    // expected, LABEL it, do not exclude it.
-    let buried = 0, overhung = 0, focusCardHits = 0;
-    for (let k = 0; k < cardBoxes.length; k++) {
-      for (let i = 0; i < badgeBoxes.length; i++) {
-        const ink = hits(cardInk[k], badgeBoxes[i]);
-        if (!ink && !hits(cardBoxes[k], badgeBoxes[i])) continue;
-        // A focused card never went through `fits`, and a focused badge blocks
-        // nobody — so neither is a violation. Still counted, so the number
-        // exists.
-        if (cardFocused[k] || badgeExempt[i]) { focusCardHits++; continue; }
-        if (ink) buried++; else overhung++;
-      }
-    }
+    // ── (b) badge vs card ─────────────────────────────────────────────────
+    // ⚠️ `buried` IS NOT AN INVARIANT VIOLATION, AND CALLING IT ONE COST TWO
+    // ROUNDS OF CHASING (2.428.0). It is measured in a DIFFERENT SPACE from the
+    // decision it appears to contradict: absorb decides in the ORTHOGRAPHIC view
+    // plane at the QUANTISED rung, these boxes come from TRUE PERSPECTIVE at the
+    // LIVE camera. The gap between those two spaces is the residual accepted by
+    // GROUP_OVERLAP_ALLOW_WIDTHS = 0. Do NOT reinstate a margin on sight of this
+    // counter: a covered badge is still reachable, because tap and long-press
+    // both ask pickBadgeAt first.
     if (buried) placeDebug(`PLACEMENT: ${buried} drawn badge(s) BURIED under a summary's ink`);
     if (overhung) placeDebug(`PLACEMENT: ${overhung} drawn badge(s) under a card's overhang (allowed)`);
     if (focusCardHits) {
@@ -6404,22 +6344,7 @@ export class EntityVisuals {
         + " nobody — pairFocusedRoom is what keeps them all tappable)");
     }
 
-    // (c) Summary vs summary. This one must be EXACTLY ZERO for cards that went
-    // through `fits` — the single clearance guarantee it makes without
-    // qualification, and nothing verified it before 2.405.0.
-    //
-    // Focused groups are BUCKETED rather than skipped, for the reason (b) above
-    // spells out: they never went through `fits`, so they are not violations,
-    // but two focused pair-cards CAN overlap each other (pairFocusedRoom emits
-    // several per room) and a counter that drops them cannot say so.
-    let summaryOverlaps = 0, summaryFocusOverlaps = 0;
-    for (let i = 0; i < cardBoxes.length; i++) {
-      for (let j = i + 1; j < cardBoxes.length; j++) {
-        if (!hits(cardBoxes[i], cardBoxes[j])) continue;
-        if (cardFocused[i] || cardFocused[j]) summaryFocusOverlaps++;
-        else summaryOverlaps++;
-      }
-    }
+    // ── (c) card vs card ──────────────────────────────────────────────────
     if (summaryFocusOverlaps) {
       placeDebug(`PLACEMENT: ${summaryFocusOverlaps} summary pair(s) OVERLAP involving a`
         + " FOCUSED card (expected: a focused card is seated unconditionally and"
@@ -6437,44 +6362,8 @@ export class EntityVisuals {
           : " — fits() promises this cannot happen"));
     }
 
-    // (d) Room chip vs everything the chip outranks. A chip is the tier of
-    // last resort and nothing used to test it against anything but another
-    // chip — see CHIP_COLLISION. Measured in TRUE perspective like every other
-    // counter here, against the chip's DRAWN box (it is lifted by half its own
-    // height, exactly as badges and cards are). Focused-room badges are
-    // excluded: they are exempt from the escalation pass by design, because
-    // tapping a room must not be able to make that room vanish.
-    // ⚠️ THE FOCUSED CASE IS COUNTED, NOT EXCLUDED (2.430.0). This skipped every
-    // exempt badge and focused card — and when a room is focused those are the
-    // ONLY things drawn besides the chips, so `chipHits=0` meant "not measured"
-    // rather than "did not happen". A capture of exactly this complaint came
-    // back clean while the screenshot showed it plainly. Third blind counter in
-    // this file's history — same shape as estErr (2.421.0) and the chip-vs-chip
-    // pair test (2.420.0): a counter must never be blind to the case it exists
-    // to see. Reported SEPARATELY because it is expected and now harmless: the
-    // chip paints behind (zIndex -1) and is asked last for taps, so the device
-    // stays both visible and reachable.
-    let chipHits = 0;
-    let chipHitsFocused = 0;
-    for (const c of chips) {
-      const box: ScreenBox = { cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH };
-      if (!onScreen(box)) continue;
-      for (let i = 0; i < badgeBoxes.length; i++) {
-        if (!hits(box, badgeBoxes[i])) continue;
-        if (badgeExempt[i]) chipHitsFocused++; else chipHits++;
-      }
-      for (let k = 0; k < cardBoxes.length; k++) {
-        if (!hits(box, cardBoxes[k])) continue;
-        if (cardFocused[k]) chipHitsFocused++; else chipHits++;
-      }
-    }
+    // ── (d) room chip vs everything it outranks ───────────────────────────
     if (chipHits) placeDebug(`PLACEMENT: ${chipHits} drawn badge(s)/card(s) OVERLAP a room chip`);
-    // ⚠️ SHOULD NOW BE ZERO (2.431.0). settleChips drops any chip a focused
-    // badge or card collides with, so this line firing means the drop missed —
-    // most likely because the render set is measured here in TRUE PERSPECTIVE
-    // while the drop tests the orthographic plane, i.e. the same residual the
-    // BURIED counter reports. A small transient count is that; a persistent one
-    // is a real gap in the drop.
     if (chipHitsFocused) {
       placeDebug(`PLACEMENT: ${chipHitsFocused} FOCUSED badge(s)/card(s) over a room chip`
         + " — ONE FRAME while the camera flies in is the plane-vs-perspective"
@@ -6482,38 +6371,6 @@ export class EntityVisuals {
         + " focus drop");
     }
 
-    // ── (e) CHIP vs CHIP, AND THE ESTIMATE THAT DECIDES IT (2.420.0) ──────
-    // The last hole in this family: every other tier had an overlap counter
-    // and the chip-vs-chip merge — the one test 2.419.0 retuned — had none.
-    //
-    // Worth two counters rather than one, because the merge is the ONLY
-    // collision test in the subsystem whose inputs are an ESTIMATE.
-    // `chipWidthPx` is `len * 8.2 + 24`; the real width comes from Babylon's
-    // `adaptWidthToChildren` and is not readable until after the frame is laid
-    // out. Its docstring says it "only has to be close enough to keep chips
-    // apart" — which was fair while a 6 px gap covered the error and is a
-    // thinner claim now that 2.419.0 cut that to 2. Under-estimate by more
-    // than the slack and two chips overlap on the glass with nothing merging
-    // them; over-estimate and they merge while visibly clear, which is the
-    // complaint 2.419.0 answered.
-    //
-    // So: `estErr` reads the width the renderer ACTUALLY laid out (the
-    // previous frame's `_currentMeasure` — this pass has not laid out yet,
-    // which is the whole reason the estimate exists) and reports the worst
-    // disagreement in CSS px. If it comes back bigger than `minGapPx`, the gap
-    // is not the dial to move: the estimate is, or the merge has to read the
-    // drawn width a frame late.
-    let chipPairs = 0;
-    const chipBoxOf = (c: RoomChip): ScreenBox =>
-      ({ cx: c.x, cy: c.y - c.halfH, hw: c.halfW, hh: c.halfH });
-    for (let i = 0; i < chips.length; i++) {
-      const a = chipBoxOf(chips[i]);
-      if (!onScreen(a)) continue;
-      for (let j = i + 1; j < chips.length; j++) {
-        const b = chipBoxOf(chips[j]);
-        if (onScreen(b) && hits(a, b)) chipPairs++;
-      }
-    }
     if (chipPairs) {
       // ⚠️ This measures the merge against its OWN boxes, so it can only catch
       // a merge that failed to reach a fixpoint — never a wrong `halfW`, since
