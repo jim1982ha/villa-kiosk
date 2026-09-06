@@ -25,7 +25,7 @@
 // noticing an absence.
 
 import type { Concern, ConcernState } from "@/vesta/shared/agentTypes";
-import { stateOf } from "@/vesta/shared/concern";
+import { stateOf, silencedSubjects, SUPPRESS_AFTER } from "@/vesta/shared/concern";
 import InfoHint from "@/components/common/InfoHint";
 import { downloadFile, filenameSlug } from "@/utils/download";
 
@@ -116,7 +116,9 @@ export const STATE_COPY: Record<ConcernState, { label: string; hint: string }> =
  *  on screen. If that number ever moves, this line is
  *  wrong and the copy above is wrong with it — which is why both live here
  *  together rather than in the component that renders them. */
-export const SUPPRESS_AFTER = 3;
+// ⚠️ `SUPPRESS_AFTER` MOVED TO `shared/concern.ts` (2.952.0), with the rule
+// it belongs to. Re-exported because `test_concern_lifecycle` reads it here.
+export { SUPPRESS_AFTER } from "@/vesta/shared/concern";
 
 /** Where a concern is in its life, as a chip.
  *
@@ -187,18 +189,12 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
       "text/csv;charset=utf-8");
   };
 
-  // ⚠️ SUBJECTS AT OR PAST THE THRESHOLD, computed the same way the backend
-  // counts them: dismissals grouped by `subjectKey`. A subject here is one the
-  // villa has stopped raising, which is a rule switching itself off — the one
-  // thing in this whole lifecycle an owner must not discover by accident.
-  const perSubject = new Map<string, number>();
-  for (const c of concerns) {
-    if (stateOf(c) !== "dismissed") continue;
-    const k = String(c.subjectKey ?? "");
-    if (k) perSubject.set(k, (perSubject.get(k) ?? 0) + 1);
-  }
-  const silenced = [...perSubject.values()]
-    .filter((n) => n >= SUPPRESS_AFTER).length;
+  // ⚠️ RATINGS, NEVER DISMISSALS — see ADR 0002 and `silencedSubjects`. This
+  // counted `stateOf(c) === "dismissed"` under a comment claiming it was
+  // "computed the same way the backend counts them". It was not: three 🚫
+  // announced a silencing that had not happened, and three ⬇️ said nothing
+  // while the villa really had gone quiet.
+  const silenced = silencedSubjects(concerns).length;
 
   return (
     <>
@@ -302,10 +298,11 @@ export function SettledSummary({ concerns }: { concerns: Concern[] }) {
       {silenced > 0 && (
         <p className="body-text sev-warning">
           {silenced === 1 ? "One thing is" : `${silenced} things are`} no longer
-          being raised, because {silenced === 1 ? "it was" : "they were"}{" "}
-          dismissed {SUPPRESS_AFTER} times. That is the villa taking you at your
-          word — it will stay quiet about {silenced === 1 ? "it" : "them"} until
-          you say otherwise.
+          being raised, because {silenced === 1 ? "it was" : "they were"} rated{" "}
+          &ldquo;less like this&rdquo; {SUPPRESS_AFTER} times. That is the villa
+          taking you at your word — it will stay quiet about{" "}
+          {silenced === 1 ? "it" : "them"} until you say otherwise. Clearing an
+          alert never does this.
         </p>
       )}
     </>

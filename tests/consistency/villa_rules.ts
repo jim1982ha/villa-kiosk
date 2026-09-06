@@ -36,6 +36,12 @@ import { iconKeyFor } from "../../src/babylon/badgeIconKeys.ts";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "../../src/utils/tapThresholds.ts";
 import { prettyState } from "../../src/utils/entityValue.ts";
 import {
+  silencedSubjects, wasRatedDown, SUPPRESS_AFTER,
+} from "../../src/vesta/shared/concern.ts";
+import {
+  tallyAutomations, figuresLine, phasesLine,
+} from "../../src/vesta/brief/recordTally.ts";
+import {
   outcomeOf, reasonOf, deferredOf, yieldOf, checkIdOf,
   QUIET_REASON, ESCALATED_PREFIX,
 } from "../../src/vesta/supervise/passReason.ts";
@@ -297,6 +303,86 @@ console.log("\n— one answer per question, across surfaces —");
   // copy survives unnoticed.
   eq("not_home reads as a sentence", prettyState("not_home"), "Not home");
   eq("…and whitespace-only trims to empty (the divergence)", prettyState("   "), "");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n— what the villa has stopped raising (ADR 0002) —");
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ A SHIPPED DEFECT UNTIL 2.952.0. `ConcernLifecycle.tsx` counted
+// `stateOf(c) === "dismissed"` and told the owner, in warning colour, that
+// dismissing had silenced a subject. ADR 0002: "Five dismissals of one subject
+// suppress nothing; three ⬇️ suppress it." The Python twin has been correct
+// since 2026-08-28 and its docstring records surviving a mutation that swapped
+// these two — the swap was shipped in the .tsx, which node refuses outright.
+{
+  const dismissed = (key: string) =>
+    ({ subjectKey: key, state: "dismissed" }) as never;
+  const ratedDown = (key: string) =>
+    ({ subjectKey: key, useful_at: "2026-09-06T10:00:00", useful: false }) as never;
+  const ratedUp = (key: string) =>
+    ({ subjectKey: key, useful_at: "2026-09-06T10:00:00", useful: true }) as never;
+
+  eq("three DISMISSALS silence nothing",
+     JSON.stringify(silencedSubjects([dismissed("a"), dismissed("a"), dismissed("a")])),
+     "[]");
+  eq("…even five of them",
+     silencedSubjects([1,2,3,4,5].map(() => dismissed("a"))).length, 0);
+  eq("three ⬇️ RATINGS silence the subject",
+     JSON.stringify(silencedSubjects([ratedDown("a"), ratedDown("a"), ratedDown("a")])),
+     '["a"]');
+  eq("two ⬇️ are not enough",
+     silencedSubjects([ratedDown("a"), ratedDown("a")]).length, 0);
+  eq("⬆️ ratings never silence", silencedSubjects([ratedUp("a"), ratedUp("a"), ratedUp("a")]).length, 0);
+  eq("ratings on DIFFERENT subjects do not add up",
+     silencedSubjects([ratedDown("a"), ratedDown("b"), ratedDown("c")]).length, 0);
+
+  // ⚠️ THE `useful`-ALONE CONFLATION, which `negatives_of` calls "the third
+  // time this pair has had to be read together": `useful: false` with no
+  // `useful_at` means NOBODY HAS SAID ANYTHING, not "less like this".
+  const unrated = { subjectKey: "a", useful: false } as never;
+  check("a row with useful:false and no stamp counts for nothing",
+        !wasRatedDown(unrated) && silencedSubjects([unrated, unrated, unrated]).length === 0);
+
+  eq("the threshold is the backend's", SUPPRESS_AFTER, 3);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n— what your automations did, counted the way the Brief counts —");
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ THE TWO HALVES DISAGREED AND THE PIN WAS GREEN. `record.tally_automations`
+// counts once per INCIDENT (`if phase in ("", "opened")`); this side counted
+// every row. `test_record_wire` asserts a literal that is present on both
+// sides — the GUARD above one of them was the difference.
+{
+  const fire = (subject: string, phase = "", extra: Record<string, unknown> = {}) =>
+    ({ source: "automation", subject, title: subject, detail: "",
+       payload: { ...(phase ? { phase } : {}), ...extra } }) as never;
+
+  // The case that read differently in the two places.
+  const overload = tallyAutomations([fire("pump", "timeout"), fire("pump", "opened")]);
+  eq("an incident that opened and timed out is ONE firing", overload[0].times, 1);
+  eq("…and says how it ended", phasesLine(overload[0]), "1 ended by timeout");
+  eq("…in one row", overload.length, 1);
+
+  eq("a villa whose rules send no phase tallies plainly by count",
+     tallyAutomations([fire("light"), fire("light"), fire("light")])[0].times, 3);
+  eq("a cleared phase does not re-count the incident",
+     tallyAutomations([fire("door", "opened"), fire("door", "cleared")])[0].times, 1);
+
+  // ⚠️ ONLY `automation` ROWS GROUP.
+  const mixed = tallyAutomations([
+    { source: "agent", subject: "pump", title: "", detail: "" } as never,
+    { source: "agent", subject: "pump", title: "", detail: "" } as never]);
+  eq("two investigations of one pump stay two rows", mixed.length, 2);
+
+  // ⚠️ FIGURES ARE SUMMED, NEVER SAMPLED — and on every firing, whatever phase.
+  const summed = tallyAutomations([
+    fire("pump", "opened", { kwh: 0.3 }), fire("pump", "timeout", { kwh: 0.3 }),
+    fire("pump", "opened", { kwh: 0.3 })]);
+  eq("three firings of 0.3 kWh total 0.9", figuresLine(summed[0]), "0.9 kWh total");
+  eq("…and that is two incidents, not three rows", summed[0].times, 2);
+  eq("a non-numeric payload contributes zero, never NaN",
+     figuresLine(tallyAutomations([fire("x", "", { kwh: "lots" })])[0]), "");
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

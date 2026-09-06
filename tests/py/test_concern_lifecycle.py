@@ -70,12 +70,24 @@ def test_the_UI_invents_no_state_the_backend_cannot_write() -> None:
 
 def test_the_SUPPRESSION_THRESHOLD_matches_the_rule_it_describes() -> None:
     """⚠️ THE UI RESTATES THE BACKEND'S NUMBER AND MUST NOT RE-DECIDE IT. Three
-    dismissals on one subject stop it being raised — the HLD calls the dismissed
-    branch "the highest-value signal in the system" — and a screen promising a
-    different number than the code enforces is worse than one that says nothing,
-    because a reader would count wrong."""
+    ⬇️ RATINGS on one subject stop it being raised, and a screen promising a
+    different number than the code enforces is worse than one that says
+    nothing, because a reader would count wrong.
+
+    ⚠️ THIS DOCSTRING SAID "three DISMISSALS" UNTIL 2.952.0, AND THE SCREEN
+    AGREED WITH IT. `suppressed_subjects` has counted ratings since 2026-08-28
+    (ADR 0002: "Five dismissals of one subject suppress nothing; three ⬇️
+    suppress it") — but this pin only ever compared the NUMBER, so the
+    predicate beside it was free to be wrong, and was. The behaviour is pinned
+    in `tests/consistency/villa_rules.ts` now; what stays here is the number.
+    """
     from vesta.supervise.agent import concerns as concerns_mod
     with open(COPY, encoding="utf-8") as handle:
+        ui = handle.read()
+    # ⚠️ THE CONSTANT MOVED TO `shared/concern.ts` (2.952.0), with the rule it
+    # belongs to; `ConcernLifecycle` re-exports it. Read where it is declared.
+    rule = os.path.join(REPO_ROOT, "src", "vesta", "shared", "concern.ts")
+    with open(rule, encoding="utf-8") as handle:
         ui = handle.read()
     m = re.search(r"SUPPRESS_AFTER = (\d+)", ui)
     assert m, "the UI no longer states the threshold it explains"

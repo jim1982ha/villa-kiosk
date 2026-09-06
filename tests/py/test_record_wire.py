@@ -152,16 +152,31 @@ def test_both_sides_group_repeated_firings_rather_than_listing_them() -> None:
         "the composer no longer groups firings through the record's own tally")
     assert 'held["times"] += 1' in record, (
         "the record lists every firing again instead of grouping by automation")
-    # ⚠️ THE CALL, NOT THE NAME. Asserting `"sumFigures" in tab` passed when the
-    # function was renamed `sumFiguresUnused` — a substring match on a symbol,
-    # the same trap this file's own client parser was fixed for one commit
-    # earlier. A name proves a definition exists; only a call proves it runs.
-    assert "held.times += 1" in tab, (
-        "the tablet lists every firing again instead of grouping")
-    assert "sumFigures(held, row)" in tab, (
-        "the tablet no longer sums a grouped row's figures — one firing's "
+    # ⚠️ THIS ASSERTED `"held.times += 1" in tab` AND WAS GREEN WHILE THE TWO
+    # SIDES DISAGREED (fixed 2.952.0). The literal WAS present on both sides;
+    # the difference was the GUARD above the record's copy — `if phase in ("",
+    # "opened")` — which counts once per INCIDENT where the tablet counted
+    # every row. A rule that opened and later timed out read "1 time · 1 ended
+    # by timeout" in the Brief and "2 times" on the wall, from the same rows
+    # over the same window. A substring check cannot see a guard, so the
+    # tablet's rule moved to `vesta/brief/recordTally.ts` and its BEHAVIOUR is
+    # pinned by `tests/consistency/villa_rules.ts`, which CI runs.
+    assert "tallyAutomations(" in tab, (
+        "the tablet no longer groups firings through the shared tally")
+    with open(os.path.join(REPO_ROOT, "src", "vesta", "brief",
+                           "recordTally.ts"), encoding="utf-8") as fh:
+        tally = fh.read()
+    assert "opensAnIncident(phase)" in tally, (
+        "the tablet counts every row again instead of once per incident")
+    assert 'phase === "" || phase === "opened"' in tally, (
+        "the tablet's incident rule no longer matches record.py's "
+        '`if phase in ("", "opened")`')
+    assert "sumFigures(held, row)" in tally, (
+        "the tally no longer sums a grouped row's figures — one firing's "
         "number beside a count is wrong by the size of the count")
 
-    for side, src in (("record", record), ("tablet", tab)):
+    # ⚠️ THE TABLET'S HALF IS `recordTally.ts` NOW, not the .tsx. The figures
+    # travel with the arithmetic that sums them.
+    for side, src in (("record", record), ("tablet", tally)):
         assert "kwh" in src and "cost_local" in src, (
             f"the {side} stopped carrying the blueprint's own figures")

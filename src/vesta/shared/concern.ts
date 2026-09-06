@@ -56,6 +56,52 @@ export const wasSeen = (c: Concern): boolean =>
 export const wasJudged = (c: Concern): boolean =>
   stamp(c.useful_at) !== "";
 
+/** How many ⬇️ ratings on one subject stop it being raised.
+ *
+ *  ⚠️ MIRRORS `concerns.NEGATIVES_TO_SUPPRESS`, and `test_concern_lifecycle`
+ *  pins the two numbers equal. */
+export const SUPPRESS_AFTER = 3;
+
+/** "Less like this" — a RATING, and the only control that changes how readily
+ *  a kind is raised.
+ *
+ *  ⚠️ KEYED ON THE STAMP, NEVER ON `useful` ALONE, for the reason `wasJudged`
+ *  gives above: `useful` is `false` both for "less like this" and for "nobody
+ *  has said anything". `concerns.negatives_of` records that its Python twin
+ *  survived a mutation swapping those two, "because the fixtures happened to
+ *  do both". */
+export const wasRatedDown = (c: Concern): boolean =>
+  wasJudged(c) && c.useful === false;
+
+/**
+ * The subjects the villa has stopped raising.
+ *
+ * ⚠️ RATINGS, NEVER A LIFECYCLE ACT — see ADR 0002, and the sentence this
+ * function exists to make true: "Five dismissals of one subject suppress
+ * nothing; three ⬇️ suppress it." `ConcernLifecycle` counted `dismissed` here
+ * and told the owner, in warning colour, that dismissing had silenced a
+ * subject. It had not, and cannot. Both halves were wrong: three 🚫 announced a
+ * silencing that had not happened, and three ⬇️ said nothing while the villa
+ * really had gone quiet.
+ *
+ * ⚠️ AND IT LIVES IN A `.ts` SO IT CAN BE RUN. The Python twin
+ * (`concerns.suppressed_subjects`) has been correct since 2026-08-28; the copy
+ * that was wrong sat in a `.tsx`, which `node` refuses outright, so no suite
+ * could reach it. `tests/consistency/villa_rules.ts` pins this one.
+ */
+export function silencedSubjects(concerns: readonly Concern[]): string[] {
+  const perSubject = new Map<string, number>();
+  for (const c of concerns) {
+    if (!wasRatedDown(c)) continue;
+    const key = String(c.subjectKey ?? "");
+    if (key) perSubject.set(key, (perSubject.get(key) ?? 0) + 1);
+  }
+  return [...perSubject.entries()]
+    .filter(([, n]) => n >= SUPPRESS_AFTER)
+    .map(([key]) => key)
+    .sort();
+}
+
 /** Still asking for the reader's attention: live, and nobody has picked it up.
  *
  *  ⚠️ ACKNOWLEDGEMENT IS WHAT REMOVES A CARD, AND NOTHING ELSE DOES (owner's
