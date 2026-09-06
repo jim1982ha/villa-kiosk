@@ -493,19 +493,6 @@ async def handle(event: Mapping[str, Any], *, session: Any,
     return "" if outcome.ok else outcome.note
 
 
-async def _entity_of(session: Any, data: Mapping[str, Any]) -> str:
-    """Which notify entity this press came back through, or "".
-
-    ⚠️ A CALLBACK NAMES A CHAT, NOT AN ENTITY, and `chat.target_for` ALREADY
-    OWNS THAT MAPPING — including the `rsplit` that a negative group id needs
-    and the cache that keeps it off the per-press path. Walking the registry
-    again here would be a second chance to get both wrong, on the one code path
-    where being wrong means editing somebody else's message.
-    """
-    from vesta.supervise.agent import chat as chat_mod
-    target = await chat_mod.target_for(session, str(data.get("chat_id") or ""))
-    return _bare(target)
-
 
 def _acted_text(row: Mapping[str, Any], note: str, who: str) -> str:
     """What a message says after a press that left it with buttons.

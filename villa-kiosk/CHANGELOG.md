@@ -1,3 +1,16 @@
+## 2.933.0
+
+### Changed — the stylesheet stops advertising conventions nobody follows
+Seventeen colour, spacing and timing values were declared and read by nothing —
+including a whole brand palette under a heading saying it applied to every
+theme. A value nobody uses is worse than no value: it reads as a convention, so
+somebody changes it and nothing happens. A test now catches the next one.
+
+### Fixed — the room chip's colour had two homes
+The 3D room chip's background was written into the code with a note saying the
+stylesheet was the real source. Nothing read the stylesheet. Restyling that
+surface now actually moves the chip, as the note always promised.
+
 ## 2.932.0
 
 ### Fixed — the alert store had rules that only some writes obeyed

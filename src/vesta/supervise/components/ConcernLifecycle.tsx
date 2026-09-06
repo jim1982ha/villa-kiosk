@@ -155,7 +155,7 @@ export function LifecycleChip({ state }: { state: ConcernState }) {
  */
 export function SettledSummary({ concerns }: { concerns: Concern[] }) {
   const by = (s: ConcernState) =>
-    concerns.filter((c) => String(c.state ?? "open") === s).length;
+    concerns.filter((c) => stateOf(c) === s).length;
   const verified = by("verified");
   const dismissed = by("dismissed");
   // ⚠️ "CAME BACK" IS A SLICE OF `closed`, NOT A SIXTH STATE, and it is

@@ -404,21 +404,19 @@ def _fake_chat(retire_ok: bool = True, restate_ok: bool = True) -> Any:
     async def fake_answer(session: Any, query_id: str, text: str) -> None:
         return None
 
-    async def fake_entity(session: Any, data: Any) -> str:
-        return "notify.x"
-
-    seen["_originals"] = (buttons.retire, buttons.restate,
-                          buttons._answer, buttons._entity_of)
+    # ⚠️ `_entity_of` WAS PATCHED HERE UNTIL 2026-09-06 AND NOTHING CALLED IT.
+    # `reason.py` records that it was replaced; the only references left in the
+    # tree were this tuple and the restore below — a test keeping an orphan
+    # alive, which is how it survived the deletion of its siblings.
+    seen["_originals"] = (buttons.retire, buttons.restate, buttons._answer)
     buttons.retire = fake_retire                      # type: ignore[assignment]
     buttons.restate = fake_restate                    # type: ignore[assignment]
     buttons._answer = fake_answer                     # type: ignore[assignment]
-    buttons._entity_of = fake_entity                  # type: ignore[assignment]
     return seen
 
 
 def _restore(seen: Any) -> None:
-    (buttons.retire, buttons.restate,
-     buttons._answer, buttons._entity_of) = seen["_originals"]
+    (buttons.retire, buttons.restate, buttons._answer) = seen["_originals"]
 
 
 def test_a_press_that_LEAVES_ACTS_LIVE_restates_rather_than_retiring() -> None:

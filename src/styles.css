@@ -17,29 +17,25 @@
 
 :root {
   /* Brand constants — identical in every theme. */
-  --ink: #17191A;
-  --green900: #14432A;
-  --green700: #1F5C33;
-  --green600: #2F6B4F;
-  --green500: #4C9A5E;
-  --green300: #8FC79B;
-  --green100: #DCEDE1;
-  --cream: #FBFAF5;
-  --base: #F7F4EE;
-  --paper: #FFFDF9;
 
-  --tracking-brand: 0.38em;
   --tracking-eyebrow: 0.18em;
   --tracking-label: 0.08em;
   --tracking-tight: -0.01em;
 
-  --radius-badge: 12px;
   --radius-pill: 999px;
   /* ⚠️ DECLARED 2026-09-06, AFTER BEING REFERENCED AT EIGHT SITES WITH NO
      DECLARATION ANYWHERE. It resolved only because every site carried a
      `, 8px` fallback — the exact failure this file documents further down:
      a `var()` with no declaration and no fallback is an INVALID value,
      silent, and invisible to tsc and to review. */
+  /* ⚠️ SEVENTEEN DECLARATIONS WERE DELETED HERE ON 2026-09-06, all with ZERO
+     readers: a brand palette (--ink, --green*, --cream, --base, --paper), a
+     letter-spacing, a radius, two durations, a mono stack, and --chip-ink and
+     --ring which cost a line in EACH of the three theme blocks for no reader
+     at all. Same measurement and same day's reasoning as the --space-* scale:
+     a declared token nobody calls is a shallow interface that reads as a
+     convention people believe exists. `test_css_tokens` now fails on a new
+     one, so the next has to be deliberate. */
   --radius-md: 8px;
   /* Same class of defect as --radius-md, found by the same probe on its
      first run: one caller, one `, rgba(...)` fallback, no declaration. */
@@ -73,9 +69,7 @@
   --elev-1: 0 1px 2px var(--shadow);
   --elev-2: 0 4px 16px var(--shadow);
   --elev-3: 0 18px 48px var(--shadow);
-  --dur-fast: 120ms;
   --dur: 200ms;
-  --dur-slow: 320ms;
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
   --stroke-icon: 1.5px;
 
@@ -150,7 +144,6 @@
   /* Public Sans (self-hosted) for everything else — body text, table cells,
      form labels, tracking 0. Falls back to the platform system font. */
   --font-ui: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, ui-sans-serif, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* ---- Type scale ----
      One ladder, eight steps. This replaced 22 distinct hand-written px values
@@ -295,7 +288,6 @@
   /* Room-cluster chip. UI chrome, not a device — so it sits outside every
      --cat-* hue on purpose and reads as a navigation affordance. */
   --chip-surface: #475569;
-  --chip-ink: #FFFFFF;
 
   --status-on: #34845A;
   --status-off: #D8D3C7;
@@ -324,7 +316,6 @@
   --hud-icon-halo: rgba(255, 253, 249, 0.95);
   --card-scrim: rgba(23, 25, 26, 0.55);
   --shadow: rgba(23, 25, 26, 0.16);
-  --ring: var(--bg-base);
 }
 
 /* Under HA Ingress, HA's own chrome already clears the Dynamic Island/notch
@@ -356,7 +347,6 @@
   /* Dark: the slate above is far too light against this map — it read as a
      pale sticker rather than chrome. Matched to the panel surfaces instead. */
   --chip-surface: #2B322D;
-  --chip-ink: #F1EFE8;
 
   --status-on: #4FC07E;
   --status-off: #333833;
@@ -384,7 +374,6 @@
   --cat-energy: #5AA3C9;
   --cat-access-control: #9B8AD4;
   --cat-others: #93A199;
-  --ring: var(--bg-base);
 }
 
 /* ---- Night theme (explicit; also what "auto" resolves to overnight — see
@@ -412,7 +401,6 @@
   /* Night: darker again, and no pure white — a bedroom wall tablet must not
      act as a lamp (see this block's own note above). */
   --chip-surface: #1C221D;
-  --chip-ink: #C9C4B6;
 
   --status-on: #3E8F62;
   --status-off: #23261F;
@@ -440,7 +428,6 @@
   --cat-energy: #5AA3C9;
   --cat-access-control: #9B8AD4;
   --cat-others: #93A199;
-  --ring: var(--bg-base);
 }
 
 * {

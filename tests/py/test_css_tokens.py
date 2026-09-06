@@ -119,3 +119,68 @@ def test_this_check_can_actually_fail() -> None:
     assert "--radius-md" in _declared(text), (
         "--radius-md is undeclared again; it is the token this file was "
         "written for")
+
+
+#: Declared tokens with no reader, and why that is deliberate.
+#: ⚠️ EMPTY, AND THAT IS THE POINT. Seventeen lived here implicitly until
+#: 2026-09-06 — a brand palette, a letter-spacing, two durations, a mono stack —
+#: and two of them cost a line in each of the three theme blocks. An entry is a
+#: decision with a reason; a stale one fails below.
+KNOWN_UNREAD: Set[str] = set()
+
+
+def _read_from_ts() -> Set[str]:
+    """Tokens a component reads, as opposed to sets. ⚠️ A `var()` in a template
+    literal or an inline style is a real reader, and a stylesheet-only scan
+    would call it dead."""
+    found: Set[str] = set()
+    for root, _dirs, files in os.walk(SRC):
+        for name in files:
+            if not name.endswith((".ts", ".tsx")):
+                continue
+            with open(os.path.join(root, name), encoding="utf-8") as handle:
+                text = handle.read()
+            found.update(re.findall(r"var\(\s*(--[a-z0-9-]+)", text))
+            # ⚠️ A TOKEN NAMED AS A STRING IS ALSO READ, and the first version
+            # of this probe reported six live ones as dead because of it.
+            # `EntityCategories.ts` keeps a table of token NAMES and resolves
+            # them with `getComputedStyle(...).getPropertyValue(name)`, so the
+            # only literal in the tree is `"--cat-comfort"` — no `var()`
+            # anywhere. A colour the 3D scene paints with is not dead because
+            # the lookup happens at runtime.
+            found.update(re.findall(r"[\"'](--[a-z0-9-]+)[\"']", text))
+    return found
+
+
+def test_every_declared_token_has_a_reader() -> None:
+    """⚠️ THE OTHER DIRECTION, AND THE FILE ALREADY STATED THE RULE.
+
+    `test_every_bare_var_names_a_token_that_is_declared` proves a USE resolves
+    to a declaration. Nothing proved a DECLARATION has a use — so seventeen
+    accumulated, including a whole brand palette under a heading claiming it was
+    "identical in every theme", read by nothing in any theme.
+
+    A token nobody calls is worse than a literal: a reader believes changing it
+    does something. That is this stylesheet's own words, written when the
+    `--space-*` scale was deleted for exactly this.
+    """
+    text = _css()
+    declared = set(_DECLARED.findall(text))
+    used = {name for name, _closer in _USED.findall(text)} | _read_from_ts()
+    # ⚠️ A TOKEN SET FROM TYPESCRIPT IS DECLARED THERE, NOT HERE, so it never
+    # appears in this file's declarations and cannot be reported unread.
+    unread = sorted(declared - used - KNOWN_UNREAD)
+    assert not unread, (
+        "token(s) declared in styles.css that nothing reads — a convention "
+        "people believe exists:\n  " + "\n  ".join(unread)
+        + "\n\nDelete them, give them callers, or add them to KNOWN_UNREAD "
+          "with the reason.")
+
+
+def test_the_unread_exemptions_do_not_rot() -> None:
+    text = _css()
+    used = {name for name, _c in _USED.findall(text)} | _read_from_ts()
+    stale = sorted(KNOWN_UNREAD & used)
+    assert not stale, (
+        "KNOWN_UNREAD names token(s) that DO have a reader now — delete the "
+        "entry: " + ", ".join(stale))

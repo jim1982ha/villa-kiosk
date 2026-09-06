@@ -103,7 +103,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
+import { effectiveCategory, categorySurface, categorySurfaceRinged, cssVar } from "@/config/EntityCategories";
 import { badgeKindFor, badgeFaceAndRing } from "@/utils/deviceActivity";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
@@ -759,7 +759,13 @@ const CHIP_COLLISION = true as boolean;
  *  (read as "just black" at a glance). Deliberately outside every category
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
-const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
+/** ⚠️ READ FROM `--chip-surface`, WITH THE LITERAL AS THE FALLBACK IT ALWAYS
+ *  CLAIMED TO BE (2026-09-06). The comment above already named the token as
+ *  the source of truth and nothing consulted it — the colour was declared in
+ *  `styles.css` AND written here, two statements of one fact with no way for
+ *  them to disagree loudly. A theme that restyles the chip surface now moves
+ *  the 3D room chip with it, which is what "see --chip-surface" promised. */
+const CLUSTER_BG_FALLBACK = "#475569";
 /**
  * One room chip as DERIVED — everything needed to decide where it lands and
  * what it swallows, before a single GUI control is touched.
@@ -8915,7 +8921,7 @@ export class EntityVisuals {
     // black" at a glance). Outside every category hue on purpose, so the
     // chip reads as UI chrome rather than any one category's badge.
     container.thickness = 0;
-    container.background = CLUSTER_BG_COLOR;
+    container.background = cssVar("--chip-surface") || CLUSTER_BG_FALLBACK;
     // WAS `shadowOffsetY = 2` — see badgeShadow.ts and the summary card above.
     badgeShadow(container, "surface");
     container.isPointerBlocker = false; // taps resolve via pickClusterAt, like badges
