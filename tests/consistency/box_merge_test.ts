@@ -24,22 +24,36 @@ interface Chip extends MergeBox { id: string; n: number; names: string[] }
 const chip = (id: string, x: number, y: number, halfW = 10, halfH = 5,
               n = 1): Chip => ({ id, x, y, halfW, halfH, n, names: [id] });
 
-/** The chip merge's own payload, so this measures the shape the renderer uses. */
+/** The chip merge's own payload, VERBATIM — including the concatenation order.
+ *
+ *  ⚠️ THIS SORTED, AND THE SORT WAS THE DEFECT. `keep.names` was
+ *  `[...keep.names, ...drop.names].sort()` and `summary` sorted again, so the
+ *  order-independence check compared SETS. It passed while the renderer, whose
+ *  payload does not sort, produced EIGHT distinct outcomes over the same 24
+ *  orderings — because the SURVIVOR choice `(a, b) => a.n >= b.n ? a : b` is
+ *  positional when the counts are equal, which is two rooms with one device
+ *  each: the common case. The survivor's name is what the chip prints and the
+ *  order of `roomNames` is what the press-and-hold list shows.
+ *
+ *  A fixture that normalises the thing under test cannot see the thing under
+ *  test. */
 function settle(boxes: Chip[], gap = 2): Chip[] {
   return mergeOverlapping(
     boxes, gap,
-    (a, b) => (a.n >= b.n ? a : b),
+    (c) => c.n,
     (keep, drop) => {
       const total = keep.n + drop.n;
       keep.x = (keep.x * keep.n + drop.x * drop.n) / total;
       keep.y = (keep.y * keep.n + drop.y * drop.n) / total;
-      keep.names = [...keep.names, ...drop.names].sort();
+      keep.names = [...keep.names, ...drop.names];      // NOT sorted
       keep.n = total;
     });
 }
 
+/** What the reader sees: the label order, and the order of the rooms behind it.
+ *  Not sorted — sorting here is what hid the defect. */
 const summary = (out: Chip[]) =>
-  out.map((c) => c.names.join("+")).sort().join(" | ");
+  out.map((c) => c.names.join("+")).join(" | ");
 
 // ── the collision rule ──────────────────────────────────────────────────────
 {
@@ -105,8 +119,12 @@ const summary = (out: Chip[]) =>
   // ⚠️ THE BUSIER ROOM KEEPS ITS NAME — it is the more informative one — and the
   // merged anchor is the DEVICE-COUNT-WEIGHTED centroid, so the chip still sits
   // among the devices it stands for rather than halfway to a room with one.
-  const big = { ...chip("big", 0, 0), n: 9 };
-  const small = { ...chip("small", 12, 0), n: 1 };
+  // ⚠️ THE BUSIER ROOM IS THE RIGHT-MOST ONE, DELIBERATELY. With `big` on the
+  // left, rank and the positional tie-break both pick it, so deleting the rank
+  // check entirely still passed — the fixture could not tell the two rules
+  // apart. Putting them in opposition is what makes this assertion about rank.
+  const big = { ...chip("big", 12, 0), n: 9 };
+  const small = { ...chip("small", 0, 0), n: 1 };
   const out = settle([big, small]);
   // ⚠️ IDENTITY, NOT THE COUNT. My first version asserted `n === 10`, and both
   // the count and the weighted centroid are SYMMETRIC in the pair — so
@@ -116,10 +134,10 @@ const summary = (out: Chip[]) =>
     out.length === 1 && out[0].id === "big" && out[0].n === 10,
     `survivor ${out[0]?.id}`);
   check("...and it survives whichever way round they arrive",
-    settle([{ ...chip("small", 12, 0), n: 1 },
-            { ...chip("big", 0, 0), n: 9 }])[0].id === "big");
+    settle([{ ...chip("small", 0, 0), n: 1 },
+            { ...chip("big", 12, 0), n: 9 }])[0].id === "big");
   check("the merged anchor is weighted by device count, not the midpoint",
-    Math.abs(out[0].x - 1.2) < 1e-9, `got ${out[0].x}`);
+    Math.abs(out[0].x - 10.8) < 1e-9, `got ${out[0].x}`);
 }
 
 // ── a merge that makes the survivor wider must be re-measured ───────────────
@@ -136,7 +154,7 @@ const summary = (out: Chip[]) =>
                         chip("C", 33, 0, 10)];
   const out = mergeOverlapping(
     grow, 2,
-    (a, b) => (a.n >= b.n ? a : b),
+    (c) => c.n,
     (keep, drop) => {
       keep.x = (keep.x * keep.n + drop.x * drop.n) / (keep.n + drop.n);
       keep.names = [...keep.names, ...drop.names].sort();

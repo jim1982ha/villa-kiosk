@@ -50,19 +50,22 @@ export function overlapSeverity(a: MergeBox, b: MergeBox, gap: number): number {
  * Repeatedly merge the worst-overlapping pair until nothing overlaps.
  *
  * `merge(keep, drop)` folds `drop` into `keep` and must leave `keep` measured —
- * its box may change, and the next round measures it again. `keep` is chosen by
- * `prefer`, which returns the survivor of a pair.
+ * its box may change, and the next round measures it again. `rank` scores a
+ * box; the higher score survives, and EQUAL SCORES ARE BROKEN HERE, on the
+ * boxes' own coordinates.
  *
- * ⚠️ THE OUTCOME DOES NOT DEPEND ON THE ORDER THE BOXES ARRIVE IN, and that is
- * asserted rather than described. Where two pairs overlap by exactly the same
- * amount, the tie is broken on the boxes' own coordinates — a fact about where
- * they are, not about where they sit in the array. The comparison being `>`
- * rather than a real tie-break is what made the original claim untrue.
+ * ⚠️ THE OUTCOME DOES NOT DEPEND ON THE ORDER THE BOXES ARRIVE IN — asserted
+ * over all 24 orderings of four tied boxes, with the caller's real payload and
+ * no sorting in the fixture, because a fixture that normalises the thing under
+ * test cannot see it. THREE things had to be total for that to hold: which
+ * PAIR merges, which of the pair SURVIVES, and the order the survivors come
+ * back in. The first shipped alone in 2.964.0 under a comment claiming all
+ * three, and the other two still carried the arrival order.
  */
 export function mergeOverlapping<T extends MergeBox>(
   boxes: T[],
   gap: number,
-  prefer: (a: T, b: T) => T,
+  rank: (box: T) => number,
   merge: (keep: T, drop: T) => void,
 ): T[] {
   for (;;) {
@@ -78,10 +81,7 @@ export function mergeOverlapping<T extends MergeBox>(
         // then top-most, then the same for the partner: a total order over the
         // pair's own coordinates, so two callers holding the same boxes in
         // different orders settle on the same pair.
-        const key = [
-          Math.min(boxes[i].x, boxes[j].x), Math.min(boxes[i].y, boxes[j].y),
-          Math.max(boxes[i].x, boxes[j].x), Math.max(boxes[i].y, boxes[j].y),
-        ];
+        const key = pairKey(boxes[i], boxes[j]);
         if (severity > worst
             || (severity === worst && bi >= 0 && lexLess(key, tie))) {
           worst = severity;
@@ -91,14 +91,49 @@ export function mergeOverlapping<T extends MergeBox>(
         }
       }
     }
-    if (bi < 0) return boxes;             // nothing overlaps — done
+    if (bi < 0) return boxes.sort(byPosition);
     const a = boxes[bi];
     const b = boxes[bj];
-    const keep = prefer(a, b);
+    // ⚠️ THE SURVIVOR IS CHOSEN THE SAME WAY THE PAIR IS, and for one release
+    // it was not: the caller passed `(a, b) => a.n >= b.n ? a : b`, where `a`
+    // is whichever box sits earlier in the ARRAY, so two equally-ranked boxes —
+    // two rooms with one device each, the common case — handed the merge to
+    // whoever arrived first. Measured over all 24 orderings of four tied
+    // boxes with the renderer's own payload: EIGHT distinct outcomes, while
+    // the oracle reported one because its fixture sorted the names.
+    //
+    // `rank` is a number rather than a chooser precisely so this module can
+    // break the tie. A caller cannot express "these two are equal" through a
+    // function that must return one of them.
+    const keep = pickSurvivor(a, b, rank);
     const drop = keep === a ? b : a;
     merge(keep, drop);
     boxes.splice(boxes.indexOf(drop), 1);
   }
+}
+
+function pickSurvivor<T extends MergeBox>(
+  a: T, b: T, rank: (box: T) => number,
+): T {
+  const ra = rank(a);
+  const rb = rank(b);
+  if (ra !== rb) return ra > rb ? a : b;
+  return lexLess([a.x, a.y], [b.x, b.y]) ? a : b;
+}
+
+/** Left-most, then top-most. ⚠️ THE RETURNED ORDER IS CANONICAL TOO, because
+ *  the survivors' POSITIONS still carried the arrival order even once the
+ *  right boxes won — and a caller that renders or lists them in array order
+ *  would still show two answers for one villa. */
+function byPosition(a: MergeBox, b: MergeBox): number {
+  return a.x - b.x || a.y - b.y;
+}
+
+function pairKey(a: MergeBox, b: MergeBox): number[] {
+  return [
+    Math.min(a.x, b.x), Math.min(a.y, b.y),
+    Math.max(a.x, b.x), Math.max(a.y, b.y),
+  ];
 }
 
 function lexLess(a: readonly number[], b: readonly number[]): boolean {

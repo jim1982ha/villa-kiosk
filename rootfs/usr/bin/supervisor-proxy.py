@@ -105,7 +105,7 @@ import sys
 import tempfile
 import time
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from aiohttp import ClientSession, ClientTimeout, WSMsgType, web
 
@@ -883,8 +883,48 @@ AUTH_GLOBAL_MAX_FAILURES = 50    # per role, all clients combined
 AUTH_GLOBAL_LOCKOUT_SECONDS = 900
 AUTH_TRACK_MAX_CLIENTS = 2048    # hard cap on tracked (role, ip) pairs
 _auth_failures: dict = {}                                    # (role, ip) -> state
-_auth_failures_global: dict = {r: {"count": 0, "last": 0.0}
-                              for r in (*AUTH_ROLES, SUPERADMIN)}
+#: role -> the timestamps of its recent failures, newest last.
+#:
+#: ⚠️ TIMESTAMPS, NOT A COUNT, AND THAT IS THE WHOLE FIX. This was
+#: `{"count": n, "last": t}`, which cannot express a rate: v2.962.0 aged it on
+#: `now - last > window`, and `last` is refreshed by every failure, so any
+#: trickle faster than one mistake per window never aged at all. Measured
+#: against that shape — one mistyped PIN every 14 minutes locked the whole
+#: villa out of a role after 11.4 hours. Slower than the lifetime accumulator
+#: it replaced, and the same defect: "A lockout must punish the guesser, not
+#: the victim."
+#:
+#: Bounded by construction: `_note_global_failure` drops what has aged out and
+#: then keeps only the newest `AUTH_GLOBAL_MAX_FAILURES`, which is all the
+#: question "are there N inside the window" can need.
+_auth_failures_global: Dict[str, List[float]] = {
+    r: [] for r in (*AUTH_ROLES, SUPERADMIN)}
+
+
+def _note_global_failure(role: str, now: Optional[float] = None) -> None:
+    """Record one wrong PIN against a role, from any source address."""
+    moment = time.monotonic() if now is None else now
+    hits = _auth_failures_global[role]
+    hits.append(moment)
+    fresh = [t for t in hits if moment - t < AUTH_GLOBAL_LOCKOUT_SECONDS]
+    hits[:] = fresh[-AUTH_GLOBAL_MAX_FAILURES:]
+
+
+def _global_locked_for(role: str, now: Optional[float] = None) -> int:
+    """Seconds this ROLE is locked out for, from every address, or 0.
+
+    ⚠️ A RATE: `AUTH_GLOBAL_MAX_FAILURES` failures inside one window. The wait
+    ends when the OLDEST of them ages out, so a guesser who stops is released
+    on the window and one who continues is not.
+    """
+    moment = time.monotonic() if now is None else now
+    hits = [t for t in _auth_failures_global[role]
+            if moment - t < AUTH_GLOBAL_LOCKOUT_SECONDS]
+    _auth_failures_global[role][:] = hits
+    if len(hits) < AUTH_GLOBAL_MAX_FAILURES:
+        return 0
+    remaining = AUTH_GLOBAL_LOCKOUT_SECONDS - (moment - hits[0])
+    return int(remaining) + 1 if remaining > 0 else 0
 
 
 def _option_int(key: str, default: int, lo: int, hi: int) -> int:
@@ -969,9 +1009,8 @@ def _prune_auth_failures(now: float) -> None:
     for key in [k for k, st in _auth_failures.items()
                 if now - st["last"] > _auth_lockout_seconds()]:
         _auth_failures.pop(key, None)
-    for gst in _auth_failures_global.values():
-        if gst["count"] and now - gst["last"] > AUTH_GLOBAL_LOCKOUT_SECONDS:
-            gst["count"] = 0
+    for hits in _auth_failures_global.values():
+        hits[:] = [t for t in hits if now - t < AUTH_GLOBAL_LOCKOUT_SECONDS]
     if len(_auth_failures) > AUTH_TRACK_MAX_CLIENTS:
         # Oldest-first eviction. Evicting a still-locked attacker is acceptable:
         # the global tier remains, and the alternative (unbounded growth) is a
@@ -1030,18 +1069,15 @@ def _lockout_remaining(role: str, ip: str) -> int:
     now = time.monotonic()
     _prune_auth_failures(now)
     worst = 0
-    for st, limit, window in (
-        (_auth_failures.get((role, ip)), AUTH_MAX_FAILURES, _auth_lockout_seconds()),
-        (_auth_failures_global[role], AUTH_GLOBAL_MAX_FAILURES, AUTH_GLOBAL_LOCKOUT_SECONDS),
-    ):
-        if not st or st["count"] < limit:
-            continue
+    st = _auth_failures.get((role, ip))
+    limit, window = AUTH_MAX_FAILURES, _auth_lockout_seconds()
+    if st and st["count"] >= limit:
         remaining = window - (now - st["last"])
         if remaining <= 0:
             st["count"] = 0
-            continue
-        worst = max(worst, int(remaining) + 1)
-    return worst
+        else:
+            worst = int(remaining) + 1
+    return max(worst, _global_locked_for(role, now))
 
 
 async def auth_roles_handler(request: web.Request) -> web.Response:
@@ -1115,14 +1151,12 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
     # one correct entry cannot reset a distributed guessing campaign.
     now = time.monotonic()
     st = _auth_failures.setdefault((SUPERADMIN, ip), {"count": 0, "last": 0.0})
-    gst = _auth_failures_global[SUPERADMIN]
     if ok:
         st["count"] = 0
     else:
         st["count"] += 1
         st["last"] = now
-        gst["count"] += 1
-        gst["last"] = now
+        _note_global_failure(SUPERADMIN, now)
         return web.json_response({"error": "incorrect code"}, status=401)
     return web.json_response({"token": _mint_elevation(),
                               "expiresIn": ELEVATION_TTL_SECONDS})
@@ -1413,18 +1447,16 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
     ok = hmac.compare_digest(pin, configured)
     now = time.monotonic()
     st = _auth_failures.setdefault((role, ip), {"count": 0, "last": 0.0})
-    gst = _auth_failures_global[role]
     if ok:
-        # Clear only THIS client's counter. The global tier decays on its own
-        # window (`_prune_auth_failures`), so one correct PIN cannot reset a
-        # distributed guess — and a slow trickle of honest mistakes cannot
-        # accumulate into a villa-wide lockout either.
+        # Clear only THIS client's counter. The global tier holds the
+        # timestamps of recent failures, so one correct PIN cannot empty a
+        # distributed guess in progress — and, because it is a rate rather than
+        # a total, a trickle of honest mistakes ages out instead of adding up.
         st["count"] = 0
     else:
         st["count"] += 1
         st["last"] = now
-        gst["count"] += 1
-        gst["last"] = now
+        _note_global_failure(role, now)
     resp = web.json_response({"ok": ok})
     if ok:
         _set_session_cookie(resp, role)

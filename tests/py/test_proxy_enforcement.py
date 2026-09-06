@@ -471,8 +471,8 @@ def test_public_model_access_is_off_unless_the_option_says_otherwise(
 
 def _reset_limiter() -> None:
     proxy._auth_failures.clear()
-    for gst in proxy._auth_failures_global.values():
-        gst["count"], gst["last"] = 0, 0.0
+    for hits in proxy._auth_failures_global.values():
+        hits.clear()
 
 
 def test_a_lockout_punishes_the_guesser_and_not_the_villa() -> None:
@@ -492,51 +492,140 @@ def test_a_lockout_punishes_the_guesser_and_not_the_villa() -> None:
     _reset_limiter()
 
 
-def test_the_global_backstop_is_a_RATE_and_not_a_lifetime_total() -> None:
-    """⚠️ IT WAS A LIFETIME ACCUMULATOR AND THE COMMENT SAID OTHERWISE. Nothing
-    aged `_auth_failures_global`: its count was incremented on a wrong PIN and
-    zeroed only inside `_lockout_remaining`, AFTER it had already fired. So the
-    fiftieth cumulative mistyped PIN for a role — across every guest, every
-    tablet, weeks of uptime — locked that role out from every source address.
+class AuthReq:
+    """A `/auth/verify` request, enough of one for the handler."""
 
-    A distributed-guess backstop has to bound a rate. Honest mistakes spread
-    across the window must not accumulate into a villa-wide lockout.
+    def __init__(self, role: str, pin: str, ip: str = "203.0.113.7") -> None:
+        self._body = {"role": role, "pin": pin}
+        self.headers: Dict[str, str] = {"X-Forwarded-For": ip}
+        self.cookies: Dict[str, str] = {}
+        self.remote = ip
+
+    async def json(self) -> Any:
+        return self._body
+
+
+def _verify(role: str, pin: str, ip: str = "203.0.113.7") -> Any:
+    """Drive the real handler. ⚠️ THE HANDLER, NOT THE STATE IT TOUCHES."""
+    import asyncio
+
+    return asyncio.run(proxy.auth_verify_handler(AuthReq(role, pin, ip)))
+
+
+def test_a_trickle_of_honest_mistakes_never_locks_the_villa_out(monkeypatch) -> None:
+    """⚠️ THE PROPERTY THE 2.962.0 FIX CLAIMED AND DID NOT DELIVER.
+
+    That release added ageing keyed on `gst["last"]` — which is refreshed on
+    EVERY failure — so any trickle faster than one mistake per window never
+    ages at all. It is a quiet-period reset, not a rate. Driven against the
+    shipped code before this test was written:
+
+        one honest mistake every 14 minutes
+        -> LOCKED OUT after 50 mistakes, 11.4 hours elapsed, every address
+
+    Slower than the lifetime accumulator it replaced, and the same defect: the
+    villa is punished for its guests mistyping, which is what this limiter's
+    own preamble says must never happen.
+
+    ⚠️ THE FIXTURE IS THE POINT. A test that fires fifty failures back to back
+    proves nothing here — that is the burst case, which always locked and still
+    must. The interval has to be long enough that no reasonable person calls it
+    an attack, and short enough that the old code still accumulated.
     """
     _reset_limiter()
     role = "owner"
-    gst = proxy._auth_failures_global[role]
+    window = proxy.AUTH_GLOBAL_LOCKOUT_SECONDS
+    step = window / 4.0                       # four honest mistakes per window
+    start = time.monotonic()
 
-    # One short of the limit, and the last of them long ago.
-    gst["count"] = proxy.AUTH_GLOBAL_MAX_FAILURES - 1
-    gst["last"] = time.monotonic() - proxy.AUTH_GLOBAL_LOCKOUT_SECONDS - 1
-    proxy._prune_auth_failures(time.monotonic())
-    assert gst["count"] == 0, (
-        "%d stale failures survived a full window, so they will still be there "
-        "when the next honest mistake arrives — that is a lifetime total, not "
-        "a rate" % gst["count"])
-
-    # And a burst inside the window still trips it.
-    now = time.monotonic()
-    gst["count"], gst["last"] = proxy.AUTH_GLOBAL_MAX_FAILURES, now
-    assert proxy._lockout_remaining(role, "198.51.100.9") > 0, (
-        "a full burst inside the window no longer locks anything — the fix "
-        "removed the backstop instead of ageing it")
+    for i in range(proxy.AUTH_GLOBAL_MAX_FAILURES * 3):
+        now = start + i * step
+        proxy._note_global_failure(role, now)
+        assert proxy._global_locked_for(role, now) <= 0, (
+            "one mistyped PIN every %.0f minutes locked the whole villa out "
+            "of the %s profile after %d of them (%.1f hours) — nobody at this "
+            "rate is guessing" % (step / 60, role, i + 1, i * step / 3600))
     _reset_limiter()
 
 
-def test_a_correct_pin_clears_the_caller_and_not_the_global_tier() -> None:
-    """One correct PIN must not reset a distributed guess in progress."""
+def test_a_real_burst_still_trips_the_global_backstop() -> None:
+    """The converse, and the reason the tier exists: per-client limiting alone
+    is defeated by rotating source addresses, so a distributed guess has to be
+    bounded by something. A fix that only relaxes is not a fix."""
+    _reset_limiter()
+    role = "owner"
+    now = time.monotonic()
+    for i in range(proxy.AUTH_GLOBAL_MAX_FAILURES):
+        proxy._note_global_failure(role, now + i)      # a second apart
+    assert proxy._global_locked_for(role, now + proxy.AUTH_GLOBAL_MAX_FAILURES) > 0, (
+        "%d failures inside one window did not lock anything"
+        % proxy.AUTH_GLOBAL_MAX_FAILURES)
+    _reset_limiter()
+
+
+def test_the_global_tier_cannot_grow_without_bound() -> None:
+    """A windowed count keeps timestamps; an attacker must not be able to make
+    that list the memory-exhaustion vector the per-client table was bounded
+    against."""
+    _reset_limiter()
+    now = time.monotonic()
+    for i in range(50_000):
+        proxy._note_global_failure("owner", now + i * 0.001)
+    held = len(proxy._auth_failures_global["owner"])
+    assert held <= proxy.AUTH_GLOBAL_MAX_FAILURES * 2, (
+        "the global tier is holding %d timestamps" % held)
+    _reset_limiter()
+
+
+def test_a_correct_pin_clears_the_caller_and_not_the_global_tier(monkeypatch) -> None:
+    """One correct PIN must not reset a distributed guess in progress.
+
+    ⚠️ THIS TEST WROTE THE LINE IT THEN ASSERTED ABOUT, and its name is a claim
+    about `auth_verify_handler` that it never called. It set the per-client
+    counter to 0 itself — "what a correct PIN does" — and checked the global
+    tier was untouched, so adding `gst["count"] = 0` to the handler's own `if
+    ok:` arm left all fifty tests in this file green. Measured, not argued.
+
+    `feedback_pin-the-caller` for the fourth time in this repository, in the
+    commit whose message said it had caught that defect twice.
+    """
+    monkeypatch.setattr(proxy, "_configured_pin", lambda role: "1234")
     _reset_limiter()
     role, ip = "owner", "203.0.113.7"
-    now = time.monotonic()
-    proxy._auth_failures[(role, ip)] = {"count": 3, "last": now}
-    gst = proxy._auth_failures_global[role]
-    gst["count"], gst["last"] = proxy.AUTH_GLOBAL_MAX_FAILURES, now
 
-    proxy._auth_failures[(role, ip)]["count"] = 0        # what a correct PIN does
-    assert gst["count"] == proxy.AUTH_GLOBAL_MAX_FAILURES, (
-        "one correct PIN emptied the global tier")
-    assert proxy._lockout_remaining(role, "198.51.100.9") > 0
+    for _ in range(3):
+        _verify(role, "0000", ip)
+    assert proxy._auth_failures[(role, ip)]["count"] == 3
+    assert len(proxy._auth_failures_global[role]) == 3, (
+        "the global tier did not see the failures")
+
+    _verify(role, "1234", ip)                      # the correct PIN, for real
+    assert proxy._auth_failures[(role, ip)]["count"] == 0, (
+        "a correct PIN did not clear the caller's own counter")
+    assert len(proxy._auth_failures_global[role]) == 3, (
+        "one correct PIN emptied the global tier, so a distributed guess is "
+        "reset by any one guesser getting it right")
+    _reset_limiter()
+
+
+def test_the_handler_refuses_once_the_caller_is_locked_out(monkeypatch) -> None:
+    """⚠️ DRIVEN, because `_lockout_remaining` returning a number proves
+    nothing about whether the handler consults it."""
+    monkeypatch.setattr(proxy, "_configured_pin", lambda role: "1234")
+    _reset_limiter()
+    role, ip = "owner", "203.0.113.7"
+    for _ in range(proxy.AUTH_MAX_FAILURES):
+        _verify(role, "0000", ip)
+
+    locked = _verify(role, "0000", ip)
+    assert getattr(locked, "status", None) == 429, (
+        "the caller sent %d wrong PINs and the handler kept checking"
+        % (proxy.AUTH_MAX_FAILURES + 1))
+    # ⚠️ AND THE CORRECT PIN IS REFUSED TOO. A lockout that a right answer walks
+    # through is not a lockout — it is exactly the state a guesser reaches.
+    assert getattr(_verify(role, "1234", ip), "status", None) == 429
+    # A different address is unaffected: the guesser is punished, not the villa.
+    assert getattr(_verify(role, "1234", "192.168.1.50"), "status", None) != 429
     _reset_limiter()
 
 

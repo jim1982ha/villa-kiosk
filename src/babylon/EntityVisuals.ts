@@ -8464,9 +8464,14 @@ export class EntityVisuals {
       // pairing was `severity > worst`, so an exact tie went to the first pair
       // in array order — and array order is room iteration order, the very
       // thing the claim above denies mattering.
+      // ⚠️ A RANK, NOT A CHOOSER. This passed `(a, b) => a.ids.length >= b.ids.length
+      // ? a : b`, and `a` is whichever chip sits earlier in the ARRAY — so two
+      // rooms with one device each, the common case, handed the merge to
+      // whichever the room iteration produced first. The survivor's name is
+      // what the chip prints. `boxMerge` breaks equal ranks on position.
       mergeOverlapping(
         chips, gap,
-        (a, b) => (a.ids.length >= b.ids.length ? a : b),
+        (c) => c.ids.length,
         (keep, drop) => {
           const a = keep, b = drop;
           const na = a.ids.length, nb = b.ids.length;
