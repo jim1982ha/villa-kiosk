@@ -60,13 +60,6 @@ DELIBERATELY_UNCALLED: Dict[str, str] = {
         "inside `/agent-feedback`, so the verdict and the receipt cannot "
         "disagree. `/agent-acknowledge` is still a live route because Telegram "
         "uses it; only the browser client is spare.",
-    "loadAgentRuns":
-        "⚠️ OPEN, NOT SETTLED (2026-09-06). Nothing surfaces the agent's runs: "
-        "`RecentChecks` shows CHECKS through `loadCheckFlags`, which is a "
-        "different list. This is the first thing this check found that nobody "
-        "has decided about — either a run list deserves a surface or this "
-        "client and its route should go. Recorded here rather than deleted, "
-        "because deleting the client is what would hide the question.",
 }
 
 

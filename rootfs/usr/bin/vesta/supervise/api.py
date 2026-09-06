@@ -183,7 +183,6 @@ def routes() -> List[Any]:
         web.get("/agent-flag-types", agent_flag_types_get_handler),
         web.post("/agent-flag-types", agent_flag_types_post_handler),
         web.post("/agent-acknowledge", agent_acknowledge_handler),
-        web.get("/agent-runs", agent_runs_handler),
         web.get("/agent-usage", agent_usage_handler),
         web.get("/agent-review", agent_review_get_handler),
         web.post("/agent-review", agent_review_decide_handler),
@@ -740,24 +739,6 @@ async def agent_chats_handler(request: web.Request) -> web.Response:
     found = await agent_chat.known_chats(request.app["session"])
     return web.json_response({"chats": [
         {"id": c.chat_id, "name": c.name} for c in found]})
-
-
-async def agent_runs_handler(request: web.Request) -> web.Response:
-    """What the agent has been doing: one row per run, most recent last.
-
-    ⚠️ READABLE BY ANY AUTHORISED SESSION, WHERE `/agent-audit` IS OWNER-ONLY,
-    and the difference is what each carries. A run row says a run started and
-    how it ended — the reader of a tablet is entitled to know the supervisor is
-    alive. The audit carries argument digests, tool names and refusal reasons,
-    which is a description of what the villa is being asked about.
-    """
-    if not deps.authorized(request):
-        return deps.unauthorized()
-    from vesta.supervise.agent import audit as agent_audit
-    rows = [r for r in agent_audit.rows(500)
-            if str(r.get("tool") or "").startswith("run:")]
-    return web.json_response({"runs": rows[-100:],
-                              "summary": agent_audit.summary()})
 
 
 async def agent_audit_handler(request: web.Request) -> web.Response:

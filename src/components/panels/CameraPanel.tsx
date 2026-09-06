@@ -35,6 +35,7 @@ import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { mergeStateHistories } from "./chartUtils";
 import StateTimeline from "./StateTimeline";
 import type { StateHistoryPoint } from "@/types/ha.types";
+import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 
 interface Props extends PanelProps {
   /** Lets the camera pin continuous rendering while the stream is open. */
@@ -54,8 +55,11 @@ const CHROME_IDLE_MS = 2000;
 // neither travelled nor lingered — otherwise a pan/pinch of a zoomed feed
 // would flip the chrome on every gesture. Slop is generous because a finger
 // on glass always drifts a little.
-const TAP_SLOP_PX = 12;
-const TAP_MAX_MS = 400;
+// ⚠️ THE SHARED ANSWER, NOT A SECOND ONE (2.949.0). These were 12px/400ms
+// against TapRecognizer's 14px/500ms, so the same finger on the same glass was
+// a tap in the 3D villa and a drag here.
+const TAP_SLOP_PX = TAP_MOVE_TOL_PX;
+const TAP_MAX_MS = LONG_PRESS_MS;
 // A horizontal drag across an UNZOOMED feed steps to the neighbouring camera.
 // Needs real travel and a clearly horizontal direction, so it can't be
 // confused with a tap or with a vertical drag. useMediaZoom only begins a pan

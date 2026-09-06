@@ -37,7 +37,15 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 BIN = os.path.join(ROOT, "rootfs", "usr", "bin")
 # ⚠️ MOVED IN 2.756.0 with the helpers themselves, when ShadowDiffPanel was
 # deleted. The contract is unchanged; only its home is.
-PANEL = os.path.join(ROOT, "src", "vesta", "supervise", "components", "RecentChecks.tsx")
+#: ⚠️ THE CLASSIFIER, NOT THE SCREEN THAT RENDERS IT (2.949.0). These rules
+#: lived in `RecentChecks.tsx`, and node refuses the `.tsx` extension outright —
+#: so the checks below, which derive the PRODUCER's literals from scheduler.py
+#: honestly, could only `grep` the consumer half. `passReason.ts` imports
+#: nothing at runtime and its BEHAVIOUR is now pinned by
+#: `tests/consistency/villa_rules.ts`, which `test_villa_rules.py` runs. These
+#: source checks stay: they hold the two halves of a two-language contract in
+#: step, which no single-language suite can do.
+PANEL = os.path.join(ROOT, "src", "vesta", "supervise", "passReason.ts")
 
 
 def _read(path: str) -> str:
@@ -77,15 +85,24 @@ def test_the_panel_classifies_using_the_producer_s_OWN_literals() -> None:
     panel = _read(PANEL)
     quiet, prefix, sep = _quiet_literal(), _escalated_prefix(), _detail_separator()
 
-    assert f'reason === "{quiet}"' in panel, (
-        f"the panel does not recognise {quiet!r}, which is what "
+    # ⚠️ THE LITERALS ARE NAMED CONSTANTS NOW (2.949.0), so this checks the
+    # DECLARATION rather than an inline comparison. The producer's own string
+    # still has to appear verbatim on the consumer side — which is the whole
+    # job of this file — but the consumer is free to give it a name, and
+    # `villa_rules.ts` separately proves the constant is the one used.
+    assert f'QUIET_REASON = "{quiet}"' in panel, (
+        f"the classifier does not recognise {quiet!r}, which is what "
         "scheduler.py returns for a pass that looked and found nothing — so "
         "every quiet pass now reports as 'could not run'")
-    assert f'reason.startsWith("{prefix}")' in panel, (
-        f"the panel does not recognise the {prefix!r} prefix, so a pass that "
-        "raised something reports as a failure")
+    assert f'ESCALATED_PREFIX = "{prefix}"' in panel, (
+        f"the classifier does not recognise the {prefix!r} prefix, so a pass "
+        "that raised something reports as a failure")
+    assert "reason.startsWith(ESCALATED_PREFIX)" in panel, (
+        "the prefix constant is declared but not used to classify")
+    assert "reason === QUIET_REASON" in panel, (
+        "the quiet constant is declared but not used to classify")
     assert f'split("{sep}")' in panel, (
-        "the panel no longer splits `detail` on the separator record_pass "
+        "the classifier no longer splits `detail` on the separator record_pass "
         "writes, so it renders the numbers as part of the sentence")
 
 

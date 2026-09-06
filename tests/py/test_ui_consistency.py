@@ -514,7 +514,13 @@ def test_a_pass_that_never_RAN_is_not_reported_as_a_quiet_one() -> None:
     it. So the panel must derive the outcome from the REASON and must not render
     the stored verdict.
     """
-    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
+    # ⚠️ THE CLASSIFIER MOVED TO passReason.ts (2.949.0) — node refuses a .tsx,
+    # so the rules could never be executed while they lived in the panel. The
+    # screen is read too, because what this pins is that the SCREEN derives the
+    # outcome rather than rendering the stored verdict.
+    panel = (_read(os.path.join(SRC, "vesta", "supervise", "passReason.ts"))
+             + _read(os.path.join(SRC, "vesta", "supervise", "components",
+                                  "RecentChecks.tsx")))
     assert "export function outcomeOf" in panel, "no derived outcome"
     body = panel[panel.index("export function outcomeOf"):]
     body = body[:body.index("\n}")]
@@ -1379,7 +1385,11 @@ def test_a_check_SAYS_when_its_flags_are_still_WAITING() -> None:
     subtracting — a check stopped for a different reason (budget, a provider
     outage) must not be reported as deferred.
     """
-    checks = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
+    # See the note above: the parser lives in passReason.ts, the heading that
+    # explains it lives in the panel, and this rule spans both.
+    checks = (_read(os.path.join(SRC, "vesta", "supervise", "passReason.ts"))
+              + _read(os.path.join(SRC, "vesta", "supervise", "components",
+                                   "RecentChecks.tsx")))
     assert "deferredOf" in checks, (
         "nothing reads how many flags are waiting, so a check can show five "
         "flagged over two cards and explain neither")

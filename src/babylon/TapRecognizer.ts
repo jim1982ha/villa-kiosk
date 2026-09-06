@@ -9,12 +9,16 @@
 // and the ghost-click fix live in exactly one place.
 
 import { suppressGhostClick } from "@/utils/ghostClick";
+import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 
 export type TapKind = "tap" | "longpress" | null;
 
 export class TapRecognizer {
-  private static readonly MOVE_TOL = 14; // px — generous for fat-finger touch
-  private static readonly LONG_MS = 500; // ms — stationary press held this long = long-press
+  // ⚠️ SHARED WITH CameraPanel SINCE 2.949.0 — see utils/tapThresholds. This
+  // file's header has always claimed the thresholds live in exactly one place;
+  // the camera feed had its own pair (12px/400ms) until then.
+  private static readonly MOVE_TOL = TAP_MOVE_TOL_PX;
+  private static readonly LONG_MS = LONG_PRESS_MS;
   /** Second press within this window, this close, is a DOUBLE press. Both
    *  cameras share these — the first-person one has had double-tap-to-walk
    *  since long before the overview got double-tap-to-zoom, and two cameras

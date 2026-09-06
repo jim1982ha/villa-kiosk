@@ -11,6 +11,7 @@
 import { useMemo, useState } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { fmtChartTime, fmtChartStamp } from "./chartUtils";
+import { prettyState } from "@/utils/entityValue";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -121,11 +122,12 @@ function cellBackground(states: string[], colorFor: (s: string) => string): stri
   return `repeating-linear-gradient(45deg, ${stops})`;
 }
 
-/** Tidy a raw HA state for display: "not_home" → "Not home", "on" → "On". */
-function prettyState(s: string): string {
-  const t = s.replace(/_/g, " ").trim();
-  return t ? t[0].toUpperCase() + t.slice(1) : s;
-}
+// ⚠️ THE NINTH COPY OF THIS, REMOVED (2.949.0). `utils/entityValue.prettyState`
+// is the shared rule — the module extracted two releases ago precisely because
+// the wall tablet and the panels were describing the villa differently. This
+// copy diverged on whitespace-only input (it returned the original, the shared
+// one returns ""), which renders identically and is exactly how a ninth copy
+// survives unnoticed.
 
 export default function StateTimeline({
   data, hours, colorFor, height, legend, loading, vertical, bucketMinutes,

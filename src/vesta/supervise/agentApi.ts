@@ -343,13 +343,12 @@ export async function saveAgentConfig(
   return r.ok;
 }
 
-/** Runs the agent has made, most recent last. Any authorised session. */
-export async function loadAgentRuns(): Promise<Record<string, string>[]> {
-  const r = await fetch(ingressPath("agent-runs"), { credentials: "same-origin" });
-  if (!r.ok) return [];
-  const d = (await r.json().catch(() => ({}))) as { runs?: unknown };
-  return Array.isArray(d.runs) ? (d.runs as Record<string, string>[]) : [];
-}
+// ⚠️ THE WHOLE `/agent-runs` SLICE IS GONE (2.949.0) — client, route, handler,
+// nginx location and its security-suite row. `test_client_has_a_caller` had
+// parked the question in an exemption reading "either a run list deserves a
+// surface or this client and its route should go", and no surface was ever
+// asked for. Nothing is lost to the owner: a run row is an audit row whose
+// `tool` starts with "run:", and `/agent-audit` still serves those.
 
 /** One conversation the villa's bot can be reached in, as a person names it. */
 export interface BotChat { id: string; name: string }
@@ -778,9 +777,13 @@ export async function loadCheckFlags(): Promise<CheckFlag[]> {
  *  a typo in one of them would silently mis-file a flag's whole life. */
 const AWAITING_VERDICT = "awaiting-approval";
 
-/** The check a flag belongs to: its own id with the `-eN` suffix removed. */
-export const checkIdOf = (flagRunId: string) =>
-  flagRunId.replace(/-e\d+$/, "");
+// ⚠️ `checkIdOf` MOVED TO `passReason.ts` (2.949.0) and is re-exported here, so
+// the join key and the pass-reason rules that travel with it are one module and
+// one test surface. This file's own comment used to point at the leaf that
+// RENDERS the classification ("What a reason MEANS is classified in exactly one
+// place, `outcomeOf` in RecentChecks") — a classifier upstream of two readers
+// living downstream of both.
+export { checkIdOf } from "@/vesta/supervise/passReason";
 
 /** One escalation waiting for a person, from `/agent-queue`.
  *

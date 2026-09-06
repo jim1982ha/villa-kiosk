@@ -33,6 +33,12 @@ import {
   effectiveCategory, SWITCH_PURPOSE_HINTS, categorySurface,
 } from "../../src/config/EntityCategories.ts";
 import { iconKeyFor } from "../../src/babylon/badgeIconKeys.ts";
+import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "../../src/utils/tapThresholds.ts";
+import { prettyState } from "../../src/utils/entityValue.ts";
+import {
+  outcomeOf, reasonOf, deferredOf, yieldOf, checkIdOf,
+  QUIET_REASON, ESCALATED_PREFIX,
+} from "../../src/vesta/supervise/passReason.ts";
 // ⚠️ THE STUB GOES IN BEFORE THE IMPORT. `loadConfig` reads localStorage at
 // call time, and stubbing it lets this suite exercise the REAL merge rather
 // than the catch arm — which is the whole point, because the merge is where a
@@ -224,6 +230,73 @@ console.log("\n— what does a FRESH INSTALL start with —");
   eq("a stored entity map survives the merge", Object.keys(after.entityMap).length, 1);
   check("…and nothing the owner never asked for joins it",
     !("light.ghost" in after.entityMap));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n— what a TRIAGE pass actually did (the consumer half) —");
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ NEVER EXECUTED BEFORE 2.949.0. These rules lived in a .tsx, which node
+// refuses outright, so `test_pass_reason_contract.py` could only assert
+// `"outcomeOf(" in panel` about them. Its own docstring names the stakes:
+// reword the quiet literal and the Handover page reclassifies every quiet pass
+// as "could not run" — a villa whose supervision appears to have failed.
+{
+  eq("the escalated prefix classifies as RAISED",
+    outcomeOf("escalated 2 (investigated 1): pool pump"), "raised");
+  eq("the quiet literal classifies as QUIET", outcomeOf(QUIET_REASON), "quiet");
+  // ⚠️ DERIVED BY EXCLUSION, so a NEW guard in scheduler._run_once lands here
+  // as "could not run" without anybody remembering to update the rule.
+  eq("a budget refusal is BLOCKED", outcomeOf("budget: monthly cap reached"), "blocked");
+  eq("a triage refusal is BLOCKED", outcomeOf("triage failed: no provider"), "blocked");
+  eq("an empty reason is BLOCKED", outcomeOf(""), "blocked");
+  check("the two producer literals are the ones scheduler.py writes",
+    ESCALATED_PREFIX === "escalated " && QUIET_REASON === "nothing to escalate");
+
+  eq("reasonOf keeps only the human half",
+    reasonOf({ detail: "nothing to escalate | doc=900c/40L | escalated=0" }),
+    "nothing to escalate");
+  eq("…including a reason that itself contains a pipe character",
+    reasonOf({ detail: "stopped a|b | doc=1c/1L" }), "stopped a|b");
+  eq("…and a missing detail is empty, not a crash", reasonOf({}), "");
+
+  // ⚠️ READ, NOT SUBTRACTED — a pass that stopped for a budget or provider
+  // reason must not be counted as having deferred anything.
+  eq("deferredOf reads the stated figure",
+    deferredOf("escalated 5 (investigated 2, 3 left for next pass): x"), 3);
+  eq("…and is 0 when the pass stopped for another reason",
+    deferredOf("escalated 5 (investigated 2, stopped; cap reached): x"), 0);
+
+  // ⚠️ "reached 0 of 24" vs "looked twenty times and concluded nothing".
+  eq("yieldOf separates looking from finding",
+    JSON.stringify(yieldOf("escalated 3 (investigated 20, 0 concerns): x")),
+    JSON.stringify({ looked: 20, raised: 0 }));
+  eq("…and reads the singular 'concern' too",
+    yieldOf("escalated 1 (investigated 2, 1 concern): x").raised, 1);
+  eq("…with nothing investigated reading as 0, not absent",
+    yieldOf(QUIET_REASON).looked, 0);
+
+  eq("checkIdOf strips a TRAILING -eN", checkIdOf("check-123-e2"), "check-123");
+  eq("…and leaves a mid-string -e alone", checkIdOf("check-e2-abc"), "check-e2-abc");
+  eq("…and an id with no suffix is unchanged", checkIdOf("check-123"), "check-123");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n— one answer per question, across surfaces —");
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  // ⚠️ TWO ANSWERS TO "WHAT IS A TAP" ON ONE TABLET, until 2.949.0.
+  // CameraPanel had 12px/400ms against TapRecognizer's 14px/500ms — so the
+  // same finger was a tap in the 3D villa and a drag on the camera feed.
+  eq("the tap slop is the recogniser's generous value", TAP_MOVE_TOL_PX, 14);
+  eq("…and the long-press threshold is its 500ms", LONG_PRESS_MS, 500);
+  check("both are plain numbers a panel can share without touching the scene",
+    typeof TAP_MOVE_TOL_PX === "number" && typeof LONG_PRESS_MS === "number");
+
+  // ⚠️ THE NINTH prettyState. StateTimeline had its own, diverging on
+  // whitespace-only input — which renders identically, which is how a ninth
+  // copy survives unnoticed.
+  eq("not_home reads as a sentence", prettyState("not_home"), "Not home");
+  eq("…and whitespace-only trims to empty (the divergence)", prettyState("   "), "");
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
