@@ -38,22 +38,34 @@ def _modules():
                 yield name, handle.read()
 
 
-def test_no_module_outside_the_store_calls_its_private_writer() -> None:
+def test_no_module_outside_the_store_reaches_for_ANY_of_its_privates() -> None:
+    """⚠️ BANNING ONE NAME MOVED THE LEAK INSTEAD OF CLOSING IT (2026-09-06).
+
+    The first version of this test banned `concerns._write` specifically. The
+    conversion closed that call — and `outbox` then reached for the store's
+    OTHER private, `concerns._now_iso`, at two sites, because `_record_send`
+    made the caller produce the stamp. This test passed throughout: it was
+    watching a name, not a rule. An architecture review found it a week later.
+
+    The rule is the underscore, not the identifier. A module that needs the
+    store's clock or the store's writer needs a VERB on the store — which is
+    what `record_delivery` and `record_escalation` are.
+    """
     problems = []
     for name, text in _modules():
-        # ⚠️ THE PARSED CALL, NOT THE SUBSTRING. The comment recording this
-        # defect names `_write` on purpose, and a substring check would fail on
-        # its own documentation — the "measure the claim, not the comment" trap.
-        tree = ast.parse(text)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.Attribute):
                 continue
-            fn = node.func
-            if isinstance(fn, ast.Attribute) and fn.attr == "_write":
-                problems.append(f"{name}:{node.lineno}")
+            if not node.attr.startswith("_") or node.attr.startswith("__"):
+                continue
+            base = node.value
+            if isinstance(base, ast.Name) and "concern" in base.id.lower():
+                problems.append(f"{name}:{node.lineno} → concerns.{node.attr}")
     assert not problems, (
-        "module(s) outside the store call `concerns._write` directly, so the "
-        "store has two write paths again: " + ", ".join(problems))
+        "module(s) outside the store reach for one of its private names, so "
+        "the store has a second entrance again: " + ", ".join(problems)
+        + "\n\nAdd a verb to `concerns` instead — a caller that never needs a "
+          "clock cannot reach for the wrong one.")
 
 
 def test_a_module_that_writes_concerns_does_not_format_their_stamps() -> None:
@@ -104,3 +116,37 @@ def test_the_editing_verb_can_abandon_an_edit() -> None:
     needs when it discovers mid-edit that the row is not what it expected."""
     calls = []
     assert concerns.edit("nope", lambda row: calls.append(row) or False) is False
+
+
+def test_every_mutator_routes_through_the_verb() -> None:
+    """⚠️ THE CLAIM SHIPPED AND THE WORK DID NOT (found 2026-09-06, a week
+    late, by an architecture review rather than by anything automated).
+
+    `edit`'s docstring said the hand-written write loop had been replaced "at
+    every mutator in this module". Six of them were still writing directly, so
+    the rules `edit` exists to hold — the `updated_at` stamp, the bound, the
+    no-op suppression, one write per edit — were applied at whichever mutator
+    somebody had got to. A docstring asserting a finished migration is worse
+    than the migration being unfinished, because it stops the next reader
+    checking.
+
+    ⚠️ `raise_concern` IS EXEMPT AND THAT IS NOT A LOOPHOLE. It APPENDS a row;
+    `edit` finds one by id and changes it. A verb that cannot express "create"
+    should not pretend to.
+    """
+    import ast as _ast
+
+    src = open(os.path.join(AGENT, "concerns.py"), encoding="utf-8").read()
+    direct = []
+    for node in _ast.parse(src).body:
+        if not isinstance(node, _ast.FunctionDef) or node.name.startswith("_"):
+            continue
+        if node.name in ("edit", "raise_concern"):
+            continue
+        body = _ast.get_source_segment(src, node) or ""
+        if "_write(" in body:
+            direct.append(node.name)
+    assert not direct, (
+        "mutator(s) in the concern store still write directly instead of "
+        "through `edit`, so every invariant it holds is applied unevenly: "
+        + ", ".join(direct))

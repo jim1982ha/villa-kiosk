@@ -1,3 +1,17 @@
+## 2.932.0
+
+### Fixed — the alert store had rules that only some writes obeyed
+Every change to an alert now goes through one place. Before, six of the store's
+own operations wrote directly, so the rules meant to hold for every write — the
+"when did this last move" stamp, the size limits, not rewriting the file when
+nothing changed — applied to whichever ones somebody had got to. Nothing was
+visibly wrong; it is the kind of unevenness that produces a strange bug months
+later.
+
+⚠️ A note in the code claimed this work was already finished. It was not, and
+the claim is worse than the gap, because it stops the next reader checking. A
+test now fails if any operation writes directly again.
+
 ## 2.931.0
 
 ### Fixed — thirty files said they were somewhere they are not

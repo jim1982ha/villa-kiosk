@@ -231,13 +231,20 @@ def edit(concern_id: str, mutate: Callable[[Dict[str, Any]], Any], *,
     """Find one concern, change it, write the store once.
 
     ⚠️ THE ONE WRITING VERB, AND `_write` IS PRIVATE FOR A REASON (2026-09-06).
-    Before this, "read → scan for the id → mutate → `_write`" was hand-written
-    at every mutator in this module AND at two sites in `outbox.py`, which
-    reached across the seam for the private writer and then re-implemented the
-    timestamp with their own `time.strftime(...)` — a second spelling of
-    `_now_iso`, which is exactly the defect `_minutes_since` was fixed for one
-    module over. A store whose write path has two entrances has no place to put
-    a rule that must hold for every write.
+    "read → scan for the id → mutate → `_write`" was hand-written at every
+    mutator here AND at two sites in `outbox.py`, which reached across the seam
+    for the private writer and re-implemented the timestamp with their own
+    `time.strftime(...)`. A store whose write path has two entrances has no
+    place to put a rule that must hold for every write.
+
+    ⚠️ AND THE FIRST VERSION OF THIS PARAGRAPH WAS FALSE FOR A WEEK. It claimed
+    the conversion had happened "at every mutator in this module"; only the two
+    external sites had been done, and six mutators here went on writing
+    directly — so the docstring told every later reader the problem was solved.
+    An architecture review found it. Everything except `raise_concern` now
+    routes through this function, and `test_one_writer` fails if that stops
+    being true; `raise_concern` is exempt because it APPENDS a row rather than
+    editing one, which is not a job this verb has.
 
     `mutate` receives the row and may change it in place. Returning `False`
     abandons the edit and writes nothing; anything else (including `None`)
@@ -249,8 +256,21 @@ def edit(concern_id: str, mutate: Callable[[Dict[str, Any]], Any], *,
     read-modify-write of the whole store, and the suppression was hand-checked
     at one mutator out of nine.
 
-    Returns whether anything was actually written. Never raises: a store that
-    cannot be written degrades, exactly as `read` and `_write` already do.
+    ⚠️ `updated_at` MEANS "WHEN THIS CONCERN LAST MOVED IN ITS LIFECYCLE", and
+    that is why `touch=False` is a real choice rather than an escape hatch.
+    `verification_sweep` reads the field as when the concern SETTLED, so a write
+    that only records where a chat message is — `note_message`, `set_messages` —
+    must not move it, or reconciling a stale button would slide the seven-day
+    verification window. Lifecycle writes touch; bookkeeping writes do not.
+
+    Returns whether the store now reflects the edit: True when it wrote, True
+    when there was nothing to write, False when the concern does not exist or
+    the write failed. ⚠️ A NO-OP IS SUCCESS. It used to return False, which is
+    indistinguishable from "the store could not be written" — and the callers
+    converted below report that to a person as a failed act.
+
+    Never raises: a store that cannot be written degrades, exactly as `read`
+    and `_write` already do.
     """
     if not concern_id:
         return False
@@ -263,7 +283,7 @@ def edit(concern_id: str, mutate: Callable[[Dict[str, Any]], Any], *,
             if mutate(row) is False:
                 return False
             if json.dumps(row, sort_keys=True, default=str) == before:
-                return False
+                return True
             if touch:
                 row["updated_at"] = _now_iso(now)
             return _write(rows)
@@ -352,6 +372,48 @@ def _supersede_rows(rows: List[Dict[str, Any]], superseded: Sequence[str],
     return rows
 
 
+def record_delivery(concern_id: str, profile: str, *,
+                    now: Optional[float] = None) -> bool:
+    """Stamp a concern as delivered, and record who was told.
+
+    ⚠️ THE STORE STAMPS ITS OWN TIME (2026-09-06). `outbox` used to build the
+    stamp and hand it in, which forced it to call `_now_iso` — this module's
+    OTHER private — after the `_write` leak was closed. `test_one_writer` bans
+    the first and not the second, so the leak was renamed rather than shut. A
+    caller that never needs a clock cannot reach for the wrong one.
+    """
+    return _record_send_at(concern_id, profile, "delivered_at", "", now=now)
+
+
+def record_escalation(concern_id: str, step: str, profile: str, *,
+                      now: Optional[float] = None) -> bool:
+    """Stamp which rung was taken, and record who was told. Pair of
+    `record_delivery`; see its note on who owns the clock."""
+    return _record_send_at(concern_id, profile, "escalated_at", step, now=now)
+
+
+def _record_send_at(concern_id: str, profile: str, stamp_field: str,
+                    step: str, *, now: Optional[float] = None) -> bool:
+    stamp = _now_iso(now)
+
+    def _mark(row: Dict[str, Any]) -> None:
+        row[stamp_field] = stamp
+        if step:
+            row["escalated_step"] = str(step)
+        # ⚠️ APPEND, NEVER REPLACE — the escalation ladder sends to a SECOND
+        # profile, and overwriting would make the card claim the first send
+        # never happened. Moved here verbatim from `outbox._record_send`, which
+        # is where it had to live while the caller owned the stamp.
+        if profile:
+            history = row.get("deliveries")
+            if not isinstance(history, list):
+                history = []
+            history.append({"profile": profile, "at": stamp})
+            row["deliveries"] = history
+
+    return edit(concern_id, _mark, now=now)
+
+
 def transition(concern_id: str, state: str, *, outcome: str = "",
                now: Optional[float] = None) -> Tuple[bool, str]:
     """Move a concern's state. Returns `(ok, reason)`.
@@ -364,20 +426,24 @@ def transition(concern_id: str, state: str, *, outcome: str = "",
     """
     if not contracts.is_valid(state, contracts.CONCERN_STATE):
         return False, f"{state!r} is not one of {list(contracts.CONCERN_STATE)}"
-    rows = read()
-    for row in rows:
-        if str(row.get("id")) == str(concern_id):
-            row["state"] = state
-            row["updated_at"] = _now_iso(now)
-            if outcome:
-                row["outcome"] = str(outcome)
-            # ⚠️ ONE WRITE. The first version called `_write` twice inside the
-            # return expression — once for the value and once for the message —
-            # so every transition rewrote the store, and a failure on the second
-            # call would have reported success from the first.
-            ok = _write(rows)
-            return ok, "" if ok else "the concern store could not be written"
-    return False, f"no concern {concern_id!r}"
+    # ⚠️ THE CLOSURE CARRIES WHAT `edit`'s BOOL CANNOT. "No such concern" and
+    # "the store could not be written" are opposite answers for a caller — one
+    # is a stale button, the other is a disk problem — and a single False means
+    # both. The flag separates them without giving the store a second entrance.
+    # ⚠️ ONE WRITE, still: `edit` writes once, which is the rule the previous
+    # version of this function was fixed to obey by hand.
+    seen = {"found": False}
+
+    def _move(row: Dict[str, Any]) -> None:
+        seen["found"] = True
+        row["state"] = state
+        if outcome:
+            row["outcome"] = str(outcome)
+
+    ok = edit(concern_id, _move, now=now)
+    if not seen["found"]:
+        return False, f"no concern {concern_id!r}"
+    return ok, "" if ok else "the concern store could not be written"
 
 
 def acknowledge(concern_id: str, *, by: str,
@@ -406,19 +472,26 @@ def acknowledge(concern_id: str, *, by: str,
         # whole content of an acknowledgement; without a name it says only that
         # a request arrived, and escalation would stop on that.
         return False, "an acknowledgement must say who made it"
-    rows = read()
-    for row in rows:
-        if str(row.get("id")) != str(concern_id):
-            continue
+    # ⚠️ THE FIRST ACKNOWLEDGEMENT WINS, AND SAYING SO IS A SUCCESS. Returning
+    # False from the mutator abandons the write; the closure carries why, so a
+    # second reader is told who has it rather than that something failed.
+    seen: Dict[str, str] = {}
+
+    def _ack(row: Dict[str, Any]) -> Any:
+        seen["found"] = "1"
         if str(row.get("acknowledged_at") or ""):
-            return True, (f"already acknowledged by "
-                          f"{row.get('acknowledged_by') or 'somebody'}")
+            seen["by"] = str(row.get("acknowledged_by") or "somebody")
+            return False
         row["acknowledged_at"] = _now_iso(now)
         row["acknowledged_by"] = who
-        row["updated_at"] = _now_iso(now)
-        ok = _write(rows)
-        return ok, "" if ok else "the concern store could not be written"
-    return False, f"no concern {concern_id!r}"
+        return None
+
+    ok = edit(concern_id, _ack, now=now)
+    if "by" in seen:
+        return True, f"already acknowledged by {seen['by']}"
+    if "found" not in seen:
+        return False, f"no concern {concern_id!r}"
+    return ok, "" if ok else "the concern store could not be written"
 
 
 def note_message(concern_id: str, entity_id: str, message_id: str,
@@ -437,10 +510,7 @@ def note_message(concern_id: str, entity_id: str, message_id: str,
     """
     if not str(message_id or "").strip() or not str(entity_id or "").strip():
         return False
-    rows = read()
-    for row in rows:
-        if str(row.get("id")) != str(concern_id):
-            continue
+    def _add(row: Dict[str, Any]) -> None:
         refs = row.get("messages")
         if not isinstance(refs, list):
             refs = []
@@ -450,8 +520,9 @@ def note_message(concern_id: str, entity_id: str, message_id: str,
         # ⚠️ BOUNDED, like every list in this store. A villa escalating the same
         # alert repeatedly must not grow one row without limit.
         row["messages"] = refs[-MAX_MESSAGE_REFS:]
-        return _write(rows)
-    return False
+
+    # ⚠️ `touch=False` — WHERE A MESSAGE IS IS NOT A LIFECYCLE MOVE. See `edit`.
+    return edit(concern_id, _add, touch=False)
 
 
 # ⚠️ `stamp_message` AND `forget_message` LIVED HERE AND WERE DELETED
@@ -479,22 +550,18 @@ def set_messages(concern_id: str,
     persisting arbitrary junk into the store) but it is a list to MAINTAIN, not
     a filter to trust.
     """
-    rows = read()
-    for row in rows:
-        if str(row.get("id")) != str(concern_id):
-            continue
-        kept = [{"entity_id": str(r.get("entity_id") or ""),
-                 "message_id": str(r.get("message_id") or ""),
-                 "acts": str(r.get("acts") or "")}
-                for r in refs if isinstance(r, Mapping)]
-        if kept == (row.get("messages") or []):
-            # ⚠️ NO WRITE WHEN NOTHING MOVED. This runs on the chase clock over
-            # every alert, and rewriting the store each tick would churn the
-            # disk on a villa where nothing is happening.
-            return True
-        row["messages"] = kept
-        return _write(rows)
-    return False
+    def _set(row: Dict[str, Any]) -> None:
+        row["messages"] = [{"entity_id": str(r.get("entity_id") or ""),
+                            "message_id": str(r.get("message_id") or ""),
+                            "acts": str(r.get("acts") or "")}
+                           for r in refs if isinstance(r, Mapping)]
+
+    # ⚠️ NO WRITE WHEN NOTHING MOVED — this runs on the chase clock over every
+    # alert, and rewriting the store each tick would churn the disk on a villa
+    # where nothing is happening. The check used to be hand-written HERE, at one
+    # mutator out of seven; `edit` now suppresses a no-op for all of them.
+    # ⚠️ `touch=False`: which buttons a message shows is not a lifecycle move.
+    return edit(concern_id, _set, touch=False)
 
 
 # ── verification ────────────────────────────────────────────────────────────
@@ -812,10 +879,10 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
     rating, which makes that signal stronger rather than weaker.
     """
     note = str(reason or "").strip()
-    rows = read()
-    for row in rows:
-        if str(row.get("id")) != str(concern_id):
-            continue
+    seen = {"found": False}
+
+    def _rate(row: Dict[str, Any]) -> None:
+        seen["found"] = True
         row["useful"] = bool(useful)
         row["useful_at"] = _now_iso(now)
         # ⚠️ THE NOTE GOES IN ITS OWN FIELD, NOT IN `outcome`. `outcome` means
@@ -823,10 +890,14 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
         # verdicts, which is what makes the pair symmetric at last.
         if note:
             row["useful_note"] = note
-        row["updated_at"] = _now_iso(now)
-        ok = _write(rows)
-        return ok, "" if ok else "the concern store could not be written"
-    return False, f"no concern {concern_id!r}"
+
+    # ⚠️ A RATING IS A LIFECYCLE MOVE, so `edit` stamps `updated_at` — which is
+    # what the previous version did by hand, twice, with two `_now_iso` calls
+    # for one write.
+    ok = edit(concern_id, _rate, now=now)
+    if not seen["found"]:
+        return False, f"no concern {concern_id!r}"
+    return ok, "" if ok else "the concern store could not be written"
 
 
 def negatives_of(subject_key: str,

@@ -296,8 +296,6 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # the last place to strip the acts. Same try-buttons-else-plain shape as
     # the primary send, and the refs it produces join `messages`, so these
     # copies are redrawn and retired by the same sweep as every other.
-    import dataclasses
-    from vesta.adapters import links as links_mod
     # ⚠️ REBUILT, NOT PREFIXED. `plan.title` is ALREADY a header line, so
     # "Still open: 🟠 WARNING · …" would stack two of them. The escalation keeps
     # the alert's severity MARK — it is the same problem — and replaces the WORD,
@@ -339,19 +337,13 @@ def _mark_escalated(concern_id: str, step: str, *,
     and for the identical reason: marking first loses the escalation entirely
     when the send fails, and at worst marking second escalates twice, which a
     person notices and can say something about."""
-    # ⚠️ THROUGH `concerns.edit`, NOT `concerns._write` (2026-09-06). This
-    # reached across the seam for the store's PRIVATE writer and carried its own
-    # `time.strftime` — a second spelling of `concerns._now_iso`, in a second
-    # module, which is the shape `_minutes_since` was already fixed for here.
-    stamp = concerns_mod._now_iso(now)
-
-    def _mark(row: Dict[str, Any]) -> None:
-        row["escalated_step"] = str(step)
-        row["escalated_at"] = stamp
-        _record_send(row, profile, stamp)
-
-    return concerns_mod.edit(concern_id, _mark, now=now)
-    return False
+    # ⚠️ THE STORE STAMPS AND RECORDS (2026-09-06). This first reached across
+    # the seam for `concerns._write`, then — after that was closed — for
+    # `concerns._now_iso`, which is the same leak wearing a different name and
+    # which `test_one_writer` did not ban. A caller that never needs a clock
+    # cannot reach for the wrong one, so the verb owns both.
+    return concerns_mod.record_escalation(concern_id, str(step), profile,
+                                          now=now)
 
 
 def quiet_now(config: Optional[Mapping[str, Any]] = None,
@@ -775,18 +767,6 @@ async def _send_with_buttons(session: Any, concern: Mapping[str, Any],
     return results
 
 
-def _record_send(row: Dict[str, Any], profile: str, stamp: str) -> None:
-    """Append one send to a concern's own history. ⚠️ APPEND, NEVER REPLACE —
-    the escalation ladder sends to a SECOND profile, and overwriting would make
-    the card claim the first send never happened."""
-    if not profile:
-        return
-    history = row.get("deliveries")
-    if not isinstance(history, list):
-        history = []
-    history.append({"profile": profile, "at": stamp})
-    row["deliveries"] = history
-
 
 def _mark_delivered(concern_id: str, *, now: Optional[float] = None,
                     profile: str = "") -> bool:
@@ -798,11 +778,4 @@ def _mark_delivered(concern_id: str, *, now: Optional[float] = None,
     say something about. The audit's own intent/outcome pairing makes the same
     choice for the same reason.
     """
-    stamp = concerns_mod._now_iso(now)
-
-    def _mark(row: Dict[str, Any]) -> None:
-        row["delivered_at"] = stamp
-        _record_send(row, profile, stamp)
-
-    return concerns_mod.edit(concern_id, _mark, now=now)
-    return False
+    return concerns_mod.record_delivery(concern_id, profile, now=now)
