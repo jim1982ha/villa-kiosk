@@ -1,3 +1,50 @@
+## 2.935.0
+
+### Changed — the alert card's rules can now be tested
+The logic behind an alert card — which buttons it offers, whether help is on the
+way, when the next chase is due, who it reached — sat inside the screen that
+draws it, where no test could run it. It now lives in its own file and is
+covered by real cases: an alert past every chase step, a time the villa could
+not write properly, a card with no buttons at all. Nothing looks different; the
+rules simply have a way of being checked now.
+
+## 2.934.0
+
+### Fixed — one clock for every time the app shows you
+Eight panels each had their own copy of "turn a stored time into your local
+clock", and they disagreed about what to show when a time cannot be read: two
+showed nothing, two showed the raw value, one showed a half-tidied version. That
+disagreement is what once put one card's heading eight hours away from its own
+contents. There is now one formatter, and each screen states which behaviour it
+wants rather than inheriting one by accident.
+
+## 2.933.0
+
+### Changed — the stylesheet stops advertising conventions nobody follows
+Seventeen colour, spacing and timing values were declared and read by nothing —
+including a whole brand palette under a heading saying it applied to every
+theme. A value nobody uses is worse than no value: it reads as a convention, so
+somebody changes it and nothing happens. A test now catches the next one.
+
+### Fixed — the room chip's colour had two homes
+The 3D room chip's background was written into the code with a note saying the
+stylesheet was the real source. Nothing read the stylesheet. Restyling that
+surface now actually moves the chip, as the note always promised.
+
+## 2.932.0
+
+### Fixed — the alert store had rules that only some writes obeyed
+Every change to an alert now goes through one place. Before, six of the store's
+own operations wrote directly, so the rules meant to hold for every write — the
+"when did this last move" stamp, the size limits, not rewriting the file when
+nothing changed — applied to whichever ones somebody had got to. Nothing was
+visibly wrong; it is the kind of unevenness that produces a strange bug months
+later.
+
+⚠️ A note in the code claimed this work was already finished. It was not, and
+the claim is worse than the gap, because it stops the next reader checking. A
+test now fails if any operation writes directly again.
+
 ## 2.931.0
 
 ### Fixed — thirty files said they were somewhere they are not
