@@ -1115,7 +1115,7 @@ def test_the_chase_line_matches_the_bands_the_BACKEND_actually_uses() -> None:
     """
     import re as _re
 
-    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "shared", "concernNarrative.ts"))
     with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                            "route.py"), encoding="utf-8") as handle:
         route = handle.read()
@@ -1136,7 +1136,7 @@ def test_only_a_CRITICAL_shows_a_chase_time() -> None:
     so a countdown on a warning promises a chase that is never coming — the
     exact misreading the "What gets chased" hint had to be written to correct.
     """
-    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "shared", "concernNarrative.ts"))
     body = panel[panel.index("function chaseLine"):]
     body = body[:body.index("\n}")]
     assert 'severity) !== "critical"' in body and "return null" in body, (
@@ -1205,7 +1205,7 @@ def test_a_chased_concern_reports_what_HAPPENED_not_what_might() -> None:
     People table), so it must not try. `escalated_step` is the villa's own
     record of what it DID, and reporting a fact is always true.
     """
-    panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "AgentConcerns.tsx"))
+    panel = _read(os.path.join(SRC, "vesta", "shared", "concernNarrative.ts"))
     body = panel[panel.index("function chaseLine"):]
     body = body[:body.index("\n}\n")]
     assert "escalated_step" in body, (

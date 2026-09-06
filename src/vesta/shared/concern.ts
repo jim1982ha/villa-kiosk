@@ -58,6 +58,21 @@ export const wasJudged = (c: Concern): boolean =>
 
 /** Still asking for the reader's attention: live, and nobody has picked it up.
  *
+ *  ⚠️ ACKNOWLEDGEMENT IS WHAT REMOVES A CARD, AND NOTHING ELSE DOES (owner's
+ *  ruling, 2026-08-27). The thumb UP used to retire it — a compliment paid to
+ *  the supervisor emptied the wall — which is fixed at the source in
+ *  `concerns.feedback`. This is the other half of the same rule: while a
+ *  delivered concern is unacknowledged it STAYS, however many opinions have
+ *  been recorded about it.
+ *
+ *  ⚠️ THE BACKEND STATE IS DELIBERATELY UNTOUCHED BY THIS. `acknowledge`'s own
+ *  docstring is emphatic that acknowledging is not resolving — the villa keeps
+ *  carrying the problem — so this is a question about what the WALL shows,
+ *  answered here, and not a fifth lifecycle state. An acknowledged concern
+ *  that is still open is counted below rather than dropped, or "I have seen
+ *  it" would silently mean "it is gone".
+ *
+ *
  * ⚠️ AN ACKNOWLEDGED-BUT-OPEN CONCERN IS COUNTED, NOT DROPPED, by the callers
  * — or "I have seen it" would silently come to mean "it is gone". */
 export const needsAttention = (c: Concern): boolean =>

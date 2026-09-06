@@ -1,3 +1,13 @@
+## 2.935.0
+
+### Changed — the alert card's rules can now be tested
+The logic behind an alert card — which buttons it offers, whether help is on the
+way, when the next chase is due, who it reached — sat inside the screen that
+draws it, where no test could run it. It now lives in its own file and is
+covered by real cases: an alert past every chase step, a time the villa could
+not write properly, a card with no buttons at all. Nothing looks different; the
+rules simply have a way of being checked now.
+
 ## 2.934.0
 
 ### Fixed — one clock for every time the app shows you

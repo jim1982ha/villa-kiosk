@@ -30,6 +30,11 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 TSX = os.path.join(REPO_ROOT, "src", "vesta", "supervise",
                    "components", "AgentConcerns.tsx")
+#: ⚠️ `offers` MOVED TO THE SHARED MODULE (2026-09-06) so a runner could reach
+#: it — `npm run test:concern-narrative` now asserts its behaviour, including
+#: the "absent acts means NO acts" rule this file could only spell.
+NARRATIVE = os.path.join(REPO_ROOT, "src", "vesta", "shared",
+                         "concernNarrative.ts")
 
 from vesta.supervise.agent import actions as agent_actions  # noqa: E402
 
@@ -60,8 +65,10 @@ def test_the_tablet_asks_the_server_which_acts_to_draw() -> None:
     original defect returning."""
     with open(TSX, encoding="utf-8") as handle:
         markup = handle.read()
-    assert re.search(r"const offers = \(c: Concern, id: string\)", markup), (
-        "`offers` is gone from AgentConcerns.tsx — the tablet has stopped "
+    with open(NARRATIVE, encoding="utf-8") as handle:
+        markup += handle.read()
+    assert re.search(r"export const offers = \(c: Concern, id: string\)", markup), (
+        "`offers` is gone — the tablet has stopped "
         "reading the served act set and is deciding for itself again")
     for act_id in ("done", "dismiss"):
         call = f'act(c.id, "{act_id}")'
