@@ -149,39 +149,20 @@ class ModuleContext:
     #: fetches; the module reads. `None` on a path that never surveyed, and
     #: the module returns nothing rather than guessing.
     automations: Any = None
-    #: Installed VESTA blueprints that have never produced an event, by stem.
-    #: ⚠️ THE GATE USES THIS TO QUALIFY A STAND-DOWN, NEVER TO REVERSE ONE.
-    #: ⚠️ THIS USED TO CITE `collect.blueprint_layer_present` for why a quiet,
-    #: well-run villa must not get duplicate findings. That predicate is
-    #: deleted (2026-08-28): the rule became `supervision_enabled` and nothing
-    #: else in 2.755.0, and the predicate's "installed beats fired" reading of
-    #: a PERSISTED CUMULATIVE list meant it could only ever answer yes. What
-    #: this adds is honesty about the claim: a check that stood down for a
-    #: blueprint which has never reported is covered in theory only, and the
-    #: Is the villa's supervision switched on?
+    #: ⚠️ `supervision_enabled` WAS HERE AND REACHED NO READER (2.967.0). The
+    #: villa's master switch was carried four hops — config, `BriefRequest`,
+    #: `run_report`, `analyse` — to arrive on this dataclass, under a comment
+    #: warning that without the last line "the flag would be defined,
+    #: defaulted, documented and never reach the gate". It reached the gate and
+    #: the gate never asked: `registry.gate` refuses on `requires`,
+    #: `settings["enabled"]`, `failures`, `min_days` and `audiences`, and has
+    #: never mentioned this. Measured with `command grep`: zero readers.
     #:
-    #: ⚠️ THE WHOLE GATE, AND IT REPLACED FOUR FIELDS AND ~90 LINES (2.755.0).
-    #: This used to ask whether a covering blueprint was installed, whether it
-    #: had ever fired, and how long the collector had been listening, then
-    #: weigh those against a 45-day grace window and an operator override. Six
-    #: outcomes, each individually defensible, and together a rule nobody could
-    #: state in a sentence — including me: explaining it to the owner took three
-    #: rounds and produced a warning about a coverage hole that did not exist.
-    #:
-    #: The owner's ruling, and it is the whole specification: "the VESTA AGENT
-    #: shall always be on and supersede the blueprint as soon as Supervision is
-    #: ON. If Supervision is OFF, then the automation is used. There is no other
-    #: option, and no 45 days period."
-    #:
-    #: ⚠️ WHAT WAS GIVEN UP, STATED PLAINLY: a villa running BOTH layers on one
-    #: device now hears about it twice. The old arrangement preferred the
-    #: blueprint per device, on the grounds that it sees occupancy and tariffs a
-    #: statistical module cannot. That is still true — and it is no longer this
-    #: system's problem to hide, because "supervision is on" now means the agent
-    #: is in charge, and a villa that also leaves the superseded automation
-    #: running has said something contradictory that a report should not paper
-    #: over.
-    supervision_enabled: bool = False
+    #: ⚠️ THE SWITCH ITSELF IS NOT GONE. `BriefRequest.supervision_enabled` is
+    #: still resolved from `agent-config.json` — that is where the villa's
+    #: master switch lives and where a reader that needs it will look. What is
+    #: deleted is the plumbing that carried it to a dead end and made it look
+    #: consulted.
 
     @property
     def zone(self) -> Any:

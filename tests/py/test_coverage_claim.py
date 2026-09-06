@@ -120,14 +120,12 @@ def test_run_all_cannot_drop_a_context_field() -> None:
         async def run(self, context):             # type: ignore[override]
             seen["labels"] = dict(context.labels)
             seen["min_history_days"] = context.min_history_days
-            seen["supervision_enabled"] = context.supervision_enabled
             return []
 
     context = ModuleContext(
         audience="owner", cadence="daily", now_local=None,
         capabilities=(), inventory={},
-        labels={"sensor.a": "A name"}, min_history_days=41,
-        supervision_enabled=True)
+        labels={"sensor.a": "A name"}, min_history_days=41)
 
     # ⚠️ THE CLEANUP HERE WAS A NO-OP FOR THE LIFE OF THIS TEST.
     # `registry.registered().remove(...)` mutates the list `registered()` just
@@ -141,7 +139,6 @@ def test_run_all_cannot_drop_a_context_field() -> None:
 
     assert seen.get("labels") == {"sensor.a": "A name"}, seen
     assert seen.get("min_history_days") == 41, seen
-    assert seen.get("supervision_enabled") is True, seen
 
 
 def test_each_module_gets_its_OWN_rejection_list() -> None:

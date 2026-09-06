@@ -1,3 +1,23 @@
+## 2.967.0
+
+### Changed — one rule decides whether a wheel zooms the picture or changes camera
+Spinning the wheel over a camera feed either magnifies the picture or moves to
+the next camera, and that single decision was written as two halves in two
+files — each one saying "not mine" in a way that only worked while the other
+said the opposite. Adjusting either would have made one flick do both at once
+or nothing at all, which is the exact fault reported and fixed once before.
+There is now one rule, in one place, that both sides ask; the sideways-swipe
+and wheel-swipe thresholds moved with it. Nothing behaves differently — checked
+across 1,665 combinations against the old code — but it can now be tested, and
+it never could before.
+
+### Changed — the assistant's on/off switch stopped being carried where nothing read it
+The setting that says whether the assistant is supervising was passed down
+through four layers of the briefing to arrive somewhere nothing ever asked for
+it, under a comment explaining how important it was that it arrive. The switch
+itself is unchanged and still read from your settings; what is gone is the
+plumbing that made it look consulted when it was not.
+
 ## 2.966.0
 
 ### Fixed — after ten alerts about one thing, the wrong one was named

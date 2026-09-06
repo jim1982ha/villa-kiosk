@@ -42,7 +42,6 @@ def _ctx(view: Any, **kw: Any) -> ModuleContext:
         "capabilities": ["automations"], "inventory": {},
         "settings": {}, "min_history_days": 14, "stats": None, "labels": {},
         "automations": fetch if view is not None else None,
-        "supervision_enabled": True,
     }
     base.update(kw)
     return ModuleContext(**base)

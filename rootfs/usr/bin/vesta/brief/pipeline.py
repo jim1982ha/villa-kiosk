@@ -418,7 +418,6 @@ async def analyse(
     settings: Dict[str, Any],
     min_history_days: int,
     failures: Dict[str, int],
-    supervision_enabled: bool = False,
     #: ⚠️ THE OPERATOR'S OWN DEVICE NAMES, AND THE REASON THIS IS A PARAMETER.
     #: `ModuleContext.labels` is documented "Injected by the pipeline" and was
     #: passed `{}` on every production path, so `label_for` always humanised the
@@ -462,7 +461,6 @@ async def analyse(
         # become dead inputs when it is True. Without this line the flag would
         # be defined, defaulted, documented and never reach the gate: the
         # thirteen-times defect this repository names `feedback_pin-the-caller`.
-        supervision_enabled=bool(supervision_enabled),
     )
     # History depth is not yet measured per statistic; the recorder's presence
     # is the proxy for it, and each module applies its own `min_days` to the
@@ -565,7 +563,6 @@ async def run_report(
     req = request if request is not None else _BriefRequest.from_config({}, {}, {})
     settings: Dict[str, Any] = dict(req.settings)
     min_history_days = req.min_history_days
-    supervision_enabled = req.supervision_enabled
     module_failures: Dict[str, Any] = dict(req.module_failures)
     narration: Dict[str, Any] = dict(req.narration)
 
@@ -652,7 +649,7 @@ async def run_report(
     findings, skipped, failures, ran, data_tally = await analyse(
         session, found, audience, cadence, now_local, settings,
         min_history_days, module_failures,
-        supervision_enabled=supervision_enabled, labels=labels)
+        labels=labels)
 
     # ⚠️ WHICH CHECKS RAN, NOT JUST HOW MANY FINDINGS (2026-08-30, owner: a line
     # vanished from a delivered brief and the log could not say why). The pass

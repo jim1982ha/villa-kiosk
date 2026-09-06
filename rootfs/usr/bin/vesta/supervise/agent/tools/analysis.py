@@ -275,8 +275,11 @@ class AnalysisTool(BaseTool):
                  days: int) -> Any:
         """The context the module already expects.
 
-        ⚠️ `supervision_enabled=True`, AND IT IS NOT A LIE — it is the one
-        honest value here. That flag exists so the briefing's gate can stand a
+        ⚠️ THIS SET `supervision_enabled=True` AND ARGUED FOR IT AT LENGTH —
+        "it is the one honest value here … so that anything reading it
+        downstream sees the truth about who is asking". Nothing read it
+        downstream, on any path. The argument was sound and the field was not
+        there; that is the shape worth remembering. That flag exists so the briefing's gate can stand a
         check down when the villa's automations are doing the job instead; a
         check reached through an AGENT TOOL has been asked for by the agent,
         which is supervision, running. The gate is not consulted on this path
@@ -292,7 +295,7 @@ class AnalysisTool(BaseTool):
             inventory=dict(found.get("inventory") or {}),
             settings={}, min_history_days=days,
             stats=statistics_fetcher(session, datetime.now(), {}),
-            labels={}, supervision_enabled=True)
+            labels={})
 
 
 class StandbyCreep(AnalysisTool):

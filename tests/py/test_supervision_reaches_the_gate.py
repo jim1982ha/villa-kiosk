@@ -152,12 +152,21 @@ def test_the_gate_no_longer_reads_the_switch_at_all() -> None:
     reads the automations, so standing a check down left off-mode with no
     analysis from either side.
 
-    The caller pin above still earns its keep — `supervision_enabled` is still
-    real context (the diagnostics banner reads it) and a caller that omits it
-    still diverges from the scheduler on whatever reads it next. THIS test
-    pins the other half: the gate treats both positions identically, so the
-    preview-vs-scheduled divergence this file was born from is now impossible
-    at the gate rather than merely guarded against.
+    ⚠️ AND THE DEFENCE OFFERED FOR KEEPING THE FIELD WAS FALSE (2.967.0). It
+    read "`supervision_enabled` is still real context (the diagnostics banner
+    reads it)". The banner reads the proxy's OWN local, `supervision_on`,
+    computed where the endpoint is served; `command grep` finds zero readers of
+    `context.supervision_enabled` anywhere. So the field was carried four hops
+    to a dead end, and the sentence defending it named a reader that was a
+    different value with a similar name — which is how a thread like this
+    survives a review.
+
+    The field is deleted; the SWITCH is not. `BriefRequest.supervision_enabled`
+    still resolves it from `agent-config.json`, and
+    `test_the_request_resolves_the_switch_and_the_defaults` above pins that.
+    THIS test pins what remains true at the gate: it treats a covered check the
+    same either way, so the preview-vs-scheduled divergence this file was born
+    from is impossible there rather than merely guarded against.
     """
     import sys
     sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
@@ -174,12 +183,20 @@ def test_the_gate_no_longer_reads_the_switch_at_all() -> None:
         settings: dict = {}
         min_history_days = 0
         audience = next(iter(module.audiences))
-        supervision_enabled = True
 
-    ok_on, reason_on, _ = gate(module, _Ctx(), {}, 3650)
-    _Ctx.supervision_enabled = False
-    ok_off, reason_off, _ = gate(module, _Ctx(), {}, 3650)
+    # ⚠️ THE CONTEXT NO LONGER CARRIES THE SWITCH AT ALL, which is a stronger
+    # statement than "the gate ignores it": there is nothing left for a
+    # stand-down arm to read. Driving the gate twice over a field the gate has
+    # never mentioned was two runs of the same run.
+    ok, reason, _ = gate(module, _Ctx(), {}, 3650)
+    assert ok, (
+        f"a covered check refused ({reason!r}) — the stand-down arm is back")
 
-    assert ok_on and ok_off, (
-        f"a covered check refused (on={reason_on!r}, off={reason_off!r}) — "
-        "the stand-down arm is back")
+    import dataclasses
+
+    from vesta.shared.analysis.base import ModuleContext
+    assert not any(f.name == "supervision_enabled"
+                   for f in dataclasses.fields(ModuleContext)), (
+        "the switch is on ModuleContext again. It is welcome back the day "
+        "something READS it — until then it is four hops of plumbing to a "
+        "dead end, wearing the look of a live gate")

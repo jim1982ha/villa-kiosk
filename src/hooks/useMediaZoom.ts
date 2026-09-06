@@ -5,6 +5,7 @@
 // drag-to-pan while zoomed, and double-tap / double-click to reset. Purely a CSS
 // transform, so it costs nothing until the user actually interacts.
 
+import { wheelOwner } from "@/components/panels/cameraGestures";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clamp } from "@/utils/geometry";
 
@@ -116,14 +117,14 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
     };
 
     const onWheel = (e: WheelEvent) => {
-      // A trackpad's two-finger SIDEWAYS swipe is a wheel event with deltaX and
-      // almost no deltaY. Treating every wheel as zoom meant that gesture read
-      // `deltaY < 0 === false` and zoomed OUT — so swiping across a feed to
-      // reach the next camera did the one thing it must not. While the feed is
-      // unzoomed a horizontal wheel is left alone for CameraPanel to use; once
-      // zoomed it belongs here again, as the pan of a magnified image.
-      // A pinch arrives as ctrl+wheel, which is vertical, so it is unaffected.
-      if (live.current.scale <= MIN_SCALE && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      // ⚠️ THE RULE IS `cameraGestures.wheelOwner`, ASKED — NOT RESTATED. This
+      // half read `scale <= MIN_SCALE && |deltaX| > |deltaY|` while
+      // `CameraPanel` read `zoomed || |deltaX| <= |deltaY|`: exact complements
+      // in two files, each a comment describing the other's job, and nothing
+      // holding them together. Loosen either and one flick zooms AND steps the
+      // camera, or does neither — the failure already reported once, "swiping
+      // across a feed to reach the next camera did the one thing it must not".
+      if (wheelOwner(e.deltaX, e.deltaY, live.current.scale > MIN_SCALE) !== "zoom") return;
       e.preventDefault();
       const next = clamp(live.current.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), MIN_SCALE, MAX_SCALE);
       if (next <= MIN_SCALE) { setScale(1); setTx(0); setTy(0); }

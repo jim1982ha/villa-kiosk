@@ -1,39 +1,17 @@
 """Every field on `ReportContext` either reaches a reader, or says why not.
 
-⚠️ AND THE SAME MEASUREMENT FOR `ModuleContext.supervision_enabled`, WHICH IS
-THE VILLA'S MASTER SWITCH AND REACHES NOBODY. It is threaded five hops —
-`agent-config.json` to `BriefRequest.from_config`, to `run_report`, to
-`analyse`, to `ModuleContext` — under a comment naming "the thirteen-times
-defect this repository calls `pin-the-caller`". `registry.gate` refuses on
-`requires`, `settings["enabled"]`, `failures`, `min_days` and `audiences`, and
-has never mentioned it. The proxy's diagnostics banner reads its own local
-`supervision_on`, so the defending test's claim that "the banner reads it" is
-false as written.
+⚠️ AND WHERE THE VILLA'S MASTER SWITCH LIVES. `supervision_enabled` was
+carried four hops — `agent-config.json` to `BriefRequest.from_config`, to
+`run_report`, to `analyse`, to `ModuleContext` — under a comment warning that
+without the last line the flag would "never reach the gate". It reached the
+gate and the gate never asked, and the test defending it named the diagnostics
+banner as a reader when the banner reads the proxy's own `supervision_on`.
 
-It is NOT deleted here. Removing the field touches 53 tests that construct a
-`ModuleContext`, and a wide mechanical edit is where a mistake hides; the
-measurement is what makes the thread visible, and pulling it is a change worth
-making on its own. `test_the_master_switch_reaches_no_reader` below is that
-measurement, and it fails the day somebody wires it — which is the good
-outcome, not a false alarm.
-
-⚠️ THREE OF ITS FOURTEEN FIELDS ARE BUILT EVERY BRIEF AND READ BY NOTHING, and
-one of them carries a product claim in its own doc-comment: `ran` says
-"Without this, 'no checks are configured' and 'every check ran and found
-nothing' are the same empty result — and they mean opposite things to the
-person reading the report." That is true, and it is true of `pipeline`'s LOCAL
-`ran`; the FIELD reaches no reader at all.
-
-⚠️ THIS DOES NOT DELETE THEM, DELIBERATELY. Whether "which checks ran" should
-cross into the narration payload is a product decision, and a field removed is
-harder to notice than a field listed. What this refuses is the third state —
-a field that looks wired, is not, and nobody knows which.
-
-`ReportContext` has exactly one consumer, `narrate/payload.from_context`, which
-duck-types its reads through `getattr` on purpose: "Importing the dataclass
-would make this module depend on the object it exists to keep out." So the set
-of fields that actually cross is not visible from the dataclass, and this is
-where it is written down.
+The three plumbing hops are gone (2.967.0). The switch is not: it is resolved
+on `BriefRequest`, which is where a reader that needs it will look, and
+`test_the_master_switch_is_resolved_and_goes_no_further` below is what keeps
+that honest in both directions — it fails if the switch stops being read from
+config, and it fails if the plumbing comes back.
 """
 
 from __future__ import annotations
@@ -126,18 +104,38 @@ def test_the_not_yet_consumed_map_does_not_rot() -> None:
         "these have a reader now, so the entry is a stale decision: %s" % wired)
 
 
-def test_the_master_switch_reaches_no_reader() -> None:
-    """⚠️ MEASURED, NOT ASSUMED, AND IN BOTH DIRECTIONS. If `supervision_enabled`
-    ever gains a reader this fails, and the right response is to delete this
-    test — not to widen it. A gap recorded as a gap is the only honest state
-    for a switch that is threaded and never consulted."""
-    text = _readers()
-    readers = re.findall(r'(?<![\w.])(?:context|ctx)\.supervision_enabled\b', text)
+def test_the_master_switch_is_resolved_and_goes_no_further() -> None:
+    """⚠️ BOTH DIRECTIONS, because half of this is a feature and half was a leak.
+
+    The switch must still be READ from the villa's config — a brief that cannot
+    tell whether supervision is on has lost the fact, not the plumbing. And it
+    must not be threaded into the analysis context again, where four hops
+    arrived at no reader and looked like a live gate.
+    """
+    import dataclasses
+    import sys
+
+    sys.path.insert(0, f"{REPO_ROOT}/rootfs/usr/bin")
+    from vesta.brief.request import BriefRequest
+    from vesta.shared.analysis.base import ModuleContext
+
+    on = BriefRequest.from_config({}, {"enabled": True}, {})
+    off = BriefRequest.from_config({}, {"enabled": False}, {})
+    assert on.supervision_enabled is True and off.supervision_enabled is False, (
+        "the master switch is no longer resolved from the agent config")
+
+    assert not any(f.name == "supervision_enabled"
+                   for f in dataclasses.fields(ModuleContext)), (
+        "the switch is threaded into the analysis context again — welcome the "
+        "day something reads it, and `registry.gate` still does not")
+
+    readers = re.findall(r'(?<![\w.])(?:context|ctx)\.supervision_enabled\b',
+                         _readers())
     assert not readers, (
-        "`supervision_enabled` has %d reader(s) now — the five-hop thread is "
-        "live, so this test has served its purpose and should go" % len(readers))
+        "`context.supervision_enabled` has %d reader(s) — if that is "
+        "deliberate, put the field back and delete this test" % len(readers))
 
     # ⚠️ THE CONVERSE, or the assertion above passes on a typo in the pattern.
-    assert re.search(r'(?<![\w.])(?:context|ctx)\.audience\b', text), (
+    assert re.search(r'(?<![\w.])(?:context|ctx)\.audience\b', _readers()), (
         "the reader scan finds nothing at all — it would report an unwired "
         "switch whatever the code said")

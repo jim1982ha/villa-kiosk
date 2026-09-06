@@ -153,13 +153,17 @@ def test_a_covered_module_RUNS_whatever_the_switch_says(module_name: str) -> Non
     assert getattr(module, "superseded_by", ()), (
         f"{module_name} no longer names its predecessor — the record half of "
         "the old rule should survive even though the gate half is gone")
-    for flag in (True, False):
-        ok, reason, _ = registry.gate(
-            module, _context(supervision_enabled=flag), {}, 60)
-        assert ok is True, (
-            f"{module_name} refused ({reason!r}) with supervision_enabled="
-            f"{flag} — the stand-down is back, and with it the mode in which "
-            "the briefing has no analysis at all")
+    # ⚠️ THE FLAG IS NO LONGER PASSABLE, AND THE PROPERTY IS UNCHANGED (2.967.0).
+    # This drove the gate twice, once per value of `supervision_enabled`, to
+    # prove the stand-down arm was gone. The field it varied never reached a
+    # reader — `registry.gate` has never mentioned it — so the two runs were
+    # the same run. What has to hold is that the gate PASSES a module naming a
+    # predecessor, and the source check below is what forbids the arm coming
+    # back; between them nothing about this property is lost.
+    ok, reason, _ = registry.gate(module, _context(), {}, 60)
+    assert ok is True, (
+        f"{module_name} refused ({reason!r}) — the stand-down is back, and "
+        "with it the mode in which the briefing has no analysis at all")
 
 
 def test_the_two_keys_share_one_hash_expression() -> None:

@@ -88,7 +88,6 @@ def _context(inventory_ids: Sequence[str], series: Dict[str, Any],
         # down for the one reason none of them is testing, and each would fail
         # for a true-but-irrelevant reason. The switch itself is tested in
         # `test_dedupe.py`, both ways.
-        "supervision_enabled": True,
     }
     base.update(kw)
     return ModuleContext(**base)
@@ -707,7 +706,6 @@ def _ctx(**kw):
         "capabilities": ["statistics", "energy_devices", "blueprint_layer"],
         "inventory": {}, "settings": {}, "min_history_days": 14,
         "stats": lambda *a, **k: [], "labels": {},
-        "supervision_enabled": True,
     }
     base.update(kw)
     return ModuleContext(**base)

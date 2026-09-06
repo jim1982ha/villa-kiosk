@@ -67,8 +67,7 @@ def _module_findings(series: List[Dict[str, Any]]) -> List[Any]:
         now_local=__import__("datetime").datetime(2026, 7, 29, 8, 0),
         capabilities=["statistics", "energy_devices"],
         inventory={"energy": {"devices": [STAT_ID]}},
-        settings={}, min_history_days=14, stats=fetch, labels={},
-        supervision_enabled=True)
+        settings={}, min_history_days=14, stats=fetch, labels={},)
     return asyncio.run(StandbyCreep().run(context))
 
 
