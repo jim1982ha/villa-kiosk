@@ -26,6 +26,7 @@ map is what separates them.
 
 from __future__ import annotations
 
+import functools
 import os
 import re
 from typing import Dict, List, Set
@@ -72,6 +73,13 @@ def _exported(rel: str) -> Set[str]:
     return set(re.findall(r"^export (?:async )?function (\w+)", _text(rel), re.M))
 
 
+#: ⚠️ CACHED BECAUSE THESE TWO TESTS COMPUTED THE SAME ANSWER TWICE (2.957.0).
+#: Measured: `test_reachability`'s pair was 16.4s + 16.1s and
+#: `test_client_has_a_caller`'s was 2.9s + 2.9s — 38.3s of an 89.2s suite, 43%,
+#: in four tests, two of which recompute what the other just did. Both
+#: functions take no arguments and are pure over the tracked corpus, so the
+#: cache changes nothing that is asserted.
+@functools.lru_cache(maxsize=None)
 def _all_source() -> List[tuple]:
     out = []
     for root, _dirs, files in os.walk(SRC):
@@ -82,6 +90,7 @@ def _all_source() -> List[tuple]:
     return out
 
 
+@functools.lru_cache(maxsize=None)
 def _orphans() -> Set[str]:
     sources = _all_source()
     orphans: Set[str] = set()

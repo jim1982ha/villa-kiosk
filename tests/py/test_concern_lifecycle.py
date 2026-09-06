@@ -82,8 +82,6 @@ def test_the_SUPPRESSION_THRESHOLD_matches_the_rule_it_describes() -> None:
     in `tests/consistency/villa_rules.ts` now; what stays here is the number.
     """
     from vesta.supervise.agent import concerns as concerns_mod
-    with open(COPY, encoding="utf-8") as handle:
-        ui = handle.read()
     # ⚠️ THE CONSTANT MOVED TO `shared/concern.ts` (2.952.0), with the rule it
     # belongs to; `ConcernLifecycle` re-exports it. Read where it is declared.
     rule = os.path.join(REPO_ROOT, "src", "vesta", "shared", "concern.ts")

@@ -130,7 +130,6 @@ def devices_named(subject: str, labels: Mapping[str, str]) -> Tuple[str, ...]:
                 continue
             claimed.append((begin, finish))
             found_at.setdefault(known[best], begin)
-    hits = sorted(found_at, key=lambda entity: found_at[entity])
     # ⚠️ THE WHOLE-SUBJECT REVERSE FALLBACK THAT USED TO SIT HERE IS GONE,
     # AND ITS REASONING LIVES IN THE SPAN LOOP ABOVE (2026-08-30). It was
     # added on 2026-08-28 for two live passes logging `0/5 identified` —

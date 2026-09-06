@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PACKAGE_PARENT = os.path.join(REPO_ROOT, "rootfs", "usr", "bin")
 
@@ -125,3 +127,52 @@ def strip_tsx_prose(code: str) -> str:
     code = _re.sub(r"/\*[\s\S]*?\*/", "", code)
     return "\n".join("" if line.lstrip().startswith("//") else line
                      for line in code.splitlines())
+
+
+# ── shared fixtures ─────────────────────────────────────────────────────────
+
+@pytest.fixture()
+def isolated_stores(tmp_path, monkeypatch):
+    """Point every `/data` store at a throwaway directory.
+
+    ⚠️ TWENTY-ONE FILES HAND-ROLLED THIS, AND THEY ISOLATED DIFFERENT SUBSETS.
+    `_isolated` in `test_agent_escalation_wiring` repoints seven constants;
+    the one in `test_agent_outbox` repoints ONE, so `audit.AUDIT_FILE` and
+    `usage.USAGE_PATH` stayed at their `/data/vesta/...` defaults while that
+    file exercised the Chase sweep. "Which stores must be repointed before this
+    module writes" had 21 conflicting answers and no home.
+
+    ⚠️ DERIVED, NOT LISTED. It walks the loaded `vesta.*` modules for path
+    constants exactly as `store._repoint` does, so a store added tomorrow is
+    isolated everywhere the day it is added rather than the day somebody
+    remembers. That is the same reasoning that made `configure()` a walk.
+    """
+    import importlib
+    import pkgutil
+    import sys as _sys
+
+    root = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta")
+    for mod in pkgutil.walk_packages([root], prefix="vesta."):
+        if ".llm." in mod.name:
+            continue                       # optional provider SDKs
+        try:
+            importlib.import_module(mod.name)
+        except Exception:                  # pragma: no cover - unmet optional dep
+            pass
+
+    from vesta.adapters import store as store_mod
+
+    moved = []
+    for name, module in list(_sys.modules.items()):
+        if not (name == "vesta" or name.startswith("vesta.")) or module is None:
+            continue
+        for attr, value in list(vars(module).items()):
+            if not attr.endswith(store_mod._PATH_SUFFIXES):
+                continue
+            if not isinstance(value, str) or not value.startswith("/data"):
+                continue
+            monkeypatch.setattr(
+                module, attr, str(tmp_path) + value[len("/data"):], raising=False)
+            moved.append("%s.%s" % (name, attr))
+    assert moved, "no store was isolated — the walk found nothing to repoint"
+    return tmp_path

@@ -87,9 +87,13 @@ const NONE: ValveDecision = { nextScaling: null, direction: null };
  *     That one cannot live here, which is why the caller now performs all
  *     three side effects from ONE place instead of two.
  *
- * Down first, then up. Their guards are mutually exclusive (one needs a slow
- * gap, the other a fast render), so the order is documentation rather than
- * logic — but stating it means a future edit cannot quietly make both fire.
+ * ⚠️ DOWN FIRST, THEN UP, AND THE ORDER IS LOAD-BEARING. An earlier version of
+ * this comment said the two guards are "mutually exclusive … so the order is
+ * documentation rather than logic". They are not: a slow GAP with a fast
+ * RENDER is routine — it is invariant 4's own bug story, a 60Hz panel whose
+ * silicon is idle. What keeps them from both firing is the `return` in the
+ * downward branch, not the shape of the guards. Reorder these and a device
+ * that needs coarsening can be sharpened instead.
  */
 export function resolutionValve(
   state: ValveState, samples: ValveSamples, limits: ValveLimits,

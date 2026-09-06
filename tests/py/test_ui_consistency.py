@@ -138,9 +138,27 @@ def test_there_is_exactly_ONE_page_size_in_the_app() -> None:
 
     # ⚠️ NO SECOND PAGING MODULE. The rival is deleted; a new one would have to
     # be named here to survive.
-    common = os.path.join(SRC, "components", "common")
-    rivals = [f for f in os.listdir(common)
-              if f.lower().startswith("pager") and f != "paging.ts"]
+    # ⚠️ THE OTHER HALF OF THIS TEST WAS WIDENED AND THIS ONE WAS NOT (fixed
+    # 2.957.0). The literal scan below walks components/, vesta/ and pages/;
+    # this walked ONE directory — and the callers this test missed twice lived
+    # under `src/vesta/brief/components/`. `startswith("pager")` also missed
+    # `Pagination.tsx` and `Paged2.tsx`, and the `!= "paging.ts"` guard was
+    # dead, because "paging.ts" does not start with "pager".
+    rival_names = re.compile(r"^(pager|paging|paginat)", re.I)
+    rivals = []
+    for root in ("components", "vesta", "pages"):
+        base = os.path.join(SRC, root)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _dirs, files in os.walk(base):
+            for f in files:
+                if not f.endswith((".ts", ".tsx")) or not rival_names.match(f):
+                    continue
+                rel = os.path.relpath(os.path.join(dirpath, f), SRC)
+                if rel in (os.path.join("components", "common", "paging.ts"),
+                           os.path.join("components", "common", "Paged.tsx")):
+                    continue
+                rivals.append(rel)
     assert not rivals, (
         f"a second paging module is back: {rivals} — `Paged.tsx` holds both "
         "control strips and `paging.ts` holds the arithmetic")

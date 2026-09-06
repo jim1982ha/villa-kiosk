@@ -35,6 +35,7 @@ exemption list, which would bury this one.
 from __future__ import annotations
 
 import ast
+import functools
 import os
 import re
 import subprocess
@@ -138,6 +139,13 @@ EXEMPT: Dict[str, str] = {
 }
 
 
+#: ⚠️ CACHED BECAUSE THESE TWO TESTS COMPUTED THE SAME ANSWER TWICE (2.957.0).
+#: Measured: `test_reachability`'s pair was 16.4s + 16.1s and
+#: `test_client_has_a_caller`'s was 2.9s + 2.9s — 38.3s of an 89.2s suite, 43%,
+#: in four tests, two of which recompute what the other just did. Both
+#: functions take no arguments and are pure over the tracked corpus, so the
+#: cache changes nothing that is asserted.
+@functools.lru_cache(maxsize=None)
 def _shipped() -> Dict[str, str]:
     """Every tracked **Python** file under `rootfs/`, by path.
 
@@ -182,6 +190,7 @@ def _shipped() -> Dict[str, str]:
     return files
 
 
+@functools.lru_cache(maxsize=None)
 def _unreachable() -> List[str]:
     files = _shipped()
     assert files, "the file walk found nothing; this test would be vacuous"

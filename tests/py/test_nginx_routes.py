@@ -154,3 +154,75 @@ def test_the_check_can_fail() -> None:
     all-clear on every future route."""
     exact, prefix = _locations()
     assert not _reachable("/definitely-not-routed", exact, prefix)
+
+
+#: nginx locations that are answered BY nginx, not proxied to the backend.
+#: ⚠️ EACH IS A DECISION WITH A REASON, not a suppression list — the same
+#: discipline `test_route_has_a_client.EXEMPT` uses.
+SERVED_BY_NGINX = {
+    "/": "the app shell, from /var/www",
+    "/assets/": "hashed static assets, from /var/www",
+    "/model/": "the villa's GLB, from /data/www behind auth_request",
+    "/auth/check": "the internal auth subrequest, never a client route",
+}
+
+
+def test_every_nginx_LOCATION_reaches_a_proxy_ROUTE() -> None:
+    """⚠️ THE THIRD QUESTION, AND NOBODY ASKED IT (2.957.0).
+
+    `test_nginx_routes` walks proxy -> nginx: is every route REACHABLE?
+    `test_route_has_a_client` walks proxy -> src: does anything REACH it?
+    Nothing walked nginx -> proxy, so `location = /scenes` outlived the store
+    it fronted by months — the proxy's own comment says the store was removed
+    because it "duplicated Home Assistant's own Scene Editor" — and Ingress
+    went on publishing a passthrough that could only produce a 404.
+
+    This file's own header calls the config "AN EXPLICIT ALLOWLIST, NOT A
+    CATCH-ALL". An allowlist checked in one direction is a list.
+    """
+    exact, prefix = _locations()
+    routes = set(_routes())
+    orphans = []
+    for path in sorted(exact | prefix):
+        if path in SERVED_BY_NGINX:
+            continue
+        if path in routes:
+            continue
+        if any(r.startswith(path) for r in routes):
+            continue
+        orphans.append(path)
+    assert not orphans, (
+        "these nginx locations proxy to nothing — Ingress publishes a path the "
+        "backend does not answer: %s.\nEither delete the block or add it to "
+        "SERVED_BY_NGINX with the reason nginx answers it itself." % orphans)
+
+
+def test_the_nginx_exemptions_do_not_rot() -> None:
+    """A named exemption whose location is gone is a stale decision."""
+    exact, prefix = _locations()
+    declared = exact | prefix
+    stale = sorted(p for p in SERVED_BY_NGINX if p not in declared)
+    assert not stale, (
+        "SERVED_BY_NGINX names locations that no longer exist: %s" % stale)
+
+
+def test_every_cache_control_location_includes_the_security_headers() -> None:
+    """⚠️ nginx DOES NOT MERGE `add_header` ACROSS LEVELS, so a location that
+    sets its own suppresses every server-level header. The note in the config
+    said "the locations that set Cache-Control (/, /assets/)" and there were
+    THREE — `/model/`, the villa's floor plan and the one static route behind
+    `auth_request`, carried none of them."""
+    text = _read(NGINX_PATH)
+    blocks = re.split(r"^\s*location\s+", text, flags=re.MULTILINE)[1:]
+    missing = []
+    for block in blocks:
+        head = block.split("{", 1)[0].strip()
+        body = block.split("{", 1)[1] if "{" in block else ""
+        body = body.split("\n    }", 1)[0]
+        if "add_header Cache-Control" not in body:
+            continue
+        if "security-headers.conf" not in body:
+            missing.append(head)
+    assert not missing, (
+        "these locations set Cache-Control and so suppress the server-level "
+        "security headers, without including them back: %s" % missing)
