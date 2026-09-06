@@ -720,10 +720,10 @@ def test_a_MANUAL_run_is_not_blocked_by_the_schedule_switch() -> None:
     # The clock still obeys its own switch.
     assert asyncio.run(scheduler._run_once(None, config=off,
                                            trigger="scheduled")) \
-        == "scheduled trigger disabled"
+        .reason == "scheduled trigger disabled"
     # And the master switch still gates everything, manual included.
     assert asyncio.run(scheduler._run_once(
-        None, config={"enabled": False}, trigger="manual")) == "agent disabled"
+        None, config={"enabled": False}, trigger="manual")).reason == "agent disabled"
 
 
 def test_the_trigger_reaches_the_usage_ledger_not_just_the_trace() -> None:

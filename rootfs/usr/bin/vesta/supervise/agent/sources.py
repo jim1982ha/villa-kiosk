@@ -553,8 +553,9 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
     # for its kind alone, so an extreme reading of an unpopular kind still
     # reaches the check.
     try:
+        measures = _measures_map()
         scored = flagtypes_mod.apply_weights(
-            scored, lambda s: flag_type_of(str(getattr(s, "entity_id", ""))))
+            scored, lambda s: flag_type_of_row(s, measures))
     except Exception as err:  # noqa: BLE001
         swallow("could not apply the owner's flag-type weights", err)
 
@@ -927,48 +928,83 @@ async def refresh_measures(session: Any, *, now: Optional[float] = None,
     return True
 
 
-def flag_type_of(entity_id: str) -> str:
-    """What KIND a concern about this device is. See `agent/flagtypes.py`.
+def _measures_map() -> Mapping[str, Any]:
+    """The villa's measurement classes, read ONCE.
 
-    ⚠️ IT LIVES HERE BECAUSE THIS MODULE IS "CONNECT A RULE TO THIS VILLA".
-    `flagtypes` owns the vocabulary and the arithmetic and reaches nothing;
-    this is the half that reads the villa's own measurements and journal.
-
-    ⚠️ THE DIRECTION COMES FROM THE SAME SCORER THE DOCUMENT IS RANKED BY, not
-    from a second reading of the numbers. A kind whose direction disagreed with
-    the sentence that flagged it would be untunable: the owner would demerit
-    "above baseline" while the screen said "below".
+    ⚠️ READ ONCE PER DOCUMENT, NOT ONCE PER DEVICE. `build_document` used to
+    hand `apply_weights` a lambda that re-read this file — and re-scored the
+    whole villa — for every scorable entity.
     """
-    from vesta.supervise.agent import flagtypes
     from vesta.adapters import store
-    entity = str(entity_id or "")
-    if not entity:
-        return ""
     raw = store.read_json(MEASURES_FILE, {})
     measures = raw.get("measures") if isinstance(raw, Mapping) else {}
+    return measures if isinstance(measures, Mapping) else {}
+
+
+def _measurement_for(entity: str, measures: Mapping[str, Any]) -> str:
+    from vesta.supervise.agent import flagtypes
     row = measures.get(entity) if isinstance(measures, Mapping) else None
     row = row if isinstance(row, Mapping) else {}
-    measurement = flagtypes.measurement_of(
+    return flagtypes.measurement_of(
         device_class=str(row.get("c") or ""), unit=str(row.get("u") or ""),
         domain=entity.split(".", 1)[0])
 
-    observed = baseline = None
-    offline = False
+
+def flag_type_of_row(row: Any, measures: Mapping[str, Any]) -> str:
+    """What KIND a concern about this SCORED ROW is. See `agent/flagtypes.py`.
+
+    ⚠️ A QUESTION ABOUT A ROW, NOT ABOUT AN ENTITY ID, AND THAT IS THE WHOLE
+    POINT. `flag_type_of` below answers the same question from an id, and to do
+    it it must re-derive the ranking — `build_scorer()` with no rows reads the
+    entire journal (a ring bounded at JOURNAL_MAX_ENTRIES) and re-scores every
+    entity, to read three fields off one of them. `build_document` was calling
+    that once per scorable entity, through a lambda that looks free.
+
+    ⚠️ AND IT MAKES THE DOCSTRING TRUE. The old path promised "THE DIRECTION
+    COMES FROM THE SAME SCORER THE DOCUMENT IS RANKED BY, not from a second
+    reading of the numbers" — and then took a second reading, timed by
+    `time.time()` rather than by the pass's own `now`, so a kind's direction
+    could be computed against a differently-timed scoring of the same journal
+    than the list being re-ranked. The row handed in here IS the scorer's, so
+    the two cannot disagree.
+    """
+    from vesta.supervise.agent import flagtypes
+    entity = str(getattr(row, "entity_id", "") or "")
+    if not entity:
+        return ""
+    offline = str(getattr(row, "novel_state", "") or "").lower() in (
+        "unavailable", "unknown")
+    return flagtypes.key_for(
+        _measurement_for(entity, measures),
+        flagtypes.direction_of(getattr(row, "observed", None),
+                               getattr(row, "baseline", None), offline=offline))
+
+
+def flag_type_of(entity_id: str) -> str:
+    """What KIND a concern about this device is, from its id alone.
+
+    ⚠️ THE EXPENSIVE ENTRY POINT, AND IT HAS EXACTLY ONE CALLER: `RaiseConcern`,
+    via the injection in `runtime.py`. That path holds an entity id and no row,
+    and runs once per concern raised — where a single scoring pass is honest.
+    Anything that already HAS a scored row must call `flag_type_of_row`.
+    """
+    entity = str(entity_id or "")
+    if not entity:
+        return ""
+    measures = _measures_map()
+    row: Any = None
     try:
         for scored in build_scorer()():
-            if str(getattr(scored, "entity_id", "")) != entity:
-                continue
-            observed = getattr(scored, "observed", None)
-            baseline = getattr(scored, "baseline", None)
-            offline = str(getattr(scored, "novel_state", "") or "").lower() in (
-                "unavailable", "unknown")
-            break
+            if str(getattr(scored, "entity_id", "")) == entity:
+                row = scored
+                break
     except Exception as err:  # noqa: BLE001
         swallow("could not read the direction of a flagged reading", err)
-
-    return flagtypes.key_for(measurement,
-                             flagtypes.direction_of(observed, baseline,
-                                                    offline=offline))
+    if row is None:
+        from vesta.supervise.agent import flagtypes
+        return flagtypes.key_for(_measurement_for(entity, measures),
+                                 flagtypes.direction_of(None, None))
+    return flag_type_of_row(row, measures)
 
 
 #: Where Home Assistant serves its own log. ⚠️ CORE'S ENDPOINT, NOT THE

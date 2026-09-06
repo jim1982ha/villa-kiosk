@@ -33,8 +33,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from dataclasses import dataclass
 
-from typing import Final, Any, Callable, Mapping, Optional
+from typing import Final, Any, Callable, Mapping, Optional, Tuple
 
 from vesta.supervise.agent import audit
 from vesta.supervise.agent import budget as budget_mod
@@ -90,7 +91,6 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     recording lives HERE, wrapped around it, and a new guard cannot escape it.
     """
     doc = document or ""
-    escalated, subjects = 0, ""
     cfg_now = agent_config.view(config)
     # ⚠️ ONE INSTANT FOR THE WHOLE CHECK, minted here and used by BOTH the row
     # below and every flag `reason.follow_up` records. `_ident` builds a flag id
@@ -101,8 +101,8 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     started = time.time()
     check_id = f"{trigger}{int(started)}"
     try:
-        reason = await _run_once(session, config=config, provider=provider,
-                                 document=doc, trigger=trigger, now=started)
+        outcome = await _run_once(session, config=config, provider=provider,
+                                  document=doc, trigger=trigger, now=started)
     except Exception:
         # ⚠️ RECORD, THEN RE-RAISE. run_forever swallows and logs; without this
         # the one outcome an operator most needs to see is the one absent from
@@ -112,24 +112,51 @@ async def run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
                           escalated=0, run_id=check_id,
                           mode=str(cfg_now.get("mode") or ""))
         raise
-    if reason.startswith("escalated "):
-        head, _, subjects = reason.partition(": ")
-        try:
-            escalated = int(head.split()[1])
-        except (IndexError, ValueError):
-            escalated = 1
+    reason = outcome.reason
     audit.record_pass(reason=reason, trigger=trigger, doc_chars=len(doc),
-                      doc_lines=doc.count("\n") + 1, escalated=escalated,
-                      subjects=subjects, run_id=check_id,
+                      doc_lines=doc.count("\n") + 1,
+                      escalated=outcome.escalated,
+                      subjects=outcome.subject_line, run_id=check_id,
                       mode=str(cfg_now.get("mode") or ""),
                       model=str(cfg_now.get("model_triage", "")))
     return reason
 
 
+@dataclass(frozen=True)
+class PassOutcome:
+    """What a pass did, as fields rather than as a sentence to be re-parsed.
+
+    ⚠️ THE SENTENCE USED TO BE THE WIRE FORMAT. `_run_once` returned
+    "escalated 2 (investigated 1): pool pump, gate" and `run_once` recovered the
+    COUNT from `head.split()[1]` and the SUBJECTS from everything after the
+    first ": ". That ordering constraint was stated in prose in TWO modules and
+    enforced in a THIRD by string mangling — `Followup.clause` ended with
+    `.replace(":", ";")`, whose job was to corrupt a budget refusal written in
+    yet another module so that a `partition` two modules away kept working.
+
+    ⚠️ AND NOTHING STOPPED A NEW GUARD BEING MIS-READ. `_run_once` also returns
+    "budget: …" and "triage …: …"; a future guard whose sentence began
+    "escalated " would have had a count and a Subject list attributed to it.
+
+    `reason` is still the human sentence — it is what the log and the Handover
+    page render, and `test_pass_reason_contract` holds it against the TypeScript
+    that classifies it. What changed is that nobody parses it back.
+    """
+
+    reason: str
+    escalated: int = 0
+    subjects: Tuple[str, ...] = ()
+
+    @property
+    def subject_line(self) -> str:
+        """The subjects as `audit.record_pass` stores them."""
+        return ", ".join(self.subjects)
+
+
 async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
                     provider: Any = None, document: str = "",
                     trigger: str = "scheduled",
-                    now: Optional[float] = None) -> str:
+                    now: Optional[float] = None) -> PassOutcome:
     """The guards themselves. Wrapped by run_once, which records the outcome.
 
     ⚠️ THE TRIGGER IS ASKED ABOUT ITSELF, NOT ABOUT THE CLOCK. This gate read
@@ -152,16 +179,16 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
     """
     cfg = agent_config.view(config)
     if not cfg.get("enabled"):
-        return "agent disabled"
+        return PassOutcome("agent disabled")
     if trigger != MANUAL and not agent_config.trigger_enabled(config, trigger):
-        return f"{trigger} trigger disabled"
+        return PassOutcome(f"{trigger} trigger disabled")
 
     money = budget_mod.check(config, kind="run")
     if not money.allowed:
-        return f"budget: {money.reason}"
+        return PassOutcome(f"budget: {money.reason}")
 
     if provider is None or not provider.configured():
-        return "no model provider configured"
+        return PassOutcome("no model provider configured")
 
     # ⚠️ THE TRIGGER TRAVELS. `run_once` already records the PASS under it;
     # without passing it on, the RUN and its spend were filed as "scheduled"
@@ -170,12 +197,12 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
                                   config=config, session=session,
                                   trigger=trigger)
     if result.status != "answered":
-        return f"triage {result.status}: {result.reason}"
+        return PassOutcome(f"triage {result.status}: {result.reason}")
     if not result.escalations:
         # ⚠️ A SUCCESSFUL QUIET PASS, AND IT IS SAID DIFFERENTLY FROM A FAILED
         # ONE. `TriageResult.quiet` is only true when the pass SUCCEEDED, and
         # this log line is the human-readable half of that distinction.
-        return "nothing to escalate"
+        return PassOutcome("nothing to escalate")
 
     # ⚠️ EVERY FLAG IS RECORDED BEFORE IT IS FOLLOWED (2026-08-30). A flagged
     # item that is never investigated — because the per-pass cap or the daily
@@ -207,13 +234,15 @@ async def _run_once(session: Any, *, config: Optional[Mapping[str, Any]] = None,
         config=config, session=session, trigger=trigger, now=now)
 
     subjects = ", ".join(e.subject for e in result.escalations[:3])
-    # ⚠️ THE CLAUSE GOES BEFORE THE COLON, and `Followup.clause` may not contain
-    # one. `run_once` recovers the escalated COUNT from `head.split()[1]` and the
-    # SUBJECTS from everything after the first ": ", so a clause appended at the
-    # end would be filed as part of the subject list — the audit row lying about
-    # what was escalated, in the record the cutover is read from.
-    return (f"escalated {len(result.escalations)} "
-            f"({follow.clause()}): {subjects}")
+    # ⚠️ THE CLAUSE STILL GOES BEFORE THE COLON, but nothing PARSES this any
+    # more — the count and the subjects travel as fields on PassOutcome. The
+    # word order is kept because it is what a reader sees in the log and on the
+    # Handover page, and `test_pass_reason_contract` holds it against the
+    # TypeScript that classifies it.
+    return PassOutcome(
+        reason=f"escalated {len(result.escalations)} ({follow.clause()}): {subjects}",
+        escalated=len(result.escalations),
+        subjects=tuple(e.subject for e in result.escalations[:3]))
 
 
 #: When a pass last ran, on disk. ⚠️ ON DISK AND NOT IN MEMORY, WHICH IS THE

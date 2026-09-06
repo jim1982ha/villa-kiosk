@@ -330,21 +330,29 @@ def test_an_investigation_that_raises_cannot_stop_the_clock() -> None:
     assert len(_rows("escalated")) == 2, "the intent rows survive the crash"
 
 
-def test_the_clause_can_never_break_the_pass_row() -> None:
-    """⚠️ `run_once` SPLITS THE REASON ON THE FIRST `": "` to recover the count
-    and the subjects. A colon inside the clause would file part of this sentence
-    as the escalated subjects — the audit lying about what was escalated, in the
-    record the cutover is read from."""
-    for follow in (reason.Followup(escalated=3, started=3, concerns=2),
-                   reason.Followup(escalated=3, queued=3),
-                   # ⚠️ A REFUSAL WRITTEN IN ANOTHER MODULE, colon and all —
-                   # `budget.check` composes its own reasons and this clause
-                   # quotes them verbatim.
-                   reason.Followup(escalated=3, started=1,
-                                   stopped="stopped, budget: 4000 reached"),
-                   reason.Followup(escalated=5, started=2,
-                                   stopped="3 left for next pass")):
-        assert ": " not in follow.clause(), follow.clause()
+def test_a_COLON_IN_THE_CLAUSE_no_longer_corrupts_the_pass_row() -> None:
+    """⚠️ THIS TEST USED TO ASSERT THE OPPOSITE, AND THE INVERSION IS THE POINT.
+
+    `run_once` used to split the pass reason on the first `": "` to recover the
+    escalated COUNT and the SUBJECTS for the audit row, so a colon inside the
+    clause filed part of the sentence as the subject list. The defence was a
+    `.replace(":", ";")` at `Followup.clause`'s exit — one module corrupting a
+    second module's sentence (a budget refusal, colon and all) to protect a
+    parse in a third.
+
+    The count and the subjects are fields on `scheduler.PassOutcome` now, so the
+    clause may say what it means. What must hold is that a colon in it changes
+    NOTHING about what was recorded — which is a stronger claim than the old
+    "the clause contains no colon", and one the old shape could not make.
+    """
+    colonful = reason.Followup(escalated=3, started=1,
+                               stopped="stopped, budget: 4000 reached")
+    clause = colonful.clause()
+    assert ": " in clause, (
+        "the fixture no longer reproduces the hazard — a budget refusal quotes "
+        "another module's sentence verbatim and that sentence has a colon")
+    assert "budget: 4000 reached" in clause, (
+        "the clause is still mangling a refusal written elsewhere")
 
 
 def test_the_pass_row_still_reports_the_count_and_the_subjects() -> None:

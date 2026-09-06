@@ -72,6 +72,11 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `test_flag_type_cost`'s journal fixture. Numbered probes, generated in a
+    # loop — the test asserts that journal reads do NOT scale with the number of
+    # devices, so the ids exist only to make that number vary (2 against 40).
+    # `sensor.probe_` is the bare stem of `"sensor.probe_%02d" % i`.
+    "sensor.probe_one", "sensor.probe_",
     # `tests/consistency/villa_rules.ts`'s fixtures. All invented, and each one
     # exists to name a RULE rather than a device:
     #   • `sensor.combo_temp`/`combo_hum` are the two-entity combo sensor that

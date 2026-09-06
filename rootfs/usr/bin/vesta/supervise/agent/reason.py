@@ -99,14 +99,17 @@ class Followup:
     def clause(self) -> str:
         """One phrase for the pass reason.
 
-        ⚠️ IT MAY NEVER CONTAIN `": "`, AND THAT IS ENFORCED HERE RATHER THAN
-        ASKED OF EVERY CONTRIBUTOR TO IT. `scheduler.run_once` splits the pass
-        reason on the first one to recover the escalated COUNT and the SUBJECTS
-        for the audit row, so a colon anywhere in this sentence files part of it
-        as the list of subjects — the pass trace lying about what was escalated,
-        in the one record the cutover is read from. `stopped` can carry a
-        budget refusal written in another module, so the guard is at the exit
-        and not at the three places that build a part.
+        ⚠️ THE COLON GUARD IS GONE (2.950.0), AND SO IS THE REASON FOR IT.
+        This used to end `.replace(":", ";")`, because `scheduler.run_once`
+        split the pass reason on the first `": "` to recover the escalated
+        COUNT and the SUBJECTS for the audit row — so a colon anywhere in this
+        sentence filed part of it as the subject list. The guard sat at this
+        exit and mangled `stopped`, which carries a budget refusal WRITTEN IN
+        ANOTHER MODULE: one module corrupting a second module's sentence to
+        protect a parse in a third.
+
+        The count and the subjects are now fields on `scheduler.PassOutcome`.
+        Nothing parses this sentence, so it may say what it means.
         """
         if self.queued:
             return f"{self.queued} queued for approval"
@@ -116,7 +119,7 @@ class Followup:
                          + ("s" if self.concerns != 1 else ""))
         if self.stopped:
             parts.append(self.stopped)
-        return ", ".join(parts).replace(":", ";")
+        return ", ".join(parts)
 
 
 def cap_of(config: Optional[Mapping[str, Any]] = None) -> int:

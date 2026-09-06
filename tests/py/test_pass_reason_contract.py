@@ -56,7 +56,7 @@ def _read(path: str) -> str:
 def _quiet_literal() -> str:
     """The exact string `_run_once` returns for a successful quiet pass."""
     src = _read(os.path.join(BIN, "vesta", "supervise", "agent", "scheduler.py"))
-    found = re.findall(r'return "(nothing[^"]*)"', src)
+    found = re.findall(r'return PassOutcome\("(nothing[^"]*)"\)', src)
     assert len(found) == 1, (
         "expected exactly one quiet-pass return in scheduler.py, found "
         f"{found!r} — the anchor moved and this test is about to pass "
@@ -67,7 +67,7 @@ def _quiet_literal() -> str:
 def _escalated_prefix() -> str:
     """The literal prefix an escalating pass's reason starts with."""
     src = _read(os.path.join(BIN, "vesta", "supervise", "agent", "scheduler.py"))
-    found = re.findall(r'return \(f"(escalated) \{', src)
+    found = re.findall(r'reason=f"(escalated) \{', src)
     assert found, "scheduler.py no longer builds an `escalated N ...` reason"
     return found[0] + " "
 
@@ -113,10 +113,14 @@ def test_the_escalated_reason_keeps_the_shape_BOTH_parsers_depend_on() -> None:
     way. `Followup.clause` already guards its half by stripping colons — this
     guards the other half, the word order it strips them FOR."""
     sched = _read(os.path.join(BIN, "vesta", "supervise", "agent", "scheduler.py"))
-    assert re.search(r'f"escalated \{len\(result\.escalations\)\} "', sched), (
-        "the count is no longer the second token, so scheduler.run_once's own "
+    assert re.search(r'f"escalated \{len\(result\.escalations\)\} ', sched), (
+        "the count is no longer the second token, so the panel's count reads "
         "`head.split()[1]` and the panel's count both read the wrong word")
-    assert re.search(r'f"\(\{follow\.clause\(\)\}\): \{subjects\}"', sched), (
+    # ⚠️ ONE F-STRING NOW, NOT TWO CONCATENATED (2.950.0) — the sentence is
+    # built inside `PassOutcome(reason=...)`. The SHAPE still matters, because
+    # the TypeScript half still parses the clause for `investigated N` and
+    # `N left for next pass`; what stopped is Python parsing its own sentence.
+    assert re.search(r'\(\{follow\.clause\(\)\}\): \{subjects\}"', sched), (
         "the clause/subjects shape changed; both parsers split on the first "
         "': ' and would file part of the clause as a subject")
     clause = _read(os.path.join(BIN, "vesta", "supervise", "agent", "reason.py"))

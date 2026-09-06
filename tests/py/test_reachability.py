@@ -51,6 +51,15 @@ PKG = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "age
 #: MADE, and the ones marked BLOCKED are findings rather than exemptions — they
 #: are here so the count does not grow silently, not because they are fine.
 EXEMPT: Dict[str, str] = {
+    "flag_type_of":
+        "⚠️ REACHED BY INJECTION, NOT BY A CALL (2.950.0). `runtime.py` wires it "
+        "into `RaiseConcern` as `flag_type_of=sources_mod.flag_type_of`, and the "
+        "tool calls it through `_flag_type`. It had a direct caller until "
+        "`build_document` stopped asking the question per entity id: that path "
+        "re-read the whole journal and re-scored every device to look up three "
+        "fields, once per scorable entity, so it now uses `flag_type_of_row` "
+        "against the row it already holds. This entry point survives for the one "
+        "caller that genuinely has an id and no row.",
     # ── genuinely unreachable, and that is a FINDING (TASK-106, parked) ──
     # ⚠️ `escalate` WAS HERE AND IS NOT ANY MORE (TASK-112, v2.701.0). It was
     # unreachable for the reason recorded: re-evaluating an unacknowledged
