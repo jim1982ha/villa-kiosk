@@ -152,7 +152,7 @@ class Concern:
     #: had been answered — exactly what `deliveries` records for the same shape
     #: of mistake.
     #:
-    #: ⚠️ DELIBERATELY NOT MIRRORED IN `src/agent/agentTypes.ts`, unlike
+    #: ⚠️ DELIBERATELY NOT MIRRORED IN `src/vesta/shared/agentTypes.ts`, unlike
     #: `deliveries` beside it (/dry-audit, 2026-08-28). The mirror exists so a
     #: value the backend owns cannot arrive at the tablet and render as
     #: something else; this field renders nowhere and never should — it is the

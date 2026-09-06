@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import List, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PROXY_PATH = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
@@ -206,12 +206,30 @@ def test_the_nginx_exemptions_do_not_rot() -> None:
         "SERVED_BY_NGINX names locations that no longer exist: %s" % stale)
 
 
+def _location_bodies() -> Dict[str, str]:
+    """`location` head -> its block body. ⚠️ ONE PARSER, because two tests ask
+    the same question of it and a second copy would drift."""
+    text = _read(NGINX_PATH)
+    bodies: Dict[str, str] = {}
+    for block in re.split(r"^\s*location\s+", text, flags=re.MULTILINE)[1:]:
+        head = block.split("{", 1)[0].strip().replace("= ", "")
+        body = block.split("{", 1)[1] if "{" in block else ""
+        bodies[head] = body.split("\n    }", 1)[0]
+    return bodies
+
+
 #: Locations that set their own `add_header` and deliberately do NOT include
 #: the shared snippet. ⚠️ A DECISION PER ENTRY, like every other exemption map
-#: in this suite.
-OWN_HEADERS = {
-    "/": "re-adds the CSP itself; the snippet carries the other five",
-}
+#: in this suite — and EMPTY, because every location that sets a header today
+#: includes the snippet back.
+#:
+#: ⚠️ THIS HELD `"/"` FOR ONE RELEASE (2.959.0) AND THAT ENTRY WAS A HOLE, not
+#: a decision: `location /` includes the snippet, so it passed without any
+#: exemption, while the exemption made it UNCHECKABLE. Deleting the include
+#: from the app shell — no nosniff, no Referrer-Policy, no X-Frame-Options, no
+#: Permissions-Policy, no HSTS on every page load — left this suite green.
+#: `test_the_own_header_exemptions_are_necessary` now refuses that shape.
+OWN_HEADERS: Dict[str, str] = {}
 
 
 def test_every_location_that_sets_ANY_add_header_includes_the_shared_set() -> None:
@@ -225,20 +243,10 @@ def test_every_location_that_sets_ANY_add_header_includes_the_shared_set() -> No
     `add_header X-Request-Id` it would have lost nosniff, Referrer-Policy,
     X-Frame-Options, Permissions-Policy and HSTS, silently, with this green.
     """
-    text = _read(NGINX_PATH)
-    blocks = re.split(r"^\s*location\s+", text, flags=re.MULTILINE)[1:]
-    missing = []
-    for block in blocks:
-        head = block.split("{", 1)[0].strip()
-        head = head.replace("= ", "")
-        body = block.split("{", 1)[1] if "{" in block else ""
-        body = body.split("\n    }", 1)[0]
-        if "add_header" not in body:
-            continue                       # inherits the server level cleanly
-        if head in OWN_HEADERS:
-            continue
-        if "security-headers.conf" not in body:
-            missing.append(head)
+    missing = [head for head, body in _location_bodies().items()
+               if "add_header" in body                 # else inherits cleanly
+               and head not in OWN_HEADERS
+               and "security-headers.conf" not in body]
     assert not missing, (
         "these locations set their own add_header — which suppresses ALL of "
         "the server-level security headers — without including them back: %s.\n"
@@ -252,3 +260,19 @@ def test_the_own_header_exemptions_do_not_rot() -> None:
              for m in re.finditer(r"^\s*location\s+([^{]+)\{", text, re.MULTILINE)}
     stale = sorted(h for h in OWN_HEADERS if h not in heads)
     assert not stale, "OWN_HEADERS names locations that no longer exist: %s" % stale
+
+
+def test_the_own_header_exemptions_are_necessary() -> None:
+    """⚠️ AN EXEMPTION FOR A LOCATION THAT WOULD PASS ANYWAY IS A HOLE.
+
+    It costs nothing today and silently swallows the failure the day someone
+    deletes the include — which is exactly what `"/"` did in 2.959.0. Mirrors
+    `now_gated` in the RBAC suite: an exemption has to be earning its keep.
+    """
+    unnecessary = sorted(h for h, body in _location_bodies().items()
+                         if h in OWN_HEADERS and "security-headers.conf" in body)
+    assert not unnecessary, (
+        "these locations are named in OWN_HEADERS but already include the "
+        "shared snippet, so the exemption is not a decision — it is a hole "
+        "that stops the include check ever running on them: %s.\n"
+        "Delete the entry." % unnecessary)

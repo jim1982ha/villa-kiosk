@@ -102,6 +102,13 @@ INJECTED = ("/agent-config", "/agent-concerns")
 #: `mcp_server.http_handler` compares a bearer token and answers 401 with no
 #: detail, because "token not configured" and "wrong token" must not be
 #: distinguishable. It never reaches `deps.authorized`.
+#:
+#: ⚠️ AND IT IS SPELLED ONCE. For one release (2.959.0) the same decision was
+#: also an entry in `READABLE_BY_FACILITY` — a route no session-holder of any
+#: role can read, filed under "a Facility Manager may read this" — which then
+#: needed a third spelling, an ad-hoc `endswith("/agent-mcp")` skip inside the
+#: rot test, to stop the entry failing. Three statements of one fact, in the
+#: file whose header is about claims made more than one way.
 OWN_AUTH = ("/agent-mcp",)
 
 
@@ -168,7 +175,6 @@ READABLE_BY_FACILITY = {
                          "judge a Concern or a draft'",
     "POST /agent-memory": "correcting a villa document is facility work, and "
                           "the correction appends rather than overwrites",
-    "POST /agent-mcp": "authenticates itself with a bearer token — see OWN_AUTH",
 }
 
 
@@ -195,6 +201,8 @@ def test_every_owner_only_route_refuses_a_facility_role():
     for key, handler in _handlers().items():
         if key in READABLE_BY_FACILITY:
             continue
+        if key.split(" ", 1)[1] in OWN_AUTH:
+            continue                       # never reaches `deps` at all
         refusals.clear()
         try:
             asyncio.run(handler(FakeRequest()))
@@ -221,8 +229,6 @@ def test_the_facility_exemptions_do_not_rot():
     refusals = _bind("ops")
     now_gated = []
     for key in READABLE_BY_FACILITY:
-        if key.endswith("/agent-mcp"):
-            continue                       # authenticates itself; see OWN_AUTH
         refusals.clear()
         try:
             asyncio.run(handlers[key](FakeRequest()))
@@ -233,6 +239,44 @@ def test_the_facility_exemptions_do_not_rot():
     assert not now_gated, (
         "these are gated to the owner now, so their exemption is stale: %s"
         % now_gated)
+
+
+def test_the_own_auth_exemptions_do_not_rot():
+    """⚠️ THE CLAIM, DRIVEN. `OWN_AUTH` says these never reach `deps` — so an
+    unauthenticated caller must produce NO refusal from the injected host, and
+    the handler must still not serve them. A route that quietly started using
+    `deps.authorized` would be covered by the sibling drive and should leave
+    this tuple; one that stopped refusing altogether is an open endpoint.
+    """
+    handlers = _handlers()
+    mounted = {k.split(" ", 1)[1] for k in handlers}
+    stale = sorted(p for p in OWN_AUTH if p not in mounted)
+    assert not stale, "OWN_AUTH names routes that are not mounted: %s" % stale
+
+    refusals = _bind("owner", authorized=False)
+    for key, handler in handlers.items():
+        if key.split(" ", 1)[1] not in OWN_AUTH:
+            continue
+        refusals.clear()
+        try:
+            asyncio.run(handler(FakeRequest()))
+        except Exception:
+            pass
+        assert not refusals, (
+            "%s refused through `deps` — it authenticates itself no longer, so "
+            "it belongs in the ordinary drive rather than OWN_AUTH: %s"
+            % (key, refusals))
+
+
+def test_own_auth_and_the_facility_list_do_not_both_claim_a_route():
+    """⚠️ ONE OWNER PER DECISION. A route in both maps is a fact stated twice,
+    and the second statement is the one that goes stale."""
+    both = sorted(k for k in READABLE_BY_FACILITY
+                  if k.split(" ", 1)[1] in OWN_AUTH)
+    assert not both, (
+        "these are named in READABLE_BY_FACILITY and in OWN_AUTH: %s. A route "
+        "that authenticates itself is readable by NO session role, so the "
+        "facility entry is not a second reason — it is a contradiction." % both)
 
 
 def test_the_role_is_never_taken_from_anything_the_caller_can_assert():

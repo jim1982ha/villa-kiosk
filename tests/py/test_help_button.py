@@ -250,3 +250,43 @@ def test_role_for_audience_is_derived_from_the_table_not_restated() -> None:
         assert route_mod.role_for_audience(audience) == role, (
             "role_for_audience disagrees with people.AUDIENCE_OF_ROLE for %r"
             % role)
+
+
+# ── the caller is driven, not read ─────────────────────────────────────────
+def test_pressing_help_actually_builds_a_verdict(monkeypatch) -> None:
+    """⚠️ THIS WENT RED ON SHIPPED CODE. `_help` omitted `Escalation.reaches`,
+    which has no default, so every press raised
+    `TypeError: missing 1 required positional argument: 'reaches'` in the live
+    add-on while this file stayed green — `help_counterpart` and `HELP_STEPS`
+    were both pinned, and the caller that assembles them was only ever read as
+    SOURCE (`test_HELP_does_NOT_acknowledge` greps for `_escalate_one`).
+
+    `feedback_pin-the-caller`, for the third time in this repository: a test of
+    the pieces survives the bug that nobody assembled them.
+    """
+    import asyncio
+    from vesta.supervise.agent import outbox as outbox_mod
+
+    seen: List[Any] = []
+
+    async def _fake(session, row, verdict, *, config, now):  # type: ignore[no-untyped-def]
+        seen.append(verdict)
+        return True
+
+    monkeypatch.setattr(outbox_mod, "_escalate_one", _fake)
+
+    for audience, expected in (("owner", "ops"), ("facility", "owner")):
+        seen.clear()
+        out = asyncio.run(actions_mod._help(
+            None, _live(audience=audience, severity="critical"),
+            by="owner", config={}, reason="", now=None))
+        assert out.ok, f"🆘 reported failure for an {audience} concern: {out}"
+        assert len(seen) == 1, "🆘 did not reach the ladder's send path"
+        v = seen[0]
+        assert v.to_role == expected, (
+            f"an alert delivered to {audience!r} asked {v.to_role!r} for help; "
+            f"the counterpart is {expected!r}")
+        assert v.step == route_mod.HELP_STEPS[expected], (
+            "the step written is not the help step for the role asked, so the "
+            "button is withdrawn for the wrong rung")
+        assert v.act is True

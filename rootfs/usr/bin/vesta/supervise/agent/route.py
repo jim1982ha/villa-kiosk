@@ -400,7 +400,9 @@ def _held_informational(*, occupied: Optional[bool], quiet_hours: bool
 class Escalation:
     act: bool
     step: str
-    #: WHO this rung reaches — "same", "owner", "all", or "" when no rung fired.
+    #: WHO this rung reaches — "same", "owner", "all", or "" when no rung
+    #: fired AND when the rung names its audience outright in `to_role`, which
+    #: is the only field `_escalate_one` consults once it is set.
     #: ⚠️ CARRIED, NOT INFERRED FROM `step` (2.951.0). See `Band`.
     reaches: str
     reason: str

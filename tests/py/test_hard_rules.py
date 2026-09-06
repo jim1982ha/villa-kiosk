@@ -298,25 +298,25 @@ FIXTURES: Set[str] = {
     # lived only in test_aggregate/noise/verify/sections/actionable fixtures,
     # and this list's own companion assertion is what noticed — an allow-listed
     # id appearing nowhere is permission nobody asked for.
-    "sensor.a_energy", "sensor.b_energy", "sensor.c",
-    "sensor.p_energy", "sensor.s", "sensor.s0", "sensor.x",
+    "sensor.a_energy", "sensor.b_energy",
+    "sensor.p_energy",
     "sensor.x_energy", "sensor.new_energy", "sensor.old_energy",
-    "binary_sensor.leak_x", "light.a",
+    "binary_sensor.leak_x",
     # The duration / frequency lens fixtures (2026-09-04): a lock held open,
     # a gate that changes N times a day, and the `sensor.n000…` family the
     # slot-reservation test fills a document with (the regex sees `sensor.n`).
-    "lock.x", "lock.gate", "lock.words", "binary_sensor.gate",
-    "sensor.n", "sensor.fine", "sensor.flat", "switch.q",
+    "lock.gate", "lock.words", "binary_sensor.gate",
+    "sensor.fine", "sensor.flat",
     # The rule-calibration fixtures (2026-09-04): a watched phase and two
     # automations that must NOT be surveyed.
-    "sensor.phase_c", "automation.b", "automation.c",
+    "sensor.phase_c",
     # The category-parity rows of `both.json` (2026-09-04), each reaching one
     # rule of `effectiveCategory` on a selectable id; and the spot-check ids.
     "switch.garden_lamp", "switch.gate_release", "switch.wall_outlet",
     "binary_sensor.patio_door", "sensor.hall_temperature", "sensor.router_status",
     "fan.study", "camera.drive", "light.porch",
     "switch.pool_light", "switch.outdoor_light", "switch.aggregate_power",
-    "binary_sensor.front_door", "camera.x", "input_boolean.gate_open",
+    "binary_sensor.front_door", "input_boolean.gate_open",
     "sensor.unknown_thing",
     # Named for the behaviour under test, not for a device.
     "sensor.debris", "sensor.ghost", "sensor.odd", "sensor.ok",
@@ -424,13 +424,32 @@ def test_no_unclassified_entity_id_reaches_tracked_source() -> None:
 def test_the_allow_list_has_no_dead_entries() -> None:
     """⚠️ AN ALLOW-LIST THAT OUTLIVES ITS ENTRIES ROTS INTO PERMISSION. A name
     left here after the code stopped using it silently re-blesses that id for
-    whoever adds it back."""
+    whoever adds it back.
+
+    ⚠️ THIS EXEMPTED SHAPE-MATCHED IDS FOR ONE RELEASE (2.959.0) AND THAT WAS
+    BACKWARDS. The exemption was a no-op the day it shipped — `dead` was empty
+    with it and without it — and it switched off rot-checking for the 11
+    `FIXTURES` entries the shape covers, permanently. An id the shape already
+    blesses does not belong on the list at all, so those 11 were deleted and
+    every remaining entry is checked. `test_the_allow_list_carries_nothing_the_
+    shape_already_covers` keeps it that way.
+    """
     found = set(_found())
     dead = sorted(KNOWN - found)
-    dead = [d for d in dead if not _is_illustrative_by_shape(d)]
     assert not dead, (
         "these are allow-listed but appear nowhere in tracked source — remove "
         f"them, or the list grants permission nobody asked for: {dead}")
+
+
+def test_the_allow_list_carries_nothing_the_shape_already_covers() -> None:
+    """⚠️ A LISTED ID THAT THE SHAPE ALSO BLESSES IS DEAD WEIGHT, and the way
+    it goes wrong is not that it grants too much — it is that the next person
+    reaches for the exemption that hides it from the rot check instead."""
+    redundant = sorted(i for i in KNOWN if _is_illustrative_by_shape(i))
+    assert not redundant, (
+        "these are on an allow-list AND match `_ILLUSTRATIVE_SHAPE`, so the "
+        "entry does nothing except keep a name alive after its last use — "
+        f"delete the entry, the shape covers it: {redundant}")
 
 
 def test_no_real_entity_id_is_rendered_as_product_copy() -> None:

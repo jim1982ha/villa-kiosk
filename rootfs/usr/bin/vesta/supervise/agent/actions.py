@@ -538,8 +538,13 @@ async def _help(session: Any, row: Mapping[str, Any], *, by: str,
     # already reading. It now asks whoever was NOT told first: the owner's alert
     # asks the facility manager, and the facility manager's asks the owner.
     to_role = route_mod.help_counterpart(row.get("audience") or "owner")
+    # ⚠️ `reaches` IS REQUIRED AND WAS OMITTED (2.959.0), so pressing 🆘 raised
+    # `TypeError: missing 1 required positional argument` in the live add-on
+    # while every test here stayed green — `help_counterpart` and `HELP_STEPS`
+    # were both pinned, and nothing drove the caller that assembles them.
+    # `""` because `to_role` names the audience outright; see `Escalation`.
     verdict = route_mod.Escalation(
-        act=True, step=route_mod.HELP_STEPS[to_role],
+        act=True, step=route_mod.HELP_STEPS[to_role], reaches="",
         reason=f"{by} asked for help", to_role=to_role)
     sent = await outbox_mod._escalate_one(session, row, verdict,
                                           config=config, now=now)

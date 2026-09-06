@@ -1,10 +1,19 @@
 """Reconciling the HA facility manager list against this period's own events.
 
-⚠️ EVERY FIXTURE IS A VERBATIM ITEM FROM THE REFERENCE DEPLOYMENT, read over MCP
-on 2026-08-21. Two shapes are in use across the nine blueprints that call
-`todo.add_item`, and a parser written against only the documented one
-(`[id] entities - task`) silently mishandles the other. That is the mistake
-2.511.0 was made of, and the reason these are copied rather than invented.
+⚠️ EVERY FIXTURE'S SHAPE IS COPIED FROM A REAL ITEM, read over MCP on
+2026-08-21 — punctuation, separator and all. Two shapes are in use across the
+nine blueprints that call `todo.add_item`, and a parser written against only
+the documented one (`[id] entities - task`) silently mishandles the other. That
+is the mistake 2.511.0 was made of, and the reason the shapes are copied rather
+than invented: `feedback_fixtures-must-match-the-property`.
+
+⚠️ THE IDS INSIDE THEM ARE NOT ALL VERBATIM, and this header said "EVERY
+FIXTURE IS A VERBATIM ITEM" for two releases after they stopped being. Three
+were replaced with `example_` names when the hard-rule pin froze the entity set
+(`sensor.example_house_pump_pf` and its two siblings in PM04); the rest stayed
+because they were already allow-listed. A substitution changes what a fixture
+proves — it can no longer witness that a real id survives the parser — so it is
+recorded here rather than left for a reader to infer from a prefix.
 
 ⚠️ AND THE ITEMS CARRY ENTITY IDS. `sensor.example_house_pump_pf` names a
 device in somebody's home; entity ids routinely name rooms and people, and this
@@ -21,7 +30,8 @@ from typing import Any, Dict, List
 
 from vesta.adapters import ledger
 
-# Verbatim from `todo.shopping_list` on the reference deployment.
+# The shape is verbatim from `todo.shopping_list` on the reference
+# deployment; the `example_` ids in PM04 are substitutions. See above.
 PM01 = ("[PM-01] sensor.house_pump_power has drifted -99.9% from baseline. "
         "Check the house pump for bearing wear, clogged suction, or impeller "
         "damage.")

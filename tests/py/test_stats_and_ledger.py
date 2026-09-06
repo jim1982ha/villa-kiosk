@@ -227,9 +227,10 @@ def test_ids_removed_mid_sentence_do_not_strand_their_separator() -> None:
         deliberate, intentional decision.
 
     An instruction to re-enable nothing in particular. The stored item was
-    complete — it named `automation.example_critical_entry` —
-    so this was the redaction, not the blueprint, and `clean_summary`'s own
-    docstring said the senders write "two shapes" while this was the third.
+    complete — it named the automation, whose real id is replaced here by
+    `automation.example_critical_entry` because this file is tracked and
+    public — so this was the redaction, not the blueprint, and `clean_summary`'s
+    own docstring said the senders write "two shapes" while this was the third.
 
     ⚠️ WITHHELD MUST NOT LOOK LIKE MISSING. That is the whole property: a
     reader who sees "found OFF: ." concludes the system lost the name, and

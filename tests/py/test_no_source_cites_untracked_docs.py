@@ -16,9 +16,15 @@ appealing to an authority the reader cannot check; a comment that states the
 fact is the authority. Every one of those 43 already stated its fact — the
 citation was decoration in front of it.
 
-This does not forbid citing TRACKED files. `tests/security_test.py`,
-`test_playbooks.py` and sibling modules are all in the repository, so a reader
-can follow them.
+This does not forbid citing TRACKED files: `tests/py/test_hard_rules.py` and
+its siblings under `tests/py/` are in the repository, so a reader can follow
+them.
+
+⚠️ `tests/security_test.py` IS NOT ONE OF THEM, and this docstring named it as
+the worked counter-example for two releases. `tests/*` is gitignored except for
+three subdirectories; `git ls-files tests/security_test.py` returns nothing.
+The example a guard offers is the first thing a reader copies, so an untracked
+one teaches the defect. Ask git, never .gitignore.
 """
 
 import io
@@ -109,16 +115,28 @@ def test_no_tracked_source_cites_a_PATH_a_clone_does_not_have():
     `git ls-files` says otherwise, and three shipped files cited it. The guard's
     worked counter-example was an instance of the defect it guards.
 
-    This asks the thing that decides what a reader has.
+    ⚠️ AND THE FIRST VERSION OF THIS TEST WAS THE SAME DEFECT AGAIN: it matched
+    `(?:tests|docs|scripts|sources)/` — the four directories the known offenders
+    happened to sit in — so it could not see `rootfs/` or `src/` at all. Both
+    halves of the contract-parity pair pointed at a twin that had moved
+    (`rootfs/usr/bin/agent/contracts.py`, `src/reports/reportsTypes.ts`), and
+    all six citations were invisible to a guard whose docstring said DERIVED.
+
+    The first segment of a citation is now checked against the directories git
+    actually tracks, which is the thing that decides what a reader has.
     """
     import re
     import subprocess
 
     tracked = set(subprocess.run(["git", "ls-files"], cwd=REPO_ROOT,
                                  capture_output=True, text=True).stdout.splitlines())
+    #: Top-level directories a fresh clone HAS — derived, so a new one is
+    #: covered the day it is committed.
+    roots = {p.split("/")[0] for p in tracked if "/" in p}
+    assert roots, "git ls-files returned nothing — this guard would pass vacuously"
     # Path-shaped citations only: a slash, a known source extension, no spaces.
-    shape = re.compile(r"\b((?:tests|docs|scripts|sources)/[\w./-]+"
-                       r"\.(?:py|ts|tsx|md|json|mjs|conf|yaml|yml))\b")
+    shape = re.compile(r"\b([\w.-]+(?:/[\w.-]+)+"
+                       r"\.(?:py|ts|tsx|js|mjs|md|json|conf|yaml|yml|css|html))\b")
     offenders = []
     for rel, full in _source_files():
         try:
@@ -127,6 +145,8 @@ def test_no_tracked_source_cites_a_PATH_a_clone_does_not_have():
             continue
         for n, line in enumerate(text.splitlines(), 1):
             for path in shape.findall(line):
+                if path.split("/")[0] not in roots:
+                    continue           # an import specifier or a runtime path
                 if path not in tracked:
                     offenders.append("%s:%d cites %s" % (rel, n, path))
     assert not offenders, (

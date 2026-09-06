@@ -146,11 +146,17 @@ async def agent_concerns_shaped_handler(request: "web.Request") -> "web.Response
     """
     if deps is None:
         raise RuntimeError("supervise.api.bind() must run before routes()")
-    resp = await deps.concerns_get(request)
+    #: ⚠️ ANNOTATED, because `deps.concerns_get` is typed `Any` and without this
+    #: every `return resp` below is `Returning Any` under `mypy --strict` —
+    #: which CI runs unpinned, so it is a red build, not a style note.
+    resp: "web.Response" = await deps.concerns_get(request)
     if getattr(resp, "status", 500) != 200 or not getattr(resp, "body", None):
         return resp
     try:
-        payload = json.loads(resp.body)
+        # `body` is `Payload | bytes | None` on aiohttp's Response; the guard
+        # above rules out None, and a streaming Payload would raise here and
+        # pass the response through untouched, which is the intent either way.
+        payload = json.loads(resp.body)  # type: ignore[arg-type]
     except (ValueError, TypeError):
         return resp
     doc = payload.get("concerns")

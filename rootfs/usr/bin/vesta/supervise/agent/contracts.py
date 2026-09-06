@@ -1,6 +1,6 @@
 """The vocabulary the agent and VESTA share. CTR-001 to CTR-020.
 
-⚠️ THIS FILE HAS A TWIN: `src/agent/agentTypes.ts`, and
+⚠️ THIS FILE HAS A TWIN: `src/vesta/shared/agentTypes.ts`, and
 `tests/py/test_contract_parity.py` fails the build if the two disagree in either
 direction. That is why every enum below is a flat tuple of strings rather than
 `enum.Enum` — an Enum is nicer Python and cannot be compared to a TypeScript

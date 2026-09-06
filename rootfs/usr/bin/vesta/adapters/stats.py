@@ -178,6 +178,22 @@ def measurement_ids(metadata: Sequence[Dict[str, Any]]) -> List[str]:
             and row.get("has_mean") and not row.get("has_sum")]
 
 
+def _own_copy(series: Dict[str, List[Dict[str, Any]]]
+              ) -> Dict[str, List[Dict[str, Any]]]:
+    """A copy the caller owns all the way down.
+
+    ⚠️ `dict(series)` IS NOT THIS, and shipped as if it were (2.959.0). It
+    copies the id -> rows mapping and hands over the cache's OWN row objects
+    and OWN lists, so a caller that edits a row, or appends to a list, edits
+    what the next module reads — the exact failure the copy was added to stop,
+    one level down from where the copy was.
+
+    The cost is bounded: a pass fetches once and serves three cached asks, and
+    a row is a two-key dict.
+    """
+    return {i: [dict(row) for row in rows] for i, rows in series.items()}
+
+
 def statistics_fetcher(session: Any, now_local: Any,
                        tally: Dict[str, Any]) -> Any:
     """The ONLY way an analysis module gets data. TASK-115 step 8.
@@ -235,7 +251,7 @@ def statistics_fetcher(session: Any, now_local: Any,
         hit = cache.get(key)
         if hit is not None:
             tally["cache_hits"] = tally.get("cache_hits", 0) + 1
-            return dict(hit)
+            return _own_copy(hit)
         start = start_of_day(now_local, days)
         try:
             async with HassClient(session) as hass:
@@ -278,10 +294,11 @@ def statistics_fetcher(session: Any, now_local: Any,
             if rows:
                 tally["sample_row"] = rows[0]
                 break
-        # ⚠️ COPIED ON BOTH PATHS. Returning `series` here hands the FIRST
-        # caller the very object the cache holds, so its edit reaches everyone
-        # after it — I copied only the hit path first and the test caught it.
+        # ⚠️ COPIED ON BOTH PATHS, AND ALL THE WAY DOWN. Returning `series`
+        # here hands the FIRST caller the very object the cache holds, so its
+        # edit reaches everyone after it — I copied only the hit path first,
+        # and then copied only the top level, which left the rows shared.
         cache[key] = series
-        return dict(series)
+        return _own_copy(series)
 
     return fetch

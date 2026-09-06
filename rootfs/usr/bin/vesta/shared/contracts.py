@@ -1,6 +1,6 @@
 """The vocabulary shared by the reports backend and the SPA.
 
-⚠️ THIS FILE HAS A TWIN: `src/reports/reportsTypes.ts`. Every tuple below is a
+⚠️ THIS FILE HAS A TWIN: `src/vesta/shared/reportsTypes.ts`. Every tuple below is a
 union type there, and `tests/py/test_contract_parity.py` FAILS THE BUILD if the
 two disagree — in either direction, including a value added to only one side.
 
@@ -69,7 +69,7 @@ AUDIENCE: Final[Tuple[str, ...]] = ("owner", "facility")
 # exactly why the two vocabularies may not be merged.
 #
 # ⚠️ DELIBERATELY NOT IN `CONTRACT_SETS`, AND THAT IS NOT AN OVERSIGHT. Every
-# other tuple here is mirrored in `src/reports/reportsTypes.ts`; this one's
+# other tuple here is mirrored in `src/vesta/shared/reportsTypes.ts`; this one's
 # TypeScript twin is `src/auth/roles.ts`'s `ROLE_ORDER`, which has held the
 # app's profiles since long before this subsystem existed. Registering it would
 # demand a SECOND list of profiles in `reportsTypes.ts` for the parity test to

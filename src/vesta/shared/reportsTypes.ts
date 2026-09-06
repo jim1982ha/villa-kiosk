@@ -1,7 +1,7 @@
 /**
  * VESTA Reports — the SPA's half of the shared vocabulary.
  *
- * ⚠️ THIS FILE HAS A TWIN: `rootfs/usr/bin/reports/contracts.py`. It is the
+ * ⚠️ THIS FILE HAS A TWIN: `rootfs/usr/bin/vesta/shared/contracts.py`. It is the
  * source of truth (the backend is what writes the stored documents); this file
  * mirrors it. `tests/py/test_contract_parity.py` FAILS THE BUILD if the two
  * disagree in either direction, including a value present on only one side.

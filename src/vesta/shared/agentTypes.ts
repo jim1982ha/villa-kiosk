@@ -1,7 +1,7 @@
 /**
  * VESTA Agent — the SPA's half of the agent vocabulary.
  *
- * ⚠️ THIS FILE HAS A TWIN: `rootfs/usr/bin/agent/contracts.py`. It is the source
+ * ⚠️ THIS FILE HAS A TWIN: `rootfs/usr/bin/vesta/supervise/agent/contracts.py`. It is the source
  * of truth (the backend writes the stored concerns); this file mirrors it.
  * `tests/py/test_contract_parity.py` FAILS THE BUILD if the two disagree in
  * either direction, including a value present on only one side.
