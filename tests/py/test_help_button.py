@@ -91,12 +91,52 @@ def test_a_second_help_is_refused_by_apply_not_only_undrawn() -> None:
         "history can still fire an act the store has withdrawn")
 
 
-def test_help_takes_the_shared_rung_rather_than_a_literal() -> None:
-    import inspect
-    src = inspect.getsource(actions_mod._help)
-    assert "HELP_STEP" in src and '"add the owner"' not in src, (
-        "the act spells its own rung, so the button and the act it triggers "
-        "can drift apart")
+def test_help_asks_the_OTHER_channel_and_never_the_one_already_told() -> None:
+    """⚠️ THE RULE CHANGED ON 2026-09-06 (owner's ruling) AND THE TEST WITH IT.
+
+    🆘 used to take the "add the owner" rung whoever pressed it, so an owner's
+    own alert asked the owner — a louder copy of a message they were already
+    reading. It now asks whoever was NOT told first: an alert delivered to the
+    owner asks the FACILITY MANAGER, and one delivered to the facility manager
+    asks the OWNER. The value of the button is that it reaches somebody who has
+    not seen this yet.
+
+    ⚠️ ASSERTED ON THE FUNCTION, NOT ON `_help`'s SOURCE. The old version read
+    the source for `HELP_STEP` and forbade the literal `"add the owner"` — and
+    it failed the moment a COMMENT explained the history, because a comment is
+    the one place that literal legitimately survives. Same trap this suite has
+    now hit four times: a test satisfied, or failed, by prose measures prose.
+    """
+    assert route_mod.help_counterpart("owner") == "ops", (
+        "an alert the OWNER was told about no longer asks the facility "
+        "manager, so 🆘 asks the person already reading it")
+    assert route_mod.help_counterpart("facility") == "owner", (
+        "an alert the FACILITY MANAGER was told about no longer asks the "
+        "owner")
+    # ⚠️ AN UNKNOWN AUDIENCE FALLS TO "ops", NOT TO NOBODY. A concern with no
+    # audience stamp was written for the owner by default (`outbox` reads it
+    # the same way), so the counterpart is the facility manager.
+    assert route_mod.help_counterpart("") == "ops"
+
+    # Every counterpart must have a step string, or the act writes an empty
+    # `escalated_step` and neither surface can say what happened.
+    for role in ("owner", "ops"):
+        assert route_mod.HELP_STEPS.get(role), f"no help step for {role!r}"
+
+
+def test_a_pressed_help_withdraws_the_button() -> None:
+    """⚠️ OTHERWISE THE COUNTERPART IS CALLED TWICE. The step 🆘 writes is not a
+    BAND, so `_help_is_spent`'s ladder-position test cannot see it — it has to
+    recognise the help steps by name."""
+    row = {"id": "c1", "state": "open", "severity": "critical"}
+    before = [a.id for a in actions_mod.available_for(row)]
+    assert "help" in before, "🆘 is not offered on a fresh critical"
+    for role, step in route_mod.HELP_STEPS.items():
+        after = [a.id for a in actions_mod.available_for(
+            {**row, "escalated_step": step})]
+        assert "help" not in after, (
+            f"🆘 is still drawn after help was asked of {role!r}, so pressing "
+            f"it again asks them a second time")
 
 
 # ── (c) the escalation is drawn from the post-escalation view ───────────────

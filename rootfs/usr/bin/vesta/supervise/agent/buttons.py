@@ -245,9 +245,27 @@ def keyboard_for(concern: Mapping[str, Any],
     # the body instead. So the drawn set is a deliberate SUBSET of
     # `available_for`, and `acts_of` stamps only what is drawn, which keeps
     # the reconcile comparison honest by construction.
-    drawn = [by_id[a.id] for a in acts
-             if a.id not in ("useful", "not_useful")]
-    return [drawn] if drawn else []
+    # ⚠️ TWO ROWS SINCE 2026-09-06, AND THE SECOND ONE IS THE OWNER REVERSING
+    # THE RULING ABOVE. The August layout kept the ratings off the phone
+    # entirely and pointed at the Reason tab with a link, so the two surfaces
+    # disagreed about what an alert offers — the tablet drew four buttons and
+    # the chat drew two. The owner asked for them here "so it's consistent
+    # between what appears on the Wall tablet and Telegram channels".
+    #
+    # ⚠️ THE WIDTH PROBLEM THAT DROVE THE ORIGINAL CHOICE IS REAL AND IS SOLVED
+    # BY THE ROW, NOT BY DROPPING THE ACTS. Five buttons abreast on a phone is
+    # what the rendered layouts rejected; acts on one row and the rating pair on
+    # its own keeps every target thumb-sized.
+    #
+    # ⚠️ AND THE RATING IS STILL NEVER FIRST. `ACTS` states it — "a rating is a
+    # comment on the supervisor, not on the villa, so it must never be the first
+    # thing offered" — which the second row satisfies by construction rather
+    # than by ordering care.
+    lifecycle = [by_id[a.id] for a in acts
+                 if a.id not in ("useful", "not_useful")]
+    rating = [by_id[a.id] for a in acts
+              if a.id in ("useful", "not_useful")]
+    return [row for row in (lifecycle, rating) if row]
 
 
 # ── which targets can carry a button ────────────────────────────────────────
@@ -728,7 +746,17 @@ async def reconcile(session: Any, *,
             ref = Ref(str(raw.get("entity_id") or ""),
                       str(raw.get("message_id") or ""),
                       str(raw.get("acts") or ""))
-            if want and ref.acts == drawn:
+            # ⚠️ THE PRESSED MESSAGE IS NEVER "IN STEP" (2026-09-06). A press
+            # whose act set does not CHANGE still has to say what happened:
+            # `job` on an FYI leaves `job, dismiss` offered before and after, so
+            # this skipped the very message somebody had just tapped and the
+            # reader got no acknowledgement at all. Reported from the villa the
+            # day the collapse shipped — the inline block this replaced restated
+            # the pressed message unconditionally, and only the OTHER copies
+            # were ever compared for drift. `done` hid it: it settles the
+            # concern, so `want` empties and the retire path answers instead.
+            pressed = bool(receipt and ref.message_id == receipt[0])
+            if want and ref.acts == drawn and not pressed:
                 kept.append(dict(raw))      # in step; leave the message alone
                 continue
             if want:

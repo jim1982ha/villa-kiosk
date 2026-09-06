@@ -20,6 +20,8 @@ sys.path.insert(0, os.path.join(
     "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import scheduler
 from fake_provider import FakeProvider, says                    # noqa: E402
 
@@ -190,7 +192,7 @@ def test_run_once_DECLINES_without_a_provider_so_the_caller_must_pass_one() -> N
     # run_once call — the caller this pin exists for — moved with it.
     with open(os.path.join(root, "rootfs", "usr", "bin", "vesta", "supervise",
                            "api.py"), encoding="utf-8") as handle:
-        proxy = re.sub(r"#[^\n]*", "", handle.read())
+        proxy = strip_prose(handle.read())
     call = proxy[proxy.index("agent_scheduler.run_once("):]
     call = call[:call.index(")\n")]
     assert "provider=" in call, (

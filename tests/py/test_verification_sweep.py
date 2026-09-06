@@ -28,6 +28,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import concerns
 
 HOUR = 3600.0
@@ -355,7 +357,7 @@ def test_the_sweep_is_reached_from_the_villa_s_own_clock() -> None:
     from vesta.supervise.agent import scheduler
 
     src = inspect.getsource(scheduler.dispatch)
-    code = re.sub(r"#[^\n]*", "", src)
+    code = strip_prose(src)
     assert "verification_sweep" in code, (
         "nothing on the villa's clock calls the verification sweep — which is "
         "exactly the state `verify` was in for its whole existence")
@@ -368,7 +370,7 @@ def test_the_sweep_runs_BEFORE_delivery_so_a_recurrence_can_be_carried() -> None
     import re
     from vesta.supervise.agent import scheduler
 
-    code = re.sub(r"#[^\n]*", "", inspect.getsource(scheduler.dispatch))
+    code = strip_prose(inspect.getsource(scheduler.dispatch))
     assert code.index("verification_sweep") < code.index("outbox_mod.sweep"), (
         "verification must run before the delivery sweep, not after it")
 

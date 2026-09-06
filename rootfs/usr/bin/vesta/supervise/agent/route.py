@@ -83,6 +83,34 @@ BANDS: Tuple[Tuple[int, str], ...] = (
 #: is a real band rather than a string nothing recognises.
 HELP_STEP: str = "add the owner"
 
+#: What 🆘 writes into `escalated_step`, per counterpart.
+#:
+#: ⚠️ NOT A BAND, AND DELIBERATELY SO (2026-09-06). 🆘 no longer means "jump to
+#: the 45-minute rung": the owner's alert asks the FACILITY MANAGER and the
+#: facility manager's asks the OWNER, so the audience depends on who was told
+#: first and no single rung can name it. The strings are what a person reads on
+#: the card and in the chat, so they say what happened rather than which
+#: position on a ladder it corresponded to.
+#:
+#: ⚠️ THE SWEEP IS UNAFFECTED. Its guard is `escalated_step == verdict.step`,
+#: an exact match against the band it is about to take, so a value that is not
+#: a band suppresses nothing — which is right: asking a person for help is not
+#: an acknowledgement and must not stop the chase.
+HELP_STEPS: Dict[str, str] = {
+    "owner": "asked the owner for help",
+    "ops": "asked the facility manager for help",
+}
+
+
+def help_counterpart(audience: str) -> str:
+    """Who 🆘 asks, given who was told first.
+
+    ⚠️ THE OTHER CHANNEL, WHICH IS THE WHOLE POINT OF THE BUTTON. Asking the
+    people who already have the message is a louder copy of something already
+    seen; the value of 🆘 is that it reaches somebody who has NOT seen it.
+    """
+    return "owner" if str(audience) == "facility" else "ops"
+
 #: How often the escalation sweep re-evaluates.
 #:
 #: ⚠️ DERIVED FROM THE FIRST BAND, NOT DECLARED (2026-08-28, owner: "make the
@@ -327,6 +355,13 @@ class Escalation:
     act: bool
     step: str
     reason: str
+    #: ⚠️ WHO TO TELL, WHEN THE STEP ALONE DOES NOT SAY (2026-09-06). The
+    #: automatic ladder leaves this empty and `_escalate_one` derives the role
+    #: from the band, exactly as before. 🆘 sets it, because "ask for help"
+    #: means the OTHER channel — the owner asks the facility manager and the
+    #: facility manager asks the owner — and that is a fact about who was told
+    #: FIRST, which a band name cannot carry.
+    to_role: str = ""
 
 
 def escalate(*, minutes_open: float, acknowledged: bool,

@@ -26,6 +26,8 @@ from typing import Dict, List, Tuple
 
 import pytest
 
+from conftest import strip_prose
+
 from vesta.shared.contracts import CONTRACT_SETS, CONTRACT_VERSION
 from vesta.supervise.agent.contracts import CONTRACT_SETS as AGENT_SETS
 from vesta.supervise.agent.contracts import CONTRACT_VERSION as AGENT_VERSION
@@ -327,7 +329,7 @@ def test_no_module_hand_writes_a_severity_ORDER_map() -> None:
                 continue
             with open(os.path.join(root, name), encoding="utf-8") as handle:
                 source = handle.read()
-            body = re.sub(r"#[^\n]*", "", source)
+            body = strip_prose(source)
             if re.search(r'"critical"\s*:\s*0', body):
                 offenders.append(name)
     # ⚠️ `SRC` DOES NOT EXIST IN THIS MODULE — its path constant is

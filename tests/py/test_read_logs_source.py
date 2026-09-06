@@ -28,6 +28,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import redact
 from vesta.supervise.agent import refs as refs_mod
 from vesta.supervise.agent import sources
@@ -276,6 +278,6 @@ def test_the_fetch_is_CAPPED_and_keeps_the_TAIL() -> None:
     import re
     from vesta.adapters import hass as hass_mod
 
-    code = re.sub(r"#[^\n]*", "", inspect.getsource(hass_mod.rest_get_text))
+    code = strip_prose(inspect.getsource(hass_mod.rest_get_text))
     assert "MAX_LOG_BYTES" in code, "the read is unbounded"
     assert "[-MAX_LOG_BYTES:]" in code, "the head was kept instead of the tail"

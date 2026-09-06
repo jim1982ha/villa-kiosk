@@ -28,6 +28,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import actions
 from vesta.supervise.agent import concerns
 
@@ -37,7 +39,7 @@ API_PATH = os.path.join(REPO, "rootfs", "usr", "bin", "vesta", "supervise", "api
 
 
 def _code(fn: Any) -> str:
-    return re.sub(r"#[^\n]*", "", inspect.getsource(fn))
+    return strip_prose(inspect.getsource(fn))
 
 
 def _read(path: str) -> str:
@@ -294,8 +296,12 @@ def test_JOB_does_not_rewrite_the_alert_as_non_informational() -> None:
     """⚠️ THE STAMP RECORDS WHAT THE MODE WAS WHEN THE ALERT WAS RAISED.
     Clearing it would relabel history — the trap `Concern.informational`'s own
     comment names — and a person asking for a job is a later decision."""
+    # ⚠️ `split('"""')[2]` USED TO SKIP THE DOCSTRING BY HAND, and `_code` now
+    # removes it — including the quotes it was splitting on, which left one
+    # piece and an IndexError. Hand-skipping prose is exactly the job the
+    # shared stripper took over; the assertion is the same one, said plainly.
     code = _code(actions._job)
-    assert "informational" not in code.split('"""')[2], \
+    assert "informational" not in code, \
         "asking for a job rewrites what the villa's mode was at the time"
 
 

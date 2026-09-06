@@ -77,6 +77,23 @@ const offers = (c: Concern, id: string) =>
  *  cardinal sin; it is tolerated here because it renders a PREDICTION for a
  *  reader rather than making a routing decision, and `test_ui_consistency`
  *  pins the two together. */
+/** What `agent/route.py`'s `HELP_STEPS` writes into `escalated_step` when
+ *  somebody presses 🆘 on the chat message.
+ *
+ *  ⚠️ A MIRROR OF A BACKEND TABLE, TOLERATED FOR THE SAME REASON AS `BANDS`
+ *  BELOW — it renders a sentence for a reader and makes no routing decision —
+ *  and pinned to the source by `test_help_button` so the two cannot drift.
+ *
+ *  ⚠️ 🆘 ASKS THE OTHER CHANNEL (2026-09-06, owner's ruling): an alert sent to
+ *  the owner asks the facility manager, and one sent to the facility manager
+ *  asks the owner. That is why the step names a PERSON rather than a rung —
+ *  which of the two it is depends on who was told first, and no band name can
+ *  carry that. */
+const HELP_STEPS: Record<string, string> = {
+  "asked the owner for help": "the owner",
+  "asked the facility manager for help": "the Facility Manager",
+};
+
 const BANDS: Array<[number, string]> = [
   [15, "re-sent to the same place"],
   [45, "the owner is brought in"],
@@ -104,6 +121,23 @@ const BANDS: Array<[number, string]> = [
  *  own record of what it actually did, and reporting that is always true. The
  *  un-escalated case keeps a prediction because it is the common one, and it
  *  is worded as a condition ("if nobody…") rather than a promise. */
+/** "Help is on the way", for any severity.
+ *
+ *  ⚠️ NOT PART OF `chaseLine`, WHICH ONLY SPEAKS FOR A CRITICAL. Chasing is a
+ *  critical-only ladder, so that function returns null for everything else —
+ *  but 🆘 can be pressed on ANY open alert, and the one surface that must agree
+ *  with the phone is this one. Folding it in there would have hidden the help
+ *  line on exactly the alerts a person is most likely to press it on. */
+function helpLine(c: Concern): string | null {
+  const asked = HELP_STEPS[String(c.escalated_step ?? "").trim()];
+  if (!asked) return null;
+  const when = new Date(c.escalated_at ?? "");
+  const stamp = Number.isNaN(when.getTime()) ? "" : ` at ${when.toLocaleTimeString(
+    undefined, { hour: "2-digit", minute: "2-digit" })}`;
+  return `Help requested${stamp} — ${asked} has been asked. The alert stays `
+    + "open until somebody deals with it.";
+}
+
 function chaseLine(c: Concern): string | null {
   // ⚠️ ONLY A CRITICAL IS EVER CHASED — `route.escalate`'s first line refuses
   // every other severity. Printing a countdown on a warning would promise a
@@ -493,6 +527,16 @@ export default function AgentConcerns() {
                 {chaseLine(c) && (
                   <span className="body-text sev-warning concern-chase">
                     {chaseLine(c)}
+                  </span>
+                )}
+                {/* ⚠️ THE PHONE AND THIS SCREEN MUST SAY THE SAME THING. 🆘 is
+                    pressed in the chat, and the only place the villa records it
+                    is `escalated_step`; without this line an owner who asked
+                    the Facility Manager for help would see no sign of it here,
+                    which is the discrepancy this whole tier exists to prevent. */}
+                {helpLine(c) && (
+                  <span className="body-text sev-warning concern-chase">
+                    {helpLine(c)}
                   </span>
                 )}
                 {/* ⚠️ BOTH DIRECTIONS, AND KEYED ON `useful_at` RATHER THAN ON

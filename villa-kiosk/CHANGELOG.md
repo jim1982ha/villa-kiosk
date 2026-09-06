@@ -1,3 +1,30 @@
+## 2.930.0
+
+### Fixed — 🆘 now asks somebody who has not seen the alert
+Pressing 🆘 always asked the owner, whoever pressed it — so on an alert sent to
+the owner it re-sent to the channel already reading it. It now asks whoever was
+NOT told first: an alert sent to you asks the Facility Manager, and one sent to
+the Facility Manager asks you. The button then withdraws, the message says who
+was asked, and the VESTA app says the same thing on the alert's card.
+
+### Fixed — clearing an alert no longer sounds like silencing it
+✅ and 🚫 said "nobody will chase you about this again", which reads as "this
+kind will not be raised again". It never meant that: only the ⬇️ rating changes
+how readily a kind is raised, and a recurrence always opens a new alert. The
+message now says the alert is cleared and that you will be told again if it
+happens once more.
+
+### Changed — the chat and the tablet now offer the same buttons
+⬆️ and ⬇️ were on the wall tablet but not in the chat, so one surface offered
+four buttons and the other two. They are now drawn in the chat as well, on their
+own row so nothing is cramped, and rating on either surface removes them from
+both.
+
+### Fixed — a press that changed nothing said nothing
+Tapping "Add to the To-Do List" left the message untouched, because the buttons
+it offers are the same before and after — so there was no sign the tap had
+worked. The pressed message now always says what happened.
+
 ## 2.929.0
 
 ### Added — send a test alert, without waiting for a real one

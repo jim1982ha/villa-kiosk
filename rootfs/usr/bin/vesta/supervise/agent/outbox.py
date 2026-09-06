@@ -267,8 +267,13 @@ async def _escalate_one(session: Any, concern: Mapping[str, Any],
     # "add the owner" and "every configured target" both mean people who were
     # not on the first message; resending to the same list would be a louder
     # copy of something already ignored.
-    role = "owner" if verdict.step != "resend to the same target" else (
-        "ops" if str(concern.get("audience")) == "facility" else "owner")
+    # ⚠️ AN EXPLICIT AUDIENCE WINS (2026-09-06). The automatic ladder leaves
+    # `to_role` empty and the band decides, exactly as before. 🆘 sets it,
+    # because "ask for help" means the OTHER channel and no band name can say
+    # which that is — it depends on who was told first.
+    role = verdict.to_role or (
+        "owner" if verdict.step != "resend to the same target" else (
+            "ops" if str(concern.get("audience")) == "facility" else "owner"))
     targets = people_mod.targets_for_role(config, role)
     if verdict.step == "every configured target, once":
         targets = list(dict.fromkeys(

@@ -27,6 +27,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import actions
 from vesta.supervise.agent import buttons
 from vesta.supervise.agent import concerns
@@ -37,7 +39,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 def _code(fn: Any) -> str:
-    return re.sub(r"#[^\n]*", "", inspect.getsource(fn))
+    return strip_prose(inspect.getsource(fn))
 
 
 @pytest.fixture(autouse=True)
@@ -70,19 +72,30 @@ def test_SOMEBODY_ELSE_S_BUTTON_is_ignored_rather_than_misread() -> None:
         assert buttons.decode(foreign) == ("", "")
 
 
-def test_the_KEYBOARD_draws_the_ACTS_and_not_the_RATING() -> None:
-    """⚠️ THE OWNER'S LAYOUT, third revision in one day and chosen from rendered
-    mock-ups (2026-08-28): "✅+🚫 at bottom, and gracefully link inside the
-    message for ⬆️+⬇️", 🆘 beside the pair. One row of acts; the rating is NOT
-    drawn — it lives in the body as the Reason-tab link (`outbox._rating_link`)
-    and on the tablet. The drawn set is therefore a deliberate SUBSET of
-    `available_for`; an old ⬆️/⬇️ button in chat history still decodes and
-    still works, it is only no longer offered on new messages."""
+def test_the_KEYBOARD_draws_the_ACTS_AND_the_RATING_on_two_rows() -> None:
+    """⚠️ THE AUGUST LAYOUT WAS REVERSED BY THE OWNER ON 2026-09-06.
+
+    It read: "✅+🚫 at bottom, and gracefully link inside the message for
+    ⬆️+⬇️", 🆘 beside the pair — one row of acts, the rating reachable only
+    through the Reason-tab link and the tablet. That made the drawn set a
+    deliberate SUBSET of `available_for`, so the chat offered two buttons where
+    the tablet offered four. The owner asked for them here "so it's consistent
+    between what appears on the Wall tablet and Telegram channels".
+
+    ⚠️ THE WIDTH CONCERN BEHIND THE ORIGINAL RULING IS ANSWERED BY THE SECOND
+    ROW, not by dropping it: five buttons abreast is what the rendered mock-ups
+    rejected. Acts first, rating second — which also keeps `ACTS`' rule that a
+    rating "must never be the first thing offered" true by construction.
+    """
     rows = buttons.keyboard_for({"id": "c1", "state": "open"})
     assert [b[1] for b in rows[0]] == ["vd:c1", "vx:c1", "vh:c1"], (
-        f"the keyboard is {[[b[1] for b in r] for r in rows]}; the owner ruled "
-        f"one row of ✅ 🚫 🆘 with the rating moved into the message body")
-    assert len(rows) == 1, "the rating pair is drawn again — it moved to a link"
+        f"the acts row is {[b[1] for b in rows[0]]}; it is ✅ 🚫 🆘 in that "
+        f"order, and a rating must never lead")
+    assert len(rows) == 2, (
+        "the rating pair is not drawn — the chat and the tablet disagree "
+        "about what this alert offers")
+    assert [b[1] for b in rows[1]] == ["vu:c1", "vn:c1"], (
+        f"the rating row is {[b[1] for b in rows[1]]}, not ⬆️ then ⬇️")
     # ⚠️ STILL PRESSABLE, JUST NOT DRAWN — the wire codes must keep decoding,
     # or every rating button already in a chat goes dead.
     assert buttons.decode("vu:c9") == ("useful", "c9")
@@ -189,7 +202,7 @@ def test_DELIVER_stays_the_INTERSECTION_of_every_platform() -> None:
     # opposite of what this repository wants. Comments and docstrings out,
     # then look for a branch.
     source = re.sub(r'"""(?:.|\n)*?"""', "", inspect.getsource(deliver))
-    source = re.sub(r"#[^\n]*", "", source)
+    source = strip_prose(source)
     for word in ("inline_keyboard", "callback", "telegram", "reply_markup"):
         assert word not in source, (
             f"`{word}` reached reports/deliver.py's CODE, which must stay "
@@ -611,10 +624,12 @@ def test_ACTS_ARE_READ_OFF_THE_KEYBOARD_that_was_drawn() -> None:
         keyboard = buttons.keyboard_for(row, {})
         drawn = set(buttons.acts_of(keyboard).split(","))
         offered = set(_acts_now(row).split(","))
-        # ⚠️ THE RATING PAIR IS THE ONE DELIBERATE GAP (2026-08-28): offered on
-        # the tablet and to old buttons, not drawn on new messages — it moved
-        # into the body as the Reason-tab link. Anything ELSE missing is drift.
-        assert drawn == offered - {"useful", "not_useful"}, \
+        # ⚠️ NO GAP AT ALL SINCE 2026-09-06. The rating pair used to be the one
+        # deliberate exception — offered on the tablet, not drawn in chat — and
+        # the owner closed it so the two surfaces cannot disagree. Every act the
+        # store offers is now drawn AND recorded, which is what lets a rating
+        # pressed on either surface withdraw the buttons on the other.
+        assert drawn == offered, \
             f"what a message records and what it draws disagree: {state}"
     assert buttons.acts_of([[["Other", "somebody-elses-button"]]]) == "", \
         "a button this cannot decode was claimed as one of ours"
@@ -697,3 +712,58 @@ def test_the_remembered_messages_are_BOUNDED() -> None:
     assert len(refs) == concerns.MAX_MESSAGE_REFS
     assert refs[-1]["message_id"] == str(concerns.MAX_MESSAGE_REFS + 3), \
         "the bound dropped the NEWEST message rather than the oldest"
+
+
+def test_a_press_that_CHANGES_NO_ACTS_still_says_what_happened() -> None:
+    """⚠️ THE REGRESSION THIS PAYS FOR, FOUND ON THE VILLA (2026-09-06).
+
+    Collapsing `handle`'s duplicated three-way question into `reconcile` moved
+    the receipt behind `reconcile`'s drift check — `if want and ref.acts ==
+    drawn: leave the message alone` — which is right for every OTHER copy of an
+    alert and wrong for the one somebody just tapped.
+
+    `job` on an FYI is the case that exposes it: "Add to the To-Do List" offers
+    `job, dismiss` before the press and `job, dismiss` after it, because nothing
+    withdraws `job`. So the pressed message compared equal, was skipped, and the
+    owner got NO acknowledgement on their phone — reported as the button "not
+    disappearing", which was the visible half of a message that never changed.
+
+    ⚠️ `done` HID IT, WHICH IS WHY IT SHIPPED. The closer settles the concern,
+    so `want` empties and the retire path answers with its own text; every press
+    anyone had tested took a branch where the act set moved.
+
+    ⚠️ IT DRIVES `reconcile` DIRECTLY, NOT A PRESS. Reaching this through
+    `handle` needs `_job` to succeed, which needs a configured to-do list and a
+    live Home Assistant — so a press test would measure the fixture, not the
+    branch. The receipt is `reconcile`'s argument and this is its contract.
+    """
+    row = {"id": "c9", "title": "Drill", "state": "open",
+           "informational": True, "delivered_at": "x"}
+    in_step = _drawn_now(row)
+    concerns._write([{**row, "messages": [
+        # ⚠️ BOTH REFS CARRY THE CURRENT ACT SET, so neither has drifted. The
+        # only thing separating them is that one was pressed.
+        {"entity_id": "notify.x", "message_id": "900", "acts": in_step},
+        {"entity_id": "notify.x", "message_id": "901", "acts": in_step},
+    ]}])
+    seen = _fake_chat()
+    try:
+        asyncio.run(buttons.reconcile(
+            None, config={}, only="c9",
+            receipt=("900", "Added to the To-Do List — Jm", "closing line")))
+    finally:
+        _restore(seen)
+
+    assert not seen["retired"], \
+        "an FYI that is still open had its buttons retired"
+    restated = {m: t for m, _a, t in seen["restated"]}
+    assert "900" in restated, (
+        "the PRESSED message was left untouched, so the reader has no way to "
+        "know the tap did anything — its act set did not change, which is "
+        "exactly when this was skipped")
+    assert "Added to the To-Do List" in restated["900"], (
+        f"the pressed message was rewritten without the receipt: "
+        f"{restated['900']!r}")
+    assert "901" not in restated, (
+        "an untouched copy of the same alert was rewritten too — only the "
+        "pressed message carries a receipt, the rest are left in step")

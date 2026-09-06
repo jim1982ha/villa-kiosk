@@ -19,6 +19,8 @@ REPO_ROOT = os.path.dirname(
 SRC = os.path.join(REPO_ROOT, "src")
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
+from conftest import strip_prose  # noqa: E402
+
 #: Two lines at a settings dialog's width. ⚠️ ONE NUMBER, because "keep it
 #: short" enforced per reviewer is what produced six-line descriptions.
 MAX_NOTE_CHARS = 200
@@ -1310,7 +1312,7 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
     import inspect
     import re as _re
     from vesta.supervise.agent import actions as actions_mod
-    done = _re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._clear))
+    done = strip_prose(inspect.getsource(actions_mod._clear))
     assert "acknowledge(" in done, (
         "closing a job does not record that the concern was seen, so the villa "
         "keeps chasing work that is already done")
@@ -1321,8 +1323,7 @@ def test_ticking_a_TO_DO_ITEM_also_acknowledges_its_concern() -> None:
     # button is dead on every villa with no to-do list configured.
     assert done.index('== "failed"') < done.index("acknowledge("), (
         "the alert is acknowledged before a failed tick is ruled out")
-    assert '"none"' in _re.sub(r"#[^\n]*", "",
-                               inspect.getsource(actions_mod._complete_item)), (
+    assert '"none"' in strip_prose(inspect.getsource(actions_mod._complete_item)), (
         "the tick reports one value for 'nothing to tick' and 'the tick was "
         "refused', which are opposite outcomes")
 
@@ -1468,7 +1469,7 @@ def test_the_JOURNAL_reports_its_OWN_clock() -> None:
         "anything, so any screen asking will reach for the collector again")
     # ⚠️ AND IT IS THE STORE'S FIELD, not a fresh timestamp — a snapshot that
     # stamped "now" would report a healthy journal on a stalled one.
-    src = re.sub(r"#[^\n]*", "", inspect.getsource(heartbeat.snapshot))
+    src = strip_prose(inspect.getsource(heartbeat.snapshot))
     assert 'current.get("last_seen")' in src, (
         "the journal's last-seen is computed rather than read, so it cannot "
         "report a journal that has stopped being written")
@@ -1508,15 +1509,13 @@ def test_an_act_from_the_UI_updates_the_CHAT_MESSAGE_immediately() -> None:
     import re as _re
     from vesta.supervise import api as agent_api
 
-    sync = _re.sub(r"#[^\n]*", "",
-                   inspect.getsource(agent_api._sync_chat_messages))
+    sync = strip_prose(inspect.getsource(agent_api._sync_chat_messages))
     assert "reconcile(" in sync, (
         "_sync_chat_messages no longer reconciles, so the kick is a no-op and "
         "the phone waits for the clock again")
 
     for handler_name in ("agent_action_handler", "agent_feedback_handler"):
-        body = _re.sub(r"#[^\n]*", "",
-                       inspect.getsource(getattr(agent_api, handler_name)))
+        body = strip_prose(inspect.getsource(getattr(agent_api, handler_name)))
         assert "_sync_chat_messages(" in body, (
             f"{handler_name} does not sync the chat after an act, so a press "
             f"on the tablet leaves the phone stale for up to 15 minutes")

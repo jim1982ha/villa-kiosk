@@ -37,6 +37,8 @@ sys.path.insert(0, os.path.join(ROOT, "rootfs", "usr", "bin"))
 
 import pytest  # noqa: E402
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import config as agent_config
 from vesta.supervise.agent import outbox
 from vesta.supervise.agent import task
@@ -376,7 +378,7 @@ def test_THE_TICK_HAS_ONE_OWNER(monkeypatch: Any) -> None:
     # failing on its own first run.
     body = re.sub(r'"""(?:.|\n)*?"""', "",
                   inspect.getsource(actions_mod._complete_item))
-    body = re.sub(r"#[^\n]*", "", body)
+    body = strip_prose(body)
     assert "complete_items" in body, \
         "the Done button ticks jobs through its own copy of the write"
     for grown in ("todo_tasks", "update_item", "HassClient"):

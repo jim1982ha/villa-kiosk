@@ -17,6 +17,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import route
 
 OWNER = ["entity:notify.owner_chat"]
@@ -432,7 +434,7 @@ def test_EVERY_NOTIFICATION_OPENS_WITH_THE_SAME_HEADER() -> None:
             with open(path, encoding="utf-8") as handle:
                 raw = handle.read()
             code = _re.sub(r'"""(?:.|\n)*?"""', "", raw)
-            code = _re.sub(r"#[^\n]*", "", code)
+            code = strip_prose(code)
             rel = _os.path.relpath(path, root)
             sources[rel] = code
             # A module that hands a TITLE and a BODY to something that sends.

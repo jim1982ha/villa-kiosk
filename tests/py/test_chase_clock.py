@@ -24,6 +24,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import route
 from vesta.supervise.agent import scheduler
 
@@ -35,7 +37,7 @@ PROXY = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "supervisor-proxy.py")
 def _code(fn) -> str:
     """Source with comments stripped — four pins in this repo have matched the
     prose recording their own fix."""
-    return re.sub(r"#[^\n]*", "", inspect.getsource(fn))
+    return strip_prose(inspect.getsource(fn))
 
 
 def test_the_sweep_cadence_is_DERIVED_from_the_first_band() -> None:
@@ -48,7 +50,7 @@ def test_the_sweep_cadence_is_DERIVED_from_the_first_band() -> None:
 def test_the_cadence_is_not_a_LITERAL_that_happens_to_match() -> None:
     """A hard-coded 15 would pass the test above and drift the day somebody
     retunes the first band, which is the whole failure being fixed."""
-    src = re.sub(r"#[^\n]*", "", inspect.getsource(route))
+    src = strip_prose(inspect.getsource(route))
     assert "SWEEP_MINUTES: int = BANDS[0][0]" in src, (
         "the sweep cadence is written as a number rather than derived from the "
         "band it must match")
@@ -107,11 +109,11 @@ def test_the_chase_task_is_STARTED_and_CANCELLED_by_the_proxy() -> None:
     # cancels — and each is pinned, because any one missing is either a loop
     # nobody runs or a shutdown that hangs.
     with open(PROXY, encoding="utf-8") as handle:
-        src = re.sub(r"#[^\n]*", "", handle.read())
+        src = strip_prose(handle.read())
     service_path = PROXY.replace("supervisor-proxy.py",
                                  "vesta/supervise/service.py")
     with open(service_path, encoding="utf-8") as handle:
-        service = re.sub(r"#[^\n]*", "", handle.read())
+        service = strip_prose(handle.read())
     assert "chase_forever(" in service, "nothing starts the chase clock"
     assert 'tasks["chase"]' in service
     assert "agent_service.start(" in src, "the proxy never starts the service"
@@ -137,7 +139,7 @@ def test_a_TICKED_JOB_RUNS_THE_SAME_ACT_AS_THE_BUTTON() -> None:
     import re as _re
     from vesta.supervise.agent import task
     assert hasattr(task, "reconcile_done")
-    code = _re.sub(r"#[^\n]*", "", inspect.getsource(task.reconcile_done))
+    code = strip_prose(inspect.getsource(task.reconcile_done))
     assert 'apply(' in code and '"done"' in code, (
         "a ticked job no longer runs the shared act, so Home Assistant's own "
         "panel and the phone's button do different things")
@@ -166,7 +168,7 @@ def test_a_TICKED_JOB_CLOSES_THE_ALERT_EVERYWHERE(tmp_path: Any) -> None:
     import re as _re
     from vesta.supervise.agent import task, concerns as concerns_mod
 
-    code = _re.sub(r"#[^\n]*", "", inspect.getsource(task.reconcile_done))
+    code = strip_prose(inspect.getsource(task.reconcile_done))
     assert "acknowledge(" not in code, (
         "it acknowledges directly again, which is the half-close that left "
         "the phone and the briefing out of step")

@@ -19,6 +19,8 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent.llm import anthropic_sdk
 from vesta.supervise.agent.llm import base
 
@@ -465,7 +467,7 @@ def test_the_SYSTEM_PROMPT_is_cache_marked_so_a_tool_loop_is_not_paid_for_twice(
     import inspect
     import re
 
-    source = re.sub(r"#[^\n]*", "", inspect.getsource(anthropic_sdk))
+    source = strip_prose(inspect.getsource(anthropic_sdk))
     assert re.search(r'"system":\s*_cached\(', source), (
         "the request builds its system block without the cache breakpoint — "
         "`_cached` is correct and unreachable")

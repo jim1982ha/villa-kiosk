@@ -21,6 +21,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import flagtypes
 
 
@@ -363,7 +365,7 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
         src = handle.read()
     body = src.split("async def agent_feedback_handler")[1].split(
         "\nasync def ")[0]
-    code = re.sub(r"#[^\n]*", "", body)
+    code = strip_prose(body)
     # ⚠️ TWO HALVES SINCE 2026-08-28, BECAUSE THE ACT MOVED AND A PIN THAT
     # FOLLOWED IT BLINDLY WOULD MEASURE LESS THAN IT DID. The handler used to
     # assemble verdict + kind + acknowledgement itself; `agent/actions.py` now
@@ -376,7 +378,7 @@ def test_a_THUMB_actually_teaches_the_kind() -> None:
         "defined, so the tablet and the phone can drift apart")
     import inspect
     from vesta.supervise.agent import actions as actions_mod
-    judge = re.sub(r"#[^\n]*", "", inspect.getsource(actions_mod._judge))
+    judge = strip_prose(inspect.getsource(actions_mod._judge))
     assert "flagtypes_mod.record(" in judge, (
         "pressing a thumb records a verdict and teaches nothing — the button's "
         "own tooltip promises otherwise")
@@ -416,7 +418,7 @@ def test_the_kind_is_STAMPED_when_the_concern_is_raised() -> None:
     import re
     from vesta.supervise.agent.tools import concern as concern_mod
 
-    code = re.sub(r"#[^\n]*", "", inspect.getsource(concern_mod.RaiseConcern.run))
+    code = strip_prose(inspect.getsource(concern_mod.RaiseConcern.run))
     assert "flag_type=" in code, "the kind is not stamped at raise time"
 
 
@@ -428,7 +430,7 @@ def test_the_weights_reach_the_document_every_check_reads() -> None:
     import re
     from vesta.supervise.agent import sources
 
-    code = re.sub(r"#[^\n]*", "", inspect.getsource(sources.build_document))
+    code = strip_prose(inspect.getsource(sources.build_document))
     assert "scored = flagtypes_mod.apply_weights" in code, (
         "taught preferences reach no check — or their result is computed and "
         "thrown away, which a bare `apply_weights in code` cannot tell apart")

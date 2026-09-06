@@ -34,6 +34,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import digest
 from vesta.supervise.agent import task
 
@@ -42,7 +44,7 @@ REPO_ROOT = os.path.dirname(
 
 
 def _code(fn: Any) -> str:
-    return re.sub(r"#[^\n]*", "", inspect.getsource(fn))
+    return strip_prose(inspect.getsource(fn))
 
 
 # ── nothing announces itself any more ───────────────────────────────────────
@@ -63,7 +65,7 @@ def test_the_EVENT_TYPE_constant_is_GONE_not_merely_unused() -> None:
     assert not hasattr(task, "EVENT_TYPE")
     src = open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent",
                             "task.py"), encoding="utf-8").read()
-    body = re.sub(r"#[^\n]*", "", src)
+    body = strip_prose(src)
     assert "vesta_task_event" not in body.split('"""', 2)[-1], (
         "the retired event name is still live code rather than only history")
 
@@ -204,7 +206,7 @@ def test_it_rides_the_EXISTING_clock_rather_than_a_fifth_loop() -> None:
     # session-token signing — an unanchored substring over a 3,700-line file,
     # which is this repo's most repeated test defect and was caught on the
     # first run.
-    body = re.sub(r"#[^\n]*", "", proxy)
+    body = strip_prose(proxy)
     started = re.findall(r'create_task\(\s*([\w.]+)', body)
     assert not any("digest" in name for name in started), (
         f"the digest has a background task of its own ({started}); it should "

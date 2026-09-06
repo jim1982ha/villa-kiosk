@@ -18,6 +18,8 @@ REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
+from conftest import strip_prose
+
 from vesta.adapters import links
 
 ENTRY = "/api/hassio_ingress/AbC123token"
@@ -232,7 +234,7 @@ def test_EVERY_notification_uses_the_SAME_link_shape() -> None:
 
     import inspect
     import re as _re
-    body = _re.sub(r"#[^\n]*", "", inspect.getsource(links.footer))
+    body = strip_prose(inspect.getsource(links.footer))
     assert "line(" in body and "kiosk_url(" not in body, (
         "footer builds its own line again, so the two shapes can drift apart")
 

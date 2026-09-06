@@ -279,6 +279,15 @@ def _help_is_spent(concern: Mapping[str, Any]) -> bool:
     step = str(concern.get("escalated_step") or "").strip()
     if not step:
         return False
+    # ⚠️ HELP ALREADY ASKED IS THE FIRST ANSWER (2026-09-06). 🆘 now writes what
+    # it did — "asked the facility manager for help" — rather than the name of a
+    # rung, so the ladder-position test below cannot see it: the string is not a
+    # band. Without this the button would redraw on a message whose counterpart
+    # has already been called, and pressing it again would call them twice.
+    if step in set(route_mod.HELP_STEPS.values()):
+        return True
+    # ⚠️ AND SO IS "EVERYBODY HAS BEEN TOLD". `route.BANDS` is ordered, so the
+    # last rung — every configured target, once — leaves 🆘 nobody left to ask.
     order = [name for _, name in route_mod.BANDS]
     if step not in order or route_mod.HELP_STEP not in order:
         return False
@@ -461,15 +470,23 @@ async def _help(session: Any, row: Mapping[str, Any], *, by: str,
     from vesta.supervise.agent import outbox as outbox_mod
     from vesta.supervise.agent import route as route_mod
 
-    # ⚠️ `route.HELP_STEP`, NOT A LITERAL — `available_for` decides whether to
-    # draw 🆘 by asking whether the ladder has reached this same rung, and two
-    # spellings would put the button and the act it triggers out of step.
-    verdict = route_mod.Escalation(act=True, step=route_mod.HELP_STEP,
-                                   reason=f"{by} asked for help")
+    # ⚠️ THE OTHER CHANNEL, NOT THE OWNER (2026-09-06, owner's ruling). 🆘 used
+    # to jump to the "add the owner" rung whoever pressed it — so an owner's own
+    # alert asked the owner, which is a louder copy of a message they are
+    # already reading. It now asks whoever was NOT told first: the owner's alert
+    # asks the facility manager, and the facility manager's asks the owner.
+    to_role = route_mod.help_counterpart(row.get("audience") or "owner")
+    verdict = route_mod.Escalation(
+        act=True, step=route_mod.HELP_STEPS[to_role],
+        reason=f"{by} asked for help", to_role=to_role)
     sent = await outbox_mod._escalate_one(session, row, verdict,
                                           config=config, now=now)
-    return Outcome(True, "The owner has been told") if sent else \
-        Outcome(False, "there is nobody else configured to tell")
+    # ⚠️ THE RECEIPT NAMES WHO WAS ASKED, because "help is on the way" is only
+    # useful if the reader knows who is coming — and because the same sentence
+    # is what the pressed message is rewritten with.
+    who_now = "the facility manager" if to_role == "ops" else "the owner"
+    return Outcome(True, f"Help requested — {who_now} has been asked") if sent \
+        else Outcome(False, f"there is no {who_now} configured to ask")
 
 
 async def _clear(session: Any, row: Mapping[str, Any], *, state: str, by: str,
@@ -523,11 +540,24 @@ async def _clear(session: Any, row: Mapping[str, Any], *, state: str, by: str,
                                       now=now)
     if not ok:
         return Outcome(False, why)
+    # ⚠️ IT SAYS THE ALERT IS CLEARED, NOT THAT THE SUBJECT IS SILENCED
+    # (2026-09-06, reported by the owner reading it on their phone). This said
+    # "nobody will chase you about this again", which is TRUE of this alert's
+    # escalation ladder and reads as "this kind will not be raised again" — the
+    # owner asked whether dismissing had just switched off a whole category of
+    # alerting. It had not, and cannot: `suppressed_subjects` counts RATINGS and
+    # never a lifecycle act, so 🚫 leaves the villa exactly as ready to raise
+    # this again as it was. A settled concern is not live either, which is what
+    # lets a recurrence open a NEW one rather than being swallowed as a
+    # duplicate. Saying which of the two happened costs one clause and is the
+    # difference between clearing your list and muting your villa.
     lead = "Marked done" if state == "closed" else "Dismissed"
-    tail = ("the job is ticked off and nobody will chase you about this again"
-            if ticked == "ticked"
-            else "nobody will chase you about this again")
-    return Outcome(True, f"{lead} — {tail}")
+    tail = ("the job is ticked off and this alert is cleared"
+            if ticked == "ticked" else "this alert is cleared")
+    return Outcome(
+        True,
+        f"{lead} — {tail}. If it happens again you will be told again; "
+        f"use \u2b07\ufe0f in VESTA to be told about this kind less often")
 
 
 async def _done(session: Any, row: Mapping[str, Any], **kw: Any) -> Outcome:

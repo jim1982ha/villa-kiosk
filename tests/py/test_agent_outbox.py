@@ -22,6 +22,8 @@ REPO_ROOT = os.path.dirname(
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import concerns
 from vesta.supervise.agent import outbox
 from vesta.supervise.agent import route
@@ -746,8 +748,8 @@ def test_the_RATING_LINK_is_appended_after_plan_in_BOTH_dialects(
     # ESCALATION. It was written twice before that, and the copies disagreed —
     # so these properties are now asserted once, on the one function, and hold
     # for both paths instead of for whichever one a test happened to read.
-    body = _re.sub(r"#[^\n]*", "", inspect.getsource(outbox_mod._send_alert))
-    caller = _re.sub(r"#[^\n]*", "", inspect.getsource(outbox_mod._deliver_one))
+    body = strip_prose(inspect.getsource(outbox_mod._send_alert))
+    caller = strip_prose(inspect.getsource(outbox_mod._deliver_one))
 
     assert "_rating_link(" in body, (
         "the delivery path no longer appends the rating link, so the phone "
@@ -789,8 +791,7 @@ def test_the_RATING_LINK_is_appended_after_plan_in_BOTH_dialects(
     assert "plain_body" in body, (
         "the plain fallback no longer sends the plain body")
 
-    helper = _re.sub(r"#[^\n]*", "",
-                     inspect.getsource(outbox_mod._rating_link))
+    helper = strip_prose(inspect.getsource(outbox_mod._rating_link))
     for shape in ("links_mod.line(", "links_mod.html_line("):
         assert shape in helper, (
             f"{shape} is missing: the line is built by hand instead of by "

@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
 import pytest  # noqa: E402
 
+from conftest import strip_prose
+
 from vesta.supervise.agent import proposals
 
 KEY = "a1b2c3"
@@ -71,7 +73,7 @@ def test_act_records_a_proposal_and_never_executes_one() -> None:
     act = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "agent", "tools",
                        "act.py")
     with open(act, encoding="utf-8") as handle:
-        source = re.sub(r"#[^\n]*", "", handle.read())
+        source = strip_prose(handle.read())
     assert "proposals_mod.propose(" in source, (
         "act_service no longer records its proposal, so a high-harm request "
         "has nowhere for a person to answer it")
