@@ -1,3 +1,27 @@
+## 2.964.0
+
+### Changed — three rules the villa depends on can now be tested
+How far the camera pulls back to frame a room, when overlapping room labels
+merge into one, and whether two fingers on the glass mean tilt or zoom: all
+three were arithmetic buried inside code that only runs on a tablet with a
+working 3D view, so nothing could check them. The room framing alone had been
+got wrong in four separate releases, each found only by someone looking at the
+screen and saying it was too far out. All three now run as tests on every
+change, including the specific cases each of those releases got wrong.
+
+### Fixed — merged room labels could settle differently depending on the order
+When two room labels overlap they merge, worst overlap first — and where two
+pairs overlapped by exactly the same amount, which pair went first depended on
+the order the rooms happened to be listed in. The same villa could therefore
+draw its labels two ways. The tie is now settled by where the labels are on the
+screen, so the answer is the same every time.
+
+### Changed — the standing eye height had eleven definitions
+The height your eyes are at in walk mode is a setting with one default, and ten
+places in the code each restated that default separately — including the check
+that decides whether you can stand somewhere. Changing it would have moved one
+of eleven and looked like it had moved them all. There is one now.
+
 ## 2.963.0
 
 ### Fixed — pressing a button on an alert could garble the message
