@@ -1,3 +1,284 @@
+## 2.961.0
+
+### Fixed — the release notes in Home Assistant were three weeks out of date
+Pressing Update showed notes for 2.939.0 while installing 2.960.0, so twenty-one
+releases' worth of changes — including the Energy tile's thousand-fold
+under-reporting and the help button that was failing on every press — were never
+described to anyone. All twenty-one are written up above. Every release bumps
+the version in two places and both were checked automatically; the notes a
+person actually reads were not, which is why this went unnoticed for so long.
+That third check now exists, so a release cannot ship without its notes again.
+
+## 2.960.0
+
+### Fixed — the "ask for help" button was failing every time it was pressed
+🆘 on an alert did nothing at all: the request failed the moment it was made, so
+nobody was ever asked. It works again, and there is now a check that presses the
+button for real rather than reading the code around it, which is how this got
+through in the first place.
+
+### Fixed — the check on the app's security headers had been switched off
+The page the tablet loads is meant to carry five protective headers. A check
+added in the previous version accidentally excluded that one page from its own
+inspection, so the headers could have been removed without anything noticing.
+The exclusion is gone, and a new check refuses any future exclusion that is not
+actually needed.
+
+### Changed — a warning that points at a file now points at one that exists
+Several notes in the code named companion files by their old locations, so
+anyone following them arrived nowhere. The rule that was supposed to catch this
+only looked in four folders; it now looks everywhere the repository keeps code,
+which found six wrong references rather than the two already known.
+
+## 2.959.0
+
+### Fixed — a milliwatt reading was shown as if it were a megawatt
+A sensor reporting 500 mW appeared on the wall tablet as "500000 kW". Units were
+being compared without regard for capital letters, and in this system that is
+the whole difference between milli and mega. Units are now matched exactly as
+Home Assistant writes them, and a unit the app cannot confidently convert is
+left out of a total rather than added to it in the wrong scale.
+
+### Changed — the checks on who may read what now cover every page
+The check on owner-only pages tested three of the eight that exist, picked by
+name. It now drives all of them, including the one that starts a paid pass, so a
+page that loses its restriction is reported rather than assumed safe.
+
+## 2.958.0
+
+### Changed — every one of the assistant's endpoints is now actually exercised
+The nineteen endpoints behind the assistant were only ever checked by searching
+their code for words. They are now each called for real, with an unauthenticated
+visitor and with a Facility Manager session, so a missing restriction shows up
+as a failure instead of reading as fine.
+
+### Fixed — a web address that could only ever return "not found"
+The server still published an address for a store that was removed months ago.
+It has been deleted, along with the last page that was missing its protective
+headers — the villa's floor plan, which had none of them.
+
+## 2.957.0
+
+### Fixed — the villa's own checks could not run on a fresh copy of the project
+Nine of the project's own checks pointed at files that are not kept in the
+repository, so they failed for anyone but the machine they were written on. They
+have been moved somewhere permanent and now run automatically on every change.
+
+### Fixed — one Home Assistant outage no longer looks like three empty answers
+When the statistics service was briefly unavailable, that single failure was
+remembered and handed to the next three parts of the briefing as though they had
+asked and genuinely found nothing. A failure is no longer remembered as an
+answer, so the next request tries again.
+
+## 2.956.0
+
+### Fixed — the Energy tile was under-reporting by a factor of a thousand
+Meters reporting in kilowatts were added to a total labelled watts, so a mains
+meter reporting 3.2 kW contributed 3.2 — the villa's largest single draw, all
+but invisible on the tile that is glanced at most. Readings are now converted
+before they are added, and a unit the app cannot scale is left out.
+
+### Fixed — a job could be created for an alert nobody was told about
+The order of "send the message" and "record the job" could be swapped without
+anything noticing, which would leave a job on the list with no message to
+explain it. The order is now something the code returns and a test reads, rather
+than something a search of the text could be fooled about.
+
+## 2.955.0
+
+### Changed — one answer to "how many rows before a page break"
+Two different paging tools sat side by side, exporting the same names with
+different behaviour, so two nearly identical imports gave two different results.
+The arithmetic behind both now lives in one place, including the rule that
+resets you to the first page when a list shrinks under you. The two control
+strips remain — the look was a real choice, the arithmetic was drift.
+
+### Changed — the wall tablet's bottom strip can now be tested
+The strip that tells you whether the doors are locked, how warm the house is and
+what it is drawing had never been checked by anything. Its rules now run in
+tests: an unavailable lock reads Unknown rather than Unlocked — a plain lie
+about a door — a gym relay is not treated as pool equipment, and a room with
+only a setpoint prints no temperature.
+
+### Fixed — an exported spreadsheet could open as one long row
+One of the two places that export a CSV joined its lines the way older versions
+of Excel on Windows do not expect, which is precisely the reader who asked for a
+file instead of a screen. Both now write the same, correct format.
+
+## 2.954.0
+
+### Changed — a briefing stopped reading history to produce nothing
+Every briefing read the whole reports history to build two lists, one of which
+was a column of zeros and neither of which was ever shown. The reading and the
+unused fields are gone. The trend itself can be brought back as a deliberate
+choice; what was removed is the machinery that made it look connected.
+
+### Changed — the same 56-day query is no longer asked twice per briefing
+Two parts of the briefing ask an identical question about the villa's baseline.
+The answer is now shared within a single pass, and deliberately forgotten at the
+end of it, so a later briefing can never be served a stale window.
+
+## 2.953.0
+
+### Fixed — briefings used your devices' real names, and could pass them on
+The names your villa gives its devices were being fetched and then thrown away,
+so the briefing invented a name from the device's internal id instead. A villa
+that names a device after a person had that name travel outward. The real names
+are now used, which is also what keeps the invented ones from leaving.
+
+### Fixed — a briefing could open with a critical alert and be titled "all clear"
+The title was worked out from a narrower set of facts than the body it sits over,
+so a briefing listing unresolved alerts could still be titled with a tick. The
+title now considers everything the body does. This had been fixed once before and
+came back when a layer was retired.
+
+### Fixed — a preview could show the previous pass's diagnostics
+The note explaining "the threshold suppressed everything" was kept on a
+long-lived object and cleared only when a part actually ran, so a part that was
+skipped served up the last pass's reasons. Each pass now keeps its own.
+
+## 2.952.0
+
+### Fixed — the tablet said dismissing an alert had silenced its subject
+The alert page counted dismissals and told you, in warning colour, that a
+subject was no longer being raised. Dismissing does not do that; three
+thumbs-down ratings do. So the page announced a silencing that had not happened,
+and stayed quiet when the villa really had gone quiet. Both halves are corrected.
+
+### Fixed — the briefing and the wall counted an automation's firings differently
+A rule that opens and later times out is one thing that happened, reported
+twice. The briefing counted it once; the wall counted both rows. The same window
+therefore read "1 time" in one place and "2 times" in the other, under a heading
+promising the same query. They now agree.
+
+## 2.951.0
+
+### Fixed — renaming a chase step silently changed who it alerts
+The steps of the chase ladder were identified by their wording, and the code
+that decides who to contact matched that wording. Renaming a step would have
+sent the first chase to the owner instead of back to whoever was already told —
+a louder copy of a message already ignored, which is the thing the ladder exists
+to avoid. Each step now carries who it reaches.
+
+### Changed — four background surveys share one clock
+The surveys that keep the villa's layout, capabilities and measurements current
+each restated the same "is this answer still fresh" rule, and three of them read
+a limit named after only one. They now share it. One of the four had no coverage
+at all — the one whose failure quietly re-tunes your ratings.
+
+## 2.950.0
+
+### Fixed — ranking the villa re-read the whole journal once per device
+Ranking forty devices read the journal forty-three times, each read scoring
+every entity in it to look up three fields about one. The cost only appeared
+after you pressed your first rating, which is why it went unseen. It is now one
+reading regardless of how many devices the villa has.
+
+### Fixed — a chase step's direction was worked out from a different reading
+Two parts of the same ranking consulted separately-timed scorings of the same
+journal, which the code's own instructions forbade. They now share one.
+
+## 2.949.0
+
+### Changed — the Handover page's reading of a pass can now be tested
+The part that decides whether a quiet pass means "nothing to report" or "could
+not run" had never been executed by a test, only searched for words. Getting it
+wrong renders as a villa whose supervision had failed. It now runs for real, in
+both directions.
+
+### Fixed — the same finger was a tap in one place and a drag in another
+The camera view used its own idea of how far a finger may move and how long it
+may rest before a touch stops counting as a tap, differing from the rest of the
+app by 2 pixels and a tenth of a second. There is now one answer.
+
+## 2.948.0
+
+### Changed — the front-end checks run against real modules for the first time
+The harness that lets the project's own checks load app code was built, kept and
+pointed at a check that asserts nothing. It now runs 92 modules' worth of real
+code, and several rules that had only ever been described in prose are executed:
+a two-part sensor counts as one device, the badge colour table matches the 3D
+icon table, and the app genuinely ships no seeded device list.
+
+## 2.947.0
+
+### Fixed — forty-three notes in the code pointed at a document nobody has
+Comments throughout the code told a reader to see a file that is deliberately
+not published, so on any fresh copy of the project the trail went cold. Each of
+those notes already stated its fact; the pointer in front of it has been removed,
+and a check now refuses new ones.
+
+## 2.946.0
+
+### Changed — the badge placement checker runs automatically
+Three hundred lines of checks on how badges are arranged around the villa had
+only ever run on a device held by a person with a debug flag on — guarding the
+part of this app that has been rewritten six times. They now run on every change.
+
+## 2.945.0
+
+### Changed — badge sizing is now covered by tests
+The arithmetic deciding how large a badge is on the glass, and how many fit,
+could not be tested where it lived. It now can, and three rules that were each a
+past bug are covered: a badge reserves room for a label it may not currently be
+showing, a pair always stays a full-size card, and "phone" is judged by the
+screen's own width rather than the resolution it happens to be rendering at.
+
+## 2.944.0
+
+### Changed — the resolution control is now something that can be run
+The control that quietly decides each tablet's rendering resolution had six
+written rules and no way to check any of them, and two had already shipped
+broken — including one that left a field iPad at 13 frames per second
+indefinitely. The rules now run as tests, and the three things that must happen
+together when resolution changes happen from one place, so none can be forgotten.
+
+## 2.943.0
+
+### Changed — two parts of the system stopped naming the host's own files
+Six functions each demanded the same two facts about where the add-on is
+installed, and their callers disagreed about how to look them up — one read a
+setting twice on adjacent lines, another read it inline with no explanation.
+Each fact now has one owner, which also means an assistant setting can no longer
+be frozen at start-up by accident.
+
+## 2.942.0
+
+### Fixed — pointing the add-on at a different data directory moved six stores of thirty-one
+The function that promises to relocate every stored document moved six, leaving
+twenty-five — the alerts, the audit trail, the budget, the journal, the learned
+procedures and the credentials file — still writing to the original location.
+The promise is now true. Nothing called that function at all, which is why it
+was never noticed.
+
+### Changed — four stored documents had two names each
+Four files were named once by the part that writes them and again by the part
+that reads them, so a rename in one place would have quietly split them in two.
+Each is now named once.
+
+## 2.941.0
+
+### Changed — one place decides what a settings change costs
+Ten separate rules across two screens decided whether an edit needs a full
+rebuild of the 3D view or just a repaint, and a third description of those rules
+sat in a third file — already out of date, in the direction that makes a reader
+relax. They are now one set of rules with one description.
+
+## 2.940.0
+
+### Fixed — a badge and the panel beside it disagreed about the same reading
+The same 6570.989 W reading printed "6.6 kW" on the badge and "6570.989 W" in
+the panel next to it, and two places prettified an absent value differently.
+There is now one rule for writing a reading; the badge's own habits — hiding a
+"Connected" label, trimming a long value — remain preferences of the badge
+rather than a second answer.
+
+### Fixed — a stored file could survive a power cut half-written
+Writing a document to disk promised to flush it before swapping it into place
+and did not. The rename can reach the disk while the contents are still in
+memory, and the tablet comes back to a file full of zeros. It now flushes, as
+it always said it did.
+
 ## 2.939.0
 
 ### Added — a glossary, so one word stops meaning two things
