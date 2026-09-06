@@ -421,6 +421,64 @@ def _redundant(domain: str, fields: Dict[str, Any],
     return "entity_id" in fields
 
 
+def _parse_mode_options(fields: Dict[str, Any]) -> List[str]:
+    """Every `parse_mode` value this service declares, as written.
+
+    ⚠️ ONE TRAVERSAL, BECAUSE THERE WERE TWO AND THEY DIVERGED. `_html_mode` and
+    `_plain_mode` ask different questions — "is html offered", "is a no-parsing
+    option offered" — of the SAME selector, and each walked it its own way:
+
+        select is a string   _html_mode !! AttributeError   _plain_mode ""
+        select is a list     _html_mode !! AttributeError   _plain_mode ""
+        options is a dict    _html_mode "html"              _plain_mode ""
+
+    A different question is not a licence to read the schema differently.
+
+    ⚠️ AND THE CRASH WAS NOT LOCAL. The only handler around `_notify_targets`
+    catches `HassUnavailable`, so one malformed service schema anywhere in the
+    villa took the whole discovery snapshot with it — and a service's schema is
+    whatever an integration declared, not something this add-on controls.
+
+    ⚠️ IT MATTERS WHICH WAY THEY DISAGREE. `deliver._payload_for` ranks them,
+    `if html_mode and html_message: … elif plain_mode:`, so `_html_mode` wins —
+    and a schema the two read differently decides whether the villa's own device
+    names reach a markup parser. That is the failure `_plain_mode` exists for:
+    the owner's delivered brief read `criticalschedule---poolpump`.
+    """
+    field = fields.get("parse_mode")
+    if not isinstance(field, dict):
+        return []
+    selector = field.get("selector")
+    if not isinstance(selector, dict):
+        return []
+    # ⚠️ THE LOCAL IS NOT NAMED AFTER THE KEY. A local of that name, followed
+    # by a method call, reads as `domain.object_id` to `test_hard_rules`'s
+    # entity-id scan — and that gate is right to be blunt. A name is cheaper to
+    # change than an allow-list entry naming a Python method call, which would
+    # be the first of many.
+    #
+    # ⚠️ AND THE FIRST VERSION OF THIS COMMENT SPELLED THE OFFENDING TOKEN OUT
+    # WHILE EXPLAINING IT, so the gate caught it a second time. Third instance
+    # this session of writing the very thing a comment says must not appear.
+    chooser = selector.get("select")
+    if not isinstance(chooser, dict):
+        return []
+    options = chooser.get("options")
+    if not isinstance(options, list):
+        return []
+    named: List[str] = []
+    for option in options:
+        # A service may write its options as bare strings or as
+        # `{"value": …, "label": …}` objects; anything else names nothing.
+        if isinstance(option, str):
+            named.append(option)
+        elif isinstance(option, dict):
+            value = option.get("value")
+            if isinstance(value, str):
+                named.append(value)
+    return named
+
+
 def _html_mode(fields: Dict[str, Any]) -> str:
     """The option that tells this service to parse the message as HTML, or "".
 
@@ -433,16 +491,9 @@ def _html_mode(fields: Dict[str, Any]) -> str:
     return "" when the option is not offered — and "" leaves the caller on the
     plain path exactly as before.
     """
-    field = fields.get("parse_mode")
-    if not isinstance(field, dict):
-        return ""
-    selector = field.get("selector") or {}
-    options = ((selector.get("select") or {}).get("options")
-               if isinstance(selector, dict) else None) or []
-    for option in options:
-        value = option.get("value") if isinstance(option, dict) else option
-        if str(value).lower() == "html":
-            return str(value)
+    for value in _parse_mode_options(fields):
+        if value.lower() == "html":
+            return value
     return ""
 
 
@@ -470,22 +521,10 @@ def _plain_mode(fields: Dict[str, Any]) -> str:
     they escape and how — which is the platform table this file exists to avoid.
     Telling the service not to parse is one field and no dialect knowledge.
     """
-    field = fields.get("parse_mode")
-    if not isinstance(field, dict):
-        return ""
-    selector = field.get("selector")
-    options: Any = []
-    if isinstance(selector, dict) and isinstance(selector.get("select"), dict):
-        options = selector["select"].get("options") or []
-    if not isinstance(options, list):
-        return ""
-    for option in options:
-        name = option if isinstance(option, str) else ""
-        if isinstance(option, dict):
-            name = str(option.get("value") or "")
+    for name in _parse_mode_options(fields):
         # "plain_text", "plain", "none", "text" — whichever this service calls
         # its no-parsing option. Matched on the CONCEPT, not on a known list.
-        if name and ("plain" in name.lower() or name.lower() in ("none", "text")):
+        if "plain" in name.lower() or name.lower() in ("none", "text"):
             return name
     return ""
 

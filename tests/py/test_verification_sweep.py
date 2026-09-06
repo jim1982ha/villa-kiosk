@@ -404,16 +404,42 @@ def test_the_sweep_is_reached_from_the_villa_s_own_clock() -> None:
         "exactly the state `verify` was in for its whole existence")
 
 
-def test_the_sweep_runs_BEFORE_delivery_so_a_recurrence_can_be_carried() -> None:
-    """A concern the sweep returns to `open` must be visible to the delivery
-    sweep in the SAME pass, or it waits six hours for the next clock."""
-    import inspect
-    import re
-    from vesta.supervise.agent import scheduler
+def test_the_sweep_can_never_RESURRECT_a_settled_concern(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """⚠️ THIS ASSERTED A SOURCE-INDEX ORDERING FOR A REASON THAT NO LONGER
+    EXISTS, and the docstring carried the dead reason: "A concern the sweep
+    returns to `open` must be visible to the delivery sweep in the SAME pass."
 
-    code = strip_prose(inspect.getsource(scheduler.dispatch))
-    assert code.index("verification_sweep") < code.index("outbox_mod.sweep"), (
-        "verification must run before the delivery sweep, not after it")
+    `verify` stopped returning anything to `open` on 2026-08-28 — it writes
+    `closed` on a recurrence and `verified` otherwise, and both are in
+    `SETTLED`. So the ordering the old test pinned is free, and comparing two
+    `str.index()` offsets is true of any file where one string precedes
+    another: it could not have noticed the behaviour it named being removed.
+
+    What actually has to hold is the property that MAKES it free — the sweep
+    moves a row between settled states and never out of them. A resurrection
+    would put two open cards on one subject, behind the back of
+    `raise_concern`'s refusal, which is the defect that removed it.
+    """
+    from vesta.supervise.agent import concerns as concerns_mod
+
+    settled_before = set(concerns_mod.SETTLED)
+    second = _row(id="c2", state="open", opened_at=_iso(NOW - 3 * 24 * HOUR),
+                  updated_at=_iso(NOW - 3 * 24 * HOUR))
+    _sweep([_row(), second], monkeypatch, tmp_path)
+
+    for row in concerns_mod.read():
+        if str(row.get("id")) != "c1":
+            continue
+        assert str(row.get("state")) in settled_before, (
+            "the sweep moved a settled concern to %r — a recurrence records, "
+            "it does not resurrect, and an open successor already exists"
+            % row.get("state"))
+    live = [r for r in concerns_mod.read()
+            if str(r.get("state")) not in settled_before]
+    assert len(live) == 1, (
+        "%d open cards for one subject after the sweep — `raise_concern` "
+        "refuses a second one, so this can only happen behind its back" % len(live))
 
 
 # ── what the owner sees on the Reason tab ───────────────────────────────────

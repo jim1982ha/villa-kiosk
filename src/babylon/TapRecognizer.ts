@@ -8,6 +8,9 @@
 // pinch/pan logic but shares this one tap state machine — so the tap thresholds
 // and the ghost-click fix live in exactly one place.
 
+// Aliased: this class has a METHOD of the same name, and a bare call inside
+// it resolves to the import rather than the method — correct, and a trap.
+import { isDoublePress as withinDoublePress } from "@/utils/tapThresholds";
 import { suppressGhostClick } from "@/utils/ghostClick";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 
@@ -19,13 +22,14 @@ export class TapRecognizer {
   // the camera feed had its own pair (12px/400ms) until then.
   private static readonly MOVE_TOL = TAP_MOVE_TOL_PX;
   private static readonly LONG_MS = LONG_PRESS_MS;
-  /** Second press within this window, this close, is a DOUBLE press. Both
-   *  cameras share these — the first-person one has had double-tap-to-walk
-   *  since long before the overview got double-tap-to-zoom, and two cameras
-   *  disagreeing about how fast a double tap is would be felt as one of them
-   *  being broken. 320ms/30px are the values first-person shipped with. */
-  private static readonly DOUBLE_MS = 320;
-  private static readonly DOUBLE_TOL = 30;
+  // ⚠️ THE DOUBLE-PRESS WINDOW MOVED TO `utils/tapThresholds.ts` (2.968.0),
+  // where the single-tap pair already lived. Both cameras shared these two
+  // numbers and the camera FEED did not: `useMediaZoom` had an inline 300ms
+  // and no distance check, so in the 300-320ms band the same finger
+  // double-tapped the villa and merely tapped twice on a feed. The argument
+  // this comment used to make for two cameras — "disagreeing about how fast a
+  // double tap is would be felt as one of them being broken" — is the same
+  // argument for two surfaces.
 
   private candidate = false;
   private startX = 0;
@@ -67,8 +71,8 @@ export class TapRecognizer {
    */
   isDoublePress(x: number, y: number): boolean {
     const now = performance.now();
-    const near = Math.hypot(x - this.lastPressX, y - this.lastPressY) < TapRecognizer.DOUBLE_TOL;
-    if (near && now - this.lastPressAt < TapRecognizer.DOUBLE_MS) {
+    if (withinDoublePress(now - this.lastPressAt,
+                          x - this.lastPressX, y - this.lastPressY)) {
       this.lastPressAt = 0;
       return true;
     }

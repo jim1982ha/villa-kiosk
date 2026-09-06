@@ -6,6 +6,7 @@
 // transform, so it costs nothing until the user actually interacts.
 
 import { wheelOwner } from "@/components/panels/cameraGestures";
+import { isDoublePress as withinDoublePress } from "@/utils/tapThresholds";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clamp } from "@/utils/geometry";
 
@@ -73,6 +74,8 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
     let pinchDist = 0, pinchScale = 1, pinchTx = 0, pinchTy = 0;
     let panning = false, panFromX = 0, panFromY = 0, panTx = 0, panTy = 0;
     let lastTap = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
 
     const onDown = (e: PointerEvent) => {
       el.setPointerCapture?.(e.pointerId);
@@ -84,10 +87,23 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
         pinchTx = live.current.tx; pinchTy = live.current.ty;
         panning = false;
       } else if (pointers.size === 1) {
-        // Double-tap (≤300ms) resets — the touch equivalent of dblclick.
+        // Double-tap resets — the touch equivalent of dblclick.
+        //
+        // ⚠️ THE WINDOW IS THE APP'S, NOT THIS FILE'S (2.968.0). This read
+        // `now - lastTap < 300` with no distance check, against the
+        // recogniser's 320ms/30px — so in the 300-320ms band the same finger
+        // double-tapped the 3D villa and merely tapped twice here, in the pair
+        // of files `tapThresholds.ts` exists to unify. The distance check is
+        // new on this surface: two presses 30px apart are two taps in two
+        // places, wherever the glass is.
         const now = Date.now();
-        if (now - lastTap < 300) { reset(); lastTap = 0; return; }
+        if (withinDoublePress(now - lastTap, e.clientX - lastTapX,
+                              e.clientY - lastTapY)) {
+          reset(); lastTap = 0; return;
+        }
         lastTap = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
         if (live.current.scale > 1) {
           panning = true;
           panFromX = e.clientX; panFromY = e.clientY;

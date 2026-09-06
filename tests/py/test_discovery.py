@@ -208,3 +208,142 @@ def test_the_two_voices_actually_differ() -> None:
     for capability in ALL_CAPABILITIES:
         assert CAPABILITY_ABSENT[capability] != CAPABILITY_MEANING[capability], (
             f"{capability} says the same thing in both voices")
+
+
+# ── the parse_mode schema, read ONCE ────────────────────────────────────────
+
+#: Schemas a service might declare, including the ones no service should.
+#:
+#: ⚠️ THE MALFORMED CASES ARE THE POINT. `_html_mode` and `_plain_mode` read the
+#: SAME `parse_mode` selector and walked it differently — one guarded
+#: `isinstance(options, list)` and the other did not, one required
+#: `selector["select"]` to be a dict and the other called `.get` on whatever
+#: was there. Measured before this test was written:
+#:
+#:   select is a string   _html_mode !! AttributeError   _plain_mode ''
+#:   select is a list     _html_mode !! AttributeError   _plain_mode ''
+#:   options is a dict    _html_mode 'html'              _plain_mode ''
+#:
+#: The crash is not local: the only handler around `_notify_targets` catches
+#: `HassUnavailable`, so one malformed service schema anywhere in the villa
+#: takes the whole discovery snapshot with it.
+PARSE_MODE_SCHEMAS = {
+    "html and plain, as strings":
+        {"select": {"options": ["HTML", "plain_text"]}},
+    "html and plain, as option objects":
+        {"select": {"options": [{"value": "html"}, {"value": "plain"}]}},
+    "neither offered": {"select": {"options": ["markdown"]}},
+    "no options key": {"select": {}},
+    "options is a string": {"select": {"options": "html"}},
+    "options is a dict": {"select": {"options": {"html": 1}}},
+    "options holds a number": {"select": {"options": [1, 2]}},
+    "select is a string": {"select": "html"},
+    "select is a list": {"select": ["html"]},
+    "selector is a string": "html",
+    "selector is a list": ["html"],
+}
+
+
+def _fields(selector):
+    return {"parse_mode": {"selector": selector}}
+
+
+def test_neither_parse_mode_reader_falls_over_on_a_schema_it_dislikes() -> None:
+    """⚠️ A SERVICE'S SCHEMA IS NOT OURS TO TRUST. It is whatever an integration
+    declared, and discovery walks every service the villa has."""
+    from vesta.adapters import discovery as discovery_mod
+
+    for name, selector in PARSE_MODE_SCHEMAS.items():
+        for reader in (discovery_mod._html_mode, discovery_mod._plain_mode):
+            try:
+                out = reader(_fields(selector))
+            except Exception as err:                     # noqa: BLE001
+                raise AssertionError(
+                    "%s raised %s on the %r schema — the only handler around "
+                    "`_notify_targets` catches HassUnavailable, so this takes "
+                    "the whole discovery snapshot with it"
+                    % (reader.__name__, type(err).__name__, name)) from err
+            assert isinstance(out, str), (reader.__name__, name, out)
+
+
+def test_the_two_parse_mode_readers_agree_about_what_the_schema_IS() -> None:
+    """⚠️ ONE SCHEMA, ONE TRAVERSAL. They ask different questions — "is html
+    offered", "is a no-parsing option offered" — of the same selector, and a
+    divergence in how they WALK it is not a difference of question.
+
+    It matters because `deliver._payload_for` ranks them: `if html_mode and
+    html_message: … elif plain_mode:`. So `_html_mode` outranks, and a schema
+    the two read differently decides whether the villa's own device names are
+    handed to a markup parser — which is the exact failure `_plain_mode` was
+    written for: "the owner's delivered brief read `criticalschedule---poolpump`".
+    """
+    from vesta.adapters import discovery as discovery_mod
+
+    for name, selector in PARSE_MODE_SCHEMAS.items():
+        options = discovery_mod._parse_mode_options(_fields(selector))
+        html = discovery_mod._html_mode(_fields(selector))
+        plain = discovery_mod._plain_mode(_fields(selector))
+        # A reader may only answer from an option the shared walk found.
+        for answer, who in ((html, "_html_mode"), (plain, "_plain_mode")):
+            assert answer == "" or answer in options, (
+                "%s returned %r for the %r schema, and the shared walk found "
+                "%r — the two are reading the selector differently"
+                % (who, answer, name, options))
+
+
+def test_the_readers_still_find_what_a_real_service_offers() -> None:
+    """The converse: a walk that refuses everything would pass the two tests
+    above and silently take every delivery back to the plain path."""
+    from vesta.adapters import discovery as discovery_mod
+
+    strings = _fields({"select": {"options": ["HTML", "plain_text", "markdown"]}})
+    assert discovery_mod._html_mode(strings) == "HTML"
+    assert discovery_mod._plain_mode(strings) == "plain_text"
+
+    objects = _fields({"select": {"options": [{"value": "html"},
+                                              {"value": "none"}]}})
+    assert discovery_mod._html_mode(objects) == "html"
+    assert discovery_mod._plain_mode(objects) == "none"
+
+    assert discovery_mod._html_mode(_fields({"select": {"options": ["markdown"]}})) == ""
+    assert discovery_mod._plain_mode(_fields({"select": {"options": ["markdown"]}})) == ""
+
+
+def test_the_shared_walk_reads_a_LIST_of_options_and_nothing_else() -> None:
+    """⚠️ A DICT IS NOT A LIST OF OPTIONS, and iterating one yields its KEYS.
+
+    The old `_html_mode` had no `isinstance(options, list)` guard, so a service
+    declaring `options: {"html": 1}` — a mapping, not a list — had its key read
+    as an offered value and got HTML enabled. `_html_mode` outranks
+    `_plain_mode` in `deliver._payload_for`, so that is the direction that
+    hands the villa's device names to a markup parser.
+
+    ⚠️ SHARING THE WALK DOES NOT COVER THIS. Both readers agree either way,
+    because they agree BY CONSTRUCTION now — dropping the guard leaves them
+    consistent and both wrong, which the agreement test cannot see. Measured:
+    that mutation survived until this assertion existed.
+    """
+    from vesta.adapters import discovery as discovery_mod
+
+    for shape in ({"html": 1}, "html", 7, None):
+        assert discovery_mod._parse_mode_options(
+            _fields({"select": {"options": shape}})) == [], shape
+        assert discovery_mod._html_mode(
+            _fields({"select": {"options": shape}})) == "", shape
+
+
+def test_an_option_that_merely_CONTAINS_html_is_not_the_html_option() -> None:
+    """⚠️ EXACT, NOT SUBSTRING. A service offering `not_html` or `html_legacy`
+    is not offering the dialect the alert path proved on hardware. The old
+    comparison was `== "html"` and nothing held it there; loosening it to a
+    substring survived every other assertion in this file."""
+    from vesta.adapters import discovery as discovery_mod
+
+    for near_miss in ("not_html", "html_legacy", "xhtml", "html5"):
+        assert discovery_mod._html_mode(
+            _fields({"select": {"options": [near_miss]}})) == "", near_miss
+
+    # ⚠️ AND CASE STILL DOES NOT MATTER — services write it both ways, and the
+    # value returned is the one the service declared, not a normalised copy.
+    assert discovery_mod._html_mode(_fields({"select": {"options": ["HTML"]}})) == "HTML"
+    assert discovery_mod._html_mode(_fields({"select": {"options": ["html"]}})) == "html"

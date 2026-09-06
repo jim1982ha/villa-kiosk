@@ -59,26 +59,72 @@ def _superseded() -> List[Any]:
     return [m for m in registry.registered() if getattr(m, "superseded_by", ())]
 
 
-# ── the signal ───────────────────────────────────────────────────────────────
-
-# ── the sentence ─────────────────────────────────────────────────────────────
-
 # ── the wiring, which is where this class of bug actually lives ──────────────
 
-def test_every_superseded_module_names_a_real_blueprint_stem() -> None:
-    """A typo here can never match an installed blueprint, so the check would
-    stand down forever with the short sentence and nothing would ever say so —
-    the same silence this whole release is about, one level up."""
+def test_superseded_by_is_a_RECORD_and_nothing_joins_it() -> None:
+    """⚠️ THIS ASSERTED AN INVARIANT ABOUT A COMPARISON NOBODY PERFORMS.
+
+    It required every stem to contain `"_"` because "`_stems_from_blueprints`
+    only records stems containing '_', so this could never match anything
+    installed" — a true statement about a join that no code makes. Nothing in
+    `rootfs/` reads `superseded_by` at all: `registry.gate` refuses on
+    `requires`, `settings["enabled"]`, `failures`, `min_days` and `audiences`,
+    and its own comment says the field "survives on the modules as the record
+    of which retired blueprint each check replaced".
+
+    So the shape rules are gone and the RECORD is what is checked: a stem must
+    still be a stem (lowercase, trimmed, not a filename), because it is read by
+    a person tracing what a check replaced. If it is ever joined to
+    `collect._stems_from_blueprints` again, the matching rule comes back WITH
+    the code that does the matching — that is where it can be true.
+    """
     assert _superseded(), "no module declares a covering blueprint any more"
     for module in _superseded():
         for stem in module.superseded_by:
-            assert stem == stem.lower().strip(), f"{module.name}: {stem!r}"
-            assert "_" in stem, (
-                f"{module.name} names {stem!r}, which has no category prefix — "
-                f"`_stems_from_blueprints` only records stems containing '_', "
-                f"so this could never match anything installed")
+            assert stem == stem.lower().strip(), (
+                "%s: %r is not written as a stem" % (module.name, stem))
             assert not stem.endswith((".yaml", ".yml")), (
                 f"{module.name}: a stem, not a file name")
+
+
+def test_nothing_joins_superseded_by_to_the_installed_blueprints() -> None:
+    """⚠️ THE PREMISE OF THE TEST ABOVE, CHECKED. If a join appears, the shape
+    rules it needs are real again and belong beside it — and this test is what
+    should fail to say so, rather than the record quietly acquiring a
+    requirement nothing enforces."""
+    import re
+    import subprocess
+
+    from conftest import strip_prose
+
+    joined = []
+    out = subprocess.run(["git", "ls-files", "rootfs"], cwd=REPO_ROOT,
+                         capture_output=True, text=True).stdout.split()
+    for rel in out:
+        if not rel.endswith(".py"):
+            continue
+        try:
+            text = open(f"{REPO_ROOT}/{rel}", encoding="utf-8").read()
+        except OSError:
+            continue
+        try:
+            code = strip_prose(text)
+        except SyntaxError:                        # pragma: no cover
+            code = text
+        for n, line in enumerate(code.splitlines(), 1):
+            # ⚠️ A READ, NOT A DECLARATION. `superseded_by: Sequence[str]` on
+            # the Protocol and `superseded_by = (...)` on the five modules are
+            # what the record IS; only an attribute access consumes it. My
+            # first pattern matched the declarations and reported the record as
+            # its own join.
+            if re.search(r"\.superseded_by\b"
+                         r"|getattr\([^,]+,\s*[\"']superseded_by[\"']", line):
+                joined.append("%s:%d" % (rel, n))
+    assert not joined, (
+        "`superseded_by` is read by shipped code again: %s.\nIt is a record, "
+        "not an input — if it is being matched against installed blueprints "
+        "once more, the stem-shape rules belong beside the code that matches "
+        "them, where they can be true." % joined)
 
 
 def test_run_all_cannot_drop_a_context_field() -> None:

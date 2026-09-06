@@ -529,11 +529,23 @@ async def dispatch(session: Any,
     from vesta.supervise.agent import concerns as concerns_mod
     from vesta.supervise.agent import outbox as outbox_mod
 
-    # ⚠️ A THIRD SWEEP, AND IT RUNS FIRST BECAUSE IT IS THE ONLY ONE THAT CAN
-    # CHANGE WHAT THE OTHER TWO SEE. A closed concern whose condition came back
-    # returns to `open`, and a delivery sweep that had already passed over it
-    # would not look again until the next clock. Ordering it here costs
-    # nothing: it writes at most a handful of rows and asks no model.
+    # ⚠️ A THIRD SWEEP. IT RAN FIRST BECAUSE IT COULD "CHANGE WHAT THE OTHER TWO
+    # SEE" — a closed concern whose condition came back returned to `open` —
+    # AND THAT STOPPED BEING TRUE ON 2026-08-28. `verify` now writes `closed`
+    # on a recurrence and `verified` otherwise, and both are in `SETTLED`, so
+    # the sweep only ever moves a row between settled states. Nothing it writes
+    # is visible to the delivery sweep, and the ordering is free.
+    #
+    # It stays first anyway, because free is not the same as arbitrary: reading
+    # the pass in the order it happens — did the last one hold, then who still
+    # needs telling, then who has not answered — is how an operator reads the
+    # log. `concerns.verify`'s own comment carries why the resurrection went:
+    # `raise_concern` refuses a second open concern about a subject, so
+    # re-opening the old one put two open cards on one subject behind the back
+    # of the rule that forbids it.
+    #
+    # Ordering it here costs nothing either way: it writes at most a handful of
+    # rows and asks no model.
     #
     # ⚠️ IT LIVES ON THIS CLOCK RATHER THAN A NEW ONE FOR THE REASON THIS
     # FUNCTION EXISTS AT ALL — `dispatch` is the one place reached by ALL THREE
