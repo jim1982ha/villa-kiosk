@@ -295,7 +295,21 @@ const CATEGORY_EXCEPTIONS: Partial<Record<string, Category>> = {
 
 // device_class sets that redirect a generic domain to a specific category.
 const COMFORT_SENSOR_DC = new Set(["temperature", "humidity"]);
-const ACCESS_BINARY_DC = new Set(["motion", "presence", "occupancy", "moving"]);
+/** The binary_sensor device classes that mean "something moved or is here".
+ *
+ *  ⚠️ EXPORTED SINCE 2.955.0, AND THAT IS THE FIX. This set is mirrored in
+ *  `adapters/categories.py` and the pair is pinned character-for-character by
+ *  `test_consistency_parity`. `Dashboard.tsx` held a THIRD copy — byte-identical,
+ *  under a comment saying "Mirrors the ACCESS_BINARY_DC set" — and could not be
+ *  brought inside that pin, because this was private. There was no seam to
+ *  import through, so the only available move was to retype it. */
+export const ACCESS_BINARY_DC = new Set(["motion", "presence", "occupancy", "moving"]);
+
+/** Does this entity report movement or presence? The one reading of that
+ *  question, for the toast and the badge alike. */
+export function isMotionDetector(deviceClass: string | undefined): boolean {
+  return ACCESS_BINARY_DC.has(String(deviceClass ?? "").toLowerCase());
+}
 
 /**
  * What a generic `switch.*` / `input_boolean.*` is actually FOR, inferred from

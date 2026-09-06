@@ -22,50 +22,27 @@
 
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { PAGE_ROWS, pageOf, clampPage, type PageView } from "./paging";
 
-/** Rows per page. ⚠️ ONE NUMBER FOR EVERY LOG IN THE APP — two logs paging at
- *  different sizes is exactly the drift this file replaces. */
-export const PAGE_ROWS = 20;
+// ⚠️ THE SIZES AND THE ARITHMETIC MOVED TO `paging.ts` (2.955.0), with the
+// rival module `Pager.tsx` folded in — see that file's header. Re-exported so
+// callers keep one import.
+export { PAGE_ROWS, PAGE_CARDS, PAGE_COMPACT, PAGE_SIZES } from "./paging";
+export type { PageView as Paged } from "./paging";
 
-/** Cards per page, where a "row" is several lines with children nested under
- *  it. ⚠️ A SECOND NUMBER, IN THE SAME FILE, ON PURPOSE. The rule this module
- *  enforces is that no page size is a literal scattered through a component —
- *  not that every list must page identically, which was never true of lists
- *  whose entries are different heights. Twenty one-line rows is a page; twenty
- *  checks each carrying its own flagged items is a scroll with no end in sight,
- *  reported as exactly that. Both numbers live here so there is still ONE place
- *  that owns pagination. */
-export const PAGE_CARDS = 10;
-
-export interface Paged<T> {
-  page: T[];
-  /** 1-based index of the first row on this page, for the "n–m of N" line. */
-  first: number;
-  total: number;
-  pageNo: number;
-  lastPage: number;
+export function usePaged<T>(rows: T[], size = PAGE_ROWS): PageView<T> & {
   go: (to: number) => void;
-}
-
-export function usePaged<T>(rows: T[], size = PAGE_ROWS): Paged<T> {
+} {
   const [pageNo, setPageNo] = useState(0);
-  // ⚠️ BACK TO THE FIRST PAGE WHEN THE DATA CHANGES UNDER THE READER. A refresh
-  // that shortens the list would otherwise leave them on a page past the end,
-  // looking at nothing and reading it as an empty ledger rather than a stale
-  // page. Keyed on length, like `useTruncated`, for the same reason: identity
-  // churn from a re-render must not move a page the reader chose.
+  // ⚠️ BACK TO THE FIRST PAGE WHEN THE DATA CHANGES UNDER THE READER. Keyed on
+  // length, like `useTruncated`, for the same reason: identity churn from a
+  // re-render must not move a page the reader chose. The CLAMP in `pageOf`
+  // covers the same hazard from the other side, and is the executable half.
   useEffect(() => { setPageNo(0); }, [rows.length]);
-
-  const lastPage = Math.max(0, Math.ceil(rows.length / size) - 1);
-  const clamped = Math.min(pageNo, lastPage);
-  const start = clamped * size;
+  const view = pageOf(rows, size, pageNo);
   return {
-    page: rows.slice(start, start + size),
-    first: start + 1,
-    total: rows.length,
-    pageNo: clamped,
-    lastPage,
-    go: (to) => setPageNo(Math.max(0, Math.min(lastPage, to))),
+    ...view,
+    go: (to) => setPageNo(clampPage(to, rows.length, size)),
   };
 }
 
@@ -79,7 +56,7 @@ export function usePaged<T>(rows: T[], size = PAGE_ROWS): Paged<T> {
  * like a broken pager.
  */
 export function Pager<T>({ paged, unit, children }: {
-  paged: Paged<T>;
+  paged: PageView<T> & { go: (to: number) => void };
   /** What a row IS, singular — "request", "event". Pluralised naively, which
    *  is correct for every unit this app has. */
   unit: string;
@@ -109,6 +86,44 @@ export function Pager<T>({ paged, unit, children }: {
           </>
         )}
       </span>
+    </div>
+  );
+}
+
+
+/**
+ * The compact strip: "Newer / Older" either side of "1 of 4".
+ *
+ * ⚠️ THE OTHER PRESENTATION, KEPT AS A CHOICE RATHER THAN A SECOND MODULE
+ * (2.955.0). This was `Pager.tsx`'s default export — a whole rival paging
+ * module in this directory whose header claimed to be the only one, exporting
+ * the same two identifiers as this file. The LOOK is a genuine design decision
+ * (a dialog's log reads better with words than with bare arrows); the
+ * ARITHMETIC underneath was the drift, and it is `paging.ts` for both now.
+ */
+export function PagerCompact<T>({ paged, newerLabel = "Newer",
+                                  olderLabel = "Older" }: {
+  paged: PageView<T> & { go: (to: number) => void };
+  newerLabel?: string;
+  olderLabel?: string;
+}) {
+  const { pageNo, lastPage, go } = paged;
+  // Renders nothing for a single page — a pager on a list that cannot be paged
+  // is furniture that asks to be pressed.
+  if (lastPage <= 0) return null;
+  return (
+    <div className="reports-pager">
+      <button className="btn ghost" disabled={pageNo === 0}
+              onClick={() => go(pageNo - 1)} aria-label={newerLabel}>
+        <ChevronLeft size={16} aria-hidden="true" />
+        <span>{newerLabel}</span>
+      </button>
+      <span className="muted">{pageNo + 1} of {lastPage + 1}</span>
+      <button className="btn ghost" disabled={pageNo >= lastPage}
+              onClick={() => go(pageNo + 1)} aria-label={olderLabel}>
+        <span>{olderLabel}</span>
+        <ChevronRight size={16} aria-hidden="true" />
+      </button>
     </div>
   );
 }

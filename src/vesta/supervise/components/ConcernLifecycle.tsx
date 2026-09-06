@@ -26,6 +26,7 @@
 
 import type { Concern, ConcernState } from "@/vesta/shared/agentTypes";
 import { stateOf, silencedSubjects, SUPPRESS_AFTER } from "@/vesta/shared/concern";
+import { toCsv as toCsvDoc } from "@/utils/csv";
 import InfoHint from "@/components/common/InfoHint";
 import { downloadFile, filenameSlug } from "@/utils/download";
 
@@ -50,27 +51,24 @@ const CSV_COLUMNS = ["Raised", "Severity", "What it said", "Outcome",
                      "Told", "Told to", "Seen by"] as const;
 
 function toCsv(rows: Concern[]): string {
-  const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  // ⚠️ THE QUOTING AND THE LINE ENDINGS ARE `utils/csv` NOW (2.955.0). They
+  // were hand-rolled here AND in UsagePanel, and the two disagreed: this file
+  // wrote `\r\n` and explained why, and UsagePanel — which predates the
+  // explanation — wrote `\n`, which is the failure this comment names.
   const when = (iso: unknown) => {
     const d = new Date(String(iso ?? ""));
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleString();
   };
-  const lines = [CSV_COLUMNS.map(cell).join(",")];
-  for (const c of rows) {
-    lines.push([
-      when(c.openedAt), c.severity, c.title,
-      // The settled record's whole point: closed, dismissed and "the fix did
-      // not hold" are three different endings and the count cannot say which.
-      c.outcome ?? "",
-      when(c.delivered_at),
-      (c.deliveries ?? []).map((d) => d.profile).join(" then ")
-        || (c.audience === "facility" ? "Facility manager" : "Owner"),
-      c.acknowledged_by ?? "",
-    ].map(cell).join(","));
-  }
-  // ⚠️ A TRAILING NEWLINE. POSIX tools treat a file without one as truncated,
-  // and this is a file somebody may pipe as well as open.
-  return lines.join("\r\n") + "\r\n";
+  return toCsvDoc(CSV_COLUMNS, rows.map((c) => [
+    when(c.openedAt), c.severity, c.title,
+    // The settled record's whole point: closed, dismissed and "the fix did not
+    // hold" are three different endings and the count cannot say which.
+    c.outcome ?? "",
+    when(c.delivered_at),
+    (c.deliveries ?? []).map((d) => d.profile).join(" then ")
+      || (c.audience === "facility" ? "Facility manager" : "Owner"),
+    c.acknowledged_by ?? "",
+  ]));
 }
 
 /** ⚠️ ONE TABLE, AND IT IS THE ONLY PLACE A STATE IS NAMED OR EXPLAINED. Five
@@ -120,32 +118,12 @@ export const STATE_COPY: Record<ConcernState, { label: string; hint: string }> =
 // it belongs to. Re-exported because `test_concern_lifecycle` reads it here.
 export { SUPPRESS_AFTER } from "@/vesta/shared/concern";
 
-/** Where a concern is in its life, as a chip.
- *
- *  ⚠️ NOTHING RENDERS THIS TODAY, AND THAT IS A RECORDED DECISION RATHER THAN
- *  DEAD CODE. (dry-audit:ok) `AgentConcerns` dropped it on 2026-08-27 at the owner's
- *  instruction because it could only ever say one thing: the wall lists LIVE
- *  concerns, nothing in the backend has ever written `acted`, so every card
- *  read "Nothing done yet" whatever anybody did. The moment a transition to
- *  `acted` exists, the chip comes back with it — and `STATE_COPY` above is
- *  used by the settled record regardless.
- *
- *  ⚠️ THE VERDICT IS WRITTEN HERE, NOT WHERE IT WAS REMOVED. It lived only in
- *  a comment in `AgentConcerns.tsx`, so /dry-audit's unused-export probe
- *  re-adjudicated this every run by opening the wrong file. */
-export function LifecycleChip({ state }: { state: ConcernState }) {
-  const copy = STATE_COPY[state];
-  // ⚠️ AN UNKNOWN STATE RENDERS NOTHING rather than an empty pill. The store is
-  // written by Python and served verbatim, so a newer add-on can send a state
-  // this build has never heard of, and a blank chip reads as a fault in the app
-  // rather than as a value it does not know.
-  if (!copy) return null;
-  return (
-    <span className={`lifecycle-chip lifecycle-${state}`} title={copy.hint}>
-      {copy.label}
-    </span>
-  );
-}
+// ⚠️ `LifecycleChip` DELETED (2.955.0). It had no importer anywhere in `src/`,
+// and its own comment recorded that it had been emptied of purpose because
+// "nothing in the backend has ever written `acted`" — a rendered module kept
+// for a state that has never existed. It passes the deletion test outright:
+// removing it removes nothing a reader can reach.
+
 
 /**
  * What the settled concerns add up to.

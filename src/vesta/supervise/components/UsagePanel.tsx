@@ -42,6 +42,7 @@ import { usePaged, Pager } from "@/components/common/Paged";
 
 import { loadUsage, type UsageBucket, type UsageRow, type UsageSummary } from "@/vesta/supervise/agentApi";
 import { downloadFile } from "@/utils/download";
+import { toCsv as toCsvDoc } from "@/utils/csv";
 
 /** ⚠️ FOUR DECIMALS, NOT TWO. The question is "where did a few cents go", and
  *  rounding a fifteen-minute triage call to $0.00 would hide the line item that
@@ -145,22 +146,19 @@ function Slices({ rows }: { rows: [string, UsageBucket][] }) {
  *  that must not drift — a file that quietly widened its own window would be a
  *  spreadsheet disagreeing with the panel it came from.
  *
- *  ⚠️ EVERY FIELD IS QUOTED AND ITS QUOTES DOUBLED. A model id or an actor name
- *  containing a comma would otherwise shift every later column by one, silently
- *  — the failure mode of hand-rolled CSV, and the reason this is nine lines
- *  rather than a join. */
+ *  ⚠️ THE QUOTING AND THE LINE ENDINGS ARE `utils/csv` NOW (2.955.0). This
+ *  file predates the rule and shipped the failure `ConcernLifecycle` documents:
+ *  it joined on `\n`, and a bare \n opens as ONE LONG ROW in older Excel on
+ *  Windows — precisely the reader who asked for a file rather than a screen.
+ *  Two hand-rolled writers, one of which explained why the other was wrong. */
 function toCsv(rows: UsageRow[]): string {
-  const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const header = ["when", "source", "actor", "model", "run_id", "input",
                   "cache_read", "cache_write", "output", "cost_usd"];
-  const lines = [header.map(cell).join(",")];
-  for (const r of rows) {
-    lines.push([new Date(r.at * 1000).toISOString(), r.source, r.actor,
-                r.model, r.run_id, r.input, r.cache_read, r.cache_write,
-                r.output, r.cost].map(cell).join(","));
-  }
-  // ⚠️ A TRAILING NEWLINE. Some tools drop the last row without one.
-  return lines.join("\n") + "\n";
+  return toCsvDoc(header, rows.map((r) => [
+    new Date(r.at * 1000).toISOString(), r.source, r.actor,
+    r.model, r.run_id, r.input, r.cache_read, r.cache_write,
+    r.output, r.cost,
+  ]));
 }
 
 function toLocalInput(seconds: number): string {

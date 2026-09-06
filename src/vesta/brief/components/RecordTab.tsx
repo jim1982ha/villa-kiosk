@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Trash2, Zap } from "lucide-react";
 import InfoHint from "@/components/common/InfoHint";
 import { whenShort } from "@/vesta/shared/when";
-import Pager, { usePaged } from "@/components/common/Pager";
+import { usePaged, PagerCompact, PAGE_COMPACT } from "@/components/common/Paged";
 import { deleteRecordEntry, fetchRecord, type RecordEntry } from "@/vesta/brief/reportsApi";
 import { tallyAutomations, figuresLine, phasesLine } from "@/vesta/brief/recordTally";
 
@@ -57,7 +57,8 @@ export default function RecordTab({ days = 31 }: { days?: number }) {
   const visible = useMemo(
     () => tallyAutomations((rows || []).filter((r) => !source || r.source === source)),
     [rows, source]);
-  const { shown, pager } = usePaged(visible);
+  const paged = usePaged(visible, PAGE_COMPACT);
+  const shown = paged.page;
 
   const load = useCallback(async () => {
     setRows(await fetchRecord(days));
@@ -192,7 +193,7 @@ export default function RecordTab({ days = 31 }: { days?: number }) {
         </div>
       )}
 
-      <Pager {...pager} />
+      <PagerCompact paged={paged} />
 
       <p className="reports-item muted">
         <Zap size={14} aria-hidden="true" />

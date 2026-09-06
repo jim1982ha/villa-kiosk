@@ -8,7 +8,7 @@
 
 import InfoHint from "@/components/common/InfoHint";
 import { whenLong } from "@/vesta/shared/when";
-import Pager, { usePaged } from "@/components/common/Pager";
+import { usePaged, PagerCompact, PAGE_COMPACT } from "@/components/common/Paged";
 import type { ReportHistoryEntry } from "@/vesta/shared/reportsTypes";
 
 
@@ -32,7 +32,8 @@ export default function HistoryTab({
   }
 
   // ⚠️ THE SHARED PAGER — one page size and one control strip for the app.
-  const { shown, pager } = usePaged(entries);
+  const paged = usePaged(entries, PAGE_COMPACT);
+  const shown = paged.page;
   return (
     <div className="reports-pane">
       <h3 className="settings-section-title">What was actually sent</h3>
@@ -75,7 +76,7 @@ export default function HistoryTab({
         </li>
       ))}
     </ul>
-      <Pager {...pager} />
+      <PagerCompact paged={paged} />
     </div>
   );
 }

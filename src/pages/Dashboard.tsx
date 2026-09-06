@@ -32,7 +32,8 @@ import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
-import { effectiveCategory, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
+import { effectiveCategory, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS,
+         isMotionDetector } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -48,7 +49,11 @@ import type { Category, TeleportPoint } from "@/types/scene.types";
 /** binary_sensor device_classes that mean "someone/something moved" — the
  *  motion toast below announces these. Mirrors the ACCESS_BINARY_DC set
  *  EntityCategories uses to bucket the same sensors. */
-const MOTION_DEVICE_CLASSES = new Set(["motion", "presence", "occupancy", "moving"]);
+// ⚠️ THE THIRD COPY OF THIS SET IS GONE (2.955.0). It was byte-identical to
+// `EntityCategories.ACCESS_BINARY_DC` and to `adapters/categories.py`, and that
+// PAIR is pinned character-for-character by `test_consistency_parity` — this
+// one sat outside the pin and could not be brought in, because the set was
+// private. Exporting it is what made the retype unnecessary.
 
 export default function Dashboard() {
   const { config, update, resolvedRooms, setResolvedRooms } = useConfig();
@@ -383,7 +388,7 @@ export default function Dashboard() {
       const deviceClass = e.attributes?.device_class as string | undefined;
       // A motion/presence detector, by device_class or (when HA doesn't report
       // one) by the same id hints categoryForEntity uses.
-      const isMotion = MOTION_DEVICE_CLASSES.has(deviceClass ?? "")
+      const isMotion = isMotionDetector(deviceClass)
         || /(^|[._])(motion|presence|occupancy|pir)([._]|$)/.test(id);
       if (!isMotion) return;
       // Only announce a sensor actually configured somewhere in the app —

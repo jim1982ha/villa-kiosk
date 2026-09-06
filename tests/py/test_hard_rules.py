@@ -72,6 +72,14 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `villa_rules.ts`'s summary-tile fixtures. Each names a RULE:
+    # `switch.spartan_gym_relay` is the substring collision POOL_WORD is
+    # anchored against ("spa" inside "spartan"), `switch.filter_pump_2` is a
+    # switch whose ROOM makes it a pool device, and the two locks are the
+    # "unavailable is not unlocked" pair — the tile's own comment calls
+    # reporting that "a plain lie about a door".
+    "switch.spartan_gym_relay", "switch.filter_pump_2",
+    "lock.a", "lock.b", "climate.a", "climate.b", "sensor.p",
     # `test_survey_clock`'s statistics-cache fixtures. Two ids, so "the same
     # window twice" and "a different id" are distinguishable.
     "sensor.one", "sensor.two",

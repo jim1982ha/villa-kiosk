@@ -42,6 +42,12 @@ import {
   tallyAutomations, figuresLine, phasesLine,
 } from "../../src/vesta/brief/recordTally.ts";
 import {
+  pageOf, clampPage, lastPageOf, PAGE_SIZES,
+} from "../../src/components/common/paging.ts";
+import { deriveTiles } from "../../src/components/hud/summaryTiles.ts";
+import { toCsv, cell } from "../../src/utils/csv.ts";
+import { isMotionDetector, ACCESS_BINARY_DC } from "../../src/config/EntityCategories.ts";
+import {
   outcomeOf, reasonOf, deferredOf, yieldOf, checkIdOf,
   QUIET_REASON, ESCALATED_PREFIX,
 } from "../../src/vesta/supervise/passReason.ts";
@@ -383,6 +389,128 @@ console.log("\n— what your automations did, counted the way the Brief counts �
   eq("…and that is two incidents, not three rows", summed[0].times, 2);
   eq("a non-numeric payload contributes zero, never NaN",
      figuresLine(tallyAutomations([fire("x", "", { kwh: "lots" })])[0]), "");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n— how long is a page here —");
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ THERE WERE TWO PAGING MODULES IN ONE DIRECTORY, each header claiming to be
+// the only one, with three sizes and two control strips between them — and
+// `test_there_is_exactly_ONE_page_size_in_the_app` was green, because it walked
+// one directory and matched a call shape the rival did not use.
+{
+  const rows = Array.from({ length: 7 }, (_, i) => i);
+
+  eq("a page is a slice", JSON.stringify(pageOf(rows, 5, 0).page), "[0,1,2,3,4]");
+  eq("…and the last page is the remainder",
+     JSON.stringify(pageOf(rows, 5, 1).page), "[5,6]");
+  eq("first is 1-based for the n–m of N line", pageOf(rows, 5, 1).first, 6);
+  check("first + page.length - 1 === total on the last page",
+        pageOf(rows, 5, 1).first + pageOf(rows, 5, 1).page.length - 1 === 7);
+
+  // ⚠️ THE RESET-ON-SHRINK RULE, which both former modules described in prose
+  // and neither could execute: a refresh that shortens the list must not leave
+  // the reader "looking at nothing and reading it as an empty ledger".
+  eq("a list shrinking below the current page lands on page 0",
+     pageOf(rows.slice(0, 2), 5, 3).pageNo, 0);
+  eq("…with rows on it", pageOf(rows.slice(0, 2), 5, 3).page.length, 2);
+
+  // ⚠️ CLAMPS AT BOTH ENDS.
+  eq("back from page one stays on page one", clampPage(-5, 7, 5), 0);
+  eq("past the end stops at the end", clampPage(99, 7, 5), 1);
+
+  eq("an empty list has ONE page, not minus one", lastPageOf(0, 5), 0);
+  eq("…and yields no rows", pageOf([], 5, 0).page.length, 0);
+  eq("a zero size cannot divide by zero", pageOf(rows, 0, 0).page.length, 1);
+
+  eq("there are exactly three page sizes", PAGE_SIZES.length, 3);
+  check("…and they are all distinct", new Set(PAGE_SIZES).size === 3);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n— the wall tablet's bottom strip —");
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ 178 PURE LINES IN A FILE NODE REFUSES OUTRIGHT, until 2.955.0. `POOL_WORD`'s
+// own comment names `SWITCH_PURPOSE_HINTS` as the same substring-collision bug
+// class — and that table IS pinned character-for-character above. This was not.
+{
+  const ent = (id: string, state: string, attrs: Record<string, unknown> = {}) =>
+    ({ entity_id: id, state, attributes: attrs }) as never;
+  const tiles = (entities: Record<string, never>, map = {}, rooms = {},
+                 thresholds = {}) =>
+    deriveTiles(entities as never, map as never, rooms as never,
+                () => true, thresholds as never);
+  const find = (out: ReturnType<typeof deriveTiles>, id: string) =>
+    out.find((t) => t.id === id);
+
+  // ⚠️ THE SUBSTRING COLLISION POOL_WORD IS ANCHORED AGAINST.
+  const gym = tiles({ "switch.spartan_gym_relay": ent("switch.spartan_gym_relay", "on") });
+  check("a 'spartan gym relay' is not a Pool tile", !find(gym, "__pool"));
+  const pool = tiles({ "switch.filter_pump_2": ent("switch.filter_pump_2", "on") },
+                     {}, { "switch.filter_pump_2": "Swimming Pool" });
+  check("…while a switch in a room resolving to 'Swimming Pool' is", !!find(pool, "__pool"));
+
+  // ⚠️ "A PLAIN LIE ABOUT A DOOR": an unavailable lock is never reported
+  // unlocked. The tile's own comment calls it that.
+  const locks = tiles({
+    "lock.a": ent("lock.a", "locked"),
+    "lock.b": ent("lock.b", "unavailable"),
+  });
+  const lockTile = find(locks, "__locks");
+  check("an unavailable lock reads Unknown, never Unlocked",
+        !!lockTile && /Unknown/.test(lockTile.value) && !/Unlocked/.test(lockTile.value),
+        lockTile ? lockTile.value : "(no lock tile)");
+  const allLocked = find(tiles({ "lock.a": ent("lock.a", "locked") }), "__locks");
+  check("all locked reads Locked", !!allLocked && /Locked/.test(allLocked.value));
+
+  // ⚠️ CLIMATE NEVER AVERAGES SETPOINTS — "a living room aimed at 26° and a
+  // bedroom aimed at 18° do not average to a 22° that means anything".
+  const setpointOnly = find(tiles({
+    "climate.a": ent("climate.a", "heat", { temperature: 26 }),
+    "climate.b": ent("climate.b", "heat", { temperature: 18 }),
+  }), "__climate");
+  check("a climate reporting only a target prints no room reading",
+        !setpointOnly || !/22/.test(setpointOnly.value),
+        setpointOnly ? setpointOnly.value : "(no climate tile)");
+
+  // ⚠️ THE FIRST HARD RULE'S OWN WORKED EXAMPLE. A hardcoded `totalW > 3000`
+  // used to live here; with no thresholds configured the tile must stay
+  // neutral at ANY wattage.
+  const hot = find(tiles({
+    "sensor.p": ent("sensor.p", "9000", { device_class: "power",
+                                          unit_of_measurement: "W" }),
+  }), "__energy");
+  check("with no thresholds configured, 9 kW is still neutral",
+        !hot || hot.tone === "neutral", hot ? hot.tone : "(no energy tile)");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n— one answer per question (round 5) —");
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  // ⚠️ TWO HAND-ROLLED CSV WRITERS, one of which explained why the other's line
+  // ending was wrong. RFC 4180 is what a spreadsheet expects; a bare \n opens
+  // as one long row in older Excel on Windows.
+  eq("a plain value is not quoted", cell("ok"), "ok");
+  eq("a value with a comma is quoted", cell("x,y"), '"x,y"');
+  eq("a quote is doubled AND the field quoted", cell('he said "hi"'), '"he said ""hi"""');
+  eq("null renders empty, never the word null", cell(null), "");
+  eq("undefined too", cell(undefined), "");
+  const doc = toCsv(["a", "b"], [[1, "x,y"]]);
+  check("every record ends CRLF, including the last", doc.endsWith("\r\n"));
+  eq("…and the records are CRLF-separated", doc, 'a,b\r\n1,"x,y"\r\n');
+  check("a value containing a newline never splits a record",
+        toCsv(["a"], [["one\ntwo"]]).split("\r\n").length === 3);
+
+  // ⚠️ THE THIRD COPY OF THE MOTION SET IS GONE. The Python↔TypeScript pair is
+  // pinned character-for-character; the .tsx copy sat outside it and could not
+  // be brought in, because the set was private.
+  check("the motion set is exported now", ACCESS_BINARY_DC.size === 4);
+  for (const dc of ["motion", "presence", "occupancy", "moving"]) {
+    check(`${dc} reports movement`, isMotionDetector(dc));
+  }
+  check("a door contact does not", !isMotionDetector("door"));
+  check("an unknown class does not", !isMotionDetector(undefined));
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

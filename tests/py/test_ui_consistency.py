@@ -116,20 +116,49 @@ def test_long_logs_page_rather_than_capping_silently() -> None:
 
 
 def test_there_is_exactly_ONE_page_size_in_the_app() -> None:
-    paged = _read(os.path.join(SRC, "components", "common", "Paged.tsx"))
-    assert "export const PAGE_ROWS" in paged
-    # ⚠️ `useTruncated`'s 3 is NOT a rival: it answers a different question and
-    # its own header says so. This asserts no THIRD number appears.
+    """⚠️ THIS WAS GREEN WHILE A WHOLE RIVAL PAGING MODULE SAT BESIDE THE ONE IT
+    CHECKS (fixed 2.955.0), and it missed it twice.
+
+    `_files("components")` walks only `src/components`, so the Briefings
+    callers under `src/vesta/brief/components/` were never read — and the regex
+    looked for `usePaged(rows, N)`, while `Pager.tsx`'s `usePaged` took no size
+    argument at all. Both modules exported the identifiers `usePaged` and
+    `Pager`, so two imports one character apart were two different behaviours,
+    and each header claimed to be the only one.
+
+    The sizes and the arithmetic live in `common/paging.ts` now, and its
+    BEHAVIOUR is pinned by `tests/consistency/villa_rules.ts`.
+    """
+    paging = _read(os.path.join(SRC, "components", "common", "paging.ts"))
+    for name in ("PAGE_ROWS", "PAGE_CARDS", "PAGE_COMPACT"):
+        assert f"export const {name}" in paging, name
+    assert "PAGE_SIZES" in paging, (
+        "the set of page sizes is no longer enumerable, so a fourth cannot be "
+        "noticed")
+
+    # ⚠️ NO SECOND PAGING MODULE. The rival is deleted; a new one would have to
+    # be named here to survive.
+    common = os.path.join(SRC, "components", "common")
+    rivals = [f for f in os.listdir(common)
+              if f.lower().startswith("pager") and f != "paging.ts"]
+    assert not rivals, (
+        f"a second paging module is back: {rivals} — `Paged.tsx` holds both "
+        "control strips and `paging.ts` holds the arithmetic")
+
+    # ⚠️ A LITERAL, NOT A NAMED CONSTANT, and now across the WHOLE SPA rather
+    # than one directory.
     sizes = set()
-    for p in _files("components"):
-        # ⚠️ A LITERAL, NOT A NAMED CONSTANT. The rule is that no page size is
-        # scattered through a component — `PAGE_CARDS` is declared beside
-        # `PAGE_ROWS` in this same module for a list whose entries are cards
-        # rather than rows, so pagination still has ONE owner. A bare number
-        # here is the drift; a second exported name is a decision.
-        sizes |= set(re.findall(r"usePaged\([^,)]+,\s*(\d+)\s*\)", _read(p)))
+    for root in ("components", "vesta", "pages"):
+        base = os.path.join(SRC, root)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _dirs, files in os.walk(base):
+            for name in files:
+                if name.endswith((".ts", ".tsx")):
+                    sizes |= set(re.findall(
+                        r"usePaged\([^,)]+,\s*(\d+)\s*\)",
+                        _read(os.path.join(dirpath, name))))
     assert not sizes, f"a caller overrode the shared page size with a literal: {sizes}"
-    assert "export const PAGE_CARDS" in paged
 
 
 def test_a_flag_with_no_identifiable_check_is_still_RENDERED() -> None:
