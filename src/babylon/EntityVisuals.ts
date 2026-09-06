@@ -115,6 +115,8 @@ import { beginSpan } from "@/utils/perfSpans";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { compactValue, clampToLabelWidth } from "@/utils/entityValue";
+import { cssToGui, effectiveScale, cardBudget, isPhoneWidth, cellCapFor,
+         badgeBox, type BadgeViewport } from "./badgeViewport";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling } from "./meshRoles";
@@ -4004,7 +4006,20 @@ export class EntityVisuals {
    * leave the badges sized for a resolution the engine has stopped using.
    */
   private cssToGui(): number {
-    return 1 / (this.scene.getEngine().getHardwareScalingLevel() || 1);
+    return cssToGui(this.viewport());
+  }
+
+  /** The four numbers the drawn-geometry cluster depends on. Two come from the
+   *  engine and two are settings; everything downstream is arithmetic over
+   *  them and the (already pure) metrics — see badgeViewport.ts. */
+  private viewport(): BadgeViewport {
+    const engine = this.scene.getEngine();
+    return {
+      renderWidthPx: engine.getRenderWidth(),
+      hardwareScaling: engine.getHardwareScalingLevel(),
+      iconUserScale: this.iconUserScale,
+      iconZoomScale: this.iconZoomScale,
+    };
   }
 
   /**
@@ -4017,7 +4032,7 @@ export class EntityVisuals {
    * rather than a rule to remember.
    */
   private effectiveScale(): number {
-    return this.iconUserScale * this.iconZoomScale * this.cssToGui();
+    return effectiveScale(this.viewport());
   }
 
   /**
@@ -6782,43 +6797,13 @@ export class EntityVisuals {
       let b = pool[i];
       if (!b) { b = { halfW: 0, halfH: 0, cy: 0 }; pool[i] = b; }
       boxes[i] = b;
-      if (card) {
-        const hasVal = s.lbl.valueWrap.isVisible;
-        const valW = hasVal
-          ? s.lbl.valueText.text.length * m.cardValueCharPx + m.cardValuePadPx
-          : 0;
-        const cardW = m.cardPadLeftPx + m.cardHeightPx + valW;
-        b.halfW = (cardW / 2) * scale;
-        b.halfH = (m.cardHeightPx / 2 + 1) * scale;
-        // The card IS the container now, so its centre is the container's
-        // centre: exactly half a card above the anchor. No magic constant to
-        // approximate a gap that no longer exists.
-        b.cy = -(m.cardHeightPx / 2) * scale;
-        continue;
-      }
-      const hasPill = s.lbl.valueWrap.isVisible;
-      // Reserve the WITH-PILL footprint (halfH/cy) for any type that can EVER
-      // grow one (see compactValue) even while it currently has none — not
-      // just when hasPill is true right now. Two fixtures mounted close
-      // together in the model (e.g. a ceiling fan + its own temperature
-      // sensor) sit fine when both are pill-less, but the moment the fan
-      // (pill-capable) turns off and drops its pill, ITS box shrank while the
-      // sensor's didn't, so they got pushed apart less than before and ended
-      // up nearly touching/overlapping — reading as "the badge got smaller"
-      // when it was really "got less clearance from its neighbour". Sizing
-      // the box off pill-CAPABILITY instead of current visibility keeps the
-      // same spacing regardless of which of a pair happens to have a reading
-      // at this exact moment. Only the WIDTH still adapts to the actual pill
-      // text when one is shown (a wide value still needs proportionally more
-      // horizontal room than a narrow one).
-      const pillCapable = PILL_CAPABLE_TYPES.has(s.lbl.type);
-      const pillHalfW = hasPill
-        ? (s.lbl.valueText.text.length * m.pillValueCharPx + m.pillValuePadPx) / 2
-        : 0;
-      b.halfW = Math.max(m.badgeDiameterPx / 2, pillHalfW) * scale;
-      b.halfH = (pillCapable ? m.classicHalfHWithPillPx : m.classicHalfHPx) * scale;
-      // Box centre Y relative to the anchor.
-      b.cy = (pillCapable ? m.classicCyWithPillPx : m.classicCyPx) * scale;
+      badgeBox(b, {
+        hasValue: s.lbl.valueWrap.isVisible,
+        valueLen: s.lbl.valueText.text.length,
+        // ⚠️ CAPABILITY, NOT CURRENT VISIBILITY — see badgeBox's docstring for
+        // the fan-and-sensor pair this rule exists for.
+        pillCapable: PILL_CAPABLE_TYPES.has(s.lbl.type),
+      }, m, scale, card);
     }
     boxes.length = shown.length;
     return boxes;
@@ -7841,9 +7826,7 @@ export class EntityVisuals {
    *  render width carries cssToGui and so does `scale`, so the device pixel
    *  ratio cancels and this is a pure fraction of the screen. */
   private cardBudget(): number {
-    const width = this.scene.getEngine().getRenderWidth();
-    const scale = this.effectiveScale();
-    return scale > 0 && width > 0 ? (width * CARD_MAX_VIEWPORT_FRACTION) / scale : 0;
+    return cardBudget(this.viewport(), CARD_MAX_VIEWPORT_FRACTION);
   }
 
   /**
@@ -7860,9 +7843,7 @@ export class EntityVisuals {
    * the same trap the focus-retention rule fell into in 2.354.0.
    */
   private isPhoneWidth(): boolean {
-    const engine = this.scene.getEngine();
-    const cssWidth = engine.getRenderWidth() * engine.getHardwareScalingLevel();
-    return cssWidth > 0 && cssWidth <= PHONE_MAX_CSS_WIDTH;
+    return isPhoneWidth(this.viewport(), PHONE_MAX_CSS_WIDTH);
   }
 
   private cardCellCap(max = MAX_TOTAL_CHIPS): number {
@@ -7877,15 +7858,11 @@ export class EntityVisuals {
     // walks are the shapes the phone will actually draw. A second, screen-blind
     // ceiling used to sit in front of it and that is what this cache-line's
     // earlier comment defended; it outlived the count badge that made it safe.
-    let cells = max;
-    if (scale > 0 && width > 0) {
-      const budget = this.cardBudget();
-      // Down to 2 and no further: a pair card is two badge boxes, which fits
-      // any screen this app can run on, and stopping there keeps the "a group
-      // of two is ALWAYS the full-size card" promise the one-pass placement
-      // rests on.
-      while (cells > 2 && this.cardOf(cells, max).width > budget) cells--;
-    }
+    // The loop's rule (measured, and floored at 2) is badgeViewport.cellCapFor;
+    // what stays here is the arrangement it measures WITH.
+    const cells = scale > 0 && width > 0
+      ? cellCapFor(this.cardBudget(), max, (n) => this.cardOf(n, max).width)
+      : max;
     this.capCells = cells;
     return cells;
   }
