@@ -1,3 +1,29 @@
+## 2.929.0
+
+### Added — send a test alert, without waiting for a real one
+There is now a "Send a test alert" button on Act & Tell. It raises one test
+alert and carries it the whole way — the same routing, the same message, the
+same to-do list and the same chasing a real alert gets — with no AI involved and
+nothing spent. It is the only way to answer "does an alert actually reach my
+phone?" without waiting for something to go wrong.
+
+⚠️ The machinery has existed since 2026-08-27, fully guarded and tested, and had
+no button: the only thing that ever fired it was a developer-side tool, and when
+that was removed the feature became unreachable. Nothing failed, which is why
+nothing noticed.
+
+### Added — a check that finds capabilities with no way to reach them
+This is the third feature in this subsystem to ship without a screen, so there
+is now a test for the pattern. It lists every add-on call the app can make and
+fails when one has nothing that uses it. ⚠️ It reports these as QUESTIONS, not
+faults: on its first run one of them turned out to be a screen retired on
+purpose. An entry has to be classified — wired up, or recorded as deliberate
+with the reason — and a recorded reason that stops being true also fails.
+
+⚠️ It found one open question straight away: nothing shows the assistant's runs.
+Either that deserves a screen or the unused call should go; it is written down
+rather than deleted, because deleting it is what would hide the question.
+
 ## 2.928.0
 
 ### Fixed — Briefings now tells the Facility Manager where their jobs are

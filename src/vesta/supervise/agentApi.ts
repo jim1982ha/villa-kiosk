@@ -628,6 +628,46 @@ const numOr = (v: unknown): number | undefined => {
  * boolean, because "nothing happened" has several causes and most are fine.
  * This spends real budget.
  */
+/**
+ * Fire the delivery DRILL: one synthetic concern, carried through the real
+ * routing, delivery, to-do and escalation sweep, with no model in the path.
+ *
+ * ⚠️ THE ROUTE HAD NO CLIENT AT ALL UNTIL 2026-09-06, WHICH IS THE THIRD TIME
+ * THIS SUBSYSTEM HAS SHIPPED A CAPABILITY WITH NO SURFACE. `_agent_drill` has
+ * existed, been guarded and been tested since 2026-08-27 — it is the only way
+ * to answer "does a concern actually reach my phone and my to-do list?" without
+ * waiting for a real one — and the only thing that ever POSTed `{drill: true}`
+ * was a developer-side skill, which was deleted. Nothing failed: the handler
+ * went on being tested, `test_nginx_routes` went on confirming the route was
+ * reachable, and there was no way to press it. Exactly the shape
+ * `test_route_has_a_client` was written for one route earlier.
+ *
+ * ⚠️ IT SENDS A REAL MESSAGE TO A REAL PHONE, possibly at night, and spends no
+ * model budget. Owner-only server-side for the first reason, not the second.
+ *
+ * ⚠️ A REFUSAL IS USUALLY THE DEDUPE RULE WORKING. `raise_concern` refuses a
+ * second concern on an open subject, so re-running while the last drill is
+ * still open is answered rather than performed — the reason comes back verbatim
+ * so a caller can tell that apart from a failure.
+ */
+export async function fireDeliveryDrill(
+  severity = "notice",
+): Promise<{ ok: boolean; reason: string; concernId: string }> {
+  const r = await postJson("agent-run-now", { drill: true, severity });
+  const body = (await r.json().catch(() => ({}))) as {
+    ok?: unknown; reason?: unknown; concern_id?: unknown; error?: unknown;
+  };
+  return {
+    ok: r.ok && body.ok === true,
+    reason: typeof body.reason === "string" && body.reason
+      ? body.reason
+      : typeof body.error === "string" ? body.error
+      : r.ok ? "" : `The add-on refused the drill (HTTP ${r.status}).`,
+    concernId: typeof body.concern_id === "string" ? body.concern_id : "",
+  };
+}
+
+
 export async function runTriageNow(): Promise<{ ok: boolean; reason: string }> {
   const r = await postJson("agent-run-now", { triage: true });
   const d = (await r.json().catch(() => ({}))) as

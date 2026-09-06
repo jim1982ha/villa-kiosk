@@ -43,6 +43,7 @@ import { ReflexTab, ObserveTab } from "./ReflexObserve";
 import { TierIntro, TIERS } from "@/vesta/shared/tiers";
 import ActDeliverySection from "./ActDeliverySection";
 import AgentTodo from "./AgentTodo";
+import DeliveryDrill from "./DeliveryDrill";
 import AgentAdvancedModal from "./AgentAdvancedModal";
 import { loadAgentConfig } from "@/vesta/supervise/agentApi";
 import { fetchReportsDiagnostics,
@@ -351,6 +352,11 @@ function AgentDialog(
                   dialog that showed no chips at all. */}
               {canConfigure && <AgentProposals />}
               <ActDeliverySection />
+              {/* ⚠️ THE REHEARSAL, UNDER THE PERMISSIONS IT REHEARSES. It
+                  proves the delivery half end to end without a model and
+                  without waiting for a real alert; owner-only, because it
+                  sends a real message. */}
+              <DeliveryDrill />
               {/* ⚠️ THE WORK THIS STEP PRODUCED, BENEATH THE RULES IT PRODUCED
                   IT UNDER. It had its own tab until 2026-08-28; the paragraph
                   above now ends "…becomes a to-do item, listed below" and this
