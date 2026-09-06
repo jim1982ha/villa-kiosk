@@ -72,6 +72,21 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `tests/consistency/villa_rules.ts`'s fixtures. All invented, and each one
+    # exists to name a RULE rather than a device:
+    #   • `sensor.combo_temp`/`combo_hum` are the two-entity combo sensor that
+    #     must count as ONE device — the exact HUD-vs-Facility disagreement
+    #     (`3 offline` against `1 offline`) that `deviceGroups.ts` was written
+    #     to end.
+    #   • `light.ghost` is config debris (no HA entity, no geometry) and
+    #     `light.kept` is its opposite; together they prove the merge direction.
+    #   • `switch.outdoor_socket` and `switch.aggregate_meter` are the two
+    #     REVERTED substring collisions `SWITCH_PURPOSE_HINTS` records —
+    #     "door" inside "outdoor", "gate" inside "aggregate".
+    #   • `switch.pool_pump_light` is the system-beats-fixture ordering case.
+    "sensor.combo_temp", "sensor.combo_hum",
+    "light.ghost", "light.kept",
+    "switch.outdoor_socket", "switch.aggregate_meter", "switch.pool_pump_light",
     # `test_subject_identity`'s fixtures — the pool/jet pair reproduces the
     # delivered brief's exact shape (one escalation naming two devices, plus a
     # power and a power-factor sensor whose labels nest), which is the geometry

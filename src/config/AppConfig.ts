@@ -287,7 +287,13 @@ export interface DeviceGroup {
   label?: string;
 }
 
-const env = import.meta.env;
+// ⚠️ `?? {}` SO THIS MODULE LOADS OUTSIDE VITE. `import.meta.env` is a Vite
+// construct and is `undefined` under plain `node`, so reading `.VITE_LAT` off
+// it threw at module scope — which made `loadConfig`, the entry point of every
+// stored setting in the app, the ONE config module no test harness could reach.
+// The villa-neutrality rule these defaults exist to uphold was stated in prose
+// in three modules and executed nowhere; see tests/consistency/villa_rules.ts.
+const env: Record<string, string | undefined> = import.meta.env ?? {};
 
 export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",

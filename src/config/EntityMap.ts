@@ -26,7 +26,7 @@ export type { EntityMapping, EntityType };
  * Config Editor and auto-detection, and once those existed nobody removed the
  * seed — so every install, on any villa, started with two dozen devices that
  * belong to somebody else's house. Worse, DEFAULT_CONFIG is spread UNDER
- * stored config on load (see AppConfig's mergeStored), so deleting one of
+ * stored config on load (see AppConfig's `loadConfig`), so deleting one of
  * those entries in the UI silently came back on the next reload — a real bug
  * users hit as "stale entities I can't get rid of".
  *
