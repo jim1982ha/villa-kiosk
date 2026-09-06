@@ -33,8 +33,9 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from .hass import HassClient, HassUnavailable
 from .log import warn
+from . import store
 
-FM_DATA_FILE = "/data/fm-data.json"
+FM_DATA_FILE = f"{store.DATA_DIR}/fm-data.json"
 
 # The collections the SPA maintains. Named explicitly rather than iterating
 # whatever keys the file happens to have, so a future collection is invisible

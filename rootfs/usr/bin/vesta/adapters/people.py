@@ -66,7 +66,7 @@ from vesta.adapters import store as store_mod
 #:
 #: ⚠️ THE ENVELOPE KEY IS WIRE-ONLY. The proxy wraps the document in `config` on
 #: the way out; the file on disk holds the bare document.
-CONFIG_PATH: str = "/data/vesta/agent-config.json"
+CONFIG_PATH: str = f"{store_mod.DATA_DIR}/vesta/agent-config.json"
 
 #: A PROFILE -> the audience whose voice they are written for.
 #: ⚠️ IMPORTED FROM `agent.playbooks` UNTIL 2.651.0 AND NOW DUPLICATED HERE ON

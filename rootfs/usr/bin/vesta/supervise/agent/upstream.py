@@ -41,6 +41,11 @@ from vesta.supervise.agent.tools.base import NARROW_HINT
 from vesta.supervise.agent.tools.base import fail
 from vesta.supervise.agent.tools.base import truncate
 from vesta.adapters.log import log, swallow
+# ⚠️ MODULE LEVEL, NOT INSIDE THE FUNCTION. The path constants below are
+# rooted on DATA_DIR at import so `store.configure()` reaches them; a
+# deferred import cannot serve a module-level f-string. store imports
+# nothing from this package, so there is no cycle to avoid here.
+from vesta.adapters import store as store_mod
 
 SUPERVISOR = "http://supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -57,7 +62,7 @@ SLUG_SUFFIX: str = "_ha_mcp"
 #: somebody updates an add-on, not every triage pass, and ~96 `tools/list`
 #: round trips a day for an answer that moves monthly is the cost that left
 #: this unwired in the first place.
-CATALOGUE_FILE: str = "/data/vesta/upstream.json"
+CATALOGUE_FILE: str = f"{store_mod.DATA_DIR}/vesta/upstream.json"
 CATALOGUE_MAX_AGE_H: int = 24
 
 #: ⚠️ THE TIMEOUT IS SHORT ON PURPOSE. This sits between a person's question and

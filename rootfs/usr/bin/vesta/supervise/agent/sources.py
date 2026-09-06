@@ -55,6 +55,11 @@ from vesta.adapters.log import note, swallow, warn
 #: enough — a second copy of `MIN_SAMPLES` is how the two would drift.
 from vesta.supervise.observe import salience as salience_mod
 from vesta.supervise.observe import snapshot as snapshot_mod
+# ⚠️ MODULE LEVEL, NOT INSIDE THE FUNCTION. The path constants below are
+# rooted on DATA_DIR at import so `store.configure()` reaches them; a
+# deferred import cannot serve a module-level f-string. store imports
+# nothing from this package, so there is no cycle to avoid here.
+from vesta.adapters import store as store_mod
 
 
 def _journal_rows() -> List[Dict[str, Any]]:
@@ -309,7 +314,7 @@ DOCUMENT_RECORD_LIMIT: int = 25
 #: triage clock and the proxy's document preview are different call paths and,
 #: on a restart, different processes; a cache in memory would make the profile
 #: differ between them, which is precisely the byte-instability REQ-004 forbids.
-CAPABILITIES_FILE: str = "/data/vesta/capabilities.json"
+CAPABILITIES_FILE: str = f"{store_mod.DATA_DIR}/vesta/capabilities.json"
 
 #: How stale a survey may be before it is re-run. ⚠️ A DAY, AND THE UNIT IS THE
 #: POINT. A villa's CAPABILITIES — does it meter per device, is a tariff
@@ -355,7 +360,7 @@ def absent_capability_sentences() -> Optional[List[str]]:
 #: AND FOR THE SAME REASON: a property's rooms change when somebody renames one,
 #: not on a cadence, so reading the registry every triage pass is ~96 fan-outs a
 #: day for an answer that moves a few times a year.
-LAYOUT_FILE: str = "/data/vesta/layout.json"
+LAYOUT_FILE: str = f"{store_mod.DATA_DIR}/vesta/layout.json"
 
 
 def layout() -> Dict[str, Any]:
@@ -867,7 +872,7 @@ def service_caller(session: Any) -> Optional[Callable[..., Any]]:
 #: day over ~1,250 entities. A device's class and unit change when somebody
 #: re-configures a device, which is monthly at most, so they belong on the same
 #: clock as the room list and the capability survey rather than in the ring.
-MEASURES_FILE: str = "/data/vesta/measures.json"
+MEASURES_FILE: str = f"{store_mod.DATA_DIR}/vesta/measures.json"
 
 
 async def refresh_measures(session: Any, *, now: Optional[float] = None,

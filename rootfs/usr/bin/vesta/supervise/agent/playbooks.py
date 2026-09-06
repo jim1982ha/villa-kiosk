@@ -40,13 +40,13 @@ SHIPPED_ROOT: str = "/usr/share/vesta/playbooks"
 #: `/data/vesta/memory/<hash>.md` one guessed name away from being served as a
 #: procedure. Found while writing `review.py` — the module whose docstring
 #: claimed the property this constant was quietly denying.
-LEARNED_ROOT: str = "/data/vesta/local"
+LEARNED_ROOT: str = f"{store_mod.DATA_DIR}/vesta/local"
 
 #: Where `note_read` records what was consulted. ⚠️ NOT IN THE PROMPT AND NOT
 #: IN A PLAYBOOK. It is a DATE, and a date above the cache breakpoint ends
 #: caching for every call — the same reason `last_confirmed` is front matter
 #: rather than prose. It lives in a store nobody sends.
-READS_PATH: str = "/data/vesta/playbook-reads.json"
+READS_PATH: str = f"{store_mod.DATA_DIR}/vesta/playbook-reads.json"
 
 #: How long a playbook may go unread before the quarterly review is told about
 #: it. ⚠️ A PROMPT FOR A DECISION, NEVER A DELETION. The current blueprint pack

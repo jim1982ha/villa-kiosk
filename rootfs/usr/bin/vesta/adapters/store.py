@@ -59,24 +59,65 @@ DATA_DIR: str = "/data"
 
 
 def configure(*, data_dir: str = "") -> None:
-    """Point every store at a different directory. The export's seam
-    (REQ-063); the add-on never calls it. Startup-only, like `hass.configure`.
+    """Point every store in the package at a different directory. The export's
+    seam (REQ-063); the add-on never calls it. Startup-only, like
+    `hass.configure`.
 
-    ⚠️ THE `*_FILE` CONSTANTS BELOW ARE DERIVED AT IMPORT and are deliberately
-    LEFT ALONE here — every reader joins paths through them, so they are
-    rebuilt from the new root instead. A caller that imported one by value
-    before configuring gets the old path, which is why this must run before
-    anything else touches the package; the external entrypoint owns that
-    ordering, exactly as the proxy owns its boot order today.
+    ⚠️ THIS USED TO REWRITE ONLY ITS OWN MODULE NAMESPACE, and its docstring
+    said otherwise. Six constants moved and TWENTY did not: concerns, audit,
+    budget, the journal, flag types, the villa memory, the learned playbook
+    tree, the review queues and the 0600 credentials file all kept writing to
+    /data. An architecture review found it, and the test suite had already
+    learned the defect and routed around it — no test called this function at
+    all, while 24 files monkeypatched 63 individual path constants instead,
+    one of them with a comment explaining that patching the root alone does
+    not work.
+
+    ⚠️ THE WALK IS OVER LOADED MODULES, so this must run before anything
+    starts writing — which is what "startup-only" already meant. A module
+    imported AFTER this call derives its own paths from the new DATA_DIR at
+    import, so both orders are covered; that is why every path constant in
+    this package is now rooted on DATA_DIR rather than on a bare "/data"
+    literal, and `test_store_configure.py` pins both halves.
+
+    Rewriting names rather than resolving paths lazily is deliberate: the
+    constants ARE the seam every reader and every test already holds, and a
+    `path()` lookup would have moved 63 monkeypatch sites for no gain the
+    relocation test does not already give.
     """
     global DATA_DIR
     if not data_dir:
         return
     old_root = DATA_DIR
     DATA_DIR = data_dir.rstrip("/")
-    for name, value in list(globals().items()):
-        if name.endswith("_FILE") and isinstance(value, str)                 and value.startswith(old_root + "/"):
-            globals()[name] = DATA_DIR + value[len(old_root):]
+    _repoint(old_root, DATA_DIR)
+
+
+#: Constant-name suffixes that hold a path into the data root. A store that
+#: names its path anything else is invisible to `configure` — which is what
+#: `test_store_configure.py`'s source pin exists to catch.
+_PATH_SUFFIXES: Final[tuple[str, ...]] = ("_FILE", "_PATH", "_ROOT", "_DIR")
+
+
+def _repoint(old_root: str, new_root: str) -> None:
+    """Move every loaded `vesta.*` path constant from one root to the other."""
+    import sys as _sys
+
+    for name, module in list(_sys.modules.items()):
+        if not (name == "vesta" or name.startswith("vesta.")):
+            continue
+        if module is None:
+            continue
+        for attr, value in list(vars(module).items()):
+            if not attr.endswith(_PATH_SUFFIXES):
+                continue
+            if not isinstance(value, str):
+                continue
+            if value == old_root:
+                setattr(module, attr, new_root)
+            elif value.startswith(old_root + "/"):
+                setattr(module, attr, new_root + value[len(old_root):])
+
 
 REPORTS_CONFIG_FILE: Final[str] = f"{DATA_DIR}/reports-config.json"
 REPORTS_HISTORY_FILE: Final[str] = f"{DATA_DIR}/reports-history.json"

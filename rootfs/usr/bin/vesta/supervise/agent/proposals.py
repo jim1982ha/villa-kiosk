@@ -39,7 +39,7 @@ from vesta.adapters.log import log, swallow
 #: Where proposals live. ⚠️ ITS OWN FILE, not a flag on a concern: a concern is
 #: something the villa has CONCLUDED and this is something it wants PERMISSION
 #: for, with a lifetime measured in minutes rather than days.
-PROPOSALS_FILE: str = "/data/vesta/proposals.json"
+PROPOSALS_FILE: str = f"{store_mod.DATA_DIR}/vesta/proposals.json"
 
 #: How long a proposal stands. ⚠️ SHORT ON PURPOSE — see the module docstring's
 #: third rule. Ten minutes is long enough to walk to the tablet and short enough

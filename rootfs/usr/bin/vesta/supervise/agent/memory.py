@@ -45,7 +45,7 @@ from vesta.supervise.agent import content
 from vesta.adapters import store as store_mod
 from vesta.adapters.log import log, swallow
 
-MEMORY_ROOT: str = "/data/vesta/memory"
+MEMORY_ROOT: str = f"{store_mod.DATA_DIR}/vesta/memory"
 
 #: DATA-018. ⚠️ `proposed` EXISTS SO A LOW-CONFIDENCE CLAIM CAN BE HELD WITHOUT
 #: BEING ASSERTED. Only `active` reaches the prompt; a proposal is visible to a

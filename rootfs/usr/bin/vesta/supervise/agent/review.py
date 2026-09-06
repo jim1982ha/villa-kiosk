@@ -33,16 +33,16 @@ from vesta.supervise.agent import content
 from vesta.adapters import store as store_mod
 from vesta.adapters.log import log, swallow
 
-QUEUE_ROOT: str = "/data/vesta/review-queue"
+QUEUE_ROOT: str = f"{store_mod.DATA_DIR}/vesta/review-queue"
 
 #: Where an APPROVED draft lands. ⚠️ THE LEARNED TREE, NEVER THE SHIPPED ONE.
 #: A villa-specific procedure is correct here and would be a hard-rule breach
 #: in `rootfs/usr/share/vesta/playbooks/` — that asymmetry is the whole reason
 #: the two trees exist, and approval must not be able to cross it.
-LIVE_ROOT: str = "/data/vesta/local"
+LIVE_ROOT: str = f"{store_mod.DATA_DIR}/vesta/local"
 
 #: Discards, kept as a record. See the module docstring's fourth rule.
-DISCARD_ROOT: str = "/data/vesta/review-discarded"
+DISCARD_ROOT: str = f"{store_mod.DATA_DIR}/vesta/review-discarded"
 
 #: ⚠️ THE TRIGGER FOR PROPOSING ONE AT ALL. An investigation that took one or
 #: two tool calls was a lookup, and a "procedure" for a lookup is noise that

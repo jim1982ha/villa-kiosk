@@ -39,8 +39,9 @@ from typing import (Any, Dict, Iterable, List, Mapping, Optional, Sequence,
                     Set, Tuple)
 
 from .log import warn
+from . import store
 
-DEVICE_CONFIG_FILE = "/data/device-config.json"
+DEVICE_CONFIG_FILE = f"{store.DATA_DIR}/device-config.json"
 
 #: ⚠️ THE SAME PAIR AS `deviceGroups.ts`, AND THE ONLY ONE THERE IS. A combo
 #: sensor exposing `_temperature` and `_humidity` is ONE device, and the first

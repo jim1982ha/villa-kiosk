@@ -147,6 +147,15 @@ from vesta.adapters import hass as reports_hass
 from vesta.brief import tasks as reports_tasks
 from vesta.brief.narrate import providers as reports_narrate_providers
 from vesta.adapters import store as reports_store
+# ⚠️ IMPORTED FOR THE PATHS THEY OWN, NOT FOR BEHAVIOUR (2.942.0). Four /data
+# documents had two homes each — the writer here, the reader in an adapter,
+# each naming the file with its own literal, and nothing pinning the pair. The
+# host importing downward is already the pattern above; what it buys here is
+# that adding a document, or relocating the data root, is one edit.
+from vesta.adapters import devices as reports_devices
+from vesta.adapters import ledger as reports_ledger
+from vesta.adapters import people as reports_people
+from vesta.supervise.agent import concerns as agent_concerns
 # ⚠️ A SECOND PACKAGE BESIDE `reports`, NOT INSIDE IT. `observe` is the
 # agent-era observation floor and `reports` is the pipeline being dismantled in
 # PH-5; keeping them apart means that cleanup is a directory rather than a
@@ -1101,7 +1110,12 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
 # `id`. Kept here (not imported from the frontend) because the server must be
 # able to tell "a record was removed" on its own — a rule that only the client
 # knows is not a rule.
-FM_RECORD_COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedDocuments")
+# ⚠️ THE LEDGER'S LIST, NOT A COPY OF IT (2.942.0). This tuple was
+# byte-identical to adapters/ledger.COLLECTIONS and nothing pinned the pair.
+# Add a sixth collection and you had to find BOTH: miss this one and
+# `_fm_guest_write_ok`'s unknown-key loop below silently refuses every guest
+# fault report; miss the ledger's and the briefing goes quiet about it.
+FM_RECORD_COLLECTIONS = reports_ledger.COLLECTIONS
 
 # The subset whose records are EVIDENCE of something that happened: a fault
 # that was raised, money that was spent, work that was signed off. Those are
@@ -1645,7 +1659,12 @@ async def model_upload_handler(request: web.Request) -> web.Response:
 # room polygons), hence the roomier cap — still bounded so a bad body can't
 # fill /data. See the frontend's config/deviceConfig.ts for exactly which
 # AppConfig fields are shared (site-wide) vs kept per-device (look/feel).
-DEVICE_CONFIG_FILE = "/data/device-config.json"
+# ⚠️ THE ADAPTER OWNS THE PATH (2.942.0). This was a second spelling of the
+# same document: the proxy WROTE it here and adapters/devices.py READ it from
+# its own literal. Two homes, no parity pin — unlike adapters/devices.py's
+# deliberate duplicate CLASSIFIER, which test_consistency_parity.py does pin.
+# Importing it also means the file follows store.configure() on an export.
+DEVICE_CONFIG_FILE = reports_devices.DEVICE_CONFIG_FILE
 DEVICE_CONFIG_MAX_BYTES = 8_000_000
 
 
@@ -1972,7 +1991,7 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
 # because every write comes from one operator on one device at a time, and an
 # atomic whole-document replace is far easier to reason about than four stores
 # that can disagree with each other mid-edit.
-FM_DATA_FILE = "/data/fm-data.json"
+FM_DATA_FILE = reports_ledger.FM_DATA_FILE
 FM_DATA_MAX_BYTES = 4_000_000
 
 # Evidence photos back the compliance record — a maintenance completion or a
@@ -2146,7 +2165,7 @@ reports_config_get_handler, reports_config_put_handler = _json_store_handlers(
 # applied at READ time by `agent.config.view` and are never persisted: a seed
 # spread underneath stored config resurrects entries the operator deleted, which
 # is a bug this project has already shipped once and been reported for.
-AGENT_CONFIG_FILE = "/data/vesta/agent-config.json"
+AGENT_CONFIG_FILE = reports_people.CONFIG_PATH
 AGENT_CONFIG_MAX_BYTES = 256_000
 def _agent_config_guard(request, body, old, new):
     """⚠️ `agent.config.errors` WAS WRITTEN, TESTED, AND CALLED BY NOBODY.
@@ -2184,7 +2203,7 @@ agent_config_get_handler, agent_config_put_handler = _json_store_handlers(
 # rewrite one would make the whole record worthless as a description of what the
 # agent concluded. Dismissing a concern is a LIFECYCLE transition (TASK-062),
 # not a document edit, and gets its own verb when it is built.
-AGENT_CONCERNS_FILE = "/data/vesta/concerns.json"
+AGENT_CONCERNS_FILE = agent_concerns.CONCERNS_FILE
 AGENT_CONCERNS_MAX_BYTES = 2_000_000
 agent_concerns_get_handler, _agent_concerns_put_unrouted = _json_store_handlers(
     AGENT_CONCERNS_FILE, "concerns", {"concerns": []}, AGENT_CONCERNS_MAX_BYTES,
@@ -2217,7 +2236,6 @@ def _agent_concerns_for_reports() -> List[Dict[str, Any]]:
     and this cannot silently print nothing during an observe period.
     """
     try:
-        from vesta.supervise.agent import concerns as agent_concerns
         from vesta.supervise.agent import sources as agent_sources
 
         rows = agent_sources.concern_rows(

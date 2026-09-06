@@ -31,9 +31,10 @@ import struct
 from typing import List, Set
 
 from .log import warn
+from . import store
 
 #: Where `supervisor-proxy.py` lands an uploaded model (MANAGED_PATH["glb"]).
-MODEL_FILE = "/data/www/villa.glb"
+MODEL_FILE = f"{store.DATA_DIR}/www/villa.glb"
 
 _GLB_MAGIC = 0x46546C67   # "glTF"
 _CHUNK_JSON = 0x4E4F534A  # "JSON"

@@ -52,7 +52,7 @@ def _add_usd(cost: float) -> None:
     except Exception:  # noqa: BLE001 - accounting must not fail the work
         pass
 
-USAGE_PATH: str = "/data/vesta/usage.json"
+USAGE_PATH: str = f"{store_mod.DATA_DIR}/vesta/usage.json"
 
 #: ⚠️ BOUNDED, LIKE EVERY OTHER RING UNDER /data. At a fifteen-minute cadence
 #: this is roughly two months of triage, which comfortably covers "since I
