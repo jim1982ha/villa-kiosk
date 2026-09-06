@@ -1,3 +1,21 @@
+## 2.962.0
+
+### Fixed — a run of wrong PINs could lock the whole villa out, eventually
+The limiter that guards against somebody guessing a PIN has two tiers. The
+second one counted wrong entries for a role and never forgot them, so fifty
+mistyped PINs spread across weeks — every guest, every tablet, honest mistakes
+included — locked that role out from every device for fifteen minutes. It now
+forgets a quiet period, which is what its own description always said it did.
+A burst of real guessing is still stopped exactly as before.
+
+### Added — the checks on who may reach Home Assistant now run automatically
+The rules deciding what a guest or a facility session may send to Home
+Assistant were only ever verified by a test file kept outside the project, so
+on any fresh copy nothing checked them at all — and five of those rules had
+never been checked anywhere. They now run on every change, including the seven
+specific requests that once slipped through to Home Assistant from a guest
+session, and the rule that a guest may file a fault report but not edit one.
+
 ## 2.961.0
 
 ### Fixed — the release notes in Home Assistant were three weeks out of date
