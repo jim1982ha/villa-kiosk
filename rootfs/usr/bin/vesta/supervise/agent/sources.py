@@ -590,7 +590,7 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
 
     delta_text = snapshot_mod.delta(
         salient=ranked, unscorable=unscorable,
-        offline_total=_offline_count(),
+        offline_total=_offline_count(entries),
         concerns=_open_concerns(), ledger=_facility_record(),
         coverage=_coverage(now=now, window_hours=window_hours),
         firings=_recent_firings(now=now, window_hours=window_hours),
@@ -600,7 +600,7 @@ def build_document(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
                                        delta_text=delta_text)
 
 
-def _offline_count() -> int:
+def _offline_count(entries: Optional[Sequence[Mapping[str, Any]]] = None) -> int:
     """HOW MANY devices are not reporting right now. Never raises.
 
     ⚠️ A COUNT, AND THE NAMES ARE DELIBERATELY NOT RETURNED (2026-08-27,
@@ -645,7 +645,13 @@ def _offline_count() -> int:
         from vesta.adapters import devices as devices_mod
         from vesta.adapters import model as model_mod
 
-        states = journal_mod.last_states()
+        # ⚠️ FROM THE ROWS THE PASS ALREADY HAS. Called with no argument this
+        # reached `last_states()`, which opens and parses the whole journal —
+        # so one pass read a ring of up to 105,000 rows TWICE, the second time
+        # to derive this single integer. `build_document`'s header is the
+        # reason that matters: "That is what lets a triage pass stay cheap
+        # enough to run four times an hour."
+        states = journal_mod.last_states(entries)
         if not states:
             # ⚠️ AN EMPTY JOURNAL IS NOT AN EMPTY VILLA, AND THIS GUARD IS THE
             # SHARP EDGE. `is_unavailable(None)` is True by design ("absent

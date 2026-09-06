@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.968.0",
+  "version": "2.969.0",
   "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
@@ -29,7 +29,9 @@
     "test:box-merge": "node --import ./tests/consistency/register.mjs tests/consistency/box_merge_test.ts",
     "test:two-finger": "node --import ./tests/consistency/register.mjs tests/consistency/two_finger_test.ts",
     "test:camera-gesture": "node --import ./tests/consistency/register.mjs tests/consistency/camera_gesture_test.ts",
-    "test:tap-thresholds": "node --import ./tests/consistency/register.mjs tests/consistency/tap_thresholds_test.ts"
+    "test:tap-thresholds": "node --import ./tests/consistency/register.mjs tests/consistency/tap_thresholds_test.ts",
+    "test:socket-timing": "node --import ./tests/consistency/register.mjs tests/consistency/socket_timing_test.ts",
+    "test:check-flags": "node --import ./tests/consistency/register.mjs tests/consistency/check_flags_test.ts"
   },
   "dependencies": {
     "@babylonjs/core": "^7.37.2",

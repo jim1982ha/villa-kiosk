@@ -935,6 +935,26 @@ def feedback(concern_id: str, *, useful: bool, reason: str = "",
     return ok, "" if ok else "the concern store could not be written"
 
 
+def _is_negative_rating(row: Mapping[str, Any]) -> bool:
+    """Did a person rate this concern "less like this"?
+
+    ⚠️ `useful_at` IS THE DISCRIMINATOR, NEVER `useful` ALONE — the verdict is
+    `false` both for "less like this" and for "nobody has said anything", so
+    reading the bare flag would count every unrated concern as a complaint and
+    suppress a subject the moment three were raised. Third time this pair has
+    had to be read together; see `feedback_guessed-field-shapes`.
+
+    ⚠️ ONE SPELLING, BECAUSE THERE WERE TWO. `negatives_of` and
+    `suppressed_subjects` are the per-subject figure and the threshold applied
+    to it, and each wrote this expression out — so they were two answers to one
+    question, ten lines apart. `negatives_of`'s docstring records what that
+    cost: "a mutation swapping the OTHER one back was survived by every test in
+    this file, because the fixtures happened to do both, which is how a
+    divergence like that stays invisible."
+    """
+    return bool(str(row.get("useful_at") or "").strip()) and not row.get("useful")
+
+
 def negatives_of(subject_key: str,
                   rows: Optional[Sequence[Mapping[str, Any]]] = None) -> int:
     """How many times a person has said "less like this" about this subject.
@@ -943,19 +963,16 @@ def negatives_of(subject_key: str,
     concerns is a counter that disagrees with them the first time one is edited
     or expires; the lifecycle IS the record.
 
-    ⚠️ IT MUST COUNT WHAT `suppressed_subjects` COUNTS — it is the per-subject
-    figure that function's threshold is applied to, so two rules here are two
-    answers to one question. It counted `state == "dismissed"` until the ratings
-    became the signal (2026-08-28); a mutation swapping the OTHER one back was
+    ⚠️ IT COUNTS WHAT `suppressed_subjects` COUNTS, BY CONSTRUCTION NOW — both
+    ask `_is_negative_rating`. This paragraph used to ASK them to agree, and
+    recorded what asking was worth: "a mutation swapping the OTHER one back was
     survived by every test in this file, because the fixtures happened to do
-    both, which is how a divergence like that stays invisible.
+    both, which is how a divergence like that stays invisible."
     """
     key = str(subject_key)
     source = list(read() if rows is None else rows)
     return sum(1 for r in source
-               if str(r.get("subject_key")) == key
-               and str(r.get("useful_at") or "").strip()
-               and not r.get("useful"))
+               if str(r.get("subject_key")) == key and _is_negative_rating(r))
 
 
 def suppressed_subjects(rows: Optional[Sequence[Mapping[str, Any]]] = None
@@ -990,7 +1007,7 @@ def suppressed_subjects(rows: Optional[Sequence[Mapping[str, Any]]] = None
     """
     counts: Dict[str, int] = {}
     for row in (read() if rows is None else rows):
-        if str(row.get("useful_at") or "").strip() and not row.get("useful"):
+        if _is_negative_rating(row):
             key = str(row.get("subject_key") or "")
             if key:
                 counts[key] = counts.get(key, 0) + 1

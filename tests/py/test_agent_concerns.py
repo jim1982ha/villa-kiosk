@@ -435,3 +435,65 @@ def test_the_suppression_constants_are_all_enforced() -> None:
     assert not unread, (
         "these constants are declared in `concerns.py` and read nowhere in it, "
         "so whatever rule they state is not the rule that runs: %s" % unread)
+
+
+def test_the_two_negative_counters_answer_from_ONE_predicate() -> None:
+    """⚠️ `negatives_of`'s OWN DOCSTRING RECORDS THIS SURVIVING A MUTATION.
+
+    "It counted `state == "dismissed"` until the ratings became the signal
+    (2026-08-28); a mutation swapping the OTHER one back was survived by every
+    test in this file, because the fixtures happened to do both, which is how a
+    divergence like that stays invisible."
+
+    Still true when this was written: the rule "a rating exists and it was
+    negative" was spelled out in `negatives_of` and again in
+    `suppressed_subjects`, ten lines apart. They are the per-subject figure and
+    the threshold applied to it, so two spellings are two answers to one
+    question.
+
+    ⚠️ THE FIXTURE IS BUILT SO THE TWO CANNOT AGREE BY ACCIDENT. Every shape
+    the pair distinguishes is present — a negative rating, a POSITIVE rating, a
+    dismissal with no rating at all, an unrated row, and a rated row belonging
+    to another subject. A fixture whose rows are all one shape is what let the
+    original mutation through.
+    """
+    from vesta.supervise.agent import concerns as concerns_mod
+
+    rows = [
+        {"id": "c1", "subject_key": "k", "useful_at": "2026-09-01", "useful": False},
+        {"id": "c2", "subject_key": "k", "useful_at": "2026-09-02", "useful": False},
+        {"id": "c3", "subject_key": "k", "useful_at": "2026-09-03", "useful": True},
+        {"id": "c4", "subject_key": "k", "state": "dismissed"},
+        {"id": "c5", "subject_key": "k"},
+        {"id": "c6", "subject_key": "other", "useful_at": "2026-09-04",
+         "useful": False},
+        {"id": "c7", "subject_key": "k", "useful_at": "   ", "useful": False},
+    ]
+
+    # ⚠️ TWO NEGATIVES, NOT FIVE. The positive rating, the dismissal with no
+    # rating, the unrated row, the other subject and the whitespace-only stamp
+    # are each a different way of not being a complaint about `k`.
+    assert concerns_mod.negatives_of("k", rows) == 2
+
+    # ⚠️ AND THE THRESHOLD IS APPLIED TO THAT SAME FIGURE. Below it, nothing is
+    # suppressed; at it, this subject is — driven rather than asserted about
+    # the constant, because "the counter and the threshold agree" is the claim.
+    assert concerns_mod.suppressed_subjects(rows) == []
+    topped = rows + [{"id": "c8", "subject_key": "k",
+                      "useful_at": "2026-09-05", "useful": False}]
+    assert concerns_mod.negatives_of("k", topped) == concerns_mod.NEGATIVES_TO_SUPPRESS
+    assert concerns_mod.suppressed_subjects(topped) == ["k"], (
+        "the per-subject count reached the threshold and the subject was not "
+        "suppressed — the two are reading the rows differently")
+
+    # ⚠️ EVERY SUBJECT, NOT JUST THE ONE ASKED ABOUT. `suppressed_subjects`
+    # walks them all, so its answer must equal `negatives_of` applied to each.
+    both = topped + [{"id": "c%d" % (9 + i), "subject_key": "other",
+                      "useful_at": "2026-09-0%d" % (5 + i), "useful": False}
+                     for i in range(concerns_mod.NEGATIVES_TO_SUPPRESS - 1)]
+    by_hand = sorted(k for k in {str(r.get("subject_key")) for r in both}
+                     if concerns_mod.negatives_of(k, both)
+                     >= concerns_mod.NEGATIVES_TO_SUPPRESS)
+    assert concerns_mod.suppressed_subjects(both) == by_hand, (
+        "the two counters disagree about which subjects are suppressed: "
+        "%s against %s" % (concerns_mod.suppressed_subjects(both), by_hand))

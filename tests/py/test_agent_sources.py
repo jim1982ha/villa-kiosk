@@ -1371,3 +1371,45 @@ def test_the_document_and_read_salient_rank_by_the_SAME_categoriser() -> None:
     import inspect
     assert "category_of=categoriser()" in inspect.getsource(sources.build_document)
     assert "category_of=categoriser()" in inspect.getsource(sources.build_tools)
+
+
+def test_one_pass_opens_the_journal_ONCE(monkeypatch, tmp_path) -> None:
+    """⚠️ THE JOURNAL IS A RING OF UP TO 105,000 ROWS AND THE PASS PARSED IT
+    TWICE. `build_document` takes the entries it needs — `entries = list(rows)
+    if rows is not None else _journal_rows()` — and then called
+    `_offline_count()`, which takes no arguments, so it reached
+    `journal.last_states()` and opened the file again to derive ONE INTEGER it
+    could have counted from the rows already in hand. `store.read_json` has no
+    cache: it is a plain `open` + `json.load` per call.
+
+    `build_document`'s own header is what makes this worth fixing rather than
+    noting: "That is what lets a triage pass stay cheap enough to run four
+    times an hour."
+
+    ⚠️ COUNTED, NOT TIMED. A timing assertion on a file read is a flake; the
+    number of reads is the claim, and it is the number that grew.
+    """
+    from vesta.adapters import store as store_mod
+    from vesta.supervise.agent import sources as sources_mod
+    from vesta.supervise.observe import journal as journal_mod
+
+    reads: list = []
+    real = store_mod.read_json
+
+    def counting(path, default=None):
+        if str(path) == str(journal_mod.JOURNAL_FILE):
+            reads.append(path)
+        return real(path, default)
+
+    monkeypatch.setattr(store_mod, "read_json", counting)
+    monkeypatch.setattr(journal_mod.store, "read_json", counting, raising=False)
+
+    rows = [{"id": "sensor.example_one", "s": "12.0", "at": "2026-09-01T00:00:00Z"},
+            {"id": "sensor.example_two", "s": "unavailable",
+             "at": "2026-09-01T00:05:00Z"}]
+    sources_mod.build_document(rows)
+
+    assert len(reads) <= 1, (
+        "one pass opened the journal %d times. `build_document` was handed its "
+        "rows and something below it went back to the file: %s"
+        % (len(reads), reads))

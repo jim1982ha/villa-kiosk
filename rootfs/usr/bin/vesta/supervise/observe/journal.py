@@ -396,7 +396,7 @@ def coverage(since_iso: str, *, as_utc: Any = None) -> Dict[str, Any]:
     }
 
 
-def last_states() -> Dict[str, str]:
+def last_states(entries: Optional[Sequence[Any]] = None) -> Dict[str, str]:
     """Each entity's most recently journalled STATE — the restart baseline.
 
     ⚠️ THIS EXISTS BECAUSE THE BASELINE WAS PROCESS MEMORY WHILE THE RECORD WAS
@@ -426,8 +426,13 @@ def last_states() -> Dict[str, str]:
     already recorded as gone, and seeding it would make the next cycle emit a
     second removal event for an entity that left the villa weeks ago.
     """
+    # ⚠️ THE ROWS, IF THE CALLER HAS THEM. `store.read_json` is a plain `open`
+    # + `json.load` per call with no cache, and this ring holds up to
+    # JOURNAL_MAX_ENTRIES rows — so a caller that already read them and then
+    # calls this parses the whole file a second time. `sources.build_document`
+    # did exactly that, for one integer.
     out: Dict[str, str] = {}
-    for row in read()["entries"]:
+    for row in (read()["entries"] if entries is None else entries):
         if not isinstance(row, dict):
             continue
         entity_id = str(row.get("id") or "")

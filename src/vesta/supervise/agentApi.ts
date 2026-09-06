@@ -717,15 +717,29 @@ export async function loadCheckFlags(): Promise<CheckFlag[]> {
   const r = await fetch(ingressPath("agent-audit"), { credentials: "same-origin" });
   if (!r.ok) return [];
   const d = (await r.json().catch(() => null)) as { rows?: unknown } | null;
-  const rows = Array.isArray(d?.rows) ? d!.rows : [];
+  return flagsFromAuditRows(Array.isArray(d?.rows) ? d!.rows : []);
+}
 
-  // ⚠️ TWO PASSES OVER ONE CHRONOLOGICAL LIST. A row with a SUBJECT is what
-  // makes a flag exist (pass rows share the store and carry none; a run row
-  // without one is the model investigating something it named itself, which
-  // belongs to no flag). Every LATER row sharing the id — subject or not —
-  // tells the same flag's story onward: the approval's link row, a dismissal,
-  // the run's own answered/declined row. Mapping rows 1:1 here is what drew
-  // one flag twice after Investigate was pressed.
+/**
+ * The audit's chronological rows, folded into one Flag per run.
+ *
+ * ⚠️ SPLIT FROM `loadCheckFlags` (2.969.0), WHICH IS NOW THE ADAPTER THAT
+ * FETCHES AND CALLS THIS. The rule is a four-verdict state machine, a
+ * person-vs-villa attribution and a subject-less-row branch, and it sat in the
+ * middle of a function whose first line is a `fetch` — so nothing could run it
+ * without a server. The comment below records what that cost: "the first cut
+ * mapped rows 1:1, so pressing Investigate made the flag appear TWICE, both
+ * copies 'Settled'. Reported from a screenshot the same day it shipped."
+ *
+ * ⚠️ TWO PASSES OVER ONE CHRONOLOGICAL LIST. A row with a SUBJECT is what
+ * makes a flag exist (pass rows share the store and carry none; a run row
+ * without one is the model investigating something it named itself, which
+ * belongs to no flag). Every LATER row sharing the id — subject or not —
+ * tells the same flag's story onward: the approval's link row, a dismissal,
+ * the run's own answered/declined row. Mapping rows 1:1 here is what drew one
+ * flag twice after Investigate was pressed.
+ */
+export function flagsFromAuditRows(rows: readonly unknown[]): CheckFlag[] {
   const flags = new Map<string, CheckFlag>();
   for (const x of rows) {
     if (!x || typeof x !== "object") continue;
@@ -774,8 +788,11 @@ export async function loadCheckFlags(): Promise<CheckFlag[]> {
 
 /** The stored literal for "waiting for a person" — `agent/audit.py`'s
  *  `AWAITING`, mirrored here because the merge above needs it three times and
- *  a typo in one of them would silently mis-file a flag's whole life. */
-const AWAITING_VERDICT = "awaiting-approval";
+ *  a typo in one of them would silently mis-file a flag's whole life.
+ *
+ *  ⚠️ EXPORTED so a test can name the same value the merge does, rather than
+ *  retyping it — a fixture spelling it out by hand would agree with a typo. */
+export const AWAITING_VERDICT = "awaiting-approval";
 
 // ⚠️ `checkIdOf` MOVED TO `passReason.ts` (2.949.0) and is re-exported here, so
 // the join key and the pass-reason rules that travel with it are one module and

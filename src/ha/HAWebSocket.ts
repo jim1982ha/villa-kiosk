@@ -2,6 +2,7 @@
 // Robust HA WebSocket client: auth, message-id tracking, event subscriptions,
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
+import { PING_INTERVAL_MS, PONG_TIMEOUT_MS, reconnectDelay } from "./socketTiming";
 import type {
   EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
   HassFloorRegistryEntry, HassServiceTarget, RawLogbookEntry, StatisticIdInfo, StatisticPeriod,
@@ -288,7 +289,12 @@ export class HAWebSocket {
 
   private scheduleReconnect() {
     if (this.reconnectTimer || this.manuallyClosed) return;
-    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000); // 1,2,4..max 30s
+    // ⚠️ THE LADDER AND THE CAP LIVE IN `socketTiming.ts` WITH THE HEARTBEAT'S
+    // TWO CLOCKS, because the relationships between the four are the part that
+    // can be wrong — a pong given longer than the gap between pings, or a
+    // heartbeat slower than the worst reconnect wait, are both invisible while
+    // the numbers sit in three different methods.
+    const delay = reconnectDelay(this.reconnectAttempts);
     this.reconnectAttempts++;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -307,7 +313,7 @@ export class HAWebSocket {
   // this the app can sit "connected" for minutes while every tap does nothing.
   private startHeartbeat() {
     this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => this.sendPing(), 25000);
+    this.heartbeatTimer = setInterval(() => this.sendPing(), PING_INTERVAL_MS);
   }
 
   private stopHeartbeat() {
@@ -327,7 +333,7 @@ export class HAWebSocket {
       this.pongTimer = null;
       this.pongTimedOut = true; // read by onclose's disconnect record
       this.ws?.close(); // dead socket → onclose → reconnect
-    }, 5000);
+    }, PONG_TIMEOUT_MS);
     try {
       this.ws.send(JSON.stringify({ id: this.nextId(), type: "ping" }));
     } catch {
