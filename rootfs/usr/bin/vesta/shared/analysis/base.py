@@ -118,7 +118,28 @@ class ModuleContext:
     #: Injected by the pipeline: `await stats(ids, days)` -> per-id daily rows.
     stats: Any = None
     #: Injected by the pipeline: labels for statistic ids, from the registry.
+    #:
+    #: ⚠️ IT WAS `{}` ON EVERY PRODUCTION PATH UNTIL 2.953.0, so `label_for`'s
+    #: `known` branch was dead and every module humanised the entity id — the
+    #: one string the payload allow-list exists to keep out of a prompt. The
+    #: pipeline reads the state dump before analysis now.
     labels: Dict[str, str] = field(default_factory=dict)
+    #: Candidates this module MEASURED and then dropped, and why.
+    #:
+    #: ⚠️ A PER-PASS RECORDER, NOT AN ATTRIBUTE ON THE MODULE (2.953.0). Modules
+    #: are long-lived singletons — `_register_shipped` builds them once at
+    #: import — and this list used to live on the instance, cleared only INSIDE
+    #: `run()`. So a module gated out on this pass (disabled, insufficient
+    #: history, errored, timed out) served its PREVIOUS pass's rejections as
+    #: this one's diagnostic, and a preview taken after a scheduled run showed
+    #: the scheduled run's. For an instrument whose whole purpose is telling
+    #: "the threshold suppressed everything" apart from "nothing is wrong", a
+    #: stale reading is worse than none.
+    #:
+    #: ⚠️ AND IT WAS NEVER IN THE PROTOCOL. `pipeline` read it with
+    #: `getattr(module, "rejected", [])` — the tell that a fifth output was
+    #: travelling by side channel on shared mutable state.
+    rejected: List[Dict[str, Any]] = field(default_factory=list)
     #: Injected by the pipeline: `await automations(band_days=, start_days=)`
     #: -> the villa's own VESTA rules with what judging them needs — see
     #: `adapters/automations.survey`. ⚠️ THE SAME SHAPE AS `stats`, FOR THE

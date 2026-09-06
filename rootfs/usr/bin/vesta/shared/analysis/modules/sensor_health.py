@@ -67,7 +67,6 @@ class SensorHealth:
     #: INSTANCE is named by whoever filled the form.
     superseded_by: Sequence[str] = ("maintenance_silence",)
 
-    rejected: List[Dict[str, Any]]
 
     async def run(self, context: ModuleContext) -> List[Finding]:
         energy = context.inventory.get("energy") or {}
@@ -94,7 +93,6 @@ class SensorHealth:
         if not newest:
             return []
 
-        self.rejected = []
         findings: List[Finding] = []
         for index, statistic_id in enumerate(ids):
             rows = series.get(statistic_id)

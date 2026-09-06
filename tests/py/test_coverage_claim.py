@@ -81,24 +81,80 @@ def test_every_superseded_module_names_a_real_blueprint_stem() -> None:
                 f"{module.name}: a stem, not a file name")
 
 
-def test_run_all_copies_every_context_field_to_the_per_module_context() -> None:
-    """⚠️ THE `reachY` RULE, IN PYTHON. `run_all` re-assembles a ModuleContext
-    per module, so a field added to the dataclass and not copied there arrives
-    at the gate as its DEFAULT — silently, with no type error, because a default
-    is a valid value. `silent_blueprints=()` makes every covering blueprint look
-    like it has reported, which is exactly the false reassurance being removed.
+def test_run_all_cannot_drop_a_context_field() -> None:
+    """⚠️ THE `reachY` RULE, IN PYTHON — AND IT IS STRUCTURAL NOW (2.953.0).
 
-    Derived from the dataclass, so field number seven is covered on the day it
-    is added rather than the day it is reported.
+    `run_all` used to re-assemble a ModuleContext field by field under a comment
+    describing the hazard that created: "a field added to the dataclass and not
+    copied HERE arrives at the gate as its DEFAULT — silently, with no type
+    error, because the default is a valid value." `ModuleContext` grew three
+    fields in tracked history and each had to be remembered there.
+
+    `dataclasses.replace` copies by construction, so this asserts the SHAPE
+    rather than enumerating fields — and then proves it, because a source check
+    alone would pass for a `replace` whose result nobody used.
     """
+    import asyncio
+
     source = inspect.getsource(registry.run_all)
-    body = re.search(r"ModuleContext\((.*?)\n        \)", source, re.DOTALL)
-    assert body, "the per-module context construction moved — this test is blind"
-    passed = set(re.findall(r"(\w+)\s*=", body.group(1)))
-    fields = {f.name for f in dataclasses.fields(ModuleContext)}
-    missing = sorted(fields - passed)
-    assert not missing, (
-        f"these ModuleContext fields are dropped when run_all rebuilds the "
-        f"context, so each module sees their default instead: {missing}")
+    assert "replace(" in source, (
+        "run_all builds the per-module context by hand again, so a new field "
+        "silently arrives at the gate as its default")
+    assert not re.search(r"ModuleContext\(", source), (
+        "run_all constructs a ModuleContext by enumeration again")
+
+    # And behaviourally: a value set on the outer context must reach the module.
+    seen: dict = {}
+
+    # ⚠️ SUBCLASSED FROM A SHIPPED MODULE, not hand-built. The gate reads a
+    # dozen attributes and a hand-rolled double drifts from the Protocol the
+    # moment one is added — which is the same defect this test guards.
+    from vesta.shared.analysis.modules.sensor_health import SensorHealth
+
+    class Spy(SensorHealth):                      # type: ignore[misc]
+        name = "spy"
+        requires = ()                             # no capability gate
+        min_days = 0                              # no history gate
+        audiences = ("owner", "facility")         # no audience gate
+
+        async def run(self, context):             # type: ignore[override]
+            seen["labels"] = dict(context.labels)
+            seen["min_history_days"] = context.min_history_days
+            seen["supervision_enabled"] = context.supervision_enabled
+            return []
+
+    context = ModuleContext(
+        audience="owner", cadence="daily", now_local=None,
+        capabilities=(), inventory={},
+        labels={"sensor.a": "A name"}, min_history_days=41,
+        supervision_enabled=True)
+
+    registry.register(Spy())
+    try:
+        asyncio.run(registry.run_all(context, {}, 999))
+    finally:
+        registry.registered().remove(
+            next(m for m in registry.registered() if m.name == "spy"))
+
+    assert seen.get("labels") == {"sensor.a": "A name"}, seen
+    assert seen.get("min_history_days") == 41, seen
+    assert seen.get("supervision_enabled") is True, seen
+
+
+def test_each_module_gets_its_OWN_rejection_list() -> None:
+    """⚠️ MODULES ARE LONG-LIVED SINGLETONS. The recorder used to be an
+    attribute on the instance, cleared only INSIDE `run()`, so a module gated
+    out this pass served its PREVIOUS pass's rejections as this one's
+    diagnostic — and for an instrument that exists to tell "the threshold
+    suppressed everything" from "nothing is wrong", a stale reading is worse
+    than none."""
+    context = ModuleContext(audience="owner", cadence="daily", now_local=None,
+                            capabilities=(), inventory={})
+    assert context.rejected == []
+    context.rejected.append({"reason": "x"})
+    fresh = ModuleContext(audience="owner", cadence="daily", now_local=None,
+                          capabilities=(), inventory={})
+    assert fresh.rejected == [], (
+        "the default is shared between contexts, so one pass can see another's")
 
 

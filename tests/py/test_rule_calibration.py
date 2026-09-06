@@ -250,7 +250,13 @@ def test_the_pipeline_injects_the_fetcher_and_the_registry_copies_it() -> None:
     from vesta.brief import pipeline
     assert "automations=automations_mod.fetcher(session, now_local, tally)" in (
         inspect.getsource(pipeline.analyse))
-    assert "automations=context.automations" in inspect.getsource(registry.run_all)
+    # ⚠️ `run_all` COPIES BY `dataclasses.replace` SINCE 2.953.0, so there is no
+    # per-field enumeration left to assert against. What matters is that the
+    # fetcher SURVIVES the copy — `test_coverage_claim` proves that
+    # behaviourally, by reading a field off the context a module actually got.
+    assert "replace(" in inspect.getsource(registry.run_all), (
+        "run_all re-assembles the context by hand again, so a field added to "
+        "ModuleContext arrives at the module as its default")
 
 
 def test_discovery_records_the_capability_from_the_alias_prefilter() -> None:

@@ -124,7 +124,6 @@ class StandbyCreep:
     superseded_by: Sequence[str] = ("maintenance_signature_drift",)
 
     #: Filled per run when diagnostics are wanted; read by the preview.
-    rejected: List[Dict[str, Any]]
 
     async def run(self, context: ModuleContext) -> List[Finding]:
         energy = context.inventory.get("energy") or {}
@@ -143,13 +142,12 @@ class StandbyCreep:
         series = await context.stats(ids, window)
 
         findings: List[Finding] = []
-        self.rejected = []
         for index, statistic_id in enumerate(ids):
             rows = series.get(statistic_id)
             if not isinstance(rows, list):
                 continue
             finding = self._assess(statistic_id, index, rows, context,
-                                   self.rejected)
+                                   context.rejected)
             if finding is not None:
                 findings.append(finding)
 

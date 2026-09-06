@@ -72,6 +72,11 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `test_module_labels`'s two shapes. `sensor.some_device_energy` shows the
+    # `_energy` suffix being stripped; the bedroom-window one shows what the
+    # humanised fallback DOES to an id that contains a person's name — which is
+    # the whole reason the operator's own label has to reach the modules.
+    "sensor.some_device_energy", "sensor.a_person_bedroom_window",
     # `test_naming`'s label table. Shaped like the reference villa's — a
     # "Power" suffix the model drops, and a compound naming two devices — so
     # the two OPPOSITE tie-breaks and the share guard have something to bite

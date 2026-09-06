@@ -294,7 +294,7 @@ def test_a_module_that_throws_becomes_a_skip_not_a_dead_pass() -> None:
     registry._reset_for_tests()
     registry.register(Exploding())  # type: ignore[arg-type]
     try:
-        findings, skipped, counts, ran = asyncio.run(
+        findings, skipped, counts, ran, _rej = asyncio.run(
             run_all(_context([], {}), {}, 30))
     finally:
         registry._reset_for_tests()
@@ -326,7 +326,7 @@ def test_a_module_that_hangs_is_timed_out() -> None:
     original = registry.MODULE_TIMEOUT_S
     registry.MODULE_TIMEOUT_S = 0.05
     try:
-        _, skipped, counts, ran = asyncio.run(run_all(_context([], {}), {}, 30))
+        _, skipped, counts, ran, _rej = asyncio.run(run_all(_context([], {}), {}, 30))
     finally:
         registry.MODULE_TIMEOUT_S = original
         registry._reset_for_tests()
@@ -341,7 +341,7 @@ def test_a_module_that_hangs_is_timed_out() -> None:
 def test_a_successful_run_clears_the_failure_count() -> None:
     """Otherwise a module that failed twice months ago is one bad week from
     being disabled forever."""
-    findings, skipped, counts, ran = asyncio.run(
+    findings, skipped, counts, ran, _rej = asyncio.run(
         run_all(_context(["sensor.x_energy"],
                          {"sensor.x_energy": _series([0.1] * 28)}),
                 {"standby_creep": 2}, 30))
@@ -590,11 +590,15 @@ def test_an_operator_can_relax_materiality() -> None:
 def test_a_rejected_candidate_is_recorded_with_its_numbers() -> None:
     """⚠️ A threshold that suppresses everything and a healthy property produce
     the same empty report. Tuning one without seeing the other is guesswork."""
+    # ⚠️ THE RECORDER IS PER-PASS AND LIVES ON THE CONTEXT (2.953.0). It used
+    # to be an attribute on the module — and modules are long-lived singletons,
+    # so a module skipped this pass served its PREVIOUS pass's rejections.
     module = StandbyCreep()
     series = {"sensor.p_energy": _pump_series(0.0009, 0.009, 0.5)}
-    asyncio.run(module.run(_context(["sensor.p_energy"], series)))
-    assert module.rejected
-    entry = module.rejected[0]
+    ctx = _context(["sensor.p_energy"], series)
+    asyncio.run(module.run(ctx))
+    assert ctx.rejected
+    entry = ctx.rejected[0]
     assert entry["reason"] == "immaterial"
     assert entry["active_level"] and entry["rise_of_active"] is not None
     assert entry["rise"] > 8.0, "the huge ratio must still be visible"
@@ -612,9 +616,10 @@ def test_the_rejection_log_always_carries_the_working_level() -> None:
     module = StandbyCreep()
     # A gentle rise: below the 40% ratio, so rejected there.
     series = {"sensor.p_energy": _pump_series(0.25, 0.30, 0.6)}
-    asyncio.run(module.run(_context(["sensor.p_energy"], series)))
-    assert module.rejected
-    entry = module.rejected[0]
+    ctx = _context(["sensor.p_energy"], series)
+    asyncio.run(module.run(ctx))
+    assert ctx.rejected
+    entry = ctx.rejected[0]
     assert entry["reason"] == "below_rise_threshold"
     assert entry["active_level"] is not None, "the tuning column must never be blank"
     assert entry["rise_of_active"] is not None
@@ -668,7 +673,7 @@ def test_a_module_is_switched_off_by_a_SLICE_not_by_a_bare_boolean() -> None:
                 stats=None, labels={})
 
         def _ran(settings: dict) -> bool:
-            _f, _s, _c, ran = asyncio.run(run_all(_ctx(settings), {}, 999))
+            _f, _s, _c, ran, _rej = asyncio.run(run_all(_ctx(settings), {}, 999))
             return "probe_module" in ran
 
         assert _ran({}), "a module with no settings must run"

@@ -63,20 +63,11 @@ from vesta.shared import style as style_mod
 from vesta.adapters.schedule import period_key, period_start
 
 
-def _rejected_candidates() -> List[Dict[str, Any]]:
-    """What each module measured and then declined to report.
-
-    ⚠️ A THRESHOLD THAT SUPPRESSES EVERYTHING AND A HEALTHY PROPERTY PRODUCE
-    THE SAME EMPTY REPORT. Tuning one without seeing the other is guesswork,
-    and this subsystem's whole risk is being either too loud or too quiet.
-    Diagnostic only: it is attached to a PREVIEW, never to a delivered report,
-    and never persisted to history.
-    """
-    out: List[Dict[str, Any]] = []
-    for module in registered():
-        for item in getattr(module, "rejected", []) or []:
-            out.append({"module": module.name, **item})
-    return out
+# ⚠️ `_rejected_candidates` DELETED (2.953.0). It walked `registered()` and read
+# `getattr(module, "rejected", [])` — a field the AnalysisModule Protocol never
+# declared, on instances the registry holds for the process lifetime. A module
+# gated out this pass served its PREVIOUS pass's rejections. `run_all` returns
+# them now, per pass, tagged with the module that recorded them.
 
 
 #: Where a briefing gets the agent's findings from. ⚠️ A HOOK, NOT AN IMPORT.
@@ -260,6 +251,50 @@ def _agent_concerns(seen_subjects: Set[str]) -> List[Dict[str, Any]]:
     return out
 
 
+def brief_severity(preflight: Sequence[Any], findings: Sequence[Any],
+                   concerns: Sequence[Any], standing: Sequence[Any]) -> str:
+    """How loud is this Brief — from everything its body shows, not a subset.
+
+    ⚠️ THE TITLE IS OFTEN ALL THAT IS READ. `style.py` says so: a push
+    notification shows the title and about two lines. So a mark computed from a
+    narrower set than the body it titles is the one inaccuracy that reaches
+    every reader.
+
+    ⚠️ AND IT WAS NARROWER. The walk was `preflight + findings` — module output
+    only — while `compose.brief` puts CONCERNS and STANDING STATE at the TOP of
+    the body. A Brief opening "N thing(s) need attention right now" over a list
+    of unavailable devices was titled ✅.
+
+    ⚠️ THIS SHIPPED ONCE ALREADY, and the note below the old loop records it: "A
+    live QA run recorded `findings=0 severity=notice` for a brief that opened '1
+    critical alert from this period is still unresolved'." That fix widened the
+    walk to the blueprint layer; the layer was retired and the walk narrowed
+    back — without the concerns and standing that had replaced it.
+
+    ⚠️ STANDING GOES THROUGH `standing.severity_of`, which is THE mapping from a
+    kind to a severity. Its own comment says why: "a second opinion computed at
+    the call site is how the tablet and the notification came to be able to
+    disagree at all." It had no production caller until this.
+    """
+    worst = "info"
+
+    def louder(candidate: str) -> None:
+        nonlocal worst
+        if severity_rank(candidate) > severity_rank(worst):
+            worst = candidate
+
+    for item in list(preflight or []) + list(findings or []):
+        if isinstance(item, Mapping):
+            louder(str(item.get("severity", "info")))
+    for item in concerns or []:
+        if isinstance(item, Mapping):
+            louder(str(item.get("severity", "info")))
+    for item in standing or []:
+        if isinstance(item, Mapping):
+            louder(standing_mod.severity_of(str(item.get("kind") or "")))
+    return worst
+
+
 def _entity_labels(states: Any) -> Dict[str, str]:
     """entity_id -> what a person calls it, for every entity the villa has.
 
@@ -401,6 +436,13 @@ async def analyse(
     min_history_days: int,
     failures: Dict[str, int],
     supervision_enabled: bool = False,
+    #: ⚠️ THE OPERATOR'S OWN DEVICE NAMES, AND THE REASON THIS IS A PARAMETER.
+    #: `ModuleContext.labels` is documented "Injected by the pipeline" and was
+    #: passed `{}` on every production path, so `label_for` always humanised the
+    #: entity id — which is the one string the whole payload allow-list exists
+    #: to keep out of a provider prompt. Defaulted so the agent's own analysis
+    #: tool, which has no state dump, keeps working unchanged.
+    labels: Optional[Dict[str, str]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]], Dict[str, int],
            List[str], Dict[str, Any]]:
     """Run every registered module against this pass's data.
@@ -420,7 +462,7 @@ async def analyse(
         inventory=found.get("inventory") or {},
         settings=settings, min_history_days=min_history_days,
         stats=_statistics_fetcher(session, now_local, tally),
-        labels={},
+        labels=dict(labels or {}),
         # ⚠️ THE SECOND INJECTED FETCHER, SAME SHAPE AS `stats` (2026-09-04).
         # `rule_calibration` reads automation configs, a schedule helper's
         # week and a power sensor's raw history — none reachable from a module
@@ -448,7 +490,12 @@ async def analyse(
     history_days = await measure_history(context.stats, device_ids)
     tally["history_days"] = history_days
 
-    produced, skipped, counts, ran = await run_all(context, failures, history_days)
+    produced, skipped, counts, ran, rejected = await run_all(
+        context, failures, history_days)
+    # ⚠️ THE REJECTIONS TRAVEL WITH THE PASS THAT PRODUCED THEM (2.953.0), in
+    # the tally, rather than being read off long-lived module instances after
+    # the fact. A module skipped this pass contributes none.
+    tally["rejected"] = rejected
     return ([f.as_dict() for f in produced], describe_skips(skipped), counts,
             ran, tally)
 
@@ -548,58 +595,17 @@ async def run_report(
     if found is None:
         found = await discovery.discover(session, generated_at)
 
-    # ── analyse ─────────────────────────────────────────────────────────────
-    findings, skipped, failures, ran, data_tally = await analyse(
-        session, found, audience, cadence, now_local, settings,
-        min_history_days, module_failures,
-        supervision_enabled=supervision_enabled)
-
-    # ⚠️ WHICH CHECKS RAN, NOT JUST HOW MANY FINDINGS (2026-08-30, owner: a line
-    # vanished from a delivered brief and the log could not say why). The pass
-    # already printed `N finding(s)`, and a count cannot separate "the check ran
-    # and correctly found nothing" from "the check never ran" — the two answers
-    # an owner needs to tell apart when a finding stops appearing.
-    #
-    # ⚠️ THE APP ALREADY ANSWERS THIS FOR A MANUAL RUN — `ModulesTab` reads
-    # `ran`/`skipped` out of the run-now response and marks each check. What it
-    # cannot answer is a SCHEDULED report, which nobody previews and whose
-    # `_analysis` is dropped on the way into history. This line is that gap and
-    # only that gap, which is why it is a log line rather than a stored field.
-    log("modules: ran " + (", ".join(ran) if ran else "none")
-        + ("" if not skipped else " · skipped "
-           + ", ".join(f"{s.get('module', '?')} ({s.get('reason', '?')})"
-                       for s in skipped)))
-
-    # ── synthesise ──────────────────────────────────────────────────────────
-    # ⚠️ SCOPED TO THE PERIOD, NOT THE WHOLE BUFFER. The ring holds up to
-    # MAX_EVENTS across months; a weekly report assembled from all of it would
-    # restate every finding the owner has already read, and its savings total
-    # would grow forever.
-    since = period_start(cadence, now_local).isoformat(timespec="seconds")
-
-    # ── deduplicate ─────────────────────────────────────────────────────────
-    # ⚠️ THE BUILT-IN CHECKS AND THE BLUEPRINTS NOW BOTH RUN, so the report is
-    # what keeps them from saying the same thing twice — by SUBJECT, per device.
-    # Until 2.572.0 the arrangement was cruder: any covering blueprint being
-    # INSTALLED switched a whole check off, which is why a property that had
-    # imported the pack and built no automations detected nothing at all, and
-    # why a rule watching four of five pumps left the fifth unreported by anyone.
-    #
-    # ⚠️ COUNTED, NOT SILENT. `suppressed` is the number of findings this
-    # property's own automations already covered; a zero here on a villa with a
-    # busy blueprint layer means the join is not matching, and a count nobody
-    # ⚠️ THE PER-DEVICE DEDUPLICATION WAS DELETED IN 2.755.0, and it is worth
-    # saying WHY rather than letting its absence read as an oversight. It
-    # dropped a built-in finding whose device a blueprint had also reported,
-    # preferring the blueprint. Under the one rule that replaced the gate it
-    # cannot fire in either direction: with supervision OFF the built-in check
-    # never ran, so there is nothing to drop; with supervision ON the agent
-    # supersedes the blueprint, which is the opposite of what it did.
-    #
-    # ⚠️ ACCEPTED CONSEQUENCE: a villa running BOTH layers on one device hears
-    # about it twice. That is a true statement about a contradictory
-    # configuration — supervision on, and a superseded automation left enabled —
-    # and a report should not paper over it.
+    # ⚠️ BEFORE THE ANALYSIS, NOT AFTER (2.953.0). This block ran below it,
+    # which meant `_entity_labels(states)` — the operator's own names for their
+    # devices — was computed 80 lines too late to reach `ModuleContext.labels`,
+    # a field documented as "Injected by the pipeline" and passed `{}` on every
+    # production path. So `label_for`'s `known` branch was dead and every module
+    # humanised the ENTITY ID instead — an object_id with its underscores turned
+    # to spaces and title-cased, which has spaces and no dot, which is exactly
+    # what `payload._looks_like_entity_id` returns False for. A villa that names
+    # a device after a person therefore had that name reach the prompt, while
+    # the operator's own label sat in the same pass, unread. Nothing here depends on
+    # the findings, so the move is a reordering and not a restructuring.
 
     # ── reconcile ───────────────────────────────────────────────────────────
     # ⚠️ THE SAME TASK ARRIVES BY TWO ROUTES. A blueprint fires its event AND
@@ -659,6 +665,60 @@ async def run_report(
         # and alert fatigue is what the +1/-1 rating on every concern feeds.
     except Exception as err:  # noqa: BLE001 - a report must still go out
         swallow("could not read the facility manager list", err)
+
+
+    # ── analyse ─────────────────────────────────────────────────────────────
+    findings, skipped, failures, ran, data_tally = await analyse(
+        session, found, audience, cadence, now_local, settings,
+        min_history_days, module_failures,
+        supervision_enabled=supervision_enabled, labels=labels)
+
+    # ⚠️ WHICH CHECKS RAN, NOT JUST HOW MANY FINDINGS (2026-08-30, owner: a line
+    # vanished from a delivered brief and the log could not say why). The pass
+    # already printed `N finding(s)`, and a count cannot separate "the check ran
+    # and correctly found nothing" from "the check never ran" — the two answers
+    # an owner needs to tell apart when a finding stops appearing.
+    #
+    # ⚠️ THE APP ALREADY ANSWERS THIS FOR A MANUAL RUN — `ModulesTab` reads
+    # `ran`/`skipped` out of the run-now response and marks each check. What it
+    # cannot answer is a SCHEDULED report, which nobody previews and whose
+    # `_analysis` is dropped on the way into history. This line is that gap and
+    # only that gap, which is why it is a log line rather than a stored field.
+    log("modules: ran " + (", ".join(ran) if ran else "none")
+        + ("" if not skipped else " · skipped "
+           + ", ".join(f"{s.get('module', '?')} ({s.get('reason', '?')})"
+                       for s in skipped)))
+
+    # ── synthesise ──────────────────────────────────────────────────────────
+    # ⚠️ SCOPED TO THE PERIOD, NOT THE WHOLE BUFFER. The ring holds up to
+    # MAX_EVENTS across months; a weekly report assembled from all of it would
+    # restate every finding the owner has already read, and its savings total
+    # would grow forever.
+    since = period_start(cadence, now_local).isoformat(timespec="seconds")
+
+    # ── deduplicate ─────────────────────────────────────────────────────────
+    # ⚠️ THE BUILT-IN CHECKS AND THE BLUEPRINTS NOW BOTH RUN, so the report is
+    # what keeps them from saying the same thing twice — by SUBJECT, per device.
+    # Until 2.572.0 the arrangement was cruder: any covering blueprint being
+    # INSTALLED switched a whole check off, which is why a property that had
+    # imported the pack and built no automations detected nothing at all, and
+    # why a rule watching four of five pumps left the fifth unreported by anyone.
+    #
+    # ⚠️ COUNTED, NOT SILENT. `suppressed` is the number of findings this
+    # property's own automations already covered; a zero here on a villa with a
+    # busy blueprint layer means the join is not matching, and a count nobody
+    # ⚠️ THE PER-DEVICE DEDUPLICATION WAS DELETED IN 2.755.0, and it is worth
+    # saying WHY rather than letting its absence read as an oversight. It
+    # dropped a built-in finding whose device a blueprint had also reported,
+    # preferring the blueprint. Under the one rule that replaced the gate it
+    # cannot fire in either direction: with supervision OFF the built-in check
+    # never ran, so there is nothing to drop; with supervision ON the agent
+    # supersedes the blueprint, which is the opposite of what it did.
+    #
+    # ⚠️ ACCEPTED CONSEQUENCE: a villa running BOTH layers on one device hears
+    # about it twice. That is a true statement about a contradictory
+    # configuration — supervision on, and a superseded automation left enabled —
+    # and a report should not paper over it.
 
     # ── narrate ─────────────────────────────────────────────────────────────
     context = ReportContext(
@@ -723,12 +783,8 @@ async def run_report(
     # SENT, purely for the history row; the title carries it since 2026-08-29,
     # so a figure computed after delivery would be a figure the reader never
     # saw. Pure — no I/O — so moving it up changes nothing else.
-    severity = "info"
-    for candidate in ([str(i.get("severity", "info")) for i in
-                       list(found.get("preflight") or []) + findings
-                       if isinstance(i, dict)]):
-        if severity_rank(candidate) > severity_rank(severity):
-            severity = candidate
+    severity = brief_severity(found.get("preflight") or [], findings,
+                              context.concerns, context.standing)
 
     # ⚠️ THE SAME HEADER SHAPE AS EVERY ALERT (owner, 2026-08-29). The word is
     # the cadence rather than a severity word — a reader needs to know it is the
@@ -940,7 +996,7 @@ async def run_report(
 
     # ⚠️ The instrument for "found nothing" vs "saw nothing".
     entry["_analysis"] = {"ran": ran, "skipped": skipped, "data": data_tally,
-                          "rejected": _rejected_candidates(),
+                          "rejected": list(data_tally.get("rejected") or []),
                           "collector": collect.state(),
                           # ⚠️ The synthesis layer's own instrument. Without it,
                           # an empty section cannot be told from an aggregation

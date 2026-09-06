@@ -102,7 +102,6 @@ class LevelShortfall:
     #: the cutover with nothing named to replace it — the gap this fills.
     superseded_by: Sequence[str] = ("roi_runtime_cap",)
 
-    rejected: List[Dict[str, Any]]
 
     async def run(self, context: ModuleContext) -> List[Finding]:
         energy = context.inventory.get("energy") or {}
@@ -114,7 +113,6 @@ class LevelShortfall:
         series = await context.stats(ids, WINDOW_DAYS)
         zone = getattr(context, "zone", None)
 
-        self.rejected = []
         findings: List[Finding] = []
         for index, statistic_id in enumerate(ids):
             rows = series.get(statistic_id)

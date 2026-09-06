@@ -24,6 +24,7 @@ and a cost the scheduler pays every time.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from typing import Any, Dict, List, Sequence, Tuple
 
 from vesta.adapters.log import swallow, warn
@@ -140,10 +141,11 @@ def gate(module: AnalysisModule, context: ModuleContext,
 
 async def run_all(context: ModuleContext, failures: Dict[str, int],
                   history_days: int) -> Tuple[List[Finding], List[Dict[str, str]],
-                                              Dict[str, int], List[str]]:
+                                              Dict[str, int], List[str],
+                                              List[Dict[str, Any]]]:
     """Run every registered module.
 
-    Returns (findings, skipped, failures, ran). `ran` is the names of modules
+    Returns (findings, skipped, failures, ran, rejected). `ran` is the names of modules
     that actually executed — ⚠️ WITHOUT IT, "no module is configured" and
     "every module ran and found nothing" are the same empty result, and the
     report cannot tell an owner which of the two happened. They mean opposite
@@ -154,31 +156,31 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
     should not have half-updated counters.
     """
     findings: List[Finding] = []
+    rejected: List[Dict[str, Any]] = []
     skipped: List[Dict[str, str]] = []
     ran: List[str] = []
     counts = dict(failures)
 
     for module in registered():
         settings = context.settings.get(module.name)
-        module_context = ModuleContext(
-            audience=context.audience, cadence=context.cadence,
-            now_local=context.now_local, capabilities=context.capabilities,
-            inventory=context.inventory,
+        # ⚠️ `replace`, NOT AN ENUMERATION (2.953.0). This copied all eleven
+        # fields by hand under a comment describing the hazard that it created:
+        # "a field added to the dataclass and not copied HERE arrives at the
+        # gate as its DEFAULT — silently, with no type error, because the
+        # default is a valid value." `ModuleContext` has grown three fields in
+        # tracked history and each had to be remembered here. `replace` makes
+        # the omission impossible rather than watched-for — the same fix
+        # `brief/request.py` applied one caller out ("a caller cannot forget a
+        # field it does not pass").
+        #
+        # ⚠️ `rejected=[]` IS THE ONE DELIBERATE OVERRIDE BESIDE `settings`. Each
+        # module gets its OWN list per pass, so a module that is skipped
+        # contributes nothing by construction and a timed-out one cannot leave a
+        # half-written diagnostic behind.
+        module_context = replace(
+            context,
             settings=settings if isinstance(settings, dict) else {},
-            min_history_days=context.min_history_days,
-            stats=context.stats, labels=context.labels,
-            automations=context.automations,
-            # ⚠️ EVERY FIELD, AND THE RULE STILL MATTERS WITH ONE LEFT.
-            # This re-assembles the context per module, so a field added to the
-            # dataclass and not copied HERE arrives at the gate as its DEFAULT —
-            # silently, with no type error, because the default is a valid
-            # value. `supervision_enabled` defaults to False, so omitting it
-            # would stand every covered check down on a villa whose supervision
-            # is on: the config saved, the gate correct, and nothing to see.
-            # `test_coverage_claim` caught exactly that on the day the old flag
-            # was added. Same shape as the `reachY` the badge tier lost in
-            # 2.429.0.
-            supervision_enabled=context.supervision_enabled,
+            rejected=[],
         )
 
         ok, reason, detail = gate(module, module_context, counts, history_days)
@@ -192,6 +194,9 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             findings.extend(produced)
             counts[module.name] = 0
             ran.append(module.name)
+            rejected.extend({"module": module.name, **item}
+                            for item in module_context.rejected
+                            if isinstance(item, dict))
         except asyncio.TimeoutError:
             counts[module.name] = counts.get(module.name, 0) + 1
             warn(f"module {module.name} exceeded {MODULE_TIMEOUT_S:.0f}s")
@@ -202,7 +207,7 @@ async def run_all(context: ModuleContext, failures: Dict[str, int],
             swallow(f"module {module.name} failed", err)
             skipped.append(skip(module.name, "errored", str(err)[:200]))
 
-    return findings, skipped, counts, ran
+    return findings, skipped, counts, ran, rejected
 
 
 def describe_skips(skipped: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
