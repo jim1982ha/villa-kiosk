@@ -9,7 +9,7 @@
  * Every colour below is a semantic variable so a whole theme swaps by
  * redefining one block; component CSS never hardcodes a colour.
  *
- * Self-hosted (never a Google Fonts link — see CLAUDE.md's offline rule):
+ * Self-hosted (never a Google Fonts link — the offline hard rule):
  * Jost for display/headlines/eyebrows, Public Sans for everything else. */
 
 @font-face { font-family: "Jost"; font-style: normal; font-weight: 400 600; font-display: swap; src: url("/fonts/jost-var.woff2") format("woff2"); }
@@ -3756,7 +3756,7 @@ label.toggle span { user-select: none; line-height: 1.4; }
    the old version read as unaligned clutter). dt/dd are direct children. */
 /* The record's domain tag — water, electrical, security. A quiet chip, NOT a
    category colour: `CATEGORY_COLORS` means a device category on the map, and
-   reusing a hue here would read as a mis-tagged badge (CLAUDE.md's own rule).
+   reusing a hue here would read as a mis-tagged badge.
    ⚠️ `.chip-row` is the filter strip; `.btn.ghost.active` is the house
    selected-state, so no new selected styling is invented here. */
 /* "14×" beside a grouped automation. Same quiet chip as the domain tag — a
@@ -5403,8 +5403,8 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 
 /* The narration payload, shown verbatim.
    ⚠️ SCROLLS INSIDE ITS OWN BOX. JSON is the widest content this dialog ever
-   holds, and CLAUDE.md's own rule is that wide content gets `overflow-x: auto`
-   on its own container so the page body never scrolls sideways — on a 360px
+   holds, and the house rule is that wide content gets `overflow-x: auto` on
+   its own container so the page body never scrolls sideways — on a 360px
    phone one unwrapped line would otherwise drag the whole modal. Capped in
    height for the same reason the tabs are: a long payload must not make the
    dialog taller than the screen. */

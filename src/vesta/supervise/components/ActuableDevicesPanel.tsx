@@ -19,7 +19,7 @@
 //
 // ⚠️ THE CANDIDATES COME FROM `selectableDeviceIds`, VIA THE SAME
 // `buildDeviceOptions` THE FACILITY PICKER USES. "What counts as a device" is
-// one rule for this whole app (CLAUDE.md), and a second list built here would
+// one rule for this whole app, and a second list built here would
 // offer rows no other screen shows — exactly the defect that function's own
 // docstring records. Reusing the picker also means the search, the offline hint
 // and the keyboard behaviour are the ones already tested.

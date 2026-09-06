@@ -48,8 +48,8 @@ export interface CameraFrame {
  *
  * ⚠️ `aspect` is a RATIO of two render dimensions, so it is invariant to the
  * resolution valve (`SceneManager.sharpen`/`unsharpen`), which scales width and
- * height together. That is what makes it safe to compare between frames — see
- * CLAUDE.md on why `getRenderHeight()` alone is not.
+ * height together. That is what makes it safe to compare between frames, and
+ * why `getRenderHeight()` alone is not.
  */
 export function cameraFrame(scene: Scene, cam: Camera): CameraFrame {
   const aspect = scene.getEngine().getAspectRatio(cam) || 1;

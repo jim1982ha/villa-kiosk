@@ -11,7 +11,7 @@
 // ⚠️ AND THE STORED DOCUMENT IS A SPARSE OVERLAY. Only what the operator has
 // actually set is written back. Filling in defaults would make a DELETED
 // schedule indistinguishable from an absent one, which is the config
-// resurrection bug CLAUDE.md's hard rule describes.
+// resurrection bug the empty-default hard rule exists for.
 //
 // ⚠️ ONE QUESTION ABOUT READERS, NOT TWO (v2.653.0). A schedule row used to
 // carry an AUDIENCE select ("written for") beside a RECIPIENT picker ("sent

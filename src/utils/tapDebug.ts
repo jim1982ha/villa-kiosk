@@ -44,7 +44,7 @@ import { debugFlagEnabled } from "@/utils/devLog";
  * hundred screens of `pair` and `PLACEMENT:` is a capture nobody reads.
  *
  * ⚠️ NOT DELETED, and the difference matters. Every one of these is documented
- * in CLAUDE.md and in the debug-capture skill as the authority for its tier —
+ * in the debug-capture skill as the authority for its tier —
  * `chipWhy` names which rule chipped a room, `seat` gives a refusal in pixels,
  * the `PLACEMENT:` family is the only guard against a badge silently
  * disappearing. Deleting them would make the next report of a grouping bug
@@ -64,8 +64,8 @@ const MUTED_BY_DEFAULT = new Set(["place", "seat", "chip", "mesh", "variant",
 // the floored strut widths, so the finding survives without the emitter running
 // on every capture.
 // ⚠️ THE EMITTER IS KEPT, NOT DELETED, and that is the other half of the same
-// rule: CLAUDE.md tells the next session to read `logBadgeGeometry`'s three
-// numbers rather than reason about badge geometry, because four rounds were
+// rule: the next session should read `logBadgeGeometry`'s three numbers
+// rather than reason about badge geometry, because four rounds were
 // spent losing to screenshots. Muted means `?debug=badge` still has it; deleted
 // would mean the next round starts by rebuilding the instrument.
 

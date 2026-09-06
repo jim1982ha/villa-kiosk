@@ -249,7 +249,8 @@ export interface ReportSchedule {
  * a sparse overlay — absent means "use the default", and the backend applies
  * defaults at read time rather than persisting them. Writing a fully populated
  * document back would make a deleted schedule indistinguishable from an absent
- * one, which is the config-resurrection bug CLAUDE.md's hard rule describes.
+ * one, which is the config-resurrection bug the empty-default hard rule
+ * exists for.
  */
 export interface ReportsConfig {
   enabled?: boolean;

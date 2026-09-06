@@ -214,7 +214,7 @@ function deriveTiles(
       id: "__energy", icon: Zap, label: "Energy",
       value: formatUnitValue(totalW, "W"),
       // A HARDCODED `totalW > 3000` used to live here, and it was exactly the
-      // per-site tuning constant CLAUDE.md's first hard rule forbids: 3 kW is
+      // per-site tuning constant the first hard rule forbids: 3 kW is
       // an idle afternoon in a villa with a pool pump and an alarming spike in
       // a small apartment. It was right for the machine it was written on and
       // wrong everywhere else — a tile permanently red on one install and

@@ -3,8 +3,8 @@
 The add-on has no logging framework and does not want one: the proxy prints
 `[supervisor-proxy] ...` with `flush=True` and that is read directly from the
 Home Assistant add-on log, which is how every field diagnosis in this project
-has actually been made (see CLAUDE.md — three ceiling bugs in a row were
-diagnosed from owner-pasted kiosk logs).
+has actually been made — three ceiling bugs in a row were diagnosed from
+owner-pasted kiosk logs.
 
 `flush=True` is not decoration. Python block-buffers stdout when it is not a
 TTY, which is exactly the case under s6, so an unflushed line can sit in a

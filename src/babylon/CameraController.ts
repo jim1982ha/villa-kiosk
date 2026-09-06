@@ -70,8 +70,8 @@ export class CameraController {
    * the one raycast in this app that runs while the camera is MOVING.
    *
    * /dry-audit, 2026-08-17: "what is the floor height below this point" is
-   * supposed to have exactly one answer (`floorProbe.ts`, three callers named in
-   * CLAUDE.md). This is a fourth, and its divergence is only half documented:
+   * supposed to have exactly one answer (`floorProbe.ts`, three callers).
+   * This is a fourth, and its divergence is only half documented:
    * the CACHE must differ (a walking camera cannot memoise an answer that
    * changes every step — see SceneManager.applyStructure's octree note), but its
    * PREDICATE also differs, silently, accepting every pickable mesh (~900) where
@@ -752,9 +752,9 @@ export class CameraController {
     // room: `spawn … standY=0.65` immediately followed by `at=-1.2,4.1,-0.2`,
     // an eye at 4.1 m over a floor the spawn had measured at 0.00, i.e.
     // standing on the 2.44 m ceiling. 2.474.0 fixed floorProbe's two entry
-    // points and missed the camera's, which CLAUDE.md calls out as the FOURTH
-    // asker of "what is the floor here" and the one that deliberately does not
-    // share that module.
+    // points and missed the camera's — the FOURTH asker of "what is the floor
+    // here", and the one that deliberately does not share that module (see this
+    // class's own probe above).
     const notCeiling = (m: AbstractMesh) =>
       !isResolvedCeiling(m);
     const base = (m: AbstractMesh) =>

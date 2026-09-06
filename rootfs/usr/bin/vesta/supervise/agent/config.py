@@ -20,8 +20,8 @@ authorised. Both must be filled in by a person, deliberately, once.
 
 ⚠️ THOSE TWO ARE THE WORST CASES, NOT THE WHOLE LIST — `MUST_BE_EMPTY` has FIVE
 entries and a test asserts each is falsy here. Read the declaration, not this
-sentence: CLAUDE.md carried exactly this gap about `SHARED_CONFIG_KEYS` (four
-named, five declared) and v2.486.0 is what it cost to find.
+sentence: the same gap once existed about `SHARED_CONFIG_KEYS` (four named,
+five declared) and v2.486.0 is what it cost to find.
 
 ⚠️ AND IT HOLDS ENTITY IDS, WHICH IT DID NOT UNTIL 2.718.0 — IT HELD PER-RUN
 HANDLES, AND THAT MADE IT NOT AN ALLOW-LIST AT ALL. `refs.py` says in its own

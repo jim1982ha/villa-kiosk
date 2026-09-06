@@ -111,8 +111,8 @@ export default function PayloadInspector({
 
           {/* ⚠️ SCROLLS INSIDE ITS OWN BOX. A JSON dump is the widest thing in
               this dialog by a wide margin, and a page that scrolls sideways on
-              a phone because of one panel is the layout bug CLAUDE.md's own
-              gotcha list warns about. */}
+              a phone because of one panel is a layout bug this app has
+              shipped before. */}
           <pre className="reports-payload">
             {JSON.stringify(payload.body, null, 2)}
           </pre>

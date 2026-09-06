@@ -157,7 +157,8 @@ export default function PeoplePanel() {
    *  the backend — `people()` reads the legacy map ONLY while the table is
    *  empty — so leaving it behind means deleting the last person here silently
    *  resurrects every sender the old panel had, which is precisely the
-   *  config-resurrection bug CLAUDE.md's hard rule describes. The backend's
+   *  config-resurrection bug the empty-default hard rule exists for. The
+   *  backend's
    *  migration is read-only; this is the edit that makes it permanent.
    *
    *  ⚠️ AND A BLANK ROW IS KEPT IN THE DRAFT RATHER THAN DROPPED. An operator

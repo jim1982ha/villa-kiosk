@@ -9,7 +9,7 @@
 // 1. A CANVAS SHADOW DOES NOT RIDE THE CTM. `shadowBlur`/`shadowOffsetX/Y` are
 //    applied in DEVICE pixels whatever the container's scale, which makes them
 //    the one badge dimension that must NOT live in `badgeMetrics.ts` (that file
-//    is CSS pixels, converted through `effectiveScale()` — see CLAUDE.md). A
+//    is CSS pixels, converted through `effectiveScale()`). A
 //    blur written there would be scaled twice on a retina panel and once here.
 //
 // 2. A BADGE FLOATING OVER A 3D VILLA HAS NO LIGHT SOURCE, so its shadow is a

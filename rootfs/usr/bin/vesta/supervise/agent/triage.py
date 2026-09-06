@@ -56,8 +56,8 @@ TRIAGE_TOOLS: Tuple[str, ...] = ("read_villa",)
 #:
 #: ⚠️ AND THE FIX IS IN THE PROMPT RATHER THAN IN `parse()`, DELIBERATELY. A
 #: code-side filter would have to match model-authored subject text by name —
-#: an unanchored substring rule over prose, which is the class of rule CLAUDE.md
-#: records as a recurring false-positive source here, and which would silently
+#: an unanchored substring rule over prose, which is a recurring
+#: false-positive source here, and which would silently
 #: drop a real finding whose subject happened to contain the word "coverage".
 #: Telling the tier what is not a subject also saves the turn, where a filter
 #: would pay for it and discard the answer.

@@ -183,7 +183,7 @@ export function structureRole(mesh: AbstractMesh): StructureRole {
  * Is this mesh a ceiling, as far as anything running AFTER `applyStructure` is
  * concerned — stamp first, then the resolved metadata flag.
  *
- * ⚠️ THE SECOND ANSWER TO A QUESTION CLAUDE.md SAYS HAS ONE, converged here by
+ * ⚠️ THE SECOND ANSWER TO A QUESTION THAT IS SUPPOSED TO HAVE ONE, converged by
  * /dry-audit (2.479.0). `isCeilingMesh` below is the CLASSIFIER: stamp or name,
  * minus devices, and it is what ModelLoader and `applyStructure` use to DECIDE.
  * By the time anything else asks, that decision has already been made and

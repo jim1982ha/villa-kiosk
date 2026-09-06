@@ -853,8 +853,8 @@ const chipSuffixOf = (c: RoomChip) => (c.rooms > 1 ? `+${c.rooms - 1}` : "");
  * The remaining differences are shape and content, and both carry meaning: a
  * group is a SQUIRCLE (it stands in for squircle badges, at a badge's own
  * corner rounding) holding pictograms or a count, the chip is a PILL (it names
- * a place) holding a room name. Not a category colour either way — CLAUDE.md
- * reserves the category hues for categories, and a summary covers several.
+ * a place) holding a room name. Not a category colour either way — the
+ * category hues are reserved for categories, and a summary covers several.
  */
 // Character-advance estimates for text this file has to MEASURE before Babylon
 // has laid it out live in `labelLayout.chipWidthPx`, whose docstring explains
@@ -1365,8 +1365,8 @@ export class EntityVisuals {
    * for the denominator and TWO for this flag. That combination can collapse
    * one spelling and leave the other's badges drawn: a half-chip, half-badges
    * room, which is exactly the state the paragraph above says must never
-   * exist. Per CLAUDE.md the key is a Map key only; every displayed name
-   * stays the raw one (see roomDisplay).
+   * exist. The key is a Map key ONLY; every displayed name stays the raw one
+   * (see roomDisplay).
    */
   private roomClustered = new Map<string, boolean>();
   /** roomKey() → the raw room name to PRINT for it. The lexicographically
@@ -6916,8 +6916,7 @@ export class EntityVisuals {
         // ── BOXES, NOT DISCS — the correction the CHIP tier already made ────
         // `cardHalfOf` is `hypot(width, height) / 2`: the CIRCUMSCRIBED radius
         // of the card. Comparing two of those against a scalar distance is a
-        // disc test, and CLAUDE.md already records why that is wrong one tier
-        // down — "a chip is a wide short pill, so a circumscribed disc would
+        // disc test, and that is wrong one tier down for a recorded reason — "a chip is a wide short pill, so a circumscribed disc would
         // chip half the villa, and since 2.287.0 the plane's axes ARE the
         // screen's axes so an exact axis-aligned test is finally expressible".
         // Cards are wide short pills too: the field capture that prompted this
@@ -8428,7 +8427,7 @@ export class EntityVisuals {
     const chips: RoomChip[] = [];
     for (const [key, g] of groups) {
       // Back to the raw spelling for anything a person reads or taps: the key
-      // is a Map key only (CLAUDE.md), and roomDisplay holds what to print.
+      // is a Map key ONLY, and roomDisplay holds what to print.
       const room = this.roomDisplay.get(key) ?? key;
       const c: RoomChip = {
         key, keys: [key], room, label: room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],

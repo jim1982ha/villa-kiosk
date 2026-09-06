@@ -34,7 +34,7 @@ export interface EntityMapping {
    *  Deliberately NOT inferred from the entity_id (a relay-controlled lock
    *  modelled as switch.* has no reliable naming convention — an earlier
    *  attempt at auto-detecting one from the name was tried, misfired, and
-   *  was reverted; see CLAUDE.md's gotchas) — only ever set by hand in
+   *  was reverted) — only ever set by hand in
    *  Advanced Settings, off by default on every device. A `type: "lock"`
    *  entity doesn't need this: it already never quick-toggles and already
    *  has its own two-step confirm on Unlock (see LockPanel). */

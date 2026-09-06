@@ -67,8 +67,8 @@ USAGE_PATH: str = f"{store_mod.DATA_DIR}/vesta/usage.json"
 MAX_ROWS: int = 8_000
 
 #: Published list prices, USD per MILLION tokens, as `(input, output)`.
-#: ⚠️ A PRICE LIST IS NOT A VILLA CONSTANT. CLAUDE.md forbids per-site tuning
-#: values; these are the provider's public rates, identical for every install,
+#: ⚠️ A PRICE LIST IS NOT A VILLA CONSTANT. The first hard rule forbids
+#: per-site tuning values; these are the provider's public rates, identical for every install,
 #: and the alternative — asking each owner to type them in — would produce
 #: worse numbers everywhere.
 #:

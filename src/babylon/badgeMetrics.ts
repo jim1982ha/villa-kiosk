@@ -573,8 +573,8 @@ const COARSE: BadgeMetrics = {
   // converged on this number: settleChips' own chip-vs-badge and chip-vs-card
   // tests read `minGapPx`, and only the merge did not.
   //
-  // CLAUDE.md said "two dials" while there were three. If a third is ever
-  // wanted, it needs a reason this comment does not already cover.
+  // This was once written down as "two dials" while there were three. If a
+  // third is ever wanted, it needs a reason this comment does not cover.
   minGapPx: 2,
   tapSlopMinPx: 10,
   // Apple's 44pt hit region, which is also this app's --touch-min.

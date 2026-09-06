@@ -34,7 +34,8 @@ Phase 0 changes no existing behaviour anywhere.
 
 ⚠️ THE STORED CONFIG IS A SPARSE OVERLAY, NEVER A SEEDED DOCUMENT. `EMPTY_CONFIG`
 is `{}` and defaults are applied at READ time by `config_view()`, never written
-back. CLAUDE.md's hard rule states why in general terms; the specific bug it
+back. The hard rule against seeded defaults states why in general terms; the
+specific bug it
 comes from is worth restating because this subsystem is a prime candidate to
 repeat it: a default table spread UNDERNEATH stored config on load resurrects
 entries the operator deleted, because "absent" and "deleted" become the same
@@ -184,8 +185,8 @@ CONFIG_DEFAULTS: Final[Dict[str, Any]] = {
     # ⚠️ THE CATALOG'S NOISE RULE, AS DEFAULTS RATHER THAN CONSTANTS. "20 fires
     # a month with no acknowledgement" is the workbook's number for ONE
     # property; a busier or quieter villa needs a different one, and a tuning
-    # constant baked into a redistributable add-on is CLAUDE.md's first hard
-    # rule broken.
+    # constant baked into a redistributable add-on breaks the first hard rule:
+    # nothing villa-specific ships.
     #
     # ⚠️ NOTHING READS THESE TWO ANY MORE (/dry-audit, 2026-09-01). The module
     # that gated on them went with the blueprint-event machinery, and the only
@@ -246,7 +247,8 @@ def validate_config(value: Any) -> List[str]:
 
     ⚠️ This is a convenience for the operator, NOT a security boundary. The
     proxy's own role gate is what stops a non-owner writing this store, exactly
-    as with every other shared store; see CLAUDE.md on RBAC being server-side.
+    as with every other shared store — RBAC is decided server-side, and
+    `tests/security_test.py` holds that line.
     """
     problems: List[str] = []
     if not isinstance(value, dict):

@@ -8,8 +8,8 @@ phone to run THE SAME CODE — not two implementations kept in step by whoever
 remembers, which is `feedback_one-owner-per-predicate` — and the two-correct-
 halves shape it belongs to is the one this repository has paid for most often.
 ⚠️ THAT SENTENCE CARRIED A COUNT ("fourteen times") FOR ONE RELEASE, AND THE
-COUNT WAS BORROWED FROM A DIFFERENT PATTERN — `pin-the-caller`'s tally, in
-CLAUDE.md. A number attached to the wrong rule is worse than no number, because
+COUNT WAS BORROWED FROM A DIFFERENT PATTERN — `pin-the-caller`'s tally.
+A number attached to the wrong rule is worse than no number, because
 it reads as evidence. Found by /dry-audit Part 3 the morning after it shipped.
 
 ⚠️ AND IT ALREADY HAD ONE, BEFORE ANY BUTTON EXISTED. "Done" on the To-Do List

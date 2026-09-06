@@ -1032,8 +1032,8 @@ export async function loadModelInto(
     // to add to Settings' extra glass hints, without turning a load record
     // into a mesh dump. These are the asset's OWN names, from the operator's
     // own model, going to their own add-on — nothing here is shipped in code
-    // (see CLAUDE.md's no-villa-specific-data rule, which is about what the
-    // REPOSITORY contains).
+    // (the no-villa-specific-data hard rule is about what the REPOSITORY
+    // contains, not what an operator's own install logs).
     const cap = (xs: string[]) => {
       const out = [...new Set(xs)].join(",");
       return out.length > 240 ? `${out.slice(0, 240)}…` : out;

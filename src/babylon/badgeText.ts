@@ -8,7 +8,7 @@
 // invisible to the compiler and easy to miss in review:
 //
 //   fontFamily            Babylon GUI does not inherit CSS and defaults to
-//                         Arial (CLAUDE.md's first known gotcha). Setting it
+//                         Arial. Setting it
 //                         is not optional and has been forgotten before.
 //   fontSize / fontWeight the caller's, and the only two that legitimately
 //                         differ between call sites.

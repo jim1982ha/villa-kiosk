@@ -70,8 +70,8 @@ const MAX_SLICES = 5;
  *  grow indefinitely: it cannot — `record()` rewrites `entries[-MAX_ROWS:]` on
  *  every append, so the file is a ring like every other store under `/data`. */
 
-/** ⚠️ A SEQUENTIAL RAMP OF ONE HUE, NEVER THE CATEGORY PALETTE. CLAUDE.md's own
- *  gotcha: reusing `CATEGORY_COLORS` for non-category UI made a room chip read
+/** ⚠️ A SEQUENTIAL RAMP OF ONE HUE, NEVER THE CATEGORY PALETTE. A recorded
+ *  defect: reusing `CATEGORY_COLORS` for non-category UI made a room chip read
  *  as a mis-tagged badge. These slices are shares of one quantity — money — with
  *  no meaning attached to any particular one, so a ramp of the accent is the
  *  honest encoding: darker is bigger, and nothing implies "this slice is the

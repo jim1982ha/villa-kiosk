@@ -185,7 +185,7 @@ const membersOf = <T extends readonly string[]>(v: unknown, set: T): T[number][]
 // "use the default", and the backend applies defaults at read time rather than
 // persisting them. Writing a fully-populated document back would make a DELETED
 // schedule indistinguishable from an absent one — the config-resurrection bug
-// CLAUDE.md's hard rule describes, which shipped once already against the
+// the empty-default hard rule exists for, which shipped once already against the
 // device-config store's seeded entity map. So `parseReportsConfig` leaves
 // absent fields UNDEFINED and the UI supplies display defaults at the point of
 // rendering, never at the point of storage.

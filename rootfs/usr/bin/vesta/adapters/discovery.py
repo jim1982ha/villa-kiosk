@@ -366,7 +366,7 @@ async def _notify_entities(hass: HassClient) -> List[Dict[str, Any]]:
             # THIS ONE DID NOT — v2.559.0 added `plain_mode` to the SERVICE loop
             # and left this builder untouched, so entity targets carried no such
             # key and `deliver` read "" for all of them. Verbatim the `reachY`
-            # failure CLAUDE.md records in the badge tier: a second builder of
+            # failure the badge tier hit: a second builder of
             # the same shape, copying nine fields and not the tenth.
             #
             # ⚠️ AND IT IS "" HERE ON PURPOSE, not by omission. An entity target

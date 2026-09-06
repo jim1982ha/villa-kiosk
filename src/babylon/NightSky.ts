@@ -3,7 +3,7 @@
 //
 // Both are PROCEDURAL — drawn into canvas textures at runtime, no image asset
 // shipped or fetched — because the add-on's target is an iPad on a villa wall
-// that may have no internet at all (see CLAUDE.md's second hard rule). A star
+// that may have no internet at all — the second hard rule. A star
 // PNG would work on a developer's desk and simply be missing on the wall.
 //
 // The moon's POSITION and PHASE are computed from date + latitude/longitude in

@@ -8,7 +8,8 @@ one-line descriptions until the agent asks for a body.
 
 ⚠️ SHIPPED AND LEARNED ARE TWO TREES AND ONLY ONE MAY CONTAIN A VILLA FACT.
 `rootfs/usr/share/vesta/playbooks/` goes to every install and is subject to
-CLAUDE.md's first hard rule — `test_playbooks.py` enforces it. `/data/vesta/` is
+the first hard rule (nothing villa-specific ships) — `test_playbooks.py`
+enforces it. `/data/vesta/` is
 per-property, never redistributed, and entity ids there are CORRECT because that
 is what a learned file is for. The asymmetry is why the CI rule is path-scoped
 rather than global.

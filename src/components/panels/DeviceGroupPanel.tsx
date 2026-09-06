@@ -40,7 +40,7 @@ interface Props {
  *
  * The brand accents carry no status meaning, so they can be assigned by index
  * without claiming anything. Same reasoning as the rule against reusing the
- * --cat-* category hues for non-category UI (see CLAUDE.md): a colour that
+ * --cat-* category hues for non-category UI: a colour that
  * means something specific elsewhere must not be spent on "these are
  * different lines".
  */

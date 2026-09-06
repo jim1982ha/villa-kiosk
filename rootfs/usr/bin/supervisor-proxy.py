@@ -2139,8 +2139,8 @@ def _reports_config_guard(request: web.Request, body, old, new):
     """Reject a structurally invalid config before it is stored.
 
     A convenience for the operator, NOT a security boundary — the factory's own
-    role gate is what stops a non-owner writing here (RBAC is server-side; see
-    CLAUDE.md). This exists so a malformed schedule fails at the moment it is
+    role gate is what stops a non-owner writing here (RBAC is decided server-side,
+    and `tests/security_test.py` is what holds that line). This exists so a malformed schedule fails at the moment it is
     saved, with a message naming the field, instead of silently never firing
     and being debugged weeks later from an add-on log.
     """
@@ -2584,8 +2584,8 @@ def _journal_facts() -> Dict[str, Any]:
             # looked for `last_seen` in a payload that no longer had it. The
             # field arrived, was ignored, and read as "nothing has been written
             # down yet" above 51,579 recorded changes. Two correct halves and a
-            # join nobody owned; CLAUDE.md calls this the envelope bug one level
-            # down, and it is the same shape: a key that differs is ACCEPTED and
+            # join nobody owned — the same shape as the envelope bug one level
+            # down: a key that differs is ACCEPTED and
             # IGNORED rather than refused.
             "last_seen": snap.get("last_seen"),
             "bound": snap.get("bound"),

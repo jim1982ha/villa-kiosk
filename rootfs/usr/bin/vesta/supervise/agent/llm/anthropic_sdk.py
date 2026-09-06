@@ -3,7 +3,8 @@
 ⚠️ AND THE ONLY FILE THAT MAY NAME THE PROVIDER'S HOSTNAME. `tests/py/
 test_narration_provider.py` derives the host list from the adapter sources and
 asserts it appears nowhere under `src/` — because a provider host reachable from
-the SPA bundle would be CLAUDE.md's second hard rule failing in the one place
+the SPA bundle would be the second hard rule — no internet dependency, ever —
+failing in the one place
 nobody would look, and it would put an API key in a browser to do it. That test
 now covers this file too.
 

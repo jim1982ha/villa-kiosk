@@ -35,8 +35,8 @@ export function roomKey(name: string | undefined | null): string {
 // re-normalise the fixed side on every iteration. Deleted rather than kept
 // "for symmetry": an exported function with no callers still has to be read,
 // understood and maintained by everyone who opens this file, and this one was
-// additionally named in CLAUDE.md as a rule to follow, which made the
-// documentation describe a convention the code did not actually have.
+// additionally written down as a rule to follow, which made the documentation
+// describe a convention the code did not actually have.
 
 /**
  * What a device with no resolvable room is filed under, on screen.
