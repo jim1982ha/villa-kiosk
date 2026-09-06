@@ -23,7 +23,7 @@ import type { Concern } from "./agentTypes";
 // import works under Vite and fails under `node`. `allowImportingTsExtensions`
 // is already on in tsconfig, so the compiler is happy either way — and being
 // node-loadable is the entire reason this file exists.
-import { timeOnly } from "./when.ts";
+import { timeOnly, whenShort } from "./when.ts";
 
 /** Does the server currently offer this act on this concern?
  *
@@ -170,11 +170,16 @@ export const PROFILE_NAME: Record<string, string> = {
  *  decided the profile — and saying nothing would read as "never sent" beside
  *  a `delivered_at` that says otherwise. */
 export function sentSummary(c: Concern): string {
+  // ⚠️ A NINTH COPY OF ONE FORMAT, IN THE MODULE BOTH SURFACES READ. `when.ts`
+  // opens "EIGHT COPIES, ONE FORMAT, FOUR ANSWERS TO FAILURE" and this was
+  // character-for-character `whenShort(iso, "blank")` — thirty lines below this
+  // file's own import of that module. A change to the shared format would have
+  // moved the Concern's timestamps on the Chat and not on the Wall tablet,
+  // which is the "one card, two clocks" defect `when.ts` was written to end.
+  // Only the leading space is this function's own.
   const when = (iso: string) => {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime())
-      ? "" : ` ${d.toLocaleString(undefined, { day: "numeric", month: "short",
-                                               hour: "2-digit", minute: "2-digit" })}`;
+    const stamp = whenShort(iso, "blank");
+    return stamp ? ` ${stamp}` : "";
   };
   const rows = c.deliveries ?? [];
   if (rows.length === 0) {

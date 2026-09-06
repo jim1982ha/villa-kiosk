@@ -1,3 +1,33 @@
+## 2.966.0
+
+### Fixed — after ten alerts about one thing, the wrong one was named
+When an alert is closed and the same problem comes back, the report names which
+later alert disproved the fix. It picked that by sorting the alerts' internal
+labels as text, and "c10" sorts before "c2" — so from your tenth alert onward
+it named the wrong one, crediting a fix with surviving a failure it did not.
+The check that was supposed to catch this used three alerts, where sorting by
+text and by time happen to agree.
+
+### Fixed — after 2,000 alerts, every new one reused the same label
+The store keeps the most recent 2,000 and the label was derived from how many
+were held, so once it filled up the counter stopped moving. Two alerts sharing
+a label would have made their chat messages, their audit trail and the report
+above all point at the wrong one.
+
+### Changed — the check for unused code was crediting the wrong function
+It matched by name across the whole project, so a function was counted as used
+because a completely different function somewhere else happened to share its
+name — and 68 names are shared that way. It now checks that the caller can
+actually reach what it names. That immediately found five things nothing calls,
+including a second copy of the "how often should the assistant run" rule that
+was missing the guard against a mistyped setting billing ninety-six runs a day.
+That copy is deleted; the other four are written down as the gaps they are.
+
+### Fixed — a test could leave a fake check running in every later report
+Its cleanup did nothing, so a made-up check joined every briefing composed
+afterwards in that run. Nothing shipped was affected — but the results the
+checks are judged by were.
+
 ## 2.965.0
 
 ### Fixed — a slow trickle of mistyped PINs could still lock the villa out

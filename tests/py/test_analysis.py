@@ -713,3 +713,56 @@ def _ctx(**kw):
     return ModuleContext(**base)
 
 
+
+
+def test_a_test_cannot_leave_a_module_in_the_registry() -> None:
+    """⚠️ THE GUARD ON THE GUARD. `test_coverage_claim` registered a fake check
+    and 'removed' it with `registered().remove(...)` — a mutation of the fresh
+    list that call builds, which left `_REGISTRY` untouched. It ran in every
+    later pass in the process, and the test that would have noticed derives its
+    expectation from `registered()`, so it absorbed the extra module instead.
+
+    This registers one and asserts nothing else has to remember: the autouse
+    fixture in `conftest` restores the registry, so the NEXT test sees the
+    shipped set. Deleting that fixture fails this.
+    """
+    from vesta.brief import registry as registry_mod
+
+    shipped = {m.name for m in registry_mod.registered()}
+    assert shipped, "the registry is empty; this would pass vacuously"
+    assert "leak_probe" not in shipped, (
+        "a previous test left `leak_probe` registered — the restore is not "
+        "running, and every module registered by a test is still live")
+
+    class _Probe:
+        name = "leak_probe"
+        requires: Sequence[str] = ()
+        audiences: Sequence[str] = ("owner", "facility")
+        min_days = 0
+        superseded_by: Sequence[str] = ()
+
+        async def run(self, context: ModuleContext) -> List[Finding]:
+            return []
+
+    registry_mod.register(_Probe())                # type: ignore[arg-type]
+    assert "leak_probe" in {m.name for m in registry_mod.registered()}
+
+
+def test_the_probe_the_previous_test_registered_is_GONE() -> None:
+    """⚠️ THE ASSERTION HAS TO BE IN A LATER TEST, WHICH IS THE WHOLE DIFFICULTY.
+
+    A leak is invisible to the test that causes it — the one above registers
+    `leak_probe` and sees it, exactly as it should. Only the NEXT test can say
+    whether it was put back, and pytest runs a file's tests in definition
+    order, so this pair is the instrument. Written as one test, the check
+    passed with the restore deleted; that is the mutation that made this a
+    pair.
+    """
+    from vesta.brief import registry as registry_mod
+
+    live = {m.name for m in registry_mod.registered()}
+    assert live, "the registry is empty; this would pass vacuously"
+    assert "leak_probe" not in live, (
+        "`leak_probe` survived the test that registered it, so a module a test "
+        "registers runs in every later pass — which is how a fake check with "
+        "`requires = ()` and `min_days = 0` joined every Brief in the session")

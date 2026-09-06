@@ -176,3 +176,41 @@ def isolated_stores(tmp_path, monkeypatch):
             moved.append("%s.%s" % (name, attr))
     assert moved, "no store was isolated — the walk found nothing to repoint"
     return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _analysis_registry_is_restored():
+    """The Brief's module registry, put back after every test.
+
+    ⚠️ A TEST LEAKED A FAKE CHECK INTO EVERY LATER PASS IN THE SESSION.
+    `test_coverage_claim` registered a `Spy` and cleaned up with
+
+        registry.registered().remove(...)
+
+    and `registered()` builds a FRESH list on every call, so `.remove()`
+    mutated a throwaway and `_REGISTRY["spy"]` was never touched. Measured: the
+    registry held `['level_anomaly', …, 'spy', 'standby_creep']` after that
+    file ran. `Spy` subclasses a real check with `requires = ()`,
+    `min_days = 0` and both audiences, so it passes every arm of the gate and
+    runs in every subsequent `run_all`.
+
+    ⚠️ THE TEST THAT WOULD NOTICE DERIVES ITS EXPECTATION FROM `registered()`,
+    so it absorbed the extra module rather than failing on it — the pollution
+    was invisible by construction.
+
+    Autouse, because the correct incantation existed (`_snapshot` /
+    `_reset_for_tests`, used properly two files over) and being available is
+    not the same as being used. Now no test has to remember.
+    """
+    try:
+        from vesta.brief import registry
+    except Exception:                              # pragma: no cover
+        yield
+        return
+    saved = registry._snapshot()
+    try:
+        yield
+    finally:
+        registry._reset_for_tests()
+        for module in saved.values():
+            registry.register(module)

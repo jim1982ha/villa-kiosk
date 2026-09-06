@@ -40,7 +40,9 @@ import os
 import re
 import subprocess
 import sys
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
+
+from conftest import strip_prose
 
 REPO_ROOT = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,15 +54,14 @@ PKG = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "age
 #: MADE, and the ones marked BLOCKED are findings rather than exemptions — they
 #: are here so the count does not grow silently, not because they are fine.
 EXEMPT: Dict[str, str] = {
-    "flag_type_of":
-        "⚠️ REACHED BY INJECTION, NOT BY A CALL (2.950.0). `runtime.py` wires it "
-        "into `RaiseConcern` as `flag_type_of=sources_mod.flag_type_of`, and the "
-        "tool calls it through `_flag_type`. It had a direct caller until "
-        "`build_document` stopped asking the question per entity id: that path "
-        "re-read the whole journal and re-scored every device to look up three "
-        "fields, once per scorable entity, so it now uses `flag_type_of_row` "
-        "against the row it already holds. This entry point survives for the one "
-        "caller that genuinely has an id and no row.",
+    # ⚠️ `flag_type_of` AND `brief` WERE HERE AND ARE NOT ANY MORE (2.966.0).
+    # Both were exempted with the same true reason — "a registration is a
+    # reference, not a call, and renaming pipeline locals to satisfy a scanner
+    # would be gaming the instrument". The scan credits a REFERENCE now
+    # (`set_brief_composer(agent_compose.brief)`,
+    # `flag_type_of=sources_mod.flag_type_of`), so neither needs an entry: the
+    # instrument was corrected instead of the code being annotated around it.
+
     # ── genuinely unreachable, and that is a FINDING (TASK-106, parked) ──
     # ⚠️ `escalate` WAS HERE AND IS NOT ANY MORE (TASK-112, v2.701.0). It was
     # unreachable for the reason recorded: re-evaluating an unacknowledged
@@ -73,14 +74,17 @@ EXEMPT: Dict[str, str] = {
                       "now delivers, but does not yet register the thread — "
                       "the remaining half of REQ-014",
 
-    # ── wired by REFERENCE, which the call-shaped scan cannot see ──
-    "brief": "the NORMAL brief's author since TASK-073. The proxy registers it "
-             "at boot (reports_pipeline.set_brief_composer(agent_compose."
-             "brief)) and the pipeline calls it through the hook — the same "
-             "mechanism as `ladder`, which this scan only credits because "
-             "_degrade's local variable happens to spell the name out. A "
-             "registration is a reference, not a call, and renaming pipeline "
-             "locals to satisfy a scanner would be gaming the instrument",
+    # ── wired by REFERENCE ──
+    # ⚠️ THIS SECTION IS EMPTY NOW, AND THAT IS THE FIX (2.966.0). `brief`,
+    # `ladder` and `flag_type_of` were all exempted here with the same true
+    # reason: "a registration is a reference, not a call, and renaming pipeline
+    # locals to satisfy a scanner would be gaming the instrument." Correct
+    # about the code and about the scanner — so the scanner was corrected. It
+    # credits `set_brief_composer(agent_compose.brief)` and
+    # `flag_type_of=sources_mod.flag_type_of` as the uses they are, and three
+    # real seams left an exemption map they were sharing with genuine
+    # oversights. An exemption that describes an instrument's limit belongs in
+    # the instrument.
 
     # ⚠️ `verify` WAS HERE AND IS NOT ANY MORE (2026-08-28), the same way
     # `escalate` left above it. It was BLOCKED rather than exempt — the ninth
@@ -90,6 +94,42 @@ EXEMPT: Dict[str, str] = {
     # throughout?". `concerns.verification_sweep` is that sweep,
     # `scheduler.dispatch` is where it runs, and the Reason tab's "Fixed and
     # confirmed" count can finally be something other than zero.
+
+    # ── SURFACED BY MAKING THIS SCAN MODULE-AWARE (2.966.0) ──
+    # ⚠️ ALL FOUR WERE CREDITED BY A DIFFERENT FUNCTION OF THE SAME NAME, and
+    # each is a real gap rather than dead code — the module, its store and in
+    # two cases its screen all exist, and only the thing that FEEDS them is
+    # missing. `triage.due` was the fifth and is deleted: it was a second
+    # cadence rule without the scheduler's typo floor.
+    #
+    # These are wiring decisions for the owner, not refactors, so they are
+    # recorded as what they are rather than quietly deleted.
+    "write": "⚠️ THE AGENT CANNOT RECORD A VILLA MEMORY. `memory.write` is the "
+             "only path that stores a derived claim, and nothing calls it — "
+             "`api.py` reads (`all_memories`) and applies a HUMAN correction "
+             "(`correct`), so the store can hold what a person overrode and "
+             "never what the agent concluded. Credited until now by prose in "
+             "two docstrings that spell `write()`",
+    "propose": "⚠️ NOTHING CAN PUT A DRAFT IN THE PLAYBOOK REVIEW QUEUE. "
+               "`review.py` holds the queue, the two-directory design and the "
+               "discard record; `api.py` serves GET and POST /agent-review and "
+               "the SPA fetches both — so the queue and its screen exist and "
+               "can only ever be empty. `act.py` calls `proposals.propose`, "
+               "which is a DIFFERENT function (a high-harm action awaiting "
+               "approval), and that name collision is what hid this. WHEN an "
+               "investigation should propose a playbook is a product decision",
+    "expire": "⚠️ THE DAILY SWEEP THAT NOTHING RUNS. `memory.expire` retires "
+              "villa memories whose `review_after` has passed — retires, never "
+              "deletes, and skips corrections. No scheduler calls it, so a "
+              "memory is asserted for ever once written. Credited until now by "
+              "`chat.expire`, which prunes chat threads and is unrelated",
+    "stats": "the counts the diagnostics panel is described as showing — "
+             "threads, turns, concerns. No endpoint serves them, so the panel "
+             "shows something else or nothing. Credited until now by "
+             "`ModuleContext.stats`, the statistics fetcher",
+    "summary": "the Supervision tab's 'is the tool upstream wired, and how "
+               "many of its tools may this villa call'. No endpoint serves it. "
+               "Credited until now by `usage.summary` and `audit.summary`",
 
     # ── deliberately not called, with the reason at the code ──
     "concern_admissible": "bundles suppression with contracts.concern_errors, "
@@ -183,11 +223,33 @@ def _shipped() -> Dict[str, str]:
         path = os.path.join(REPO_ROOT, rel)
         if os.path.exists(path):
             try:
-                files[path] = open(path, encoding="utf-8",
-                                   errors="ignore").read()
+                text = open(path, encoding="utf-8", errors="ignore").read()
             except OSError:
-                pass
+                continue
+            _SOURCE[path] = text
+            # ⚠️ DOCSTRINGS ARE PROSE TOO, AND ONE OF THEM CREDITED A CALLER.
+            # The filter below skips `#` comments; `audit.passes` was reported
+            # reachable because its OWN docstring reads "The triage passes,
+            # newest last." — a name followed by a comma matches the call
+            # shape. This file's docstring already says "prose naming a
+            # function is not a use of it"; `strip_prose` blanks comments AND
+            # docstrings in place, so every column and line number survives and
+            # the def-line skip still lines up.
+            try:
+                files[path] = strip_prose(text)
+            except SyntaxError:                    # pragma: no cover
+                files[path] = text
     return files
+
+
+#: path -> the file as written. ⚠️ THE ORIGINAL, BECAUSE `strip_prose` OUTPUT
+#: DOES NOT RE-PARSE. It blanks a docstring IN PLACE, so a function whose body
+#: is only a docstring becomes an empty block — `ast.parse` then raises, and
+#: `_reaches`' "do not accuse" fallback credited EVERY name in that file,
+#: silently restoring the blind spot this change exists to close. Imports are
+#: read from what was written; calls are matched against what is left after the
+#: prose is blanked.
+_SOURCE: Dict[str, str] = {}
 
 
 @functools.lru_cache(maxsize=None)
@@ -210,20 +272,94 @@ def _unreachable() -> List[str]:
             # twice.
             call = re.compile(rf"(?<![\w.]){re.escape(node.name)}\s*\("
                               rf"|\.{re.escape(node.name)}\s*\(")
-            if not _called(files, call, node, path):
+            if not _called(files, call, node, path, name=node.name):
                 found.append(f"{node.name}  ({os.path.basename(path)}:"
                              f"{node.lineno})")
     return found
 
 
+@functools.lru_cache(maxsize=None)
+def _module_of(path: str) -> str:
+    """The dotted module a shipped file is imported as."""
+    rel = os.path.relpath(path, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
+    return rel[:-3].replace(os.sep, ".")
+
+
+def _reaches(path: str, module: str, name: str) -> Tuple[bool, Set[str]]:
+    """How this file could reach `module.name` -> (bare, module aliases).
+
+    ⚠️ A CALL IS ONLY A CALL IF IT CAN REACH THE DEFINITION. The scan matched a
+    bare name across the whole corpus, so `triage.due` was credited by
+    `schedule_mod.due(...)` and `digest.due(...)` — different functions
+    entirely — and sat unreachable, without the cadence floor the scheduler
+    applies, while the gate reported it healthy. 68 shipped function names are
+    defined in two or more files, so the blind spot is the width of that list.
+
+    ⚠️ AND THE ALIASES, NOT A BOOLEAN. Returning "this file may use the
+    attribute form" and then matching any `.name` credits attribute access on
+    unrelated objects: `budget.status` was credited by `result.status` in two
+    files that merely import `budget`. Trading one blind spot for another is
+    not a fix, so the alias the module is actually bound to is what gets
+    matched.
+    """
+    try:
+        tree = ast.parse(_SOURCE.get(path, ""))
+    except SyntaxError:                            # pragma: no cover
+        return (True, {"*"})                       # unparseable: do not accuse
+    tail = module.rsplit(".", 1)[-1]
+    bare = False
+    aliases: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == module:
+                    aliases.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            for alias in node.names:
+                if base == module and alias.name == name:
+                    bare = True                    # from <module> import <name>
+                elif base == module and alias.name == "*":
+                    bare = True
+                elif alias.name == tail and f"{base}.{tail}" == module:
+                    aliases.add(alias.asname or alias.name)
+    return (bare, aliases)
+
+
 def _called(files: Dict[str, str], call: "re.Pattern[str]", node: ast.AST,
-            path: str) -> bool:
+            path: str, name: str = "") -> bool:
     """⚠️ THE DEFINITION LINE AND COMMENTS DO NOT COUNT. Prose naming a function
     is not a use of it — that alone was three false hits in /dry-audit's own
     history, in this same repository."""
     lineno = getattr(node, "lineno", -1)
-    name = getattr(node, "name", "")
+    name = name or getattr(node, "name", "")
+    module = _module_of(path)
     for where, text in files.items():
+        # ⚠️ RESOLVED, NOT MATCHED BY NAME. A file that cannot import this
+        # definition cannot be calling it, however the text reads.
+        if where == path:
+            bare, aliases = True, {"*"}        # its own module always can
+        else:
+            bare, aliases = _reaches(where, module, name)
+        if not (bare or aliases):
+            continue
+        # ⚠️ THE SPELLING THIS FILE CAN ACTUALLY USE. A file holding
+        # `from x import name` may write `name(`; one holding `import x as m`
+        # may write `m.name(`. Crediting either spelling to a file that has
+        # only one of the imports is the same blind spot one notch smaller.
+        # ⚠️ A REFERENCE IS A USE, NOT JUST A CALL. `compose.ladder` is handed
+        # to `pipeline.set_ladder_composer(agent_compose.ladder)` — no parens —
+        # and the proxy calls it through that hook. Matching only `name(` made
+        # every injected function look uncalled, which is how a real seam ends
+        # up in an exemption map beside the genuine oversights.
+        spellings = []
+        if bare:
+            spellings.append(rf"(?<![\w.]){re.escape(name)}\s*[(,)\]}}]")
+        for alias in aliases:
+            spellings.append(
+                rf"\.{re.escape(name)}\s*[(,)\]}}]" if alias == "*"
+                else rf"(?<![\w.]){re.escape(alias)}\.{re.escape(name)}\s*[(,)\]}}]")
+        here = re.compile("|".join(spellings))
         for i, line in enumerate(text.splitlines(), 1):
             if where == path and i == lineno:
                 continue
@@ -243,7 +379,7 @@ def _called(files: Dict[str, str], call: "re.Pattern[str]", node: ast.AST,
                 continue
             if re.match(rf"\s*(async )?def {re.escape(name)}\b", line):
                 continue
-            if call.search(line):
+            if here.search(line):
                 return True
     return False
 
@@ -277,10 +413,42 @@ def test_the_exemption_map_does_not_rot() -> None:
 def test_the_scanner_can_actually_fail() -> None:
     """⚠️ MUTATION-PROOFING, IN THE FILE. A reachability check that matched
     everything would pass for ever and measure nothing — which is exactly the
-    failure mode it exists to catch, so it is worth one test."""
-    files = {"x.py": "nothing here"}
+    failure mode it exists to catch, so it is worth one test.
+
+    ⚠️ AND IT NOW CHECKS THE RESOLUTION, NOT JUST THE MATCH. The scan credited
+    a bare name anywhere in the corpus, so `triage.due` was "called" by
+    `digest.due` and `schedule_mod.due` — different functions — while sitting
+    unreachable without the cadence floor. The middle case below is that
+    defect: identical call TEXT in a file that cannot import the definition.
+    """
     node = ast.parse("def only_in_tests():\n    pass").body[0]
-    assert not _called(files, re.compile(r"(?<![\w.])only_in_tests\s*\("),
-                       node, "x.py")
-    assert _called({"x.py": "    only_in_tests()"},
-                   re.compile(r"(?<![\w.])only_in_tests\s*\("), node, "y.py")
+    call = re.compile(r"(?<![\w.])only_in_tests\s*\(")
+    here = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "x.py")
+    there = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "y.py")
+
+    def _with(source: str) -> Dict[str, str]:
+        _SOURCE[there] = source
+        return {there: source}
+
+    assert not _called(_with("nothing_here = 1"), call, node, here,
+                       name="only_in_tests"), "a file with no mention credited it"
+
+    # ⚠️ THE DEFECT ITSELF: the right text, in a file that cannot reach it.
+    assert not _called(_with("only_in_tests()"), call, node, here,
+                       name="only_in_tests"), (
+        "a call with no import credited it — this is the name-collision blind "
+        "spot, and 68 shipped function names are defined in two or more files")
+
+    assert _called(_with("from vesta.x import only_in_tests\n"
+                         "only_in_tests()"), call, node, here,
+                   name="only_in_tests"), "an imported, called function was missed"
+
+    # ⚠️ A REFERENCE IS A USE. `set_brief_composer(agent_compose.brief)`.
+    assert _called(_with("from vesta import x as x_mod\n"
+                         "register(x_mod.only_in_tests)"), call, node, here,
+                   name="only_in_tests"), "a function passed as a value was missed"
+
+    # ⚠️ AND PROSE IS NOT. `audit.passes` was credited by its own docstring,
+    # "The triage passes, newest last." — a name and a comma.
+    assert not _called(_with("# the only_in_tests, newest last"), call, node,
+                       here, name="only_in_tests"), "prose credited a caller"

@@ -129,12 +129,15 @@ def test_run_all_cannot_drop_a_context_field() -> None:
         labels={"sensor.a": "A name"}, min_history_days=41,
         supervision_enabled=True)
 
+    # ⚠️ THE CLEANUP HERE WAS A NO-OP FOR THE LIFE OF THIS TEST.
+    # `registry.registered().remove(...)` mutates the list `registered()` just
+    # built and returns; `_REGISTRY["spy"]` was never touched, so a fake check
+    # that passes every arm of the gate ran in every later pass in the session.
+    # `conftest._analysis_registry_is_restored` now puts the registry back
+    # after every test, so this needs no cleanup of its own — but registering
+    # inside the fixture's window is the point, not an accident.
     registry.register(Spy())
-    try:
-        asyncio.run(registry.run_all(context, {}, 999))
-    finally:
-        registry.registered().remove(
-            next(m for m in registry.registered() if m.name == "spy"))
+    asyncio.run(registry.run_all(context, {}, 999))
 
     assert seen.get("labels") == {"sensor.a": "A name"}, seen
     assert seen.get("min_history_days") == 41, seen

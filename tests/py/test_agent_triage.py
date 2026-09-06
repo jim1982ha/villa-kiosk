@@ -235,9 +235,32 @@ def test_being_UNABLE_to_see_still_reaches_a_person_deterministically() -> None:
 
 # ── cadence ─────────────────────────────────────────────────────────────────
 def test_the_cadence_comes_from_config() -> None:
-    assert triage.due(ON, since_minutes=20) is True
-    assert triage.due(ON, since_minutes=5) is False
-    assert triage.due({"triage_minutes": 0}, since_minutes=999) is False
+    """⚠️ ASKED OF `scheduler._cadence`, WHICH IS THE ONE THAT RUNS.
+
+    This asserted on `triage.due`, a second answer to the same question that
+    nothing called — and, unlike the scheduler's, one with NO FLOOR. The
+    scheduler's own comment says what that floor is for: "A GUARD AGAINST A
+    TYPO, not a policy. `triage_minutes: 1` is ninety-six times the intended
+    spend." The uncalled copy was the one named `due`, living in `triage.py`,
+    with a test called `test_the_cadence_comes_from_config` — the one a future
+    wiring reaches for first. It is deleted; this asks the survivor.
+
+    It escaped the unreachable-code gate because that gate matched a bare name
+    across the whole corpus, and `schedule_mod.due` and `digest.due` are
+    different functions entirely. 68 shipped names are defined in two or more
+    files; the gate resolves the module now.
+    """
+    from vesta.supervise.agent import scheduler as scheduler_mod
+
+    assert scheduler_mod._cadence(ON) > 0
+    assert scheduler_mod._cadence({"triage_minutes": 0}) == 0.0, (
+        "a cadence of zero must mean OFF, not 'as often as possible'")
+    assert scheduler_mod._cadence({"triage_minutes": "not a number"}) == 0.0
+
+    # ⚠️ THE FLOOR, WHICH THE DELETED COPY DID NOT HAVE.
+    assert scheduler_mod._cadence({"triage_minutes": 1}) == scheduler_mod.MIN_MINUTES, (
+        "`triage_minutes: 1` is a typo that bills ninety-six passes a day, and "
+        "the floor is the only thing between it and the villa's budget")
 
 
 def test_the_pass_LOGS_why_a_subject_was_not_identified(capsys: Any) -> None:

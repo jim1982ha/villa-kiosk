@@ -9,6 +9,7 @@
 import {
   BANDS, HELP_STEPS, chaseLine, helpLine, offers, sentSummary,
 } from "../../src/vesta/shared/concernNarrative.ts";
+import { whenShort } from "../../src/vesta/shared/when.ts";
 
 let failures = 0;
 function check(name: string, cond: boolean, extra = "") {
@@ -79,6 +80,27 @@ check("with a list it names each in order",
   sentSummary({ deliveries: [{ profile: "owner", at: ago(30) },
                              { profile: "ops", at: ago(10) }] } as never)
     .includes(", then "));
+
+// ── the Concern's stamp is the app's ONE stamp ────────────────────────────
+{
+  // ⚠️ NOT THE FORMAT — TIED TO THE SHARED ONE. `sentSummary` carried a ninth
+  // hand-written copy of `whenShort`, character for character, in the module
+  // both the Wall tablet and the Chat read. Asserting the rendered string would
+  // pin PRESENTATION, which this repo rejects; asserting that the two agree
+  // pins the consolidation, and stays true when the format changes.
+  const iso = "2026-08-27T09:23:55Z";
+  const line = sentSummary({
+    id: "c1", audience: "owner", delivered_at: iso,
+  } as never);
+  const shared = whenShort(iso, "blank");
+  check("the sent line stamps its time with the app's shared formatter",
+    shared !== "" && line.includes(shared), `line=${line} shared=${shared}`);
+
+  const bad = sentSummary({ id: "c1", audience: "owner",
+                            delivered_at: "not a time" } as never);
+  check("...and an unreadable time renders as nothing, not as raw text",
+    !bad.includes("not a time"), bad);
+}
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 if (failures > 0) process.exit(1);

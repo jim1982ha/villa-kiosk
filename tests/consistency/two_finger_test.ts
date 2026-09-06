@@ -41,7 +41,13 @@ const f = (from: number, to: number) => ({ y: to, startY: from });
     classifyTwoFinger(f(200, 300), f(400, 300)) === "zoom");
   check("one finger still and one moving a long way is a zoom",
     classifyTwoFinger(f(300, 300), f(300, 100)) === "zoom");
-  check("a purely horizontal spread is a zoom — no vertical drift at all",
+  // ⚠️ THIS WAS NAMED "a purely horizontal spread" AND `FingerTrack` HAS NO `x`.
+  // What it asserts is that two fingers which have not moved VERTICALLY are a
+  // zoom — true, and the right default, but not the thing the name claimed.
+  // The classifier never sees horizontal motion at all: that is the caller's
+  // (`handleTwoFingerTouch` takes the twist from `atan2` separately), and a
+  // test naming an input its subject cannot receive is a test nobody can check.
+  check("no vertical drift at all is a zoom, which is the default",
     classifyTwoFinger(f(300, 300), f(300, 300)) === "zoom");
 }
 

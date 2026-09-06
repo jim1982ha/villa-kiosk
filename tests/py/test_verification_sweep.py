@@ -153,6 +153,47 @@ def test_the_EARLIEST_successor_is_the_one_named(
     assert "c2" in _outcome_of("c1") and "c3" not in _outcome_of("c1")
 
 
+def test_the_earliest_successor_survives_the_TENTH_concern(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """⚠️ THE FIXTURE ABOVE CANNOT FAIL, AND THAT IS THE WHOLE POINT OF THIS ONE.
+
+    `_recurred_after` sorted `str(r.get("id"))`, and ids are minted
+    `f"c{len(rows) + 1}"` — so `"c10" < "c2"` and the successor named was
+    whichever id sorted first as TEXT. With `c1`, `c2`, `c3` the lexicographic
+    and chronological orders coincide by accident, so every assertion in the
+    test above passes whichever field is sorted.
+
+    A villa reaches ten Concerns in a week. Driven against the shipped code
+    before this test was written: with c1..c11 it named `c10` where the true
+    earliest was `c2` — the card, the Reason tab and the stored `outcome` all
+    crediting the fix with surviving a failure it did not.
+
+    The successor here is deliberately NOT the first in either order: `c11` is
+    the chronologically earliest, so a sort on the id names `c10` and a sort on
+    the wrong direction names something else again.
+    """
+    rows = [_row()]                                   # c1, settled
+    # c2..c9 belong to another subject, purely to push the ids into two digits.
+    for n in range(2, 10):
+        rows.append(_row(id="c%d" % n, subject_key="other",
+                         opened_at=_iso(NOW - 5 * 24 * HOUR),
+                         updated_at=_iso(NOW - 5 * 24 * HOUR)))
+    rows.append(_row(id="c10", state="open", opened_at=_iso(NOW - 2 * 24 * HOUR),
+                     updated_at=_iso(NOW - 2 * 24 * HOUR)))
+    rows.append(_row(id="c11", state="open", opened_at=_iso(NOW - 8 * 24 * HOUR),
+                     updated_at=_iso(NOW - 8 * 24 * HOUR)))
+
+    _sweep(rows, monkeypatch, tmp_path)
+    outcome = _outcome_of("c1")
+    assert "c11" in outcome, (
+        "the successor named is not the earliest one: c11 came back first "
+        "(8 days ago) and c10 later (2 days ago), and the outcome reads %r"
+        % outcome)
+    assert "c10" not in outcome, (
+        "the outcome names c10, which is what sorting the id as TEXT gives — "
+        "'c10' < 'c11' as strings, and the ids say nothing about time")
+
+
 def test_a_window_we_were_NOT_LISTENING_through_is_CANNOT_VERIFY(
         monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     """⚠️ THIS MODULE'S FOUNDING SENTENCE. "It did not recur" and "I was not

@@ -57,7 +57,12 @@ ALLOWED: Dict[str, set] = {
     # provider, and the adapter table's entries implement narrate() — callers
     # one level INSIDE the boundary, not new doors through it.
     "rootfs/usr/bin/vesta/supervise/agent/runtime.py": {"run"},
-    "rootfs/usr/bin/vesta/brief/narrate/providers.py": {"narrate"},
+    # ⚠️ `narrate/providers.py` WAS HERE AND NO LONGER INVOKES THE SEAM
+    # (2.966.0). It was the adapter table whose entries implemented
+    # `narrate()`; `command grep` finds no `.run(` or `.narrate(` in it now.
+    # The entry was a standing permission for a file that had stopped using it
+    # — found by `test_the_allow_list_does_not_rot` on its first run, which is
+    # what a map without a rot check costs.
 }
 
 #: Names whose `.run(`/`.narrate(` is NOT the provider seam. Each is verified
@@ -112,3 +117,17 @@ def test_exactly_the_allowed_files_invoke_the_seam() -> None:
         "If it is deliberate, add it to ALLOWED with a sentence about what it "
         "costs per run — a third LLM call is a bill and a failure mode, not "
         "an implementation detail:\n  " + "\n  ".join(strays))
+
+
+def test_the_allow_list_does_not_rot() -> None:
+    """⚠️ AN ENTRY FOR A FILE THAT NO LONGER CALLS THE SEAM PRE-AUTHORISES THE
+    NEXT CALL SOMEBODY PUTS THERE. This map is the whole record of where the
+    villa spends money on a model; a stale line in it is a door left open in
+    the file it names."""
+    sites = _call_sites()
+    reached = {rel for rel in (s.rsplit(":", 2)[0] for s in sites)}
+    stale = sorted(rel for rel in ALLOWED if rel not in reached)
+    assert not stale, (
+        "these files are allowed to invoke the model and no longer do: %s.\n"
+        "Remove them — a third LLM call is a bill and a failure mode, and this "
+        "list is what makes adding one a decision." % stale)

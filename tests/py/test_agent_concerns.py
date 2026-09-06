@@ -365,3 +365,73 @@ def test_a_dismissal_of_ANOTHER_subject_does_not_count() -> None:
     assert other is not None
     concerns.transition(other.id, "dismissed", outcome="dismissed by owner")
     assert concerns.suppressed_subjects() == []
+
+
+def test_an_id_stays_unique_once_the_store_has_filled_up() -> None:
+    """⚠️ THE STORE IS TRIMMED AND THE ID WAS DERIVED FROM THE ROW COUNT.
+
+    `_write` keeps `list(rows)[-MAX_CONCERNS:]` and `_mint` returned
+    `f"c{len(rows) + 1}"`, so from the moment the ring saturates the count
+    stops growing and EVERY subsequent Concern is minted the same id. Measured
+    against the shipped code: a full store minted `c2001`, and so did the next
+    one, and the next.
+
+    An id is not decoration here — `note_message` keys a chat message's
+    address on it, the audit rows correlate on it, and `_recurred_after` names
+    one to a reader. Two Concerns sharing an id make all three wrong at once.
+
+    ⚠️ THE FIXTURE HAS TO SATURATE. A test with three rows cannot see this at
+    all, which is why the mint has never had one.
+    """
+    from vesta.supervise.agent import concerns as concerns_mod
+
+    full = [{"id": "c%d" % i} for i in range(1, concerns_mod.MAX_CONCERNS + 1)]
+    first = concerns_mod._mint(full)
+    assert first not in {r["id"] for r in full}, (
+        "the mint reused an id that is still in the store: %s" % first)
+
+    # what `_write` does: append, then trim to the bound
+    after = (full + [{"id": first}])[-concerns_mod.MAX_CONCERNS:]
+    second = concerns_mod._mint(after)
+    assert second != first, (
+        "a saturated store minted %r twice — every Concern from here on shares "
+        "one id" % first)
+    assert second not in {r["id"] for r in after}
+
+    third = concerns_mod._mint((after + [{"id": second}])[-concerns_mod.MAX_CONCERNS:])
+    assert len({first, second, third}) == 3, (first, second, third)
+
+
+def test_the_mint_survives_a_row_whose_id_is_not_a_number() -> None:
+    """A store written by an older version, or a hand-edited one, must not stop
+    the mint working — it must not return an id already present either."""
+    from vesta.supervise.agent import concerns as concerns_mod
+
+    odd = [{"id": "c1"}, {"id": ""}, {"id": "legacy"}, {"id": "c7"}, {}]
+    minted = concerns_mod._mint(odd)
+    assert minted not in {str(r.get("id")) for r in odd}, minted
+
+
+def test_the_suppression_constants_are_all_enforced() -> None:
+    """⚠️ A CONSTANT THAT STATES HALF A RULE NOBODY APPLIES IS WORSE THAN NO
+    CONSTANT. `DISMISSAL_WINDOW_DAYS: int = 90` sat beside
+    `NEGATIVES_TO_SUPPRESS` under a comment reading "and over what window",
+    and `command grep` found it exactly once — its own declaration. A reader
+    deciding whether a silenced subject comes back was told ninety days by the
+    constants and never by the code.
+    """
+    import inspect
+    import re
+
+    from conftest import strip_prose
+    from vesta.supervise.agent import concerns as concerns_mod
+
+    code = strip_prose(inspect.getsource(concerns_mod))
+    declared = re.findall(r"^([A-Z][A-Z_]+): [A-Za-z\[\]]+ = ", code, re.M)
+    assert declared, "no module constants parsed — the scan has rotted"
+
+    unread = [name for name in declared
+              if len(re.findall(rf"(?<![\w.]){name}(?![\w])", code)) < 2]
+    assert not unread, (
+        "these constants are declared in `concerns.py` and read nowhere in it, "
+        "so whatever rule they state is not the rule that runs: %s" % unread)

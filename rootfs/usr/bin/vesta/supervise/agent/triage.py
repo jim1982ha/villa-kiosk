@@ -353,13 +353,3 @@ def _unidentified_note(found: Sequence[Any], refs: Any) -> str:
     except Exception:  # noqa: BLE001 - a note must not fail the pass
         return ""
 
-
-def due(config: Optional[Mapping[str, Any]] = None, *,
-        since_minutes: float = 0.0) -> bool:
-    """Is a triage pass due? Cadence from config, never a literal here."""
-    cfg = agent_config.view(config)
-    try:
-        every = float(cfg.get("triage_minutes") or 0)
-    except (TypeError, ValueError):
-        return False
-    return every > 0 and since_minutes >= every

@@ -356,8 +356,25 @@ def _mint(rows: Sequence[Mapping[str, Any]]) -> str:
     ⚠️ SEQUENTIAL, NOT A HASH — the same choice `refs.py` makes. It must be
     correlatable inside one villa (a concern and the audit rows about it) and
     must NOT be correlatable across properties.
+
+    ⚠️ FROM THE HIGHEST ID PRESENT, NOT FROM THE ROW COUNT. This returned
+    `f"c{len(rows) + 1}"`, and `_write` keeps only the last `MAX_CONCERNS`
+    rows — so the moment the ring saturates the count stops growing and every
+    subsequent concern is minted the SAME id, for ever. Measured: a full store
+    minted `c2001`, and so did the next one. The id is what `note_message`
+    keys a chat message's address on, what the audit rows correlate on, and
+    what `_recurred_after` names to a reader; two concerns sharing one make all
+    three wrong at once.
+
+    A row whose id is not `c<number>` — an older version's, or a hand-edited
+    store — contributes nothing to the maximum rather than stopping the count.
     """
-    return f"c{len(rows) + 1}"
+    highest = 0
+    for row in rows:
+        ident = str(row.get("id") or "")
+        if ident.startswith("c") and ident[1:].isdigit():
+            highest = max(highest, int(ident[1:]))
+    return f"c{highest + 1}"
 
 
 def _supersede_rows(rows: List[Dict[str, Any]], superseded: Sequence[str],
@@ -810,23 +827,41 @@ def _recurred_after(subject_key: str, settled_at: str, own_id: str,
     """
     if not subject_key:
         return ""
-    after = sorted(str(r.get("id")) for r in rows
-                   if str(r.get("subject_key") or "") == subject_key
-                   and str(r.get("id")) != own_id
-                   and str(r.get("opened_at") or "") > settled_at)
-    return after[0] if after else ""
+    # ⚠️ SORTED BY WHEN IT OPENED, NOT BY ITS ID. This sorted `str(id)`, and ids
+    # are minted `f"c{len(rows) + 1}"` — so `"c10" < "c2"` as text, and from the
+    # tenth concern onward the successor named was whichever id happened to sort
+    # first. Measured: with c1..c11 it named c10 where the true earliest was c2.
+    # The id is an opaque handle; `opened_at` is the only field here that
+    # carries time, and the docstring above is a claim about time.
+    after = sorted(
+        (str(r.get("opened_at") or ""), str(r.get("id")))
+        for r in rows
+        if str(r.get("subject_key") or "") == subject_key
+        and str(r.get("id")) != own_id
+        and str(r.get("opened_at") or "") > settled_at)
+    return after[0][1] if after else ""
 
 
-#: How many "-1 Less like this" verdicts on one subject suppress it, and
-#: over what window. ⚠️ RATINGS, NOT CANCELLATIONS (2026-08-28) — see
-#: `suppressed_subjects` for why the cancel button stopped counting.
+#: How many "-1 Less like this" verdicts on one subject suppress it.
+#:
+#: ⚠️ AND OVER WHAT WINDOW IS NOT A QUESTION THIS CODE ANSWERS. This comment
+#: read "and over what window" beside a `DISMISSAL_WINDOW_DAYS: int = 90` that
+#: `command grep` found exactly once — its own declaration. Nothing read it,
+#: and `suppressed_subjects` counts every rated row ever stored; its docstring
+#: says so outright, "silently, since suppression never expires". The rule was
+#: written twice, ten lines apart, and the half that shipped was not the half
+#: at the constants. The constant is deleted rather than implemented: whether
+#: a subject silenced three months ago should start being raised again is the
+#: owner's decision, and an unenforced promise is the worst way to ask it.
+#:
+#: ⚠️ RATINGS, NOT CANCELLATIONS (2026-08-28) — see `suppressed_subjects` for
+#: why the cancel button stopped counting.
 #: ⚠️ THREE, AND THE COUNTER IS THE MECHANISM — NOT AGENT JUDGEMENT. "Stop
 #: telling me about the gym lights" must work RELIABLY rather than
 #: probabilistically, and that is the whole difference between a feedback loop
 #: and a suggestion. RPT-05: the acknowledgement half has never existed
 #: anywhere in this system, so no rule could ever be judged noisy.
 NEGATIVES_TO_SUPPRESS: int = 3
-DISMISSAL_WINDOW_DAYS: int = 90
 
 
 def feedback(concern_id: str, *, useful: bool, reason: str = "",

@@ -146,3 +146,30 @@ def test_the_debt_list_holds_only_live_edges() -> None:
     assert not stale, (
         f"these allowances name imports that no longer exist — delete them, the "
         f"move that fixed them is done: {stale}")
+
+
+def test_the_debt_map_does_not_rot() -> None:
+    """⚠️ THE COMMENT ABOVE `ALLOWED_DEBT` SAYS "Removing an entry is the
+    definition of done for the move that fixes it" — AND NOTHING ENFORCED IT.
+
+    Fourteen of the sixteen allow/exempt maps in this suite have a dead-entry
+    check; this was one of the two that did not. All four entries are live
+    today, so nothing is stale yet — the day a debt is paid, the entry stays
+    and silently re-blesses that crossing for the NEXT file to make it. That is
+    how `OWN_HEADERS` came to exempt a route that did not need it, and how the
+    entity allow-list grew to 151 written entries for 147 ids.
+    """
+    sources = _sources()
+    assert len(sources) >= 15, "the source walk found nothing; this is vacuous"
+    live = set()
+    for rel, source in sources.items():
+        layer = _layer_of(rel)
+        for imported in set(_IMPORT.findall(source)):
+            if imported != layer:
+                live.add((rel, imported))
+
+    paid = sorted(e for e in ALLOWED_DEBT if e not in live)
+    assert not paid, (
+        "these debts are no longer crossings — the move that fixes them is "
+        "done, so the entry is a standing permission nobody asked for: %s"
+        % paid)

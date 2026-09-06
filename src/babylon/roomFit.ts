@@ -43,9 +43,15 @@ import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProje
  *  that order is what makes one number correct on every aspect ratio. */
 export const ROOM_FIT_VIEWPORT_FRACTION = 0.6;
 
-/** The wider fraction for the entity-anchor fallback. Entity anchors mark
- *  DEVICES, not walls, so their box under-states the room and the shot needs
- *  more headroom than a true polygon does. */
+/** The fraction for the entity-anchor fallback: a SMALLER share of the
+ *  viewport, which is a WIDER shot. Entity anchors mark DEVICES, not walls, so
+ *  their box under-states the room and the framing needs more headroom than a
+ *  true polygon does.
+ *
+ *  ⚠️ THIS SAID "the wider fraction" AND IT IS THE SMALLER NUMBER. The fraction
+ *  is how much of the glass the room fills; the shot is what gets wider. A
+ *  reader checking the arithmetic against the sentence would find them
+ *  disagreeing about which direction 0.45 moves the camera. */
 export const ROOM_FIT_VIEWPORT_FRACTION_ENTITIES = 0.45;
 
 /** Never closer than this, whatever the arithmetic says. A one-device room has
