@@ -1,3 +1,20 @@
+## 2.965.0
+
+### Fixed — a slow trickle of mistyped PINs could still lock the villa out
+Last release said it had fixed this and it had not. The limiter forgot its
+count after a quiet period, but any run of mistakes closer together than that
+kept the clock refreshed — so one wrong PIN every fourteen minutes, across all
+your guests and tablets, still locked that profile out for everyone after about
+eleven hours. It now counts what happened inside a real window, so honest
+mistakes age out while a genuine burst of guessing is stopped exactly as before.
+
+### Fixed — merged room labels still settled two ways
+Also a repeat. Last release made the choice of WHICH pair merges independent of
+ordering, and left the choice of which label survives, and the order they come
+back in, still depending on it. The same villa could draw the same labels eight
+different ways. All three are settled by position on screen now, and the check
+that missed it was sorting the evidence before looking.
+
 ## 2.964.0
 
 ### Changed — three rules the villa depends on can now be tested
