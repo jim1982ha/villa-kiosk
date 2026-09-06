@@ -59,6 +59,8 @@ interface OverviewCallbacks {
   onAnimating?: (ms: number) => void;
 }
 
+import { classifyTwoFinger } from "./twoFingerGesture";
+
 interface Bounds {
   minX: number; maxX: number;
   minZ: number; maxZ: number;
@@ -124,8 +126,8 @@ export class OverviewController {
     this.camera.fov = 0.8;
     this.camera.lowerBetaLimit = OverviewController.BETA_MIN;
     this.camera.upperBetaLimit = OverviewController.BETA_MAX;
-    this.camera.lowerRadiusLimit = 3;
-    this.camera.upperRadiusLimit = 200;
+    this.camera.lowerRadiusLimit = OverviewController.RADIUS_MIN_INITIAL;
+    this.camera.upperRadiusLimit = OverviewController.RADIUS_MAX;
     // Input is fully manual — we never call attachControl.
   }
 
@@ -188,7 +190,8 @@ export class OverviewController {
     const aspectCorrection = Math.max(1, Math.tan(vHalf) / Math.tan(hHalf));
     const correctedSpan = span * aspectCorrection;
 
-    this.camera.lowerRadiusLimit = Math.max(2, span * 0.08);
+    this.camera.lowerRadiusLimit = Math.max(OverviewController.RADIUS_MIN_FLOOR,
+                                            span * 0.08);
     this.camera.upperRadiusLimit = correctedSpan * 2.2;
     this.camera.setTarget(new Vector3(cx, ext.min.y + 1, cz));
     this.camera.alpha = -Math.PI / 2;
@@ -215,7 +218,8 @@ export class OverviewController {
   applyPose(pose: { alpha: number; beta: number; radius: number; target: { x: number; y: number; z: number } }): void {
     this.camera.alpha = pose.alpha;
     this.camera.beta = clamp(pose.beta, OverviewController.BETA_MIN, OverviewController.BETA_MAX);
-    this.camera.radius = clamp(pose.radius, this.camera.lowerRadiusLimit ?? 2, this.camera.upperRadiusLimit ?? 200);
+    const { lo, hi } = this.radiusLimits();
+    this.camera.radius = clamp(pose.radius, lo, hi);
     const t = this.camera.target;
     t.x = clamp(pose.target.x, this.bounds.minX, this.bounds.maxX);
     t.y = pose.target.y;
@@ -406,6 +410,31 @@ export class OverviewController {
     this.touchBase = { ax: a.x, ay: a.y, bx: b.x, by: b.y, startAy: a.y, startBy: b.y };
   }
 
+  /** How close the camera may come before the villa's own extent is known —
+   *  replaced by `fitToBounds` the moment it is. */
+  static readonly RADIUS_MIN_INITIAL = 3;
+  /** The floor `fitToBounds` will not go below, however small the villa. */
+  static readonly RADIUS_MIN_FLOOR = 2;
+  static readonly RADIUS_MAX = 200;
+
+  /**
+   * The zoom limits this camera is actually holding.
+   *
+   * ⚠️ ONE READING, BECAUSE THERE WERE THREE. The constructor sets the lower
+   * limit to 3, six readbacks defaulted it to `?? 2`, and a diagnostic printed
+   * it as `?? 0` — three different answers to "what is the closest this camera
+   * comes", none of them reachable (the constructor always sets it) and all of
+   * them visible to a reader comparing the printed number against the clamp.
+   * Babylon types these as optional; this is the one place that says what an
+   * absent one would mean.
+   */
+  radiusLimits(): { lo: number; hi: number } {
+    return {
+      lo: this.camera.lowerRadiusLimit ?? OverviewController.RADIUS_MIN_FLOOR,
+      hi: this.camera.upperRadiusLimit ?? OverviewController.RADIUS_MAX,
+    };
+  }
+
   private handleTwoFingerTouch(): void {
     const pts = [...this.pointers.values()];
     if (pts.length < 2) return;
@@ -437,13 +466,14 @@ export class OverviewController {
     //    outweighs how much their vertical separation changed → a two-finger
     //    vertical DRAG → TILT (and zoom is suppressed so it doesn't creep in);
     //  • otherwise (a pinch, a mostly-horizontal move, one finger still) → ZOOM.
-    const totalDyA = a.y - base.startAy;
-    const totalDyB = b.y - base.startBy;
-    const shared = (totalDyA > 0 && totalDyB > 0) ? Math.min(totalDyA, totalDyB)
-                 : (totalDyA < 0 && totalDyB < 0) ? Math.max(totalDyA, totalDyB)
-                 : 0;
-    const separationDrift = Math.abs(totalDyA - totalDyB);
-    const tiltMode = Math.abs(shared) > 6 && Math.abs(shared) >= separationDrift;
+    // ⚠️ THE RULE IS `twoFingerGesture.ts`, WHICH BARE NODE CAN LOAD. It was
+    // inline here, gated on an unnamed `6`, in the branch whose sign has
+    // already been reported wrong once — and a misclassification looks like the
+    // app ignoring you rather than like a wrong branch, which is the hardest
+    // kind of defect to report from a tablet on a wall.
+    const tiltMode = classifyTwoFinger(
+      { y: a.y, startY: base.startAy },
+      { y: b.y, startY: base.startBy }) === "tilt";
 
     if (tiltMode) {
       // Tilt from the centroid's incremental vertical move (its net travel over
@@ -466,8 +496,8 @@ export class OverviewController {
       // Zoom: ratio of finger distances (spread = zoom in = smaller radius).
       this.camera.radius = clamp(
         this.camera.radius * (baseDist / dist),
-        this.camera.lowerRadiusLimit ?? 2,
-        this.camera.upperRadiusLimit ?? 200,
+        this.radiusLimits().lo,
+        this.radiusLimits().hi,
       );
     }
 
@@ -617,8 +647,7 @@ export class OverviewController {
    */
   zoomStep(factor: number, toward?: Vector3): void {
     if (this.zooming) return;
-    const lo = this.camera.lowerRadiusLimit ?? 2;
-    const hi = this.camera.upperRadiusLimit ?? 200;
+    const { lo, hi } = this.radiusLimits();
     const to = clamp(this.camera.radius * factor, lo, hi);
     // Already against the stop: don't animate a move of nothing, which would
     // read as a dead control rather than as "there is no more zoom".
@@ -668,8 +697,8 @@ export class OverviewController {
   private applyZoom(delta: number): void {
     this.camera.radius = clamp(
       this.camera.radius - delta,
-      this.camera.lowerRadiusLimit ?? 2,
-      this.camera.upperRadiusLimit ?? 200,
+      this.radiusLimits().lo,
+      this.radiusLimits().hi,
     );
   }
 

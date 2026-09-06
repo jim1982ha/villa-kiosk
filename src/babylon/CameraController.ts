@@ -25,7 +25,7 @@ import { Axis } from "@babylonjs/core/Maths/math.axis";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import type { Scene } from "@babylonjs/core/scene";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import type { AppConfig } from "@/config/AppConfig";
+import { eyeHeightOf, type AppConfig } from "@/config/AppConfig";
 import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
@@ -115,7 +115,7 @@ export class CameraController {
     this.config = config;
     this.cb = cb;
     this.canvas = canvas;
-    this.eyeHeight = config.eyeHeight ?? 1.7;
+    this.eyeHeight = eyeHeightOf(config);
     this.walkSpeed = config.walkSpeed ?? 1;
 
     this.camera = new UniversalCamera("villaCamera", new Vector3(0, this.eyeHeight, 0), scene);

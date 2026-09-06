@@ -18,7 +18,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability, type Capability } from "@/auth/permissions";
 import { useHA } from "@/ha/HAStateStore";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
-import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, type AppConfig, type RenderConfig } from "@/config/AppConfig";
+import { DEFAULT_SITE_TITLE, DEFAULT_RENDER, eyeHeightOf, type AppConfig, type RenderConfig } from "@/config/AppConfig";
 import type { SceneManager } from "@/babylon/SceneManager";
 
 interface Props {
@@ -110,7 +110,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
       pending.cancel(SETTINGS_DRAFT_KEY);
       update(baseline);
       setSiteTitle(baseline.siteTitle ?? "");
-      setEyeHeight(baseline.eyeHeight ?? 1.7);
+      setEyeHeight(eyeHeightOf(baseline));
       setWalkSpeed(baseline.walkSpeed ?? 1);
       setRender(baseline.render ?? DEFAULT_RENDER);
     },
@@ -122,7 +122,7 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const dialogRef = useModalA11y(closeModal);
 
   const [siteTitle, setSiteTitle] = useState(config.siteTitle);
-  const [eyeHeight, setEyeHeight] = useState(config.eyeHeight ?? 1.7);
+  const [eyeHeight, setEyeHeight] = useState(eyeHeightOf(config));
   const [walkSpeed, setWalkSpeed] = useState(config.walkSpeed ?? 1);
   const [render, setRender] = useState<RenderConfig>(config.render ?? DEFAULT_RENDER);
 

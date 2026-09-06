@@ -177,7 +177,13 @@ export interface AppConfig {
   dismissedEntityIds: string[];
   teleportPoints: TeleportPoint[];
   alertThresholds: Record<string, Threshold>;
-  /** Standing eye height in metres (default 1.7). Configurable in Settings. */
+  /** Standing eye height in metres. Configurable in Settings.
+   *  ⚠️ NON-OPTIONAL, AND `DEFAULT_CONFIG` SUPPLIES IT — read it through
+   *  `eyeHeightOf`, never as `config.eyeHeight ?? 1.7`. Ten sites restated that
+   *  literal, including the one that decides whether a spawn point is
+   *  standable, and under this declaration every one of those fallback arms is
+   *  unreachable — so a change to the default would move one of eleven places
+   *  and look like it had moved all of them. */
   eyeHeight: number;
   /** Walk-speed multiplier (1.0 = default). Configurable in Settings. */
   walkSpeed: number;
@@ -378,6 +384,26 @@ function migrateMotionEntityId(config: AppConfig): AppConfig {
     }),
   );
   return changed ? { ...config, entityMap } : config;
+}
+
+/**
+ * The standing eye height, in metres.
+ *
+ * ⚠️ ONE READER FOR ONE DEFAULT. `eyeHeight` is non-optional and
+ * `DEFAULT_CONFIG` supplies it, yet ten sites across `CameraController`,
+ * `SceneManager` and `SettingsModal` each wrote `config.eyeHeight ?? 1.7` —
+ * eleven statements of one number, ten of them unreachable under the type.
+ * That is not merely redundant: it is how a default comes to have two values.
+ * `SceneManager`'s headroom ray, which decides whether a spawn point is
+ * standable, was one of them.
+ *
+ * The `??` is kept HERE and only here, because a config that has been through
+ * `loadConfig`'s merge always carries the field but a hand-built object from an
+ * older stored document may not, and the type cannot say which one a caller
+ * holds.
+ */
+export function eyeHeightOf(config: { eyeHeight?: number } | null | undefined): number {
+  return config?.eyeHeight ?? DEFAULT_CONFIG.eyeHeight;
 }
 
 export function loadConfig(): AppConfig {

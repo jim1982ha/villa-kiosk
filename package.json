@@ -1,8 +1,8 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.963.0",
-  "description": "VESTA — a 3D interactive villa dashboard for Home Assistant",
+  "version": "2.964.0",
+  "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
@@ -24,7 +24,10 @@
     "test:reports-workspace": "node --import ./tests/consistency/register.mjs tests/consistency/reports_workspace_test.ts",
     "test:entity-value": "node --import ./tests/consistency/register.mjs tests/consistency/entity_value_test.ts",
     "test:resolution-valve": "node --import ./tests/consistency/register.mjs tests/consistency/resolution_valve_test.ts",
-    "test:villa-rules": "node --import ./tests/consistency/register.mjs tests/consistency/villa_rules.ts"
+    "test:villa-rules": "node --import ./tests/consistency/register.mjs tests/consistency/villa_rules.ts",
+    "test:room-fit": "node --import ./tests/consistency/register.mjs tests/consistency/room_fit_test.ts",
+    "test:box-merge": "node --import ./tests/consistency/register.mjs tests/consistency/box_merge_test.ts",
+    "test:two-finger": "node --import ./tests/consistency/register.mjs tests/consistency/two_finger_test.ts"
   },
   "dependencies": {
     "@babylonjs/core": "^7.37.2",

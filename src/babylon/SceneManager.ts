@@ -75,13 +75,13 @@ import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog, debugFlagEnabled } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { loadOverviewView, saveOverviewView } from "@/utils/storage";
-import type { AppConfig, RenderConfig } from "@/config/AppConfig";
+import { eyeHeightOf, type AppConfig, type RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { sceneConfigDelta } from "@/babylon/entityMapDiff";
 import { resolutionValve } from "@/babylon/resolutionValve";
 import { ModelKeyedStore } from "./modelStore";
-import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
+import { MIN_ROOM_FIT_RADIUS, unionFootprint, viewFrame, wallFit } from "./roomFit";
 import { cameraFrame } from "./cameraFrame";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
@@ -226,12 +226,9 @@ const OVERVIEW_HORIZON_DROP = 700;
 // The entity-bounds fallback takes a SMALLER fraction (a wider shot), because
 // device anchors sit inside the room rather than at its walls, so their box
 // under-states it and the shot has to cover what the box does not describe.
-const ROOM_FIT_VIEWPORT_FRACTION = 0.6;
-const ROOM_FIT_VIEWPORT_FRACTION_ENTITIES = 0.45;
 // Floor under the fitted radius, for a "room" that measures as a point (a
 // single device, or a one-entity teleport spot) and would otherwise ask the
 // camera to fly arbitrarily close. Expressed in world units = metres.
-const MIN_ROOM_FIT_RADIUS = 1.5;
 // NOTE for anyone tempted to add a tuning constant back here: two used to
 // live at this spot and both are gone (2.209.0).
 //   * DECLUTTER_RADIUS_MARGIN (0.85) padded the declutter zoom so it would
@@ -484,7 +481,6 @@ export class SceneManager {
   /** Scratch for computeRoomOverviewPose's four-corner footprint projection.
    *  Runs once per room tap, but projectToView writes into a caller-owned
    *  point by contract and this keeps that contract honest. */
-  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0 };
 
   /**
    * The stair rooms' surface-hugging glow, carried across loads.
@@ -1907,7 +1903,7 @@ export class SceneManager {
    *  order, so they very likely inflated the `paintMs` figure reported for
    *  years of load telemetry. */
   private firstPersonSpawn(): TeleportPoint {
-    const eye = this.config.eyeHeight ?? 1.7;
+    const eye = eyeHeightOf(this.config);
     const ground = (p: TeleportPoint) => p.floor === 1;
     // ⚠️ EVERY CANDIDATE IS VALIDATED, AND THE CHAIN FALLS THROUGH ON FAILURE
     // (2.459.0). The staircase spawn has now put the walker somewhere unstandable
@@ -1989,7 +1985,7 @@ export class SceneManager {
   /** Ground a room's calibrated centre on its own storey and face open space —
    *  used when switching overview → first-person into a selected room. */
   private roomSpawn(room: TeleportPoint): TeleportPoint {
-    const eye = this.config.eyeHeight ?? 1.7;
+    const eye = eyeHeightOf(this.config);
     const x = room.position.x;
     const z = room.position.z;
     const y = this.estimateFloorY(x, z, room.floor) + eye;
@@ -2047,7 +2043,7 @@ export class SceneManager {
     const inStairwell = this.worldRoomPolys.find(
       (r) => STAIR_ROOM_RE.test(r.name) && pointInPolygon(x, z, r.pts));
     if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
-    const need = (this.config.eyeHeight ?? 1.7) + 0.15;
+    const need = (eyeHeightOf(this.config)) + 0.15;
     const R = 0.3;
     const blocks = (m: AbstractMesh) =>
       m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
@@ -2183,7 +2179,7 @@ export class SceneManager {
    * stair GEOMETRY (split-structure GLBs) and finally null.
    */
   private staircaseSpawn(): TeleportPoint | null {
-    const eye = this.config.eyeHeight ?? 1.7;
+    const eye = eyeHeightOf(this.config);
     const groundAt = (x: number, z: number): TeleportPoint => {
       const y = this.estimateFloorY(x, z, 1) + eye;
       return { name: "Staircase", floor: 1, position: { x, y, z }, target: this.bestFacing(x, z, y - 0.1) };
@@ -2368,7 +2364,7 @@ export class SceneManager {
         + ` solved=${framed.solved} declutters=${framed.declutters}`
         + ` real=${framed.real} halfW=${framed.halfW.toFixed(2)}`
         + ` halfH=${framed.halfH.toFixed(2)}`
-        + ` minRadius=${(this.overview.camera.lowerRadiusLimit ?? 0).toFixed(2)}`,
+        + ` minRadius=${this.overview.radiusLimits().lo.toFixed(2)}`,
         "seat",
       );
     }
@@ -2412,28 +2408,16 @@ export class SceneManager {
     // stands for several rooms at once, and a short tap on it frames all of
     // them — so the box to fit is their union, not whichever room happened to
     // win the chip's label.
-    let bounds: { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number } | null = null;
     // Real wall polygons where every room has one; the entity-anchor fallback
     // is per room, so one room without a polygon only loosens ITS contribution.
     let allReal = true;
-    for (const name of roomNames) {
+    const boxes = roomNames.map((name) => {
       const real = this.camera.getRoomBounds(name);
       if (!real) allReal = false;
-      const b = real ?? this.visuals.getRoomEntityBounds(name);
-      if (!b) continue;
-      bounds = bounds ? {
-        minX: Math.min(bounds.minX, b.minX), maxX: Math.max(bounds.maxX, b.maxX),
-        minZ: Math.min(bounds.minZ, b.minZ), maxZ: Math.max(bounds.maxZ, b.maxZ),
-        // The lower floor of the two: framing has to clear the deeper one.
-        floorY: Math.min(bounds.floorY, b.floorY),
-      } : { ...b };
-    }
+      return real ?? this.visuals.getRoomEntityBounds(name);
+    });
+    const bounds = unionFootprint(boxes);
     if (!bounds) return null;
-    // Entity anchors mark devices, not walls, so their box under-states the
-    // room — give that fallback more headroom than a true polygon needs.
-    const fitFrac = allReal
-      ? ROOM_FIT_VIEWPORT_FRACTION
-      : ROOM_FIT_VIEWPORT_FRACTION_ENTITIES;
 
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
@@ -2444,7 +2428,6 @@ export class SceneManager {
     // separately did.
     const { vHalf, hHalf } = cameraFrame(this.scene, cam);
     const vFov = 2 * vHalf;
-    const hFov = 2 * hHalf;
 
     // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
     // A floor plan seen from straight above is the view that shows a room's
@@ -2465,58 +2448,21 @@ export class SceneManager {
     // sin α sin β), so the direction it LOOKS is the negated unit offset. At
     // destBeta this is very nearly straight down, which is the whole point —
     // and it is what the badge ladder below has to measure through.
-    const sb = Math.sin(destBeta);
-    const destDir = {
-      x: -Math.cos(cam.alpha) * sb,
-      y: -Math.cos(destBeta),
-      z: -Math.sin(cam.alpha) * sb,
-    };
+    // ⚠️ THE ARITHMETIC LIVES IN `roomFit.ts`, WHICH BARE NODE CAN LOAD. It was
+    // ~80 lines here, inside a method on a class that needs a GPU context, and
+    // the docstring above counts what that cost: four releases got the fit
+    // wrong and only field telemetry could say so. What is left below is the
+    // adapter — the camera, the room bounds, and the badge ladder.
 
-    // ── Fit the room's footprint AS PROJECTED, per screen axis ─────────────
-    // This used to fit a bounding SPHERE (half the footprint diagonal) inside
-    // the TIGHTER of the two field-of-view angles. Both halves of that are
-    // rotation-invariant, and on a portrait phone they compound into a shot
-    // that is dramatically too far out: the horizontal FOV is the tight one, so
-    // the room was pushed back until its DIAGONAL fitted the screen's SHORT
-    // axis, and the tall axis — most of the glass — was left empty.
-    //
-    // Measured, not argued (v2.362.0 telemetry): the same Living Room reports a
-    // bounding sphere of 7.157 m on a 704x845 tablet, 7.151 m on a 932x616
-    // tablet and 7.157 m on a 475x661 phone — the room is identical, and every
-    // difference in the resulting shot was the formula. Swimming Pool wanted
-    // radius 36.05 at aspect 0.719 and 51.13 at aspect 0.495: 42% further out
-    // on the iPhone for the same room, which is the "zoom level is too low"
-    // that was reported from it.
-    //
-    // The destination pose is known exactly by this point, so there is nothing
-    // to be invariant to. Project the footprint's four corners onto the view
-    // plane and fit each screen axis against its OWN half-angle. `tan`, not
-    // `sin`: a floor seen from above is a plane facing the camera, and the
-    // distance at which a plane's half-extent subtends a half-angle is
-    // extent/tan. `sin` is the tangent-sphere form, and is the more
-    // conservative of the two by 1/cos — small next to the anisotropy, but it
-    // was wrong in the same direction.
-    const frame = exactViewBasis(destDir.x, destDir.y, destDir.z, "plane");
-    let halfW = 0;
-    let halfH = 0;
-    for (const px of [bounds.minX, bounds.maxX]) {
-      for (const pz of [bounds.minZ, bounds.maxZ]) {
-        // Relative to the orbit centre, which is what the frame is centred on.
-        // The projection is linear, so the projected corners bound the whole
-        // footprint exactly — no corner can escape a frame that holds all four.
-        const p = projectToView(frame, px - cx, 0, pz - cz, this.fitScratch);
-        halfW = Math.max(halfW, Math.abs(p.px));
-        halfH = Math.max(halfH, Math.abs(p.py));
-      }
-    }
-    // Per axis against its OWN half-angle, THEN the context fraction — see
-    // ROOM_FIT_VIEWPORT_FRACTION for why that order is what makes one number
-    // correct on every aspect ratio.
-    let radius = Math.max(
-      halfW / Math.tan(hFov / 2),
-      halfH / Math.tan(vFov / 2),
-      MIN_ROOM_FIT_RADIUS,
-    ) / fitFrac;
+    const fit = wallFit({ bounds, alpha: cam.alpha, beta: destBeta,
+                          vHalf, hHalf, allReal });
+    const destDir = fit.direction;
+    const { halfW, halfH } = fit;
+    let radius = fit.radius;
+    // ⚠️ THE SAME FRAME THE FIT MEASURED THROUGH. The badge ladder below asks a
+    // different question of the same shot, and two separately-built bases would
+    // let them disagree about which way is across and which is along.
+    const frame = viewFrame(destDir);
 
     // ── Now ask the badges, by TESTING rather than deriving ───────────────
     // The wall fit above frames the ROOM. It says nothing about whether the
@@ -2552,13 +2498,13 @@ export class SceneManager {
       frame,
       cx, cy: bounds.floorY, cz,
       dir: destDir,
-      minRadius: this.overview.camera.lowerRadiusLimit ?? 2,
+      minRadius: this.overview.radiusLimits().lo,
       // The wall fit is the widest shot worth considering: past it the room no
       // longer fills the frame, and nothing about badges improves by backing
       // further away.
-      maxRadius: Math.max(radius, this.overview.camera.lowerRadiusLimit ?? 2),
+      maxRadius: Math.max(radius, this.overview.radiusLimits().lo),
     }) : null;
-    const wallFit = radius;
+    const wallFitRadius = radius;
     let declutters = true;
     if (solved) {
       radius = solved.radius;
@@ -2570,7 +2516,7 @@ export class SceneManager {
       alpha: cam.alpha,
       beta: destBeta,
       radius,
-      wallFit,
+      wallFit: wallFitRadius,
       solved: !!solved,
       declutters,
       real: allReal,
@@ -3367,7 +3313,7 @@ export class SceneManager {
     // anchored well above the recentred floor's y≈0, so the glow patch must
     // use ITS OWN local floor height, not the flat offset real room polygons
     // use, or it renders buried inside the stairs/slab below and never shows.
-    const eyeHeight = this.config.eyeHeight ?? 1.7;
+    const eyeHeight = eyeHeightOf(this.config);
     const extras = this.config.teleportPoints
       .filter((p) => !this.lastRoomPolyNames.has(roomKey(p.name)))
       .map((p) => ({ name: p.name, x: p.position.x, z: p.position.z, floorY: p.position.y - eyeHeight }));
@@ -3838,9 +3784,9 @@ export class SceneManager {
       // size of the SCATTER between panels, not of the panels, and reading it as
       // coverage is what made "half the villa is covered" look like a fact.
       + ` area=${area.toFixed(1)}m2 (${(100 * area / villaFoot).toFixed(1)}% of villa)`
-      + ` eye=${(this.config.eyeHeight ?? 1.7).toFixed(2)}m`
+      + ` eye=${(eyeHeightOf(this.config)).toFixed(2)}m`
       + ` alpha=${minAlpha.toFixed(2)} see-through=${seeThrough}/${this.ceilingMeshes.length}`
-      + (maxY < (this.config.eyeHeight ?? 1.7)
+      + (maxY < (eyeHeightOf(this.config))
         ? " — ENTIRELY BELOW EYE LEVEL: this is trim, not a lid"
         : ""),
     );

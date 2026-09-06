@@ -88,6 +88,7 @@ import {
   GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
   SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE, CARD_VALUE_MARGIN_OF_ICON_PAD,
 } from "./badgeMetrics";
+import { mergeOverlapping } from "./boxMerge";
 import { badgeRank } from "./badgePriority";
 import {
   viewBasis, projectToView, VIEW_BASIS_STEPS,
@@ -8453,36 +8454,34 @@ export class EntityVisuals {
       // ever wants to be tighter or looser. `chipGapPx` is deleted, not
       // aliased, so nothing can drift back apart.
       const gap = this.metrics.minGapPx * scale;
-      for (;;) {
-        let bi = -1, bj = -1, worst = 0;
-        for (let i = 0; i < chips.length; i++) {
-          for (let j = i + 1; j < chips.length; j++) {
-            const a = chips[i], b = chips[j];
-            const ox = a.halfW + b.halfW + gap - Math.abs(b.x - a.x);
-            const oy = a.halfH + b.halfH + gap - Math.abs(b.y - a.y);
-            if (ox <= 0 || oy <= 0) continue; // clear on at least one axis
-            const severity = Math.min(ox, oy);
-            if (severity > worst) { worst = severity; bi = i; bj = j; }
-          }
-        }
-        if (bi < 0) break; // nothing overlaps — done
-        const a = chips[bi], b = chips[bj];
-        const keep = a.ids.length >= b.ids.length ? a : b;
-        const drop = keep === a ? b : a;
-        const na = a.ids.length, nb = b.ids.length;
-        keep.centre = a.centre.scale(na / (na + nb))
-          .addInPlace(b.centre.scale(nb / (na + nb)));
-        keep.ids = keep.ids.concat(drop.ids);
-        keep.rooms = a.rooms + b.rooms;
-      // Keep the NAMES, not just the count: a merged chip has to be able to
-      // offer the rooms it swallowed when it is tapped, and "+2" cannot.
-      keep.roomNames = [...a.roomNames, ...b.roomNames];
-        keep.keys = [...a.keys, ...b.keys];
-        keep.ringRed = a.ringRed || b.ringRed;
-        keep.unavailable = a.unavailable || b.unavailable;
-        chips.splice(chips.indexOf(drop), 1);
-        measure(keep);
-      }
+      // ⚠️ THE FIXPOINT IS `boxMerge.ts`, WHICH BARE NODE CAN LOAD. This was a
+      // hand-written second copy of the shape `badgePlacement` was extracted
+      // for — that file's header says why: "this is the THIRD fixpoint in this
+      // subsystem to ship wrong". What is here is the merge PAYLOAD, which is
+      // genuinely about chips; the pairing and the loop are not.
+      //
+      // ⚠️ AND THE ORDER-INDEPENDENCE THIS METHOD CLAIMS IS NOW TRUE. The old
+      // pairing was `severity > worst`, so an exact tie went to the first pair
+      // in array order — and array order is room iteration order, the very
+      // thing the claim above denies mattering.
+      mergeOverlapping(
+        chips, gap,
+        (a, b) => (a.ids.length >= b.ids.length ? a : b),
+        (keep, drop) => {
+          const a = keep, b = drop;
+          const na = a.ids.length, nb = b.ids.length;
+          keep.centre = a.centre.scale(na / (na + nb))
+            .addInPlace(b.centre.scale(nb / (na + nb)));
+          keep.ids = keep.ids.concat(drop.ids);
+          keep.rooms = a.rooms + b.rooms;
+          // Keep the NAMES, not just the count: a merged chip has to be able
+          // to offer the rooms it swallowed when it is tapped, and "+2" cannot.
+          keep.roomNames = [...a.roomNames, ...b.roomNames];
+          keep.keys = [...a.keys, ...b.keys];
+          keep.ringRed = a.ringRed || b.ringRed;
+          keep.unavailable = a.unavailable || b.unavailable;
+          measure(keep);
+        });
     }
 
     return chips;
