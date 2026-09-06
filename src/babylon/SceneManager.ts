@@ -79,6 +79,7 @@ import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { sceneConfigDelta } from "@/babylon/entityMapDiff";
+import { resolutionValve } from "@/babylon/resolutionValve";
 import { ModelKeyedStore } from "./modelStore";
 import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 import { cameraFrame } from "./cameraFrame";
@@ -167,12 +168,14 @@ const FRAME_REPORT_MAX = 8;
 // Below ~25fps interaction stops feeling like direct manipulation — that is
 // the point at which supersampling is no longer worth what it costs.
 const FRAME_SLOW_MS = 40;
-// What easeResolution aims for once it has decided to act (~45fps). Not 60:
+// What the valve's downward step aims for once it has decided to act
+// (~45fps, resolutionValve.ts). Not 60:
 // overshooting to the resolution floor on one marginal burst would spend the
 // whole quality budget to chase frames the display may not even present.
 const FRAME_TARGET_MS = 22;
 // 1.0 = one backbuffer pixel per CSS pixel. Never coarser than this — see
-// easeResolution for the rainbow-speckle regression that sets this floor.
+// resolutionValve's downward step for the rainbow-speckle regression that
+// sets this floor.
 const HW_SCALE_FLOOR = 1;
 // The starting cap: up to 2x CSS, whatever the panel claims. On a DPR-3 phone
 // that is TWO THIRDS of native pixel density, and the compositor upscales the
@@ -1302,28 +1305,12 @@ export class SceneManager {
     // Its own minimum is lower because it is answering an easier question than
     // the telemetry is: "is this device comfortably missing frame budget",
     // not "characterise this burst". Still monotonic, still floored at 1x CSS.
-    if (s.length >= VALVE_SAMPLE_MIN) {
-      // Down first, then up. Their guards are mutually exclusive (one needs a
-      // slow p50, the other a fast one), so the order is documentation rather
-      // than logic — but stating it means a future edit to either guard cannot
-      // quietly make both fire on one sample.
-      this.easeResolution(at(0.5));
-      // ⚠️ The UPWARD step reads RENDER time, not the frame gap. `at(0.5)` is
-      // the median gap BETWEEN frames, and on any device holding vsync that is
-      // the refresh period and nothing else: this phone reports p50 16.7ms at
-      // 60Hz and 8.4ms at 120Hz while its render cost is 4-9ms either way. A
-      // gate fed that number would refuse to sharpen an idle GPU because its
-      // display happened to be running at 60Hz, and would read a 120Hz panel
-      // as twice as capable as the same silicon behind a 60Hz one.
-      // `renderSamples` is the work actually done per frame, which is the only
-      // thing that scales with pixel count.
-      if (r.length >= VALVE_SAMPLE_MIN) {
-        // Sorted in place: the telemetry block below sorts it again anyway, so
-        // this costs a nearly-sorted re-sort and no allocation.
-        r.sort((a, b) => a - b);
-        this.raiseResolution(r[Math.floor(r.length * 0.5)]);
-      }
-    }
+    // The law itself is in resolutionValve.ts; this supplies the two medians
+    // and owns the three side effects.
+    if (r.length >= VALVE_SAMPLE_MIN) r.sort((a, b) => a - b);
+    this.applyResolutionValve(
+      at(0.5), s.length,
+      r.length ? r[Math.floor(r.length * 0.5)] : Number.POSITIVE_INFINITY, r.length);
 
     if (s.length < FRAME_SAMPLE_MIN || this.frameReportsSent >= FRAME_REPORT_MAX) return;
     this.frameReportsSent += 1;
@@ -1440,51 +1427,47 @@ export class SceneManager {
    *   Mac (DPR 1.6/2)               never reaches the test — already native
    *
    * ── And why it cannot hunt ───────────────────────────────────────────────
-   * easeResolution is deliberately monotonic ("never finer again") because a
-   * two-way controller oscillates around its threshold and the resolution
-   * visibly pulses. This is not a controller: it is ONE step, taken at most
+   * The valve's downward step is deliberately monotonic ("never finer again")
+   * because a two-way controller oscillates around its threshold and the
+   * resolution visibly pulses. This is not a controller: it is ONE step, taken at most
    * once per session, guarded by a flag. Afterwards the ordinary downward
    * valve keeps sampling and can back the device off again if the prediction
    * was wrong — so a bad guess costs a few seconds, not the session, and the
    * monotonic invariant holds from that point on exactly as before.
    */
   private resolutionRaised = false;
-  private raiseResolution(p50: number): void {
-    if (this.resolutionRaised) return;
-    // Never decide from the sharp idle frame's scaling — that is a temporary
-    // override, not this device's measured operating point.
-    if (this.sharpened) return;
-    const cur = this.engine.getHardwareScalingLevel();
-    const native = 1 / Math.max(1, window.devicePixelRatio || 1);
-    // Already at (or finer than) the panel — nothing to win. This is every
-    // DPR<=2 device, so they never reach the prediction below at all.
-    if (cur <= native + 1e-6) return;
-    // Pixel count scales with the SQUARE of the linear scaling change.
-    const costRatio = (cur / native) ** 2;
-    if (p50 * costRatio > FRAME_TARGET_MS) return;
-    this.resolutionRaised = true;
-    this.engine.setHardwareScalingLevel(native);
-    // Same obligation easeResolution has: badge geometry is authored in CSS px
-    // and converted through this exact value, so the layer has to be told or
-    // every badge keeps the size it had for a resolution that no longer
-    // exists — and its collision boxes keep measuring it at that size too.
-    this.visuals.notifyRenderScaleChanged();
-    this.requestRender();
-  }
 
-  private easeResolution(p50: number): void {
-    if (p50 <= FRAME_SLOW_MS) return;
-    if (this.sharpened) return;   // see raiseResolution
-    const cur = this.engine.getHardwareScalingLevel();
-    if (cur >= HW_SCALE_FLOOR) return;
-    const next = Math.min(HW_SCALE_FLOOR, cur * Math.sqrt(p50 / FRAME_TARGET_MS));
-    if (next <= cur) return;
-    this.engine.setHardwareScalingLevel(next);
-    // Badge geometry is authored in CSS px and converted through this exact
-    // value (EntityVisuals.cssToGui), so changing it here silently resizes
-    // every badge. Tell the layer, or badges keep the size they had for a
-    // resolution the engine has stopped rendering at — and the collision
-    // boxes keep measuring them at it too.
+  /** Run the valve and apply its verdict.
+   *
+   *  ⚠️ THE LAW MOVED TO resolutionValve.ts (2.944.0); what stays here is the
+   *  engine and the three side effects. They now fire from ONE place, which is
+   *  what makes invariant 6 structural instead of remembered: badge geometry is
+   *  authored in CSS px and converted through this exact scaling value, so a
+   *  step that forgot `notifyRenderScaleChanged` would leave every badge at a
+   *  size for a resolution that no longer exists — and its collision box would
+   *  keep measuring it at that size too. Two call sites each had to remember
+   *  that; now there are none to forget.
+   */
+  private applyResolutionValve(gapP50: number, gapCount: number,
+                               renderP50: number, renderCount: number): void {
+    const decision = resolutionValve(
+      {
+        current: this.engine.getHardwareScalingLevel(),
+        native: 1 / Math.max(1, window.devicePixelRatio || 1),
+        sharpened: this.sharpened,
+        alreadyRaised: this.resolutionRaised,
+      },
+      { gapP50, renderP50, gapCount, renderCount },
+      {
+        sampleMin: VALVE_SAMPLE_MIN,
+        slowMs: FRAME_SLOW_MS,
+        targetMs: FRAME_TARGET_MS,
+        scaleFloor: HW_SCALE_FLOOR,
+      },
+    );
+    if (decision.nextScaling === null) return;
+    if (decision.direction === "raise") this.resolutionRaised = true;
+    this.engine.setHardwareScalingLevel(decision.nextScaling);
     this.visuals.notifyRenderScaleChanged();
     this.requestRender();
   }
@@ -1506,7 +1489,7 @@ export class SceneManager {
    * rule would be wrong for the iPhone, which measured 10-14ms and does not
    * need the help — it would just make its picture softer for nothing.
    *
-   * easeResolution already decides this correctly, from measured frame time,
+   * resolutionValve already decides this correctly, from measured frame time,
    * per device. Its only problem was never getting to run: it feeds on frame
    * samples, and those only exist during a burst of continuous interaction. A
    * wall-mounted kiosk that nobody touches never produces one, which is why no
@@ -1604,8 +1587,8 @@ export class SceneManager {
    * ⚠️ `sharpened` means "we are currently OVERRIDING the scaling", and only
    * that. Until 2.329.0 it latched even when the device was already at native
    * and there was nothing to override, which quietly disabled the whole
-   * resolution valve on every DPR<=2 machine: `easeResolution` and
-   * `raiseResolution` both bail while sharpened, so a flag set on the first
+   * resolution valve on every DPR<=2 machine: `resolutionValve` bails as a
+   * whole while sharpened, so a flag set on the first
    * idle tick and never cleared meant the valve could not act for the rest of
    * the session. Latching only on a real change keeps the flag honest and costs
    * two float comparisons per idle tick.
