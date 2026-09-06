@@ -73,6 +73,7 @@
 // capability instead.
 
 import { useCallback, useEffect, useState } from "react";
+import { noticeFor, visibleTabs } from "@/vesta/brief/reportsWorkspace";
 import { AlertTriangle, CheckCircle2, FileText, History, ListChecks,
          Loader2, ShieldQuestion } from "lucide-react";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -133,7 +134,11 @@ export default function ReportsModal(
   { onClose: () => void; canConfigure: boolean },
 ) {
   const dialogRef = useModalA11y(onClose);
-  const tabs = TABS.filter((t) => canConfigure || !t.configure);
+  // ⚠️ THE TAB DERIVATION MOVED TO `reportsWorkspace` (2026-09-06) so it could
+  // be tested. It is the defect that was fixed once and reintroduced through a
+  // fallback, and it had never been exercisable — the whole modal has to render
+  // to reach it. The prose explaining both attempts lives with the function.
+  const { tabs, initial } = visibleTabs(TABS, canConfigure);
   // ⚠️ THE DEFAULT TAB IS THE FIRST VISIBLE ONE, NOT A LITERAL. Hard-coding
   // "preview" opened a facility manager on a tab that is not in their list, so
   // the body rendered nothing while every tab button looked unselected.
@@ -148,7 +153,7 @@ export default function ReportsModal(
   // landed on a tab that matches no body branch. That is precisely the defect
   // the comment above says was fixed once already, reintroduced through the
   // fallback rather than through a hard-coded id.
-  const [tab, setTab] = useState<Tab | null>(tabs[0]?.id ?? null);
+  const [tab, setTab] = useState<Tab | null>(initial as Tab | null);
 
   const [config, setConfig] = useState<ReportsConfig | null>(null);
   const [rev, setRev] = useState<string | null>(null);
@@ -334,23 +339,10 @@ export default function ReportsModal(
       preview: false, cadence: s.cadence, role: s.role,
       audience: s.audience, targets: s.targets,
     });
-    const sent = (result?.deliveries ?? []).filter((d) => d.status === "sent");
-    const failed = (result?.deliveries ?? []).filter(
-      (d) => d.status === "failed");
-    setNotice(!result
-      ? { text: "Could not send. See the add-on log.", bad: true }
-      : failed.length
-        ? { text: `Sent to ${sent.length}, failed for ${failed.length}: `
-                  + failed.map((d) => d.detail || d.target).join("; "), bad: true }
-        // ⚠️ "Sent to 0 recipient(s)" WAS THE ANSWER FOR A SCHEDULE WITH
-        // NOWHERE TO GO, and it reads as success. The pre-flight refusal that
-        // used to catch it could only see the schedule's own list; now that
-        // destinations come from the profile, the add-on is the only thing that
-        // knows, so the empty answer is named where it arrives.
-        : sent.length === 0
-          ? { text: "Nobody is set up to receive this profile's briefings, so "
-                    + "nothing was sent.", bad: true }
-          : { text: `Sent to ${sent.length} recipient(s).`, bad: false });
+    // ⚠️ THE LADDER MOVED TO `reportsWorkspace.noticeFor` so the "sent to
+    // nobody reads as success" case has a test. Three nested ternaries in a
+    // callback were reachable only by sending a real briefing.
+    setNotice(noticeFor(result));
     setHistory(await fetchReportsHistory());
     setBusy(false);
   }, []);

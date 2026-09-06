@@ -1,3 +1,12 @@
+## 2.936.0
+
+### Fixed — "sent to nobody" no longer reads as success
+When a briefing went out to a profile with no destinations set up, the dialog
+answered "Sent to 0 recipient(s)", which reads as though it worked. It now says
+plainly that nobody is set up to receive it. The same change separates "the
+request failed" from "the request succeeded and reached nobody", which had been
+one sentence.
+
 ## 2.935.0
 
 ### Changed — the alert card's rules can now be tested
