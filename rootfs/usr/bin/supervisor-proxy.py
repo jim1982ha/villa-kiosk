@@ -130,16 +130,14 @@ from vesta.adapters import record as vesta_record
 from vesta.adapters import discovery as reports_discovery
 from vesta.brief import pipeline as reports_pipeline
 from vesta.brief import request as reports_request
-# ⚠️ BOTH LINES ARE LOAD-BEARING, AND THE SECOND IS THE ONE THAT IS EASY TO
-# DROP. A module registers itself at IMPORT TIME, and `analysis/__init__`
-# imports `base` and `registry` but NOT `modules` — so importing the registry
-# alone yields one that is legitimately empty. It happens to be populated today
-# because `pipeline` imports `analysis.modules` for this exact side effect, but
-# depending on that is depending on an unrelated module's import list: drop that
-# line in pipeline and this endpoint silently reports zero modules again, which
-# is the defect being fixed here wearing a different hat.
+# ⚠️ THE REGISTRY POPULATES ITSELF NOW, AND THIS COMMENT USED TO SAY OTHERWISE.
+# It ran to nine lines defending a SECOND import of this same module under a
+# second name, on the grounds that the registry is only populated as a side
+# effect of `pipeline` importing `analysis.modules`. That stopped being true
+# when `registry._register_shipped()` moved the registration into the registry
+# itself and ran it at import — the registry's own note says so, and the alias
+# it defended had zero references. One import, and importing it is enough.
 from vesta.brief import registry as reports_registry
-from vesta.brief import registry as _reports_registry
 from vesta.adapters import schedule as reports_schedule
 from vesta.adapters import secrets as reports_secrets
 from vesta.adapters import log as reports_log
@@ -173,8 +171,14 @@ from vesta.supervise.agent import compose as agent_compose
 from vesta.supervise.agent import actions as agent_actions
 from vesta.supervise import api as agent_api
 from vesta.supervise import service as agent_service
-from vesta.supervise.agent import config as agent_config
-from vesta.supervise.observe import cycle as observe_cycle
+# ⚠️ `agent_config` IS NOT IMPORTED HERE, DELIBERATELY. It is imported INSIDE
+# the three functions that use it, because a missing local import is what
+# killed the whole triage clock from v2.643.0 to v2.707.0 — see
+# `_agent_config_now`, which carries that story. A module-scope import would
+# make those three redundant without removing them, which is the same fact in
+# two spellings and would quietly satisfy the one that documents the outage.
+# `observe_cycle` was imported here and used nowhere: the task it belonged to
+# moved into `service.start` and only its NAME survives, in the shutdown list.
 
 SUPERVISOR = "supervisor"
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
@@ -946,10 +950,28 @@ def _client_ip(request: web.Request) -> str:
 
 
 def _prune_auth_failures(now: float) -> None:
-    """Drop expired per-client entries, and hard-trim if still oversized."""
+    """Drop expired per-client entries, age the global tier, and hard-trim if
+    still oversized.
+
+    ⚠️ THE GLOBAL TIER HAD NO DECAY AT ALL, while the comment beside its only
+    increment said "the global tier is left to decay on its own window". Its
+    count was written in exactly two places — incremented on a wrong PIN, and
+    reset inside `_lockout_remaining` only AFTER it had already fired — so it
+    was monotonic from process start to 50. The fiftieth CUMULATIVE mistyped
+    PIN for a role, across every guest and every tablet on an add-on that runs
+    for weeks, locked that role out from every source address for 900 s.
+
+    That is the outcome this limiter was rewritten to prevent: "A lockout must
+    punish the guesser, not the victim." A backstop against a distributed guess
+    has to be a RATE, and a rate needs the window applied while the count is
+    still below the limit — which is the one place nothing was ageing it.
+    """
     for key in [k for k, st in _auth_failures.items()
                 if now - st["last"] > _auth_lockout_seconds()]:
         _auth_failures.pop(key, None)
+    for gst in _auth_failures_global.values():
+        if gst["count"] and now - gst["last"] > AUTH_GLOBAL_LOCKOUT_SECONDS:
+            gst["count"] = 0
     if len(_auth_failures) > AUTH_TRACK_MAX_CLIENTS:
         # Oldest-first eviction. Evicting a still-locked attacker is acceptable:
         # the global tier remains, and the alternative (unbounded growth) is a
@@ -1393,8 +1415,10 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
     st = _auth_failures.setdefault((role, ip), {"count": 0, "last": 0.0})
     gst = _auth_failures_global[role]
     if ok:
-        # Clear only THIS client's counter. The global tier is left to decay on
-        # its own window, so one correct PIN cannot reset a distributed guess.
+        # Clear only THIS client's counter. The global tier decays on its own
+        # window (`_prune_auth_failures`), so one correct PIN cannot reset a
+        # distributed guess — and a slow trickle of honest mistakes cannot
+        # accumulate into a villa-wide lockout either.
         st["count"] = 0
     else:
         st["count"] += 1
