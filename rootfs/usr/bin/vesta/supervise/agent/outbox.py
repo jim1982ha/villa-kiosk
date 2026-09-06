@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.supervise.agent import concerns as concerns_mod
 from vesta.supervise.agent import config as agent_config
@@ -504,16 +504,16 @@ async def sweep(session: Any, *,
 
     for row in pending[:MAX_PER_SWEEP]:
         try:
-            sent = await _deliver_one(session, row, config=config,
-                                      quiet=quiet, occupied=occupied, now=now)
+            delivery = await _deliver_one(session, row, config=config,
+                                          quiet=quiet, occupied=occupied, now=now)
         except Exception as err:  # noqa: BLE001 - one concern is not the sweep
             swallow(f"could not deliver concern {row.get('id')}", err)
             out.failed += 1
             continue
-        if sent == "sent":
+        if delivery.outcome == "sent":
             out.sent += 1
             out.delivered_ids.append(str(row.get("id") or ""))
-        elif sent == "held":
+        elif delivery.outcome == "held":
             out.held += 1
         else:
             out.failed += 1
@@ -562,11 +562,45 @@ async def _rating_link(session: Any) -> Tuple[str, str]:
             links_mod.html_line("Rate this alert in", urls))
 
 
+@dataclass(frozen=True)
+class Delivery:
+    """What one concern's delivery did, IN THE ORDER IT DID IT.
+
+    ⚠️ THE ORDER IS AN INTERFACE PROPERTY AND IT WAS UNGUARDED. `_deliver_one`
+    returned a bare `"sent"`, so the one rule that matters here — the job is
+    raised only AFTER the send has landed and the concern is stamped — could be
+    asserted only by reading the function's source and comparing two character
+    offsets. `test_task_loop` did exactly that, and `_mark_delivered` appears
+    TWICE in this function: once as code, once in the comment below it. The
+    comment sits between the code and the anchor, so `src.index()` found the
+    prose and the pin passed with the two calls REVERSED. Proven by mutation:
+    the whole 2,313-test suite stayed green.
+
+    ⚠️ `steps` IS ORDERED AND APPEND-ONLY. A caller reads the sequence; nobody
+    has to know where a line sits in this file.
+    """
+
+    outcome: str                       #: sent | held | failed
+    steps: Tuple[str, ...] = ()
+
+
+#: The steps a delivery can take, as `Delivery.steps` records them.
+STEP_SENT: Final[str] = "sent"
+STEP_MARKED: Final[str] = "marked_delivered"
+STEP_RAISED: Final[str] = "raised_task"
+
+
 async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
                        config: Optional[Mapping[str, Any]],
                        quiet: bool, occupied: Optional[bool],
-                       now: Optional[float]) -> str:
-    """One concern, routed and sent. Returns sent | held | failed."""
+                       now: Optional[float]) -> Delivery:
+    """One concern, routed and sent.
+
+    Returns a `Delivery` whose `steps` name what happened in order — see that
+    class for why the order is returned rather than left to be read out of this
+    function's source.
+    """
+    steps: List[str] = []
     from vesta.adapters import deliver as deliver_mod
     from vesta.adapters import people as people_mod
 
@@ -623,7 +657,7 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     if plan.held:
         # ⚠️ NOT MARKED. The next sweep re-evaluates it, and the moment the
         # window has passed it goes. This is the whole release mechanism.
-        return "held"
+        return Delivery("held", tuple(steps))
     if not plan.targets:
         # ⚠️ NOWHERE TO SEND IS A CONFIGURATION STATE, NOT AN ERROR — and it
         # must NOT mark the concern delivered, or configuring a target later
@@ -636,7 +670,7 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
         # and sending somebody to the wrong one of those costs a round.
         warn(f"concern {ident} has nowhere to go: no destination is configured "
              f"for the {role!r} profile on the People tab")
-        return "failed"
+        return Delivery("failed", tuple(steps))
 
     # ⚠️ BUTTONS FIRST, AND EVERYTHING THEY DECLINE FALLS THROUGH UNCHANGED.
     # `deliver.py` is deliberately the INTERSECTION of what every notify
@@ -651,8 +685,10 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     landed = [str(r.get("target")) for r in results
               if isinstance(r, Mapping) and str(r.get("status")) == "sent"]
     if not landed:
-        return "failed"
+        return Delivery("failed", tuple(steps))
+    steps.append(STEP_SENT)
     _mark_delivered(str(concern.get("id") or ""), now=now, profile=role)
+    steps.append(STEP_MARKED)
 
     # ⚠️ AFTER THE SEND, AND ONLY AFTER IT. A facility manager job raised for a concern
     # whose delivery then failed is a task nobody was told about, sitting on a
@@ -675,7 +711,8 @@ async def _deliver_one(session: Any, concern: Mapping[str, Any], *,
     if not bool(concern.get("informational")):
         from vesta.supervise.agent import task as task_mod
         await task_mod.raise_for(session, concern, config=config)
-    return "sent"
+        steps.append(STEP_RAISED)
+    return Delivery("sent", tuple(steps))
 
 
 async def _send_alert(session: Any, drawn_as: Mapping[str, Any], plan: Any, *,

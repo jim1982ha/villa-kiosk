@@ -72,6 +72,10 @@ NOT_ENTITY_IDS: Set[str] = {
 #: numbered stand-ins, and the standard entity of an HA integration
 #: (`sensor.moon_phase` ships with `sun`/`moon` and is not villa data).
 ILLUSTRATIVE: Set[str] = {
+    # `villa_rules.ts`'s power-unit fixtures. `sensor.mains` is the whole-house
+    # meter that reports kW — the case that made the Energy tile add 3.2 to a
+    # watt total — and the rest are the units beside it.
+    "sensor.mains", "sensor.lamp", "sensor.plug", "sensor.a", "sensor.b",
     # `villa_rules.ts`'s summary-tile fixtures. Each names a RULE:
     # `switch.spartan_gym_relay` is the substring collision POOL_WORD is
     # anchored against ("spa" inside "spartan"), `switch.filter_pump_2` is a

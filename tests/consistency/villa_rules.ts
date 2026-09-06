@@ -482,6 +482,41 @@ console.log("\n— the wall tablet's bottom strip —");
   }), "__energy");
   check("with no thresholds configured, 9 kW is still neutral",
         !hot || hot.tone === "neutral", hot ? hot.tone : "(no energy tile)");
+
+  // ⚠️ THE SELECTOR AND THE SUM MUST AGREE ABOUT UNITS. This tile filtered on a
+  // regex that matches "W" and cannot match "kW", while `device_class` admitted
+  // kilowatts — so a mains meter reporting 3.2 kW added 3.2 to a watt total.
+  // The value was never read by any assertion; only `tone` was.
+  const kw = find(tiles({
+    "sensor.mains": ent("sensor.mains", "3.2", { device_class: "power",
+                                                 unit_of_measurement: "kW" }),
+  }), "__energy");
+  eq("a meter reporting 3.2 kW reads as 3.2 kW, not 3.2 W",
+     kw ? kw.value : "(none)", "3.2 kW");
+
+  const mixed = find(tiles({
+    "sensor.mains": ent("sensor.mains", "3", { device_class: "power",
+                                               unit_of_measurement: "kW" }),
+    "sensor.lamp": ent("sensor.lamp", "40", { device_class: "power",
+                                              unit_of_measurement: "W" }),
+  }), "__energy");
+  eq("kilowatts and watts sum in ONE unit", mixed ? mixed.value : "(none)", "3 kW");
+
+  // A sensor with no device_class but a power unit is still a power sensor.
+  const byUnit = find(tiles({
+    "sensor.plug": ent("sensor.plug", "60", { unit_of_measurement: "W" }),
+  }), "__energy");
+  check("a unit alone identifies a power sensor", !!byUnit, byUnit ? byUnit.value : "(none)");
+
+  // …and one this app cannot scale contributes nothing rather than a wrong number.
+  const odd = find(tiles({
+    "sensor.a": ent("sensor.a", "5", { device_class: "power",
+                                       unit_of_measurement: "furlongs" }),
+    "sensor.b": ent("sensor.b", "40", { device_class: "power",
+                                        unit_of_measurement: "W" }),
+  }), "__energy");
+  eq("an unscalable unit adds nothing, never its raw number",
+     odd ? odd.value : "(none)", "40 W");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -108,21 +108,92 @@ def test_the_summary_carries_the_BRACKETED_id() -> None:
         "write")
 
 
-def test_the_task_is_raised_AFTER_the_send_and_only_on_success() -> None:
+def test_the_task_is_raised_AFTER_the_send_and_only_on_success(
+        tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """⚠️ ORDERING, AND IT IS THE SAME RULE AS `_mark_delivered`. A job raised
     for a concern whose delivery then failed is a task nobody was told about,
-    sitting on a list with no message to explain it."""
-    src = inspect.getsource(outbox._deliver_one)
-    assert "task_mod.raise_for" in src, "delivery no longer raises a task"
-    assert src.index("_mark_delivered") < src.index("task_mod.raise_for"), (
-        "the task is raised before the concern is marked delivered")
+    sitting on a list with no message to explain it.
+
+    ⚠️ THIS PIN PASSED WITH THE ORDER REVERSED UNTIL 2.956.0, AND SO DID THE
+    WHOLE SUITE. It read raw source and compared two `str.index()` offsets —
+    and `_mark_delivered` appears TWICE in `_deliver_one`: once as code, once
+    in the comment directly below it. The comment sits between the code and the
+    `task_mod.raise_for` anchor, so `index()` matched the PROSE. Moving the call
+    below the anchor left `2313 passed`, which is how a rule this file names as
+    load-bearing went a year unguarded.
+
+    It runs the delivery now and reads the order off `Delivery.steps`.
+    """
+    from vesta.supervise.agent import concerns as concerns_mod
+    from vesta.supervise.agent import outbox as outbox_mod
+    from vesta.adapters import deliver as deliver_mod
+    from vesta.adapters import people as people_mod
+
+    monkeypatch.setattr(concerns_mod, "CONCERNS_FILE", str(tmp_path / "c.json"))
+    raised: List[str] = []
+
+    async def deliver(session: Any, targets: Any, title: str, message: str,
+                      known: Any = ()) -> List[Dict[str, Any]]:
+        return [{"target": t, "status": "sent"} for t in targets]
+
+    async def raise_for(session: Any, concern: Any, *, config: Any = None) -> str:
+        # ⚠️ READS THE STORE AT THE MOMENT THE JOB IS RAISED. If the stamp has
+        # not landed yet, this sees an unstamped row — which is exactly the
+        # state the rule forbids.
+        rows = concerns_mod.read()
+        raised.append(str(rows[0].get("delivered_at") or "") if rows else "")
+        return "raised"
+
+    async def occ(session: Any) -> Any:
+        return None
+
+    monkeypatch.setattr(deliver_mod, "deliver", deliver)
+    monkeypatch.setattr(people_mod, "targets_for_role",
+                        lambda cfg, role: ["notify.owner"])
+    monkeypatch.setattr(outbox_mod, "occupancy_now", occ)
+    monkeypatch.setattr(task, "raise_for", raise_for)
+
+    stored, why = concerns_mod.raise_concern(concerns_mod.Concern(
+        subject_key="a1b2c3d4a1b2c3d4", title="Cooling unit short-cycling",
+        body="It has been at 340 W.", severity="critical", audience="owner",
+        evidence=[{"tool": "history", "summary": "340 W for six hours"}]))
+    assert stored is not None, why
+
+    config = {"enabled": True, "shadow": False,
+              "people": [{"role": "owner", "telegram": "123",
+                          "targets": ["notify.owner"]}]}
+    result = asyncio.run(outbox_mod.sweep(None, config=config))
+    assert result.sent == 1, result
+
+    # ⚠️ THE ORDER, AS A VALUE. Not a character offset in another file.
+    assert raised and raised[0], (
+        "the job was raised before the concern was stamped delivered — a task "
+        "on somebody's list with no message behind it")
+
+
+def test_the_delivery_reports_its_steps_in_order(
+        tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same rule from the other side: `Delivery.steps` is the interface."""
+    from vesta.supervise.agent import outbox as outbox_mod
+
+    steps = (outbox_mod.STEP_SENT, outbox_mod.STEP_MARKED, outbox_mod.STEP_RAISED)
+    assert list(steps) == sorted(steps, key=lambda s: [
+        outbox_mod.STEP_SENT, outbox_mod.STEP_MARKED, outbox_mod.STEP_RAISED].index(s))
+    held = outbox_mod.Delivery("held")
+    assert held.steps == (), "a held concern took no steps"
+    assert outbox_mod.Delivery("failed").steps == (), (
+        "a failed delivery took no steps, so it cannot have raised a job")
+
     # ⚠️ `return "suppressed"` left with shadow delivery (2026-08-28):
     # observe-mode concerns are delivered as FYIs now, so that early return no
     # longer exists to order against. The FYI's own no-job rule is pinned in
-    # `test_agent_outbox`.
-    for early in ('return "held"', 'return "failed"'):
-        assert src.index(early) < src.index("task_mod.raise_for"), (
-            f"a concern that returns {early} would still raise a job")
+    # `test_agent_outbox`. What remains is that every early exit leaves the
+    # steps EMPTY, which is the same claim the old character-offset scan was
+    # making and could not actually check.
+    code = strip_prose(inspect.getsource(outbox._deliver_one))
+    for early in ('return Delivery("held"', 'return Delivery("failed"'):
+        assert code.index(early) < code.index("STEP_RAISED"), (
+            f"a concern that takes `{early}` would still raise a job")
 
 
 def test_delivery_is_the_ONLY_bar_and_there_is_no_second_one() -> None:

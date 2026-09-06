@@ -28,6 +28,7 @@ import type { ComponentType } from "react";
 import { Snowflake, Zap, Waves } from "lucide-react";
 import { levelForValue, type Threshold } from "@/config/ThresholdConfig";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
+import { effectiveSensorClass, toBaseUnit } from "@/config/SensorClasses";
 import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import { formatUnitValue } from "@/utils/entityValue";
 import type { HassEntity } from "@/types/ha.types";
@@ -193,13 +194,26 @@ export function deriveTiles(
   }
 
   // ── Energy → total instantaneous power across power sensors (read-only) ─
+  // ⚠️ THE SELECTOR AND THE SUM MUST AGREE ABOUT UNITS (2.956.0). This filtered
+  // on `device_class === "power" || /(^|_)w$|watt/i.test(unit)` — an
+  // entity-id-shaped predicate applied to a UNIT string, so it matched "W" and
+  // could not match "kW" — while `device_class === "power"` admitted kilowatts.
+  // Every member's raw `state` then went into a total labelled watts, so a
+  // mains meter reporting 3.2 kW contributed 3.2. `SensorClasses` has held
+  // `"kw": "power"` all along, three files away.
   const powerSensors = byDomain("sensor").filter(
-    (e) => e.attributes.device_class === "power" || /(^|_)w$|watt/i.test(e.attributes.unit_of_measurement ?? ""),
+    (e) => effectiveSensorClass(e.attributes.device_class as string | undefined,
+                                e.attributes.unit_of_measurement as string | undefined)
+           === "power",
   );
   if (powerSensors.length) {
+    // ⚠️ NORMALISED BEFORE SUMMING, SCALED BACK BY `formatUnitValue` AFTER. The
+    // k-prefix rule runs once, at the end, which is what it is for. A member
+    // whose unit this app cannot scale contributes nothing rather than a
+    // number in the wrong unit.
     const totalW = powerSensors.reduce((sum, e) => {
-      const v = Number(e.state);
-      return sum + (Number.isFinite(v) ? v : 0);
+      const watts = toBaseUnit(e.state, e.attributes.unit_of_measurement as string | undefined);
+      return sum + (watts ?? 0);
     }, 0);
     tiles.push({
       id: "__energy", icon: Zap, label: "Energy",
