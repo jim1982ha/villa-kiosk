@@ -46,6 +46,32 @@ def _code(name: str) -> str:
 #: can only shrink. Converting one means deleting its line — and a line that no
 #: longer describes a file fails the rot test below, so the list cannot become
 #: a record of things that were once true.
+#: Files with their own `.tsx` comment stripper, frozen on 2026-09-06.
+#:
+#: ⚠️ FOURTEEN, NOT TWO. The review found the two that a candidate named; the
+#: guard found twelve more. That is what a missing shared tool costs — and
+#: `test_module_conventions`' own copy carries the history: "three of eight
+#: /dry-audit hits on 2026-08-19 were exactly this mistake".
+#:
+#: ⚠️ A BACKLOG, NOT AN EXEMPTION, and frozen rather than mass-converted
+#: because two bulk edits over these files went wrong the same day: a regex
+#: anchored on `sys.path.insert(` matched the first line of a MULTI-LINE call
+#: and inserted an import into the middle of it. The list can only shrink.
+KNOWN_OWN_TSX_STRIPPER: Set[str] = {
+    "test_agent_queue_bulk.py",
+    "test_cockpit_reach.py",
+    "test_css_classes.py",
+    "test_dedupe.py",
+    "test_editable_rows.py",
+    "test_flag_type_wire.py",
+    "test_people.py",
+    "test_review_surface.py",
+    "test_route_has_a_client.py",
+    "test_section_rhythm.py",
+    "test_store_envelope.py",
+    "test_verification_sweep.py",
+}
+
 KNOWN_RAW: Set[str] = {
     "test_act_availability.py",
     "test_agent_act.py",
@@ -134,6 +160,32 @@ def test_the_broken_stripper_never_comes_back() -> None:
     assert not guilty, (
         "file(s) strip comments with a regex that leaves docstrings and eats "
         "`#` inside string literals — use `strip_prose`: " + ", ".join(guilty))
+
+
+def test_no_file_rolls_its_own_TSX_comment_stripper() -> None:
+    """⚠️ THE SAME "EVERYONE INVENTS IT" PATTERN, ON THE OTHER HALF OF THE TREE.
+    Two files carried a private `_strip_comments` for `.tsx`, written the same
+    way, for the same reason the Python side had six copies of a regex: no
+    shared tool existed. `conftest.strip_tsx_prose` is it.
+
+    ⚠️ A file may still DEFINE `_strip_comments` as a thin alias — what is
+    banned is a second implementation, spotted by the block-comment regex all
+    of them are built on."""
+    guilty = set()
+    for name in sorted(os.listdir(HERE)):
+        if not name.endswith(".py") or name == os.path.basename(__file__):
+            continue
+        code = _code(name)
+        if 're.sub(r"/\\*' in code and "strip_tsx_prose" not in code:
+            guilty.add(name)
+    new = sorted(guilty - KNOWN_OWN_TSX_STRIPPER)
+    assert not new, (
+        "file(s) strip TSX comments with their own regex instead of the "
+        "shared `strip_tsx_prose`: " + ", ".join(new))
+    stale = sorted(KNOWN_OWN_TSX_STRIPPER - guilty)
+    assert not stale, (
+        "these no longer roll their own — delete their lines: "
+        + ", ".join(stale))
 
 
 def test_the_helper_actually_removes_both_kinds_of_prose() -> None:

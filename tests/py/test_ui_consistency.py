@@ -19,7 +19,7 @@ REPO_ROOT = os.path.dirname(
 SRC = os.path.join(REPO_ROOT, "src")
 sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 
-from conftest import strip_prose  # noqa: E402
+from conftest import strip_prose, strip_tsx_prose  # noqa: E402
 
 #: Two lines at a settings dialog's width. ⚠️ ONE NUMBER, because "keep it
 #: short" enforced per reviewer is what produced six-line descriptions.
@@ -1009,11 +1009,14 @@ def test_the_triage_card_and_its_flags_share_ONE_clock() -> None:
     second raw render elsewhere in the file, which is exactly how this arrived.
     """
     panel = _read(os.path.join(SRC, "vesta", "supervise", "components", "RecentChecks.tsx"))
-    # The fallback INSIDE whenOf is the one legitimate raw slice: an
-    # unparseable stamp is better shown as itself than as "Invalid Date".
-    body = panel[panel.index("const whenOf"):]
-    body = body[body.index("\n};"):]
-    offenders = re.findall(r'\breplace\("T", " "\)', body)
+    # ⚠️ THE EXEMPTION IS GONE, WHICH MAKES THIS STRICTER (2026-09-06). This
+    # used to slice past `whenOf`'s own body, because its unparseable-stamp
+    # fallback tidied the raw string with `replace("T", " ")` — a THIRD failure
+    # policy for a format two other panels already shared. `whenOf` now
+    # delegates to `shared/when.whenShort(iso, "raw")`, so no raw slice exists
+    # anywhere in the file and none needs excusing. The slice also broke on the
+    # one-line helper, which is the giveaway that it was pinned to a shape.
+    offenders = re.findall(r'\breplace\("T", " "\)', strip_tsx_prose(panel))
     assert not offenders, (
         "a timestamp is rendered raw (UTC) outside `whenOf`, so it will "
         "disagree with every other time on the same card by the viewer's "

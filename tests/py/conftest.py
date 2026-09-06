@@ -100,3 +100,28 @@ def strip_prose(source: str) -> str:
                               + line[end:] if row == r2
                               else line[:begin] + " " * (end - begin) + keep_nl)
     return "".join(lines)
+
+
+def strip_tsx_prose(code: str) -> str:
+    """A `.ts`/`.tsx` file with its comments removed, layout preserved.
+
+    ⚠️ THE SAME TRAP AS `strip_prose`, ON THE OTHER SIDE OF THE TREE. A pin that
+    greps a component for an identifier matches inside the ⚠️ paragraphs this
+    codebase writes above almost every rule — passing because a remark mentions
+    the thing, or failing because a remark explains the history of the thing it
+    bans. Both have happened.
+
+    ⚠️ TWO FILES HAD ALREADY INVENTED IT INDEPENDENTLY, which is what a missing
+    shared tool looks like: `test_no_internal_ids_on_screen` and
+    `test_module_conventions` each carry a private `_strip_comments`.
+
+    ⚠️ ONLY A LINE THAT *STARTS* WITH `//` GOES. A trailing `//` cannot be
+    removed safely by a regex — `https://…` inside a string literal is the
+    obvious casualty — and the block form is enough for this codebase, whose
+    prose is block comments and JSX `{/* … */}`.
+    """
+    import re as _re
+
+    code = _re.sub(r"/\*[\s\S]*?\*/", "", code)
+    return "\n".join("" if line.lstrip().startswith("//") else line
+                     for line in code.splitlines())

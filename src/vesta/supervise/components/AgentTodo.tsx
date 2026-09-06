@@ -34,6 +34,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ClipboardCheck, Loader2 } from "lucide-react";
 
 import { actOnAlert, loadAgentConfig, loadConcerns } from "@/vesta/supervise/agentApi";
+import { whenShort } from "@/vesta/shared/when";
 import type { Concern } from "@/vesta/shared/agentTypes";
 import InfoHint from "@/components/common/InfoHint";
 import { hasCapability } from "@/auth/permissions";
@@ -51,13 +52,9 @@ interface TodoRow {
   concern?: Concern;
 }
 
-/** `2026-08-27T09:23:55Z` → `27 Aug, 17:23` in the reader's own zone. */
-const whenOf = (iso: string) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, { day: "numeric", month: "short",
-                                       hour: "2-digit", minute: "2-digit" });
-};
+/** ⚠️ BLANK ON AN UNPARSEABLE STAMP, said out loud. A job's stamp is optional,
+ *  so "" reads as "not yet" while a broken string reads as a fault. */
+const whenOf = (iso: string) => whenShort(iso, "blank");
 
 export default function AgentTodo() {
   const { ws } = useHA();

@@ -32,6 +32,7 @@ import { ACT_GLYPH, severityRank, type Concern } from "@/vesta/shared/agentTypes
 import {
   isSeenButOpen, isSettled, needsAttention, wasJudged,
 } from "@/vesta/shared/concern";
+import { timeOnly } from "@/vesta/shared/when";
 import Loading from "@/components/common/Loading";
 
 /** ⚠️ Settled concerns are not shown: closed, verified and dismissed are the
@@ -131,9 +132,8 @@ const BANDS: Array<[number, string]> = [
 function helpLine(c: Concern): string | null {
   const asked = HELP_STEPS[String(c.escalated_step ?? "").trim()];
   if (!asked) return null;
-  const when = new Date(c.escalated_at ?? "");
-  const stamp = Number.isNaN(when.getTime()) ? "" : ` at ${when.toLocaleTimeString(
-    undefined, { hour: "2-digit", minute: "2-digit" })}`;
+  const clock = timeOnly(String(c.escalated_at ?? ""));
+  const stamp = clock ? ` at ${clock}` : "";
   return `Help requested${stamp} — ${asked} has been asked. The alert stays `
     + "open until somebody deals with it.";
 }
@@ -145,13 +145,10 @@ function chaseLine(c: Concern): string | null {
   // chased" hint was written to correct.
   if (String(c.severity) !== "critical") return null;
   if (!c.delivered_at || c.acknowledged_at) return null;
-  const at = (d: Date) =>
-    d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-
   const step = String(c.escalated_step ?? "").trim();
   if (step) {
-    const when = new Date(c.escalated_at ?? "");
-    const stamp = Number.isNaN(when.getTime()) ? "" : ` at ${at(when)}`;
+    const clock = timeOnly(String(c.escalated_at ?? ""));
+    const stamp = clock ? ` at ${clock}` : "";
     return `Escalated${stamp} — ${step}. No further step is due unless `
       + "something changes.";
   }
@@ -162,7 +159,11 @@ function chaseLine(c: Concern): string | null {
   const next = BANDS.find(([after]) => mins < after);
   if (!next) return "Not acknowledged — every escalation step has been taken.";
   const due = new Date(sent.getTime() + next[0] * 60000);
-  return `If nobody says they have seen it, by ${at(due)} it is ${next[1]}.`;
+  // ⚠️ THE PREDICTED TIME GOES THROUGH THE SAME FORMATTER as every stored
+  // stamp. It is a Date rather than a string, so it is serialised first — one
+  // clock for the whole card, which is the defect `RecentChecks` records.
+  return `If nobody says they have seen it, by ${timeOnly(due.toISOString())}`
+    + ` it is ${next[1]}.`;
 }
 
 /** Profile ids as a person reads them on the People tab. ⚠️ `ops` IS THE

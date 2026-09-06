@@ -7,19 +7,14 @@
 // spams the person who already read it — see `DELIVERY_STATUS`'s own comment.
 
 import InfoHint from "@/components/common/InfoHint";
+import { whenLong } from "@/vesta/shared/when";
 import Pager, { usePaged } from "@/components/common/Pager";
 import type { ReportHistoryEntry } from "@/vesta/shared/reportsTypes";
 
 
-function when(iso: string): string {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime())
-    ? iso
-    : at.toLocaleString(undefined, {
-        weekday: "short", day: "numeric", month: "short",
-        hour: "2-digit", minute: "2-digit",
-      });
-}
+/** ⚠️ THE WEEKDAY IS THE POINT HERE — a delivery list is scanned by day — and
+ *  an unparseable stamp shows raw rather than vanishing from the history. */
+const when = (iso: string) => whenLong(iso, "raw");
 
 export default function HistoryTab({
   entries,

@@ -34,6 +34,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, ChevronRight, Loader2, MinusCircle, Search, X } from "lucide-react";
 
 import { PAGE_CARDS, Pager, usePaged } from "@/components/common/Paged";
+import { whenShort } from "@/vesta/shared/when";
 import {
   checkIdOf, decideEscalation, loadApprovalQueue, loadCheckFlags, loadConcerns,
   type CheckFlag, type TriagePass,
@@ -107,12 +108,12 @@ export function yieldOf(reason: string): { looked: number; raised: number } {
  *
  *  The fallback still slices the raw string, because an unparseable stamp is
  *  better shown as itself than as "Invalid Date". */
-const whenOf = (iso: string) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.replace("T", " ").slice(0, 16);
-  return d.toLocaleString(undefined,
-    { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-};
+/** ⚠️ RAW ON AN UNPARSEABLE STAMP — which is what the paragraph above always
+ *  meant by "better shown as itself than as Invalid Date". It used to tidy the
+ *  raw string with `replace("T", " ").slice(0, 16)`, a THIRD failure policy for
+ *  a format two other panels already shared; the cosmetics were not worth a
+ *  third answer to one question. */
+const whenOf = (iso: string) => whenShort(iso, "raw");
 
 /** One flag, drawn inside the check that raised it.
  *

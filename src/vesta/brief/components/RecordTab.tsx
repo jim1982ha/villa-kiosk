@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Trash2, Zap } from "lucide-react";
 import InfoHint from "@/components/common/InfoHint";
+import { whenShort } from "@/vesta/shared/when";
 import Pager, { usePaged } from "@/components/common/Pager";
 import { deleteRecordEntry, fetchRecord, type RecordEntry } from "@/vesta/brief/reportsApi";
 
@@ -86,12 +87,10 @@ const SOURCES: { id: string; label: string }[] = [
   { id: "automation", label: "Your automations" },
 ];
 
-function when(iso: string): string {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleString(undefined, {
-    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-  });
-}
+/** ⚠️ RAW ON AN UNPARSEABLE STAMP, said out loud. A recorded fact that will not
+ *  parse is still worth showing — a reader can act on it — where hiding it
+ *  would silently drop a row from the record. */
+const when = (iso: string) => whenShort(iso, "raw");
 
 export default function RecordTab({ days = 31 }: { days?: number }) {
   const [rows, setRows] = useState<RecordEntry[] | null>(null);

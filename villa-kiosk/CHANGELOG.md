@@ -1,3 +1,13 @@
+## 2.934.0
+
+### Fixed — one clock for every time the app shows you
+Eight panels each had their own copy of "turn a stored time into your local
+clock", and they disagreed about what to show when a time cannot be read: two
+showed nothing, two showed the raw value, one showed a half-tidied version. That
+disagreement is what once put one card's heading eight hours away from its own
+contents. There is now one formatter, and each screen states which behaviour it
+wants rather than inheriting one by accident.
+
 ## 2.933.0
 
 ### Changed — the stylesheet stops advertising conventions nobody follows

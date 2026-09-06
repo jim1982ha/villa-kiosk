@@ -43,6 +43,8 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "rootfs", "usr", "bin"))
 
+from conftest import strip_tsx_prose  # noqa: E402
+
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(REPO, "src")
 
@@ -66,9 +68,10 @@ def _tsx() -> Dict[str, str]:
 
 
 def _strip_comments(code: str) -> str:
-    code = re.sub(r"/\*[\s\S]*?\*/", "", code)
-    return "\n".join(l for l in code.splitlines()
-                     if not l.strip().startswith("//"))
+    """⚠️ ONE STRIPPER (2026-09-06). This and `test_module_conventions` each
+    carried their own copy — the same "everyone invents it" pattern the Python
+    side had, on the other half of the tree."""
+    return strip_tsx_prose(code)
 
 
 def test_no_component_RENDERS_an_internal_reference() -> None:
