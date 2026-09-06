@@ -12,8 +12,8 @@
 // slow part.
 //
 // NOT the same as the optimistic PREDICTION that was tried and reverted for
-// the in-scene quick-toggle tap (see TapRipple's docstring / CHANGELOG
-// ~v2.32.7-20). That one predicted 3D mesh appearance with no bounded
+// the in-scene quick-toggle tap (see TapRipple's own header, which states
+// the case). That one predicted 3D mesh appearance with no bounded
 // correction, so a fast ON-then-OFF could strand the scene showing the wrong
 // thing. This is narrower and self-correcting on every axis:
 //   * it only overrides a discrete DOM switch, never scene/material state;

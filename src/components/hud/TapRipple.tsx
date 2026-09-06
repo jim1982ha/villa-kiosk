@@ -4,8 +4,8 @@
 // panel). That gesture calls Home Assistant over the network and waits for
 // the real state_changed event before anything on screen changes — on a slow
 // link that gap reads as "did that even work?". An optimistic on/off
-// PREDICTION was tried here before and reverted (see CHANGELOG ~v2.32.7-20:
-// mispredicted state on rapid taps, e.g. a fast ON then OFF). This sidesteps
+// PREDICTION was tried here before and reverted, because it mispredicted
+// state on rapid taps — a fast ON then OFF. This sidesteps
 // that failure mode entirely: it never predicts the outcome, just acknowledges
 // the tap itself with a brief expanding ring at the tap point, purely in the
 // DOM (zero Babylon/material involvement, so it can't race or desync from the

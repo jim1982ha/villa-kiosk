@@ -1,3 +1,25 @@
+## 2.963.0
+
+### Fixed — pressing a button on an alert could garble the message
+An alert is written in one text format and sent that way, but the rewrite that
+happens when you press a button did not say which format it was in — so Telegram
+fell back to the villa's own default, a different one. A device name containing
+an underscore was enough to make that rewrite fail outright, silently, leaving
+buttons on a message that had already moved on. Every rewrite now states its
+format, and there is one place that decides it.
+
+### Fixed — alerts offered to rate them twice
+A ruling last week moved the ⬆️/⬇️ rating from the message body onto its own
+row of buttons, and the line in the body was never removed — so every alert
+carried both. There is now one rule deciding where the rating appears: on the
+buttons when there are buttons, in the body when a message cannot carry any.
+
+### Fixed — a wording change on the phone could silence the wall tablet
+The two 🆘 wordings the chat and the tablet share were described as being kept
+in step by a check that did not exist. Changing either would have left the chat
+saying help was asked for and the tablet saying nothing. They are now compared
+on every change.
+
 ## 2.962.0
 
 ### Fixed — a run of wrong PINs could lock the whole villa out, eventually
@@ -22,7 +44,7 @@ session, and the rule that a guest may file a fault report but not edit one.
 Pressing Update showed notes for 2.939.0 while installing 2.960.0, so twenty-one
 releases' worth of changes — including the Energy tile's thousand-fold
 under-reporting and the help button that was failing on every press — were never
-described to anyone. All twenty-one are written up above. Every release bumps
+described to anyone. All twenty-one are written up below. Every release bumps
 the version in two places and both were checked automatically; the notes a
 person actually reads were not, which is why this went unnoticed for so long.
 That third check now exists, so a release cannot ship without its notes again.

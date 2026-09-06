@@ -8,7 +8,7 @@
 // state without restructuring the list.
 //
 // WHY OPTIMISTIC HERE, when the project reverted an optimistic experiment
-// before (CHANGELOG ~v2.32.7-20): that revert was about predicting the 3D
+// before: that revert was about predicting the 3D
 // SCENE's appearance — mesh/material state with no bounded correction, where
 // a mispredicted value strands the villa looking wrong until something else
 // happens to repaint it. This is the opposite case on every axis that

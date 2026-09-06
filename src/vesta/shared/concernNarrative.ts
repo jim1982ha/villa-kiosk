@@ -54,7 +54,15 @@ export const offers = (c: Concern, id: string) =>
  *
  *  ⚠️ A MIRROR OF A BACKEND TABLE, TOLERATED FOR THE SAME REASON AS `BANDS`
  *  BELOW — it renders a sentence for a reader and makes no routing decision —
- *  and pinned to the source by `test_help_button` so the two cannot drift.
+ *  and pinned to the source by `test_ui_consistency`'s help-step check, beside
+ *  the one that pins `BANDS`, so the two cannot drift.
+ *
+ *  ⚠️ IT NAMED `test_help_button` UNTIL 2.963.0, AND THAT FILE OPENS NO `.ts`.
+ *  The pin did not exist: the node oracle beside it compares this copy with
+ *  itself (`Object.keys(HELP_STEPS)`, then asserts the rendered line contains
+ *  `HELP_STEPS[key]`), which holds whatever either table says. Reword either
+ *  side and `helpLine` stops recognising the step and returns null — the chat
+ *  says the counterpart was asked and this screen says nothing at all.
  *
  *  ⚠️ 🆘 ASKS THE OTHER CHANNEL (2026-09-06, owner's ruling): an alert sent to
  *  the owner asks the facility manager, and one sent to the facility manager

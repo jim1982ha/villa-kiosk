@@ -47,8 +47,22 @@ def _ids(row: Dict[str, Any]) -> List[str]:
 def test_the_help_rung_is_a_band_the_ladder_actually_has() -> None:
     """⚠️ A STEP NOTHING RECOGNISES WOULD SILENTLY DISABLE THE WITHDRAWAL —
     `_help_is_spent` returns False for an unknown step, by design, so a typo
-    here fails OPEN and 🆘 is drawn forever with nothing to say why."""
-    assert route_mod.HELP_STEP in [band.step for band in route_mod.BANDS]
+    here fails OPEN and 🆘 is drawn forever with nothing to say why.
+
+    ⚠️ THIS ASSERTED `HELP_STEP in [b.step for b in BANDS]`, AND `route.py:108`
+    IS `HELP_STEP = BANDS[1].step`. No typo could fail it — the constant was
+    compared with the list it is drawn from. What actually has to hold is that
+    the RECOGNISER knows every step 🆘 can write, which is a claim about
+    `_help_is_spent` rather than about the constant's own definition.
+    """
+    for step in (route_mod.HELP_STEP, *route_mod.HELP_STEPS.values()):
+        spent = actions_mod.available_for({"id": "c1", "state": "open",
+                                           "severity": "critical",
+                                           "escalated_step": step})
+        assert "help" not in [a.id for a in spent], (
+            "%r is a step 🆘 can write and the recogniser does not know it, so "
+            "the button is drawn again and the counterpart is asked twice"
+            % step)
 
 
 def test_help_is_offered_while_the_ladder_has_not_reached_its_rung() -> None:
@@ -290,3 +304,11 @@ def test_pressing_help_actually_builds_a_verdict(monkeypatch) -> None:
             "the step written is not the help step for the role asked, so the "
             "button is withdrawn for the wrong rung")
         assert v.act is True
+        # ⚠️ THE FIELD THIS TEST WAS WRITTEN FOR. It was added because `reaches`
+        # was omitted and the call raised — and then asserted `to_role`, `step`
+        # and `act` and not `reaches`, so `reaches="all"` would have passed and
+        # `_escalate_one` would union the ops targets into a send aimed at one
+        # counterpart. Asserting the crash is not asserting the value.
+        assert v.reaches == "", (
+            "🆘 named its audience in `to_role` and ALSO set reaches=%r; that "
+            "field is what fans a send out to everyone." % v.reaches)

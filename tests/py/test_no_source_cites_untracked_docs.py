@@ -152,3 +152,61 @@ def test_no_tracked_source_cites_a_PATH_a_clone_does_not_have():
     assert not offenders, (
         "tracked source cites path(s) a fresh clone does not have — state the "
         "fact, or name something tracked:\n  " + "\n  ".join(offenders))
+
+
+#: Files that ARE tracked but whose CONTENT is trimmed, so a citation naming a
+#: point inside them ages out even though the file itself is still there.
+#:
+#: ⚠️ THE CHANGELOG IS ONE. Four shipped files cited "CHANGELOG ~v2.32.7-20"
+#: and the file's oldest surviving entry was 2.749.0 — seven hundred releases
+#: later. The guard above could not see it: that one matches a PATH (a slash
+#: and an extension), and "CHANGELOG" is a bare name. A reader following it
+#: arrives at a real file that has never heard of the version they were sent
+#: to look up, which is worse than an unresolvable path — it looks resolvable.
+TRIMMED_FILES = ("CHANGELOG",)
+
+
+def test_no_tracked_source_cites_a_VERSION_inside_a_trimmed_file():
+    """⚠️ EVERY ONE OF THE FOUR ALREADY STATED ITS FACT. "an optimistic
+    PREDICTION was tried here before and reverted (see CHANGELOG ~v2.32.7-20:
+    mispredicted state on rapid taps)" — the parenthesis is the citation and
+    the clause after the colon is the fact. Deleting the pointer costs the
+    reader nothing, which is the same conclusion the 43 CLAUDE.md citations
+    reached.
+    """
+    import re
+
+    shape = re.compile(r"(%s)[^\n]{0,40}?v?\d+\.\d+" % "|".join(TRIMMED_FILES))
+    offenders = []
+    for rel, full in _source_files():
+        try:
+            text = io.open(full, encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            if shape.search(line):
+                offenders.append("%s:%d: %s" % (rel, n, line.strip()[:100]))
+    assert not offenders, (
+        "these cite a version inside a file whose older entries are trimmed, "
+        "so the citation resolves to a file that no longer contains what it "
+        "names. State the fact instead:\n  " + "\n  ".join(offenders))
+
+
+def test_the_trimmed_file_premise_is_true():
+    """⚠️ THE GUARD'S OWN PREMISE. If the changelog ever stopped being trimmed
+    this rule would be wrong and should go, rather than being worked around."""
+    import re
+    import subprocess
+
+    path = os.path.join(REPO_ROOT, "villa-kiosk", "CHANGELOG.md")
+    tracked = subprocess.run(["git", "ls-files", "villa-kiosk/CHANGELOG.md"],
+                             cwd=REPO_ROOT, capture_output=True, text=True).stdout
+    assert tracked.strip(), "the changelog is not tracked, which is a different bug"
+    versions = re.findall(r"^## (\d+)\.", io.open(path, encoding="utf-8").read(),
+                          re.MULTILINE)
+    assert versions, "the changelog has no version headings"
+    heads = re.findall(r"^## (\d+\.\d+\.\d+)", io.open(path, encoding="utf-8").read(),
+                       re.MULTILINE)
+    assert len(heads) < 500, (
+        "the changelog now carries %d releases; if it is no longer trimmed, a "
+        "citation into it resolves and this rule should be deleted" % len(heads))

@@ -523,13 +523,19 @@ async def sweep(session: Any, *,
 
 
 async def _rating_link(session: Any) -> Tuple[str, str]:
-    """The one line that replaces the ⬆️/⬇️ buttons, or "" fail-closed.
+    """The line that offers the Rating where no button can, or "" fail-closed.
 
-    ⚠️ THE OWNER'S RULING (2026-08-28): the keyboard keeps only the acts, and
-    rating moves into the message as a link — "✅+🚫 at bottom, and gracefully
-    link inside the message for ⬆️+⬇️". A rating is a judgement, not an act
-    on the villa, so it belongs on the Reason tab where the judgement is
-    explained; the acts stay one press away.
+    ⚠️ IT CALLED ITSELF "THE ONE LINE THAT REPLACES THE ⬆️/⬇️ BUTTONS" UNTIL
+    2.963.0, AND THOSE BUTTONS HAD BEEN BACK SINCE 2026-09-06. The owner's
+    ruling of 2026-08-28 — "✅+🚫 at bottom, and gracefully link inside the
+    message for ⬆️+⬇️" — was reversed by a second ruling that
+    `buttons.keyboard_for` records, and this docstring went on describing the
+    first. Both statements were live, so every delivered Concern offered the
+    Rating twice: as a pair of buttons and as a link under them.
+
+    `buttons.offers_rating` is now the single predicate, asked of the keyboard
+    actually drawn. This line survives for the case a keyboard cannot serve —
+    the plain-text fallback, where the Rating has nowhere else to go.
 
     ⚠️ THE URL COMES FROM `links`, THE MODULE WITH THE RULES — https-only, the
     owner's own `external_url`, a closed page set, percent-encoded, no secret.
@@ -748,7 +754,19 @@ async def _send_alert(session: Any, drawn_as: Mapping[str, Any], plan: Any, *,
     from vesta.adapters import deliver as deliver_mod
     from vesta.adapters import links as links_mod
 
+    # ⚠️ ONE PLACE OFFERS THE RATING, AND THE KEYBOARD IS ASKED WHICH (2.963.0).
+    # `_rating_link` still calls itself "the one line that REPLACES the ⬆️/⬇️
+    # buttons", citing the owner's ruling of 2026-08-28 — reversed on
+    # 2026-09-06, which `buttons.keyboard_for`'s second row records. Both
+    # statements were live, so every delivered Concern offered the Rating
+    # twice, as buttons AND as a link. The plain-text fallback below has no
+    # buttons at all and still needs the line, which is why `plain_line` is
+    # unconditional and only the rich body consults the keyboard.
+    from vesta.supervise.agent import buttons as buttons_mod
+
     plain_line, html_line = await _rating_link(session)
+    if buttons_mod.offers_rating(drawn_as, config):
+        html_line = ""
     rich = plan
     if html_line:
         rich = dataclasses.replace(

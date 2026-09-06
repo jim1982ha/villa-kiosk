@@ -290,9 +290,13 @@ def statistics_fetcher(session: Any, now_local: Any,
         # could not have shown it — 11,859 rows arrived and every one was
         # unusable. Recording one real row makes the next reading confirm the
         # diagnosis instead of assuming the fix is why anything changed.
+        # ⚠️ COPIED, LIKE EVERYTHING ELSE THAT LEAVES THIS CACHE. `tally` is the
+        # caller's dict and outlives the fetch, so handing it `rows[0]` aliased
+        # one of the cache's own rows straight past the copy three lines below
+        # — the guarantee had a hole in it the width of one row.
         for rows in series.values():
             if rows:
-                tally["sample_row"] = rows[0]
+                tally["sample_row"] = dict(rows[0])
                 break
         # ⚠️ COPIED ON BOTH PATHS, AND ALL THE WAY DOWN. Returning `series`
         # here hands the FIRST caller the very object the cache holds, so its

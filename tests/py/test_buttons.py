@@ -765,3 +765,142 @@ def test_a_press_that_CHANGES_NO_ACTS_still_says_what_happened() -> None:
     assert "901" not in restated, (
         "an untouched copy of the same alert was rewritten too — only the "
         "pressed message carries a receipt, the rest are left in step")
+
+
+# ── the dialect an edit is parsed in ────────────────────────────────────────
+
+def _drive_edits() -> list:
+    """Every edit this module can make, against a fake Home Assistant."""
+    import asyncio
+    from typing import Any
+
+    import vesta.adapters.hass as hass_mod
+    from vesta.supervise.agent import buttons as buttons_mod
+
+    sent: list = []
+
+    class _Hass:
+        def __init__(self, session: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> "_Hass":
+            return self
+
+        async def __aexit__(self, *exc: Any) -> None:
+            return None
+
+        async def command(self, kind: str, **payload: Any) -> None:
+            sent.append({"kind": kind, **payload})
+
+    ref = buttons_mod.Ref(entity_id="notify.example_channel", message_id=42)
+    keyboard = [[("ok", "act:done")]]
+    original = hass_mod.HassClient
+    hass_mod.HassClient = _Hass                    # type: ignore[assignment]
+    try:
+        asyncio.run(buttons_mod.retire(object(), ref, "closing line"))
+        asyncio.run(buttons_mod.restate(object(), ref, "new text", keyboard))
+        asyncio.run(buttons_mod.redraw(object(), ref, keyboard))
+    finally:
+        hass_mod.HassClient = original             # type: ignore[assignment]
+    return sent
+
+
+def test_every_edit_that_carries_a_body_declares_the_dialect() -> None:
+    """⚠️ THIS WENT RED ON SHIPPED CODE, and the constant said otherwise.
+
+    `PARSE_MODE`'s comment claimed "ONE VALUE, READ BY EVERY SEND AND EVERY
+    EDIT here". `grep -n PARSE_MODE buttons.py` returned its own definition and
+    nothing else: the send took `rich`'s copy, and `retire` and `restate` set
+    no dialect at all. So an alert arrived as HTML (`_send_alert` wraps the
+    title in `<b>` and appends an `<a href>` rating line) and the first press
+    rewrote it with the villa's own integration default — which `discovery.py`
+    has already measured as markdown, and which returned HTTP 500 on a name
+    with underscores. `swallow` hides that, leaving live buttons on a message
+    the store has moved past.
+    """
+    from vesta.supervise.agent import buttons as buttons_mod
+
+    sent = _drive_edits()
+    assert len(sent) == 3, "an edit did not reach Home Assistant at all: %s" % sent
+    for call in sent:
+        data = call["service_data"]
+        if "message" not in data:
+            continue
+        assert data.get("parse_mode") == buttons_mod.PARSE_MODE, (
+            "%s carries a body and does not say how to parse it, so Telegram "
+            "applies the villa's own default — a different dialect from the "
+            "one the message was written in: %s" % (call["service"], data))
+
+
+def test_the_markup_only_edit_declares_no_dialect() -> None:
+    """⚠️ THE CONVERSE, because "add parse_mode everywhere" is the wrong fix.
+    `edit_replymarkup` has no `message`; declaring a parse mode for a body that
+    is not in the call describes a field that does not exist."""
+    markup = [c for c in _drive_edits() if "message" not in c["service_data"]]
+    assert markup, "no markup-only edit was made, so this proves nothing"
+    for call in markup:
+        assert "parse_mode" not in call["service_data"], call
+
+
+def test_the_dialect_is_the_one_the_briefing_uses() -> None:
+    """Two spellings of "html" is how an alert and a briefing come to disagree
+    about how they are parsed. `rich` owns it; this module re-exports."""
+    from vesta.adapters import rich as rich_mod
+    from vesta.supervise.agent import buttons as buttons_mod
+    assert buttons_mod.PARSE_MODE is rich_mod.PARSE_MODE
+    sent = _drive_edits()
+    bodies = [c["service_data"] for c in sent if "message" in c["service_data"]]
+    assert bodies, "no edit carried a body"
+    assert {b["parse_mode"] for b in bodies} == {rich_mod.PARSE_MODE}
+
+
+# ── where the Rating is offered ─────────────────────────────────────────────
+
+def test_the_rating_is_offered_in_exactly_one_place_per_message() -> None:
+    """⚠️ IT WAS OFFERED TWICE, AND EACH HALF SAID IT WAS THE ONLY ONE.
+
+    `_rating_link`'s docstring called itself "the one line that REPLACES the
+    ⬆️/⬇️ buttons", citing the owner's ruling of 2026-08-28; that ruling was
+    reversed on 2026-09-06 and `keyboard_for` drew the pair again. Neither
+    module was wrong about its own half, and both halves shipped.
+    """
+    from vesta.supervise.agent import buttons as buttons_mod
+
+    live = {"id": "c1", "state": "open", "severity": "critical",
+            "delivered_at": "2026-09-06T00:00:00Z"}
+    keyboard = buttons_mod.keyboard_for(live)
+    drawn = {callback for row in keyboard for _label, callback in row}
+    assert keyboard, "a live critical drew no buttons at all"
+    assert buttons_mod.offers_rating(live) is True, (
+        "the keyboard carries the rating pair and the predicate says it does "
+        "not, so the body would append a second offer under them: %s" % drawn)
+
+
+def test_a_message_with_no_keyboard_leaves_the_rating_to_the_link() -> None:
+    """⚠️ THE FAIL-OPEN DIRECTION IS THE ONE THAT MATTERS. A settled Concern
+    draws no buttons and goes out through the plain path, where the link is the
+    only way a Rating can be offered at all — answering True there would take
+    it away entirely."""
+    from vesta.supervise.agent import buttons as buttons_mod
+
+    settled = {"id": "c2", "state": "closed", "severity": "critical"}
+    assert buttons_mod.keyboard_for(settled) == []
+    assert buttons_mod.offers_rating(settled) is False
+
+
+def test_the_rating_ids_are_named_once() -> None:
+    """Two spellings of "which acts are a Rating" is how the keyboard and the
+    body come to disagree about where it lives."""
+    from conftest import code_of
+
+    from vesta.supervise.agent import buttons as buttons_mod
+
+    # ⚠️ `code_of`, NOT `getsource` — `keyboard_for`'s comments quote both
+    # literals while explaining the ruling that produced the row, so a raw read
+    # would be satisfied by the prose that documents the rule rather than by
+    # the code that follows it. The site guard caught this on the first run.
+    code = code_of(buttons_mod.keyboard_for)
+    assert "RATING_ACT_IDS" in code, (
+        "keyboard_for splits its rows on a literal again; `offers_rating` asks "
+        "the same question and the two would drift")
+    assert '"useful"' not in code and '"not_useful"' not in code, code

@@ -33,7 +33,7 @@ export default function PowerToggle({ on, onClick, label, requireConfirm }: Prop
   // state_changed event landing — on a slow link that read as "did that even
   // register?". An earlier attempt at PREDICTING the outcome (optimistic
   // toggle) was reverted project-wide after it mispredicted rapid ON->OFF
-  // taps (see CHANGELOG ~v2.32.7-20). This doesn't predict anything: it just
+  // taps. This doesn't predict anything: it just
   // acknowledges the tap with a brief pulse, and clears the moment `on`
   // actually changes to whatever HA reports — so it can never show the wrong
   // state, only "something is happening". The rules for that live in

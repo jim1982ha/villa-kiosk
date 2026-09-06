@@ -449,3 +449,67 @@ def test_a_cached_answer_is_copied_not_shared(monkeypatch):
     assert third["sensor.one"] != "clobbered by the hit path", (
         "the hit path handed out the cache's own dict, so one module edited "
         "another module's data")
+
+
+def test_each_caller_owns_its_rows_and_not_just_its_keys(monkeypatch) -> None:
+    """⚠️ THE COPY IS CLAIMED ALL THE WAY DOWN, AND WAS ONLY ONE LEVEL DEEP.
+
+    `dict(series)` copies the id -> rows mapping and hands over the cache's own
+    LISTS and own ROW OBJECTS. The pin above rebinds a key, which is exactly
+    the level `dict()` already protects — so reverting `_own_copy` to
+    `dict(series)`, the shape 2.960.0 called the defect, left all 2,356 tests
+    green. That commit's message said every fix in it was mutation-tested in
+    both directions; five of the six were, and this was the sixth.
+
+    Three depths, because the defect lives at a different one each time: the
+    key, the list, and the row.
+    """
+    import asyncio
+    from datetime import datetime
+
+    from vesta.adapters import stats as stats_mod
+
+    async def ok(hass, ids, start, period=None, types=None):
+        # ⚠️ A FRESH LIST AND FRESH DICTS PER CALL, so the only way two callers
+        # can share a row is through the cache — which is the thing under test.
+        return {i: [{"start": "2026-09-01T00:00:00+00:00", "change": 1.0}]
+                for i in ids}
+
+    class Hass:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(stats_mod, "statistics_during_period", ok)
+    monkeypatch.setattr("vesta.adapters.hass.HassClient", lambda *_a, **_k: Hass())
+
+    tally: dict = {}
+    fetch = stats_mod.statistics_fetcher(None, datetime(2026, 9, 6), tally)
+
+    first = asyncio.run(fetch(["sensor.one"], 56))
+    first["sensor.one"][0]["change"] = 999.0          # the ROW
+    first["sensor.one"].append({"start": "x", "change": -1})   # the LIST
+    first["sensor.one"] = "clobbered"                 # the KEY
+
+    second = asyncio.run(fetch(["sensor.one"], 56))
+    assert second["sensor.one"] != "clobbered", "the key is shared"
+    assert len(second["sensor.one"]) == 1, (
+        "one caller appended to a list the next caller reads: %s"
+        % second["sensor.one"])
+    assert second["sensor.one"][0]["change"] == 1.0, (
+        "one caller edited a ROW the next caller reads — `dict(series)` copies "
+        "the mapping and shares everything inside it")
+
+    # ⚠️ THE OTHER DIRECTION, and my first assertion here had it backwards —
+    # it edited the RETURNED rows, which are already copies, so aliasing the
+    # sample row survived the mutation. `tally` is the caller's own dict and
+    # `sample_row` was the cache's row object, so the edit that reaches the
+    # cache comes FROM the tally, not from the result.
+    assert tally.get("sample_row", {}).get("change") == 1.0
+    tally["sample_row"]["change"] = -12345.0
+    fourth = asyncio.run(fetch(["sensor.one"], 56))
+    assert fourth["sensor.one"][0]["change"] == 1.0, (
+        "editing the recorded sample row rewrote the cache — the diagnostic "
+        "that records what arrived is holding the cache's own row")

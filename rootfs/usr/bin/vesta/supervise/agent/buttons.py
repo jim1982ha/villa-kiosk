@@ -112,12 +112,30 @@ EDIT_MARKUP_SERVICE: Tuple[str, str] = (rich_mod.PLATFORM, "edit_replymarkup")
 #: EDIT here, so a message and its later rewrite can never disagree about how
 #: they are parsed — which would show as a body that renders on arrival and
 #: turns into raw tags the first time the buttons are redrawn.
+#:
+#: ⚠️ THAT SENTENCE WAS FALSE FOR THE LIFE OF THIS MODULE. `grep -n PARSE_MODE`
+#: returned this line and nothing else: the send read `rich`'s copy through
+#: `rich.payload`, and the two edits that carry a body set no dialect at all.
+#: An alert therefore arrived as HTML — `_send_alert` wraps the title in `<b>`
+#: and appends an `<a href>` rating line — and the first press rewrote it with
+#: whatever the villa's own telegram_bot entry defaults to. `discovery.py`
+#: records what that is: "the villa's telegram_bot entry has `parse_mode:
+#: markdown` as its DEFAULT … ate every underscore as an italic marker", and a
+#: real device name plus our ingress URL both carry underscores, which returned
+#: HTTP 500 — swallowed, leaving live buttons on a stale message.
+#: `_edit_call` below is now the one place an edit is assembled.
 #: ⚠️ RE-EXPORTED FROM `adapters.rich`, NOT RESTATED (2026-08-29). The briefing
 #: needs the identical dialect on the identical transport, and it lives a layer
 #: below where both callers can reach it — `brief` may import `adapters` and
 #: never `supervise`. Two spellings of "html" is how an alert and a briefing
 #: come to disagree about how they are parsed.
 PARSE_MODE: str = rich_mod.PARSE_MODE
+
+#: The two acts that are a verdict on the SUPERVISOR rather than on the villa.
+#: ⚠️ NAMED ONCE, because `keyboard_for` splits its rows on this set and
+#: `offers_rating` asks the same question of the result — two spellings of it
+#: would let the keyboard and the body disagree about where the Rating lives.
+RATING_ACT_IDS: Tuple[str, ...] = ("useful", "not_useful")
 
 #: ⚠️ THE PLATFORM AS THE ENTITY REGISTRY SPELLS IT. `chat.target_for` matches
 #: the same string for the same reason — a notify entity and a notify service
@@ -261,10 +279,8 @@ def keyboard_for(concern: Mapping[str, Any],
     # comment on the supervisor, not on the villa, so it must never be the first
     # thing offered" — which the second row satisfies by construction rather
     # than by ordering care.
-    lifecycle = [by_id[a.id] for a in acts
-                 if a.id not in ("useful", "not_useful")]
-    rating = [by_id[a.id] for a in acts
-              if a.id in ("useful", "not_useful")]
+    lifecycle = [by_id[a.id] for a in acts if a.id not in RATING_ACT_IDS]
+    rating = [by_id[a.id] for a in acts if a.id in RATING_ACT_IDS]
     return [row for row in (lifecycle, rating) if row]
 
 
@@ -515,6 +531,67 @@ async def _answer(session: Any, query_id: str, text: str) -> None:
         swallow("could not answer a button press", err)
 
 
+def offers_rating(concern: Mapping[str, Any],
+                  config: Optional[Mapping[str, Any]] = None) -> bool:
+    """Does the keyboard this message will carry already offer the Rating?
+
+    ⚠️ ONE OWNER FOR "WHERE THE RATING IS OFFERED". `outbox._rating_link` called
+    itself "the one line that REPLACES the ⬆️/⬇️ buttons", citing the owner's
+    ruling of 2026-08-28 — reversed on 2026-09-06, which the comment above
+    `keyboard_for`'s second row records. Both statements stayed live, so every
+    delivered Concern carried the Rating twice: as a pair of buttons AND as a
+    link in the body under them.
+
+    ⚠️ IT READS THE KEYBOARD RATHER THAN RE-DERIVING IT. My first version asked
+    `available_for` a second time, which is a second statement of the row rule
+    — the defect this closes, wearing a different hat — and carried a guard for
+    the empty keyboard that turned out to be unreachable. Reading the drawn
+    rows means a change to how they are split cannot leave the two disagreeing,
+    and a message with NO keyboard falls out as False, which is right: the link
+    is the only place a Rating can be offered there.
+    """
+    rating = _rating_row(concern, config)
+    return bool(rating) and rating in keyboard_for(concern, config)
+
+
+def _rating_row(concern: Mapping[str, Any],
+                config: Optional[Mapping[str, Any]]) -> List[List[str]]:
+    """The Rating row `keyboard_for` builds, built the one way it builds it."""
+    from vesta.supervise.agent import actions as actions_mod
+
+    ident = str(concern.get("id") or "")
+    return [[a.label, encode(a.code, ident)]
+            for a in actions_mod.available_for(concern, config)
+            if a.id in RATING_ACT_IDS]
+
+
+async def _edit_call(session: Any, service: Tuple[str, str], ref: "Ref",
+                     what: str, **fields: Any) -> bool:
+    """The one place an edit reaches Home Assistant. Never raises.
+
+    ⚠️ THE DIALECT IS ADDED HERE AND NOWHERE ELSE, and only when the call
+    actually carries a body — `edit_replymarkup` has no `message`, so declaring
+    a parse mode for it would be describing a field that is not in the call.
+    Three call sites each deciding separately is what let the two that DO carry
+    a body ship with no dialect at all.
+    """
+    domain, service_name = service
+    data: Dict[str, Any] = {"entity_id": ref.entity_id,
+                            "message_id": ref.message_id}
+    data.update(fields)
+    if "message" in data:
+        data["parse_mode"] = PARSE_MODE
+    try:
+        from vesta.adapters.hass import HassClient
+        async with HassClient(session) as hass:
+            await hass.command("call_service", domain=domain,
+                               service=service_name, service_data=data)
+    except Exception as err:  # noqa: BLE001 - degrade, never fail
+        swallow("could not %s message %s" % (what, ref.message_id), err)
+        return False
+    return True
+
+
 async def retire(session: Any, ref: Ref, closing: str) -> bool:
     """Remove a message's buttons and say what became of it. Never raises.
 
@@ -525,18 +602,8 @@ async def retire(session: Any, ref: Ref, closing: str) -> bool:
     """
     if not ref.entity_id or not ref.message_id or not closing:
         return False
-    domain, service = EDIT_SERVICE
-    try:
-        from vesta.adapters.hass import HassClient
-        async with HassClient(session) as hass:
-            await hass.command("call_service", domain=domain, service=service,
-                               service_data={"entity_id": ref.entity_id,
-                                             "message_id": ref.message_id,
-                                             "message": closing})
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow(f"could not retire the buttons on message {ref.message_id}", err)
-        return False
-    return True
+    return await _edit_call(session, EDIT_SERVICE, ref,
+                            "retire the buttons on", message=closing)
 
 
 async def restate(session: Any, ref: "Ref", text: str,
@@ -556,23 +623,9 @@ async def restate(session: Any, ref: "Ref", text: str,
     """
     if not ref.entity_id or not ref.message_id or not text or not keyboard:
         return False
-    domain, service = EDIT_SERVICE
-    try:
-        from vesta.adapters.hass import HassClient
-        async with HassClient(session) as hass:
-            await hass.command(
-                "call_service", domain=domain, service=service,
-                service_data={
-                    "entity_id": ref.entity_id,
-                    "message_id": ref.message_id,
-                    "message": text,
-                    "inline_keyboard": [[list(b) for b in row]
-                                        for row in keyboard],
-                })
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow(f"could not restate message {ref.message_id}", err)
-        return False
-    return True
+    return await _edit_call(
+        session, EDIT_SERVICE, ref, "restate", message=text,
+        inline_keyboard=[[list(b) for b in row] for row in keyboard])
 
 
 async def redraw(session: Any, ref: "Ref",
@@ -593,22 +646,9 @@ async def redraw(session: Any, ref: "Ref",
     """
     if not ref.entity_id or not ref.message_id or not keyboard:
         return False
-    domain, service = EDIT_MARKUP_SERVICE
-    try:
-        from vesta.adapters.hass import HassClient
-        async with HassClient(session) as hass:
-            await hass.command(
-                "call_service", domain=domain, service=service,
-                service_data={
-                    "entity_id": ref.entity_id,
-                    "message_id": ref.message_id,
-                    "inline_keyboard": [[list(b) for b in row]
-                                        for row in keyboard],
-                })
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        swallow(f"could not redraw the buttons on message {ref.message_id}", err)
-        return False
-    return True
+    return await _edit_call(
+        session, EDIT_MARKUP_SERVICE, ref, "redraw the buttons on",
+        inline_keyboard=[[list(b) for b in row] for row in keyboard])
 
 
 # ── keeping the phone in step with the tablet ───────────────────────────────

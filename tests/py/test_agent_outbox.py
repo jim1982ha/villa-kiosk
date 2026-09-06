@@ -877,3 +877,50 @@ def test_the_TELEGRAM_path_sets_its_own_PARSE_MODE() -> None:
         "deliver's html branch escapes by hand (or not at all) instead of "
         "borrowing the one escaper in links")
 
+
+
+def test_a_message_with_rating_buttons_does_not_also_carry_a_rating_link(
+        monkeypatch, tmp_path):
+    """⚠️ EVERY DELIVERED CONCERN OFFERED THE RATING TWICE, and each half of
+    the code said it was the only one.
+
+    `_rating_link`'s docstring called itself "the one line that REPLACES the
+    ⬆️/⬇️ buttons" (owner's ruling, 2026-08-28); that ruling was reversed on
+    2026-09-06 and `keyboard_for` drew the pair again. Neither module was wrong
+    about its own half. This drives the composition and reads the body that
+    actually goes out, because a source check cannot see which one won.
+    """
+    import asyncio
+
+    from vesta.supervise.agent import buttons as buttons_mod
+    from vesta.supervise.agent import outbox as outbox_mod
+
+    sent: list = []
+
+    async def fake_rating_link(session):
+        return ("rate: http://example.invalid/r", '<a href="x">rate</a>')
+
+    async def fake_send_with_buttons(session, concern, plan, *, config):
+        sent.append(plan)
+        return [{"target": t, "status": "sent"} for t in plan.targets]
+
+    monkeypatch.setattr(outbox_mod, "_rating_link", fake_rating_link)
+    monkeypatch.setattr(outbox_mod, "_send_with_buttons", fake_send_with_buttons)
+
+    live = {"id": "c1", "state": "open", "severity": "critical",
+            "delivered_at": "2026-09-06T00:00:00Z"}
+    assert buttons_mod.offers_rating(live) is True, (
+        "the fixture draws no rating buttons, so this proves nothing")
+
+    from vesta.supervise.agent import route as route_mod
+
+    plan = route_mod.Delivery(concern_id="c1", severity="critical",
+                              targets=["notify.example_channel"],
+                              title="t", body="the body")
+
+    asyncio.run(outbox_mod._send_alert(object(), live, plan, title="t", config={}))
+    assert sent, "the alert never reached the button path"
+    body = sent[0].body
+    assert "<a href=" not in body, (
+        "the body carries a rating link under a keyboard that already offers "
+        "the rating pair — the Rating is offered twice: %r" % body)

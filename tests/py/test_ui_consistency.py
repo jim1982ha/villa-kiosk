@@ -1188,6 +1188,47 @@ def test_the_chase_line_matches_the_bands_the_BACKEND_actually_uses() -> None:
         f"the card shows escalation bands {shown} but route.py uses {backend}")
 
 
+def test_the_help_steps_the_TABLET_renders_are_the_ones_the_BACKEND_writes() -> None:
+    """⚠️ THE TABLE BESIDE `BANDS` CLAIMED THIS PIN AND IT DID NOT EXIST.
+
+    `concernNarrative.ts` says its `HELP_STEPS` is "pinned to the source by
+    `test_help_button` so the two cannot drift" — that file opens no `.ts` at
+    all. The node oracle beside it only compares the TypeScript copy with
+    itself (`Object.keys(HELP_STEPS)`, then asserts the rendered line contains
+    `HELP_STEPS[key]`), which is true whatever either table says. `BANDS`, one
+    declaration below, IS genuinely pinned — by the test above.
+
+    The consequence of drift is not cosmetic: `helpLine` looks the step up and
+    returns null when it does not recognise it, so the chat says the
+    counterpart was asked and the wall tablet says nothing at all.
+
+    ⚠️ THE TWO ARE KEYED DIFFERENTLY ON PURPOSE — Python maps role -> step, the
+    SPA maps step -> the person to name in the sentence — so what is shared is
+    the SET of step strings, and that is what this compares.
+    """
+    import re as _re
+
+    panel = _read(os.path.join(SRC, "vesta", "shared", "concernNarrative.ts"))
+    with open(os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise",
+                           "agent", "route.py"), encoding="utf-8") as handle:
+        route = handle.read()
+
+    block = _re.search(r"HELP_STEPS: Record<string, string> = \{(.*?)\}", panel, _re.S)
+    assert block, "HELP_STEPS is no longer declared in concernNarrative.ts"
+    shown = set(_re.findall(r'"([^"]+)":', block.group(1)))
+
+    py_block = _re.search(r"HELP_STEPS: Dict\[str, str\] = \{(.*?)\}", route, _re.S)
+    assert py_block, "HELP_STEPS is no longer declared in route.py"
+    backend = set(_re.findall(r':\s*"([^"]+)"', py_block.group(1)))
+
+    assert shown and backend, (shown, backend)
+    assert shown == backend, (
+        "the tablet renders help steps %s and the backend writes %s. A step "
+        "the SPA does not recognise renders as nothing, so the chat says the "
+        "counterpart was asked and the wall says silence."
+        % (sorted(shown), sorted(backend)))
+
+
 def test_only_a_CRITICAL_shows_a_chase_time() -> None:
     """⚠️ `route.escalate`'s FIRST LINE refuses every severity below critical,
     so a countdown on a warning promises a chase that is never coming — the
