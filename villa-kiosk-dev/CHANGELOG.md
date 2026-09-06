@@ -1,3 +1,25 @@
+## 2.968.0
+
+### Fixed — one oddly-written notification service could stop the villa being surveyed
+The add-on reads every notification service Home Assistant offers to learn what
+each one can do. Two of those readings walked the same description differently,
+and one of them crashed outright on a shape the other handled — and nothing
+around it catches that, so a single integration declaring its options unusually
+would have taken down the whole survey the briefing is built from. They read it
+the same way now, and neither falls over.
+
+The same divergence could also have switched on rich-text formatting for a
+service that never offered it, which is how device names end up mangled in a
+delivered briefing.
+
+### Changed — a double-tap means the same thing everywhere on the glass
+Double-tapping to reset a zoomed camera feed used a slightly shorter window
+than double-tapping in the 3D view, and did not care how far apart the two taps
+landed. In the band between the two, the same finger registered a double-tap in
+one place and two separate taps in the other. There is one answer now — and on
+a camera feed the second tap must land near the first, as it already had to
+everywhere else.
+
 ## 2.967.0
 
 ### Changed — one rule decides whether a wheel zooms the picture or changes camera
