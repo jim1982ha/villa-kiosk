@@ -1,3 +1,13 @@
+## 2.939.0
+
+### Added — a glossary, so one word stops meaning two things
+"Escalated" has meant two unrelated things in this project: chasing somebody who
+has not answered an alert, and the assistant deciding something is worth a closer
+look. A reader could not tell which from the word. There is now a short glossary
+at the root of the repository naming both — "chase" and "flag" — along with the
+distinctions this week's work settled: an act versus a rating, an audience versus
+a role, what a drill is, what a brief is.
+
 ## 2.938.0
 
 ### Changed — a briefing is composed from one resolved request
