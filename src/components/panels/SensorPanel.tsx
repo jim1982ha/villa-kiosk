@@ -18,6 +18,7 @@ import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 import { binarySensorColor, paletteColorFor, isUnavailable } from "@/utils/stateColors";
+import { formatSensorParts } from "@/utils/entityValue";
 
 const LEVEL_COLOR: Record<AlertLevel, string> = {
   normal: "var(--status-on)",
@@ -50,6 +51,11 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // instead of the numeric Sparkline one.
   const isEnum = !isBinary && entity != null && !Number.isFinite(numeric);
   const unit = entity?.attributes.unit_of_measurement ?? "";
+  // ⚠️ THE SHARED RULE (2.940.0). This used to print the RAW state beside the
+  // RAW unit, so a 6570.989 W sensor read in full here while the badge for the
+  // same entity read "6.6 kW". Parts, not the joined string, because the unit
+  // is styled as its own smaller span.
+  const shown = entity ? formatSensorParts(entity) : { value: "", unit };
   const threshold = config.alertThresholds[mapping.entityId];
   // What this SPECIFIC binary_sensor reports — a leak sensor, a motion PIR, a
   // door contact, etc. — read from HA's own device_class attribute, so the
@@ -140,9 +146,9 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
               className="value-large"
               style={{ color: unavailable ? "var(--status-warning)" : isEnum ? "var(--text-primary)" : LEVEL_COLOR[level] }}
             >
-              {unavailable ? "Unavailable" : isEnum ? (entity?.state ?? "--") : Number.isFinite(numeric) ? numeric : entity?.state ?? "--"}
+              {unavailable ? "Unavailable" : isEnum ? (shown.value || "--") : Number.isFinite(numeric) ? (shown.value || "--") : entity?.state ?? "--"}
             </span>{" "}
-            {!unavailable && !isEnum && <span className="value-unit">{unit}</span>}
+            {!unavailable && !isEnum && <span className="value-unit">{shown.unit}</span>}
           </div>
           <div className="field">
             <HistoryHeader title={range.title} picker={picker} />

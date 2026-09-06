@@ -114,6 +114,7 @@ import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
+import { compactValue, clampToLabelWidth } from "@/utils/entityValue";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling } from "./meshRoles";
@@ -894,18 +895,6 @@ interface ShownLabel {
    *  once and through its own walls. */
   occluded: boolean;
 }
-
-// Status/enum SENSOR states (a text sensor like an AP's connectivity state).
-// NOMINAL = "all good, nothing to report" — its value is hidden (the badge is
-// neutral by default, so "Connected" is just clutter). ALERT states (which
-// drive the badge ring — see utils/deviceActivity's SENSOR_ALERT_STATES,
-// shared with badgeKind below) are the mirror image: their value stays
-// SHOWN, so a real change is never silently swallowed. An unrecognised enum
-// value (e.g. a weather "sunny") is neither: it's shown, un-ringed, as before.
-const SENSOR_NOMINAL_STATES = new Set([
-  "connected", "online", "ok", "okay", "normal", "nominal", "available",
-  "ready", "clear", "operational", "up", "good", "healthy", "active",
-]);
 
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
@@ -9209,105 +9198,23 @@ export class EntityVisuals {
     return this.clampToLabelWidth(parts.join("  ·  "));
   }
 
-  /**
-   * Truncate value text to what the label container can actually DRAW.
-   *
-   * Derived, not guessed: the ceiling is `labelMaxWidthPx` and the per-character
-   * advance is the one `labelBoxes` measures the very same string with, so the
-   * width the solver reserves and the width the renderer draws agree by
-   * construction rather than by a constant that happens to be big enough.
-   */
+  /** Truncate value text to what the label container can actually DRAW.
+   *  The rule lives in utils/entityValue; this supplies the two facts only the
+   *  scene knows — the live metrics and whether the badge is drawn as a card. */
   private clampToLabelWidth(text: string): string {
-    const m = this.metrics;
-    const card = this.isCardStyle();
-    const fixed = card
-      ? m.cardPadLeftPx + m.cardHeightPx + m.cardValuePadPx
-      : m.pillValuePadPx;
-    const charPx = card ? m.cardValueCharPx : m.pillValueCharPx;
-    if (!(charPx > 0)) return text;
-    const max = Math.max(1, Math.floor((m.labelMaxWidthPx - fixed) / charPx));
-    return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text;
+    return clampToLabelWidth(text, this.metrics, this.isCardStyle());
   }
 
-  /** Tiny chip text under the badge for entities whose state is a reading, not just on/off. */
+  /** Tiny chip text under the badge for entities whose state is a reading.
+   *
+   *  ⚠️ THE RULE MOVED TO utils/entityValue (2.940.0) so the DOM panels answer
+   *  this question the same way — they used to each answer it differently, and
+   *  the same 6570.989 W reading printed three ways depending on where you
+   *  looked. The badge's own two preferences (hide a nominal status, clamp to
+   *  16 chars) are passed as flags rather than baked in, because they are
+   *  about a chip with no room, not about how the villa is described. */
   private compactValue(type: EntityType, s: HassEntity): string {
-    if (isUnavailable(s)) return "";
-    switch (type) {
-      case "light": {
-        const b = s.attributes.brightness as number | undefined;
-        return s.state === "on" && b ? `${Math.round((b / 255) * 100)}%` : "";
-      }
-      case "fan": {
-        const p = s.attributes.percentage as number | undefined;
-        return s.state === "on" && p != null ? `${Math.round(p)}%` : "";
-      }
-      case "cover": {
-        const pos = s.attributes.current_position as number | undefined;
-        return pos != null ? `${Math.round(pos)}%` : "";
-      }
-      case "climate": {
-        const cur = s.attributes.current_temperature as number | undefined;
-        return cur != null ? `${Math.round(cur)}°` : "";
-      }
-      case "sensor":
-        return this.formatSensorValue(s);
-      default:
-        return "";
-    }
-  }
-
-  /**
-   * Compact, readable value for the pill — exhaustive across the kinds of state
-   * HA reports, so nothing crowds the chip:
-   *   • Numbers → rounded to a sensible precision, with large power/energy scaled
-   *     to k-units (6570.989 W → "6.6 kW", 25.05 °C → "25.1°C").
-   *   • Enum / text states → tidied (underscores→spaces, Sentence case) so a raw
-   *     "not_home" reads "Not home", "connected" reads "Connected".
-   *   • Anything still long is ellipsised so the pill can never blow out.
-   */
-  private formatSensorValue(s: HassEntity): string {
-    const unit = ((s.attributes.unit_of_measurement as string | undefined) ?? "").trim();
-    const n = Number(s.state);
-
-    // ── Non-numeric (enum / status text) ──────────────────────────────────
-    if (s.state.trim() === "" || !Number.isFinite(n)) {
-      // Hide a NOMINAL/healthy status ("Connected", "OK", "Normal"…) — the
-      // badge is already category-coloured, so the word is redundant clutter.
-      // Any OTHER value stays shown (and a known-bad one rings red, see
-      // badgeKind), so a state change is never silently lost.
-      if (SENSOR_NOMINAL_STATES.has(s.state.trim().toLowerCase())) return "";
-      const words = String(s.state).replace(/_/g, " ").trim();
-      const pretty = words.charAt(0).toUpperCase() + words.slice(1);
-      return this.clampPill(pretty);
-    }
-
-    // ── Numeric ───────────────────────────────────────────────────────────
-    const abs = Math.abs(n);
-    const u = unit.toLowerCase();
-    // Round to `d` decimals and drop trailing zeros ("25.0"→"25", "6.60"→"6.6").
-    const trim = (v: number, d: number) => String(Number(v.toFixed(d)));
-
-    let out: string;
-    if (u === "w" && abs >= 1000) out = `${trim(n / 1000, 1)} kW`;
-    else if (u === "wh" && abs >= 1000) out = `${trim(n / 1000, 1)} kWh`;
-    else if (u === "va" && abs >= 1000) out = `${trim(n / 1000, 1)} kVA`;
-    else if (u === "%") out = `${Math.round(n)}%`;                        // percent hugs its sign
-    else if (u === "°c" || u === "°f" || u === "°") out = `${trim(n, 1)}${unit}`; // degrees hug too
-    // Units that read cleanest as whole numbers.
-    else if (u === "w" || u === "wh" || u === "va" || u === "lx" || u === "ppm" || u === "ppb")
-      out = unit ? `${Math.round(n)} ${unit}` : String(Math.round(n));
-    // Generic: whole numbers as-is, otherwise up to 1 decimal.
-    else {
-      const val = Number.isInteger(n) ? String(n) : trim(n, 1);
-      out = unit ? `${val} ${unit}` : val;
-    }
-    return this.clampPill(out);
-  }
-
-  /** Hard cap on pill text so an unexpectedly long value can never blow out the
-   *  chip; keeps every pill to a tidy, uniform footprint. */
-  private clampPill(text: string): string {
-    return text.length > 16 ? `${text.slice(0, 15)}…` : text;
+    return compactValue(type, s);
   }
 
   // ---------------------------------------------------------------------------

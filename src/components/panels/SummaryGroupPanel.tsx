@@ -30,6 +30,7 @@ import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityType } from "@/types/scene.types";
 import { NO_ROOM_LABEL } from "@/config/roomKey";
+import { formatSensorValue } from "@/utils/entityValue";
 
 export interface SummaryGroup {
   title: string;
@@ -292,7 +293,6 @@ export default function SummaryGroupPanel({
     const cat: Category = effectiveCategory(
       id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
     const label = entityLabel(id);
-    const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
     const curTemp = e.attributes.current_temperature as number | null | undefined;
     const targetTemp = e.attributes.temperature as number | null | undefined;
     // Current AND target, not current alone — the bottom summary bar's own
@@ -307,7 +307,12 @@ export default function SummaryGroupPanel({
         ? (curTemp == null
             ? (targetTemp == null ? "--" : `→ ${Math.round(targetTemp)}°`)
             : (targetTemp == null ? `${Math.round(curTemp)}°` : `${Math.round(curTemp)}° → ${Math.round(targetTemp)}°`))
-        : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
+        // ⚠️ THE SHARED RULE, NOT A SECOND ONE (2.940.0). This row used to
+        // print `pretty(state) + unit`, so a 6570.989 W reading rendered in
+        // full here while the badge for the SAME entity, two feet away on the
+        // wall tablet, read "6.6 kW". `hideNominal` stays off: this row has
+        // room for "Connected", where the chip does not.
+        : formatSensorValue(e) || pretty(e.state);
 
     const isLock = domain === "lock";
     // `rowInHa` gates every CONTROL on the row. A phantom is rendered so the

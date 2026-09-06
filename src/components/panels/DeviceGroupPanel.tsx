@@ -20,6 +20,7 @@ import type { EntityMapping } from "@/types/scene.types";
 import type { HistoryPoint } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
+import { formatSensorParts } from "@/utils/entityValue";
 
 interface Props {
   group: DeviceGroup;
@@ -57,8 +58,12 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
     return {
       id,
       label: entityLabel(id),
-      unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
-      value: entity?.state ?? "—",
+      // ⚠️ THE SHARED RULE (2.940.0). These two used to be the RAW state and
+      // the RAW unit, so a 6570.989 W sensor printed in full here while the
+      // badge for the same entity read "6.6 kW". Parts, not the joined string,
+      // because this panel styles the unit as its own smaller span.
+      unit: entity ? formatSensorParts(entity).unit : "",
+      value: entity ? (formatSensorParts(entity).value || "—") : "—",
       numeric: Number.isFinite(numeric) ? numeric : undefined,
       unavailable: isUnavailable(entity),
     };

@@ -362,17 +362,21 @@ def write_json(path: str, payload: Any) -> None:
     """Atomic overwrite: temp file in the same directory, then os.replace.
 
     ⚠️ DELIBERATELY NOT `supervisor-proxy.py`'s `atomic_write`, and this is the
-    one place in the subsystem that duplicates a shared rule on purpose.
-    CLAUDE.md says every write under /data goes through that helper; the
-    layering rule in `__init__.py` says nothing here may import the proxy,
-    because a reports bug must never be able to reach the kiosk's own auth
-    path. Both rules are right and they collide here.
+    one place in the subsystem that duplicates a shared rule on purpose. The
+    proxy owns the same primitive for every write under /data; the layering
+    rule in `__init__.py` says nothing here may import the proxy, because a
+    reports bug must never be able to reach the kiosk's own auth path. Both
+    rules are right and they collide here.
 
     The MECHANISM is what matters and it is reproduced exactly: same directory
     (so os.replace is atomic rather than a cross-device copy), fsync before
-    replace, temp file removed on failure. A partial or failed write can never
-    leave the live store truncated — a reader sees the whole previous version
-    or the whole new one.
+    replace, temp file removed on failure. ⚠️ THAT SENTENCE WAS FALSE FOR THE
+    LIFE OF THIS FILE and an architecture review caught it: the proxy's copy
+    never fsync'd, so the claim of an identical mechanism was pinning the
+    WEAKER of the two. The proxy was fixed rather than this docstring.
+
+    A partial or failed write can never leave the live store truncated — a
+    reader sees the whole previous version or the whole new one.
 
     ⚠️ The convergence path, if this is ever worth doing: the proxy ALREADY
     imports this package, so the helper could move HERE and the proxy import

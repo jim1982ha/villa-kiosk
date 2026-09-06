@@ -36,6 +36,7 @@ import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 import { useBackToClose } from "@/hooks/useBackToClose";
+import { formatUnitValue } from "@/utils/entityValue";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -211,7 +212,7 @@ function deriveTiles(
     }, 0);
     tiles.push({
       id: "__energy", icon: Zap, label: "Energy",
-      value: totalW >= 1000 ? `${(totalW / 1000).toFixed(1)} kW` : `${Math.round(totalW)} W`,
+      value: formatUnitValue(totalW, "W"),
       // A HARDCODED `totalW > 3000` used to live here, and it was exactly the
       // per-site tuning constant CLAUDE.md's first hard rule forbids: 3 kW is
       // an idle afternoon in a villa with a pool pump and an alarming spike in

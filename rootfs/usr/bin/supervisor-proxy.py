@@ -1683,6 +1683,14 @@ def atomic_write(dest: str, write_body, binary: bool = True, mode: int = 0o644) 
                            **({} if binary else {"encoding": "utf-8"}))
         with opener as out:
             write_body(out)
+            # ⚠️ FSYNC BEFORE REPLACE, not after. os.replace is atomic against a
+            # READER, but not against power loss: the rename can reach the disk
+            # while the bytes it points at are still in the page cache, and the
+            # tablet comes back to a live file full of zeros. The store-side
+            # copy in adapters/store.py has always done this; this one did not,
+            # and its docstring claimed the two mechanisms were identical.
+            out.flush()
+            os.fsync(out.fileno())
         os.chmod(tmp, mode)
         os.replace(tmp, dest)
     except BaseException:
@@ -1708,6 +1716,8 @@ async def atomic_write_async(dest: str, write_body, binary: bool = True,
                            **({} if binary else {"encoding": "utf-8"}))
         with opener as out:
             result = await write_body(out)
+            out.flush()
+            os.fsync(out.fileno())
         os.chmod(tmp, mode)
         os.replace(tmp, dest)
         return result
