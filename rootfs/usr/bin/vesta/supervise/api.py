@@ -529,12 +529,40 @@ async def agent_memory_correct_handler(request: web.Request) -> web.Response:
     # into every future run's context — the same cap the concern feedback route
     # applies to its reason, for the same reason.
     text = str(body.get("text") or "")[:500].strip()
+
+    from vesta.supervise.agent import memory as agent_memory
+
+    # ⚠️ PROMOTION IS A SECOND ACT ON THIS ROUTE, NOT A SECOND ROUTE, AND IT IS
+    # NAMED RATHER THAN INFERRED (ADR-0005). Both acts are "a person's verdict
+    # on one claim", carry the same role gate and the same nginx cap, so a
+    # second path would be a second place to get the gate right. But which act
+    # is meant is never guessed from whether `text` happens to be present —
+    # `/agent-review` states the rule this follows: a decision is an explicit
+    # enum, never a default. An OLD TABLET THAT SENDS NO DECISION still
+    # corrects, which is what it has always done and the only reason the enum
+    # is not required outright.
+    if str(body.get("decision") or "") == "promote":
+        if not subject:
+            return web.json_response(
+                {"ok": False, "reason": "a subject is required"}, status=400)
+        # ⚠️ REFUSES FOR MORE THAN ONE REASON AND SAYS SO IN ONE. `promote`
+        # returns False for "no such claim" and for "it is not held" alike; the
+        # screen only ever offers the button on a held claim, so a refusal here
+        # means the store moved under the reader — which is a reload, not a
+        # different message per cause.
+        if not agent_memory.promote(subject,
+                                    by=str(deps.role_for(request) or "owner")):
+            return web.json_response(
+                {"ok": False,
+                 "reason": "that claim is no longer waiting to be accepted"},
+                status=409)
+        return web.json_response({"ok": True})
+
     if not subject or not text:
         return web.json_response(
             {"ok": False, "reason": "a subject and a correction are required"},
             status=400)
 
-    from vesta.supervise.agent import memory as agent_memory
     # ⚠️ THE CORRECTOR IS THE SESSION'S ROLE, NEVER A FIELD IN THE BODY. "Who
     # told us this" is the half that makes a correction outrank the agent, and a
     # browser-supplied name is a claim about identity rather than a fact about

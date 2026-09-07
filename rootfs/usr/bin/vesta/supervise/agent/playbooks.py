@@ -178,6 +178,22 @@ def domain_of(name: str, roots: Optional[Sequence[str]] = None) -> str:
     return ""
 
 
+def consulted_this_run() -> Tuple[str, ...]:
+    """Which playbooks THIS investigation opened. ADR-0006 reads this.
+
+    ⚠️ AN ACCESSOR RATHER THAN THE LIST, because `_READ_THIS_RUN` is mutable
+    module state and a caller holding it would see it cleared under them by the
+    next `reset_run`. A tuple is a snapshot of the answer at the moment asked.
+
+    ⚠️ AND IT IS NOT `bool(domain_this_run())`. A playbook whose front matter
+    carries no `domain:` was still consulted, so the domain string answers
+    "which subject was this" and this answers "did it have anything to work
+    from" — ADR-0006 needs the second, and conflating them would propose a new
+    playbook every time the agent read an undomained one.
+    """
+    return tuple(_READ_THIS_RUN)
+
+
 def domain_this_run(roots: Optional[Sequence[str]] = None) -> str:
     """The domain of the FIRST playbook this investigation consulted.
 

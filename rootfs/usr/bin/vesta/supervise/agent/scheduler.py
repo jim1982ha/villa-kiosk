@@ -341,6 +341,27 @@ async def chase_forever(session: Any,
                     said = await digest_mod.send_daily(session, config=config)
                     if said.startswith("sent "):
                         log(f"digest: {said}")
+                    # ⚠️ EXPIRY RIDES THIS TICK TOO, AND WITHOUT A STAMP.
+                    # `memory.expire` calls itself the daily sweep and had no
+                    # caller at all, so a claim was asserted for ever once
+                    # written. It is idempotent — a claim past its review date
+                    # is retired once and then skipped as `retired` — and it is
+                    # a directory walk over a store bounded by the number of
+                    # subjects, so running it every chase tick costs nothing
+                    # and retires a claim nearer its due moment than a daily
+                    # stamp would. A stamp file here would be machinery to make
+                    # a cheap sweep happen LESS often.
+                    #
+                    # ⚠️ INSIDE THE MASTER SWITCH, with the rest of this block.
+                    # Expiry only ever retires what the agent itself concluded;
+                    # a villa with supervision off is not accruing claims, and
+                    # letting a stopped agent's store keep changing underneath
+                    # it would be a second loop that never heard about the
+                    # switch — the defect the guard above this exists for.
+                    from vesta.supervise.agent import memory as memory_mod
+                    gone = memory_mod.expire()
+                    if gone:
+                        log(f"memory: {len(gone)} claim(s) retired")
         except asyncio.CancelledError:
             log("chase clock stopped")
             raise

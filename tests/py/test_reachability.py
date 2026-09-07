@@ -96,33 +96,21 @@ EXEMPT: Dict[str, str] = {
     # confirmed" count can finally be something other than zero.
 
     # ── SURFACED BY MAKING THIS SCAN MODULE-AWARE (2.966.0) ──
-    # ⚠️ ALL FOUR WERE CREDITED BY A DIFFERENT FUNCTION OF THE SAME NAME, and
-    # each is a real gap rather than dead code — the module, its store and in
-    # two cases its screen all exist, and only the thing that FEEDS them is
-    # missing. `triage.due` was the fifth and is deleted: it was a second
-    # cadence rule without the scheduler's typo floor.
+    # ⚠️ FOUR WERE FOUND HERE AND THREE HAVE SINCE BEEN WIRED. `memory.write`,
+    # `memory.expire` and `review.propose` were the agent's learning loop: the
+    # modules, the stores, the routes and both screens existed, and the only
+    # missing part was what FED them, so the villa memory could hold what a
+    # person overrode and never what the agent concluded, and the playbook queue
+    # could only ever be empty. `agent/learn.py` is what feeds them now
+    # (ADR-0004), `scheduler` runs the sweep, and this test is what proved all
+    # three were reachable afterwards rather than a grep that said so.
     #
-    # These are wiring decisions for the owner, not refactors, so they are
-    # recorded as what they are rather than quietly deleted.
-    "write": "⚠️ THE AGENT CANNOT RECORD A VILLA MEMORY. `memory.write` is the "
-             "only path that stores a derived claim, and nothing calls it — "
-             "`api.py` reads (`all_memories`) and applies a HUMAN correction "
-             "(`correct`), so the store can hold what a person overrode and "
-             "never what the agent concluded. Credited until now by prose in "
-             "two docstrings that spell `write()`",
-    "propose": "⚠️ NOTHING CAN PUT A DRAFT IN THE PLAYBOOK REVIEW QUEUE. "
-               "`review.py` holds the queue, the two-directory design and the "
-               "discard record; `api.py` serves GET and POST /agent-review and "
-               "the SPA fetches both — so the queue and its screen exist and "
-               "can only ever be empty. `act.py` calls `proposals.propose`, "
-               "which is a DIFFERENT function (a high-harm action awaiting "
-               "approval), and that name collision is what hid this. WHEN an "
-               "investigation should propose a playbook is a product decision",
-    "expire": "⚠️ THE DAILY SWEEP THAT NOTHING RUNS. `memory.expire` retires "
-              "villa memories whose `review_after` has passed — retires, never "
-              "deletes, and skips corrections. No scheduler calls it, so a "
-              "memory is asserted for ever once written. Credited until now by "
-              "`chat.expire`, which prunes chat threads and is unrelated",
+    # ⚠️ THE EXEMPTIONS ARE DELETED RATHER THAN EDITED. A sentence saying "this
+    # is a real gap, the wiring is a product decision" is not true of a wired
+    # function, and leaving it would cover the NEXT unreachable function of the
+    # same name — which is the whole reason `test_the_exemption_map_does_not_rot`
+    # exists. `triage.due` left this map the same way and is also gone.
+
     "stats": "the counts the diagnostics panel is described as showing — "
              "threads, turns, concerns. No endpoint serves them, so the panel "
              "shows something else or nothing. Credited until now by "

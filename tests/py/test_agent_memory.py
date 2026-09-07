@@ -322,3 +322,75 @@ def test_an_empty_correction_is_refused(tmp_path: Any) -> None:
     assert not memory_mod.correct(KEY, by="owner", text="   ", root=root)
     stored = memory_mod.read(KEY, root=root)
     assert stored is not None and stored.state != "corrected"
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Promotion — the exit from `proposed` (ADR-0005)
+# ════════════════════════════════════════════════════════════════════════════
+
+def test_a_HELD_claim_can_be_promoted_and_only_then_reaches_the_prompt(root):
+    """⚠️ THE POINT OF PROMOTION IS THE INDEX, NOT THE FIELD. Asserting that
+    `state` became "active" would pass on a change that flipped the string and
+    left the claim out of what the agent is shown — which is the only thing the
+    state means. So this checks the prompt block on both sides of the act."""
+    memory_mod.write(KEY, claim="the pump idles near 40W", source=SOURCE,
+                     confidence=0.4, root=root, now=NOW)
+    assert memory_mod.read(KEY, root=root).state == "proposed"
+    assert "40W" not in memory_mod.index(root), (
+        "a held claim reached the prompt before anybody accepted it")
+
+    assert memory_mod.promote(KEY, by="owner", root=root, now=NOW) is True
+    assert memory_mod.read(KEY, root=root).asserted is True
+    assert "40W" in memory_mod.index(root), (
+        "promotion changed the state and the agent still cannot see the claim")
+
+
+def test_promotion_KEEPS_the_review_horizon(root):
+    """⚠️ THE WEAKER OF THE TWO HUMAN ACTS, AND THE HORIZON IS WHAT MAKES IT SO.
+    `correct` clears `review_after` because a person's own claim does not decay
+    on a timer; promotion only accepts the AGENT's words, so it must still be
+    re-derived on time. Giving promotion the exemption too would let one press
+    turn a guess into a permanent premise."""
+    memory_mod.write(KEY, claim="a claim", source=SOURCE, confidence=0.4,
+                     root=root, now=NOW)
+    before = memory_mod.read(KEY, root=root).review_after
+    memory_mod.promote(KEY, by="owner", root=root, now=NOW)
+    after = memory_mod.read(KEY, root=root)
+    assert after.review_after == before != "", (
+        "promotion dropped the review date, so an accepted guess is permanent")
+    assert memory_mod.expire(root=root, now=NOW + 200 * DAY) == [KEY], (
+        "a promoted claim escaped expiry")
+
+
+@pytest.mark.parametrize("setup,state", [
+    (lambda r: memory_mod.write(KEY, claim="c", source=SOURCE, confidence=0.9,
+                                root=r, now=NOW), "active"),
+    (lambda r: (memory_mod.write(KEY, claim="c", source=SOURCE, confidence=0.4,
+                                 root=r, now=NOW),
+                memory_mod.correct(KEY, by="owner", text="no", root=r,
+                                   now=NOW)), "corrected"),
+    (lambda r: (memory_mod.write(KEY, claim="c", source=SOURCE, confidence=0.4,
+                                 root=r, now=NOW - 200 * DAY),
+                memory_mod.expire(root=r, now=NOW)), "retired"),
+])
+def test_promotion_refuses_every_state_that_is_not_HELD(root, setup, state):
+    """⚠️ EACH REFUSAL GUARDS A DIFFERENT THING. Promoting an `active` claim is
+    a no-op dressed as an act; promoting a `corrected` one walks back over rule
+    3 through a side door; promoting a `retired` one re-asserts a claim expiry
+    already judged stale, without re-deriving it."""
+    setup(root)
+    assert memory_mod.read(KEY, root=root).state == state, "fixture is wrong"
+    assert memory_mod.promote(KEY, by="owner", root=root, now=NOW) is False
+    assert memory_mod.read(KEY, root=root).state == state, (
+        f"a refused promotion still changed a {state} claim")
+
+
+def test_promotion_refuses_without_a_name_or_a_claim(root):
+    """⚠️ "WHO ACCEPTED THIS" IS THE WHOLE VALUE OF THE ACT. An anonymous
+    promotion is indistinguishable from the agent asserting its own guess."""
+    memory_mod.write(KEY, claim="c", source=SOURCE, confidence=0.4, root=root,
+                     now=NOW)
+    assert memory_mod.promote(KEY, by="   ", root=root) is False
+    assert memory_mod.read(KEY, root=root).state == "proposed"
+    assert memory_mod.promote(OTHER, by="owner", root=root) is False
+    assert memory_mod.promote("../etc/passwd", by="owner", root=root) is False

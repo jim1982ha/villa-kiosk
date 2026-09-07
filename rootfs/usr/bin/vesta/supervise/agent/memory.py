@@ -234,6 +234,60 @@ def correct(subject_key: str, *, by: str, text: str,
     return _save(path, front, body, f"memory {subject_key} corrected by {by}")
 
 
+def promote(subject_key: str, *, by: str,
+            root: Optional[str] = None, now: Optional[float] = None) -> bool:
+    """A person accepting a held claim, so it may be asserted. ADR-0005.
+
+    ⚠️ THIS EXISTS BECAUSE `proposed` WAS A STATE WITH NO EXIT. `state` is set
+    in exactly one place — `write`, from confidence — so a claim the agent was
+    not confident enough to assert could only become `active` if a LATER
+    investigation happened to score higher, and otherwise sat unread until
+    expiry retired it. Deriving confidence from the run rather than asking the
+    model for a number (ADR-0005) makes that the common case, not the corner
+    one, so the exit is part of that decision rather than a later nicety.
+
+    ⚠️ IT IS THE WEAKER OF THE TWO HUMAN ACTS, AND DELIBERATELY SO. `correct`
+    replaces the agent's words with a person's and is exempt from expiry;
+    promotion only accepts the words already there, so the claim KEEPS ITS
+    REVIEW HORIZON and will still be re-derived on time. Giving promotion the
+    exemption too would let one press turn a guess into a permanent premise,
+    which is the thing `ASSERT_CONFIDENCE` exists to make hard.
+
+    ⚠️ REFUSES ANYTHING THAT IS NOT `proposed`. Promoting an `active` claim is
+    a no-op dressed as an act; promoting a `corrected` one would walk back over
+    rule 3 through a side door; promoting a `retired` one would re-assert a
+    claim that expiry has already judged stale without re-deriving it.
+    """
+    base = root or MEMORY_ROOT
+    path = _path(base, subject_key)
+    existing = read(subject_key, root=base) if path else None
+    if not path or existing is None or not str(by).strip():
+        return False
+    if existing.state != "proposed":
+        log(f"memory {subject_key} not promoted: it is {existing.state}")
+        return False
+    at = now if now is not None else time.time()
+    front = {
+        "subject_key": existing.subject_key,
+        "source": existing.source,
+        "learned_at": existing.learned_at or _day(at),
+        "review_after": existing.review_after,
+        "confidence": f"{existing.confidence:.2f}",
+        "state": "active",
+        # ⚠️ WHO, ON THE CLAIM ITSELF. "Why is the villa asserting this?" must
+        # resolve without reading a log that has since rotated — and a promoted
+        # claim is the one case where the answer is a person rather than a run.
+        "promoted_by": str(by).strip(),
+        "promoted_at": _day(at),
+    }
+    body = existing.claim
+    if existing.corrections:
+        body += "\n\nCorrections:\n" + "\n".join(
+            f"- {c}" for c in existing.corrections)
+    return _save(path, front, body,
+                 f"memory {subject_key} promoted by {by}")
+
+
 def expire(*, root: Optional[str] = None,
            now: Optional[float] = None) -> List[str]:
     """The daily sweep. Returns the keys retired. Never raises.

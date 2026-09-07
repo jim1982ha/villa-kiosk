@@ -58,6 +58,8 @@ export default function AgentReview() {
    *  Approve. Kept per slug rather than as one flag so closing a draft does not
    *  un-read it, and so approving one does not unlock the next. */
   const [read, setRead] = useState<Set<string>>(new Set());
+  /** Why this draft is being refused, for the draft now open. */
+  const [why, setWhy] = useState("");
 
 
   const expand = (draft: ReviewDraft) => {
@@ -65,6 +67,7 @@ export default function AgentReview() {
     setOpen(next);
     if (next) {
       setEdited(draft.body);
+      setWhy("");
       setRead((current) => new Set(current).add(draft.slug));
     }
   };
@@ -79,14 +82,29 @@ export default function AgentReview() {
       // ⚠️ THE EDITED BODY ONLY WHEN IT IS THE ONE ON SCREEN. `edited` belongs
       // to whichever draft is open, so sending it for a row the reviewer never
       // expanded would write one draft's text into another's file.
+      // ⚠️ THE REASON TRAVELS WITH A DISCARD, AND FOR SIX RELEASES IT DID
+      // NOT. The store, the route and `decideReviewDraft` itself all accepted
+      // one; this panel sent `{}`, so every refusal was recorded with an empty
+      // reason. `review.py` calls that reason "the answer to the same draft
+      // arriving again next quarter" — so the queue was keeping a record of
+      // WHAT it refused and never WHY, which is the half that answers anything.
+      // `test_review_surface` pinned that discard exists, not that it carries a
+      // reason, which is why this stayed green.
+      //
+      // ⚠️ ONLY FROM THE OPEN DRAFT, on the same argument as the edited body:
+      // `why` belongs to whichever row is expanded, and sending it for another
+      // would file one refusal's reason against a different draft.
+      const mine = open === draft.slug;
       const ok = await decideReviewDraft(draft.slug, decision,
-        decision === "approve" && open === draft.slug ? { body: edited } : {});
+        decision === "approve"
+          ? (mine ? { body: edited } : {})
+          : (mine && why.trim() ? { reason: why.trim() } : {}));
       if (!ok) {
         throw new Error("That decision was not recorded. The draft is unchanged.");
       }
       setOpen(null);
     });
-  }, [edited, open, run]);
+  }, [edited, open, why, run]);
 
   if (rows === null) {
     return (
@@ -162,12 +180,25 @@ export default function AgentReview() {
               />
             )}
 
+            {canReview && open === draft.slug && (
+              <input
+                type="text" value={why} maxLength={300}
+                placeholder="If you discard it, why? (optional)"
+                aria-label={`Reason for discarding ${draft.title}`}
+                onChange={(e) => setWhy(e.target.value)}
+              />
+            )}
+
             {canReview && (
               <div className="modal-footer-actions cockpit-review-actions">
                 <button
                   type="button"
                   className="btn danger"
                   disabled={busy === draft.slug}
+                  title={open === draft.slug
+                    ? "Refuse this one. Your reason is kept, so the same "
+                      + "proposal can be answered if it comes back"
+                    : "Refuse this one. Open it first if you want to say why"}
                   onClick={() => void decide(draft, "discard")}
                 >
                   <Trash2 size={16} aria-hidden /> Discard

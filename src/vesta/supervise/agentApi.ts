@@ -939,6 +939,41 @@ export async function correctMemory(
   return { ok: d.ok === true, reason: d.reason || "" };
 }
 
+/** Accept a claim the villa was not confident enough to rely on. ADR-0005.
+ *
+ *  ⚠️ THE DECISION IS NAMED IN THE BODY. `/agent-memory` carries two acts on
+ *  one route — correcting a claim and accepting one — and which is meant is
+ *  never inferred from whether `text` was sent. A tablet that predates this
+ *  sends no decision and still corrects, which is why the field is read rather
+ *  than required.
+ *
+ *  ⚠️ IT IS THE WEAKER ACT, AND THE COPY MUST NOT BLUR THEM. Accepting keeps
+ *  the agent's own words and its review date, so the claim is still re-derived
+ *  on time; correcting replaces the words with a person's and never expires. */
+export async function promoteMemory(
+  subjectKey: string,
+): Promise<{ ok: boolean; reason: string }> {
+  const r = await postJson("agent-memory", { subjectKey, decision: "promote" });
+  const d = (await r.json().catch(() => ({}))) as
+    { ok?: boolean; reason?: string };
+  if (!r.ok) return { ok: false, reason: d.reason || `HTTP ${r.status}` };
+  return { ok: d.ok === true, reason: d.reason || "" };
+}
+
+/** What a claim's state means to a reader, and whether the villa is using it.
+ *
+ *  ⚠️ THE SCREEN RENDERED ALL FOUR STATES IDENTICALLY, under copy that said
+ *  every row "uses in every later check" — which is false for two of them. That
+ *  was harmless only while nothing could write a claim; the moment the agent
+ *  can, a held claim and a retired one both read as though they were in force.
+ *  ADR-0005. */
+export const MEMORY_STATE: Record<string, { label: string; inUse: boolean }> = {
+  active: { label: "In use", inUse: true },
+  corrected: { label: "Corrected — in use", inUse: true },
+  proposed: { label: "Waiting for you", inUse: false },
+  retired: { label: "Expired — not in use", inUse: false },
+};
+
 export interface UsageRow {
   at: number; source: string; model: string; actor: string;
   run_id: string; input: number; output: number;

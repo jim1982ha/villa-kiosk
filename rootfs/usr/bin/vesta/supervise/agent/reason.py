@@ -39,6 +39,7 @@ from vesta.supervise.agent import audit as audit_mod
 from vesta.supervise.agent import contracts as agent_contracts
 from vesta.supervise.agent import budget as budget_mod
 from vesta.supervise.agent import config as agent_config
+from vesta.supervise.agent import learn
 from vesta.supervise.agent import playbooks
 from vesta.supervise.agent import runtime
 from vesta.supervise.agent.llm.base import Provider
@@ -303,6 +304,21 @@ async def investigate_subject(item: Any, *, provider: Provider,
         swallow(f"investigation of {subject!r} raised", err)
         return False
     stage("reason", f"{run_id} {result.status} on {subject!r}")
+
+    # ⚠️ THE VILLA LEARNS HERE, AND ONLY HERE (ADR-0004). `memory.py` and
+    # `review.py` both refuse to be written from a tool — tool results carry
+    # text other people wrote, and a path from there into a store that is
+    # re-asserted on every future pass is an injection into permanent state — so
+    # the reasoning path is the only place a claim may be recorded, and this is
+    # the reasoning path's one choke point.
+    #
+    # ⚠️ AFTER `stage`, BEFORE `_mark_looked_at`, AND IT CANNOT AFFECT EITHER.
+    # `learn_from` never raises and never returns anything this function reads;
+    # a provider that is down, a ceiling that is spent or a reply that says
+    # nothing all cost the villa a claim it did not have, which is not a cost
+    # worth failing a delivered investigation over.
+    await learn.learn_from(result, item, provider=provider, config=config,
+                           session=session, trigger=trigger)
 
     # ⚠️ RECORD THAT IT WAS LOOKED AT, NOT ONLY THAT SOMETHING WAS FOUND
     # (2026-08-30, from a delivered brief). `record.stamp_outcome` was called

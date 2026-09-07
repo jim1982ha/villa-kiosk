@@ -104,6 +104,30 @@ def test_the_surface_can_BOTH_approve_and_discard() -> None:
             f"{path} reaches the queue but cannot express both decisions")
 
 
+def test_a_DISCARD_can_carry_its_REASON() -> None:
+    """⚠️ THE TENTH TWO-CORRECT-HALVES DEFECT, AND THIS FILE HELD ONE HALF OF IT.
+    `review.discard` takes a reason and records it, `/agent-review` reads
+    `body["reason"]`, and `decideReviewDraft`'s own signature accepts one — and
+    the panel sent `{}`, so every refusal was stored with an empty reason for as
+    long as the screen existed.
+
+    ⚠️ THE TEST ABOVE IS WHY IT SURVIVED: it pins that the surface can express
+    BOTH decisions, which was true, and says nothing about what travels with
+    them. "Can a person discard" and "does the discard record anything" are two
+    questions, and only the first was being asked. `review.py`'s own docstring
+    states the stake — a recorded reason is "the answer to the same draft
+    arriving again next quarter", so a queue that forgets its refusals
+    re-proposes them for ever.
+    """
+    found = _surfaces()
+    assert found, "no surface — the loop below would pass vacuously"
+    for path, code in found.items():
+        assert "reason" in code, (
+            f"{path} can discard a draft but sends no reason with it. The "
+            f"store, the route and the client function all accept one; a "
+            f"discard without it records WHAT was refused and never WHY.")
+
+
 def test_APPROVAL_requires_the_draft_to_have_been_OPENED() -> None:
     """⚠️ TASK-094's ARCHITECTURAL CONSTRAINT, AS THE UI CAN BREAK IT. "NOTHING
     enters the live playbook set without human approval" — and approving text

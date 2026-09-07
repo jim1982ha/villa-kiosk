@@ -17,6 +17,20 @@ What a concern is about, identified by its device(s). A concern's identity, and
 the key every later join uses.
 _Avoid_: entity (that is Home Assistant's word for one row of state), thing.
 
+**Claim**:
+Something the assistant concluded that stands about the property, rather than
+about a moment — "this pump's idle draw is normally around 40W". Carries the
+investigation that produced it, and is shown to the assistant on every later
+pass until it is corrected or it expires. One per **Subject**; a later
+investigation supersedes it.
+_Avoid_: memory (that is the store the claims live in, not one of them),
+belief, fact (a claim can be wrong, which is the point), learning, insight.
+
+⚠️ A **Claim** is not a **Concern**. A concern is about a moment and gets
+closed; a claim is a standing property of the villa and is re-asserted for as
+long as it stands. The cost of a wrong concern is one bad report. The cost of a
+wrong claim is a bad premise under every report after it.
+
 **Informational**:
 A concern raised while the villa is set to tell rather than ask. It is delivered
 once and never chased, and it asks nothing of the reader.
@@ -44,6 +58,20 @@ different questions and the words must stay apart.
 "Somebody has this." It stops the chase and takes the card off the wall; it does
 not mean the villa's problem is over.
 _Avoid_: seen, read, resolve.
+
+**Correct**:
+Telling the villa that a **Claim** is wrong, in your own words. A correction
+outranks what the assistant derived, is never overwritten by a later
+investigation, and never expires.
+_Avoid_: edit, override, fix. Deliberately not an **Act** (that changes a
+concern's lifecycle) and not a **Rating** (that judges whether a concern was
+worth raising) — all three are different questions about different things.
+
+**Promote**:
+Saying that a held **Claim** is right, so the assistant may rely on it. What a
+person does to a claim the assistant was not confident enough to assert by
+itself.
+_Avoid_: approve (that is what happens to a **Draft**), confirm, accept.
 
 ## Being told, and being told again
 
@@ -106,6 +134,13 @@ A procedure the villa's assistant reads at runtime to decide what to do about a
 kind of situation.
 _Avoid_: skill (that is a procedure for the DEV assistant, a different tree),
 runbook, rule.
+
+**Draft**:
+A procedure the assistant wrote and is asking to keep. Not a **Playbook** yet —
+nothing reads it, and it becomes one only when a person approves it. A refused
+draft is kept with the reason it was refused, so the same one arriving again
+can be answered.
+_Avoid_: proposal, candidate, suggestion, pending playbook.
 
 **Drill**:
 A synthetic concern carried through the real delivery path to prove an alert

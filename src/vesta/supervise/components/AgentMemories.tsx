@@ -28,10 +28,13 @@
 // procedure does rather than being read once and closed.
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, Pencil, X } from "lucide-react";
+import { Check, Loader2, Pencil, ThumbsUp, X } from "lucide-react";
 import SourceChip from "@/components/common/SourceChip";
 
-import { correctMemory, loadMemories, type VillaMemory } from "@/vesta/supervise/agentApi";
+import {
+  MEMORY_STATE, correctMemory, loadMemories, promoteMemory,
+  type VillaMemory,
+} from "@/vesta/supervise/agentApi";
 import { hasCapability } from "@/auth/permissions";
 import { useProfile } from "@/auth/ProfileContext";
 
@@ -68,6 +71,15 @@ export default function AgentMemories() {
     await load();
   }, [text, load]);
 
+  const accept = useCallback(async (subjectKey: string) => {
+    setBusy(true);
+    setFailed("");
+    const out = await promoteMemory(subjectKey);
+    if (!out.ok) setFailed(out.reason || "that claim could not be accepted");
+    setBusy(false);
+    await load();
+  }, [load]);
+
   if (rows === null) return null;
   // ⚠️ NOTHING AT ALL WHEN THE VILLA HAS LEARNED NOTHING, rather than an empty
   // heading. A fresh install has no memories and that is the correct state, not
@@ -84,9 +96,11 @@ export default function AgentMemories() {
         <SourceChip source="agent" />
       </div>
       <p className="muted body-text">
-        Claims it has formed about this property and uses in every later check.
-        Correcting one does not erase it — your note is added underneath and
-        outranks it from then on.
+        Claims it has formed about this property. Only the ones marked
+        <em> in use</em> are given to it in later checks — anything
+        <em> waiting for you</em> is held back until you accept it. Correcting a
+        claim does not erase it: your note is added underneath and outranks it
+        from then on.
       </p>
       {failed ? <p className="body-text sev-warning" role="alert">{failed}</p> : null}
       <div className="cockpit-attention-list">
@@ -104,6 +118,15 @@ export default function AgentMemories() {
                     </span>
                   </>
                 )}
+                {/* ⚠️ THE STATE IS DRAWN ON EVERY ROW, not only on the held
+                    ones. A reader scanning this list must be able to tell what
+                    the villa is actually working from; a badge that appears
+                    only sometimes makes its ABSENCE the thing to interpret,
+                    which is the harder reading and the one people get wrong. */}
+                <br />
+                <span className={MEMORY_STATE[m.state]?.inUse ? "muted" : "sev-warning"}>
+                  {MEMORY_STATE[m.state]?.label ?? m.state}
+                </span>
               </span>
               {/* ⚠️ A DIRECT CHILD OF `.editable-row-fields`, NOT NESTED IN THE
                   SPAN ABOVE. `.editable-row-fields > input` is what gives this
@@ -146,12 +169,29 @@ export default function AgentMemories() {
                 </button>
               </>
             ) : (
-              <button type="button" className="row-action"
-                title="Tell the villa this is wrong"
-                aria-label={`Correct this: ${m.claim.slice(0, 60)}`}
-                onClick={() => { setEditing(m.subjectKey); setText(""); }}>
-                <Pencil size={16} aria-hidden />
-              </button>
+              <>
+                {/* ⚠️ OFFERED ONLY ON A HELD CLAIM, because that is the only
+                    state `memory.promote` accepts — it refuses an active one
+                    as a no-op, a corrected one because that would walk back
+                    over a person, and a retired one because expiry has already
+                    judged it stale. A button drawn where the server refuses is
+                    a button that reports failure for working correctly. */}
+                {m.state === "proposed" && (
+                  <button type="button" className="row-action" disabled={busy}
+                    title="Accept this — the villa may rely on it"
+                    aria-label={`Accept this: ${m.claim.slice(0, 60)}`}
+                    onClick={() => void accept(m.subjectKey)}>
+                    {busy ? <Loader2 size={16} className="spin" aria-hidden />
+                          : <ThumbsUp size={16} aria-hidden />}
+                  </button>
+                )}
+                <button type="button" className="row-action"
+                  title="Tell the villa this is wrong"
+                  aria-label={`Correct this: ${m.claim.slice(0, 60)}`}
+                  onClick={() => { setEditing(m.subjectKey); setText(""); }}>
+                  <Pencil size={16} aria-hidden />
+                </button>
+              </>
             ))}
           </div>
         ))}
