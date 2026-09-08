@@ -15,6 +15,7 @@ import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useProfile } from "@/auth/ProfileContext";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
@@ -118,6 +119,7 @@ export default function SummaryGroupPanel({
   // tap is easy to trigger by accident — require an explicit second tap
   // before it actually fires, same pattern as LockPanel's unlock confirm.
   const [confirming, setConfirming] = useState(false);
+  const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
 
   const roomOf = (id: string) => resolvedRooms[id]?.trim() ?? "";
 
@@ -275,7 +277,12 @@ export default function SummaryGroupPanel({
                 type="button"
                 className="btn ghost"
                 disabled={!canControl}
-                onClick={() => callService("scene", "turn_on", {}, { entity_id: s.entityId })}
+                // ⚠️ THE SAME HOOK THE SUMMARY BAR USES. A scene run from a
+                // room panel and one run from the bar are the same act with
+                // the same consequence, so they ask the same question — see
+                // ADR-0003. This surface also had no haptic; the hook carries
+                // one, so that difference is gone too.
+                onClick={() => askScene(s)}
               >
                 <Sparkles size={16} /> {s.name}
               </button>
@@ -283,6 +290,7 @@ export default function SummaryGroupPanel({
           </div>
         </div>
       )}
+      {sceneDialog}
     </BasePanel>
   );
 

@@ -23,12 +23,12 @@ import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
+import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 import { useProfile } from "@/auth/ProfileContext";
 import { isCategoryAllowed } from "@/auth/permissions";
 import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/config/EntityCategories";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
-import { successFeedback } from "@/utils/haptics";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import { useBackToClose } from "@/hooks/useBackToClose";
@@ -213,7 +213,8 @@ function SceneMenu({ scenes, canRun, apply }: {
 }
 
 export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
-  const { entities, suppressedEntityIds, callService } = useHA();
+  const { entities, suppressedEntityIds } = useHA();
+  const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
   const { role } = useProfile();
   const { config, resolvedRooms } = useConfig();
 
@@ -253,16 +254,16 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
           <SceneMenu
             scenes={scenes}
             canRun={canRunScenes}
-            apply={(s) => {
-              // Running a scene changes several rooms at once and the
-              // result is usually not visible from where you tapped —
-              // the strongest case in the app for a confirming haptic.
-              successFeedback();
-              void callService("scene", "turn_on", {}, { entity_id: s.entityId });
-            }}
+            // ⚠️ ASKS FIRST SINCE 2.972.0, THROUGH THE SHARED HOOK. This used
+            // to send the scene on the tap that selected it. The haptic and the
+            // call now live in `useSceneConfirm` so this surface and the room
+            // panel's scene row cannot answer the same question differently —
+            // which is ADR-0003's rule about two surfaces and the same acts.
+            apply={askScene}
           />
         )}
       </div>
+      {sceneDialog}
       {openGroup && (
         <SummaryGroupPanel
           group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
