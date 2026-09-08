@@ -34,11 +34,29 @@ async function fetchRaw(entityId: string, hours: number): Promise<RawHistoryStat
   return data[0] ?? [];
 }
 
+/** A history row's numeric value, or NaN when there was no reading at all.
+ *
+ *  ⚠️ BLANK AND NULL ARE NOT ZERO. Kept as a named function rather than inlined
+ *  because "absent" vs "zero" is the distinction the whole numeric path turns
+ *  on, and `Number(x)` quietly answers 0 for both. */
+export function numericState(raw: unknown): number {
+  if (raw == null) return NaN;
+  const s = String(raw).trim();
+  return s === "" ? NaN : Number(s);
+}
+
 /** Fetch the last `hours` of NUMERIC history for an entity (line sparklines). */
 export async function fetchHistory(entityId: string, hours = 24): Promise<HistoryPoint[]> {
   const series = await fetchRaw(entityId, hours);
   return series
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: Number(s.state) }))
+    // ⚠️ A MISSING READING MUST BECOME NaN, NEVER 0. `Number(null)` is 0 and so
+    // is `Number("")`, and both are `Number.isFinite`, so the filter below —
+    // which exists to drop unparseable rows — passed them through as a real
+    // measurement of zero. On a power sensor that draws a line to the floor and
+    // reads as "the device stopped drawing power"; on a temperature it reads as
+    // 0°C. Found while fixing the null-state crash on 2026-09-08: same wire,
+    // same lie about the type, silent instead of loud.
+    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }))
     .filter((p) => Number.isFinite(p.v));
 }
 
@@ -71,7 +89,14 @@ export async function fetchStateHistory(
 ): Promise<StateHistoryPoint[]> {
   const series = await fetchRaw(entityId, hours);
   const points = series
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), state: s.state }))
+    // ⚠️ COERCED AT THE DOOR. `state` is typed `string` and Home Assistant
+    // sends null on a freshly added entity's early rows; every consumer
+    // downstream believed the type. `statusKeyFor` is now total as well, but a
+    // guard there alone would leave the null in the data for the next reader
+    // to trip over — an adapter's job is to make the wire match the type it
+    // claims to return.
+    .map((s) => ({ t: new Date(s.last_changed).getTime(),
+                   state: String(s.state ?? "") }))
     .filter((p) => Number.isFinite(p.t)
       && (opts.keepUnavailable || !UNKNOWN_STATES.has(p.state)));
   // Collapse consecutive duplicate states (can happen when only attributes

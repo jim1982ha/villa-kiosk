@@ -188,7 +188,22 @@ const DOMAIN_STATES: Record<string, Record<string, StatusKey>> = {
  * ("lock.front_door") — anything before the first dot is used.
  */
 export function statusKeyFor(state: string, domain?: string): StatusKey {
-  const s = state.trim().toLowerCase();
+  // ⚠️ COERCED, BECAUSE THE DECLARED TYPE IS A HOPE AND NOT A GUARANTEE. This
+  // is called with values that came off Home Assistant's wire through
+  // `HAHistoryAPI`, and a freshly added entity has history rows whose `state`
+  // is null. `UNKNOWN_STATES.has(null)` is false, so the adapter's filter
+  // passed it straight through and the `.trim()` below threw
+  // `Cannot read properties of null` — inside a React render, which took the
+  // whole panel to the error screen. Reported 2026-09-08: a new smoke detector
+  // could not have its badge tapped at all.
+  //
+  // ⚠️ AND NULL LANDS ON THE BLANK BRANCH, NOT IN `UNKNOWN_STATES`. The cheap
+  // fix is to add it to that set and it would be wrong for the reason the
+  // comment below already gives: the set is the FACT "this entity is
+  // unreachable", read by `isUnavailable` and by the devices layer across the
+  // language boundary. A missing history row on a brand-new entity is not an
+  // outage. Same colour, different fact.
+  const s = String(state ?? "").trim().toLowerCase();
   // ⚠️ WIDER THAN `UNKNOWN_STATES` ON PURPOSE, and the two extra members stay
   // spelled out: a blank state and the literal `"none"` are not "the value is
   // unknown", they are an entity that has nothing to report — they land on the

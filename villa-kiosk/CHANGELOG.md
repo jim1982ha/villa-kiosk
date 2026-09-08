@@ -1,3 +1,51 @@
+## 2.971.0
+
+### Fixed — tapping a newly added device no longer breaks the screen
+Opening the badge for a device Home Assistant had only just learned about took
+the whole panel to the error screen. A device with no history yet reports its
+early readings as blank, and the part of the app that decides what colour a
+reading should be assumed there was always something there. Reported after a new
+smoke detector could not be opened at all. It now treats "nothing recorded yet"
+the same way it treats an entity with nothing to say, which is the grey it
+already uses.
+
+### Fixed — a gap in a chart is no longer drawn as a reading of zero
+The same missing readings were being plotted as a real measurement of zero, so a
+power sensor that had simply not reported yet drew a line to the floor, and a
+temperature read 0°. A gap is now left as a gap. This was silent, and it affected
+every sparkline on a device that had been added recently or had a period with no
+data.
+
+## 2.970.0
+
+### Added — the villa now keeps what it works out about your equipment
+Until now the assistant investigated, told you what it found, and forgot. It now
+records a short standing fact when an investigation establishes one — "this
+pump's idle draw sits near 40W" — and reads those facts back before every later
+check, so it starts from what it already knows instead of from nothing.
+
+A new **What the villa believes** block on the Reason screen lists them. Each
+shows whether it is in use or still waiting for you: the assistant only relies on
+a claim by itself when the investigation behind it was thorough, and otherwise
+holds it for you to accept with a press. Anything you disagree with can be
+corrected in your own words, and your version outranks the assistant's from then
+on and never expires.
+
+Claims are re-checked every ninety days, so nothing it concluded once is
+asserted for ever without being worked out again.
+
+### Added — the assistant can now propose a procedure, and the queue can fill
+The **Proposed procedures** screen existed but nothing could ever put anything in
+it. After investigating something the villa had no written procedure for, the
+assistant now drafts one and asks whether to keep it. It only proposes where
+there was nothing already, so the queue stops asking as your procedures build up
+rather than filling for ever.
+
+### Fixed — discarding a proposed procedure now keeps your reason
+Refusing a draft recorded that you refused it and threw away why, which is the
+part that answers the same proposal arriving again months later. There is now a
+box to say why, and what you write is kept with the refusal.
+
 ## 2.969.0
 
 ### Changed — the rule for "this alert was rated unhelpful" is written once
