@@ -1,3 +1,16 @@
+## 2.972.0
+
+### Changed — running a scene now asks first
+Tapping a scene set several rooms at once, immediately, with no undo and often
+no way to see the result from where you were standing. It now asks, and the
+question says what that particular scene will actually do — how many devices,
+and in which rooms — so the answer is worth reading rather than a habit.
+
+This applies to both places a scene can be run: the scenes button on the bar at
+the bottom of the map, and the "Scenes for this room" row inside a room's panel.
+They ask the same question in the same words, and a scene run from the room
+panel now gives the same confirming buzz the bar always did.
+
 ## 2.971.0
 
 ### Fixed — tapping a newly added device no longer breaks the screen
