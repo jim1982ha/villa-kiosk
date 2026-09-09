@@ -30,12 +30,12 @@ import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/conf
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
-import { successFeedback } from "@/utils/haptics";
 import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 import { useBackToClose } from "@/hooks/useBackToClose";
+import { useSceneConfirm } from "@/hooks/useSceneConfirm";
 
 type IconType = ComponentType<{ size?: number | string }>;
 
@@ -395,7 +395,8 @@ function SceneMenu({ scenes, canRun, apply }: {
 }
 
 export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
-  const { entities, suppressedEntityIds, callService } = useHA();
+  const { entities, suppressedEntityIds } = useHA();
+  const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
   const { role } = useProfile();
   const { config, resolvedRooms } = useConfig();
 
@@ -435,16 +436,15 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
           <SceneMenu
             scenes={scenes}
             canRun={canRunScenes}
-            apply={(s) => {
-              // Running a scene changes several rooms at once and the
-              // result is usually not visible from where you tapped —
-              // the strongest case in the app for a confirming haptic.
-              successFeedback();
-              void callService("scene", "turn_on", {}, { entity_id: s.entityId });
-            }}
+            // ⚠️ ASKS FIRST, THROUGH THE SHARED HOOK. This used to send the
+            // scene on the tap that selected it. The haptic and the call now
+            // live in `useSceneConfirm` so this surface and the room panel's
+            // scene row cannot answer the same question differently.
+            apply={askScene}
           />
         )}
       </div>
+      {sceneDialog}
       {openGroup && (
         <SummaryGroupPanel
           group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}

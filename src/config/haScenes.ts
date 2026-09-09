@@ -76,3 +76,26 @@ export function scenesForRoom(scenes: HaSceneInfo[], room: string): HaSceneInfo[
   const key = roomKey(room);
   return scenes.filter((s) => s.rooms.some((r) => roomKey(r) === key));
 }
+
+
+/** What running this scene will do, in the owner's terms.
+ *
+ *  ⚠️ DERIVED FROM THE SCENE'S OWN MEMBERS, never a fixed sentence. A scene
+ *  that sets two lamps and one that sets the whole ground floor are different
+ *  decisions, and a message that read the same for both would train people to
+ *  confirm without reading — which is worse than not asking.
+ *
+ *  ⚠️ AND IT NAMES ROOMS, NOT ENTITIES. `memberEntityIds` are Home Assistant's
+ *  ids; the rooms are what a person recognises, and `HaSceneInfo` has already
+ *  resolved them. A scene whose members resolve to no room falls back to the
+ *  count alone rather than inventing a place. */
+export function sceneMessage(info: HaSceneInfo): string {
+  const n = info.memberEntityIds.length;
+  const devices = `${n} device${n === 1 ? "" : "s"}`;
+  const rooms = info.rooms;
+  if (n === 0) return "This scene sets nothing. Running it changes nothing.";
+  if (rooms.length === 0) return `This sets ${devices} at once. It cannot be undone.`;
+  if (rooms.length === 1) return `This sets ${devices} in ${rooms[0]}. It cannot be undone.`;
+  return `This sets ${devices} across ${rooms.length} rooms `
+    + `(${rooms.join(", ")}). It cannot be undone.`;
+}
