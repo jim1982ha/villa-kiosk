@@ -176,7 +176,17 @@ const DOMAIN_STATES: Record<string, Record<string, StatusKey>> = {
  * ("lock.front_door") — anything before the first dot is used.
  */
 export function statusKeyFor(state: string, domain?: string): StatusKey {
-  const s = state.trim().toLowerCase();
+  // ⚠️ COERCED, BECAUSE THE DECLARED TYPE IS A HOPE AND NOT A GUARANTEE. This
+  // is called with values that came off Home Assistant's wire through
+  // `HAHistoryAPI`, and a freshly added entity has history rows whose `state`
+  // is null — nothing upstream filters those out, so `.trim()` threw
+  // `Cannot read properties of null` inside a React render and took the whole
+  // panel to the error screen. Reported 2026-09-08: a newly added smoke
+  // detector could not have its badge opened at all.
+  //
+  // A missing reading is "nothing to report", which is the same branch as a
+  // blank state below, and lands on the same colour.
+  const s = String(state ?? "").trim().toLowerCase();
   if (s === "" || s === "unavailable" || s === "unknown" || s === "none") {
     return "unavailable";
   }

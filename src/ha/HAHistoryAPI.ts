@@ -33,11 +33,29 @@ async function fetchRaw(entityId: string, hours: number): Promise<RawHistoryStat
   return data[0] ?? [];
 }
 
+/** A history row's numeric value, or NaN when there was no reading at all.
+ *
+ *  ⚠️ BLANK AND NULL ARE NOT ZERO. Kept as a named function rather than inlined
+ *  because "absent" vs "zero" is the distinction the whole numeric path turns
+ *  on, and `Number(x)` quietly answers 0 for both. */
+export function numericState(raw: unknown): number {
+  if (raw == null) return NaN;
+  const s = String(raw).trim();
+  return s === "" ? NaN : Number(s);
+}
+
 /** Fetch the last `hours` of NUMERIC history for an entity (line sparklines). */
 export async function fetchHistory(entityId: string, hours = 24): Promise<HistoryPoint[]> {
   const series = await fetchRaw(entityId, hours);
   return series
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: Number(s.state) }))
+    // ⚠️ A MISSING READING MUST BECOME NaN, NEVER 0. `Number(null)` is 0 and so
+    // is `Number("")`, and both are `Number.isFinite`, so the filter below —
+    // which exists to drop unparseable rows — passed them through as a real
+    // measurement of zero. On a power sensor that draws a line to the floor and
+    // reads as "the device stopped drawing power"; on a temperature it reads as
+    // 0°C. Same wire and same lie about the declared type as the null-state
+    // crash fixed alongside this, silent instead of loud.
+    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }))
     .filter((p) => Number.isFinite(p.v));
 }
 
@@ -70,7 +88,14 @@ export async function fetchStateHistory(
 ): Promise<StateHistoryPoint[]> {
   const series = await fetchRaw(entityId, hours);
   const points = series
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), state: s.state }))
+    // ⚠️ COERCED AT THE DOOR, alongside the guard in `statusKeyFor`. Home
+    // Assistant sends a null `state` on a freshly added entity's early rows
+    // and every consumer downstream believed the declared type. The filter
+    // below treats null exactly as it did before (it is neither "unavailable"
+    // nor "unknown"), so this changes no behaviour — it only stops the null
+    // travelling any further.
+    .map((s) => ({ t: new Date(s.last_changed).getTime(),
+                   state: String(s.state ?? "") }))
     .filter((p) => Number.isFinite(p.t)
       && (opts.keepUnavailable || (p.state !== "unavailable" && p.state !== "unknown")));
   // Collapse consecutive duplicate states (can happen when only attributes

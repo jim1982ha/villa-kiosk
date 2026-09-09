@@ -1,3 +1,23 @@
+## 2.496.1
+
+### Fixed — tapping a newly added device no longer breaks the screen
+Opening the badge for a device Home Assistant had only just learned about took
+the whole panel to the error screen. A device with no history yet reports its
+early readings as blank, and the part of the app that decides what colour a
+reading should be assumed there was always something there. Reported after a new
+smoke detector could not be opened at all. It now treats "nothing recorded yet"
+the same way it treats a device with nothing to say, which is the grey it
+already uses.
+
+### Fixed — a gap in a chart is no longer drawn as a reading of zero
+The same missing readings were being plotted as a real measurement of zero, so a
+power sensor that had simply not reported yet drew a line to the floor, and a
+temperature read 0°. A gap is now left as a gap. This was silent, and it affected
+every sparkline on a device that had been added recently or had a period with no
+data.
+
+Nothing else changes in this release.
+
 ## 2.496.0
 
 ### Fixed — you could walk through the glass balcony railing and fall a storey
