@@ -30,7 +30,9 @@ import { useMediaZoom } from "@/hooks/useMediaZoom";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { tapDebug } from "@/utils/tapDebug";
+import { WHEEL_IDLE_MS, swipeStep, wheelOwner, wheelStep } from "./cameraGestures";
 import { STATUS_COLOR } from "@/utils/stateColors";
+import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { mergeStateHistories } from "./chartUtils";
 import StateTimeline from "./StateTimeline";
@@ -54,20 +56,11 @@ const CHROME_IDLE_MS = 2000;
 // neither travelled nor lingered — otherwise a pan/pinch of a zoomed feed
 // would flip the chrome on every gesture. Slop is generous because a finger
 // on glass always drifts a little.
-const TAP_SLOP_PX = 12;
-const TAP_MAX_MS = 400;
-// A horizontal drag across an UNZOOMED feed steps to the neighbouring camera.
-// Needs real travel and a clearly horizontal direction, so it can't be
-// confused with a tap or with a vertical drag. useMediaZoom only begins a pan
-// once already zoomed in, so at 1x this gesture is otherwise unused.
-const SWIPE_MIN_PX = 48;
-const SWIPE_DIR_RATIO = 1.6;
-// The same gesture from a trackpad or a tilt wheel arrives as wheel events, not
-// as a drag, so it needs its own threshold: total sideways travel before a step
-// fires, and a quiet period that ends the gesture so one long swipe cannot walk
-// through every camera.
-const WHEEL_SWIPE_PX = 120;
-const WHEEL_SWIPE_IDLE_MS = 320;
+// ⚠️ THE SHARED ANSWER, NOT A SECOND ONE. These were 12px/400ms against
+// TapRecognizer's 14px/500ms, so the same finger on the same glass was a tap
+// in the 3D villa and a drag here. `utils/tapThresholds.ts` is the one place.
+const TAP_SLOP_PX = TAP_MOVE_TOL_PX;
+const TAP_MAX_MS = LONG_PRESS_MS;
 // How often to refresh the fallback snapshot, and how many consecutive snapshot
 // failures to tolerate before declaring the camera unavailable.
 const SNAPSHOT_INTERVAL_MS = 800;
@@ -215,19 +208,21 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // i.e. by the user actually stopping.
   const wheelSpent = useRef(false);
   const onFeedWheel = useCallback((e: { deltaX: number; deltaY: number }) => {
-    if (zoomedRef.current || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    // ⚠️ ONE PREDICATE, ASKED BY BOTH SIDES. `useMediaZoom` read the exact
+    // complement of this line; see `cameraGestures.wheelOwner` for why the
+    // tie has to be decided once.
+    if (wheelOwner(e.deltaX, e.deltaY, zoomedRef.current) !== "camera") return;
     window.clearTimeout(wheelIdle.current);
     // A gesture ends after a quiet moment; that is what re-arms it.
     wheelIdle.current = window.setTimeout(() => {
       wheelTravel.current = 0;
       wheelSpent.current = false;
-    }, WHEEL_SWIPE_IDLE_MS);
+    }, WHEEL_IDLE_MS);
     if (wheelSpent.current) return; // already stepped for this flick
     wheelTravel.current += e.deltaX;
-    if (Math.abs(wheelTravel.current) < WHEEL_SWIPE_PX) return;
-    // Content follows the gesture, matching the touch swipe: scrolling right
-    // (positive deltaX) brings the NEXT camera in from the right.
-    stepCameraRef.current(wheelTravel.current > 0 ? 1 : -1);
+    const step = wheelStep(wheelTravel.current);
+    if (step === 0) return;
+    stepCameraRef.current(step);
     wheelTravel.current = 0;
     wheelSpent.current = true;
   }, []);
@@ -319,7 +314,6 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     const inPanel = (e: Event) =>
       !!rootRef.current && e.target instanceof Node && rootRef.current.contains(e.target);
     let downX = 0, downY = 0, downT = 0, tracking = false;
-    const SWIPE_MAX_MS = 600;
     const onDown = (e: PointerEvent) => {
       if (zoomedRef.current || !canCycleRef.current || !inPanel(e)) return;
       tracking = true;
@@ -329,12 +323,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       if (!tracking) return;
       tracking = false;
       if (zoomedRef.current) return;
-      const dx = e.clientX - downX, dy = e.clientY - downY;
-      if (Date.now() - downT <= SWIPE_MAX_MS
-          && Math.abs(dx) >= SWIPE_MIN_PX
-          && Math.abs(dx) > Math.abs(dy) * SWIPE_DIR_RATIO) {
-        stepCameraRef.current(dx < 0 ? 1 : -1); // swipe left -> next, right -> previous
-      }
+      const step = swipeStep(e.clientX - downX, e.clientY - downY,
+                             Date.now() - downT);
+      if (step !== 0) stepCameraRef.current(step);
     };
     const onCancel = () => { tracking = false; };
     // CAPTURE phase, on the window. Bubbling was still being lost: while a

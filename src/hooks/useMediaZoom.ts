@@ -5,6 +5,8 @@
 // drag-to-pan while zoomed, and double-tap / double-click to reset. Purely a CSS
 // transform, so it costs nothing until the user actually interacts.
 
+import { wheelOwner } from "@/components/panels/cameraGestures";
+import { isDoublePress as withinDoublePress } from "@/utils/tapThresholds";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clamp } from "@/utils/geometry";
 
@@ -72,6 +74,8 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
     let pinchDist = 0, pinchScale = 1, pinchTx = 0, pinchTy = 0;
     let panning = false, panFromX = 0, panFromY = 0, panTx = 0, panTy = 0;
     let lastTap = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
 
     const onDown = (e: PointerEvent) => {
       el.setPointerCapture?.(e.pointerId);
@@ -85,8 +89,18 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
       } else if (pointers.size === 1) {
         // Double-tap (≤300ms) resets — the touch equivalent of dblclick.
         const now = Date.now();
-        if (now - lastTap < 300) { reset(); lastTap = 0; return; }
+        // ⚠️ THE WINDOW IS THE APP'S, NOT THIS FILE'S. This read
+        // `now - lastTap < 300` with no distance check, against the
+        // recogniser's 320ms/30px — so in the 300-320ms band the same finger
+        // double-tapped the 3D villa and merely tapped twice here. The distance
+        // check is new on this surface: two presses 30px apart are two taps.
+        if (withinDoublePress(now - lastTap, e.clientX - lastTapX,
+                              e.clientY - lastTapY)) {
+          reset(); lastTap = 0; return;
+        }
         lastTap = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
         if (live.current.scale > 1) {
           panning = true;
           panFromX = e.clientX; panFromY = e.clientY;
@@ -123,7 +137,10 @@ export function useMediaZoom<T extends HTMLElement>(): MediaZoom<T> {
       // unzoomed a horizontal wheel is left alone for CameraPanel to use; once
       // zoomed it belongs here again, as the pan of a magnified image.
       // A pinch arrives as ctrl+wheel, which is vertical, so it is unaffected.
-      if (live.current.scale <= MIN_SCALE && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      // ⚠️ THE RULE IS `cameraGestures.wheelOwner`, ASKED — NOT RESTATED. This
+      // half and CameraPanel's were exact complements in two files with nothing
+      // holding them together; loosen either and one flick zooms AND steps.
+      if (wheelOwner(e.deltaX, e.deltaY, live.current.scale > MIN_SCALE) !== "zoom") return;
       e.preventDefault();
       const next = clamp(live.current.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), MIN_SCALE, MAX_SCALE);
       if (next <= MIN_SCALE) { setScale(1); setTx(0); setTy(0); }

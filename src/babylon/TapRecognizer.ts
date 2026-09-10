@@ -9,19 +9,23 @@
 // and the ghost-click fix live in exactly one place.
 
 import { suppressGhostClick } from "@/utils/ghostClick";
+import { DOUBLE_PRESS_MS, DOUBLE_PRESS_TOL_PX, LONG_PRESS_MS, TAP_MOVE_TOL_PX }
+  from "@/utils/tapThresholds";
 
 export type TapKind = "tap" | "longpress" | null;
 
 export class TapRecognizer {
-  private static readonly MOVE_TOL = 14; // px — generous for fat-finger touch
-  private static readonly LONG_MS = 500; // ms — stationary press held this long = long-press
+  // ⚠️ THE VALUES LIVE IN `utils/tapThresholds.ts` — the camera feed reads the
+  // same four, so one glass has one definition of a tap. Unchanged here.
+  private static readonly MOVE_TOL = TAP_MOVE_TOL_PX; // px — generous for fat-finger touch
+  private static readonly LONG_MS = LONG_PRESS_MS; // ms — stationary press held this long = long-press
   /** Second press within this window, this close, is a DOUBLE press. Both
    *  cameras share these — the first-person one has had double-tap-to-walk
    *  since long before the overview got double-tap-to-zoom, and two cameras
    *  disagreeing about how fast a double tap is would be felt as one of them
    *  being broken. 320ms/30px are the values first-person shipped with. */
-  private static readonly DOUBLE_MS = 320;
-  private static readonly DOUBLE_TOL = 30;
+  private static readonly DOUBLE_MS = DOUBLE_PRESS_MS;
+  private static readonly DOUBLE_TOL = DOUBLE_PRESS_TOL_PX;
 
   private candidate = false;
   private startX = 0;

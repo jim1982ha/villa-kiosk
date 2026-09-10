@@ -1,3 +1,19 @@
+## 2.496.4
+
+### Fixed — a swipe across a camera feed can no longer zoom it by mistake
+"Is this zooming the picture, or stepping to the next camera?" was decided in two
+places that had to agree by accident. They now ask one rule, so a sideways flick
+does exactly one thing.
+
+### Changed — a tap means the same thing on a camera feed as on the villa
+The camera view counted a tap more strictly than the 3D map (a slightly smaller
+drift and a shorter hold), so the same finger could be a tap on the villa and a
+drag on the feed. Both now use the same definition. Double-tapping a feed to
+reset its zoom now also requires the second tap to land near the first, as it
+already did on the map — two taps in two places are two taps.
+
+Nothing else changes in this release.
+
 ## 2.496.3
 
 ### Fixed — the first requests after a restart no longer fail
