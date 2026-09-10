@@ -1,3 +1,22 @@
+## 2.496.3
+
+### Fixed — the first requests after a restart no longer fail
+For a second or so after every restart of the add-on, the page's very first
+requests were refused, because the web server was accepting connections before
+the part behind it had finished starting. The browser retried and recovered, so
+the only trace was a pair of "connection refused" lines in the log at each
+start. The web server now waits for the backend to be ready (up to ten seconds)
+before it starts answering.
+
+### Fixed — the villa's floor plan is served with the same security headers as everything else
+Three routes each set their own caching rule, and the web server drops the
+shared security headers on any route that does that. Two of the three repeated
+them by hand; the route that serves the 3D floor plan repeated none, so it went
+out without them. The headers now come from one shared file that every such
+route includes, so a fourth route cannot make the same mistake.
+
+Nothing else changes in this release.
+
 ## 2.496.2
 
 ### Changed — running a scene now asks first
