@@ -183,7 +183,6 @@ def routes() -> List[Any]:
     return [
         web.get("/agent-config", deps.config_get),
         web.get("/agent-concerns", agent_concerns_shaped_handler),
-        web.get("/agent-chats", agent_chats_handler),
         web.post("/agent-feedback", agent_feedback_handler),
         web.post("/agent-action", agent_action_handler),
         web.get("/agent-flag-types", agent_flag_types_get_handler),
@@ -748,31 +747,6 @@ async def agent_confirm_handler(request: web.Request) -> web.Response:
         return web.json_response(
             {"error": f"the service call failed: {detail}"}, status=502)
     return web.json_response({"ok": True, "state": "confirmed"})
-
-
-async def agent_chats_handler(request: web.Request) -> web.Response:
-    """The bot's private chats, named. Owner-only, because it enumerates who
-    can talk to this villa.
-
-    ⚠️ IT EXISTS SO NOBODY HAS TO COPY A NUMBER. The sender list keys on a
-    Telegram user id, which an owner had to find in a raw event payload — asked
-    for directly, and fair. In a PRIVATE chat the chat id and the user id are
-    the same number, so the bot's own chat list is exactly the right menu; in a
-    group they differ, and `chat.known_chats` excludes groups for that reason
-    rather than offering an entry that could never match a sender.
-
-    ⚠️ NEVER RAISES. A villa whose core is restarting gets an empty list and a
-    panel that falls back to typing the number, which is the behaviour that
-    existed before this route.
-    """
-    if not deps.authorized(request):
-        return deps.unauthorized()
-    if deps.role_for(request) != "owner":
-        return deps.forbidden("Only the owner profile may list the bot's chats.")
-    from vesta.supervise.agent import chat as agent_chat
-    found = await agent_chat.known_chats(request.app["session"])
-    return web.json_response({"chats": [
-        {"id": c.chat_id, "name": c.name} for c in found]})
 
 
 async def agent_audit_handler(request: web.Request) -> web.Response:

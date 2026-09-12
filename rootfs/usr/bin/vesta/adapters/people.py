@@ -50,7 +50,7 @@ and an owner who edits the new panel writes the new shape.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.adapters import store as store_mod
 
@@ -81,10 +81,12 @@ CONFIG_PATH: str = f"{store_mod.DATA_DIR}/vesta/agent-config.json"
 AUDIENCE_OF_ROLE: Dict[str, str] = {"owner": "owner", "ops": "facility",
                                     "guest": "owner"}
 
-#: The channel an inbound id belongs to. ⚠️ KEPT AS A PREFIX RATHER THAN A BARE
-#: ID for the reason `allowed_senders` did: a Telegram user id and a future
-#: WhatsApp id are integers from different namespaces and would collide.
-INBOUND_CHANNEL: str = "telegram"
+#: Profiles a CHAT may resolve to, strongest first.
+#: ⚠️ ORDERED, NOT TABLE-ORDER. Two rows may legitimately name one chat — this
+#: villa's owner and facility manager both receive in the same group — and which
+#: voice a question from that room is answered in must not depend on which row
+#: somebody edited last. All THREE profiles participate — guest is a real one.
+CHAT_ROLE_PRECEDENCE: Tuple[str, ...] = ("owner", "ops", "guest")
 
 
 def _row(raw: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
@@ -103,7 +105,6 @@ def _row(raw: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
                if str(t).strip()] if isinstance(targets, Sequence) \
         and not isinstance(targets, str) else []
     return {
-        "telegram": str(raw.get("telegram") or "").strip(),
         "targets": targets,
         "role": role,
     }
@@ -134,46 +135,41 @@ def people(config: Optional[Mapping[str, Any]] = None) -> List[Dict[str, Any]]:
                 got = _row(entry)
                 if got is not None:
                     rows.append(got)
-    if rows:
-        return rows
-
-    # ⚠️ THE MIGRATION, AND IT IS READ-ONLY. Nothing writes the new table here:
-    # a config rewrite on READ is how a store silently loses a key it did not
-    # understand, and this path runs on every message. The owner's first edit in
-    # the new panel is what persists the new shape.
-    legacy = cfg.get("allowed_senders")
-    if not isinstance(legacy, Mapping):
-        return []
-    for key, role in sorted(legacy.items()):
-        if not isinstance(role, str):
-            continue
-        channel, _, sender = str(key).partition(":")
-        if channel.strip().lower() != INBOUND_CHANNEL or not sender:
-            continue
-        got = _row({"telegram": sender, "role": role})
-        if got is not None:
-            rows.append(got)
     return rows
 
 
-def role_for_sender(config: Optional[Mapping[str, Any]], *, channel: str,
-                    sender_id: Any) -> str:
-    """Who is this? `""` means nobody — no run and no reply.
+def role_for_chat(config: Optional[Mapping[str, Any]],
+                  *, target: str) -> str:
+    """The profile a message arriving from THIS chat is answered as, or `""`.
 
-    ⚠️ IT READS `telegram` AND NOTHING ELSE. A delivery target on the same row
-    is a place to send to, not an identity to trust; treating one as inbound
-    proof would let anyone who can name a notify entity assume that person's
-    role. That is the one way merging these two tables could have gone wrong,
-    and it is closed here rather than in the caller.
+    ⚠️ THE VILLA NO LONGER KEEPS ITS OWN INBOUND ALLOW-LIST, AND THAT IS THE
+    OWNER'S RULING (2026-09-13). There used to be a `telegram` field per row and
+    a `role_for_sender` that matched a sender id against it — a second
+    allow-list beside Home Assistant's own `allowed_chat_ids`, which could and
+    did disagree with it. Reaching a chat the villa delivers to IS the
+    permission; `telegram_bot` drops every update from anywhere else before this
+    code runs. The owner's words: "there is no need for 'can message' selection
+    here, since it will be fully handled by the telegram group/channel
+    configured."
+
+    ⚠️ SO THIS ANSWERS VOICE, NOT ADMISSION. Nothing here decides WHETHER to
+    listen — that is already settled. It decides which profile's system prompt a
+    reply is written from, because a facility manager gets the file that wants
+    entity ids and an owner gets the one that forbids them. An unknown chat
+    answers `""` and the caller falls back to the owner voice, which is the
+    withholding one.
+
+    `target` is the entity-addressed form (`entity:notify.…`) that
+    `chat.target_for` resolves a chat id to — the same shape a row stores.
     """
-    if str(channel).strip().lower() != INBOUND_CHANNEL:
-        return ""
-    wanted = str(sender_id).strip()
+    wanted = str(target or "").strip()
     if not wanted:
         return ""
-    for person in people(config):
-        if person["telegram"] and person["telegram"] == wanted:
-            return str(person["role"])
+    found = {person["role"] for person in people(config)
+             if wanted in person["targets"]}
+    for role in CHAT_ROLE_PRECEDENCE:
+        if role in found:
+            return str(role)
     return ""
 
 

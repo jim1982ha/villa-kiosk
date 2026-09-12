@@ -144,10 +144,21 @@ def _press(data: Dict[str, Any]) -> Dict[str, Any]:
     return {"event_type": buttons.EVENT_TYPE, "data": data}
 
 
-def test_a_press_from_SOMEBODY_NOT_PERMITTED_acts_on_nothing() -> None:
-    """⚠️ THE ROLE COMES FROM THE SENDER ID AND NOTHING ELSE. A payload must
-    never influence which role it is treated as — the same rule
-    `policy.sender_role` states and `chat.handle_event` obeys."""
+def test_a_press_from_ANYONE_IN_THE_CHAT_ACTS(monkeypatch) -> None:
+    """⚠️ THE GATE IS GONE ON PURPOSE (owner's ruling, 2026-09-13), AND THIS IS
+    THE TEST THAT WAS INVERTED TO SAY SO.
+
+    It used to assert that a sender absent from the people table acted on
+    nothing. That second allow-list sat beside Home Assistant's own
+    `allowed_chat_ids` and disagreed with it: a phantom chat entry got stored,
+    matched nobody, and every press answered "You cannot act on this alert" —
+    the owner's included — for a fortnight. Reaching the chat is the permission.
+    The owner's words: "the fact that the person had access to the telegram chat
+    is the first [gate] already."
+
+    So an unregistered presser with an EMPTY people table must now act, and the
+    alert must come back acknowledged.
+    """
     concerns._write([{"id": "c1", "title": "t", "state": "open",
                       "delivered_at": "x", "acknowledged_at": ""}])
     answered: List[str] = []
@@ -155,29 +166,28 @@ def test_a_press_from_SOMEBODY_NOT_PERMITTED_acts_on_nothing() -> None:
     async def fake_answer(session: Any, query_id: str, text: str) -> None:
         answered.append(text)
 
-    original = buttons._answer
-    buttons._answer = fake_answer                     # type: ignore[assignment]
-    try:
-        out = asyncio.run(buttons.handle(
-            _press({"data": "vx:c1", "id": "q1", "user_id": 99,
-                    "from_first": "Stranger", "role": "owner"}),
-            session=None, config={"people": []}))
-    finally:
-        buttons._answer = original                    # type: ignore[assignment]
-    assert out == "presser may not act"
-    assert not concerns.read()[0]["acknowledged_at"], \
-        "an unlisted sender acknowledged an alert"
-    # ⚠️ ANSWERED, UNLIKE AN UNKNOWN TYPED MESSAGE. A button is only visible to
-    # somebody already in the chat, so leaving their press spinning forever is
-    # a broken app rather than a closed door.
-    assert answered, "the refused press was left spinning"
+    monkeypatch.setattr(buttons, "_answer", fake_answer)
+    out = asyncio.run(buttons.handle(
+        _press({"data": "vx:c1", "id": "q1", "user_id": 99,
+                "from_first": "Stranger"}),
+        session=None, config={"people": []}))
+    assert out == "", f"a press from the chat was refused: {out!r}"
+    assert concerns.read()[0]["acknowledged_at"], \
+        "the press did not acknowledge the alert"
+    assert answered, "the press was left spinning"
 
 
-def test_the_ROLE_is_read_from_the_SENDER_ID_never_from_the_payload() -> None:
+def test_the_HANDLER_READS_NO_ROLE_AT_ALL_AND_CERTAINLY_NOT_FROM_THE_PAYLOAD() -> None:
+    """⚠️ TWO PROPERTIES, AND THE SECOND OUTLIVES THE GATE. There is no role
+    lookup left in this path — pinned so a future edit cannot quietly restore a
+    per-person allow-list. And a press must still never name its own role: with
+    no gate the field would be inert today, but a payload-supplied role is the
+    shape that becomes a privilege bug the moment anything reads one again."""
     code = _code(buttons.handle)
-    assert 'sender_id=data.get("user_id")' in code
     assert 'data.get("role")' not in code, \
         "the press names its own role, so anyone in the chat can claim one"
+    assert "sender_role" not in code, "the per-person gate is back"
+    assert "MAY_ACT" not in code, "the role gate is back on the press path"
 
 
 def test_a_press_that_is_NOT_OURS_stops_before_anything_is_read() -> None:

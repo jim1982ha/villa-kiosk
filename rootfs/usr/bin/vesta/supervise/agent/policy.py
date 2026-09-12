@@ -253,53 +253,6 @@ class Decision:
         return self.verdict == "allow"
 
 
-def sender_role(config: Optional[Mapping[str, Any]], *, channel: str,
-                sender_id: Any) -> str:
-    """Who is this, in one lookup? `""` means nobody — no run and no reply.
-
-    ⚠️ RESOLVED BEFORE THE MESSAGE TEXT IS READ, AND THAT ORDER IS THE WHOLE
-    CONTROL. The chat channel is the one place an attacker can inject text, so
-    nothing in a message may influence which role it is treated as. This
-    function takes no message and cannot be given one.
-
-    ⚠️ AN UNLISTED SENDER GETS SILENCE, NOT A REFUSAL. An error reply confirms
-    the bot is live to whoever is probing it, and the bot's username is
-    discoverable. The caller records one audit row and returns.
-
-    ⚠️ THE MAP IS SEEDED EMPTY AND A DEFAULT HERE WOULD BE A SECURITY BUG, not
-    a convenience — see `config.MUST_BE_EMPTY`. Empty means the bot answers
-    nobody, which is the correct state for a villa where nobody has said who may
-    talk to it.
-
-    ⚠️ KEYED `channel:sender_id`, NOT ON THE ID ALONE. A Telegram user id and a
-    future WhatsApp id are integers from different namespaces and would
-    eventually collide; a bare id map would then grant one person's role to a
-    stranger on another platform. Lookup is on the STRING of the id because
-    JSON object keys are strings and an int id round-trips as one.
-    """
-    # ⚠️ DELEGATED TO `people.py` SINCE 2.651.0, AND THE LOOKUP DID NOT MOVE —
-    # only its source did. One table now answers both "may this person talk to
-    # the villa" and "whose voice is a briefing to them written in", because
-    # they were always the same fact about the same person configured twice.
-    # `role_for_sender` reads ONLY the telegram field: a delivery target on the
-    # same row is a place to send to, never an identity to trust, and that is
-    # the one way merging the two tables could have widened the allow-list.
-    from vesta.adapters import people as people_mod
-    role = people_mod.role_for_sender(config, channel=channel,
-                                      sender_id=sender_id)
-    if not role:
-        return ""
-    # ⚠️ AN UNKNOWN ROLE IS NOBODY, NOT A DEFAULT ONE. Defaulting would grant
-    # some access to a typo, and this map is the only thing standing between the
-    # villa and anyone who finds the bot. `config.errors` refuses such a role on
-    # the way in; this is the second half, for a document written by hand.
-    # ⚠️ THE APP'S OWN PROFILES, from `contracts.SENDER_ROLE`. This listed
-    # `("owner", "facility", "ops")` — `facility` and `ops` being two names for
-    # ONE person (the Facility Manager, whose profile id is `ops`), with the
-    # real third profile, `guest`, missing entirely.
-    return role if role in contracts.SENDER_ROLE else ""
-
-
 def may_use_tool(policy: RunPolicy, tool_name: str, mode: str = "READ") -> Decision:
     """May this run call this tool at all?
 

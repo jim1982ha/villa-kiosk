@@ -131,7 +131,7 @@ def test_a_trigger_flag_stops_only_its_own_entry_point() -> None:
 def test_an_unknown_SENDER_ROLE_is_refused_not_defaulted() -> None:
     """⚠️ Defaulting would grant SOME access to a typo, and this map is the
     only thing between the villa and anyone who finds the bot."""
-    problems = config.errors({"allowed_senders": {"123": "admin"}})
+    problems = config.errors({"people": [{"role": "admin"}]})
     assert any("admin" in p and "owner" in p for p in problems)
     # ⚠️ THE APP HAS THREE PROFILES AND `facility` IS NOT ONE OF THEM. This
     # fixture accepted it, which is how one person came to have two names: the
@@ -139,10 +139,10 @@ def test_an_unknown_SENDER_ROLE_is_refused_not_defaulted() -> None:
     # `facility` is the AUDIENCE word from `reports/contracts.py`, which that
     # file explicitly says is not a role. Reported from the role picker, where
     # it offered a profile that exists nowhere in the app.
-    assert config.errors({"allowed_senders": {"123": "facility"}}), (
+    assert config.errors({"people": [{"role": "facility"}]}), (
         "an audience word was accepted as a profile")
     for real in ("guest", "owner", "ops"):
-        assert config.errors({"allowed_senders": {"123": real}}) == [], real
+        assert config.errors({"people": [{"role": real}]}) == [], real
 
 
 def test_a_non_boolean_kill_switch_is_refused() -> None:
@@ -160,7 +160,7 @@ def test_negative_and_non_numeric_limits_are_refused() -> None:
 
 def test_junk_shapes_are_refused_without_raising() -> None:
     assert config.errors("not an object")
-    assert config.errors({"allowed_senders": ["not", "a", "map"]})
+    assert config.errors({"people": "not a list"})
     assert config.errors({"actuable_entities": "light.x"})
     assert config.errors(None)
 
@@ -169,7 +169,7 @@ def test_a_valid_config_has_no_errors() -> None:
     assert config.errors({
         "enabled": True, "act_enabled": False,
         "triggers": {"scheduled": True, "event": False, "chat": True},
-        "monthly_limit": 2000, "allowed_senders": {"765979167": "owner"},
+        "monthly_limit": 2000,
         "actuable_entities": ["light.x"], "suppressed_subjects": [],
     }) == []
 

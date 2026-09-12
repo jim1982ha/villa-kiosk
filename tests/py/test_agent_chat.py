@@ -118,66 +118,58 @@ def test_a_dateless_message_with_no_connection_time_is_answered() -> None:
     assert chat.is_fresh(msg, connected_since=0.0, now=1_700_000_000.0) is True
 
 
-# ── who may speak ───────────────────────────────────────────────────────────
-def test_an_unlisted_sender_resolves_to_nobody() -> None:
-    assert policy.sender_role({}, channel="telegram", sender_id="222") == ""
-    assert policy.sender_role({"allowed_senders": {}},
-                              channel="telegram", sender_id="222") == ""
+# ── which VOICE, not whether to listen ──────────────────────────────────────
+#
+# ⚠️ THIS SECTION USED TO TEST WHO MAY SPEAK, AND THAT QUESTION IS GONE (owner's
+# ruling, 2026-09-13). `policy.sender_role` matched an inbound sender id against
+# a per-person table — a second allow-list beside Home Assistant's own
+# `allowed_chat_ids`. The two disagreed: a phantom entry the settings picker
+# offered got stored, matched nobody, and every button press was refused for
+# everybody. Reaching a chat the villa delivers to IS the permission.
+#
+# What survives is a narrower question with the same table: which PROFILE'S
+# VOICE a reply is written in. A facility manager gets the prompt that wants
+# entity ids; an owner gets the one that forbids them.
+def test_the_SENDER_LOOKUP_IS_GONE_FROM_BOTH_HALVES() -> None:
+    """⚠️ PINNED BY ABSENCE, AND BOTH HALVES TOGETHER. While either survived, a
+    caller could resolve a sender to a role and gate on it again."""
+    from vesta.adapters import people as people_mod
+    from vesta.supervise.agent import policy
+    assert not hasattr(policy, "sender_role")
+    assert not hasattr(people_mod, "role_for_sender")
 
 
-def test_a_listed_sender_gets_their_role() -> None:
-    # ⚠️ `ops` IS THE FACILITY MANAGER — the app's own profile id, per
-    # `src/auth/roles.ts`. This fixture said `facility`, which is an AUDIENCE
-    # word and was never a profile; the picker offering it was the bug.
-    cfg = {"allowed_senders": {"telegram:222": "owner",
-                               "telegram:333": "ops",
-                               "telegram:444": "guest"}}
-    assert policy.sender_role(cfg, channel="telegram", sender_id="222") == "owner"
-    assert policy.sender_role(cfg, channel="telegram", sender_id=333) == "ops"
-    assert policy.sender_role(cfg, channel="telegram", sender_id=444) == "guest"
+def test_the_VOICE_comes_from_the_CHAT_the_question_arrived_in() -> None:
+    from vesta.adapters import people as people_mod
+    cfg = {"people": [
+        {"targets": ["entity:notify.bot_private"], "role": "owner"},
+        {"targets": ["entity:notify.bot_group"], "role": "ops"}]}
+    assert people_mod.role_for_chat(
+        cfg, target="entity:notify.bot_private") == "owner"
+    assert people_mod.role_for_chat(
+        cfg, target="entity:notify.bot_group") == "ops"
 
 
-def test_the_key_carries_the_CHANNEL_not_just_the_id() -> None:
-    """⚠️ A Telegram user id and a future WhatsApp id are integers from
-    different namespaces and would eventually collide, granting one person's
-    role to a stranger on another platform."""
-    cfg = {"allowed_senders": {"telegram:222": "owner"}}
-    assert policy.sender_role(cfg, channel="whatsapp", sender_id="222") == ""
+def test_an_UNKNOWN_chat_falls_back_to_the_WITHHOLDING_voice() -> None:
+    """⚠️ `""` MEANS "NO PROFILE STATED", NOT "REFUSED" — admission was settled
+    upstream. `handle_event` passes it through `AUDIENCE_OF_ROLE.get(role,
+    "owner")`, and the owner prompt is the one that WITHHOLDS entity ids, so an
+    unrecognised room is answered with less rather than more."""
+    from vesta.adapters import people as people_mod
+    from vesta.supervise.agent import playbooks
+    assert people_mod.role_for_chat({"people": []},
+                                    target="entity:notify.anything") == ""
+    assert playbooks.AUDIENCE_OF_ROLE.get("", "owner") == "owner"
 
 
-def test_an_unknown_role_is_NOBODY_not_a_default_one() -> None:
-    """Defaulting would grant some access to a typo."""
-    for junk in ("admin", "Owner ", "", "facility", None, 7, ["owner"]):
-        cfg = {"allowed_senders": {"telegram:222": junk}}
-        got = policy.sender_role(cfg, channel="telegram", sender_id="222")
-        assert got in ("", "owner"), got
-    assert policy.sender_role({"allowed_senders": {"telegram:222": "admin"}},
-                              channel="telegram", sender_id="222") == ""
-    # ⚠️ `facility` IS NOT A PROFILE and must resolve to nobody — it is the
-    # audience word, and admitting it here is what let one person have two
-    # names.
-    assert policy.sender_role({"allowed_senders": {"telegram:222": "facility"}},
-                              channel="telegram", sender_id="222") == ""
-
-
-def test_a_role_is_matched_case_and_space_insensitively() -> None:
-    cfg = {"allowed_senders": {"telegram:222": "  Owner "}}
-    assert policy.sender_role(cfg, channel="telegram", sender_id="222") == "owner"
-
-
-def test_resolving_a_sender_takes_no_message_and_so_cannot_read_one() -> None:
-    """⚠️ STRUCTURAL, NOT A CONVENTION. The chat channel is the one place an
-    attacker can inject text, so nothing in a message may influence which role
-    it is treated as. The function has no parameter for one."""
-    import inspect
-    params = set(inspect.signature(policy.sender_role).parameters)
-    assert params == {"config", "channel", "sender_id"}
-
-
-def test_the_allow_list_ships_empty() -> None:
+def test_the_TABLE_still_ships_empty() -> None:
+    """⚠️ EMPTY IS STILL A SECURITY REQUIREMENT, for the other direction now: an
+    empty table means nowhere to deliver, and a seeded one would write this
+    property's briefings to whatever address a default named."""
     from vesta.supervise.agent import config as agent_config
-    assert agent_config.DEFAULTS["allowed_senders"] == {}
-    assert "allowed_senders" in agent_config.MUST_BE_EMPTY
+    assert agent_config.DEFAULTS["people"] == []
+    assert "people" in agent_config.MUST_BE_EMPTY
+    assert "allowed_senders" not in agent_config.DEFAULTS
 
 
 # ── threads ─────────────────────────────────────────────────────────────────
@@ -394,8 +386,7 @@ def _handle(event: Dict[str, Any], **kw: Any) -> str:
     kw.setdefault("model", "m")
     kw.setdefault("targets", ["notify.owner"])
     kw.setdefault("config", {"enabled": True,
-                             "triggers": {"chat": True},
-                             "allowed_senders": {"telegram:222": "owner"}})
+                             "triggers": {"chat": True}})
     return asyncio.run(chat.handle_event(event, **kw))
 
 
@@ -409,65 +400,37 @@ def test_a_message_from_a_listed_sender_produces_a_run() -> None:
 
 def test_the_chat_trigger_switch_stops_it_before_anything_costs_anything() -> None:
     got = _handle(_event(), config={"enabled": True,
-                                    "triggers": {"chat": False},
-                                    "allowed_senders": {"telegram:222": "owner"}})
+                                    "triggers": {"chat": False}})
     assert got == "chat trigger disabled"
 
 
 def test_the_master_switch_stops_it_too() -> None:
     got = _handle(_event(), config={"enabled": False,
-                                    "triggers": {"chat": True},
-                                    "allowed_senders": {"telegram:222": "owner"}})
+                                    "triggers": {"chat": True}})
     assert got == "chat trigger disabled"
 
 
-def test_an_unlisted_sender_gets_no_run_and_no_reply() -> None:
-    """TEST-029. ⚠️ EXACTLY ONE AUDIT ROW AND NO REPLY — silence is the answer,
-    because an error reply confirms the bot is live to whoever is probing it."""
-    from vesta.supervise.agent import audit as audit_mod
+def test_a_sender_NOBODY_REGISTERED_still_gets_a_run() -> None:
+    """⚠️ TEST-029 INVERTED, DELIBERATELY (owner's ruling, 2026-09-13).
 
-    before = len(audit_mod.rows(500))
+    This used to assert that a sender absent from the allow-list got silence and
+    one audit row. That allow-list is gone: Home Assistant's own
+    `allowed_chat_ids` already decides which chats reach this code, and keeping a
+    second list beside it is what refused the owner's own presses for a
+    fortnight. The owner's words: "the fact that the person had access to the
+    telegram chat is the first [gate] already."
+
+    So a message with an EMPTY people table must now be answered. What is no
+    longer tested here is a property that no longer exists; what replaced it is
+    `role_for_chat`, covered in the "which VOICE" section above.
+    """
     verdict = _handle(_event(), config={"enabled": True,
                                         "triggers": {"chat": True},
-                                        "allowed_senders": {}})
-    # ⚠️ THE VERDICT IS NAMED IN THE MESSAGE BECAUSE THIS TEST FAILED ONCE,
-    # ON 2026-08-26, AND COULD NOT BE REPRODUCED IN SEVEN LATER RUNS OF THE
-    # FULL SUITE. A bare `==` prints both sides, but the run that failed was
-    # piped through `tail -3` and the detail was lost — so the one thing needed
-    # to diagnose it was thrown away by the person watching, which is this
-    # repository's `feedback_verify-by-exit-status` in its other direction.
-    #
-    # `_handle` reaches this verdict through TWO guards that read state this
-    # test does not set: `trigger_enabled`, and `is_fresh` against
-    # `collect.connected_seconds()` — a module-level global in another package
-    # that the autouse fixture does not reset. If this ever fires again, the
-    # message says which guard answered instead of leaving it to be guessed.
-    assert verdict == "sender not allowed", (
-        f"the handler refused for a different reason: {verdict!r}. If this "
+                                        "people": []})
+    assert verdict.startswith("answered"), (
+        f"a message from a configured chat was refused: {verdict!r}. If this "
         "names a freshness or trigger guard, the cause is leaked module state "
-        "rather than the allow-list this test is about")
-    rows = audit_mod.rows(500)[before:]
-    assert len(rows) == 1, (
-        f"expected one audit row, got {len(rows)}: "
-        f"{[r.get('tool') for r in rows]}")
-    assert rows[0]["verdict"] == "refused"
-    # ⚠️ THE FIELDS, NOT THE ROW'S REPR — AND THIS IS THE 2026-08-26 FLAKE,
-    # FOUND 2026-08-28 AFTER 250 RUNS. The comment above blamed a freshness or
-    # trigger guard and added diagnostics to the wrong assertion; the failure
-    # was here. `run_id` is `chat<epoch seconds>`, so on roughly one run in a
-    # thousand the CLOCK ends in the same three digits as the fixture's sender
-    # id and a substring search over the whole row matched a timestamp. The
-    # test then reported that a prober's id had been recorded verbatim, which
-    # is a security claim, about a number that came from `time.time()`.
-    #
-    # ⚠️ IT IS THE SAME DEFECT `_matches` WAS FIXED FOR ONE FILE OVER: an
-    # unanchored substring search over text that legitimately contains digits.
-    # Naming the fields also makes the assertion say what it means — a NEW
-    # field carrying the sender would be missed by a whole-row search that
-    # happened to match the run id anyway.
-    leaky = {k: v for k, v in rows[0].items() if k != "run_id"}
-    assert "222" not in str(leaky), (
-        f"the row must not record the prober's id verbatim: {leaky}")
+        "rather than the gate this test used to be about")
 
 
 def test_a_replayed_backlog_message_is_refused_before_the_model() -> None:
@@ -572,10 +535,20 @@ def test_a_successful_run_does_not_ALSO_send_a_decline() -> None:
     assert not any("could not answer" in m for m in sent)
 
 
-def test_an_UNLISTED_sender_is_never_told_anything() -> None:
-    """⚠️ THE SILENCE RULE STILL HOLDS WHERE IT WAS WRITTEN FOR. It protects
-    against a stranger learning the bot is live; it was never about hiding a
-    fault from the owner. This is the boundary between the two."""
+def test_A_DECLINE_IS_SPOKEN_TO_WHOEVER_ASKED_REGISTERED_OR_NOT() -> None:
+    """⚠️ INVERTED WITH THE GATE (owner's ruling, 2026-09-13), AND THE SILENCE
+    RULE IT PROTECTED NO LONGER HAS A CASE TO PROTECT.
+
+    The old rule was: a stranger must never learn the bot is live, because an
+    error reply confirms it to a prober. That reasoning assumed the villa might
+    be reached by somebody it had not been configured for. It cannot be: Home
+    Assistant only delivers updates from its own configured chats, so there is
+    no stranger on this path — only people the owner already put in a chat.
+
+    So a decline must now REACH the person who asked, whoever they are. The
+    failure this guards against is the opposite of the old one: asking the villa
+    a question, the run declining on cost, and hearing nothing back.
+    """
     from fake_provider import FakeProvider, declines
 
     sent: List[str] = []
@@ -591,11 +564,12 @@ def test_an_UNLISTED_sender_is_never_told_anything() -> None:
         got = _handle(_event(),
                       provider=FakeProvider([declines("no credit left")]),
                       config={"enabled": True, "triggers": {"chat": True},
-                              "allowed_senders": {}})
+                              "people": []})
     finally:
         reply_mod.ReplyTool = original  # type: ignore[misc]
-    assert got == "sender not allowed"
-    assert sent == [], "a stranger was told the bot exists"
+    assert got != "sender not allowed", "the removed gate is back"
+    assert sent, "the person who asked was told nothing about the decline"
+    assert any("credit" in body for body in sent), sent
 
 
 # ── who the answer goes to ──────────────────────────────────────────────────
@@ -787,100 +761,6 @@ def test_an_answer_the_model_ALREADY_replied_is_not_sent_twice() -> None:
         reply_mod.ReplyTool = original  # type: ignore[misc]
 
     assert sent == ["Looking now."], f"answered twice: {sent}"
-
-
-# ── naming the chats, so nobody copies a number ─────────────────────────────
-def _chats(rows: Any = None, states: Any = None) -> List[Any]:
-    import vesta.adapters.hass as hass_mod
-
-    class _Both(_Registry):
-        async def command(self, name: str, **_kw: Any) -> Any:
-            self.calls += 1
-            if name == "get_states":
-                return states if states is not None else [
-                    {"entity_id": "notify.bot_private",
-                     "attributes": {"friendly_name": "Jm"}},
-                    {"entity_id": "notify.bot_group",
-                     "attributes": {"friendly_name": "TheLysHouse"}},
-                ]
-            return self.entries
-
-    fake = _Both(REGISTRY_ROWS if rows is None else rows)
-    original = hass_mod.HassClient
-    hass_mod.HassClient = lambda session: fake   # type: ignore[assignment,misc]
-    try:
-        return asyncio.run(chat.known_chats(None))
-    finally:
-        hass_mod.HassClient = original           # type: ignore[assignment]
-
-
-def test_a_chat_is_offered_by_its_NAME() -> None:
-    """Asked for directly: not a numeric id copied out of a raw payload."""
-    found = _chats()
-    assert [c.name for c in found] == ["Jm"]
-    assert found[0].chat_id == "765979167"
-
-
-def test_a_GROUP_is_NOT_offered_and_the_exclusion_is_correctness() -> None:
-    """⚠️ `allowed_senders` KEYS ON WHO SPEAKS; A NOTIFY ENTITY GIVES WHERE.
-
-    In a private chat those are the same number — verified on the reference
-    villa, 765979167 for both. In a group they differ: the chat id names the
-    room, the user id names whichever member typed. Offering a group would
-    store a value that can never match a sender, and it would fail SILENTLY —
-    the bot would go on ignoring everybody, which looks exactly like an empty
-    list.
-
-    ⚠️ Discriminated on TELEGRAM'S OWN CONVENTION — private ids are positive,
-    groups negative — rather than on the name, because a name is whatever
-    somebody typed.
-    """
-    assert all(not c.chat_id.startswith("-") for c in _chats())
-    assert "TheLysHouse" not in [c.name for c in _chats()]
-
-
-def test_the_name_comes_from_the_STATE_not_the_registry() -> None:
-    """⚠️ Both registry entries on the reference villa carry `name: null` and
-    `original_name: null`; the human label lives in the state's
-    `friendly_name`. Checked against the running instance rather than assumed,
-    which is how the last four bugs in this feature were found."""
-    found = _chats(states=[{"entity_id": "notify.bot_private",
-                            "attributes": {"friendly_name": "Jean-Marie"}}])
-    assert found[0].name == "Jean-Marie"
-
-
-def test_a_chat_with_no_friendly_name_falls_back_to_its_entity_id() -> None:
-    """Never blank: a nameless row is unpickable and looks like a bug."""
-    found = _chats(states=[])
-    assert found[0].name == "notify.bot_private"
-
-
-def test_each_chat_carries_a_target_deliver_can_actually_use() -> None:
-    from vesta.adapters import deliver
-
-    found = _chats()
-    assert found[0].target.startswith(deliver.ENTITY_PREFIX)
-    assert deliver._service_path(found[0].target) == deliver.ENTITY_SERVICE
-
-
-def test_an_unreachable_core_yields_an_EMPTY_list_not_an_error() -> None:
-    """The panel falls back to typing the number, which is what existed
-    before — a villa whose core is restarting must not lose the editor."""
-    import vesta.adapters.hass as hass_mod
-
-    class _Broken:
-        async def __aenter__(self) -> "_Broken":
-            raise RuntimeError("core is restarting")
-
-        async def __aexit__(self, *exc: Any) -> None:
-            return None
-
-    original = hass_mod.HassClient
-    hass_mod.HassClient = lambda session: _Broken()  # type: ignore[assignment,misc]
-    try:
-        assert asyncio.run(chat.known_chats(None)) == []
-    finally:
-        hass_mod.HassClient = original               # type: ignore[assignment]
 
 
 # ── how long an answer may be ───────────────────────────────────────────────

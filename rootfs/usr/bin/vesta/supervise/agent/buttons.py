@@ -442,7 +442,6 @@ async def handle(event: Mapping[str, Any], *, session: Any,
         return ""                        # somebody else's button
 
     from vesta.supervise.agent import actions as actions_mod
-    from vesta.supervise.agent import policy as policy_mod
 
     query_id = str(data.get("id") or "")
     message = data.get("message")
@@ -450,17 +449,27 @@ async def handle(event: Mapping[str, Any], *, session: Any,
     if isinstance(message, Mapping):
         message_id = str(message.get("message_id") or "")
 
-    role = policy_mod.sender_role(config, channel="telegram",
-                                  sender_id=data.get("user_id"))
-    if role not in actions_mod.MAY_ACT:
-        # ⚠️ ANSWERED, UNLIKE AN UNKNOWN TYPED MESSAGE. Silence is right for a
-        # message from a stranger — it tells a prober nothing — but a button is
-        # only visible to somebody already in the chat, and leaving their press
-        # spinning forever is a broken app rather than a closed door.
-        await _answer(session, query_id, "You cannot act on this alert")
-        return "presser may not act"
-
-    who = str(data.get("from_first") or "").strip() or role
+    # ⚠️ NO PER-PERSON GATE HERE, BY THE OWNER'S RULING (2026-09-13), AND THE
+    # CODE THIS REPLACED ALREADY CONTAINED THE ARGUMENT FOR ITS OWN REMOVAL: "a
+    # button is only visible to somebody already in the chat". Reaching a chat
+    # IS the authorisation. Home Assistant's `telegram_bot` accepts updates only
+    # from its configured chats, so a callback that gets this far came from a
+    # room the villa itself delivers to; asking again which individual pressed
+    # it added a second allow-list that could disagree with the first — and did,
+    # refusing the owner for a fortnight.
+    #
+    # ⚠️ THE CONSEQUENCE IS ACCEPTED, NOT OVERLOOKED: anyone who can see the
+    # message can action it, now and as the chat's membership changes. The
+    # owner's words: "As soon as the message is being received in the telegram
+    # chat (whether this is a group chat or an individual chat), the button
+    # shall be clickable whoever is clicking it. The fact that the person had
+    # access to the telegram chat is the first [gate] already." It was asked for
+    # twice; do not reintroduce a sender allow-list without asking.
+    #
+    # ⚠️ `MAY_ACT` STILL GUARDS THE HTTP SURFACE (`supervise/api.py`). That is a
+    # browser session behind Home Assistant's own auth, which is a different
+    # door with a different key, and nothing here changes it.
+    who = str(data.get("from_first") or "").strip() or "someone in the chat"
     # ⚠️ ONE CALL DOES BOTH (2026-09-06). This used to `apply` and then run its
     # own reconcile, which is the same ordering obligation the two HTTP
     # handlers each answered differently and `task.reconcile_done` answered not

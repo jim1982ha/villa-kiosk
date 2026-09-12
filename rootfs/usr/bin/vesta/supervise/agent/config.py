@@ -221,21 +221,16 @@ DEFAULTS: Final[Dict[str, Any]] = {
     "model_chat": "claude-sonnet-5",
     "model_brief": "claude-sonnet-5",
 
-    # ── the two that MUST be empty ───────────────────────────────────────
-    #: ⚠️ EMPTY MEANS NOBODY MAY TALK TO THE BOT. A sender not in this map gets
-    #: no run and no reply — silence rather than a refusal, because an error
-    #: reply confirms the bot is live to whoever is probing it.
-    #:
-    #: ⚠️ SUPERSEDED BY `people` AND DELIBERATELY KEPT. `people.people()` reads
-    #: this when the new table is empty, so a villa that configured senders
-    #: before 2.651.0 does not have its bot go deaf on upgrade — the symptom
-    #: would be "it stopped answering me" with nothing visibly wrong.
-    "allowed_senders": {},
-    #: ⚠️ ONE TABLE FOR BOTH DIRECTIONS, AND THEY ARE NOT SYMMETRIC.
-    #: `{name, telegram, targets[], role}`. `telegram` is the only field that
-    #: grants anything INBOUND; `targets` are notify destinations, which can
-    #: only receive. A person with a device and no chat is delivery-only, which
-    #: is a normal row. Empty by the same requirement as `allowed_senders`.
+    # ── the ones that MUST be empty ──────────────────────────────────────
+    #: ⚠️ ONE TABLE, AND IT NO LONGER GRANTS ANYTHING INBOUND (2026-09-13).
+    #: `{targets[], role}`. `targets` are notify destinations, which can only
+    #: receive; the `telegram` field and the `allowed_senders` map that preceded
+    #: it are both gone, because Home Assistant's own `allowed_chat_ids` is the
+    #: gate and a second allow-list beside it could only disagree with it — and
+    #: did, refusing the owner's own button presses. The role on a row now
+    #: answers VOICE (whose system prompt a reply loads), not admission.
+    #: Still empty by security requirement: an empty table means nowhere to
+    #: deliver, and a seeded one would write briefings to a stranger.
     "people": [],
     #: ⚠️ WHICH SERVICES, as distinct from `actuable_entities`' WHICH DEVICES —
     #: both allow-lists must pass, so `light.turn_off` on an unlisted lamp and
@@ -262,7 +257,7 @@ DEFAULTS: Final[Dict[str, Any]] = {
 #: Keys whose default is EMPTY BY SECURITY REQUIREMENT rather than by taste. A
 #: test asserts each of these is falsy in DEFAULTS, so a helpful seed cannot be
 #: added without the build failing.
-MUST_BE_EMPTY: Final[Tuple[str, ...]] = ("allowed_senders", "people",
+MUST_BE_EMPTY: Final[Tuple[str, ...]] = ("people",
                                         "actuable_entities", "allowed_services",
                                         "suppressed_subjects")
 
@@ -398,22 +393,34 @@ def errors(value: Any) -> List[str]:
         if flag in value and not isinstance(value[flag], bool):
             problems.append(f"{flag} must be true or false")
 
-    senders = value.get("allowed_senders")
-    if senders is not None:
-        if not isinstance(senders, Mapping):
-            problems.append("allowed_senders must be an object of id -> role")
+    # ⚠️ THE PEOPLE TABLE IS VALIDATED HERE BECAUSE ITS PREDECESSOR WAS AND
+    # THE CHECK DID NOT FOLLOW IT. `allowed_senders` had a role check in this
+    # function for releases; when `people` superseded it the check stayed
+    # pointed at the old key, so the NEW table — the one an operator actually
+    # edits — was stored unvalidated. That is how a row came to hold a profile
+    # the app cannot express, and a guard that enumerates yesterday's key is
+    # worth less than no guard, because it reads as covered.
+    #
+    # ⚠️ IT REFUSES, IT DOES NOT REPAIR. A config the app cannot express is a
+    # mistake somebody should see; silently rewriting it is how an operator
+    # comes to believe a setting took effect.
+    rows = value.get("people")
+    if rows is not None:
+        if not isinstance(rows, list):
+            problems.append("people must be a list of rows")
         else:
-            for sender, role in senders.items():
-                if not str(sender).strip():
-                    problems.append("allowed_senders has an empty sender id")
+            for index, row in enumerate(rows):
+                if not isinstance(row, Mapping):
+                    problems.append(f"people[{index}] must be an object")
+                    continue
+                role = row.get("role")
                 if role not in contracts.SENDER_ROLE:
-                    # ⚠️ AN UNKNOWN ROLE IS REFUSED, not defaulted. Defaulting
-                    # would grant SOME access to a typo, and this map is the
-                    # only thing standing between the villa and anyone who
-                    # finds the bot.
                     problems.append(
-                        f"allowed_senders[{sender}] role {role!r} is not one "
-                        f"of {', '.join(contracts.SENDER_ROLE)}")
+                        f"people[{index}] role {role!r} is not one of "
+                        f"{', '.join(contracts.SENDER_ROLE)}")
+                targets = row.get("targets")
+                if targets is not None and not isinstance(targets, list):
+                    problems.append(f"people[{index}] targets must be a list")
 
     for name in ("actuable_entities", "allowed_services", "suppressed_subjects"):
         if name in value and not isinstance(value[name], list):

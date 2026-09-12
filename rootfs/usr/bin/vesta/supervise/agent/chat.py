@@ -452,19 +452,28 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
                 f"{int(_now() - connected)}s after connecting, "
                 f"backlog window {BACKLOG_GRACE_S}s)")
 
-    from vesta.supervise.agent import audit as audit_mod
+    # ⚠️ THE VILLA NO LONGER RE-ASKS WHO SENT THIS (owner's ruling, 2026-09-13).
+    # There used to be a per-person allow-list here, matched on the sender id —
+    # a second gate beside Home Assistant's own `allowed_chat_ids`, which could
+    # disagree with it and did. `telegram_bot` accepts updates only from its
+    # configured chats, so a message that reaches this line already came from a
+    # room the villa is configured to talk in. The owner's words: "the fact that
+    # the person had access to the telegram chat is the first [gate] already."
+    #
+    # ⚠️ WHAT IS RESOLVED HERE IS VOICE, NOT ADMISSION. The profile decides which
+    # system prompt loads — a facility manager gets the file that WANTS entity
+    # ids, an owner gets the one that forbids them — so it is read from the CHAT
+    # the question arrived in rather than from whoever typed it. An unknown chat
+    # resolves to `""` and `AUDIENCE_OF_ROLE.get(role, "owner")` below falls
+    # back to the owner voice, which is the WITHHOLDING one: the safe default is
+    # to say less, not more.
+    # ⚠️ `policy_mod` IS STILL NEEDED BELOW (`for_run`), and removing the gate
+    # above took its import with it the first time — a NameError three hundred
+    # lines further down, caught by the suite rather than by reading.
+    from vesta.adapters import people as people_mod
     from vesta.supervise.agent import policy as policy_mod
-    role = policy_mod.sender_role(config, channel=message.channel,
-                                  sender_id=message.sender_id)
-    if not role:
-        # ⚠️ ONE AUDIT ROW AND NO REPLY. Silence is the answer — an error reply
-        # confirms the bot is live to whoever is probing it. The row is what
-        # makes "somebody is trying to talk to the villa" visible to the owner
-        # without telling the prober anything.
-        audit_mod.record_run(f"chat{int(_now())}", actor="unknown",
-                             trigger="chat", verdict="refused",
-                             detail="sender not in allowed_senders")
-        return "sender not allowed"
+    role = people_mod.role_for_chat(
+        config, target=await target_for(session, message.chat_id))
 
     if provider is None or not provider.configured():
         return "no model provider configured"
@@ -510,7 +519,8 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
             playbooks.AUDIENCE_OF_ROLE.get(role, "owner"),
             instructions=SYSTEM, document=document),
         messages=context_for(message),
-        config=config, actor=role, trigger="chat", kind="chat")
+        config=config, actor=role or "chat", trigger="chat",
+        kind="chat")
 
     # ⚠️ THE ANSWER ITSELF IS DELIVERED HERE, AND FORGETTING THAT COST THE
     # WHOLE FEATURE. `run_loop` returns the model's final prose in
@@ -674,75 +684,3 @@ async def target_for(session: Any, chat_id: str,
 def forget_targets() -> None:
     """Drop the resolved map. For tests, and for a registry that has changed."""
     _TARGETS.clear()
-
-
-@dataclass
-class Chat:
-    """One conversation the bot can be reached in, as a person names it."""
-
-    chat_id: str
-    name: str
-    #: `entity:notify.…`, ready for `deliver`.
-    target: str
-
-
-async def known_chats(session: Any) -> List[Chat]:
-    """Every PRIVATE chat this villa's bot has, named as a person would.
-
-    ⚠️ PRIVATE ONLY, AND THE EXCLUSION IS CORRECTNESS RATHER THAN TASTE.
-    `allowed_senders` keys on WHO SPEAKS (`user_id`); a notify entity gives
-    WHERE (`chat_id`). In a private chat those are the same number — verified
-    on the reference villa, `765979167` for both. In a GROUP they differ: the
-    chat id identifies the room and the user id identifies whichever member
-    typed. Offering a group here would store a number that can never match a
-    sender, and it would fail SILENTLY — the bot would simply keep ignoring
-    everyone, which is indistinguishable from an empty list.
-
-    ⚠️ TELEGRAM'S OWN CONVENTION IS THE DISCRIMINATOR: a private chat id is
-    POSITIVE, a group or supergroup is NEGATIVE. Read off the id rather than
-    off the name, because a name is whatever somebody typed.
-
-    ⚠️ THE NAME COMES FROM THE STATE, NOT THE REGISTRY. Both registry entries
-    on the reference villa carry `name: null` and `original_name: null`, and the
-    human label lives in the state's `friendly_name` — checked against the
-    running instance rather than assumed, which is how the last four bugs in
-    this feature were found.
-    """
-    try:
-        from vesta.adapters import deliver
-        from vesta.adapters.hass import HassClient
-        async with HassClient(session) as hass:
-            entries = await hass.command("config/entity_registry/list")
-            states = await hass.command("get_states")
-    except Exception as err:  # noqa: BLE001 - degrade, never fail
-        from vesta.adapters.log import swallow
-        swallow("could not list the bot's chats", err)
-        return []
-
-    labels: Dict[str, str] = {}
-    for state in states if isinstance(states, list) else []:
-        if not isinstance(state, Mapping):
-            continue
-        attrs = state.get("attributes")
-        if isinstance(attrs, Mapping) and attrs.get("friendly_name"):
-            labels[str(state.get("entity_id") or "")] = \
-                str(attrs["friendly_name"])
-
-    out: List[Chat] = []
-    for entry in entries if isinstance(entries, list) else []:
-        if not isinstance(entry, Mapping):
-            continue
-        if str(entry.get("platform") or "") != rich_mod.PLATFORM:
-            continue
-        unique = str(entry.get("unique_id") or "")
-        if "_" not in unique:
-            continue
-        chat_id = unique.rsplit("_", 1)[1]
-        if chat_id.startswith("-"):
-            continue                      # a group: see the docstring
-        entity_id = str(entry.get("entity_id") or "")
-        out.append(Chat(chat_id=chat_id,
-                        name=labels.get(entity_id) or entity_id,
-                        target=f"{deliver.ENTITY_PREFIX}{entity_id}"))
-    out.sort(key=lambda c: c.name.lower())
-    return out

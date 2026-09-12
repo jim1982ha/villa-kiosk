@@ -1,12 +1,17 @@
-"""The people table — one row per person, two directions, not symmetric.
+"""The people table — one row per person: destinations and a profile.
 
-⚠️ MERGING AN AUTH ALLOW-LIST WITH A DELIVERY LIST HAS EXACTLY ONE DANGEROUS
-FAILURE, AND IT IS THE FIRST TEST BELOW. `allowed_senders` decided who may talk
-to the villa; the schedule targets decided where a brief is sent. They are now
-one table because they were always one fact about one person — but a notify
-destination can only RECEIVE, so treating one as identity would let anyone who
-can name a notify entity assume that person's role. Everything else here is
-convenience; that one is the boundary.
+⚠️ THE TABLE NO LONGER DECIDES WHO MAY TALK TO THE VILLA (owner's ruling,
+2026-09-13). It used to carry a `telegram` id per row, and `role_for_sender`
+matched an inbound sender against it — a second allow-list beside Home
+Assistant's own `allowed_chat_ids`, which could disagree with it and did:
+a phantom entry offered by the settings picker was stored, matched nobody, and
+every Telegram button answered "You cannot act on this alert" for a fortnight,
+the owner included. Reaching a chat the villa delivers to IS the permission.
+
+So the row now answers ONE question in ONE direction: PROFILE -> DESTINATIONS,
+plus its mirror `role_for_chat` (DESTINATION -> PROFILE) which decides the VOICE
+a reply is written in, never whether to listen. Any test here that expects an
+inbound grant is testing behaviour that was deliberately removed.
 """
 
 from __future__ import annotations
@@ -21,59 +26,90 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "rootfs", "usr", "bin"))
 from vesta.adapters import people as people_mod
 from vesta.brief import pipeline as pipeline_mod
 
-OWNER = {"telegram": "765979167",
-         "targets": ["entity:notify.iphone_16_fab"], "role": "owner"}
-FM = {"telegram": "",
-      "targets": ["entity:notify.the_ipad"], "role": "ops"}
+OWNER = {"targets": ["entity:notify.iphone_16_fab"], "role": "owner"}
+FM = {"targets": ["entity:notify.the_ipad"], "role": "ops"}
 CFG = {"people": [OWNER, FM]}
 
 
-# ── the boundary ────────────────────────────────────────────────────────────
-def test_a_DELIVERY_TARGET_is_never_an_identity() -> None:
-    """⚠️ THE ONE WAY THIS MERGE COULD HAVE WIDENED THE ALLOW-LIST. A notify
-    entity can only receive; naming one must grant nothing inbound. If this ever
-    goes green in the other direction, anyone who can guess a notify entity id
-    can speak to the villa as its owner."""
-    assert people_mod.role_for_sender(
-        CFG, channel="telegram", sender_id="entity:notify.iphone_16_fab") == ""
-    assert people_mod.role_for_sender(
-        CFG, channel="telegram", sender_id="notify.the_ipad") == ""
+# ── the boundary, in its new place ──────────────────────────────────────────
+def test_a_ROW_CARRIES_NO_INBOUND_CREDENTIAL_AT_ALL() -> None:
+    """⚠️ THE FIELD IS GONE, NOT MERELY IGNORED. While a `telegram` key survived
+    on a row, the next reader could quietly start trusting it again — which is
+    how the villa ended up with two allow-lists that disagreed. `_row` must not
+    carry one forward even if a stale document still holds it."""
+    stale = {"people": [{"telegram": "12345",
+                         "targets": ["entity:notify.the_ipad"],
+                         "role": "ops"}]}
+    rows = people_mod.people(stale)
+    assert rows and "telegram" not in rows[0], (
+        "a row still carries an inbound id — the second allow-list is back")
 
 
-def test_a_person_with_NO_telegram_grants_nothing_inbound() -> None:
-    """A delivery-only row is a normal row, and it is not a credential."""
-    assert people_mod.role_for_sender(CFG, channel="telegram",
-                                      sender_id="") == ""
-    # The FM is reachable and cannot speak.
-    assert people_mod.targets_for_role(CFG, "ops") == ["entity:notify.the_ipad"]
+def test_the_MODULE_offers_no_way_to_resolve_a_SENDER() -> None:
+    """⚠️ PINNED BY ABSENCE, DELIBERATELY. The removal is the feature; a helper
+    that resolves a sender id to a role is the thing that must not return."""
+    assert not hasattr(people_mod, "role_for_sender")
+    assert not hasattr(people_mod, "INBOUND_CHANNEL")
 
 
-def test_an_unknown_sender_is_NOBODY() -> None:
-    assert people_mod.role_for_sender(CFG, channel="telegram",
-                                      sender_id="999") == ""
+def test_a_CHAT_resolves_to_the_PROFILE_it_is_a_DESTINATION_for() -> None:
+    """The voice, from the room. `chat.target_for` hands this the entity-
+    addressed form it resolved a chat id to, which is the shape a row stores."""
+    assert people_mod.role_for_chat(
+        CFG, target="entity:notify.iphone_16_fab") == "owner"
+    assert people_mod.role_for_chat(
+        CFG, target="entity:notify.the_ipad") == "ops"
 
 
-def test_another_channel_is_NOBODY_even_with_a_matching_id() -> None:
-    """⚠️ A Telegram user id and a future WhatsApp id are integers from
-    different namespaces and would eventually collide."""
-    assert people_mod.role_for_sender(CFG, channel="whatsapp",
-                                      sender_id="765979167") == ""
+def test_an_UNKNOWN_chat_answers_NOBODY_and_the_caller_falls_back_QUIETER() -> None:
+    """⚠️ `""` IS NOT A DENIAL HERE — admission was already settled upstream.
+    It means "no profile stated", and `AUDIENCE_OF_ROLE.get(role, "owner")`
+    then loads the OWNER voice, which is the one that WITHHOLDS entity ids. The
+    safe fallback is to say less, not more."""
+    assert people_mod.role_for_chat(CFG, target="entity:notify.nobody") == ""
+    assert people_mod.role_for_chat(CFG, target="") == ""
+    assert people_mod.role_for_chat({}, target="entity:notify.the_ipad") == ""
 
 
-def test_an_EMPTY_table_answers_nobody() -> None:
-    assert people_mod.role_for_sender({}, channel="telegram",
-                                      sender_id="765979167") == ""
+def test_ONE_CHAT_NAMED_BY_TWO_ROWS_RESOLVES_BY_PRECEDENCE_NOT_ORDER() -> None:
+    """⚠️ THIS VILLA'S ACTUAL SHAPE: the owner and the facility manager both
+    receive in one group. Which voice that room is answered in must not depend
+    on which row somebody edited last, so the answer is the strongest profile
+    present rather than the first match."""
+    shared = "entity:notify.the_ipad"
+    both = {"people": [{"targets": [shared], "role": "ops"},
+                       {"targets": [shared], "role": "owner"}]}
+    flipped = {"people": [{"targets": [shared], "role": "owner"},
+                          {"targets": [shared], "role": "ops"}]}
+    assert people_mod.role_for_chat(both, target=shared) == "owner"
+    assert people_mod.role_for_chat(flipped, target=shared) == "owner"
+
+
+def test_ALL_THREE_PROFILES_PARTICIPATE() -> None:
+    """⚠️ GUEST IS A REAL PROFILE, and it was missing from the first version of
+    the precedence tuple. The onboarding menu offers guest, owner and facility
+    manager; a guest-only chat must resolve to guest rather than to nobody."""
+    guest = {"people": [{"targets": ["entity:notify.the_ipad"],
+                         "role": "guest"}]}
+    assert people_mod.role_for_chat(
+        guest, target="entity:notify.the_ipad") == "guest"
+    assert set(people_mod.CHAT_ROLE_PRECEDENCE) \
+        == set(people_mod.AUDIENCE_OF_ROLE)
+
+
+def test_an_EMPTY_table_reaches_nobody() -> None:
     assert people_mod.people({}) == []
+    assert people_mod.targets_for_role({}, "owner") == []
 
 
 def test_a_row_with_an_UNKNOWN_ROLE_is_dropped_not_defaulted() -> None:
-    """⚠️ The role decides both whether somebody may speak and which voice they
-    are written in — one withholds entity ids, the other requires them. A
-    default here would be a privilege decision made by a typo."""
-    bad = {"people": [{"telegram": "1", "role": "adminz"}]}
+    """⚠️ The profile decides which voice a reply is written in — one withholds
+    entity ids, the other requires them. A default here would be a privilege
+    decision made by a typo."""
+    bad = {"people": [{"targets": ["entity:notify.the_ipad"],
+                       "role": "adminz"}]}
     assert people_mod.people(bad) == []
-    assert people_mod.role_for_sender(bad, channel="telegram",
-                                      sender_id="1") == ""
+    assert people_mod.role_for_chat(bad, target="entity:notify.the_ipad") == ""
 
 
 # ── the derivation: PROFILE -> TARGETS ──────────────────────────────────────
@@ -123,14 +159,13 @@ def test_two_people_of_one_profile_sharing_a_device_get_ONE_copy() -> None:
         == ["entity:notify.tablet", "entity:notify.iphone"]
 
 
-def test_a_person_with_a_CHAT_and_no_device_makes_no_profile_reachable() -> None:
-    """The asymmetry, from the delivery side: `role_for_sender` says they may
-    speak and this says there is nowhere to write back to on a schedule."""
-    chat_only = {"people": [{"telegram": "1", "role": "ops",
-                             "targets": []}]}
-    assert people_mod.role_for_sender(chat_only, channel="telegram",
-                                      sender_id="1") == "ops"
-    assert people_mod.targets_for_role(chat_only, "ops") == []
+def test_a_person_with_NO_device_makes_no_profile_reachable() -> None:
+    """A row with a profile and no destinations is a normal row that reaches
+    nowhere — and, now that the inbound half is gone, reaches nowhere in BOTH
+    directions: there is no target for `role_for_chat` to match either."""
+    no_device = {"people": [{"role": "ops", "targets": []}]}
+    assert people_mod.targets_for_role(no_device, "ops") == []
+    assert people_mod.role_for_chat(no_device, target="entity:notify.x") == ""
 
 
 # ── the pipeline reads it in that one direction ─────────────────────────────
@@ -248,18 +283,19 @@ def test_the_schedules_PROFILE_KEY_crosses_every_boundary_intact() -> None:
         "the profiles the dialog offers are not the profiles the store accepts")
 
 
-def test_the_PANEL_never_hides_an_inbound_grant_it_has_stored() -> None:
-    """⚠️ AUTHORITY YOU CANNOT SEE IS WORSE THAN A FIELD YOU DO NOT NEED.
+def test_the_PANEL_NO_LONGER_ASKS_FOR_A_CHAT_AT_ALL() -> None:
+    """⚠️ PINNED BY ABSENCE, AND THIS IS THE CONTROL THAT CAUSED THE INCIDENT.
 
-    The chat field is hidden while the villa answers nobody — there is nothing
-    for it to grant, and an inert control is what made this row read as one
-    address asked for twice. But a row that ALREADY carries a chat must keep
-    showing it whatever the toggle says: switching "Answer messages" off does
-    not clear the table, so hiding the field would conceal exactly who starts
-    speaking again the moment it goes back on.
+    The removed column was a picker of the bot's private chats. Its option list
+    was built from any telegram-platform registry entry whose unique_id had an
+    underscore, so when Home Assistant grew an update-EVENT entity the list
+    offered "Vesta_… Update event" as a PERSON. It was reasonably selected, and
+    a stored value that can never equal a sender id then refused every button
+    press by everybody.
 
-    ⚠️ AND IT IS THE `||` THAT CARRIES THAT. The obvious condition is "show it
-    when chat is on"; the safe one is "…or when this row has one".
+    The owner's ruling: "there is no need for 'can message' selection here,
+    since it will be fully handled by the telegram group/channel configured."
+    So the field is gone, and a future panel must not reintroduce it.
     """
     import re
 
@@ -267,10 +303,17 @@ def test_the_PANEL_never_hides_an_inbound_grant_it_has_stored() -> None:
                          "PeoplePanel.tsx")
     with open(panel, encoding="utf-8") as handle:
         source = handle.read()
+    # ⚠️ COMMENTS STRIPPED FIRST, AND THE FIRST VERSION OF THIS TEST FAILED
+    # BECAUSE THEY WERE NOT. The header above explains the removal and has to
+    # NAME the removed label to do so, so a raw substring search over the file
+    # reports the control as present while reading its own obituary. Assert
+    # against the CODE, never against prose describing it.
     source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
-    assert re.search(r"\{\(chat \|\| row\.telegram\) && \(", source), (
-        "the chat field is no longer shown for a row that already has one — "
-        "turning chat off would hide who may speak rather than stopping them")
+    source = re.sub(r"(?m)^\s*//.*$", "", source)
+    assert "Can message the villa" not in source, (
+        "the inbound chat picker is back — it is the control that stored an "
+        "unmatchable id and refused every press")
+    assert "loadBotChats" not in source and "row.telegram" not in source
 
 
 def test_the_profile_vocabulary_is_the_APPS_OWN() -> None:
@@ -293,39 +336,6 @@ def test_the_profile_vocabulary_is_the_APPS_OWN() -> None:
         "a profile with no audience answers nothing, silently")
 
 
-# ── the migration ───────────────────────────────────────────────────────────
-def test_the_LEGACY_map_still_answers_when_the_table_is_empty() -> None:
-    """⚠️ WITHOUT THIS, UPGRADING MAKES THE BOT GO DEAF. The symptom would be
-    "the villa stopped answering me" with nothing in the config visibly
-    wrong."""
-    legacy = {"allowed_senders": {"telegram:765979167": "owner"}}
-    assert people_mod.role_for_sender(legacy, channel="telegram",
-                                      sender_id="765979167") == "owner"
-    rows = people_mod.people(legacy)
-    assert len(rows) == 1 and rows[0]["role"] == "owner"
-    assert rows[0]["targets"] == [], "a legacy sender has no delivery target"
-
-
-def test_the_NEW_table_wins_over_the_legacy_map() -> None:
-    """Once an owner has edited the new panel, the old map must not resurrect a
-    sender they removed — the config-resurrection bug in a new place."""
-    both = {"people": [OWNER],
-            "allowed_senders": {"telegram:111": "owner"}}
-    assert people_mod.role_for_sender(both, channel="telegram",
-                                      sender_id="111") == ""
-    assert people_mod.role_for_sender(both, channel="telegram",
-                                      sender_id="765979167") == "owner"
-
-
-def test_the_migration_does_not_WRITE(tmp_path, monkeypatch) -> None:
-    """⚠️ A config rewrite on READ is how a store silently loses a key it did
-    not understand, and this path runs on every message."""
-    path = str(tmp_path / "agent-config.json")
-    monkeypatch.setattr(people_mod, "CONFIG_PATH", path)
-    people_mod.people({"allowed_senders": {"telegram:1": "owner"}})
-    assert not os.path.exists(path)
-
-
 # ── the duplicated constant, pinned equal ───────────────────────────────────
 def test_the_two_AUDIENCE_OF_ROLE_tables_agree() -> None:
     """⚠️ DUPLICATED ON PURPOSE: `agent.playbooks` cannot be imported from
@@ -336,11 +346,20 @@ def test_the_two_AUDIENCE_OF_ROLE_tables_agree() -> None:
     assert people_mod.AUDIENCE_OF_ROLE == playbooks.AUDIENCE_OF_ROLE
 
 
-def test_policy_delegates_to_this_module() -> None:
-    """The agent's own entry point must resolve identically — one table, one
-    answer, not two lookups that agree today."""
+def test_policy_OFFERS_NO_SENDER_LOOKUP_EITHER() -> None:
+    """⚠️ THE AGENT'S OWN ENTRY POINT IS GONE TOO, and both halves must stay
+    gone together. While either survived, a caller could resolve a sender to a
+    role and gate on it — which is the second allow-list this removal exists to
+    delete. `test_reachability` would also flag an uncalled survivor, but this
+    says WHY rather than merely that nothing calls it."""
     from vesta.supervise.agent import policy
-    assert policy.sender_role(CFG, channel="telegram",
-                              sender_id="765979167") == "owner"
-    assert policy.sender_role(CFG, channel="telegram",
-                              sender_id="entity:notify.iphone_16_fab") == ""
+    assert not hasattr(policy, "sender_role")
+
+
+def test_the_CONFIG_no_longer_carries_an_inbound_allow_list() -> None:
+    """⚠️ `allowed_senders` WAS THE OLDER SPELLING OF THE SAME GATE, kept for a
+    migration that no longer has anywhere to migrate to. Leaving the key in
+    DEFAULTS would let a hand-edited document reintroduce it silently."""
+    from vesta.supervise.agent import config as agent_config
+    assert "allowed_senders" not in agent_config.DEFAULTS
+    assert "allowed_senders" not in agent_config.MUST_BE_EMPTY

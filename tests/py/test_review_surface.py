@@ -216,7 +216,7 @@ def test_the_ROLES_the_server_permits_can_REACH_the_surface() -> None:
     with open(API_PATH, encoding="utf-8") as _api:
         proxy = _api.read()
     handlers = proxy[proxy.index("async def agent_review_get_handler"):]
-    handlers = handlers[:handlers.index("async def agent_chats_handler")]
+    handlers = handlers[:handlers.index("async def agent_audit_handler")]
     assert handlers.count("TASK_ACK_ROLES") == 2, (
         "the review routes no longer gate on TASK_ACK_ROLES")
 

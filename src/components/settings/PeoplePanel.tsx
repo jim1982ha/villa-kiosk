@@ -1,107 +1,60 @@
 // src/components/settings/PeoplePanel.tsx
 //
-// Who the villa knows: one row per person — name, Telegram chat, the devices
-// they are reached on, and their profile. REQ-016, TASK-037, and the owner's
-// own request after the panel this replaces was reported as "a very limited
-// choice of senders".
+// Who the villa knows: one row per person — the devices they are reached on,
+// and their profile. REQ-016, TASK-037.
 //
-// ⚠️ IT REPLACES `ChatSendersPanel`, WHICH ASKED HALF THE QUESTION. That panel
-// listed Telegram chats and a role, because it existed only to answer "may this
-// person talk to the villa". Meanwhile a briefing's recipients were chosen in a
-// completely different modal, from a completely different list, against no
-// person at all — so one human being was configured twice, in two vocabularies,
-// and the two could disagree with nothing anywhere saying so. `reports/people.py`
-// merged the two facts; this is the screen that edits the merged table.
+// ⚠️ THIS PANEL NO LONGER DECIDES WHO MAY TALK TO THE VILLA (owner's ruling,
+// 2026-09-13), AND THE CONTROL IT LOST IS THE ONE THAT BROKE IT. A third column
+// used to ask "Can message the villa", offering the bot's private chats so
+// nobody had to copy a user id out of a raw payload. Its option list was built
+// from any telegram-platform registry entry whose unique_id contained an
+// underscore — so when Home Assistant grew an update-EVENT entity, the list
+// offered "Vesta_… Update event" as a PERSON. It was reasonably selected, and
+// from then on every Telegram button answered "You cannot act on this alert"
+// for everybody, the owner included, because a stored "event" can never equal a
+// sender id. Two allow-lists, and the one this panel wrote disagreed with Home
+// Assistant's own.
 //
-// ⚠️ ONLY THE `telegram` FIELD GRANTS ANYTHING INBOUND, AND THIS PANEL MUST NOT
-// BLUR THAT. A notify target can only RECEIVE — naming one is an address, never
-// an identity — so a person with three devices and no chat may be sent
-// everything and may say nothing. `people.role_for_sender` reads the telegram
-// field alone and is mutation-pinned; a panel that presented the two as one
-// "contact method" would be the one way merging these tables could widen the
-// allow-list.
+// So the second list is gone rather than guarded. Home Assistant's
+// `allowed_chat_ids` decides which chats the bot answers in; reaching one of
+// those chats IS the permission. The owner's words: "As soon as the message is
+// being received in the telegram chat (whether this is a group chat or an
+// individual chat), the button shall be clickable whoever is clicking it. The
+// fact that the person had access to the telegram chat is the first [gate]
+// already." Do not reintroduce a per-person picker here — it was asked for
+// twice, and `test_people` pins its absence.
 //
-// ⚠️ AND THE MERGE WAS ASKED FOR, TWICE, ON A CORRECT OBSERVATION: the same
-// person's Telegram chat appears in BOTH pickers, so the row reads as one
-// address asked for twice. The observation is right and the conclusion does not
-// follow, for three reasons worth keeping written down because the question
-// will be asked again:
+// ⚠️ SO A ROW ANSWERS TWO THINGS, BOTH OUTBOUND. Where briefings go
+// (`targets`), and which voice they are written in (`role`) — a facility
+// manager gets the file that WANTS entity ids, an owner gets the one that
+// forbids them. `people.role_for_chat` reads the same table backwards to pick
+// that voice for a reply, which is a rendering question, never an admission
+// one.
 //
-//   1. THE SETS DIVERGE. `chat.known_chats` is PRIVATE chats only — it excludes
-//      groups because a group's id names the ROOM and the sender id names
-//      whoever typed, so storing one matches nobody and fails silently. The
-//      devices list is Companion apps, televisions, notify services and
-//      Telegram entities INCLUDING groups; the reference villa's own facility
-//      target is a supergroup. One list is people, the other is addresses.
-//   2. DERIVING ONE FROM THE OTHER WOULD MAKE ADDING A DEVICE GRANT THE RIGHT
-//      TO COMMAND THE VILLA. Today a guest can be sent a check-out reminder on
-//      Telegram without gaining a voice; under a merge, that delivery target
-//      would silently authenticate them.
-//   3. IT WOULD PUT THE AUTH PATH ON A LIVE REGISTRY LOOKUP. Identity is a
-//      stored id compared as a string — no network, fails closed. Resolving a
-//      notify entity to a chat id at message time makes the answer depend on an
-//      HA call that can be slow or fail, and "fails closed" then means the bot
-//      goes deaf.
+// ⚠️ ALL THREE PROFILES, from `auth/roles.ts` ROLE_ORDER: guest, owner and
+// facility manager — the same three the onboarding menu offers. A fourth
+// spelling of "who a person is" is how `facility` and `ops` once appeared in
+// one picker.
 //
-// So the FIELDS stay and the PRESENTATION changed: devices first (the ordinary
-// case), the chat second and only while the villa answers messages at all, and
-// labelled by what it DOES ("Can message the villa") rather than by what it
-// contains ("Telegram chat"), which is what made it read as a second address.
+// ⚠️ THE TABLE SHIPS EMPTY, still by security requirement: an empty table means
+// nowhere to deliver, and a seeded one would write this property's briefings to
+// whatever address a default named.
 //
-// ⚠️ THE TABLE SHIPS EMPTY AND EMPTY MEANS THE BOT ANSWERS NOBODY. That is not
-// an unconfigured state to be helped past: a row with a Telegram id in it is an
-// open bot, and anyone who finds the username can then talk to the villa. No
-// example row, no placeholder id, no "add me" shortcut.
-//
-// ⚠️ AND IT IS A RENDERING CONVENIENCE ONLY. `agent/policy.py:sender_role`
-// resolves identity before a message is read and the proxy refuses a non-owner
+// ⚠️ AND IT IS A RENDERING CONVENIENCE ONLY. The proxy refuses a non-owner
 // write to /agent-config. Nothing here is a control.
 
 import ToggleField from "@/components/common/ToggleField";
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
-import { loadBotChats, peopleOf,
-         type AgentConfig, type BotChat, type Person } from "@/vesta/supervise/agentApi";
+import { peopleOf,
+         type AgentConfig, type Person } from "@/vesta/supervise/agentApi";
 import { useAgentConfigDraft } from "@/vesta/supervise/AgentConfigDraft";
 import { fetchReportsDiagnostics } from "@/vesta/brief/reportsApi";
 import DestinationList, { RecipientButton,
                           type DiscoveredTarget } from "@/vesta/brief/components/DestinationList";
 import { ROLE_LABELS, ROLE_ORDER, type Role } from "@/auth/roles";
 import Loading from "@/components/common/Loading";
-
-/** ⚠️ Keyed `channel:id` in the legacy map, because a Telegram user id and a
- *  future WhatsApp id are integers from different namespaces and would
- *  eventually collide. The new table keeps the channel in the FIELD NAME
- *  instead, which is why `people.py` has an `INBOUND_CHANNEL` constant. */
-const CHANNEL = "telegram";
-
-/** Rows synthesised from `allowed_senders`, for a villa that configured senders
- *  before this table existed.
- *
- *  ⚠️ THE SAME MIGRATION `people.people()` DOES ON THE BACKEND, AND FOR THE
- *  SAME REASON — except that one is READ-ONLY and this one is what makes it
- *  permanent. Without it the panel would show an empty list on a villa whose
- *  bot is answering people, which reads as "nobody is configured" and is false.
- *  A legacy sender has no delivery target, so the row is inbound-only until the
- *  owner gives it one — which is exactly the `(no devices yet)` state Briefings
- *  now names. */
-function fromLegacy(map: Record<string, string> | undefined): Person[] {
-  return Object.entries(map ?? {})
-    .filter(([key]) => key.startsWith(`${CHANNEL}:`))
-    .map(([key, role]) => ({
-      // ⚠️ THE CHAT'S OWN NAME WHEN THE BOT KNOWS IT. `allowed_senders` stored
-      // only a number, so a straight migration produced a person CALLED
-      // "765979167" sitting beside a chat picker showing "Jm" — read from the
-      // screen as the same field twice. The bot already knows that chat's
-      // name; using it is the difference between a migrated row and a migrated
-      // row somebody can recognise. The number remains if the chat is gone.
-      telegram: key.slice(CHANNEL.length + 1),
-      targets: [],
-      role: (ROLE_ORDER as readonly string[]).includes(role)
-        ? (role as Role) : "ops",
-    }));
-}
 
 export default function PeoplePanel() {
   /** ⚠️ ONE DRAFT FOR THE WHOLE DOCUMENT, SHARED WITH THE DIALS PANEL BESIDE
@@ -110,41 +63,20 @@ export default function PeoplePanel() {
    *  it and it did not save" on the screen. See `AgentConfigDraft`. */
   const draft = useAgentConfigDraft();
   const saving = draft.saving;
-  const [error, setError] = useState<string | null>(null);
-  /** The bot's own private chats, so nobody copies a number out of a raw
-   *  payload. Empty is a normal state — a villa whose core is restarting, or
-   *  whose bot has no private chats — and the row falls back to typing the id.
-   *  It is never a reason to block the edit. */
-  const [chats, setChats] = useState<BotChat[]>([]);
   /** Every destination Home Assistant can deliver to, from the SAME discovery
    *  the Briefings dialog uses. ⚠️ NOT A SECOND PICKER: `DestinationList` owns
    *  the tick-list idiom, including the two escapes from "a destination is a
    *  notify service" that this villa needed. */
   const [targets, setTargets] = useState<DiscoveredTarget[]>([]);
-  /** ⚠️ THE CHAT FIELD IS HIDDEN WHILE THE VILLA ANSWERS NOBODY — there is
-   *  nothing for it to grant, and an inert control is the clutter that made
-   *  this row confusing. ⚠️ BUT NEVER HIDDEN WHEN A ROW ALREADY HAS ONE: that
-   *  is authority already granted, and authority you cannot see is worse than a
-   *  field you do not need. Switching chat off must not conceal who could
-   *  speak the moment it goes back on. */
   /** Which row has its destination list open. ⚠️ ONE AT A TIME and by INDEX,
    *  the same rule ScheduleTab follows: two open lists on a phone push
    *  everything else off the screen. */
   const [open, setOpen] = useState<number | null>(null);
 
-  const stored = peopleOf(draft.config);
-  /** Rows synthesised from the legacy sender map, when the table is empty.
-   *  ⚠️ DERIVED AFTER `chats` IS DECLARED, because the migration reads it to
-   *  name the person — see `fromLegacy`. */
-  const migrated = stored.length === 0
-    ? fromLegacy(draft.config.allowedSenders as Record<string, string>)
-    : [];
-  const legacy = stored.length === 0 && migrated.length > 0;
-  const rows = stored.length ? stored : migrated;
+  const rows = peopleOf(draft.config);
 
   useEffect(() => {
     let cancelled = false;
-    void loadBotChats().then((got) => { if (!cancelled) setChats(got); });
     void fetchReportsDiagnostics().then((diag) => {
       if (!cancelled) setTargets(diag?.notifyTargets ?? []);
     });
@@ -153,28 +85,16 @@ export default function PeoplePanel() {
 
   /** Put the whole table into the draft.
    *
-   *  ⚠️ IT CLEARS `allowed_senders` AT THE SAME TIME. The two are not merged on
-   *  the backend — `people()` reads the legacy map ONLY while the table is
-   *  empty — so leaving it behind means deleting the last person here silently
-   *  resurrects every sender the old panel had, which is precisely the
-   *  config-resurrection bug the empty-default hard rule exists for. The
-   *  backend's
-   *  migration is read-only; this is the edit that makes it permanent.
+   *  ⚠️ A BLANK ROW IS KEPT IN THE DRAFT RATHER THAN DROPPED. An operator fills
+   *  a row in left to right, and a table that deleted the row the moment it had
+   *  no destinations would delete it under the cursor. `people._row` drops a
+   *  roleless row on read, so nothing downstream can be confused by one.
    *
-   *  ⚠️ AND A BLANK ROW IS KEPT IN THE DRAFT RATHER THAN DROPPED. An operator
-   *  fills a row in left to right, and a table that deleted the row the moment
-   *  it had no name would delete it under the cursor. `people._row` drops a
-   *  nameless row on read, so nothing downstream can be confused by one.
-   *
-   *  ⚠️ A DUPLICATE TELEGRAM ID IS REFUSED, because `role_for_sender` returns
-   *  the FIRST match — two rows claiming one chat would make which profile that
-   *  person speaks as depend on list order. */
+   *  ⚠️ NO DUPLICATE CHECK ANY MORE: there is no per-person id to collide.
+   *  Two rows may name the same chat, and `people.CHAT_ROLE_PRECEDENCE` decides
+   *  which voice that chat is answered in rather than list order. */
   const commit = useCallback((next: Person[]) => {
-    const ids = next.map((r) => r.telegram.trim()).filter(Boolean);
-    setError(ids.length !== new Set(ids).size
-      ? "Two people cannot share one Telegram chat — that one is not stored."
-      : null);
-    draft.edit({ people: next, allowedSenders: {} });
+    draft.edit({ people: next });
   }, [draft]);
 
   /** ⚠️ `triggers` IS SPREAD FROM WHAT WAS STORED, never rebuilt from literals:
@@ -220,22 +140,15 @@ export default function PeoplePanel() {
           : "Turn “Supervision is switched on” on, under Cadence and cost below."}
         more={agentOn ? (
           <>
-            Each row gains a “Can message the villa” field, asked separately
-            from their devices because the two point opposite ways: a device is
-            an address the villa sends TO, and only a private Telegram chat
-            identifies who is SPEAKING. Group chats are not offered — a group's
-            id names the room, not the person.
+            Anyone who can see a message in one of the bot's Telegram chats can
+            reply to it and press its buttons. Reaching the chat is the
+            permission — Home Assistant already decides which chats the bot
+            answers in, and the villa does not keep a second list beside it. The
+            profile below decides whose voice a reply is written in, not who is
+            allowed to ask.
           </>
         ) : undefined}
       />
-
-      {legacy && (
-        <div className="fm-banner" style={{ marginTop: 12 }}>
-          These people were set up when the villa only recorded who may send it
-          messages, so nobody has any devices yet. Add the devices each person
-          should be reached on — briefings for their profile go there.
-        </div>
-      )}
 
       <p className="muted body-text" style={{ marginTop: 14 }}>
         One row per person: where the villa reaches them, and what they are to
@@ -298,59 +211,6 @@ export default function PeoplePanel() {
                   onToggle={() => setOpen(open === i ? null : i)}
                 />
               </label>
-              {/* ⚠️ A NAME WHEN WE KNOW ONE, THE NUMBER WHEN WE DO NOT. In a
-                  PRIVATE chat the chat id and the sender id are the same
-                  number, so the bot's own chat list is exactly the right menu —
-                  groups are excluded by the backend because there the two
-                  differ and an entry could never match anybody. An id already
-                  stored but no longer among the chats keeps its own option, or
-                  editing an existing row would silently retarget it.
-
-                  ⚠️ AND "No chat" IS A REAL CHOICE, NOT AN EMPTY ONE. A person
-                  with devices and no chat is a normal, delivery-only row, and
-                  the option has to say so — a blank first entry reads as "not
-                  filled in yet".
-
-                  ⚠️ IT IS NOT THE SAME QUESTION AS THE DEVICES BESIDE IT, and
-                  the labels are what say so. Asked directly — "I was expecting
-                  to see only the dropdown from picture #3, since it covers all
-                  the possibilities of sending to". It does cover all of those:
-                  it is the OUTBOUND half. A chat is the only thing that lets
-                  somebody message the VILLA, and a notify target can only
-                  receive, so listing one may never be read as identity. That
-                  asymmetry is the one thing merging these two tables could have
-                  got wrong (`people.role_for_sender`), which is why the field
-                  stays and the labels changed instead. */}
-              {(chat || row.telegram) && (
-              <label className="people-field">
-                <span>Can message the villa</span>
-                {chats.length > 0 ? (
-                  <select
-                    value={row.telegram}
-                    disabled={saving}
-                    onChange={(e) => at(i, { telegram: e.target.value })}
-                  >
-                    <option value="">No — receives only</option>
-                    {chats.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                    {row.telegram && !chats.some((c) => c.id === row.telegram) && (
-                      <option value={row.telegram}>
-                        {row.telegram} (not a current chat)
-                      </option>
-                    )}
-                  </select>
-                ) : (
-                  <input
-                    value={row.telegram}
-                    disabled={saving}
-                    placeholder="Their Telegram user id, or leave empty"
-                    inputMode="numeric"
-                    onChange={(e) => at(i, { telegram: e.target.value })}
-                  />
-                )}
-              </label>
-              )}
               <label className="people-field">
                 <span>Profile</span>
                 <select
@@ -394,23 +254,11 @@ export default function PeoplePanel() {
       ))}
 
       <button className="btn" disabled={saving}
-              onClick={() => commit([...rows, { telegram: "", targets: [],
-                                                role: "owner" }])}
+              onClick={() => commit([...rows, { targets: [], role: "owner" }])}
               style={{ marginTop: 10, alignSelf: "flex-start" }}>
         <Plus size={16} aria-hidden /><span>Add someone</span>
       </button>
 
-      {error && <p className="body-text" role="alert">{error}</p>}
-
-      <p className="muted body-text" style={{ marginTop: 10,
-        fontSize: "var(--text-xs)" }}>
-        {chats.length > 0
-          ? "The chat list is the bot's own private chats. Group chats are not "
-            + "listed: a group names a room rather than a person, so it could "
-            + "never match who sent a message."
-          : "No chats found, so type the numeric Telegram user id — it is in "
-            + "the user_id field of any message the bot receives."}
-      </p>
     </>
   );
 }

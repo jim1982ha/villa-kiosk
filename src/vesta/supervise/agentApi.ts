@@ -67,10 +67,10 @@ const AGENT_WIRE_KEYS = {
   model_reason: "modelReason",
   model_chat: "modelChat",
   model_brief: "modelBrief",
-  allowed_senders: "allowedSenders",
-  /** ⚠️ ONE TABLE FOR BOTH DIRECTIONS — see `reports/people.py`. It supersedes
-   *  `allowed_senders`, which is kept and still read when this is empty so an
-   *  existing villa's bot does not go deaf on upgrade. */
+  /** ⚠️ ONE TABLE, AND IT GRANTS NOTHING INBOUND (2026-09-13). A row is
+   *  destinations plus a profile; the `telegram` field and the `allowed_senders`
+   *  map are both gone, because Home Assistant's own allowed-chat list is the
+   *  gate and a second one beside it could only disagree with it. */
   people: "people",
   /** ⚠️ THE FACILITY MANAGER LIST. Empty means the loop is off: a delivered
    *  alert reaches a person and becomes nothing anybody is asked to DO. Naming
@@ -96,8 +96,6 @@ export type AgentTrigger = "scheduled" | "chat";
  *  value travelled to a JSON file and back. The chat picker already shows the
  *  name Telegram itself holds, which is the one nobody has to keep in step. */
 export interface Person {
-  /** Telegram user id, or "" for a delivery-only person. */
-  telegram: string;
   /** Notify destinations — Companion app, Telegram entity, anything
    *  `discovery` found. Receive-only, always. */
   targets: string[];
@@ -119,7 +117,6 @@ export function peopleOf(config: Partial<AgentConfig>): Person[] {
     const r = raw as unknown as Record<string, unknown>;
     if (!(ROLE_ORDER as readonly string[]).includes(String(r.role))) continue;
     out.push({
-      telegram: typeof r.telegram === "string" ? r.telegram : "",
       targets: Array.isArray(r.targets)
         ? r.targets.filter((t): t is string => typeof t === "string" && !!t)
         : [],
@@ -211,7 +208,6 @@ export interface AgentConfig {
    *  name. This was typed `"owner" | "facility" | "ops"` — `facility` and `ops`
    *  being two names for one person, with `guest` missing — which is what put a
    *  profile that does not exist in the picker. */
-  allowedSenders: Record<string, Role>;
   /** Who the villa knows and how to reach them. ⚠️ `telegram` is the ONLY field
    *  that grants anything inbound; `targets` are notify destinations, which can
    *  only receive. A person with a device and no chat is delivery-only, which
@@ -349,25 +345,6 @@ export async function saveAgentConfig(
 // surface or this client and its route should go", and no surface was ever
 // asked for. Nothing is lost to the owner: a run row is an audit row whose
 // `tool` starts with "run:", and `/agent-audit` still serves those.
-
-/** One conversation the villa's bot can be reached in, as a person names it. */
-export interface BotChat { id: string; name: string }
-
-/**
- * The bot's private chats, named. ⚠️ PRIVATE ONLY, and the backend excludes
- * groups deliberately: the sender list keys on WHO SPEAKS, a group's chat id
- * identifies the ROOM, and storing one would silently match nobody.
- */
-export async function loadBotChats(): Promise<BotChat[]> {
-  const r = await fetch(ingressPath("agent-chats"), { credentials: "same-origin" });
-  if (!r.ok) return [];
-  const d = (await r.json().catch(() => ({}))) as { chats?: unknown };
-  const rows = Array.isArray(d.chats) ? d.chats : [];
-  return rows.filter((c): c is BotChat =>
-    !!c && typeof c === "object"
-    && typeof (c as BotChat).id === "string"
-    && typeof (c as BotChat).name === "string");
-}
 
 /**
  * Record a verdict on a concern. Owner and facility manager only, server-side.
