@@ -1,3 +1,26 @@
+## 2.973.0
+
+### Fixed — the buttons on a Telegram alert work again, for everyone in the chat
+Pressing ✅, 🚫 or SOS on an alert replied "You cannot act on this alert" — to
+everybody, including the owner. The villa had been keeping its own list of who
+was allowed to press, separate from the list of chats Home Assistant already
+answers in, and the two had drifted apart. The settings screen offered a
+Telegram entry that was not a person at all; it was chosen, reasonably, and from
+then on no press matched anyone.
+
+That second list is gone rather than patched. Being in a chat the villa sends to
+is now the permission: if a message reached you, its buttons work, whoever you
+are. There is nothing to fill in.
+
+### Changed — "Who may talk to it" no longer asks for a Telegram chat
+The middle column of that screen has been removed. It existed to match a press
+back to a particular person, and with the permission now coming from the chat
+itself there is nothing left for it to decide — it was also the control that
+broke the buttons. A row is now the devices somebody is reached on and their
+profile: guest, owner or facility manager, the same three the setup menu offers.
+The profile still decides what a briefing for them contains and how a reply to
+them is worded.
+
 ## 2.972.0
 
 ### Changed — running a scene now asks first
