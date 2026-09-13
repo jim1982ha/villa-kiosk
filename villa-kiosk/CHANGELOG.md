@@ -1,3 +1,22 @@
+## 2.496.10
+
+### Fixed — the Energy tile under-counted the villa's largest draw by 1000×
+The summary bar's **Energy** figure adds up every power sensor. It added their
+raw numbers together as if all of them reported watts — but Home Assistant lets
+a power sensor report kilowatts, and whole-house meters usually do. A mains
+meter reading **3.2 kW** therefore contributed **3.2** to the total, not 3200.
+
+On a villa with a 3.2 kW mains reading plus about a kilowatt of appliances, the
+tile showed **1.6 kW** where the truth was **4.3 kW** — and the bigger the main
+draw, the more of it went missing. Every reading is now converted to a single
+unit before being added.
+
+Two smaller things came with it. A power sensor that reports only a unit and no
+device class (some plugs do) was already understood elsewhere in the app and is
+now counted here too. And a unit the app cannot interpret with certainty
+contributes **nothing** rather than a number in the wrong unit — "cannot say" is
+not zero.
+
 ## 2.496.9
 
 ### Fixed — a merged room label no longer changes name between loads

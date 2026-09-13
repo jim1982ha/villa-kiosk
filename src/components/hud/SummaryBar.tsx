@@ -31,6 +31,7 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { formatUnitValue } from "@/utils/entityValue";
+import { effectiveSensorClass, toBaseUnit } from "@/config/SensorClasses";
 import { selectableDeviceIds } from "@/config/deviceGroups";
 import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -199,14 +200,26 @@ function deriveTiles(
   }
 
   // ── Energy → total instantaneous power across power sensors (read-only) ─
+  // ⚠️ BY CLASS, NOT BY A REGEX OVER THE UNIT. The old predicate was
+  // `/(^|_)w$|watt/i` — an entity-id-shaped pattern applied to a unit string,
+  // so it matched "W" and could not match "kW" — OR'd with a device_class test
+  // that DID admit kilowatts. `SensorClasses` has mapped "kw" → "power" all
+  // along, three files away; this now asks it.
   const powerSensors = byDomain("sensor").filter(
-    (e) => e.attributes.device_class === "power" || /(^|_)w$|watt/i.test(e.attributes.unit_of_measurement ?? ""),
+    (e) => effectiveSensorClass(e.attributes.device_class as string | undefined,
+                                e.attributes.unit_of_measurement as string | undefined)
+           === "power",
   );
   if (powerSensors.length) {
-    const totalW = powerSensors.reduce((sum, e) => {
-      const v = Number(e.state);
-      return sum + (Number.isFinite(v) ? v : 0);
-    }, 0);
+    // ⚠️ NORMALISED BEFORE SUMMING, SCALED BACK BY `formatUnitValue` AFTER.
+    // This added every member's RAW state into a total labelled watts, so a
+    // mains meter reporting 3.2 kW contributed 3.2 — the villa's largest draw,
+    // under-reported by 1000×, on the most-glanced tile on the wall. A member
+    // whose unit this app cannot scale contributes nothing rather than a number
+    // in the wrong unit.
+    const totalW = powerSensors.reduce(
+      (sum, e) => sum + (toBaseUnit(e.state, e.attributes.unit_of_measurement as string | undefined) ?? 0),
+      0);
     tiles.push({
       id: "__energy", icon: Zap, label: "Energy",
       // ⚠️ ASKED, NOT RESTATED. This was a third copy of the ≥1000 → kW rule,
