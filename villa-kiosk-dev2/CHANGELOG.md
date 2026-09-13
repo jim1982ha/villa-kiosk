@@ -1,3 +1,36 @@
+## 2.496.6
+
+### Fixed — the moon in the night sky was drawn inside out
+The moon showed the exact opposite of its real phase, at every phase: a full
+moon was drawn as a black disc, a new moon as a bright full one, and a crescent
+appeared on the wrong side. One setting in the drawing code was reversed, and
+the note beside it explaining which way round it went was reversed too, which is
+how it survived. Measured across eight phases before and after: a moon that is
+97% lit was drawing 3% of itself, and now draws 97%.
+
+### Fixed — faults with an unreadable status no longer disappear from the report
+The facility report counted a fault as **resolved** whenever it could not read
+that fault's status — if the field was empty, missing, or held something this
+version does not recognise. So a fault could quietly vanish from the report
+because of a bad record rather than because anyone fixed it.
+
+Anything not explicitly marked resolved now counts as **open**. This is also
+what the rest of the app already did: the alert count in the top bar, the
+faults list and the Today tab all treated an unreadable status as open, so the
+report's totals could contradict the number shown on the very same screen.
+
+### Fixed — the example entity name in Advanced Settings named a real camera here
+The Devices tab explains how to type an entity name and gave an example. The
+example was one of this property's own cameras — a name that means nothing on
+any other installation, and which no longer exists on this one either. It now
+shows a generic example.
+
+### Added — the version is readable from the browser console
+Diagnostic snippets captured from a browser can now report which build produced
+them by reading `__VK_VERSION__`. A capture that does not say which build it
+came from cannot be read properly: a fix that has not reached the tablet looks
+exactly like a fix that did not work.
+
 ## 2.496.5
 
 ### Added — a third add-on, "VESTA (dev2)", for trying a fix before it is released
