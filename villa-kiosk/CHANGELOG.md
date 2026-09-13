@@ -1,3 +1,20 @@
+## 2.496.5
+
+### Added — a third add-on, "VESTA (dev2)", for trying a fix before it is released
+Until now there were two: the released **VESTA**, and **VESTA (dev)**, which
+carries the assistant features. Fixes for the released version had nowhere to be
+tried — they went straight onto the release and you saw them for the first time
+there.
+
+**VESTA (dev2)** is that missing middle. It is the released version plus the
+fixes being prepared for the next release, and nothing else — none of the
+assistant features from VESTA (dev). It installs alongside the other two, so you
+can put a fix on the wall tablet, look at it, and only then decide it is ready.
+
+Nothing about the released VESTA changes in this release, and nothing about
+VESTA (dev) changes either. All three keep their own version number, their own
+settings and their own place in the add-on list.
+
 ## 2.496.4
 
 ### Fixed — a swipe across a camera feed can no longer zoom it by mistake

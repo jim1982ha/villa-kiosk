@@ -4,7 +4,15 @@ name: Build & publish add-on images
 # on-device build). Runs on pushes that touch the app/add-on, and on demand.
 on:
   push:
-    branches: [main]
+    # dev2 builds too, or the backport branch produces no installable image
+    # and the owner cannot verify a backport before it reaches main — the
+    # add-on installs by image pull, there is no on-device build.
+    #
+    # ⚠️ ADDING A BRANCH HERE IS NOT ENOUGH ON ITS OWN. Until 2026-09-13 this
+    # job hardcoded the STABLE image name and pushed `:latest` unconditionally,
+    # because it only ever ran on main. A second branch without the suffix and
+    # the `:latest` guard below would overwrite the released VESTA image.
+    branches: [main, dev2]
     paths:
       - "src/**"
       - "public/**"
@@ -44,7 +52,28 @@ jobs:
           version=$(grep -E '^version:' villa-kiosk/config.yaml | head -1 | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
           echo "version=$version" >> "$GITHUB_OUTPUT"
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          echo "image=ghcr.io/${owner}/villa-kiosk-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+          # SEPARATE IMAGE PER CHANNEL. Stable and dev2 never share a tag
+          # namespace, so a dev2 build can never overwrite a released image
+          # even at an identical version number.
+          suffix=""
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then suffix="-${GITHUB_REF_NAME}"; fi
+          image="ghcr.io/${owner}/villa-kiosk${suffix}-${{ matrix.arch }}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          # ⚠️ `:latest` IS PUSHED ONLY FROM main. It is what a human reads as
+          # "the current build", and a dev2 push that moved it would quietly
+          # retitle an unreleased backport as the release. The Supervisor
+          # resolves image:<config.yaml version>, never :latest, so a dev2
+          # build is installable without it — provided the version was bumped,
+          # which every commit here does.
+          tags="${image}:${version}"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            tags="${tags}"$'\n'"${image}:latest"
+          fi
+          {
+            echo "tags<<__TAGS__"
+            echo "$tags"
+            echo "__TAGS__"
+          } >> "$GITHUB_OUTPUT"
 
       # QEMU lets the arm64 runtime stage build on this amd64 runner. The heavy
       # npm/Babylon build stage is pinned to BUILDPLATFORM in the Dockerfile, so
@@ -75,9 +104,8 @@ jobs:
           # byte-for-byte reproducible builds.
           build-args: |
             BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:latest
-          tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
-            ${{ steps.meta.outputs.image }}:latest
+          # Computed in `meta`: the version tag always, `:latest` only on main.
+          tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             io.hass.version=${{ steps.meta.outputs.version }}
@@ -85,3 +113,103 @@ jobs:
             io.hass.type=addon
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+
+  # ── Publish the dev2 channel to Home Assistant ───────────────────────────
+  # Supervisor reads add-on manifests from the repository's DEFAULT BRANCH and
+  # nowhere else — it has no idea `dev2` exists. So a dev2 image is invisible
+  # until a manifest describing it appears on main. This job materialises that
+  # manifest by copying dev2's own add-on directory and patching the handful of
+  # fields that must differ, which means the dev2 channel can never drift from
+  # the stable one's schema, options or translations: it IS the stable one,
+  # with five values changed and the host port removed.
+  #
+  # It touches `villa-kiosk-dev2/` only. The stable add-on's files and the dev
+  # channel's `villa-kiosk-dev/` are never written by this job.
+  #
+  # ⚠️ THIS COMMITS TO main, AND THAT IS THE ONLY WAY HA CAN SEE THE CHANNEL.
+  # Identical in kind to the `chore(dev-channel):` commits the dev branch has
+  # been making since 2026-08. It is additive and path-scoped; it is not a
+  # release and it does not touch `villa-kiosk/`.
+  sync-dev2-manifest:
+    if: github.ref_name == 'dev2'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Serialised: two dev2 pushes landing together would both try to push main.
+    # Not `cancel-in-progress` — a cancelled sync leaves the channel a version
+    # behind with nothing to retry it.
+    concurrency:
+      group: sync-dev2-manifest
+      cancel-in-progress: false
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Materialise villa-kiosk-dev2/ from dev2
+        run: |
+          set -euo pipefail
+          git fetch origin dev2
+          rm -rf villa-kiosk-dev2 && mkdir -p villa-kiosk-dev2
+          git archive origin/dev2 villa-kiosk | tar -x --strip-components=1 -C villa-kiosk-dev2
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          OWNER="$owner" python3 - <<'PATCH'
+          import os, re, pathlib
+          p = pathlib.Path("villa-kiosk-dev2/config.yaml")
+          out, skip = [], False
+          for line in p.read_text().splitlines(keepends=True):
+              # Drop `ports:` / `ports_description:` and their indented children.
+              # Ingress-only by design: two add-ons cannot bind the same host
+              # port, and a test channel does not need direct access.
+              if re.match(r"^(ports|ports_description):", line):
+                  skip = True
+                  continue
+              if skip:
+                  if line.startswith((" ", "\t")) or not line.strip():
+                      continue
+                  skip = False
+              line = re.sub(r"^name:.*$", "name: VESTA (dev2)", line)
+              line = re.sub(r"^slug:.*$", "slug: villa_kiosk_dev2", line)
+              line = re.sub(r"^panel_title:.*$", "panel_title: VESTA dev2", line)
+              line = re.sub(r"^panel_icon:.*$", "panel_icon: mdi:home-plus-outline", line)
+              line = re.sub(r"^image:.*$",
+                            f"image: ghcr.io/{os.environ['OWNER']}/villa-kiosk-dev2-{{arch}}", line)
+              out.append(line)
+          p.write_text("".join(out))
+          PATCH
+          python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
+          python3 -c "import yaml;d=yaml.safe_load(open('villa-kiosk-dev2/config.yaml'));assert d['slug']=='villa_kiosk_dev2' and 'ports' not in d, d; print('dev2 manifest ok:', d['version'])"
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          # ⚠️ STAGE FIRST, THEN ASK THE INDEX. `git diff` does NOT see untracked
+          # files, so on the run that CREATES villa-kiosk-dev2/ it reports "no
+          # change", exits 0 and commits nothing — a green tick on the one run
+          # that had to work. `--all` (scoped to this path) also catches files
+          # DELETED from villa-kiosk/, which a bare `git add <dir>` would leave
+          # staged as present.
+          git add --all villa-kiosk-dev2
+          if git diff --cached --quiet -- villa-kiosk-dev2; then
+            echo "dev2 manifest already current — nothing to publish"; exit 0
+          fi
+          echo "publishing $(git diff --cached --name-only -- villa-kiosk-dev2 | wc -l) file(s):"
+          git diff --cached --stat -- villa-kiosk-dev2
+          version=$(grep -E '^version:' villa-kiosk-dev2/config.yaml | head -1 \
+                    | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(dev2-channel): publish VESTA (dev2) ${version}"
+          # main may have moved (a real release, or the dev channel's own sync)
+          # between checkout and push. Rebase rather than force: this job's
+          # commit is additive and touches only villa-kiosk-dev2/, so it can
+          # never conflict with a release or with the dev channel's manifest.
+          for attempt in 1 2 3; do
+            if git push origin main; then exit 0; fi
+            echo "push rejected (attempt ${attempt}) — rebasing onto main"
+            git fetch origin main && git rebase origin/main
+          done
+          echo "could not publish the dev2 manifest after 3 attempts"; exit 1
