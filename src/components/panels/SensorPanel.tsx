@@ -5,6 +5,7 @@
 // isEnum below.
 
 import { useEffect, useState } from "react";
+import { formatSensorParts } from "@/utils/entityValue";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
 import Sparkline from "./Sparkline";
@@ -50,6 +51,8 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // instead of the numeric Sparkline one.
   const isEnum = !isBinary && entity != null && !Number.isFinite(numeric);
   const unit = entity?.attributes.unit_of_measurement ?? "";
+  // One reading, written once — see utils/entityValue.
+  const formatted = entity ? formatSensorParts(entity) : { value: "", unit: "" };
   const threshold = config.alertThresholds[mapping.entityId];
   // What this SPECIFIC binary_sensor reports — a leak sensor, a motion PIR, a
   // door contact, etc. — read from HA's own device_class attribute, so the
@@ -140,9 +143,16 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
               className="value-large"
               style={{ color: unavailable ? "var(--status-warning)" : isEnum ? "var(--text-primary)" : LEVEL_COLOR[level] }}
             >
-              {unavailable ? "Unavailable" : isEnum ? (entity?.state ?? "--") : Number.isFinite(numeric) ? numeric : entity?.state ?? "--"}
+              {/* ⚠️ THE SAME RULE THE BADGE USES (utils/entityValue). This
+                  printed the RAW state and the RAW unit, so a 6570.989 W
+                  sensor read "6570.989" here and "6.6 kW" on the badge in the
+                  villa behind it — the same sensor, one screen, two numbers.
+                  No `clamp` and no `hideNominal`: this surface has room, and a
+                  nominal status belongs on a row that has no coloured ring to
+                  say it for them. */}
+              {unavailable ? "Unavailable" : formatted.value || (entity?.state ?? "--")}
             </span>{" "}
-            {!unavailable && !isEnum && <span className="value-unit">{unit}</span>}
+            {!unavailable && formatted.unit && <span className="value-unit">{formatted.unit}</span>}
           </div>
           <div className="field">
             <HistoryHeader title={range.title} picker={picker} />

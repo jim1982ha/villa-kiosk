@@ -9,6 +9,7 @@
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
 import { useState, type ComponentType } from "react";
+import { prettyState } from "@/utils/entityValue";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
@@ -75,7 +76,12 @@ interface Props {
 
 const OFF = new Set(["off", "unavailable", "unknown", ""]);
 
-const pretty = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
+// ⚠️ THE SECOND PRETTIFIER IS GONE. This capitalised first and replaced
+// underscores after; `entityValue.prettyState` does it the other way round.
+// They agree on every state either has been shown, and disagree on one
+// beginning with an underscore — which is the kind of difference nobody finds
+// until a reader reports two spellings of one word.
+const pretty = prettyState;
 
 /** Bucket a list of entities by their resolved room (ConfigContext's
  *  resolvedRooms — HA's own Area assignment, falling back to GLB geometric

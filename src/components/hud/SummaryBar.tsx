@@ -30,6 +30,7 @@ import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/conf
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
+import { formatUnitValue } from "@/utils/entityValue";
 import { selectableDeviceIds } from "@/config/deviceGroups";
 import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -208,7 +209,11 @@ function deriveTiles(
     }, 0);
     tiles.push({
       id: "__energy", icon: Zap, label: "Energy",
-      value: totalW >= 1000 ? `${(totalW / 1000).toFixed(1)} kW` : `${Math.round(totalW)} W`,
+      // ⚠️ ASKED, NOT RESTATED. This was a third copy of the ≥1000 → kW rule,
+      // alongside the badge's and (by omission) the panel's. `formatUnitValue`
+      // also drops a trailing zero, so 3000 W now reads "3 kW" rather than
+      // "3.0 kW" — the same spelling the badge has always used.
+      value: formatUnitValue(totalW, "W"),
       // A HARDCODED `totalW > 3000` used to live here, and it was exactly the
       // per-site tuning constant CLAUDE.md's first hard rule forbids: 3 kW is
       // an idle afternoon in a villa with a pool pump and an alarming spike in

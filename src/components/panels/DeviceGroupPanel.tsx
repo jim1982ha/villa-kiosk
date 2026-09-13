@@ -7,6 +7,7 @@
 // (the common case) or a stacked sparkline per series otherwise.
 
 import { useEffect, useState } from "react";
+import { formatSensorParts } from "@/utils/entityValue";
 import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
 import Sparkline from "./Sparkline";
@@ -59,6 +60,12 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
       label: entityLabel(id),
       unit: (entity?.attributes.unit_of_measurement as string | undefined) ?? "",
       value: entity?.state ?? "—",
+      // ⚠️ THE FORMATTED READING IS A SEPARATE FIELD, NOT AN OVERWRITE OF
+      // `unit`. The sparkline below plots the RAW series and labels its axis
+      // from `r.unit`; scaling the label to "kW" while the points stay in
+      // watts would put a wrong axis on a right chart. `display` is for the
+      // row's headline number only — the one that has to match the badge.
+      display: entity ? formatSensorParts(entity) : { value: "", unit: "" },
       numeric: Number.isFinite(numeric) ? numeric : undefined,
       unavailable: isUnavailable(entity),
     };
@@ -110,7 +117,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
                     a bit smaller, matching how SensorPanel already does it. */}
                 {r.unavailable
                   ? <span className="status-pill unavailable">UNAVAILABLE</span>
-                  : <>{r.value}{r.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.unit}</span>}</>}
+                  : <>{r.display.value || r.value}{r.display.unit && <span className="value-unit" style={{ fontSize: "var(--text-md)", marginLeft: 3 }}>{r.display.unit}</span>}</>}
               </div>
               <div className="muted body-text">{r.label}</div>
             </div>

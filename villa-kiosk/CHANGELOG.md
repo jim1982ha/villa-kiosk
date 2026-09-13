@@ -1,3 +1,22 @@
+## 2.496.8
+
+### Fixed — a sensor now reads the same on the villa badge and in its own panel
+Tapping a badge in the 3D villa opens a panel about that sensor, and the two
+could print the same reading differently. A power sensor showing **6.6 kW** on
+the badge read **6570.989** in the panel beside it — the same sensor, on the
+same screen, at the same moment. Temperatures, percentages and text states like
+"not_home" had the same split.
+
+There is now one rule for how a reading is written, and every surface asks it:
+the badge, the sensor panel, the grouped-device panel, the summary tiles and the
+group list. Where the surfaces genuinely differ they still do, but deliberately:
+the badge shortens a long value to fit a chip and hides an "all is well" status
+because its colour already says so, while a panel row — which has room and no
+colour ring — shows both in full.
+
+One visible knock-on: the Energy tile now reads **3 kW** where it read "3.0 kW",
+which is how the badge has always written it.
+
 ## 2.496.7
 
 ### Fixed — a fresh install no longer opens on a dead end

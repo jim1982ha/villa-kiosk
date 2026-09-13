@@ -108,6 +108,7 @@ import { badgeKindFor, badgeFaceAndRing } from "@/utils/deviceActivity";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
+import { formatSensorValue } from "@/utils/entityValue";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
@@ -895,10 +896,9 @@ interface ShownLabel {
 // shared with badgeKind below) are the mirror image: their value stays
 // SHOWN, so a real change is never silently swallowed. An unrecognised enum
 // value (e.g. a weather "sunny") is neither: it's shown, un-ringed, as before.
-const SENSOR_NOMINAL_STATES = new Set([
-  "connected", "online", "ok", "okay", "normal", "nominal", "available",
-  "ready", "clear", "operational", "up", "good", "healthy", "active",
-]);
+// ⚠️ THE TABLE ITSELF NOW LIVES IN `utils/entityValue.ts` (exported as
+// SENSOR_NOMINAL_STATES) so the badge and the panels cannot drift apart on
+// which statuses count as "nothing to report".
 
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
@@ -9245,65 +9245,20 @@ export class EntityVisuals {
         return cur != null ? `${Math.round(cur)}°` : "";
       }
       case "sensor":
-        return this.formatSensorValue(s);
+        return formatSensorValue(s, { hideNominal: true, clamp: true });
       default:
         return "";
     }
   }
 
-  /**
-   * Compact, readable value for the pill — exhaustive across the kinds of state
-   * HA reports, so nothing crowds the chip:
-   *   • Numbers → rounded to a sensible precision, with large power/energy scaled
-   *     to k-units (6570.989 W → "6.6 kW", 25.05 °C → "25.1°C").
-   *   • Enum / text states → tidied (underscores→spaces, Sentence case) so a raw
-   *     "not_home" reads "Not home", "connected" reads "Connected".
-   *   • Anything still long is ellipsised so the pill can never blow out.
-   */
-  private formatSensorValue(s: HassEntity): string {
-    const unit = ((s.attributes.unit_of_measurement as string | undefined) ?? "").trim();
-    const n = Number(s.state);
+  /* ⚠️ `formatSensorValue` AND `clampPill` MOVED TO `utils/entityValue.ts`.
+   * They were private methods on this class, so the DOM panels could not reach
+   * them and each wrote a reading its own way: the same 6570.989 W sensor read
+   * "6.6 kW" on this badge and "6570.989 W" in the panel a tap opens. The rule
+   * is unchanged — only its address is — and the badge passes the two flags
+   * that were previously implicit here: hide a nominal status, clamp to 16
+   * characters. A panel passes neither, because it has room and no ring. */
 
-    // ── Non-numeric (enum / status text) ──────────────────────────────────
-    if (s.state.trim() === "" || !Number.isFinite(n)) {
-      // Hide a NOMINAL/healthy status ("Connected", "OK", "Normal"…) — the
-      // badge is already category-coloured, so the word is redundant clutter.
-      // Any OTHER value stays shown (and a known-bad one rings red, see
-      // badgeKind), so a state change is never silently lost.
-      if (SENSOR_NOMINAL_STATES.has(s.state.trim().toLowerCase())) return "";
-      const words = String(s.state).replace(/_/g, " ").trim();
-      const pretty = words.charAt(0).toUpperCase() + words.slice(1);
-      return this.clampPill(pretty);
-    }
-
-    // ── Numeric ───────────────────────────────────────────────────────────
-    const abs = Math.abs(n);
-    const u = unit.toLowerCase();
-    // Round to `d` decimals and drop trailing zeros ("25.0"→"25", "6.60"→"6.6").
-    const trim = (v: number, d: number) => String(Number(v.toFixed(d)));
-
-    let out: string;
-    if (u === "w" && abs >= 1000) out = `${trim(n / 1000, 1)} kW`;
-    else if (u === "wh" && abs >= 1000) out = `${trim(n / 1000, 1)} kWh`;
-    else if (u === "va" && abs >= 1000) out = `${trim(n / 1000, 1)} kVA`;
-    else if (u === "%") out = `${Math.round(n)}%`;                        // percent hugs its sign
-    else if (u === "°c" || u === "°f" || u === "°") out = `${trim(n, 1)}${unit}`; // degrees hug too
-    // Units that read cleanest as whole numbers.
-    else if (u === "w" || u === "wh" || u === "va" || u === "lx" || u === "ppm" || u === "ppb")
-      out = unit ? `${Math.round(n)} ${unit}` : String(Math.round(n));
-    // Generic: whole numbers as-is, otherwise up to 1 decimal.
-    else {
-      const val = Number.isInteger(n) ? String(n) : trim(n, 1);
-      out = unit ? `${val} ${unit}` : val;
-    }
-    return this.clampPill(out);
-  }
-
-  /** Hard cap on pill text so an unexpectedly long value can never blow out the
-   *  chip; keeps every pill to a tidy, uniform footprint. */
-  private clampPill(text: string): string {
-    return text.length > 16 ? `${text.slice(0, 15)}…` : text;
-  }
 
   // ---------------------------------------------------------------------------
   // Mesh visuals
