@@ -167,6 +167,13 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   for (const t of tickets) {
     if (t.status === "open") open++;
     else if (t.status === "in_progress") inProgress++;
+    // ⚠️ EXPLICIT, AND AN UNKNOWN STATUS COUNTS AS OPEN. This was a bare
+    // `else`, so ANY row whose status was missing, empty or corrupt was counted
+    // RESOLVED — a fault silently removed from the facility report by bad data,
+    // which is the one direction this must never fail in. A fault wrongly shown
+    // as open is a question someone asks; a fault wrongly shown as resolved is
+    // one nobody ever asks again.
+    else if (t.status !== "resolved") open++;
     else {
       resolved++;
       if (t.resolvedAt) {

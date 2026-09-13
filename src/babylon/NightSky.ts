@@ -225,15 +225,24 @@ export class NightSky {
     ctx.beginPath();
     // Lit limb: the right semicircle, top to bottom.
     ctx.arc(0, 0, R, -Math.PI / 2, Math.PI / 2, false);
-    // Terminator. Sweeping anticlockwise past π (the left side) ADDS the left
-    // half, giving gibbous→full; sweeping clockwise back across the right side
-    // SUBTRACTS, giving quarter→crescent→new. Hence the test on 0.5:
-    //   lit 1.00 → b = R, anticlockwise → full disc
-    //   lit 0.50 → b = 0        → the ellipse degenerates to a line: half disc
-    //   lit 0.25 → b = R/2, clockwise → crescent
-    //   lit 0.00 → b = R, clockwise → retraces the arc: nothing lit
+    // Terminator.
+    //
+    // ⚠️ THE FLAG WAS INVERTED, AND THE MOON DREW ITS OWN COMPLEMENT AT EVERY
+    // PHASE — a full moon as a black disc, a new moon as a bright full one.
+    // Reported from the villa as "the moon is black when it should be full".
+    //
+    // Canvas measures angles from +x with y pointing DOWN, and the last
+    // argument means ANTICLOCKWISE, which in those coordinates is DECREASING
+    // angle. So π/2 → -π/2 anticlockwise passes through 0 — the RIGHT side,
+    // where the lit limb already is — and SUBTRACTS from it. Sweeping the
+    // other way passes through π, the left side, and ADDS. The old comment
+    // had those two the wrong way round, which is how the flag came to match it.
+    //   lit 1.00 → b = R,   add the left half  → full disc
+    //   lit 0.50 → b = 0    → the ellipse degenerates to a line: half disc
+    //   lit 0.25 → b = R/2, cut into the right → crescent
+    //   lit 0.00 → b = R,   cut the whole limb → retraces it: nothing lit
     ctx.ellipse(0, 0, R * Math.abs(1 - 2 * lit), R, 0,
-      Math.PI / 2, -Math.PI / 2, lit > 0.5);
+      Math.PI / 2, -Math.PI / 2, lit < 0.5);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
