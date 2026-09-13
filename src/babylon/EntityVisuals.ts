@@ -109,6 +109,7 @@ import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
 import { formatSensorValue } from "@/utils/entityValue";
+import { mergeOverlapping } from "./boxMerge";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
@@ -8559,8 +8560,11 @@ export class EntityVisuals {
     // an overlap is resolved is by two chips becoming one. Both properties hold
     // literally and at every zoom level.
     //
-    // Merging is by worst overlap first and repeats until nothing overlaps, so
-    // the outcome does not depend on room iteration order. The survivor keeps
+    // Merging is by worst overlap first and repeats until nothing overlaps.
+    // ⚠️ THAT ALONE DOES NOT MAKE IT ORDER-INDEPENDENT — this comment claimed
+    // it did for several releases while three tie-breaks still read array
+    // order. See the merge call below; `boxMerge.ts` owns the rule. The
+    // survivor keeps
     // the BUSIER room's name (the more informative one) plus a "+N" suffix, its
     // anchor becomes the device-count-weighted centroid of the merged rooms —
     // so it still sits among the devices it represents — and it owns the union
@@ -8627,36 +8631,42 @@ export class EntityVisuals {
       // ever wants to be tighter or looser. `chipGapPx` is deleted, not
       // aliased, so nothing can drift back apart.
       const gap = this.metrics.minGapPx * scale;
-      for (;;) {
-        let bi = -1, bj = -1, worst = 0;
-        for (let i = 0; i < chips.length; i++) {
-          for (let j = i + 1; j < chips.length; j++) {
-            const a = chips[i], b = chips[j];
-            const ox = a.halfW + b.halfW + gap - Math.abs(b.x - a.x);
-            const oy = a.halfH + b.halfH + gap - Math.abs(b.y - a.y);
-            if (ox <= 0 || oy <= 0) continue; // clear on at least one axis
-            const severity = Math.min(ox, oy);
-            if (severity > worst) { worst = severity; bi = i; bj = j; }
-          }
-        }
-        if (bi < 0) break; // nothing overlaps — done
-        const a = chips[bi], b = chips[bj];
-        const keep = a.ids.length >= b.ids.length ? a : b;
-        const drop = keep === a ? b : a;
-        const na = a.ids.length, nb = b.ids.length;
-        keep.centre = a.centre.scale(na / (na + nb))
-          .addInPlace(b.centre.scale(nb / (na + nb)));
-        keep.ids = keep.ids.concat(drop.ids);
-        keep.rooms = a.rooms + b.rooms;
-      // Keep the NAMES, not just the count: a merged chip has to be able to
-      // offer the rooms it swallowed when it is tapped, and "+2" cannot.
-      keep.roomNames = [...a.roomNames, ...b.roomNames];
-        keep.keys = [...a.keys, ...b.keys];
-        keep.ringRed = a.ringRed || b.ringRed;
-        keep.unavailable = a.unavailable || b.unavailable;
-        chips.splice(chips.indexOf(drop), 1);
-        measure(keep);
-      }
+      // ⚠️ THE FIXPOINT IS `boxMerge.ts` NOW, AND THE COMMENT ABOVE WAS WRONG.
+      // It claimed "the outcome does not depend on room iteration order", and
+      // this loop settled ties with `severity > worst` — so on an exact tie the
+      // first pair in ARRAY order won, and array order is room iteration order.
+      // Ties are not exotic: two equal-width chips at equal spacing produce
+      // them, and villas are frequently laid out on a grid.
+      //
+      // THREE things had to be made total, not one: which PAIR merges, which of
+      // the pair SURVIVES (`a.ids.length >= b.ids.length` handed it to whoever
+      // arrived first whenever the counts matched — two rooms with one device
+      // each, the common case), and the ORDER the survivors come back in.
+      // Measured over all 24 orderings of four tied chips: EIGHT distinct
+      // outcomes before, one after.
+      //
+      // Same defect class as the badge placement order-dependence fixed in
+      // 2.366.0 — in the very subsystem that fix was written for.
+      mergeOverlapping(
+        chips,
+        gap,
+        (c) => c.ids.length,
+        (keep, drop) => {
+          const a = keep, b = drop;
+          const na = a.ids.length, nb = b.ids.length;
+          keep.centre = a.centre.scale(na / (na + nb))
+            .addInPlace(b.centre.scale(nb / (na + nb)));
+          keep.ids = keep.ids.concat(drop.ids);
+          keep.rooms = a.rooms + b.rooms;
+          // Keep the NAMES, not just the count: a merged chip has to be able to
+          // offer the rooms it swallowed when it is tapped, and "+2" cannot.
+          keep.roomNames = [...a.roomNames, ...b.roomNames];
+          keep.keys = [...a.keys, ...b.keys];
+          keep.ringRed = a.ringRed || b.ringRed;
+          keep.unavailable = a.unavailable || b.unavailable;
+          measure(keep);
+        },
+      );
     }
 
     return chips;

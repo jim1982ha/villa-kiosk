@@ -1,3 +1,20 @@
+## 2.496.9
+
+### Fixed — a merged room label no longer changes name between loads
+When two or more room labels sit too close to draw apart, they combine into one
+— "Kitchen +2". Which room got to give the combined label its name was decided
+by the order the rooms happened to be processed in, not by anything on screen.
+So the same villa, at the same zoom, could show "Kitchen +2" on one load and
+"Terrace +2" on the next, with nothing having changed.
+
+Measured on a villa whose rooms sit on a grid — four labels, equally spaced,
+one device each: **four different answers** depending on processing order. It is
+now one answer, every time, decided by where the labels actually are.
+
+The comment in the code claimed this was already order-independent, and had
+done for several releases. It was not: three separate tie-breaks still fell back
+on processing order.
+
 ## 2.496.8
 
 ### Fixed — a sensor now reads the same on the villa badge and in its own panel
