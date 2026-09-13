@@ -34,8 +34,12 @@ const friendly = (e: HassEntity, entityMap: Record<string, EntityMapping>) =>
 export function locksGroup(
   entities: Record<string, HassEntity>,
   entityMap: Record<string, EntityMapping> = {},
+  /** The villa's own devices — see `lightsGroup` for why this exists and why
+   *  it is optional. */
+  allowed?: ReadonlySet<string>,
 ): SummaryGroup | null {
-  const locks = Object.values(entities).filter((e) => e.entity_id.startsWith("lock."));
+  const locks = Object.values(entities).filter(
+    (e) => e.entity_id.startsWith("lock.") && (!allowed || allowed.has(e.entity_id)));
   if (locks.length === 0) return null;
   const allLocked = locks.every((l) => l.state === "locked");
   return {
@@ -47,8 +51,24 @@ export function locksGroup(
 
 /** Every `light.*` entity. Returns null (no group, no tile) when there are
  *  no lights at all. */
-export function lightsGroup(entities: Record<string, HassEntity>): SummaryGroup | null {
-  const lights = Object.values(entities).filter((e) => e.entity_id.startsWith("light."));
+/**
+ * ⚠️ THE DOMAIN PREFIX IS NOT THE VILLA. This filtered on `light.` alone, so
+ * every light Home Assistant knows about was counted as one of the villa's —
+ * a helper light, a neighbouring integration, a light in another building.
+ * Invisible on a tidy instance and wrong on a busy one: the summary tile then
+ * reports "3 of 11 on" for a villa that has six lights.
+ *
+ * `allowed` is the villa's own device set (`selectableDeviceIds`), and it is
+ * OPTIONAL on purpose: a caller that passes nothing keeps the old behaviour,
+ * so this could be corrected without auditing every call site in one release.
+ * Every caller in this build does pass it.
+ */
+export function lightsGroup(
+  entities: Record<string, HassEntity>,
+  allowed?: ReadonlySet<string>,
+): SummaryGroup | null {
+  const lights = Object.values(entities).filter(
+    (e) => e.entity_id.startsWith("light.") && (!allowed || allowed.has(e.entity_id)));
   if (lights.length === 0) return null;
   return { title: "Lights", icon: Lightbulb, entityIds: lights.map((e) => e.entity_id) };
 }

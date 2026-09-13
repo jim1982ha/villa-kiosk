@@ -75,7 +75,7 @@ export default function BabylonCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
   const { config, update } = useConfig();
-  const { role } = useProfile();
+  const { role, beginSwitch } = useProfile();
   const { subscribeAll, getEntitiesSnapshot } = useHA();
   // What the SCENE is allowed to show for the active profile: role-denied
   // categories folded into the hidden set, denied entities stripped from the
@@ -959,9 +959,33 @@ export default function BabylonCanvas({
         <div className="center-overlay">
           <div className="body-text">No 3D model loaded yet.</div>
           {!canManageModel ? (
-            <div className="muted body-text">
-              Ask the owner to set up the villa's 3D model.
-            </div>
+            <>
+              <div className="muted body-text">
+                Ask the owner to set up the villa's 3D model.
+              </div>
+              {/* ⚠️ THE WAY OUT, ON THE ONE SCREEN THAT HAS NO OTHER CONTENT.
+                  On a fresh install this is the FIRST thing anyone sees, and
+                  the person reading it is usually the owner who has not signed
+                  in as one yet — so telling them to "ask the owner" and
+                  offering nothing else reads as a dead end. Reported exactly
+                  that way from a clean instance.
+
+                  The HUD's own profile switcher is present and always was, but
+                  it is a small icon in the top bar (and behind the ⋯ overflow
+                  on a phone) on a screen that is otherwise empty black; being
+                  reachable is not the same as being findable.
+
+                  `beginSwitch`, not `logout`: it overlays the picker over the
+                  live session, so cancelling returns you exactly here rather
+                  than ending a session the user never asked to end. */}
+              <button
+                type="button"
+                className="btn primary"
+                onClick={beginSwitch}
+              >
+                Switch profile
+              </button>
+            </>
           ) : (
             <>
               <div className="muted body-text">

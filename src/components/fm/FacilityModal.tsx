@@ -98,8 +98,8 @@ export default function FacilityModal({
   // summaryGroups.ts) rather than a second, differently-scoped view.
   const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
   const openCheckDevices = (check: ReadinessCheck) => {
-    const group = check.id === "locks" ? locksGroup(entities)
-      : check.id === "lights" ? lightsGroup(entities)
+    const group = check.id === "locks" ? locksGroup(entities, config.entityMap, villaDeviceIds)
+      : check.id === "lights" ? lightsGroup(entities, villaDeviceIds)
       : null;
     if (group) setCheckPanelGroup(group);
   };
@@ -122,11 +122,17 @@ export default function FacilityModal({
   // applies none of those, so the report divided a strictly-filtered numerator
   // by an unfiltered total and understated the offline share. deviceGroups.ts
   // already records this drift happening once before, to the fault picker.
-  const totalDeviceCount = useMemo(
-    () => selectableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds,
-                              entities, config.dismissedEntityIds).length,
+  //
+  // ⚠️ THE SET, NOT JUST ITS SIZE. The readiness tiles below need the same list
+  // to decide which locks and lights are the VILLA's (see summaryGroups), and
+  // deriving the count from a second call would be two answers to one question.
+  const villaDeviceIds = useMemo(
+    () => new Set(selectableDeviceIds(config.entityMap, config.deviceGroups,
+                                      mappedEntityIds, entities,
+                                      config.dismissedEntityIds)),
     [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
   );
+  const totalDeviceCount = villaDeviceIds.size;
 
   // Same list the HUD's own unavailable-devices badge shows (see
   // unavailableDeviceIds) — the Readiness tab's quick-link opens the same

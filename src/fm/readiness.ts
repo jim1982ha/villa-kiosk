@@ -14,7 +14,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { EntityMapping } from "@/types/scene.types";
 import type { DeviceGroup } from "@/config/AppConfig";
 import { isUnavailable } from "@/utils/stateColors";
-import { unavailableDeviceIds } from "@/config/deviceGroups";
+import { selectableDeviceIds, unavailableDeviceIds } from "@/config/deviceGroups";
 import { scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 
@@ -63,11 +63,19 @@ export function buildReadiness(
 ): ReadinessReport {
   const checks: ReadinessCheck[] = [];
 
-  const relevant = (id: string) =>
-    !entityMap[id]?.disabled && (mappedEntityIds.has(id) || !!entities[id]);
+  // ⚠️ THE VILLA'S OWN DEVICES, NOT EVERYTHING HOME ASSISTANT KNOWS. The old
+  // predicate here was `!disabled && (mapped || entities[id])`, and that second
+  // clause admits EVERY entity HA has — so a helper, a neighbouring
+  // integration or a light in another building counted toward "all lights off"
+  // and "all doors locked". `selectableDeviceIds` is the same set the offline
+  // badge and the Facility device count already use, so all three now answer
+  // from one list instead of three predicates that happened to agree.
+  const villaDevices = new Set(selectableDeviceIds(
+    entityMap, [...deviceGroups], mappedEntityIds, entities, dismissedEntityIds));
 
   const byDomain = (d: string) =>
-    Object.values(entities).filter((e) => e.entity_id.startsWith(`${d}.`) && relevant(e.entity_id));
+    Object.values(entities).filter(
+      (e) => e.entity_id.startsWith(`${d}.`) && villaDevices.has(e.entity_id));
 
   // ── Devices online ───────────────────────────────────────────────────────
   // Shared with the HUD's unavailable-devices badge — deliberately the SAME

@@ -30,6 +30,7 @@ import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/conf
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
+import { selectableDeviceIds } from "@/config/deviceGroups";
 import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
@@ -63,6 +64,10 @@ function deriveTiles(
   resolvedRooms: Record<string, string>,
   can: (c: Category) => boolean,
   thresholds: Record<string, Threshold>,
+  /** The villa's own devices. ⚠️ THREADED THROUGH RATHER THAN RECOMPUTED: the
+   *  tile counts and the list a tap opens must come from one set, or the tile
+   *  says "3 On" and the panel shows four rows. */
+  allowed?: ReadonlySet<string>,
 ): SummaryTile[] {
   const all = Object.values(entities);
   const byDomain = (d: string) => all.filter((e) => e.entity_id.startsWith(`${d}.`));
@@ -75,7 +80,7 @@ function deriveTiles(
   // an unanchored "door" substring — reverted). Shared with the Facility
   // Readiness tab's "View doors" shortcut (see summaryGroups.ts) so both
   // open the identical group, not two independently-derived lists.
-  const locksG = locksGroup(entities, entityMap);
+  const locksG = locksGroup(entities, entityMap, allowed);
   if (locksG) {
     const locks = locksG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
     const lockedN = locks.filter((l) => l.state === "locked").length;
@@ -147,7 +152,7 @@ function deriveTiles(
   // Shared with the Facility Readiness tab's "View lights" shortcut (see
   // summaryGroups.ts) so both open the identical full list of lights, not
   // just the ones a readiness check happens to flag as still lit.
-  const lightsG = lightsGroup(entities);
+  const lightsG = lightsGroup(entities, allowed);
   if (lightsG) {
     const lights = lightsG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
     const n = lights.filter(isOn).length;
@@ -414,9 +419,20 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
     return out;
   }, [entities, suppressedEntityIds]);
 
+  // The villa's own devices — the same set the offline badge and the Facility
+  // device count use. See lightsGroup for what counting by domain prefix alone
+  // got wrong.
+  const villaDevices = useMemo(
+    () => new Set(selectableDeviceIds(config.entityMap, config.deviceGroups,
+                                      mappedEntityIds, visibleEntities,
+                                      config.dismissedEntityIds)),
+    [config.entityMap, config.deviceGroups, mappedEntityIds, visibleEntities,
+     config.dismissedEntityIds],
+  );
+
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds),
-    [visibleEntities, config.entityMap, resolvedRooms, role],
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, villaDevices),
+    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, villaDevices],
   );
 
   // A scene spans categories — allow running one if the profile may control ANY.

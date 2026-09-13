@@ -1,3 +1,27 @@
+## 2.496.7
+
+### Fixed — a fresh install no longer opens on a dead end
+Before a 3D model has been uploaded, the first screen says "Ask the owner to set
+up the villa's 3D model" — to a person who usually **is** the owner, but has not
+signed in as one yet. It named the one action they could not take and offered no
+way to take it. There is now a **Switch profile** button on that screen.
+
+The profile switcher was always in the top bar, but it is a small icon (and
+behind the ⋯ menu on a phone) on a screen that is otherwise empty. Cancelling
+the picker returns you to this screen rather than signing you out.
+
+### Fixed — summary counts and readiness checks counted devices that are not the villa's
+The lights and locks tiles, and the Facility readiness checks behind them,
+gathered **every** light and lock Home Assistant knows about — anything from
+another integration, a helper, or equipment in another building. So the tile
+could report "3 of 11 lights on" for a villa with six lights, and a single lock
+belonging to something else could hold "All doors locked" at **not locked**
+however carefully the villa was shut up.
+
+All of these now count the villa's own configured devices — the same list the
+offline-devices badge and the Facility device count already used, so the three
+agree instead of each deciding for itself.
+
 ## 2.496.6
 
 ### Fixed — the moon in the night sky was drawn inside out
