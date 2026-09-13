@@ -30,6 +30,12 @@ export interface DraftCommit<T> {
   flush: (key: string) => void;
   /** Commit every pending draft right now. */
   flushAll: () => void;
+  /** ⚠️ DROP `key`'s pending draft WITHOUT committing it — the exact opposite
+   *  of `flush`, and the reason Discard works. Without it, a Discard that
+   *  restored the baseline would be overwritten ~500ms later by the timer the
+   *  last edit had already started: the values would visibly revert and then
+   *  come back. */
+  cancel: (key: string) => void;
 }
 
 const DEFAULT_DELAY_MS = 350;
@@ -63,6 +69,20 @@ export function useDraftCommit<T>(
     for (const key of Object.keys(timers.current)) flush(key);
   }, [flush]);
 
+  /** Drop a pending draft without committing it. ⚠️ THE TIMER MUST DIE WITH THE
+   *  DRAFT. Clearing only the draft would leave the timer to fire and commit
+   *  `undefined`; clearing only the timer would leave the value to be picked up
+   *  by the next flush. Both, or neither. */
+  const cancel = useCallback((key: string) => {
+    clearTimeout(timers.current[key]);
+    delete timers.current[key];
+    setDrafts((prev) => {
+      if (!(key in prev)) return prev;
+      const { [key]: _dropped, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
   const draft = useCallback((key: string, value: T, delayMs = defaultDelayMs) => {
     setDrafts((prev) => ({ ...prev, [key]: value }));
     clearTimeout(timers.current[key]);
@@ -74,5 +94,5 @@ export function useDraftCommit<T>(
   // re-render tearing this row down, etc.).
   useEffect(() => () => flushAll(), [flushAll]);
 
-  return { drafts, draft, flush, flushAll };
+  return { drafts, draft, flush, flushAll, cancel };
 }

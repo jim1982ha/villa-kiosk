@@ -1,3 +1,30 @@
+## 2.496.14
+
+### Changed — Settings now has a Save button, and closing it asks
+Until now every control in Settings applied and kept itself the moment you
+touched it. That worked, but it gave you no way back: to undo a change you had
+to remember the old value and type it in again.
+
+Settings now keeps a **snapshot of how things were when you opened it**.
+
+* Sliders and switches still preview **live** — you still see the villa change
+  as you drag, because a setting you cannot see the effect of cannot be tuned.
+* **Save** keeps what you have and becomes the new starting point. It does not
+  close the panel, so you can carry on.
+* **Close** asks first, if you changed anything: **Save**, **Discard**, or
+  **Stay**. Discard puts everything back the way it was when you opened it — the
+  villa included.
+* Pressing Escape, or tapping outside the panel, asks the same question. Escape
+  while that question is up means **Stay**, so you cannot lose an edit by
+  reaching for the keyboard.
+
+If you have changed nothing, Close just closes — a question with one sensible
+answer is only noise.
+
+⚠️ One thing worth knowing: a change is still written as you make it, so it
+survives the tablet restarting. **Discard** is what undoes it, not closing the
+panel by accident.
+
 ## 2.496.13
 
 ### Fixed — every on/off row in Settings is now a finger-sized target

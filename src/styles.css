@@ -4132,3 +4132,32 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
   font-size: var(--text-sm); font-variant-numeric: tabular-nums;
 }
 .pager-controls { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ── Shared modal footer (ModalFooter.tsx) ─────────────────────────────────
+   ⚠️ THE PAIR READS AS ONE CONTROL GROUP. Equal minimum sizes so Save and
+   Close look like two answers to one question rather than two buttons that
+   happen to be adjacent. */
+.modal-footer-actions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.modal-footer-actions > button {
+  min-height: var(--touch-min); min-width: var(--touch-min);
+  justify-content: center;
+}
+/* The word beside the glyph. ⚠️ A CLASS, NOT THE `hidden` ATTRIBUTE — an
+   author has to be able to hide the word at the phone tier without leaving the
+   control unnamed to a screen reader. */
+.btn-label { margin-left: 8px; }
+
+/* Used by the footer's error line, and by anything else that has to say
+   "this is a warning" in text rather than in a badge. */
+.sev-warning { color: var(--status-warning); }
+
+@media (max-width: 720px) {
+  /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a hint do
+     not fit a 360px footer — the row wraps, and a wrapped footer is what makes
+     a dialog look broken. Square, --touch-min on both axes. */
+  .modal-footer-actions > button { width: var(--touch-min); padding: 0; }
+  .btn-label { display: none; }
+}
