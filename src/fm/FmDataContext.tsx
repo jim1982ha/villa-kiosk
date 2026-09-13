@@ -13,6 +13,7 @@ import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
 } from "react";
+import { isTicketOpen, isTicketResolved } from "./fmEngine";
 import {
   fetchFmData, saveFmData, fmId, diffFmData, fmDiffIsEmpty, applyFmDiff,
 } from "./fmApi";
@@ -151,7 +152,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       rev: fresh.rev,
       changed,
       tickets: fresh.doc.tickets.length,
-      openTickets: fresh.doc.tickets.filter((t) => t.status !== "resolved").length,
+      openTickets: fresh.doc.tickets.filter(isTicketOpen).length,
       costs: fresh.doc.costs.length,
       completions: fresh.doc.completions.length,
     });
@@ -206,7 +207,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       reportSync({
         op: "push", ok: true, elevated: Boolean(elevation),
         tickets: outcome.next.tickets.length,
-        openTickets: outcome.next.tickets.filter((t) => t.status !== "resolved").length,
+        openTickets: outcome.next.tickets.filter(isTicketOpen).length,
         costs: outcome.next.costs.length,
       });
       return;
@@ -323,7 +324,9 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
         const next = { ...t, ...patch };
         // Stamp the resolution time automatically — the operator marks it done,
         // the app records WHEN, which is what the MTTR evidence rests on.
-        if (patch.status === "resolved" && !next.resolvedAt) {
+        // The WRITE side of the same rule — stamp a resolution time when, and
+        // only when, the status actually becomes resolved.
+        if (isTicketResolved(patch) && !next.resolvedAt) {
           next.resolvedAt = new Date().toISOString();
         }
         return next;

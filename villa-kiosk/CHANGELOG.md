@@ -1,3 +1,19 @@
+## 2.496.11
+
+### Changed — "is this fault still open" is now decided in one place
+Eleven places in the app each decided for themselves whether a fault counted as
+open or resolved, by comparing its status to a piece of text. They agreed —
+except one, which 2.496.6 corrected — but nothing held them together, so the
+next edit to any of them could have split the answer again. That is how the
+report's totals came to contradict the alert count in the top bar.
+
+There is now one rule, and everything asks it: the top bar's count, the faults
+list, the Today tab, the readiness checks, the report totals, the status colours
+on each row, and the moment a fault is marked resolved.
+
+No numbers change in this release. It makes the previous fix permanent rather
+than correcting anything new.
+
 ## 2.496.10
 
 ### Fixed — the Energy tile under-counted the villa's largest draw by 1000×

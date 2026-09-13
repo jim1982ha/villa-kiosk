@@ -45,7 +45,7 @@ import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
-import { scheduleBoard } from "@/fm/fmEngine";
+import { isTicketOpen, scheduleBoard } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
 
 // Label-size stepper (next to the category filter): each click moves
@@ -148,7 +148,7 @@ export default function HUD({
   const facilityAttention = useMemo(() => {
     const lateTasks = scheduleBoard(fmData).filter(
       (s) => s.state === "overdue" || s.state === "never").length;
-    const openFaults = fmData.tickets.filter((t) => t.status !== "resolved").length;
+    const openFaults = fmData.tickets.filter(isTicketOpen).length;
     return lateTasks + openFaults;
   }, [fmData]);
 

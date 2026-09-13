@@ -162,6 +162,30 @@ export interface TicketStats {
   meanResolutionHours: number | null;
 }
 
+/** Is this fault closed?
+ *
+ *  ⚠️ THE STATUS DECIDES, NOT `resolvedAt`. A ticket can carry a resolution
+ *  timestamp from an earlier close and be reopened; the status is the field the
+ *  UI writes and the field a person sets.
+ *
+ *  ⚠️ AND ANYTHING ELSE IS OPEN. Missing, empty, or a value this build does not
+ *  recognise all mean "not resolved" — a fault wrongly shown open is a question
+ *  someone asks, while one wrongly shown resolved is one nobody ever asks
+ *  again. `ticketStats` used to disagree with the other seven readers of this
+ *  rule via a bare `else`; see 2.496.6. */
+// ⚠️ THE STATUS IS OPTIONAL IN THE PARAMETER TYPE, DELIBERATELY. The write
+// path in `FmDataContext` asks this of a `Partial<FmTicket>` patch, and a
+// signature requiring the field would push that one caller back to an inline
+// comparison — which is the exact drift this predicate exists to stop. It also
+// matches what the rule already SAYS: a missing status is not resolved.
+export function isTicketResolved(t: { status?: FmTicket["status"] }): boolean {
+  return t.status === "resolved";
+}
+
+export function isTicketOpen(t: { status?: FmTicket["status"] }): boolean {
+  return !isTicketResolved(t);
+}
+
 export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   let open = 0, inProgress = 0, resolved = 0, totalMs = 0, timed = 0;
   for (const t of tickets) {
@@ -173,7 +197,7 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
     // which is the one direction this must never fail in. A fault wrongly shown
     // as open is a question someone asks; a fault wrongly shown as resolved is
     // one nobody ever asks again.
-    else if (t.status !== "resolved") open++;
+    else if (isTicketOpen(t)) open++;
     else {
       resolved++;
       if (t.resolvedAt) {

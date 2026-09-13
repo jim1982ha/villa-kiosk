@@ -15,7 +15,7 @@ import { ChevronDown, ChevronRight, Plus, Wrench } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, ticketStats } from "@/fm/fmEngine";
+import { isTicketOpen, isTicketResolved, localStamp, ticketStats } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
@@ -93,7 +93,7 @@ export default function FaultsTab(
 
   // Devices HA currently reports as unavailable that don't already have an open
   // ticket — the "raise this" shortlist.
-  const ticketed = new Set(data.tickets.filter((t) => t.status !== "resolved")
+  const ticketed = new Set(data.tickets.filter(isTicketOpen)
     .map((t) => t.entityId).filter(Boolean));
   const broken = unavailableIds.filter((id) => !ticketed.has(id));
 
@@ -262,7 +262,7 @@ export default function FaultsTab(
         {openFirst.map((t) => (
           <ErasableRow
             key={t.id}
-            className={`state-${t.status === "resolved" ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
+            className={`state-${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}
             intent={{ title: "Erase this fault", detail: t.title }}
             erase={(token) => removeTicket(t.id, token)}
             onOpen={() => openEditor(t)}
@@ -321,7 +321,7 @@ export default function FaultsTab(
                 </div>
               )}
             </div>
-            <span className={`fm-badge ${t.status === "resolved" ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
+            <span className={`fm-badge ${isTicketResolved(t) ? "ok" : t.status === "open" ? "overdue" : "due-soon"}`}>
               {LABEL[t.status]}
             </span>
             {NEXT[t.status] && (

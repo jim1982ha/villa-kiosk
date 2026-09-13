@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { scheduleBoard, formatIdr, localStamp, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
+import { formatIdr, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
 import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
@@ -67,7 +67,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
   }
 
   const attention = board.filter((s) => s.state !== "ok");
-  const openTickets = data.tickets.filter((t) => t.status !== "resolved");
+  const openTickets = data.tickets.filter(isTicketOpen);
 
   return (
     <div className="fm-stack">

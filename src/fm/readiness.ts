@@ -15,7 +15,7 @@ import type { EntityMapping } from "@/types/scene.types";
 import type { DeviceGroup } from "@/config/AppConfig";
 import { isUnavailable } from "@/utils/stateColors";
 import { selectableDeviceIds, unavailableDeviceIds } from "@/config/deviceGroups";
-import { scheduleStatus } from "./fmEngine";
+import { isTicketOpen, scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 
 export type CheckState = "pass" | "warn" | "fail";
@@ -173,7 +173,7 @@ export function buildReadiness(
   }
 
   // ── Nothing broken and unresolved ────────────────────────────────────────
-  const openTickets = fm.tickets.filter((t) => t.status !== "resolved");
+  const openTickets = fm.tickets.filter(isTicketOpen);
   checks.push({
     id: "tickets",
     label: "No unresolved faults",

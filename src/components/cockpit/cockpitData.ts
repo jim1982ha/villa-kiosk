@@ -11,7 +11,7 @@ import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
 import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
-import { scheduleBoard } from "@/fm/fmEngine";
+import { isTicketResolved, scheduleBoard } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
 import { isOn } from "@/utils/entityState";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
@@ -65,7 +65,7 @@ export function buildAttentionItems(opts: {
   }
 
   for (const t of fmData.tickets) {
-    if (t.status === "resolved") continue;
+    if (isTicketResolved(t)) continue;
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
