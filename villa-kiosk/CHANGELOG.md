@@ -1,3 +1,28 @@
+## 2.496.13
+
+### Fixed — every on/off row in Settings is now a finger-sized target
+The switch rows throughout Settings were **22 pixels** tall — half the 44 pixels
+this app sets as its own minimum for anything operated by finger. Nothing looked
+wrong, because the row spans the full width and reads as a comfortable target
+sideways; only its height was short. On a wall-mounted tablet that is the
+difference between a tap that lands and a tap that does nothing.
+
+### Added — Settings copes with a villa that has many devices
+Three lists in Settings assumed a short villa.
+
+**Grouped devices** had no filter: every group rendered, always. There is now a
+filter box that matches both the entity name and the label you gave it.
+
+**The entity table** sat behind a collapse, so the section opened on a heading
+and nothing else — and how many entities there were was invisible until you
+clicked. It now shows its first rows straight away, with **Show all** beneath.
+Typing in the filter narrows the list and the top of the *results* is what you
+see.
+
+**Diagnostic events** showed the newest ten and told you to use Copy or Download
+for the rest, which made event 11 of 500 unreachable on the one screen meant for
+reading them. It now pages through all of them.
+
 ## 2.496.12
 
 ### Changed — one rule for "did this setting actually change"

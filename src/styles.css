@@ -156,6 +156,11 @@
   --panel-radius: 18px;
   --panel-padding: 24px;
   --touch-min: 44px;
+  /* The shared checkbox row's box, and the padding that lifts the ROW to a
+     finger-sized target. Named rather than inlined so a container can subtract
+     the leftover instead of guessing at it. */
+  --toggle-box: 22px;
+  --toggle-pad: calc((var(--touch-min) - var(--toggle-box)) / 2);
 
   /* ── THE ICON CHIP, defined once for both renderers ────────────────────
      A category-coloured rounded square holding a glyph, with a label or a
@@ -2448,6 +2453,20 @@ label.toggle {
   cursor: pointer;
   font-size: var(--text-md);
   color: var(--text-primary);
+  /* ⚠️ THE ROW IS THE TARGET, AND IT WAS 22px TALL — half of --touch-min.
+     The checkbox is 22x22 and this row had no height of its own, so the whole
+     tappable strip was 22px on a wall-mounted tablet operated by finger.
+     Nothing here LOOKED wrong: the label spans the full width, so it reads as a
+     comfortable target horizontally and only measuring finds it.
+
+     ⚠️ FIXED ON THE SHARED ROW, NOT PER SCREEN — every `label.toggle` in the
+     app is this one rule, so it reaches all of them. `align-items: center` was
+     already here, so the contents stay centred and only the row grows.
+
+     Expressed as PADDING, not min-height: same 44px target (22px box +
+     2 x 11px), but the leftover is a named value a container can subtract
+     rather than a height nobody can. */
+  padding-block: var(--toggle-pad);
 }
 label.toggle input[type="checkbox"] {
   appearance: none;
@@ -4102,3 +4121,14 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
 /* No hover on a touchscreen, and the same gesture there already opens the
    panel — so the tooltip would either never appear or fight the tap. */
 @media (hover: none) { .badge-tooltip { display: none; } }
+
+/* ── Paging for any long list (Paged.tsx) ──────────────────────────────────
+   ⚠️ `tabular-nums` SO THE COUNT DOES NOT JITTER. "1-10 of 500" reflows on
+   every page turn when the digits have proportional widths, which reads as the
+   whole row twitching each time a finger lands on it. */
+.pager {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-top: 10px;
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums;
+}
+.pager-controls { display: inline-flex; align-items: center; gap: 8px; }

@@ -17,6 +17,7 @@
 // THEM changed.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
@@ -122,6 +123,13 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       || (m.label ?? "").toLowerCase().includes(q)
       || (resolvedRooms[key] ?? "").toLowerCase().includes(q));
   }, [allEntries, search, resolvedRooms]);
+
+  // ⚠️ THE FIRST FEW, NOT A COLLAPSE, and applied AFTER the filter above — so
+  // typing narrows the list and the top of the RESULTS is what shows. This
+  // table used to sit behind a collapse toggle, so the section opened on a
+  // heading and nothing else, and the number of entities was invisible until
+  // you clicked.
+  const shown = useTruncated(entries);
 
   // Stable-identity commit path: reads the LATEST config through a ref rather
   // than closing over `config` directly, so `patch`'s own function identity
@@ -237,7 +245,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </tr>
           </thead>
           <tbody>
-            {entries.map(([key, m0]) => (
+            {shown.visible.map(([key, m0]) => (
               <EntityMapRow
                 key={key}
                 entryKey={key}
@@ -260,6 +268,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
           </tbody>
         </table>
       )}
+      <ShowAll list={shown} noun="entity" />
 
     </div>
   );

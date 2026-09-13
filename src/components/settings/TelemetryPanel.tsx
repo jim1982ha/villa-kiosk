@@ -9,6 +9,8 @@
 // explain an iOS white-screen-after-app-switch.
 
 import { useCallback, useEffect, useState } from "react";
+import { usePaged, Pager } from "@/components/common/Paged";
+import { downloadFile } from "@/utils/download";
 import { RefreshCw, Trash2, Copy, Check, Download, Stethoscope, Activity } from "lucide-react";
 import { ingressPath } from "@/ha/ingress";
 import { buildReport, captureError } from "@/utils/diagnostics";
@@ -287,10 +289,13 @@ const TONE: Record<string, string> = {
  *  supervisor-proxy.py's TELEMETRY_MAX_EVENTS ring buffer), but 500 rows of
  *  DOM in one long scroll is its own kind of unusable. Copy all/Download
  *  still act on the FULL fetched set, not just what's visibly rendered. */
-const VISIBLE_ROWS = 10;
+// ⚠️ THE FIXED WINDOW IS GONE. This showed the newest 10 and told you to use
+// Copy/Download for the rest — so row 11 of 500 was unreachable on the very
+// screen that exists to read them. `usePaged` reaches every row.
 
 export default function TelemetryPanel() {
   const [events, setEvents] = useState<TelemetryEvent[] | null>(null);
+  const paged = usePaged(events ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -353,12 +358,9 @@ export default function TelemetryPanel() {
   /** Save to a file — for a log too big to paste comfortably, and so it can be
    *  attached/forwarded as-is. */
   const downloadAll = useCallback(() => {
-    const url = URL.createObjectURL(new Blob([asJson()], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `villa-kiosk-telemetry-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(
+      `villa-kiosk-telemetry-${new Date().toISOString().slice(0, 10)}.json`,
+      asJson(), "application/json");
   }, [asJson]);
 
   // The probe writes its own telemetry record, so the result is recoverable
@@ -462,7 +464,7 @@ export default function TelemetryPanel() {
 
       {!!events?.length && (
         <div className="config-table">
-          {events.slice(0, VISIBLE_ROWS).map((e, i) => (
+          {paged.page.map((e, i) => (
             /* Layout lives in styles.css (.telemetry-row), NOT inline: the
                phone tier has to re-flow this row onto two lines, and a media
                query cannot override an inline style prop. */
@@ -486,12 +488,7 @@ export default function TelemetryPanel() {
           ))}
         </div>
       )}
-      {!!events?.length && events.length > VISIBLE_ROWS && (
-        <p className="muted body-text" style={{ marginTop: 8, fontSize: "var(--text-xs)" }}>
-          Showing the newest {VISIBLE_ROWS} of {events.length} — use <strong>Copy all</strong> or
-          <strong> Download .json</strong> above for the rest.
-        </p>
-      )}
+      {!!events?.length && <Pager paged={paged} unit="event" />}
     </div>
   );
 }

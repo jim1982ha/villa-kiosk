@@ -6,9 +6,10 @@
 // already applies to the live scene through ConfigContext.update(), so there is
 // nothing to reload on the way out.
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
+import CollapsibleSection from "@/components/common/CollapsibleSection";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { ChevronDown, ChevronRight, LogOut, Upload } from "lucide-react";
+import { LogOut, Upload } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
@@ -28,31 +29,8 @@ interface Props {
   onModelChanged: () => void;
 }
 
-/** A section title that doubles as a collapse toggle — for the two sections
- *  in this modal (auto-detected entities, device telemetry) whose lists can
- *  run long enough to dominate the whole screen on open. Collapsed by
- *  default so Advanced Settings opens on something scannable rather than a
- *  wall of rows; `defaultOpen` lets a specific entry point (jumping here to
- *  edit one entity) start expanded instead. */
-function CollapsibleSection({
-  title, defaultOpen = false, children,
-}: { title: string; defaultOpen?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <>
-      <button
-        type="button"
-        className="settings-section-title settings-section-toggle"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        {title}
-      </button>
-      {open && children}
-    </>
-  );
-}
+/* `CollapsibleSection` moved to `components/common` — byte-identical to the
+   copy that was here, and TelemetryPanel wanted the same behaviour. */
 
 /** Villa coordinates (drive sun tracking). Applies live on blur rather than
  *  needing a Save button — guards against a half-typed number (e.g. "-8.")
