@@ -8,6 +8,7 @@
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
 import { Engine } from "@babylonjs/core/Engines/engine";
+import { sliceChanged } from "./entityMapDiff";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
@@ -4306,8 +4307,14 @@ export class SceneManager {
     // calibrateRooms() to pick them up — the Rooms menu kept showing
     // whatever was calibrated at the PREVIOUS model load until a second full
     // reload happened to already have the fresh data cached from last time.
+    // ⚠️ BY CONTENT HERE TOO, THOUGH BabylonCanvas ALREADY GUARDS ITS CALLER.
+    // `parseRoomData` returns fresh arrays every open, so a bare reference
+    // check is wrong for the same reason it was wrong for the four keys above;
+    // it survives only because the one caller happens to check first. A second
+    // caller would not know that.
     const sh3dChanged =
-      prev.sh3dRooms !== config.sh3dRooms || prev.sh3dEntities !== config.sh3dEntities;
+      sliceChanged(prev.sh3dRooms, config.sh3dRooms)
+      || sliceChanged(prev.sh3dEntities, config.sh3dEntities);
 
     // A COSMETIC per-entity edit (label, room, category, badge colour, linked/
     // motion entity, light intensity) changes entityMap by reference like any
@@ -4336,9 +4343,7 @@ export class SceneManager {
     // there's no cosmetic/structural split to make here — any REAL change to
     // which mesh is which entity is inherently structural — so this only
     // needs a same-content check, not a delta classifier.
-    const meshBindingsChanged =
-      prev.meshBindings !== config.meshBindings &&
-      JSON.stringify(prev.meshBindings) !== JSON.stringify(config.meshBindings);
+    const meshBindingsChanged = sliceChanged(prev.meshBindings, config.meshBindings);
     const cosmeticOnly =
       mapDelta === "cosmetic" &&
       !meshBindingsChanged &&
@@ -4392,8 +4397,7 @@ export class SceneManager {
     // old height until a reload. Same class of defect from the other side: a
     // consumer that does not re-run when one of its inputs moves.
     const roomPointsChanged =
-      (prev.teleportPoints !== config.teleportPoints
-        && JSON.stringify(prev.teleportPoints) !== JSON.stringify(config.teleportPoints))
+      sliceChanged(prev.teleportPoints, config.teleportPoints)
       || prev.eyeHeight !== config.eyeHeight;
     if (roomPointsChanged) {
       this.syncRoomPoints();

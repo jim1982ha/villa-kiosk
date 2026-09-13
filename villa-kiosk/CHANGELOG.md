@@ -1,3 +1,19 @@
+## 2.496.12
+
+### Changed — one rule for "did this setting actually change"
+Whenever the app re-reads its settings — which happens simply by returning to
+the tab — it receives a fresh copy of them, even when nothing was edited. Each
+part of the app that had to tell a real edit from an identical re-read worked
+that out for itself, and the same fix had been written four separate times, once
+per setting, each time at whichever place happened to be reported.
+
+There is now one rule and five places ask it. Nothing changes on screen; it
+makes a fix that had to be repeated four times unable to be missed a fifth.
+
+One of the five was still comparing by identity rather than content, and got
+away with it only because its single caller checked first. It no longer relies
+on that.
+
 ## 2.496.11
 
 ### Changed — "is this fault still open" is now decided in one place

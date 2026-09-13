@@ -46,6 +46,7 @@
 //   See desiredVariantWord / orderVariantWords / applyStateNamedVariant.
 
 import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { sliceChanged } from "./entityMapDiff";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
@@ -1762,9 +1763,7 @@ export class EntityVisuals {
     // from the same pull — it is a SHARED_CONFIG_KEY too, so it also arrives
     // freshly parsed on every focus. badgeStyle is a per-device string and
     // compares by value already.
-    const groupsChanged =
-      config.deviceGroups !== prevGroups
-      && JSON.stringify(config.deviceGroups) !== JSON.stringify(prevGroups);
+    const groupsChanged = sliceChanged(config.deviceGroups, prevGroups);
     if (needsRepaint || groupsChanged || config.badgeStyle !== prevBadgeStyle) {
       this.rebuildLabels();
     }
