@@ -1,3 +1,57 @@
+## 2.496.17
+
+### Fixed — a lock the villa cannot see no longer says the door is unlocked
+A device row's switch was thrown from `state !== "locked"` — and that is also
+true of `unavailable`, `unknown` and `jammed`. So a lock Home Assistant had
+lost contact with rendered its switch in the **unlocked** position, announced
+to a screen reader as "on", while the very same row's text read *Unavailable*
+and its badge was amber. One row, three readings, and the wrong one was the
+one shaped like a door.
+
+A switch has two positions and the villa did not know which was true, so it
+now offers neither: where the state has not been observed, the control is
+withheld and the row simply reports what it knows. That is the rule the row's
+own "not in Home Assistant" guard already followed one line above.
+
+A **jammed** lock is deliberately not treated this way. It did report: the
+bolt failed to throw, the door is definitely not secured, and the retry is the
+one thing you want at a jammed door — so the switch stays, reading unlocked.
+A lock **mid-motion** claims nothing, because it is on its way somewhere.
+
+### Fixed — a motion sensor doing its job no longer rings red on the map
+Three surfaces described one motion sensor three different ways. The map badge
+rang **red**. The panel pill said **Motion detected** in its calm category
+colour. The history bar directly beneath that pill painted the same instant
+**green**. And **Map colours** told you red means *"the device needs attention
+— an unlocked door, a leak, low battery"*.
+
+The badge was the odd one out: it read a bare `state == "on"` and had no idea
+`device_class` existed, so every PIR, occupancy sensor, door contact and
+presence sensor in the villa was painted as a fault. They are informational
+now, exactly as the device-class table has always said, and the badge, the
+pill and the history bar give one answer.
+
+A **connectivity** sensor was worse than inconsistent — it was inverted. Its
+problem state is *off*, so the badge alerted while the access point was
+**connected** and went quiet when it dropped off the network. It alerts when
+the device is down now.
+
+Leak, smoke, gas, CO, tamper, battery and safety sensors are unchanged: they
+alert, as they always did.
+
+### Changed — where a reading is a fault is decided in one place
+Two lists of "words that mean something is wrong" sat in two modules under a
+comment claiming they were deliberately identical. They were not: the status
+table also carried `jammed` and `triggered`, which the badge's private copy
+lacked, so a sensor reporting either drew a red history segment under a badge
+that stayed quiet. There is one list now — the one **Map colours** documents.
+
+Your own per-entity override now reaches the map as well as the panel. It
+could only ever be seen by the panel before, because the badge was never given
+it: the badge is built from a single reading that carries the device's type,
+its live state, its linked entity and that override together, so no caller can
+quietly leave one out.
+
 ## 2.496.16
 
 ### Changed — Advanced Settings is three tabs, not six things to unfold
