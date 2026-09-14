@@ -1,0 +1,706 @@
+/* VESTA — brand theme. Plain CSS + custom properties only.
+ *
+ * Theming is fully variable-driven: the default `:root` is the LIGHT palette,
+ * `:root[data-theme="dark"]` overrides for dark, `:root[data-theme="night"]`
+ * is a further-dimmed, warmer dark for a bedroom-mounted tablet after hours.
+ * "auto" is NOT a fourth CSS block — it can't be, because choosing night over
+ * plain dark needs the real sun position (ConfigContext.tsx resolves it in JS
+ * via utils/themeTime.ts and stamps the concrete data-theme value here reads).
+ * Every colour below is a semantic variable so a whole theme swaps by
+ * redefining one block; component CSS never hardcodes a colour.
+ *
+ * Self-hosted (never a Google Fonts link — see CLAUDE.md's offline rule):
+ * Jost for display/headlines/eyebrows, Public Sans for everything else. */
+
+@font-face { font-family: "Jost"; font-style: normal; font-weight: 400 600; font-display: swap; src: url("/fonts/jost-var.woff2") format("woff2"); }
+@font-face { font-family: "Public Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("/fonts/public-sans-var.woff2") format("woff2"); }
+
+:root {
+  /* Brand constants — identical in every theme. */
+  --ink: #17191A;
+  --green900: #14432A;
+  --green700: #1F5C33;
+  --green600: #2F6B4F;
+  --green500: #4C9A5E;
+  --green300: #8FC79B;
+  --green100: #DCEDE1;
+  --cream: #FBFAF5;
+  --base: #F7F4EE;
+  --paper: #FFFDF9;
+
+  --tracking-brand: 0.38em;
+  --tracking-eyebrow: 0.18em;
+  --tracking-label: 0.08em;
+  --tracking-tight: -0.01em;
+
+  --radius-badge: 12px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --elev-1: 0 1px 2px var(--shadow);
+  --elev-2: 0 4px 16px var(--shadow);
+  --elev-3: 0 18px 48px var(--shadow);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --stroke-icon: 1.5px;
+
+  /* Category hues — used ONLY when a device is active or alerting, never as
+     an always-on gradient (see EntityCategories.ts's categorySurface()). */
+  --cat-comfort: #B4643C;
+  --cat-light: #C08A2E;
+  --cat-network: #2F6B4F;
+  --cat-energy: #2E6E8F;
+  --cat-access-control: #6B5AA6;
+  --cat-others: #6E7B72;
+
+  /* Not a light/dark concern — one shape constant for every standalone HUD
+     "section" chip (icon buttons, the floor/rooms stack, the category
+     group, the brand/title pill…), so they all read as the same family of
+     control regardless of which one a given rule happens to style. */
+  --radius-squircle: 14px;
+
+  /* Every top-anchored element's clearance from the Dynamic Island/notch
+     reads THIS, not env(safe-area-inset-top) directly. Under HA Ingress
+     (main.tsx stamps .vk-ingress on <html> before first paint) this page is
+     ALWAYS embedded below HA's own chrome — the sidebar's bar on desktop, or
+     the Companion App's toolbar on iOS — which is what actually touches the
+     physical screen edge there, not us. Reserving our own inset on top of
+     that stacked a second, redundant gap below an area HA had already
+     cleared, pushing the villa-name chip/floor-stack/PIN-gate down further
+     than the villa's own UI needs (a real field report — iPhone, Ingress
+     specifically, not the direct-hostname PWA where this page IS the
+     top-level document and genuinely owns the inset). */
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /* The bottom-edge mirror of --safe-top, and it exists for the same reason:
+     under Ingress this page is embedded INSIDE HA's own chrome, which is what
+     actually meets the home-indicator area — so reserving our own inset there
+     too stacked a second redundant gap and pushed the summary bar visibly
+     higher on an iPhone than the identical build sits on Android or a laptop
+     (reported alongside "there's a bar at the bottom on iPhone only"). The
+     top half of this bug was found and fixed first; the bottom half was
+     simply never done, and every bottom-anchored rule kept reading
+     env(safe-area-inset-bottom) directly.
+
+     Bottom-anchored elements must read THIS, and must combine it with max(),
+     not by adding: `14px + inset` stacks the design's breathing room on top
+     of a 34px gesture zone that already provides plenty, which is what put
+     the bar ~48px off the bottom edge. max() gives whichever is larger — so
+     the home indicator is still cleared on iOS, and Android/desktop keep the
+     designed offset exactly. */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Reduced clearance for a FLOATING bottom element (the summary bar, the
+     radial-menu manage button) as opposed to one flush with the screen edge
+     (a modal footer, the camera control scrim).
+
+     iOS's ~34px inset is sized so that content sitting AT the edge isn't
+     obscured by, or fighting for touches with, the home indicator. A pill
+     that already floats with its own margin, rounded corners and a shadow
+     is not that: it reads as clearly above the indicator well before 34px,
+     so spending the full inset on it just parks it in mid-screen — which is
+     what made the bar sit visibly higher on an iPhone PWA than the identical
+     build does on Android or a laptop. Just over half the inset clears the
+     indicator pill itself (~5px tall, ~8px up from the edge) with room to
+     spare. Zero wherever the inset is (Android, desktop, Ingress), so those
+     keep the designed offset untouched. */
+  --safe-bottom-float: calc(var(--safe-bottom) * 0.55);
+
+  /* Type */
+  /* Jost (self-hosted, @font-face above) for the wordmark, numerals, screen
+     headlines and eyebrows — never below 15px, always with tracking. Falls
+     back to Futura/Century Gothic (close geometric-sans cousins preinstalled
+     on macOS/iOS) rather than a serif if the woff2 hasn't painted yet. */
+  --font-display: "Jost", "Futura", "Century Gothic", ui-sans-serif, sans-serif;
+  /* Public Sans (self-hosted) for everything else — body text, table cells,
+     form labels, tracking 0. Falls back to the platform system font. */
+  --font-ui: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- Type scale ----
+     One ladder, eight steps. This replaced 22 distinct hand-written px values
+     that had drifted apart over time, including pairs too close to be a
+     deliberate distinction (12 vs 12.5, 13 vs 13.5) and ten sizes used
+     exactly once each. A reader can't name the difference between 12px and
+     12.5px, but the accumulation of near-misses is what makes an interface
+     read as assembled rather than designed.
+
+     Steps are named by ROLE, not by number, so a new surface picks the one
+     that matches what it IS (a caption, a body line, a section title) rather
+     than eyeballing a pixel value — which is how the drift started. If a new
+     size seems necessary, the right move is almost always the nearest step. */
+  --text-2xs: 11px;   /* dense metadata: chip counts, timeline ticks */
+  --text-xs: 12px;    /* captions, secondary meta under a label */
+  --text-sm: 13px;    /* form labels, table cells, muted body */
+  --text-base: 14px;  /* default UI text */
+  --text-md: 15px;    /* emphasised rows, primary buttons */
+  --text-lg: 18px;    /* card/section titles */
+  --text-xl: 20px;    /* panel + modal headings */
+  --text-2xl: 28px;   /* the one-per-screen headline */
+  /* Display sizes stay separate from the UI ladder above: these are the
+     deliberately oversized readouts (a climate panel's current temperature,
+     the profile gate's villa name), where the size IS the design rather than
+     a step in a text hierarchy. */
+  --text-display-sm: 32px;
+  --text-display: 40px;
+  --text-display-lg: 64px;
+
+  /* Sizing */
+  --panel-radius: 18px;
+  --panel-padding: 24px;
+  --touch-min: 44px;
+  /* The shared checkbox row's box, and the padding that lifts the ROW to a
+     finger-sized target. Named rather than inlined so a container can subtract
+     the leftover instead of guessing at it. */
+  --toggle-box: 22px;
+  --toggle-pad: calc((var(--touch-min) - var(--toggle-box)) / 2);
+
+  /* ── THE ICON CHIP, defined once for both renderers ────────────────────
+     A category-coloured rounded square holding a glyph, with a label or a
+     value beside it. The bottom bar draws it in the DOM (.summary-tile-icon);
+     the map draws the same object in Babylon, where CSS cannot reach — so the
+     3D layer reads these tokens through cssVar() and works in PROPORTIONS of
+     --chip-size, which is what lets a 46px tile and a 22px map badge be
+     recognisably the same component.
+
+     Every geometry question asked of the map badge over 2.232.0-2.245.0 —
+     how big the glyph is, how much padding it gets, how far the value sits,
+     how round the corners are — already had an answer here. Change them here
+     and both surfaces follow. */
+  --chip-size: 46px;    /* the chip itself */
+  /* 61% of the chip. Both renderers read this now (config/chipProportions →
+     babylon/badgeIcons' iconFraction), so it is the ONE place the pictogram's
+     size is decided — the baked map badge held a separate literal 0.56 for a
+     long time while this said 0.52, and the same object drew at two ratios.
+     Raised from 24px because the map badge's glyph read as too small once the
+     doubled ring came off in 2.252.0 and there was visibly more room in the
+     squircle than the pictogram was using. */
+  --chip-glyph: 28px;
+  --chip-gap: 13px;     /* chip → its label/value — 28% */
+  --chip-radius: 13px;  /* corner rounding — 28% */
+  /* Every top-bar chip/pill (.hud-brand, .hud-group) shares this height so the
+     brand chip on the left reads as the same size as the category/alert pills
+     on the right, not a visibly shorter section — see both selectors below.
+     Re-declared (not just relied on via auto-sizing) inside the ≤640px
+     compact-bar query, where the category row's own icon-btn shrinks to 32px
+     and this must shrink to match.
+
+     It is NOT a free number: .hud-group sets this as an explicit height, so it
+     has to equal its own content + chrome exactly — 40px chip + 2×4px padding
+     + 2×1px border = 50. It was 48 against a 38px chip; raising the chip to the
+     brand guidelines' 40px without this would have overflowed the pill by 2px.
+     The compact query's 42 is the same arithmetic at a 32px chip. */
+  --hud-pill-h: 50px;
+  /* One labelled form field, one rhythm. Three surfaces had grown their own
+     numbers for the same idea — the Settings body (6px under a 13px label),
+     the slider fields (8px) and the Facility forms (5px under a 12px one) —
+     so a field looked slightly tighter or looser depending on which modal you
+     happened to be in, and the Facility forms read as cramped next to the
+     rest of the app. The value lives here now; the three rules below consume
+     it, and a fourth surface should too rather than picking a fourth number. */
+  --field-label-gap: 7px;
+  --field-label-size: 13px;
+
+  /* ---- Light theme (default) ---- */
+  /* Surfaces — warm cream, not cool blue-white (the VESTA brand identity:
+     off-white paper tone, forest-green accent, Jost display type). */
+  --bg-base: #F7F4EE;
+  --bg-panel: rgba(255, 253, 248, 0.86);
+  --bg-overlay: rgba(255, 253, 248, 0.96);
+  /* Solid surface for every floating DIALOG (device panels, Settings, Config
+     Editor, the badge legend…) — deliberately opaque, unlike the HUD's own
+     "glass" chrome (.icon-btn/.hud-group/.hud-stack/.hud-menu etc., see
+     --bg-panel above), which stays translucent. A dialog reads as content
+     you're meant to read/edit, not a floating overlay you glance past. */
+  --bg-modal: #FFFDF9;
+  --bg-card: rgba(255, 253, 248, 0.92);
+  --bg-input: rgba(23, 25, 26, 0.05);
+
+  --accent: #2F6B4F;
+  --accent-strong: #1F5C33;
+  --accent-soft: #DCEDE1;
+  --accent-warm: #C08A2E;
+  --accent-teal: #14b8a6;
+
+  --text-primary: #17191A;
+  --text-secondary: #5A5F5B;
+  --text-dim: #9AA09B;
+  --text-on-accent: #FFFDF9;
+
+  /* Room-cluster chip. UI chrome, not a device — so it sits outside every
+     --cat-* hue on purpose and reads as a navigation affordance. */
+  --chip-surface: #475569;
+  --chip-ink: #FFFFFF;
+
+  --status-on: #34845A;
+  --status-off: #D8D3C7;
+  /* "Moving between two rest states" — see utils/stateColors STATUS_COLOR.
+     Cyan is the one hue left free by the rest of the system: it is not any of
+     the six --cat-* category hues (which must never be reused for non-category
+     UI), and it reads as neither the green of settled-on, the amber of
+     lost-contact, nor the red of a fault, which is exactly the point — a lock
+     motoring is doing what it was told, not failing. Kept clear of
+     --cat-energy's softer blue by staying saturated and cyan rather than
+     drifting toward it. */
+  --status-pending: #1F7F8C;
+  --status-warning: #B8801F;
+  --status-danger: #B24232;
+
+  --hairline: rgba(23, 25, 26, 0.10);
+  --hairline-strong: rgba(23, 25, 26, 0.18);
+  --scrim: rgba(23, 25, 26, 0.28);
+  --scrim-strong: rgba(23, 25, 26, 0.48);
+  --chip-bg: rgba(255, 253, 248, 0.76);
+  --topbar-fade: rgba(255, 253, 249, 0.76);
+  /* Halo behind bare top-bar icons/type that no longer sit on a plate.
+     It is the THEME'S OWN GROUND, near-opaque — so it lifts a dark glyph off
+     a night render in light mode and a light glyph off a bright sky in dark
+     mode, which a single hardcoded shadow colour cannot do. */
+  --hud-icon-halo: rgba(255, 253, 249, 0.95);
+  --card-scrim: rgba(23, 25, 26, 0.55);
+  --shadow: rgba(23, 25, 26, 0.16);
+  --ring: var(--bg-base);
+}
+
+/* Under HA Ingress, HA's own chrome already clears the Dynamic Island/notch
+   AND the home indicator — see --safe-top/--safe-bottom's own comments above.
+   Not a light/dark concern, so this is its own rule rather than folded into
+   the theme blocks below. */
+:root.vk-ingress { --safe-top: 0px; --safe-bottom: 0px; }
+
+/* ---- Dark theme (explicit) ---- */
+:root[data-theme="dark"] {
+  --bg-base: #101311;
+  --bg-panel: rgba(16, 19, 17, 0.86);
+  --bg-overlay: rgba(16, 19, 17, 0.96);
+  --bg-modal: #171B18;
+  --bg-card: rgba(26, 31, 27, 0.88);
+  --bg-input: rgba(240, 238, 230, 0.10);
+
+  --accent: #62B584;
+  --accent-strong: #4C9A5E;
+  --accent-soft: rgba(98, 181, 132, 0.16);
+  --accent-warm: #DFAB4D;
+  --accent-teal: #2dd4bf;
+
+  --text-primary: #F1EFE8;
+  --text-secondary: #A5AAA3;
+  --text-dim: #6C726B;
+  --text-on-accent: #0B1710;
+
+  /* Dark: the slate above is far too light against this map — it read as a
+     pale sticker rather than chrome. Matched to the panel surfaces instead. */
+  --chip-surface: #2B322D;
+  --chip-ink: #F1EFE8;
+
+  --status-on: #4FC07E;
+  --status-off: #333833;
+  --status-pending: #48C2CE;
+  --status-warning: #E0A93A;
+  --status-danger: #E2685A;
+
+  --hairline: rgba(241, 239, 232, 0.12);
+  --hairline-strong: rgba(241, 239, 232, 0.24);
+  --scrim: rgba(4, 6, 5, 0.55);
+  --scrim-strong: rgba(4, 6, 5, 0.78);
+  --chip-bg: rgba(16, 19, 17, 0.64);
+  --topbar-fade: rgba(16, 19, 17, 0.72);
+  /* Halo behind bare top-bar icons/type that no longer sit on a plate.
+     It is the THEME'S OWN GROUND, near-opaque — so it lifts a dark glyph off
+     a night render in light mode and a light glyph off a bright sky in dark
+     mode, which a single hardcoded shadow colour cannot do. */
+  --hud-icon-halo: rgba(16, 19, 17, 0.92);
+  --card-scrim: rgba(4, 6, 5, 0.85);
+  --shadow: rgba(0, 0, 0, 0.55);
+
+  --cat-comfort: #D98A5C;
+  --cat-light: #DFAB4D;
+  --cat-network: #62B584;
+  --cat-energy: #5AA3C9;
+  --cat-access-control: #9B8AD4;
+  --cat-others: #93A199;
+  --ring: var(--bg-base);
+}
+
+/* ---- Night theme (explicit; also what "auto" resolves to overnight — see
+   utils/themeTime.ts) ---- Lower luminance than dark, warmer, no pure white
+   anywhere: a wall tablet mounted in a bedroom must not act as a lamp. */
+:root[data-theme="night"] {
+  --bg-base: #0A0C0A;
+  --bg-panel: rgba(10, 12, 10, 0.90);
+  --bg-overlay: rgba(10, 12, 10, 0.97);
+  --bg-modal: #0F120F;
+  --bg-card: rgba(18, 21, 18, 0.90);
+  --bg-input: rgba(201, 196, 182, 0.07);
+
+  --accent: #3E7F5C;
+  --accent-strong: #2F6B4F;
+  --accent-soft: rgba(62, 127, 92, 0.14);
+  --accent-warm: #A87C2A;
+  --accent-teal: #24997e;
+
+  --text-primary: #C9C4B6;
+  --text-secondary: #7E837B;
+  --text-dim: #565B55;
+  --text-on-accent: #0A0C0A;
+
+  /* Night: darker again, and no pure white — a bedroom wall tablet must not
+     act as a lamp (see this block's own note above). */
+  --chip-surface: #1C221D;
+  --chip-ink: #C9C4B6;
+
+  --status-on: #3E8F62;
+  --status-off: #23261F;
+  --status-pending: #2E7681;
+  --status-warning: #A87C2A;
+  --status-danger: #A4483C;
+
+  --hairline: rgba(201, 196, 182, 0.10);
+  --hairline-strong: rgba(201, 196, 182, 0.18);
+  --scrim: rgba(0, 0, 0, 0.62);
+  --scrim-strong: rgba(0, 0, 0, 0.85);
+  --chip-bg: rgba(10, 12, 10, 0.70);
+  --topbar-fade: rgba(10, 12, 10, 0.78);
+  /* Halo behind bare top-bar icons/type that no longer sit on a plate.
+     It is the THEME'S OWN GROUND, near-opaque — so it lifts a dark glyph off
+     a night render in light mode and a light glyph off a bright sky in dark
+     mode, which a single hardcoded shadow colour cannot do. */
+  --hud-icon-halo: rgba(10, 12, 10, 0.94);
+  --card-scrim: rgba(0, 0, 0, 0.85);
+  --shadow: rgba(0, 0, 0, 0.7);
+
+  --cat-comfort: #D98A5C;
+  --cat-light: #DFAB4D;
+  --cat-network: #62B584;
+  --cat-energy: #5AA3C9;
+  --cat-access-control: #9B8AD4;
+  --cat-others: #93A199;
+  --ring: var(--bg-base);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Every lucide-react icon in the app, standardised on ONE stroke weight
+   (VESTA-DESIGN.md §1.3) — a CSS override of the `stroke-width` PRESENTATION
+   ATTRIBUTE lucide renders (stroke-width="2" by default), not a change to
+   every call site's own `size` (which stays per-instance: 20 default, 24 in
+   the top bar, 18 inside chips). CSS always wins over a presentation
+   attribute, so this one rule is the single source of truth instead of a
+   strokeWidth={1.5} prop repeated at every one of the app's icon usages.
+   strokeLinecap/strokeLinejoin round and fill:none are already lucide's own
+   defaults — nothing here overrides those. */
+svg.lucide { stroke-width: var(--stroke-icon); }
+
+/* `hidden` means hidden, whatever else claims otherwise.
+
+   The attribute is implemented as a plain UA rule (`[hidden] { display: none }`)
+   at the LOWEST possible precedence, so ANY author rule that sets `display`
+   silently defeats it. That has now bitten twice: a chip row with
+   `display: flex` kept showing its chips when collapsed, and a file input
+   inside a styled form field reappeared as a stray "Choose files / No file
+   chosen" control under the photo strip. Both were invisible in review,
+   because the markup said `hidden` and was right — the defect was somewhere
+   else entirely.
+
+   !important is deliberate, and this is the case that justifies it: it is not
+   a style being forced, it is the meaning of an attribute being restored. */
+[hidden] { display: none !important; }
+
+/* Form controls (button/input/select/textarea) do NOT inherit font-family
+   from the page by default — every browser's UA stylesheet gives them their
+   own native control font instead, regardless of what html/body sets. One
+   rule here, at the top, is the single place that's ever true: every such
+   element inherits whatever --font-ui resolves to (San Francisco on Apple
+   devices) from its ambient context, rather than each component/screen
+   needing its own explicit font-family (which is what silently left some
+   controls on the browser default before — a fix in one place, DRY, instead
+   of patched in per component as they were each individually noticed). */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  /* 100% depends on the initial containing block resolving to the TRUE
+     viewport — on iOS Safari/WKWebView (including the HA Companion App's
+     Ingress webview) that can end up wrong/stale (a well-documented iOS
+     quirk, historically tied to the address-bar-hide animation baking in a
+     shorter height that a non-scrolling, overflow:hidden page like this one
+     never gets a chance to correct), leaving dead black space above/below
+     the app's own background — reported as black letterboxing on iPhone.
+     100dvh is the dynamic-viewport-height unit iOS added specifically for
+     this: it tracks the ACTUAL visible viewport live. Kept as a second
+     declaration (not a replacement) so browsers that don't understand dvh
+     just ignore it and keep the 100% fallback. */
+  height: 100%;
+  height: 100dvh;
+  width: 100%;
+  width: 100dvw;
+  overflow: hidden;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+button {
+  color: var(--text-primary);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* --- Typography scale --- */
+.room-title { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 300; letter-spacing: 0.05em; }
+/* Small section caption ("LAST 24 HOURS", …). Slightly smaller and lighter
+   than it was: at 13px/500 it competed with the actual content underneath it
+   instead of quietly labelling it. */
+/* Same eyebrow, same contrast fix as .summary-tile-label — see its comment. */
+.entity-label { font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-secondary); }
+.value-large { font-family: var(--font-ui); font-size: var(--text-display-lg); font-weight: 200; line-height: 1; }
+.value-unit { font-family: var(--font-ui); font-size: var(--text-lg); font-weight: 400; color: var(--text-secondary); }
+.body-text { font-family: var(--font-ui); font-size: var(--text-md); line-height: 1.5; }
+
+/* --- App shell --- */
+/* The shell is pinned to the viewport, and paints the theme's own background
+   so nothing behind it can ever show through. */
+/* ⚠️ HEIGHT COMES FROM THE DYNAMIC VIEWPORT, NOT THE ICB (2.309.0).
+   `position: fixed; inset: 0` resolves against the INITIAL CONTAINING BLOCK —
+   precisely the quantity documented forty lines above as unreliable on
+   iOS/WKWebView, and the whole reason html/body/#root carry `100dvh`. The
+   SHELL never got that treatment, and the shell is the element that actually
+   contains the canvas (`height: 100%` resolves against this box) and is the
+   containing block the summary bar's `bottom` anchors to. So a stale ICB does
+   not letterbox harmlessly — it paints --bg-base where the villa should be
+   along the bottom edge, and hangs the summary bar off the visible area with
+   it. Reported as "a large empty section at the bottom on iPhone".
+   ⚠️ MIN-height, not height, since 2.319.0 — and the difference is the whole
+   safety of this rule. `height: 100dvh` OVER-CONSTRAINS the box, and CSS 2.1
+   §10.6.4 resolves that by keeping `top` + `height` and dropping `bottom`. So
+   2.309.0 did not add a safety net to `inset: 0`; it REPLACED the bottom pin
+   with a computed number, and handed the whole question to whether `100dvh`
+   reports correctly on the device. If it ever under-reports — the same class
+   of iOS quirk this rule exists to survive — the shell is SHORTER than the
+   viewport and `--bg-base` paints the difference: a pale band along the
+   bottom, which is the exact symptom, in the exact colour, that the change
+   was made to remove.
+
+   `min-height` composes instead of replacing. The insets still pin top AND
+   bottom, so the box can never be shorter than the viewport they describe;
+   dvh can only ever grow it, which is all that was wanted when the ICB comes
+   back stale and short. Both failure directions are covered, neither trusts
+   the other, and nothing has to be right for the shell to fill the screen.
+
+   ⚠️ Do not "simplify" this back to `height`. A browser with no dvh
+   support drops the declaration and keeps exactly today's inset behaviour —
+   which is every desktop engine and Android Chrome, so neither changes. */
+.app-root { position: fixed; inset: 0; min-height: 100dvh; background: var(--bg-base); }
+/* EXPLICIT width/height — never `inset: 0` alone.
+   2.162.0 changed this to `position: absolute; inset: 0` with no width/height,
+   reasoning that the shell is already pinned to four edges so the canvas could
+   just match it. That is true for an ordinary element and FALSE for a replaced
+   one, which <canvas> is: for an absolutely positioned replaced element,
+   `width: auto` resolves to the element's INTRINSIC width (CSS 2.1 §10.3.8)
+   and the `right` inset is then ignored — it does not stretch. A <canvas>'s
+   intrinsic size is its width/height ATTRIBUTES, which default to 300x150, and
+   Babylon sets those from clientWidth/clientHeight — so the box fed its own
+   size back to itself and stuck at 300x150 in the top-left corner, under the
+   top bar. The villa loaded perfectly (telemetry showed 692 meshes and a
+   2.2s paint); it was just being drawn into a stamp-sized box.
+   The irony is that the comment being replaced here named <canvas> as a
+   replaced element and then walked into the other replaced-element rule. */
+.babylon-canvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+
+/* --- Buttons --- */
+.btn {
+  min-height: var(--touch-min);
+  min-width: var(--touch-min);
+  padding: 0 18px;
+  border-radius: 12px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn:active { transform: scale(0.96); }
+.btn.primary { background: var(--accent); color: var(--text-on-accent); font-weight: 600; }
+.btn.danger { background: var(--status-danger); color: #fff; }
+.btn.ghost { background: transparent; border: 1px solid var(--hairline-strong); }
+.btn.active { background: var(--accent); color: var(--text-on-accent); }
+/* Inside a device panel, a selected chip (the fan's speed, a climate mode, a
+   media source) is reporting THAT DEVICE'S current state, so it speaks the
+   same language as the On button above it — the badge treatment in the
+   device's own category colour, from --device-* (see .big-toggle.on).
+   As a solid --accent it was doing two wrong things at once: repeating the
+   panel's one primary-ACTION colour, which is supposed to belong to Close
+   alone, and painting a blue-badged device's state green. Falls back to a
+   soft accent tint where no single device is open (a group panel). */
+/* A device panel's own controls (a cover's Open/Stop/Close, a fan's presets,
+   a climate mode) speak the DEVICE's colour, exactly as its On button does —
+   one vocabulary for "this belongs to this device" wherever it appears.
+   Scoped to .row-buttons, which is what those rows are, and NOT to every
+   ghost button in the panel: Edit and Report fault are the app's own chrome,
+   they act on the app rather than on the device, and tinting them made the
+   footer change colour with whatever happened to be open. Ghost keeps its
+   transparent fill, so the panel still has only one solid accent (Close). */
+.panel-modal .row-buttons .btn.ghost {
+  color: var(--device-ink, var(--text-primary));
+  border-color: var(--device-ring, var(--hairline-strong));
+}
+.panel-modal .row-buttons .btn.ghost:hover { background: var(--device-fill, var(--bg-input)); }
+.panel-modal .row-buttons .btn.active,
+.panel-modal .btn.active {
+  background: var(--device-fill, var(--accent-soft));
+  color: var(--device-ink, var(--accent));
+  box-shadow: inset 0 0 0 1.5px var(--device-ring, var(--accent));
+  font-weight: 600;
+}
+.btn:disabled { opacity: 0.4; pointer-events: none; }
+
+/* Shared "glass" chrome — translucent panel background + backdrop blur —
+   used by every floating HUD/modal-adjacent piece over the 3D scene. One
+   definition instead of eight copies of the same two values; each selector
+   below still sets its own border (color/width vary: hairline, hairline-strong,
+   or the danger color for the service-error toast) and layout separately. */
+.icon-btn, .hud-group, .hud-stack, .hud-menu,
+.room-label, .service-toast, .joystick-base {
+  background: var(--bg-panel);
+  backdrop-filter: blur(20px) saturate(1.1);
+  box-shadow: var(--elev-2);
+}
+
+/* Every HUD *section* (a container grouping controls) shares ONE glass level —
+   the lighter --chip-bg the profile chip already used, so the brand/clock, the
+   category row, the floor stack and the bottom bar all read as the same
+   material rather than the profile chip looking like a different component.
+   Standalone .icon-btn keeps the denser --bg-panel above: a lone button needs
+   more backing than a group that's mostly filled by its contents. */
+/* .hud-brand is deliberately NOT in this list any more (2.309.0): the app
+   icon sits directly on the bar as a peer of the other top-bar icons, not in
+   a capsule of its own. Everything else keeps the shared section material. */
+.hud-group, .hud-stack, .summary-bar {
+  background: var(--chip-bg);
+}
+
+/* Colour-legend (?) separator at the END of the category row. The buttons it
+   fences off (.hud-cat-help, .hud-labelsize-btn) are hidden on phones — where
+   the overflow menu carries the same actions — but that rule CANNOT live here:
+   `.icon-btn { display: flex }` is declared just below at equal specificity
+   (0,1,0), so a `display: none` written above it silently loses the cascade and
+   the buttons stay visible. It lives in the compact-bar media query far below
+   instead, after .icon-btn, and scoped through .hud-center to outrank it
+   outright. */
+.hud-cat-sep {
+  flex: 0 0 auto; width: 1px; align-self: stretch; margin: 3px 4px;
+  background: var(--hairline-strong);
+}
+
+.icon-btn {
+  /* Squircle (not a circle) so every standalone control — Settings, view toggle,
+     compass, anchor, (i), profile logout — matches the squircle buttons in the
+     top-bar groups and the left stack. */
+  width: 48px; height: 48px; border-radius: var(--radius-squircle);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-primary);
+  border: 1px solid var(--hairline);
+}
+/* Lit state for toggle / open icon buttons (view mode, display toggles, menus). */
+.icon-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+/* Category filter row (HUD.tsx's .hud-center): a soft accent tint, not a
+   solid fill or a per-category gradient — VESTA-DESIGN.md §1.6. These are
+   FILTERS (is this category shown at all), not category-coloured badges, so
+   they use the app's one accent regardless of which category they toggle;
+   the map badges are what carry each category's own hue (see
+   config/EntityCategories.categorySurface), only once a device in it is
+   actually active or alerting. */
+.hud-center .icon-btn.active {
+  background: var(--accent-soft); color: var(--accent); border-color: transparent;
+}
+/* Unavailable-devices button (HUD category row): quiet at zero, red the
+   instant something's offline — same colour language as the map badge ring
+   and the status pill's "Unavailable" state, so it reads as the same signal. */
+.icon-btn.has-alert { color: var(--status-danger); border-color: var(--status-danger); }
+.icon-btn { position: relative; }
+/* Count sits fully INSIDE the button's box, not hanging off its corner: this
+   button lives in .hud-group-scroll, whose `overflow-x: auto` also clips
+   vertically (CSS forces a non-visible overflow-y once one axis is auto), so
+   a negatively-offset badge got its top sliced off. Tucked to the top-right
+   corner within bounds instead — it overlaps the glyph slightly, which is the
+   normal look for a count badge and costs nothing legibility-wise. */
+.icon-btn-count {
+  position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px;
+  padding: 0 3px; border-radius: var(--radius-pill);
+  background: var(--status-danger); color: #fff;
+  font-size: var(--text-2xs); font-weight: 700; line-height: 16px; text-align: center;
+  box-shadow: 0 0 0 1.5px var(--bg-overlay);
+}
+
+/* Grouped icon "sections" in the top bar — each set of related buttons sits in
+   its own pill, so the categories read clearly without any text labels. */
+.hud-group {
+  display: flex; align-items: center; gap: 4px;
+  /* --panel-radius (18px), not the 14px squircle its BUTTONS use: the brand
+     guidelines define one panel material — background, blur, hairline and an
+     18px radius — shared by the top bar, the floor switch and the bottom bar,
+     with the squircle reserved for the controls sitting on it. Container and
+     control are deliberately two different shapes now. */
+  border-radius: var(--panel-radius); padding: 4px;
+  border: 1px solid var(--hairline);
+  /* Explicit (not just a side effect of 4px padding + a 38px icon-btn) so
+     .hud-brand can target the exact same number below rather than the two
+     drifting apart the next time either one changes independently. */
+  height: var(--hud-pill-h);
+}
+/* Vertically stacked HUD control block (Room + Switch View under the floor
+   switch, on the left). Full-width rows inside a single rounded pill. */
+.hud-stack {
+  display: flex; flex-direction: column; gap: 4px;
+  border-radius: var(--panel-radius); padding: 4px;
+  border: 1px solid var(--hairline);
+}
+/* Both groups reset the shared .icon-btn glass chrome to a flat, borderless
+   button — only their own size differs (hud-stack's rows are full-width). */
+.hud-group .icon-btn, .hud-stack .icon-btn {
+  border-radius: 10px;
+  /* ⚠️ box-shadow BELONGS IN THIS RESET and was missing until 2.312.0.
+     .icon-btn's shared glass chrome is four properties — background, blur,
+     border and --elev-2 — and this rule reset three. Inside a group that was
+     invisible: the group's own opaque plate sat over the button's shadow. The
+     moment the right-hand plates were removed (2.309.0) the shadow became the
+     only thing painting there, and a soft dark rounded rectangle behind a
+     32px glyph is indistinguishable from the container that had just been
+     deleted. Reported three releases running as "the Settings icon is still
+     hosted inside a section" — correctly, because that is what it looked
+     like. It was never the pill and never the halo; it was this. */
+  background: transparent; backdrop-filter: none; border: none; box-shadow: none;
+  color: var(--text-primary);
+}
+.hud-group .icon-btn { width: 40px; height: 40px; }
+.hud-stack .icon-btn { width: 40px; height: 38px; }
+.hud-group .icon-btn:hover, .hud-stack .icon-btn:hover { background: var(--bg-input); }
+.hud-group .icon-btn.active, .hud-stack .icon-btn.active { background: var(--accent); color: var(--text-on-accent); }
+.hud-group .icon-btn.active:hover { background: var(--accent); }

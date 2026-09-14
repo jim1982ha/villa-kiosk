@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type Hls from "hls.js";
 import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
+import { useRailLayout } from "@/utils/railLayout";
 import { usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
@@ -146,14 +147,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const motionActive = mapping.motionEntityId
     ? entities[mapping.motionEntityId]?.state === "on"
     : false;
-  const [railVertical, setRailVertical] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(orientation: landscape) and (max-height: 560px)");
-    const sync = () => setRailVertical(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
+  // ⚠️ ASKED, NOT RESTATED. This was a second copy of the stylesheet's media
+  // query and it drifted: v2.81.1 changed the CSS to `(pointer: coarse)` and
+  // left `(max-height: 560px)` here, so an iPad in landscape got rail layout
+  // from the stylesheet and `vertical={false}` from this file — a history bar
+  // drawing its segments along X inside a ten-pixel-wide vertical strip.
+  const railVertical = useRailLayout();
   // Reorders .camera-controls' vertical (phone-landscape) column ONLY — the
   // portrait row keeps its natural DOM order untouched. Close-top/fullscreen-
   // 2nd/next-above-previous reads more natural for a one-handed reach down a

@@ -1,0 +1,836 @@
+/* --- HUD --- */
+/* Three zones: brand + time (left) · action icons (centre) · alerts + settings (right). */
+.hud-topbar {
+  position: absolute; top: 0; left: 0; right: 0; height: 52px;
+  /* The centre track is minmax(0, auto), NOT auto: the category filter's
+     button count varies (role, config), so past the available width the
+     track must be allowed to shrink and let .hud-group scroll internally —
+     a plain auto track would push the side zones off-screen instead. */
+  display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center;
+  padding: 0 18px; gap: 16px;
+  background: linear-gradient(180deg, var(--topbar-fade), transparent);
+  /* Above the floating floor switch (z-21) so the dropdown menus, which live
+     inside this bar's stacking context, paint OVER the 1F/2F selector when open. */
+  z-index: 22; pointer-events: none;
+}
+.hud-topbar > * { pointer-events: auto; }
+/* The brand is its own self-contained, legible chip (same treatment as every
+   other HUD control) so the villa name reads clearly on ANY backdrop — the
+   canvas behind it can be a bright sky, a dark night, or an empty void, and
+   the name never washes out. */
+.hud-brand {
+  justify-self: start; display: flex; align-items: center; gap: 10px;
+  /* --text-xl (20px), not --text-2xl (28px, "the one-per-screen headline" —
+     used by things like the profile gate's villa name and panel headings):
+     that step read as oversized for a chip that's on screen at all times,
+     not a one-per-screen moment. This is the value the chip shipped with for
+     most of the app's life, before the --text-* scale rollout (2.83.0)
+     mapped it to the wrong step. */
+  font-family: var(--font-display); font-size: var(--text-xl); font-weight: 500;
+  /* The shared panel radius (see .hud-group) — this chip is a section of
+     the top bar, so it takes the panel shape, not the button squircle. It
+     used to be a full capsule (999px), the one section that matched nothing. */
+  /* NO border/radius/background since 2.309.0 — the capsule around the app
+     icon is gone and the icon sits on the bar itself. The height below stays,
+     because it is what keeps the icon optically centred on the same baseline
+     as .hud-group's buttons; only the CHROME was removed, not the metrics. */
+  /* Height, not vertical padding: a content-driven height (the old rule was
+     `padding: 6px 16px 6px 10px`) came out shorter than .hud-group's own
+     48px (its 38px icon-btn + 4px top/bottom padding + border) because this
+     chip's tallest content — the villa-name text — has a shorter line height
+     than an icon-btn is tall. That read as the brand chip being visibly
+     smaller than the category/alert pills beside it. Fixed height + flex
+     centering (align-items: center above) matches .hud-group exactly
+     instead, and tracks it automatically if --hud-pill-h ever changes. */
+  height: var(--hud-pill-h);
+  /* Left padding matches .hud-stack's own 4px (not the right side's 16px,
+     kept for the villa-name text) so the home icon's left edge lines up
+     exactly under the 1F/2F floor buttons directly below it — both are now
+     the same 40px box (see .hud-home-btn), which is what made a mismatched
+     inset (this used to be 10px both sides) actually visible as two
+     same-sized squares not lining up, rather than a small icon floating
+     inside a taller chip. */
+  /* No left inset any more: with the capsule gone there is no plate edge for
+     the icon to be inset FROM, and 4px of it would push the icon out of line
+     with .hud-left-col below, which sits flush at --hud-side-pad. Right side
+     keeps its breathing room so the villa name never touches the category
+     row. */
+  padding: 0 16px 0 0;
+  /* Never let the villa name WRAP as its 1fr grid track is squeezed. Without
+     this a long name ("The Lys House") broke onto three lines on a narrowed
+     desktop window, ballooning the chip vertically until it covered the floor
+     switch below the bar. It truncates instead (see .hud-title), and the
+     progressive rules further down drop the clock, then the name entirely,
+     before it can get that tight. */
+  white-space: nowrap; min-width: 0; overflow: hidden;
+}
+/* The name used to be legible because it sat on the brand capsule's glass.
+   With the capsule gone it is type directly over the villa render, which can
+   be a bright sky or a night scene, so it carries its own halo — the same
+   trick the right-side icons use (--hud-icon-halo), and the reason that token
+   is a theme variable rather than a colour written here. */
+.hud-title {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  letter-spacing: var(--tracking-tight);
+  text-shadow: 0 1px 2px var(--hud-icon-halo), 0 0 8px var(--hud-icon-halo);
+}
+.hud-brand svg {
+  color: var(--accent); flex: 0 0 auto;
+  filter: drop-shadow(0 1px 2px var(--hud-icon-halo));
+}
+/* The mark FILLS its button, so the button's box and the artwork's visible
+   edge are the same rectangle. They were not: the button tracked
+   --hud-pill-h (50px) while the SVG was a 44px prop, leaving 3px of slack that
+   inset the mark from the bar's padding edge — so its left edge sat 3px right
+   of .hud-left-col's floor stack, which starts flush at --hud-side-pad.
+   Reported as the left-hand icons not lining up. Sizing it here rather than
+   in the TSX also means --hud-pill-h stays the single source of the number;
+   the `size` prop now only sets the viewBox. */
+/* Height drives everything and the aspect ratio is left alone. 2.311.0 set
+   BOTH axes to 100%, which squares a mark whose artwork is 100:93 — it
+   stretched the squircle and, because the button was a fixed 50px while the
+   mark's natural width at that height is 54px, it also stopped the two being
+   the same box. Width auto on both means the button IS the mark: one edge, at
+   the bar's padding edge, with nothing to be misaligned against. */
+.hud-home-btn svg { height: 100%; width: auto; }
+.hud-center { justify-self: center; display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 100%; }
+.hud-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
+/* ── The DESKTOP right side hosts no pill (2.309.0) ───────────────────────
+   .hud-right-inline is a .hud-group, so it inherited the section plate:
+   background, hairline, 4px padding and the pill height. Its icons sit on the
+   bar directly instead, as peers of the app icon on the left. `background:
+   none` has to beat the shared section rule above, which it does on source
+   order at equal specificity — the same cascade note that governs the
+   phone/landscape pair far below, so keep these AFTER it. Contrast no longer
+   comes from the plate; it comes from --hud-icon-halo on the glyph itself,
+   which is theme-aware and therefore works in both modes without a container.
+   The gap opens from .hud-group's tight 4px (sized for buttons sharing one
+   plate) to 8px, because free-standing icons need real space between them to
+   stop reading as one blob.
+
+   ⚠️ .hud-overflow is NOT in this rule, and that is the whole of the phone
+   fix. It used to be, but .hud-overflow is display:none everywhere except the
+   phone tier — so stripping its plate only ever changed the phone, where it
+   left ONE bare glyph beside a filled category pill and read as a control
+   that had not finished loading. It keeps the plain .hud-group plate, which
+   means it also tracks --hud-pill-h and the pill's radius/padding with no
+   values restated here. Two icons standing free (desktop) is a composition;
+   one is an oversight. */
+.hud-right-inline {
+  background: none; border-color: transparent; padding: 0; gap: 8px;
+  backdrop-filter: none; box-shadow: none;
+}
+/* ONE tight shadow, not two. 2.309.0 added a second `0 0 6px` glow for
+   legibility on any backdrop, and at 6px around a 32px glyph it rendered as a
+   soft filled rectangle — the user read it as the hosting container still
+   being there, which is exactly what it looks like. A 2px shadow separates the
+   glyph from whatever is behind it without ever reading as a surface. Only for
+   glyphs with no plate under them: inside a pill it would be a smudge. */
+.hud-right-inline .icon-btn {
+  filter: drop-shadow(0 1px 2px var(--hud-icon-halo));
+}
+/* Hover/active still need a readable plate under them, and an active filter
+   would smear the fill rather than outline it. */
+.hud-right-inline .icon-btn:hover,
+.hud-right-inline .icon-btn.active { filter: none; }
+
+.hud-right-inline { display: flex; align-items: center; gap: 8px; }
+
+/* Overflow menu: on phones the right-side controls (view mode, Settings,
+   switch profile) collapse into this single button + dropdown. Hidden on
+   roomy screens where the inline buttons fit; the compact-bar media query
+   below swaps the two. */
+.hud-overflow { position: relative; display: none; }
+.hud-menu {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  min-width: 210px;
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--hairline); border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.hud-menu-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: var(--text-xs); color: var(--text-secondary);
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--hairline); margin-bottom: 4px;
+  white-space: nowrap;
+}
+.hud-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 11px 10px;
+  background: transparent; border: none; border-radius: 10px;
+  color: var(--text-primary); font-size: var(--text-base); text-align: left;
+  cursor: pointer;
+}
+.hud-menu-item svg { flex: 0 0 auto; color: var(--text-secondary); }
+.hud-menu-item:hover, .hud-menu-item:active { background: var(--bg-input); }
+/* Label-size row: same padding/row shape as a normal .hud-menu-item, but it
+   isn't itself a button (its two child icon-btns are) — space-between
+   instead of the icon+text left-aligned layout, and no hover fill (nothing
+   to click on the row itself). */
+.hud-menu-stepper { justify-content: space-between; cursor: default; }
+.hud-menu-stepper:hover, .hud-menu-stepper:active { background: transparent; }
+.hud-menu-stepper .icon-btn { width: 32px; height: 32px; }
+/* The currently-open camera's own row in .camera-picker-menu below — reused
+   nowhere else, so scoped there rather than added to the base .hud-menu-item
+   (every other menu in the app is a one-shot action list, nothing in it is
+   ever "the current selection"). */
+.hud-menu-item.active { background: var(--accent); color: var(--text-on-accent); }
+.hud-menu-item.active svg { color: inherit; }
+
+/* Camera picker — opened by holding either prev/next arrow in CameraPanel.
+   Built on .hud-menu (same glass chip, border, shadow) with its own
+   positioning: anchored near the bottom-right control cluster it's opened
+   from, growing UPWARD (the cluster sits at the bottom of the screen in
+   every layout — mobile overlay or the ≥900px in-flow row — so a menu that
+   dropped down like .hud-menu normally does would run straight off-screen). */
+.camera-picker-backdrop { position: absolute; inset: 0; z-index: 10; }
+.camera-picker-menu {
+  position: absolute; z-index: 11; top: auto;
+  right: calc(20px + env(safe-area-inset-right, 0px));
+  bottom: max(96px, var(--safe-bottom));
+  width: min(280px, calc(100vw - 40px));
+  max-height: min(60vh, 420px);
+}
+.camera-picker-list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+
+/* Scrollable variant of a .hud-group (the category filter): however many
+   buttons the profile/config produces, the pill never wraps and never grows
+   past its grid track — extra buttons pan horizontally (touch / trackpad /
+   wheel). Scrollbars are hidden.
+
+   ⚠️ NO EDGE FADE, and do not reintroduce one (2.310.0). This carried
+   JS-toggled `mask-image` gradients on .fade-left/.fade-right as a "there's
+   more this way" affordance. A mask applies to the element's OWN rendering,
+   so it dissolved the pill's background, its hairline border and its buttons
+   together — the pill stopped having an edge and bled into the villa behind
+   it. Reported as "a bad-looking gradient/fade/blur on the right of the
+   header", and it is the reason the puzzle icon looked half-erased. The
+   affordance is not worth an edge that dissolves: the row still pans, it
+   simply ends cleanly. The React state that drove the classes went with
+   them — a dead measurement is how the next person concludes the fade is
+   still wanted. */
+.hud-group.hud-group-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;   /* don't hand the pan to the canvas */
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.hud-group.hud-group-scroll::-webkit-scrollbar { display: none; }
+.hud-group.hud-group-scroll .icon-btn { flex: 0 0 auto; }
+/* Time sits inside the brand chip, right of the villa name — a hairline
+   divider separates it instead of a nested pill-in-pill. */
+.hud-clock {
+  font-variant-numeric: tabular-nums; font-size: var(--text-md); font-weight: 400;
+  color: var(--text-secondary);
+  padding-left: 10px; margin-left: 2px; border-left: 1px solid var(--hairline);
+}
+
+/* Connection status sits right next to the villa name — just a coloured dot. */
+.conn-dot { display: inline-flex; align-items: center; }
+.conn-dot .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-off); }
+.conn-dot.online .dot { background: var(--status-on); box-shadow: 0 0 8px var(--status-on); }
+/* Connecting is a TRANSITIONAL state — mid-handshake, on its way to a rest
+   state — which is what --status-pending means (2.157.0). Amber here said
+   "contact lost", which is the state it is actively trying to leave. */
+.conn-dot.connecting .dot { background: var(--status-pending); animation: pulse 1s infinite; }
+.conn-dot.offline .dot { background: var(--status-danger); box-shadow: 0 0 8px var(--status-danger); }
+
+/* Rooms dial button — vertically centred on the left edge so its long-press
+   radial fans out symmetrically over the full height. */
+/* The Rooms dial button + the 1F/2F floor toggle now flow together in the
+   left-column .hud-stack (see HUD). "1F"/"2F" are text, not icons. */
+.hud-floor-btn { font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.02em; }
+
+/* Rooms dial popup: tappable floating chips on arcs beside the button (see
+   RadialRoomMenu). The full-screen backdrop catches an outside tap to dismiss;
+   a faint scrim focuses attention and reads as "modal". */
+.radial-room-menu { position: fixed; inset: 0; z-index: 60; pointer-events: auto; background: var(--scrim); backdrop-filter: blur(1px); }
+.radial-item {
+  position: fixed; transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 7px 13px; border-radius: 999px; white-space: nowrap; cursor: pointer;
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-primary);
+  background: var(--bg-overlay); border: 1px solid var(--hairline-strong);
+  box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
+  max-width: 190px; overflow: hidden;
+  animation: radial-pop 0.12s ease-out;
+  transition: background 0.12s, transform 0.08s;
+}
+.radial-item > span { overflow: hidden; text-overflow: ellipsis; }
+/* Hover = the solid accent (same as the active/selected state), not a faint
+   translucent wash — matches every other button's highlight. */
+.radial-item:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+.radial-item:active { transform: translate(-50%, -50%) scale(0.94); }
+.radial-item.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+@keyframes radial-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); } }
+
+/* "Manage rooms" — the full Rooms list (create/edit/re-anchor), the one
+   thing the old Rooms button's long-press reached that this dial's floor/
+   room picking doesn't cover. Pinned at a FIXED screen position (bottom
+   centre), deliberately NOT part of the arc layout above: the arcs are
+   anchored to whichever floor button was held and their size varies with
+   the room count, so anything sharing that coordinate system could collide
+   with a long room list. A fixed, independent spot can't. */
+.radial-manage-btn {
+  position: fixed; left: 50%; bottom: max(28px, var(--safe-bottom-float));
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 999px; white-space: nowrap; cursor: pointer;
+  font-size: var(--text-sm); font-weight: 600; color: var(--text-primary);
+  background: var(--bg-overlay); border: 1px solid var(--hairline-strong);
+  box-shadow: 0 6px 20px var(--shadow); backdrop-filter: blur(8px);
+  animation: radial-pop 0.12s ease-out;
+}
+.radial-manage-btn:hover { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+.radial-manage-btn:active { transform: translateX(-50%) scale(0.96); }
+
+/* Left-side control column: floor switch, then the Room + Switch View stack,
+   all aligned under the brand on the left edge. */
+.hud-left-col {
+  position: absolute; z-index: 21;
+  top: calc(52px + var(--safe-top) + 8px);
+  /* --hud-side-pad — the SAME value .hud-topbar pads its brand chip with
+     (18px, 24px on desktop — see that variable's own comment) — so the floor
+     stack's left edge always lines up exactly under the villa-name chip's
+     left edge at every breakpoint, not just the one it happened to be
+     eyeballed against. */
+  left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+}
+.hud-left-col > * { pointer-events: auto; }
+
+/* The brand icon's "go home" button (see HUD.tsx's .hud-brand +
+   useHomeAnchor) — same gesture the removed floor-stack anchor button used
+   to offer (tap = jump to the saved default, long-press/right-click = set
+   it), just always reachable now instead of overview-mode only. Reset to a
+   plain unstyled button first: it sits among the villa name/clock/connection
+   dot rather than in a row of .icon-btn squares, so it must NOT pick up
+   icon-btn's chrome, only a light hover/focus cue of its own. */
+.hud-home-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  position: relative; flex: 0 0 auto;
+  /* Same footprint as the 1F/2F floor buttons (.hud-stack .icon-btn) right
+     below it, so the two left-edge controls read as one consistent size
+     instead of this one looking small next to them. Matched again in the
+     ≤640px compact-bar query, where the floor buttons grow to 40x40. */
+  /* Matches the header SECTION (--hud-pill-h), not the buttons inside it.
+     2.309.0 sized this to .hud-group .icon-btn (40px, and 32px on phones) on
+     the reasoning that the app icon had become "the first button of the top
+     bar". It hadn't: the mark is its own squircle artwork, so next to a 50px
+     pill it read as a small icon floating in a tall row rather than a peer of
+     the section beside it. One value, tracking the pill, so the two cannot
+     drift apart again. */
+  height: var(--hud-pill-h); width: auto;
+  background: none; border: none;
+  border-radius: 10px; cursor: pointer; color: inherit;
+}
+.hud-home-btn:hover, .hud-home-btn:focus-visible { background: var(--bg-input); }
+.hud-home-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Invisible 44px hit area (see the phone touch-target overlay further down
+   for the same technique) — on ::before, not ::after, because ::after is
+   already spoken for by .has-hold-action's "hold does more" dot below. */
+.hud-home-btn::before {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: var(--touch-min); height: var(--touch-min);
+  transform: translate(-50%, -50%);
+}
+/* The confirmation flash (applied/saved/etc.) renders as a TOPBAR-level
+   sibling of .hud-brand, not a child of it — .hud-brand clips overflow to
+   stop a long villa name from wrapping (see its own comment), which would
+   clip this too if it were nested inside. */
+.hud-home-hint {
+  position: absolute; top: calc(100% + 8px); z-index: 5;
+  left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+}
+
+.room-label {
+  /* Same safe-area treatment as .service-toast right below — this banner
+     used to sit at a flat 64px regardless of device, which on an iPhone with
+     a Dynamic Island (a taller inset than a plain notch) let it render
+     partially under/behind the island cutout instead of clear of it. */
+  position: absolute; top: calc(64px + var(--safe-top)); left: 50%; transform: translateX(-50%);
+  padding: 8px 22px; border-radius: 999px; z-index: 15;
+  animation: fadeSlide 0.4s ease-out;
+  text-align: center; max-width: 86vw;
+  border: 1px solid var(--hairline);
+}
+
+/* Failed-service-call feedback: sits above panels/sheets so a tap that did
+   nothing always explains itself, wherever it happened. */
+.service-toast {
+  position: absolute; top: calc(64px + var(--safe-top));
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--status-danger); color: var(--status-danger);
+  padding: 10px 18px; border-radius: 999px; z-index: 70;
+  animation: fadeSlide 0.3s ease-out;
+  max-width: 86vw; font-size: var(--text-base);
+}
+/* Neutral variant (AppNotice) — a general "heads up", not a failure, so it
+   doesn't borrow the danger-red tone the plain .service-toast uses for a
+   failed HA service call. */
+/* App notices (e.g. "Motion detected · Kitchen") belong to the VILLA MAP, so
+   they sit BELOW the fullscreen camera viewer (z-index 60) instead of the
+   shared toast's 70 — a motion alert was drawing on top of the live feed you
+   were watching. The error toast keeps the higher z-index on purpose: a
+   service failure still has to reach you over anything. */
+.service-toast.app-notice {
+  border-color: var(--hairline-strong); color: var(--text-primary);
+  background: var(--bg-panel); z-index: 55;
+}
+
+/* Instant tap-acknowledgment ring for the in-scene quick-toggle gesture (see
+   TapRipple.tsx) — fixed layer over the whole viewport, never intercepts
+   input, sits above the 3D canvas but below any real UI (panels/menus). */
+.tap-ripple-layer { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
+.tap-ripple {
+  position: fixed; width: 16px; height: 16px; margin: -8px 0 0 -8px;
+  border-radius: 50%; border: 2px solid var(--accent);
+  animation: tap-ripple-expand 0.5s ease-out forwards;
+}
+@keyframes tap-ripple-expand {
+  from { transform: scale(0.4); opacity: 0.9; }
+  to   { transform: scale(3.2); opacity: 0; }
+}
+
+.bottom-bar {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 96px;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  /* Safe-area on all three exposed edges: bottom for the home-indicator
+     gesture bar, left/right for a Dynamic-Island-class device rotated to
+     landscape (the island's clearance shows up as inset-left/right there,
+     not inset-top — see .hud-topbar for the same reasoning). Was a flat
+     16px/20px with no env() at all, so the joystick/view-toggle corner
+     controls could sit under the home indicator or, in landscape, under
+     the island itself. */
+  padding: 16px calc(20px + env(safe-area-inset-right, 0px))
+           max(16px, var(--safe-bottom)) calc(20px + env(safe-area-inset-left, 0px));
+  z-index: 23; pointer-events: none;
+  /* ABOVE .summary-bar (21): the bottom-right joystick (the only thing left
+     in this bar — the view-mode toggle moved to .hud-left-col) can still sit
+     under the summary bar's centred, near-full-width tile row on a narrow
+     phone, so it needs to win that stacking fight the same way it always has. */
+}
+.bottom-bar > * { pointer-events: auto; }
+
+/* The first-person/bird's-eye toggle's own layout (used both in its
+   .hud-left-col home and, "stacked" false, inside the SummaryBar in the past
+   — see ViewControls' docstring). (Only in overview) the "jump to default
+   view" button sits in a DIFFERENT section (hud-left-col's floor/rooms
+   stack) — not part of this class. */
+.overview-help { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.overview-help-buttons { display: flex; flex-direction: column; gap: 8px; }
+.overview-hint {
+  max-width: min(60vw, 460px);
+  background: var(--bg-overlay); color: var(--text-secondary);
+  padding: 10px 14px; border-radius: 14px; font-size: var(--text-xs); line-height: 1.4;
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 6px 24px var(--shadow);
+  animation: fadeIn 0.12s ease;
+}
+
+/* --- Bottom summary / scene strip (SummaryBar) --- */
+/* A centred, horizontally-scrollable row of live tiles (scenes, lights, AC,
+   energy, pool, entrance). Sits ABOVE the .bottom-bar's z-index and centred so
+   it never collides with the corner controls (view toggle / joystick). Own
+   pointer-events since it's a sibling of the pointer-events:none bottom-bar. */
+.summary-bar {
+  /* bottom safe-area only — horizontally centred, so left/right insets
+     don't apply the way they do for an edge-anchored bar. Without this the
+     tile row could sit under the home-indicator gesture area on an iPhone.
+     A tablet-class touch device gets a tighter flat term below (the
+     safe-area term alone already clears its gesture zone) — see the
+     pointer:coarse override below this rule. Desktop has no such gesture
+     zone at all, so its own 20px stays as the plain breathing room it always
+     was. */
+  position: absolute; bottom: max(20px, var(--safe-bottom-float)); left: 50%; transform: translateX(-50%);
+  z-index: 21; pointer-events: auto;
+  display: flex; gap: 8px; align-items: stretch;
+  /* width:max-content is ESSENTIAL: a centred (left:50%) absolutely-positioned
+     scroll container (overflow-x:auto) otherwise shrink-to-fits only into the
+     space from 50% to the right edge (~half the viewport), then scrolls — so
+     max-width:99vw never actually took effect and the tiles were needlessly
+     clipped. Forcing the width to the tiles' own size (capped at 99vw) lets
+     the bar use the FULL viewport before any scroll kicks in. */
+  width: max-content;
+  /* Reserve an 80px gutter on each side for whatever might sit in either
+     bottom corner — today just the first-person joystick on the right (the
+     view-mode toggle that used to justify the LEFT gutter moved into
+     hud-left-col, but this stays centred either way so removing it isn't
+     load-bearing the way it was for the phone rule below, which anchored
+     asymmetrically instead of centring). z-index alone (.bottom-bar is
+     above this) used to just make a corner control paint ON TOP when the
+     tile row was wide enough to reach it — clickable, but visually
+     overlapping the tiles underneath. Capping the width so the bar's own
+     edge stops short of the corner fixes the overlap at the source instead
+     of only fixing which layer wins it. Bar stays scrollable (overflow-x)
+     for whatever tiles don't fit in what's left. */
+  max-width: min(calc(99vw - 160px), 1900px);
+  padding: 6px; border-radius: var(--panel-radius);
+  backdrop-filter: blur(20px) saturate(1.1); /* background: shared HUD-section glass, above */
+  border: 1px solid var(--hairline); box-shadow: var(--elev-2);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+/* Tablet-class touch device (iPad, not a phone — the phone-width rule further
+   down has its own tuned 14px): a touch tablet reads as sitting too far off
+   the bottom edge at the base rule's 20px, since it also carries a real
+   gesture-zone inset (Apple gives a tablet without a physical Home button
+   roughly the same ~20pt an iPhone gets) that desktop has nothing equivalent
+   to — reported as "the bar doesn't sit at the bottom", reproducing in both
+   orientations (confirms it's this flat value, not anything
+   landscape-specific). With the max() form both terms are now alternatives
+   rather than cumulative, so this is the floor for a tablet with no inset at
+   all and the inset itself wins wherever there is one. Scoped to
+   pointer:coarse plus a width floor so a genuine desktop window narrowed to
+   tablet width doesn't pick this up by accident. */
+@media (pointer: coarse) and (min-width: 721px) {
+  .summary-bar { bottom: max(8px, var(--safe-bottom-float)); }
+}
+.summary-bar::-webkit-scrollbar { display: none; }
+.summary-scene { display: flex; }
+
+/* Tiles are flush against each other, separated by a hairline divider
+   (VESTA-DESIGN.md §1.6) rather than each being its own floating card —
+   the BAR is the one floating surface (see .summary-bar above); a tile is
+   just a section of it. */
+.summary-tile {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--chip-gap);
+  min-width: 116px; max-width: 260px;
+  padding: 6px 16px 6px 10px; border-radius: 10px;
+  background: transparent; border: none;
+  color: var(--text-primary); text-align: left; cursor: pointer;
+  transition: background 0.15s ease;
+}
+.summary-tile:not(:last-child) { border-right: 1px solid var(--hairline); }
+.summary-tile:hover:not(:disabled) { background: var(--bg-input); }
+.summary-tile.is-info, .summary-tile:disabled { cursor: default; }
+.summary-tile:disabled { opacity: 0.9; }
+
+/* A tile that is ONLY its glyph (the Scene button). It carries no label and no
+   value, so the asymmetric right padding — which exists purely to separate the
+   icon chip from the text beside it — would leave dead space on one side and
+   read as a mis-aligned tile. Vertical padding is deliberately the base tile's
+   6px so the two sit at exactly the same height in the bar.
+
+   Not merged with the phone-portrait rule below that strips text from EVERY
+   tile: that one is a "there genuinely isn't room" rule and it also flattens
+   the icon chip, while this is a permanent property of one button that keeps
+   its chip at every width so it still matches the plated tiles beside it. */
+.summary-tile-iconly { min-width: 0; padding: 6px 10px; gap: 0; }
+
+.summary-tile-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: var(--chip-size); height: var(--chip-size); flex: 0 0 auto;
+  border-radius: var(--chip-radius);
+  /* State-driven fill/glyph — the same categorySurface() the 3D badges bake,
+     so a tile's icon chip and that device's badge on the map are literally
+     the same colour. OPAQUE (see surfaceBase() in EntityCategories.ts): the
+     fallback matches, since this chip sits on the translucent summary bar
+     and a translucent-on-translucent chip disappears the same way the map
+     badges did. A hairline keeps the resting (unfilled) chip a legible
+     object rather than a same-colour hole in the bar. */
+  color: var(--tile-glyph, var(--text-secondary));
+  background: var(--tile-fill, var(--bg-modal));
+  border: 1px solid var(--hairline);
+}
+.summary-tile-icon svg { width: var(--chip-glyph); height: var(--chip-glyph); }
+.summary-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; gap: 1px; }
+.summary-tile-label {
+  /* 11px Jost caps, per the brand guidelines' bottom-bar spec — the label is
+     an eyebrow, which is display type, not body copy. The VALUE below it is
+     Jost too (18px/500); everything a guest actually READS stays Public Sans. */
+  font-family: var(--font-display);
+  /* --text-secondary, NOT --text-dim. #9AA09B on the light bar is 2.4:1,
+     which fails WCAG AA (4.5:1) for text this size by a wide margin and was
+     reported as simply hard to read; --text-secondary is 5.8:1. --text-dim is
+     a decorative tone in this palette (separators, placeholders, disabled
+     chevrons) and darkening the TOKEN enough to pass would have collapsed it
+     into --text-secondary, so the eyebrows move instead. */
+  font-size: var(--text-2xs); font-weight: 500; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: var(--tracking-label);
+}
+.summary-tile-value {
+  font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Neutral by default (VESTA-DESIGN.md §0): the icon chip only takes its
+   category's hue once the tile itself reports "on" — see the Tile
+   component's categorySurface() call, which also sets --tile-ring for this
+   accent. An inset underline rather than a full border, so it reads as a
+   status cue on the flush tile rather than reintroducing a per-tile card. */
+.summary-tile.tone-on { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--accent)); }
+/* Reads --tile-ring, exactly like tone-on above, so the underline and the icon
+   chip it sits under are ONE value rather than two answers to one question.
+   It was a literal --status-warning while the chip took categorySurface's
+   "alert" surface, i.e. --status-danger: the Energy tile drew a red chip with
+   an amber underline on the same tile (reported from a screenshot). Amber was
+   also simply the wrong meaning — a tile turns "warn" for an unlocked lock or
+   a high energy draw, which is a confirmed condition needing attention, not
+   Home Assistant losing contact. */
+.summary-tile.tone-warn { box-shadow: inset 0 -2px 0 var(--tile-ring, var(--status-danger)); }
+.summary-tile.tone-off .summary-tile-value { color: var(--text-secondary); }
+
+
+
+/* Scene pop-up picker (portaled to <body>, anchored above the Scene tile). */
+.summary-scene-menu {
+  z-index: 40; pointer-events: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 190px; max-width: 300px; max-height: 46vh; overflow-y: auto;
+  padding: 6px; border-radius: 16px;
+  background: var(--bg-overlay); backdrop-filter: blur(12px);
+  border: 1px solid var(--hairline); box-shadow: 0 10px 30px var(--shadow);
+  animation: fadeIn 0.1s ease;
+}
+.summary-scene-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 12px; border-radius: 11px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-primary); font-size: var(--text-md); font-weight: 600;
+  text-align: left; white-space: nowrap;
+}
+.summary-scene-item:hover { background: var(--bg-input); }
+.summary-scene-item svg { color: var(--text-secondary); flex: 0 0 auto; }
+
+/* --- SummaryGroupPanel: the modal a bottom-bar tile opens (entity list) --- */
+/* The group modal matches the SETTINGS/Advanced-Settings width (780px), not
+   the narrow single-device panel — it lists a whole group two-across, so it
+   shares the width of the app's other "wide" dialogs rather than inventing a
+   third size. */
+.modal.panel-modal.summary-group-modal { max-width: 780px; }
+/* Two columns on desktop/tablet, collapsing to one when the tracks no longer
+   fit (phones) — no breakpoint juggling. */
+.summary-entity-grid {
+  display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  margin-bottom: 14px;
+}
+/* Room sub-heading within a section (on-map / not-on-map) — quieter than
+   .summary-offmap-heading (a sub-level of it, not a peer): no border/accent
+   colour, just enough weight to separate one room's devices from the next. */
+.summary-room-heading {
+  margin: 10px 2px 6px; font-size: var(--text-2xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary);
+}
+.summary-room-heading:first-child { margin-top: 0; }
+/* "Scenes for this room" strip — SummaryGroupPanel's roomScenes, room-cluster
+   panel only. Sits BELOW the device list (the room's own devices are why the
+   modal was opened; scenes are a secondary shortcut for the same room),
+   separated by a hairline above so it still reads as a distinct action row
+   rather than another device. */
+.summary-room-scenes {
+  border-top: 1px solid var(--hairline); padding-top: 14px; margin-top: 14px;
+}
+.summary-room-scenes .summary-room-heading { margin-top: 0; }
+.summary-room-scenes-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* On a phone two ordinary scene names miss sharing a row by a hair — measured
+   at 296px of button against 285px of content on a 360px-wide device, an
+   11px shortfall — so each fell onto its own line with obvious empty space
+   beside it, reading as a layout bug rather than as a wrap. The row is doing
+   the right thing; the buttons are simply too wide for it. Trimming the
+   horizontal padding (the base .btn's 18px is tuned for a full-width dialog,
+   not a 285px column) buys 24px across the pair, which clears it with room
+   to spare. Wrapping remains the fallback for genuinely long scene names. */
+@media (max-width: 720px) {
+  .summary-room-scenes-row .btn { padding: 0 12px; }
+}
+/* HA-only devices (no geometry in this villa model) — listed after the mapped
+   ones under this heading and tinted, so it's clear they're not on the map. */
+.summary-offmap-heading {
+  margin: 18px 0 8px; font-size: var(--text-xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent);
+  border-top: 1px solid var(--hairline); padding-top: 14px;
+}
+.summary-entity-row.is-offmap .summary-entity-name,
+.summary-entity-row.is-offmap .summary-entity-state { color: var(--accent); }
+/* Devices Home Assistant has no entity for at all — the villa model still
+   carries geometry named after them. A DIFFERENT fact from "not on the map"
+   and so a different colour: --status-warning is the app's one token for
+   "Home Assistant has lost contact with this", the same amber the map badge's
+   dashed ring uses (see categorySurface's `unavailable` row and the Map
+   colours legend). Reusing the off-map accent here would have said "exists in
+   HA, just not modelled", which is the opposite of what this section means. */
+.summary-notinha-heading { color: var(--status-warning); }
+.summary-entity-row.is-notinha .summary-entity-name,
+.summary-entity-row.is-notinha .summary-entity-state { color: var(--status-warning); }
+.summary-entity-row {
+  display: flex; align-items: center; gap: 10px;
+  border-radius: 14px; background: var(--bg-input);
+}
+.summary-entity-main {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 14px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-primary); text-align: left;
+}
+.summary-entity-main:hover { background: var(--bg-card); }
+.summary-entity-badge { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 11px; }
+.summary-entity-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+/* Row wrapper so the "hidden in HA" icon (if any) stays fixed-width and
+   visible rather than being clipped along with the name's own truncation —
+   the icon needs to sit OUTSIDE the ellipsis-truncating span, not inside it. */
+.summary-entity-name-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.summary-entity-name {
+  font-size: var(--text-md); font-weight: 600; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A user explicitly hid this entity in HA (registry hidden_by) — shown only
+   where a caller has opted OUT of the default suppressed-entity filtering
+   (the room/category browse modals), so a device that's normally invisible
+   elsewhere doesn't just quietly appear with no indication anything's
+   different about it. */
+.summary-entity-hidden-icon { flex: 0 0 auto; color: var(--text-dim); }
+.summary-entity-state { font-size: var(--text-xs); color: var(--text-secondary); }
+.summary-entity-chevron { color: var(--text-dim); flex: 0 0 auto; }
+
+/* Inline on/off switch (a compact version of the panels' PowerToggle). */
+.summary-entity-toggle {
+  flex: 0 0 auto; width: 48px; height: 28px; margin-right: 10px;
+  border-radius: 999px; border: none; cursor: pointer; position: relative;
+  background: var(--status-off); transition: background 0.15s ease;
+}
+.summary-entity-toggle.on { background: var(--status-on); }
+.summary-entity-toggle .knob {
+  position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+  transition: transform 0.15s ease;
+}
+.summary-entity-toggle.on .knob { transform: translateX(20px); }
+
+/* Linked-entity switch at the top of every device panel (BasePanel) — set
+   apart from the panel's own controls by a card background + rule, since it
+   acts on a DIFFERENT entity than the rest of the panel and shouldn't read as
+   one of that device's own controls. */
+.panel-linked-row {
+  display: flex; align-items: center; gap: 4px;
+  padding: 10px 12px; margin-bottom: 14px;
+  border-radius: 12px; background: var(--bg-card);
+  border: 1px solid var(--hairline);
+}
+.panel-linked-label {
+  font-size: var(--text-base); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  /* THE BAR HUGS ITS TILES. It is a floating surface like every other one in
+     the HUD, and a floating surface is the size of what it contains.
+
+     Two earlier anchorings are worth not repeating. It first reserved 80px on
+     the LEFT for a view-controls button that used to sit in the bottom-left,
+     and read as shifted right once that button moved into hud-left-col. The
+     fix for that stretched it edge-to-edge (left AND right set, width:auto)
+     and centred the tiles inside — which trades a lopsided bar for an
+     oversized one: on a portrait phone the tiles collapse to six icon chips
+     (see the 640px rule below), so a full-width bar is mostly empty glass with
+     a huddle of icons in the middle. Reported from a 412px Android as exactly
+     that.
+
+     So this no longer positions the bar at all — the base rule's
+     `left: 50%` + `translateX(-50%)` + `width: max-content` already centres it
+     AND sizes it to its content, which is the behaviour every other viewport
+     has always had. ⚠️ Do not re-introduce `left` + `right` + `width: auto`
+     here: setting both insets on an absolutely-positioned box overrides
+     max-content sizing outright, which is what made it full-width. Only the
+     max-width needs a phone value, because the base one reserves a 160px
+     gutter for bottom-corner controls that a phone does not have. */
+  .summary-bar {
+    /* max(), not a flat 14px and not `14px + inset` — the home-indicator
+       gesture area still has to be cleared on a phone that has one (a bare
+       literal silently dropped that on every phone, since this query matches
+       virtually all of them), but ADDING the two stacked the design's
+       breathing room on top of a 34px zone that already supplies plenty and
+       left the bar sitting visibly higher on an iPhone than the same build
+       does on Android — see --safe-bottom. */
+    bottom: max(14px, var(--safe-bottom-float)); gap: 8px; padding: 7px;
+    /* The only thing a phone needs to say about width: how far it may grow
+       before it starts scrolling. 14px of breathing room each side, plus the
+       notch insets so a landscape phone's rounded corner never clips it. */
+    max-width: calc(
+      100vw - 28px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)
+    );
+    /* Plain "center" on an overflowing SCROLLABLE flex row is a well-known
+       trap: the browser computes centred scroll bounds, which happily let you
+       scroll right to reach the last tile but clip/refuse to scroll left far
+       enough to reach the first one (reported: could see the end of an
+       overflowing tile row but not its start). "safe center" (CSS Box
+       Alignment) keeps the centred look while content fits, and falls back to
+       normal start-alignment — fully scrollable both ways — the instant it
+       overflows. Declared after the plain fallback so an engine that doesn't
+       understand "safe" just keeps that (still buggy, but least-broken)
+       behaviour instead of losing the centring keyword entirely. */
+    justify-content: center;
+    justify-content: safe center;
+  }
+  .summary-tile { min-width: 96px; padding: 9px 14px 9px 9px; gap: 10px; }
+  .summary-tile-icon { width: 40px; height: 40px; }
+  .summary-tile-icon svg { width: 21px; height: 21px; }
+  .summary-tile-value { font-size: var(--text-md); }
+}
+
+/* ── Narrow portrait phone: tiles collapse to their icons ────────────────────
+   The row is centred with its own max-width and pans horizontally past it, so
+   on a portrait phone the last tile was always half off the edge ("LIG  4 O")
+   and the live value it exists to show was the part that got cut. Dropping the
+   text is what makes every tile fit at once — six icon chips need about a
+   third of the width the labelled tiles do.
+
+   Width-and-orientation driven, not overflow-driven, because CSS has no "if
+   this box overflows" selector and the alternative is a ResizeObserver whose
+   result feeds back into the width it measured. Portrait is qualified on
+   purpose: the same phone in landscape has room for the labels and keeps them,
+   so this is not a device rule, it is a "there genuinely isn't room" rule.
+
+   The tile keeps its full tap target, its tone ring and its aria-label — only
+   the visible text is dropped, so nothing becomes unreachable or unlabelled
+   for a screen reader. */
+@media (max-width: 640px) and (orientation: portrait) {
+  .summary-tile-text { display: none; }
+  /* With the text gone the tile is a chip: square-ish, no asymmetric right
+     padding that only existed to separate icon from label. */
+  .summary-tile { min-width: 0; padding: 9px; gap: 0; }
+
+  /* ONE frame, not two. The BAR is the single floating surface (see
+     .summary-bar) and a tile is a section of it — but the icon chip carries
+     its own fill and hairline so that it stays a legible object when it sits
+     BESIDE a label. With the label gone the chip is the only thing in the
+     tile, so its border draws a box inside a box: five framed icons inside a
+     framed bar. Reported as a redundant frame around each icon.
+
+     ⚠️ State is NOT lost with the fill. The chip's background is
+     categorySurface()'s --tile-fill, but that is the second of three signals,
+     not the only one: the GLYPH keeps --tile-glyph (the same colour the map
+     badge bakes) and the tile keeps its tone underline (.tone-on/.tone-warn's
+     inset box-shadow). Both survive here, so on/off still reads at a glance
+     without the plate. */
+  .summary-tile-icon {
+    background: none; border-color: transparent;
+    width: auto; height: auto;
+  }
+  /* Bigger, now that the glyph IS the tile rather than its decoration — it
+     was 21px inside a 40px chip at this tier, sized to leave room for a
+     surround that no longer exists. The tile's own 9px padding keeps the tap
+     target comfortably past --touch-min (30 + 18 = 48). */
+  .summary-tile-icon svg { width: 30px; height: 30px; }
+}
+
+
+/* --- Virtual joystick --- */
+.joystick-base {
+  width: 120px; height: 120px; border-radius: 50%;
+  position: relative; touch-action: none;
+  border: 1px solid var(--hairline-strong);
+}
+.joystick-knob {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--accent); position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  box-shadow: 0 2px 12px var(--shadow);
+}

@@ -1,0 +1,389 @@
+/* ---- Reduced motion ----------------------------------------------------
+   The OS-level "reduce motion" preference, honoured app-wide. This matters
+   more here than in an ordinary web app for two reasons: this is a KIOSK,
+   often wall-mounted and permanently in view, and several of its animations
+   are ambient and indefinite rather than one-shot — the sensor-pulse, the
+   loading-skeleton sweep, the pending-toggle throb, the connecting dot. For
+   a motion-sensitive user, "subtle movement that never stops in the corner
+   of the room" is the worst case, not a transient one.
+
+   Deliberately NOT `animation: none`: killing a keyframe outright can strand
+   an element on frame 0 (a skeleton stuck mid-sweep, a dot stuck dim), which
+   swaps a motion problem for a correctness one. Instead durations collapse
+   to ~0 so every animation lands immediately on its FINAL state, and
+   infinite loops are cut to one iteration. State still changes, transitions
+   still "complete", nothing moves.
+
+   Applied last in the file so it wins on specificity ties without needing
+   !important on individual rules. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* The tap ripple is PURELY decorative motion with no end state worth
+     landing on (it exists only to acknowledge a tap the 3D scene can't
+     otherwise confirm) — the status pill and the service toast already
+     report the same outcome in text, so removing it costs no information. */
+  .tap-ripple { display: none; }
+
+  /* PROGRESS INDICATORS ARE NOT DECORATION, and the blanket reset above was
+     silently destroying them: one iteration at 0.01ms means the loading
+     spinner snapped through a single rotation and then sat perfectly still.
+     A frozen spinner does not read as "motion was reduced", it reads as
+     "this app has hung" — reported as the spinner not turning on an iPad,
+     during a model parse that legitimately takes several seconds.
+     Removing the only evidence that work is still happening is a real loss
+     of information, which is exactly the line the tap-ripple note above
+     draws.
+     Reduced-motion asks for no VESTIBULAR motion, not for no feedback, so
+     these keep animating with the movement taken out: a slow opacity breath
+     conveys "still working" while nothing travels, rotates or scales. */
+  .spinner, .conn-dot.connecting .dot, .state-timeline-skeleton {
+    animation: reduced-motion-breathe 1.6s ease-in-out infinite !important;
+  }
+  /* The skeleton's own look is a moving GRADIENT, so the breath above has to
+     replace the sweep rather than sit on top of it — otherwise it keeps a
+     frozen highlight band parked mid-element, which reads as a rendering
+     fault rather than as a placeholder. */
+  .state-timeline-skeleton { background: var(--bg-input); }
+}
+@keyframes reduced-motion-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* ---- Connection banner (ConnectionBanner.tsx) -------------------------
+   Sits at the TOP EDGE, full width, rather than borrowing the centred pill
+   shape .service-toast uses. That is deliberate: a toast is transient and
+   dismissible-by-waiting, while this stays for as long as the problem does,
+   and the two must not be mistaken for each other. Full-bleed also survives
+   the phone tier that hides the brand chip's connection dot — the exact case
+   this exists for.
+
+   Warning-amber, not danger-red: the socket dropping is recoverable and
+   usually self-heals in seconds. Red here would put a permanent-looking
+   alarm on a wall display for something that resolves on its own, and would
+   collide with the red this app already reserves for a device that needs
+   attention (an unlocked door, a leak). */
+/* Sits BELOW the top bar (52px, see .hud-topbar) rather than across it. As a
+   full-width strip pinned to top:0 it covered the villa name, the category
+   rail and the corner controls whenever the connection dropped — hiding the
+   UI at the exact moment someone is trying to work out what still works. A
+   centred pill clears the corners entirely, so nothing but empty canvas is
+   ever behind it. */
+.connection-banner {
+  position: absolute;
+  top: calc(var(--safe-top) + 52px + 8px);
+  left: 50%; transform: translateX(-50%); z-index: 75;
+  max-width: min(560px, calc(100% - 32px));
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--status-warning) 16%, var(--bg-modal));
+  border: 1px solid color-mix(in srgb, var(--status-warning) 45%, transparent);
+  border-radius: 999px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  text-align: center;
+  animation: fadeIn 0.2s ease-out;
+  /* Never eat a tap meant for the HUD underneath: the banner is purely
+     informational and has no controls of its own. */
+  pointer-events: none;
+}
+.connection-banner svg { flex: 0 0 auto; color: var(--status-warning); }
+.conn-banner-short { display: none; }
+
+/* Phone: the full sentence wrapped to five lines inside a shrink-to-fit pill,
+   which read as a slab dropped over the villa rather than as a status note —
+   and pushed down far enough to sit alongside the floor buttons. Swap to the
+   short phrasing, tighten the box, and keep it on one line: `nowrap` is what
+   actually guarantees the height, since a pill that is merely narrower can
+   still wrap. The width cap keeps that single line clear of the floor stack
+   on the left and the overflow button on the right. */
+@media (max-width: 640px) {
+  .connection-banner {
+    max-width: calc(100% - 120px);
+    padding: 6px 12px;
+    gap: 6px;
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+  .conn-banner-full { display: none; }
+  .conn-banner-short { display: inline; }
+}
+
+/* --- Cockpit page (CockpitModal) — villa-wide status report ------------- */
+.cockpit-health {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 12px;
+  font-size: var(--text-md); font-weight: 500;
+}
+.cockpit-health svg { flex: 0 0 auto; }
+.cockpit-health-ok { background: color-mix(in srgb, var(--status-on) 14%, transparent); color: var(--status-on); }
+.cockpit-health-warn { background: color-mix(in srgb, var(--status-warning) 16%, transparent); color: var(--status-warning); }
+.cockpit-health-danger { background: color-mix(in srgb, var(--status-danger) 16%, transparent); color: var(--status-danger); }
+
+.cockpit-attention-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.cockpit-attention-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border-radius: 10px; text-align: left;
+  background: var(--bg-input); border: none; color: inherit; font: inherit;
+}
+button.cockpit-attention-row.tappable { cursor: pointer; }
+button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg-input)); }
+.cockpit-attention-icon { flex: 0 0 auto; }
+/* These two were SWAPPED, which inverted the one distinction the status
+   vocabulary exists to protect (utils/stateColors, babylon/colors): amber is
+   "Home Assistant has lost contact, the state is unknown", red is "a confirmed
+   problem". Cockpit painted an unavailable device as a confirmed alarm and a
+   confirmed fault as merely unreachable — the same device shown red here and
+   amber on the map badge beside it. `schedule` stays amber deliberately: it is
+   a maintenance item, and amber is Facility Manager's established "due soon"
+   tier (.fm-badge.due-soon), not a claim about connectivity. */
+.cockpit-attention-unavailable { color: var(--status-warning); }
+.cockpit-attention-fault, .cockpit-attention-alarm { color: var(--status-danger); }
+.cockpit-attention-schedule { color: var(--status-warning); }
+.cockpit-attention-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cockpit-attention-title {
+  font-size: var(--text-sm); color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Room/Floor/Category selector header: wraps onto its own line below the
+   "By ___" label on a narrow phone rather than clipping or overflowing —
+   a 3-button segmented control (Category was folded in from its own
+   always-visible section, see CockpitModal) is wider than the 2-button one
+   this row used to hold. */
+.cockpit-pivot-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; row-gap: 6px; }
+
+.cockpit-category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 4px; }
+.cockpit-category-tile { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: var(--bg-input); }
+.cockpit-category-icon {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; color: #fff;
+}
+.cockpit-category-label { font-size: var(--text-sm); font-weight: 500; color: var(--text-primary); }
+
+.cockpit-pivot-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+/* A real button (tap opens that room/floor's own device list, SummaryGroupPanel
+   reused from every other device-group view in the app) — reset to plain row
+   chrome first since a <button> otherwise brings its own border/background,
+   then the SAME layout the row always had (flex/gap unchanged) plus a hover
+   cue and the trailing chevron below. .cockpit-pivot-label itself is
+   untouched — only the row's own container gained interactivity. */
+.cockpit-pivot-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: none; padding: 3px 4px; margin: -3px -4px;
+  border-radius: 8px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.cockpit-pivot-row:hover, .cockpit-pivot-row:focus-visible {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.cockpit-pivot-label {
+  flex: 0 0 130px; font-size: var(--text-sm); color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The track IS the unavailable state — amber — and the green fill covers the
+   part that is reporting. One element instead of two, so the two segments can
+   never disagree about where the boundary is. */
+.cockpit-pivot-bar {
+  position: relative;
+  flex: 1 1 auto; height: 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--status-warning) 55%, var(--bg-input));
+  overflow: hidden;
+}
+.cockpit-pivot-bar-ok { height: 100%; background: var(--status-on); border-radius: inherit; }
+/* Per-device notches, one every --tick of the width. Faint on purpose: it is a
+   scale for reading the bar, not data of its own, so it should be legible when
+   looked for and invisible when not. Hidden once devices are thinner than a
+   notch, where it would read as texture rather than as divisions. */
+.cockpit-pivot-bar::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0, transparent calc(var(--tick) - 1px),
+    color-mix(in srgb, var(--bg-base) 55%, transparent) calc(var(--tick) - 1px), color-mix(in srgb, var(--bg-base) 55%, transparent) var(--tick));
+}
+@supports not (width: calc(var(--tick) - 1px)) { .cockpit-pivot-bar::after { display: none; } }
+.cockpit-pivot-count { flex: 0 0 26px; text-align: right; font-size: var(--text-xs); }
+.cockpit-pivot-chevron { flex: 0 0 auto; }
+
+.cockpit-energy-value { font-size: var(--text-display-sm); font-weight: 600; color: var(--text-primary); margin: 4px 0 0; }
+
+.cockpit-activity-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+/* Two columns where there is width for them, so the same 20 entries are read
+   without scrolling. CSS columns rather than a grid: the feed is chronological,
+   and columns flow top-to-bottom then across, which keeps 1-10 on the left and
+   11-20 on the right. A grid would interleave them across rows and scramble the
+   order. */
+@media (min-width: 641px) {
+  .cockpit-activity-list { display: block; columns: 2; column-gap: 28px; }
+  .cockpit-activity-row { break-inside: avoid; margin-bottom: 8px; }
+}
+/* A phone gets the 10 most recent only. The feed still carries 20 — the rest
+   are hidden rather than dropped, so widening the window fills the second
+   column immediately instead of waiting on a refetch. */
+@media (max-width: 640px) {
+  .cockpit-activity-row:nth-child(n + 11) { display: none; }
+}
+.cockpit-activity-row { display: flex; align-items: baseline; gap: 10px; font-size: var(--text-xs); }
+.cockpit-activity-time { flex: 0 0 50px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.cockpit-activity-text { color: var(--text-secondary); }
+.cockpit-activity-text strong { color: var(--text-primary); font-weight: 600; }
+
+.cockpit-updates { margin-top: 16px; }
+
+/* ── Telemetry log rows ────────────────────────────────────────────────────
+   A diagnostic row is four parts: the event kind, which device/role/build sent
+   it, the human-readable summary, and the timestamp. Three of those are
+   fixed-width by nature, and on a phone they consume the entire line — which
+   left the SUMMARY, the only flexible item, squeezed to roughly one character
+   wide. Its `word-break` then did exactly what it was told and broke every
+   single letter onto its own line, rendering the summary as a vertical column
+   of characters hundreds of pixels tall (reported from an Android screenshot).
+   These live in CSS rather than inline style props specifically so the phone
+   tier below can override them — a media query cannot touch an inline style,
+   which is a trap this codebase has hit before. */
+.telemetry-row {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 8px 0; font-size: var(--text-sm);
+}
+.telemetry-row + .telemetry-row { border-top: 1px solid var(--hairline); }
+.telemetry-row > .telemetry-kind { flex: 0 0 auto; font-weight: 600; }
+.telemetry-row > .telemetry-meta { flex: 0 0 auto; font-size: var(--text-2xs); }
+.telemetry-row > .telemetry-time { flex: 0 0 auto; font-size: var(--text-2xs); }
+/* `anywhere` rather than `break-word`: it may break mid-token to avoid an
+   overflow, but unlike `break-all` it still prefers ordinary word boundaries
+   whenever the line has room for them. */
+.telemetry-row > .telemetry-summary { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  /* Give the summary the whole of its own line instead of the sliver left
+     over after the other three. `order` moves it below them without changing
+     DOM order (which stays the natural reading order on a wide screen), and
+     the timestamp is pushed to the right end of the first line so that line
+     reads "kind · device · when". */
+  .telemetry-row { flex-wrap: wrap; row-gap: 4px; }
+  .telemetry-row > .telemetry-summary { flex: 1 1 100%; order: 1; }
+  .telemetry-row > .telemetry-time { margin-left: auto; }
+}
+
+/* On-demand "this device" diagnostics (TelemetryPanel). Monospace and
+   scrollable in BOTH axes: the report has long unwrapped lines (a full user
+   agent, a WebGL renderer string) that must stay readable and copyable rather
+   than being reflowed into ambiguity. */
+.diag-report {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: pre;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* --- Merged room-chip chooser (RoomChoiceSheet) --------------------------
+   ONLY the rows. Everything about the card — width, centring, scrim, entry
+   animation, safe-area padding, and the phone override back to a centred card
+   — comes from BasePanel's .panel-modal / .panel-modal-backdrop, which this
+   dialog is now built on.
+
+   It used to set its own `width: min(360px, 100vw - 48px)` here. That looked
+   harmless and was the actual bug on phones: the shared shell turns into a
+   full-bleed top-anchored sheet below 640px (correct for Settings' long
+   forms), and this width rule — later in the file, so it won the cascade —
+   left a 360px square-cornered slab pinned to the top-left. A dialog that
+   states its own geometry is a dialog that cannot follow the shell's
+   responsive behaviour. Nothing here may set width, padding or position. */
+.room-choice-list { display: flex; flex-direction: column; gap: 4px; }
+.room-choice-row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: var(--touch-min); padding: 0 12px;
+  border-radius: 12px; background: var(--bg-input);
+  font-size: var(--text-md); color: var(--text-primary); text-align: left;
+}
+.room-choice-row:hover { background: var(--accent-soft); color: var(--accent); }
+.room-choice-icon { flex: 0 0 auto; color: var(--text-dim); }
+.room-choice-row:hover .room-choice-icon { color: var(--accent); }
+.room-choice-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The count is why one row is distinguishable from the next, so it reuses the
+   count-pill treatment the chip itself carries on the map. */
+.room-choice-count {
+  flex: 0 0 auto; min-width: 24px; padding: 2px 8px;
+  border-radius: 999px; background: var(--bg-modal);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums;
+  color: var(--text-secondary); text-align: center;
+}
+
+/* --- Badge hover tooltip (Dashboard) -------------------------------------
+   Follows the pointer, offset clear of the cursor so it never sits under the
+   badge it is naming. pointer-events: none is essential, not cosmetic: a
+   tooltip that can be hovered becomes the hover target, which drops the badge
+   and flickers the tooltip out from under the cursor. */
+.badge-tooltip {
+  position: fixed; z-index: 80; pointer-events: none;
+  transform: translate(14px, -50%);
+  max-width: 240px; padding: 5px 9px;
+  border-radius: 10px;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--hairline);
+  box-shadow: 0 8px 22px var(--shadow);
+  color: var(--text-primary);
+  /* --text-2xs, the scale's dense-metadata step: a name that follows the
+     cursor is a label on the map, not body copy, and at --text-xs it competed
+     with the badge it was naming. Padding comes in with it so the pill stays
+     in proportion rather than looking padded. */
+  font-family: var(--font-ui); font-size: var(--text-2xs); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: fadeIn 0.12s ease-out;
+}
+/* No hover on a touchscreen, and the same gesture there already opens the
+   panel — so the tooltip would either never appear or fight the tap. */
+@media (hover: none) { .badge-tooltip { display: none; } }
+
+/* ── Paging for any long list (Paged.tsx) ──────────────────────────────────
+   ⚠️ `tabular-nums` SO THE COUNT DOES NOT JITTER. "1-10 of 500" reflows on
+   every page turn when the digits have proportional widths, which reads as the
+   whole row twitching each time a finger lands on it. */
+.pager {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px; margin-top: 10px;
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums;
+}
+.pager-controls { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ── Shared modal footer (ModalFooter.tsx) ─────────────────────────────────
+   ⚠️ THE PAIR READS AS ONE CONTROL GROUP. Equal minimum sizes so Save and
+   Close look like two answers to one question rather than two buttons that
+   happen to be adjacent. */
+.modal-footer-actions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.modal-footer-actions > button {
+  min-height: var(--touch-min); min-width: var(--touch-min);
+  justify-content: center;
+}
+/* The word beside the glyph. ⚠️ A CLASS, NOT THE `hidden` ATTRIBUTE — an
+   author has to be able to hide the word at the phone tier without leaving the
+   control unnamed to a screen reader. */
+.btn-label { margin-left: 8px; }
+
+/* Used by the footer's error line, and by anything else that has to say
+   "this is a warning" in text rather than in a badge. */
+.sev-warning { color: var(--status-warning); }
+
+@media (max-width: 720px) {
+  /* ⚠️ ICON-ONLY AT THE PHONE TIER, where two labelled buttons plus a hint do
+     not fit a 360px footer — the row wraps, and a wrapped footer is what makes
+     a dialog look broken. Square, --touch-min on both axes. */
+  .modal-footer-actions > button { width: var(--touch-min); padding: 0; }
+  .btn-label { display: none; }
+}
