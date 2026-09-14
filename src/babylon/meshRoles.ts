@@ -274,3 +274,76 @@ export function isStructureMesh(mesh: AbstractMesh): boolean {
 export function blocksCameraBeam(mesh: AbstractMesh): boolean {
   return isStructureMesh(mesh);
 }
+
+/**
+ * A mesh this app added to the scene — a badge halo, a room-glow surface, a
+ * camera beam, a light pool. Not part of the villa, and never an answer to any
+ * ray.
+ *
+ * ⚠️ TWO CONVENTIONS, ONE MEANING, AND SIX CALLERS EACH REMEMBERING A DIFFERENT
+ * SUBSET. `metadata.isMarker` is what the current helpers stamp themselves
+ * with; the `halo_`/`label_` name prefixes are the older convention and still
+ * in the tree. Three of the six ray predicates tested both, two tested only the
+ * stamp, and one tested only the names.
+ */
+export function isHelperMesh(mesh: AbstractMesh): boolean {
+  if ((mesh.metadata as { isMarker?: boolean } | null)?.isMarker === true) return true;
+  return /^(halo_|label_|marker)/i.test(mesh.name);
+}
+
+/** Which meshes a ray may answer with. See `rayTargets`. */
+export interface RayFilter {
+  /** Require `isPickable`. Default true — pass false for a set resolved ONCE
+   *  at load time, where liveness is the caller's own business. */
+  pickable?: boolean;
+  /** Require `isVisible`. Default true. */
+  visible?: boolean;
+  /** Require `isEnabled()`. Default true. */
+  enabled?: boolean;
+  /** Only the structural shell — floor slabs, walls — so a ray lands on the
+   *  floor rather than on a table top. */
+  structural?: boolean;
+  /** Only meshes that take part in collision. */
+  collidable?: boolean;
+}
+
+/**
+ * THE predicate for "what may this ray hit", built once.
+ *
+ * ⚠️ IT WAS COMPOSED SIX TIMES FROM THE SAME FIVE TERMS, AND TWO OF THE SIX
+ * WERE MISSING THE CEILING RULE. `groundCamera`'s own comment records the
+ * story: a ceiling IS structure — it occludes and belongs to a storey — so the
+ * moment the pipeline started peeling real ceilings, a downward ray grounded
+ * the walker ON TOP of the one over the living room, an eye at 4.1 m above a
+ * floor measured at 0.00. 2.474.0 fixed two entry points, 2.476.0 fixed a
+ * third and fourth, and `walkToScreen` — wired live from the tap handler — was
+ * still the fifth asker with no ceiling term at all.
+ *
+ * ⚠️ THE CEILING AND HELPER EXCLUSIONS ARE NOT FLAGS. Every flag here can only
+ * ever NARROW the set; nothing a caller passes or forgets can widen it back
+ * onto a ceiling. That is the opposite arrangement from the optional argument
+ * this codebase removed from `effectiveCategory`, where an omission silently
+ * RELAXED the rule — and the difference is deliberate: an omission here costs
+ * precision, never safety.
+ *
+ * ⚠️ THE THREE LIVENESS TERMS DEFAULT TO REQUIRED and each existing caller
+ * states the ones it deliberately does without, so no site's behaviour moved
+ * except the two that gained the ceiling rule.
+ */
+export function rayTargets(filter: RayFilter = {}): (mesh: AbstractMesh) => boolean {
+  const { pickable = true, visible = true, enabled = true,
+          structural = false, collidable = false } = filter;
+  return (mesh: AbstractMesh): boolean => {
+    if (pickable && !mesh.isPickable) return false;
+    if (visible && !mesh.isVisible) return false;
+    if (enabled && !mesh.isEnabled()) return false;
+    if (structural && (mesh.metadata as { isStructure?: boolean } | null)?.isStructure !== true) {
+      return false;
+    }
+    if (collidable && !mesh.checkCollisions) return false;
+    if (isHelperMesh(mesh)) return false;
+    // ⚠️ LAST AND UNCONDITIONAL. You cannot walk on a ceiling, stand under one
+    // by raycast, or be grounded onto one.
+    return !isResolvedCeiling(mesh);
+  };
+}

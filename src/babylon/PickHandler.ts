@@ -15,6 +15,8 @@ import type { Node } from "@babylonjs/core/node";
 import { resolveMeshToMapping } from "@/config/EntityMap";
 import { tapDebug } from "@/utils/tapDebug";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 export class PickHandler {
   private scene: Scene;

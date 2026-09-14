@@ -20,34 +20,6 @@ import { Ray } from "@babylonjs/core/Culling/ray";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import "@babylonjs/loaders/glTF";
-// Side-effect only: patches Mesh.prototype's renderOutline/renderOverlay
-// setters (used by applyHighlight below, the blue "clickable" glow) so they
-// actually lazy-load Babylon's OutlineRenderer instead of silently doing
-// nothing. @babylonjs/core's full barrel used to pull this in for free; this
-// codebase's deep, tree-shaking-friendly imports do not — the same class of
-// gap as Scene.pickWithRay (Culling/ray) and beginDirectAnimation
-// (Animations/animatable) below and in CameraController.ts, both patched
-// onto a prototype by a sibling file TypeScript's types can't distinguish
-// from the one holding the class itself. Without this import,
-// `mesh.renderOutline = true` is a plain, inert property assignment: no
-// error, no outline, which is exactly why this bug passed every type check.
-import "@babylonjs/core/Rendering/outlineRenderer";
-// Side-effect only: patches AbstractMesh.prototype.createOrUpdateSubmeshesOctree
-// (used by applyStructure below) — same prototype-patch pattern as the import
-// just above.
-import "@babylonjs/core/Culling/Octrees/octreeSceneComponent";
-// Side-effect only, and this is the actual first-person-movement-freeze fix:
-// registers Scene.CollisionCoordinatorFactory. Without it, `scene.
-// collisionCoordinator` (accessed internally by Babylon's own moveWithCollisions
-// — triggered the instant camera.cameraDirection is non-zero, i.e. only while
-// actually walking, never while just looking around) throws "DefaultCollision-
-// Coordinator needs to be imported before as it contains a side-effect required
-// by your code" on EVERY SINGLE FRAME of movement — confirmed via production
-// telemetry (WINDOW_ERROR, same message, every app version back to 2.132.0).
-// `scene.collisionsEnabled = true` below only sets a flag; it never pulls this
-// module in on its own. Same prototype-patch pattern as the two imports above.
-import "@babylonjs/core/Collisions/collisionCoordinator";
 import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
@@ -70,7 +42,7 @@ import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
-import { isCeilingMesh, structureRole, isResolvedCeiling } from "./meshRoles";
+import { isCeilingMesh, structureRole, rayTargets, isHelperMesh } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog, debugFlagEnabled } from "@/utils/devLog";
@@ -83,6 +55,8 @@ import { entityMapDelta } from "./entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
 import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 import { cameraFrame } from "./cameraFrame";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -1773,7 +1747,9 @@ export class SceneManager {
     const rect = canvas?.getBoundingClientRect();
     const pick = this.scene.pick(
       clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0),
-      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker,
+      // No ceiling term here either — the seventh asker. `enabled: false`
+      // preserves what this site actually tested.
+      rayTargets({ enabled: false }),
     );
     return pick?.hit && pick.pickedPoint ? pick.pickedPoint : null;
   }
@@ -1993,8 +1969,7 @@ export class SceneManager {
   private bestFacing(x: number, z: number, y: number): { x: number; y: number; z: number } {
     const DIRS = 16;
     const REACH = 8;
-    const blocks = (m: AbstractMesh) =>
-      m.isPickable && m.isVisible && m.isEnabled() && m.checkCollisions && !m.metadata?.isMarker;
+    const blocks = rayTargets({ collidable: true });
     let bestAng = 0;
     let bestDist = -1;
     for (let i = 0; i < DIRS; i++) {
@@ -2070,9 +2045,9 @@ export class SceneManager {
     if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
     const need = (this.config.eyeHeight ?? 1.7) + 0.15;
     const R = 0.3;
-    const blocks = (m: AbstractMesh) =>
-      m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
-      && !isResolvedCeiling(m);
+    // `visible: false` on purpose — `applyStructure` hides structure per view,
+    // and a wall you cannot see still stops you standing there.
+    const blocks = rayTargets({ visible: false, structural: true });
 
     // ⚠️ THE PROBED FLOOR IS NOT ALWAYS THE SURFACE YOU STAND ON (2.464.0).
     // `estimateFloorY` -> `floorProbe.storeyFloorY` deliberately takes the
@@ -3105,17 +3080,18 @@ export class SceneManager {
       modelWidth: ext.max.x - ext.min.x,
       modelDepth: ext.max.z - ext.min.z,
       hitsFloorAt: (wx, wz) => {
+        const _calibrationFloor = rayTargets({ enabled: false });
         const hit = this.scene.pickWithRay(
           new Ray(new Vector3(wx, 20, wz), new Vector3(0, -1, 0), 40),
           (m) => {
-            if (!m.isPickable || !m.isVisible || m.metadata?.isMarker) return false;
             // ⚠️ A CEILING IS THIN TOO (2.478.0, /dry-audit). This ray starts at
             // y=20 and the thinness test alone happily accepts a 2.44 m ceiling
             // slab on the way down, answering "there is floor here" from the
             // lid rather than the floor. Harmless where a floor is directly
             // beneath, wrong wherever a ceiling overhangs past one — and it
             // feeds CALIBRATION, so a wrong answer moves the whole plan fit.
-            if (isResolvedCeiling(m)) return false;
+            // The ceiling rule is `rayTargets`' now and cannot be dropped.
+            if (!_calibrationFloor(m)) return false;
             const bb = m.getBoundingInfo().boundingBox;
             return (bb.maximumWorld.y - bb.minimumWorld.y) < 0.8; // flat = floor/ground
           },
@@ -3573,7 +3549,7 @@ export class SceneManager {
 
     for (const m of meshes) {
       const name = m.name;
-      if (/^(halo_|label_)/i.test(name) || m.metadata?.isMarker) continue;
+      if (isHelperMesh(m)) continue;
 
       // HA entity fixtures (light.*, cover.*, fan.*, …) are owned entirely by
       // EntityVisuals — the structural pass must never hide or collide them.

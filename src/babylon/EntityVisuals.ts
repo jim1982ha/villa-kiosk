@@ -45,6 +45,8 @@
 //
 //   See desiredVariantWord / orderVariantWords / applyStateNamedVariant.
 
+import type { Observer } from "@babylonjs/core/Misc/observable";
+import { FrameClock } from "./frameClock";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { sliceChanged } from "./entityMapDiff";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -67,12 +69,6 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Camera } from "@babylonjs/core/Cameras/camera";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import type { Scene } from "@babylonjs/core/scene";
-// Side-effect only: patches the renderOutline/renderOverlay setters onto
-// Mesh.prototype (used below for the climate red outline). @babylonjs/core's
-// barrel used to pull this in for free; a deep import doesn't — see
-// SceneManager.ts's own copy of this import for the fuller explanation and
-// the sibling-file convention (Ray/beginDirectAnimation) this follows.
-import "@babylonjs/core/Rendering/outlineRenderer";
 import { AdvancedDynamicTexture } from "@babylonjs/gui/2D/advancedDynamicTexture";
 import { Rectangle } from "@babylonjs/gui/2D/controls/rectangle";
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
@@ -120,7 +116,7 @@ import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
-import { blocksCameraBeam, isResolvedCeiling } from "./meshRoles";
+import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
 import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
@@ -144,6 +140,8 @@ import {
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -1090,7 +1088,10 @@ export class EntityVisuals {
   private requestRender: () => void;
   private requestAnimationRender: () => void;
   /** performance.now() of the last animation step — see registerBeforeRender. */
-  private lastAnimTickAt = 0;
+  private readonly animClock = new FrameClock();
+  /** Held so `dispose()` can detach them — see the registrations. */
+  private onBeforeRender: (() => void) | null = null;
+  private afterRenderObserver: Observer<Scene> | null = null;
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
@@ -1567,33 +1568,28 @@ export class EntityVisuals {
     this.probe.setRoomResolver((x, y, z) => this.roomContaining(x, y, z));
     this.roomHighlight = new RoomHighlight(scene, requestRender, this.probe, this.requestAnimationRender);
     this.beams = new CameraBeams(scene);
-    scene.registerBeforeRender(() => {
-      // Elapsed time measured HERE, not from engine.getDeltaTime().
-      //
-      // Babylon sets its delta in beginFrame(), which its render loop calls on
-      // every requestAnimationFrame tick — BEFORE the loop body decides whether
-      // to actually render. So getDeltaTime() reports tick-to-tick (~16.7ms at
-      // 60Hz) rather than render-to-render, and the moment continuous animation
-      // became rate-capped (SceneManager.ANIMATION_FRAME_MS) every animation
-      // was told 16.7ms had passed when 33ms really had — running at half speed
-      // while idle and snapping back to full speed during interaction, which
-      // reads as a fan surging. This clock counts real time between the frames
-      // these animations are actually stepped on, whatever the cadence.
-      const now = performance.now();
-      // Clamped: the on-demand loop can idle for seconds, and a raw delta after
-      // such a gap would make everything jump. First tick has no predecessor.
-      const dtMs = this.lastAnimTickAt ? Math.min(now - this.lastAnimTickAt, 100) : 16;
-      this.lastAnimTickAt = now;
+    // ⚠️ KEPT SO `dispose()` CAN DETACH THEM. Both observers below used to be
+    // registered and never removed, while this class's own dispose() docstring
+    // promised it was "safe to run before scene.dispose()" — which is exactly
+    // the order under which they keep firing against maps this teardown has
+    // just cleared. `registerBeforeRender` has no handle of its own, so the
+    // callback is held here for `unregisterBeforeRender`.
+    this.onBeforeRender = () => {
+      // Real time between the frames these animations are actually stepped
+      // on, whatever the render cadence — see babylon/frameClock for why
+      // engine.getDeltaTime() cannot answer this.
+      const dtMs = this.animClock.step(performance.now());
       this.animatePulse(dtMs);
       this.animateFans(dtMs);
       this.cullLabels();
-    });
+    };
+    scene.registerBeforeRender(this.onBeforeRender);
     // AFTER render, not before: Babylon reprojects every linkWithMesh control
     // during the frame, so the drawn `leftInPixels` this reads is only the
     // real one once the frame is done. Reading it in beforeRender would report
     // the PREVIOUS frame's projection and could never see the jump at all —
     // the same class of mistake as watching the world centre.
-    scene.onAfterRenderObservable.add(() => {
+    this.afterRenderObserver = scene.onAfterRenderObservable.add(() => {
       this.watchChipJump();
       this.logBadgeGeometry();
       if (this.wakeTrace > 0) { this.wakeTrace--; this.traceWake(); }
@@ -2065,7 +2061,7 @@ export class EntityVisuals {
         // Everything that isn't a bound entity is villa shell / furniture: it can
         // block a lamp's light, so keep it as a potential shadow caster. Skip the
         // helper meshes (markers, halos, labels) that aren't real geometry.
-        if (m.getTotalVertices() > 0 && !/^(halo_|label_|marker)/i.test(m.name)) {
+        if (m.getTotalVertices() > 0 && !isHelperMesh(m)) {
           this.shadowCasters.push(m);
         }
         continue;
@@ -2709,6 +2705,16 @@ export class EntityVisuals {
    *  (beams, roomHighlight) have their own dispose(). Called by
    *  SceneManager.dispose(); safe to run before scene.dispose(). */
   dispose(): void {
+    // ⚠️ THE TWO SCENE OBSERVERS COME OFF FIRST, AND THEY USED NOT TO COME OFF
+    // AT ALL. This method's own docstring says it is safe to run before
+    // `scene.dispose()`; under that order a beforeRender still stepping
+    // animations over cleared maps is precisely what "safe" has to exclude.
+    if (this.onBeforeRender) {
+      this.scene.unregisterBeforeRender(this.onBeforeRender);
+      this.onBeforeRender = null;
+    }
+    this.scene.onAfterRenderObservable.remove(this.afterRenderObserver);
+    this.afterRenderObserver = null;
     document.removeEventListener("visibilitychange", this.onWake);
     this.offPointerClass?.();
     this.offPointerClass = null;

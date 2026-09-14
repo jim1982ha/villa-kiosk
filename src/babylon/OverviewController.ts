@@ -36,13 +36,11 @@ import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import { clamp } from "@/utils/geometry";
 import { Animation } from "@babylonjs/core/Animations/animation";
-// Side-effect only: registers Scene.prototype.beginDirectAnimation, used by
-// zoomStep. "Animations/animation" does NOT carry it — the extension lives in
-// this sibling file, and missing it is invisible to tsc (see CLAUDE.md).
-import "@babylonjs/core/Animations/animatable";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { TapRecognizer } from "./TapRecognizer";
 import { cameraFrame } from "./cameraFrame";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 interface OverviewCallbacks {
   onActivity: () => void;

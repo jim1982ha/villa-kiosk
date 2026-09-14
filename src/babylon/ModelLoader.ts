@@ -12,7 +12,6 @@ import { KhronosTextureContainer2 } from "@babylonjs/core/Misc/khronosTextureCon
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
-import "@babylonjs/loaders/glTF";
 // Bundle the Draco decoder from @babylonjs/core so a Draco-compressed GLB loads
 // WITHOUT hitting Babylon's default CDN — required for the offline HA-Ingress
 // kiosk. Vite's `?url` rewrites these to hashed, correctly-based build assets.
@@ -34,6 +33,8 @@ import { saveModelToIndexedDB } from "@/utils/storage";
 import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { isCeilingMesh, isStructureMesh, structureRole } from "./meshRoles";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
 // still only instantiated lazily, when a model actually uses Draco — so an

@@ -1,3 +1,48 @@
+## 2.496.21
+
+### Fixed — tapping the floor could aim at the ceiling
+Tapping a spot on the floor to walk there asks the 3D model what is under your
+finger. That question is asked in seven different places in the villa view —
+walking, being placed on arrival, following stairs, deciding which way to face —
+and **three of the seven never excluded ceilings**.
+
+A ceiling is part of the building's structure exactly as a floor is, so a ray
+looking for something solid will happily answer with the slab over your head.
+The villa already carries the scar: a previous release grounded the walker
+**on top of** the living-room ceiling, an eye 4.1 m above a floor measured at
+zero. That was fixed in the two places it was reported, then a third and fourth,
+and the one wired to *tapping* was never among them.
+
+All seven now ask one rule, and that rule cannot be relaxed: every option it
+takes can only ever narrow what a ray may hit. There is no way to ask it for a
+ceiling.
+
+### Fixed — a latent crash in the overview drag, invisible to the build
+Some of the 3D engine's functions exist only once a companion module has been
+loaded; without it they either throw or quietly do nothing, and the type checker
+cannot tell the difference because the function appears to exist either way.
+
+Two parts of the villa view were relying on companions they never asked for.
+Dragging the overview map would have thrown outright, and — worse — the handler
+that decides what you tapped would have silently reported that you tapped
+nothing, so **no device in the villa would respond to a tap**, with nothing but a
+line in the browser console to say why.
+
+Both worked only because unrelated files happened to pull those companions in.
+The dependency is declared in one place now, and the build fails if a file uses
+one of those functions without saying so.
+
+### Fixed — the 3D view leaked two live callbacks on teardown
+Rebuilding the scene left two per-frame callbacks attached to the old one, still
+stepping animations over data that had just been cleared.
+
+### Changed — one clock for every animation in the villa
+The rule that keeps a fan spinning at the same speed on a 60 Hz tablet and a
+120 Hz phone was written down and then implemented twice, word for word — while
+a third animation, the one that keeps walking speed steady, used the very
+function the rule forbids. It was right only by accident. There is one clock
+now, and nothing else left to call.
+
 ## 2.496.20
 
 ### Fixed — a combo sensor counted as two devices in some places and one in others
