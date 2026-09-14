@@ -54,6 +54,12 @@ PKG = os.path.join(REPO_ROOT, "rootfs", "usr", "bin", "vesta", "supervise", "age
 #: MADE, and the ones marked BLOCKED are findings rather than exemptions — they
 #: are here so the count does not grow silently, not because they are fine.
 EXEMPT: Dict[str, str] = {
+    "reset_for_test": (
+        "clock.villa_zone caches the resolved zone for the life of the "
+        "process — deliberately, so a rendered timestamp never costs a file "
+        "read. A test that sets a different villa needs to clear it, and "
+        "production must not: a caller clearing it would put that read back "
+        "inside every history point rendered."),
     # ⚠️ `flag_type_of` AND `brief` WERE HERE AND ARE NOT ANY MORE (2.966.0).
     # Both were exempted with the same true reason — "a registration is a
     # reference, not a call, and renaming pipeline locals to satisfy a scanner

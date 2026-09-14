@@ -34,6 +34,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
+from vesta.shared import wallclock
+from vesta.supervise.agent import clock
 from vesta.shared import instants
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import data
@@ -144,6 +146,19 @@ class ReadHistory(BaseTool):
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         series = list(points) if isinstance(points, Sequence) else []
+        # ⚠️ THE VILLA'S WALL CLOCK, NOT UTC — see shared/wallclock. Home
+        # Assistant hands these back in UTC and the model is given them
+        # verbatim; on a UTC+8 property that is how an evening event reached
+        # the owner's phone described as lunchtime.
+        # ⚠️ NON-MAPPING ROWS PASS THROUGH UNTOUCHED. Rewriting the list with
+        # `if isinstance(r, Mapping)` dropped every other shape on the floor —
+        # `total_points` went from 1000 to 0 against a source that yields plain
+        # values, and the model would have been told a complete series was
+        # empty. A renderer must never be able to delete a reading.
+        zone = clock.villa_zone()
+        series = [{**dict(r), "at": wallclock.for_reader(r.get("at"), zone)}
+                  if isinstance(r, Mapping) else r
+                  for r in series]
         sampled, step = _downsample(series, MAX_HISTORY_POINTS)
         return [data({
             "ref": ref, "label": self._refs.label(ref),
@@ -193,9 +208,11 @@ class ReadAutomationTrace(BaseTool):
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         rows = [r for r in (traces if isinstance(traces, Sequence) else [])
                 if isinstance(r, Mapping)]
+        # The villa's wall clock — see shared/wallclock.
+        zone = clock.villa_zone()
         return [data({
             "ref": ref, "label": self._refs.label(ref),
-            "runs": [{"at": str(r.get("at") or ""),
+            "runs": [{"at": wallclock.for_reader(r.get("at"), zone),
                       "outcome": str(r.get("outcome") or ""),
                       "error": str(r.get("error") or "")} for r in rows[:limit]],
             "count": len(rows),

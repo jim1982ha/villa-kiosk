@@ -381,6 +381,22 @@ def render_index(root: Optional[str] = None) -> str:
 #: ⚠️ AND THE ORDER IS THE CONTRACT: stable first, volatile last. Putting the
 #: document earlier would make every block after it uncacheable, which is the
 #: same bug with the halves swapped.
+def _clock_sentence() -> str:
+    """What the model is told about the villa's clock. ⚠️ NO INSTANT IN IT —
+    see `system_blocks`. Stable for the life of an install, so it costs one
+    cached block and never invalidates the prefix."""
+    from vesta.supervise.agent import clock as clock_mod
+    zone = clock_mod.villa_zone()
+    name = clock_mod.zone_name(zone)
+    return (
+        f"The villa keeps its own wall clock, {name}. Every timestamp a tool "
+        "returns is already in that clock and carries its offset. Write times "
+        "in it, exactly as given, and never convert one to UTC or write the "
+        "letters UTC: the people reading you are at the property and read the "
+        "clock on its wall."
+    )
+
+
 def system_blocks(audience: str = "owner", *, instructions: str = "",
                   document: str = "",
                   root: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -393,6 +409,20 @@ def system_blocks(audience: str = "owner", *, instructions: str = "",
     repository keeps paying for.
     """
     blocks: List[Dict[str, Any]] = [
+        # ⚠️ THE VILLA'S WALL CLOCK, STATED ONCE, IN A CACHE-STABLE BLOCK. The
+        # model was handed UTC stamps in every tool result and told the offset
+        # NOWHERE — not here, not in the instructions, not in the Villa
+        # Document (which forbids stamps outright, deliberately, to keep the
+        # prefix cacheable). So it wrote UTC back verbatim, and an owner on a
+        # UTC+8 property read "12:20 UTC" for something that happened at
+        # 20:20 over dinner.
+        #
+        # ⚠️ THE ZONE'S NAME IS SAFE TO CACHE AND THE CURRENT TIME IS NOT. A
+        # property's timezone changes when the property moves; interpolating
+        # "now" here would change the prefix on every call and silently destroy
+        # the cache, which is exactly what `snapshot.profile` refuses to do and
+        # for the same reason.
+        {"type": "text", "text": _clock_sentence()},
         # ⚠️ `root` IS PASSED THROUGH SO A TEST CAN POINT AT THE SHIPPED TREE.
         # Without it `system_prompt` returns "" wherever the playbooks are not
         # installed, and a test asserting "the constitution is in here" passes

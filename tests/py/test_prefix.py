@@ -10,6 +10,8 @@ measurement nothing calls.
 
 from __future__ import annotations
 
+import re
+
 import inspect
 import os
 import sys
@@ -44,15 +46,29 @@ def test_the_block_NAMES_match_what_the_builder_actually_emits() -> None:
     inserts a block — and it slides SILENTLY, because every count still adds up.
     `system_blocks` fixes the order for the cache boundary's sake; this pins
     that this module's names are that same order."""
-    assert prefix.SYSTEM_BLOCK_NAMES == ("playbook", "instructions", "document")
+    assert prefix.SYSTEM_BLOCK_NAMES == (
+        "clock", "playbook", "instructions", "document")
     built = playbooks.system_blocks("owner", instructions="I", document="D")
     assert len(built) == len(prefix.SYSTEM_BLOCK_NAMES)
+    # ⚠️ THE CLOCK BLOCK CARRIES NO INSTANT, and that is what keeps it stable
+    # enough to sit first. A date or a time in here would change the prefix on
+    # every call and silently destroy the cache — the failure `snapshot.profile`
+    # refuses in the same words.
+    assert not re.search(r"\d{4}-\d{2}-\d{2}|\d{2}:\d{2}", built[0]["text"]), (
+        "the clock block names the ZONE, never the time")
     assert built[-1]["text"] == "D", (
         "the document must stay LAST — stable first, volatile last, or every "
         "block after it becomes uncacheable")
-    assert "cache_control" in built[1], (
-        "the stable boundary sits after the instructions; without it the villa "
-        "document re-writes every tool schema on every journal row (2.714.0)")
+    # ⚠️ FOUND BY TEXT, NOT BY INDEX — which is this test's own lesson applied
+    # to itself. It asserted `built[1]`, and inserting the clock block slid the
+    # breakpoint's block to index 2 while the assertion went on passing against
+    # whatever had arrived at 1. The boundary belongs to the INSTRUCTIONS, so
+    # say so.
+    carrying = [b for b in built if "cache_control" in b]
+    assert [b["text"] for b in carrying] == ["I"], (
+        "the stable boundary sits on the instructions, the LAST stable block; "
+        "without it the villa document re-writes every tool schema on every "
+        "journal row (2.714.0)")
 
 
 def test_a_FOURTH_system_block_is_reported_rather_than_dropped() -> None:
@@ -61,7 +77,7 @@ def test_a_FOURTH_system_block_is_reported_rather_than_dropped() -> None:
     extra = _blocks() + [{"type": "text", "text": "Z" * 250}]
     out = prefix.measure(system=extra, tools=[], messages=[])
     names = [p.name for p in out.parts]
-    assert "system[3]" in names
+    assert f"system[{len(prefix.SYSTEM_BLOCK_NAMES)}]" in names
     assert out.chars >= 250
 
 
@@ -73,7 +89,7 @@ def test_the_document_being_ABSENT_shifts_no_label() -> None:
         tools=[], messages=[])
     names = [p.name for p in out.parts]
     assert "document" not in names
-    assert names[:2] == ["playbook", "instructions"]
+    assert names[:3] == ["clock", "playbook", "instructions"]
 
 
 # ── the arithmetic ─────────────────────────────────────────────────────────

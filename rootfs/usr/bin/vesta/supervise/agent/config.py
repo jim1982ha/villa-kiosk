@@ -147,9 +147,18 @@ DEFAULTS: Final[Dict[str, Any]] = {
     #: morning it is a warning.
     "quiet_hours_start": "",
     "quiet_hours_end": "",
-    #: The property's timezone, for the window above. ⚠️ EMPTY DEGRADES TO UTC,
-    #: which is wrong by eight hours on the reference villa — so it is read from
-    #: discovery where possible rather than typed.
+    #: The property's timezone — an OVERRIDE, not the only source.
+    #:
+    #: ⚠️ THE COMMENT HERE USED TO CLAIM "it is read from discovery where
+    #: possible rather than typed", AND NOTHING IN THIS TREE EVER WROTE IT. The
+    #: settings screen was its only writer, so on any install where nobody
+    #: typed it every reader in this tier degraded to UTC — wrong by eight
+    #: hours on the reference villa, and silent.
+    #:
+    #: `agent/clock.villa_zone` is the resolver now: this field first, then the
+    #: name the brief tier already learns from Home Assistant and caches in
+    #: `reports-state.json`, then UTC with a warning. Leave it empty unless the
+    #: villa disagrees with Home Assistant.
     "timezone": "",
 
     # ── cadence ──────────────────────────────────────────────────────────

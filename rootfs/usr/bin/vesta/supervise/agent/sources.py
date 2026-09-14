@@ -49,6 +49,8 @@ from vesta.supervise.agent import flagtypes as flagtypes_mod
 from vesta.supervise.agent.refs import RefTable
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.adapters.log import note, swallow, warn
+from vesta.shared import wallclock
+from vesta.supervise.agent import clock
 
 #: ⚠️ THE WINDOW AND THE SAMPLE MINIMUMS BELONG TO `observe/salience.py` AND ARE
 #: NOT RESTATED HERE. This module decides what to feed it, never what counts as
@@ -202,11 +204,17 @@ def build_scorer(rows: Optional[Sequence[Mapping[str, Any]]] = None, *,
                 by_entity.setdefault(entity_id, []).append(dict(row))
 
         out: List[salience_mod.Salience] = []
+        # ⚠️ THE VILLA'S OWN DAY, NOT A SLICE OF A UTC STAMP. `str(at)[:10]`
+        # files everything after 16:00 local under TOMORROW on a UTC+8
+        # property — so an evening's readings were compared against the wrong
+        # day's neighbours, every day, in the ranking that decides what the
+        # model is shown at all. See shared/wallclock.day_for_reader.
+        zone = clock.villa_zone()
         for entity_id, history in by_entity.items():
             samples: List[Dict[str, Any]] = []
             for row in history:
                 value = _numeric(row.get("s"))
-                day = str(row.get("at") or "")[:10]
+                day = wallclock.day_for_reader(row.get("at"), zone)
                 if value is not None and day:
                     samples.append({"day": day, "value": value})
             latest = _numeric(history[-1].get("s"))

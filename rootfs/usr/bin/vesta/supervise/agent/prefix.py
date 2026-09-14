@@ -51,7 +51,14 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 #: ⚠️ THE LAST ONE IS OPTIONAL. `system_blocks` omits the document when it is
 #: empty (triage on a villa with no profile), so the zip is over whatever
 #: arrived, never padded.
-SYSTEM_BLOCK_NAMES: Tuple[str, ...] = ("playbook", "instructions", "document")
+#:
+#: ⚠️ `clock` JOINED THE LIST WHEN THE VILLA'S WALL CLOCK DID, and the pin
+#: caught it exactly as designed: adding a block without naming it here slid
+#: every label along by one, so the playbook's characters would have been
+#: attributed to the clock sentence and the document's to the instructions. It
+#: is FIRST because it is the most stable thing in the request — a property's
+#: timezone changes when the property moves.
+SYSTEM_BLOCK_NAMES: Tuple[str, ...] = ("clock", "playbook", "instructions", "document")
 
 #: A part smaller than this is folded into `other` on the tool line. Purely
 #: presentational: the totals always cover everything.

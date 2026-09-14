@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from vesta.shared import wallclock
+from vesta.supervise.agent import clock
 from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import data
 from vesta.supervise.agent.tools.base import fail
@@ -299,6 +301,15 @@ class ReadCoverage(BaseTool):
             absent = self._absent_source()
         else:
             absent = None
+        # ⚠️ THE TWO INSTANTS IN HERE ARE READ BY THE MODEL AND QUOTED BACK TO
+        # A PERSON, so they leave in the villa's own wall clock — see
+        # shared/wallclock. Everything else in `cov` is a count or a flag.
+        zone = clock.villa_zone()
+        if isinstance(cov, Mapping):
+            cov = {**dict(cov),
+                   **{key: wallclock.for_reader(cov.get(key), zone)
+                      for key in ("online_since", "last_seen")
+                      if cov.get(key)}}
         return [data({
             "temporal": cov,
             # ⚠️ `None` IS "NOT SURVEYED", NOT "NOTHING MISSING", and the model
