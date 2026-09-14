@@ -1,3 +1,27 @@
+## 2.496.18
+
+### Fixed — the trash can in Advanced Settings now actually removes the device
+There are two Remove buttons on that screen and they did different things.
+
+The banner at the top — *"N entities no longer in Home Assistant → Remove N"* —
+deletes the row **and records the decision**, which is what makes a removal
+stick. The trash can on every individual row deleted the row and recorded
+nothing.
+
+That is the difference between a device going away and a device appearing to.
+A row you deleted with the trash can either came straight back on the next
+model load, or vanished from Advanced Settings while the device carried on
+showing up in the Facility fault picker, the offline device count and the
+readiness check — because those read the ids the 3D model itself supplies, not
+the table you deleted from.
+
+It is the same symptom you reported that the banner was built to fix. It was
+still reachable, one button along, on the same screen.
+
+Removing a device is one operation now, and it returns both halves together,
+so there is no longer a way to call it and get only the half that does not
+stick.
+
 ## 2.496.17
 
 ### Fixed — a lock the villa cannot see no longer says the door is unlocked
