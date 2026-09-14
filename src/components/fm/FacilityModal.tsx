@@ -28,7 +28,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
-import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
+import { villaDevices } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitModal from "@/components/cockpit/CockpitModal";
@@ -75,7 +75,7 @@ export default function FacilityModal({
   // Landing on Faults rather than Today when the operator arrived by tapping
   // "report a fault" on a device: they have already said what they want.
   const [tab, setTab] = useState<Tab>(reportFaultFor ? "faults" : "today");
-  const { entities } = useHA();
+  const { entities, entityDeviceIds } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
@@ -97,10 +97,26 @@ export default function FacilityModal({
   // (every lock, not just the currently-unlocked ones), so this opens the
   // identical group locksGroup/lightsGroup already build for that tile (see
   // summaryGroups.ts) rather than a second, differently-scoped view.
+  // ⚠️ ONE CALL, AND IT USED TO BE FIVE. This modal reassembled the same
+  // five-argument tuple for the device count, the readiness report, the fault
+  // picker and the offline list — four dependency arrays that had to stay in
+  // step, plus a third argument ORDER inside buildReadiness. One value now,
+  // handed to everything that needs it.
+  const devices = useMemo(
+    () => villaDevices({
+      entityMap: config.entityMap, deviceGroups: config.deviceGroups,
+      dismissedEntityIds: config.dismissedEntityIds,
+      mappedEntityIds, entities, entityDeviceIds,
+    }),
+    [config.entityMap, config.deviceGroups, config.dismissedEntityIds,
+     mappedEntityIds, entities, entityDeviceIds],
+  );
+  const totalDeviceCount = devices.ids.length;
+
   const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
   const openCheckDevices = (check: ReadinessCheck) => {
-    const group = check.id === "locks" ? locksGroup(entities, config.entityMap, villaDeviceIds)
-      : check.id === "lights" ? lightsGroup(entities, villaDeviceIds)
+    const group = check.id === "locks" ? locksGroup(entities, config.entityMap, devices)
+      : check.id === "lights" ? lightsGroup(entities, devices)
       : null;
     if (group) setCheckPanelGroup(group);
   };
@@ -108,10 +124,8 @@ export default function FacilityModal({
   // Shared by the Readiness tab and the Report tab, so the report can never
   // disagree with what the operator just looked at.
   const readiness = useMemo(
-    () => buildReadiness(
-      entities, config.entityMap, mappedEntityIds, data, config.deviceGroups,
-      config.dismissedEntityIds),
-    [entities, config.entityMap, mappedEntityIds, data, config.deviceGroups, config.dismissedEntityIds],
+    () => buildReadiness(entities, data, devices),
+    [entities, data, devices],
   );
 
   // The report's DENOMINATOR, and it has to come from the same rule its
@@ -127,13 +141,6 @@ export default function FacilityModal({
   // ⚠️ THE SET, NOT JUST ITS SIZE. The readiness tiles below need the same list
   // to decide which locks and lights are the VILLA's (see summaryGroups), and
   // deriving the count from a second call would be two answers to one question.
-  const villaDeviceIds = useMemo(
-    () => new Set(selectableDeviceIds(config.entityMap, config.deviceGroups,
-                                      mappedEntityIds, entities,
-                                      config.dismissedEntityIds)),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
-  const totalDeviceCount = villaDeviceIds.size;
 
   // Same list the HUD's own unavailable-devices badge shows (see
   // unavailableDeviceIds) — the Readiness tab's quick-link opens the same
@@ -146,16 +153,11 @@ export default function FacilityModal({
   // starting point is precisely how the picker ended up offering rows no
   // other screen would show.
   const deviceOptions = useMemo(
-    () => buildDeviceOptions(config.entityMap, entities, resolvedRooms, config.deviceGroups,
-                             mappedEntityIds, config.dismissedEntityIds),
-    [config.entityMap, entities, resolvedRooms, config.deviceGroups, mappedEntityIds, config.dismissedEntityIds],
+    () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
+    [devices, config.entityMap, entities, resolvedRooms],
   );
 
-  const unavailableIds = useMemo(
-    () => unavailableDeviceIds(
-      config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
+  const unavailableIds = devices.unavailable as string[];
   const canControl = role != null && hasCapability(role, "controlEntities");
 
   return (

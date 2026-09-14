@@ -26,9 +26,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import type { EntityMapping } from "@/types/scene.types";
 import { displayLabelFor } from "@/config/EntityMap";
-import { selectableDeviceIds } from "@/config/deviceGroups";
+import type { VillaDevices } from "@/config/deviceGroups";
 import { isUnavailable } from "@/utils/stateColors";
-import type { DeviceGroup } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 
 export interface DeviceOption {
@@ -53,15 +52,12 @@ export interface DeviceOption {
  *  else in the UI. The result was a picker offering rows like "Bedroom 1"
  *  that named nothing anyone could find in the villa. */
 export function buildDeviceOptions(
+  devices: VillaDevices,
   entityMap: Record<string, EntityMapping>,
   entities: Record<string, HassEntity>,
   resolvedRooms: Record<string, string>,
-  deviceGroups: DeviceGroup[] = [],
-  mappedEntityIds: ReadonlySet<string> = new Set(),
-  dismissedEntityIds: readonly string[] = [],
 ): DeviceOption[] {
-  return selectableDeviceIds(entityMap, deviceGroups, mappedEntityIds, entities,
-                             dismissedEntityIds)
+  return [...devices.ids]
     .map((id) => ({
       entityId: id,
       label: displayLabelFor(id, entityMap[id]?.label, entities[id]?.attributes.friendly_name),

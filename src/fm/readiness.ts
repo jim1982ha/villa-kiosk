@@ -11,10 +11,8 @@
 // performance clauses exist to protect, whatever they happen to say.
 
 import type { HassEntity } from "@/types/ha.types";
-import type { EntityMapping } from "@/types/scene.types";
-import type { DeviceGroup } from "@/config/AppConfig";
 import { isUnavailable } from "@/utils/stateColors";
-import { selectableDeviceIds, unavailableDeviceIds } from "@/config/deviceGroups";
+import type { VillaDevices } from "@/config/deviceGroups";
 import { isTicketOpen, scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 
@@ -49,16 +47,13 @@ const OFF_LIKE = new Set(["off", "unavailable", "unknown", ""]);
  */
 export function buildReadiness(
   entities: Record<string, HassEntity>,
-  entityMap: Record<string, EntityMapping>,
-  mappedEntityIds: Set<string>,
   fm: FmData,
-  /** Same folding/debris rules as the HUD's unavailable-devices badge — see
-   *  unavailableDeviceIds. Optional (defaults to none) only for a caller with
-   *  no groups configured yet; every real caller has config.deviceGroups. */
-  deviceGroups: readonly DeviceGroup[] = [],
-  /** See AppConfig.dismissedEntityIds — an entity the owner removed as gone
-   *  from HA must not keep the readiness check red forever either. */
-  dismissedEntityIds: readonly string[] = [],
+  /** The villa's own devices, already resolved — see config/deviceGroups'
+   *  villaDevices. ⚠️ THIS REPLACED TWO OPTIONAL ARGUMENTS in a seven-argument
+   *  list that re-ordered the same nouns a third way. Both defaulted to empty,
+   *  so a caller that forgot one silently resurrected dismissed devices and
+   *  unfolded every combo sensor rather than failing. */
+  devices: VillaDevices,
   now = Date.now(),
 ): ReadinessReport {
   const checks: ReadinessCheck[] = [];
@@ -70,12 +65,9 @@ export function buildReadiness(
   // and "all doors locked". `selectableDeviceIds` is the same set the offline
   // badge and the Facility device count already use, so all three now answer
   // from one list instead of three predicates that happened to agree.
-  const villaDevices = new Set(selectableDeviceIds(
-    entityMap, [...deviceGroups], mappedEntityIds, entities, dismissedEntityIds));
-
   const byDomain = (d: string) =>
     Object.values(entities).filter(
-      (e) => e.entity_id.startsWith(`${d}.`) && villaDevices.has(e.entity_id));
+      (e) => e.entity_id.startsWith(`${d}.`) && devices.has(e.entity_id));
 
   // ── Devices online ───────────────────────────────────────────────────────
   // Shared with the HUD's unavailable-devices badge — deliberately the SAME
@@ -83,8 +75,7 @@ export function buildReadiness(
   // check counted raw candidates with no device-folding or debris filtering,
   // so a two-entity combo sensor could read as two broken devices here and
   // one on the HUD badge); see unavailableDeviceIds's docstring.
-  const offline = unavailableDeviceIds(
-    entityMap, [...deviceGroups], mappedEntityIds, entities, dismissedEntityIds);
+  const offline = devices.unavailable as string[];
   checks.push({
     id: "devices-online",
     label: "All devices reporting",

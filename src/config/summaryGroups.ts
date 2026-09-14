@@ -36,7 +36,9 @@ export function locksGroup(
   entityMap: Record<string, EntityMapping> = {},
   /** The villa's own devices — see `lightsGroup` for why this exists and why
    *  it is optional. */
-  allowed?: ReadonlySet<string>,
+  /** Only `.has` is ever called, so `villaDevices(...)` satisfies this
+   *  directly and so does a plain Set. */
+  allowed?: { has(entityId: string): boolean },
 ): SummaryGroup | null {
   const locks = Object.values(entities).filter(
     (e) => e.entity_id.startsWith("lock.") && (!allowed || allowed.has(e.entity_id)));
@@ -65,7 +67,9 @@ export function locksGroup(
  */
 export function lightsGroup(
   entities: Record<string, HassEntity>,
-  allowed?: ReadonlySet<string>,
+  /** Only `.has` is ever called, so `villaDevices(...)` satisfies this
+   *  directly and so does a plain Set. */
+  allowed?: { has(entityId: string): boolean },
 ): SummaryGroup | null {
   const lights = Object.values(entities).filter(
     (e) => e.entity_id.startsWith("light.") && (!allowed || allowed.has(e.entity_id)));

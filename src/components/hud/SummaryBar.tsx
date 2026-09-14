@@ -32,7 +32,7 @@ import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { formatUnitValue } from "@/utils/entityValue";
 import { effectiveSensorClass, toBaseUnit } from "@/config/SensorClasses";
-import { selectableDeviceIds } from "@/config/deviceGroups";
+import { villaDevices } from "@/config/deviceGroups";
 import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
@@ -68,8 +68,8 @@ function deriveTiles(
   thresholds: Record<string, Threshold>,
   /** The villa's own devices. ⚠️ THREADED THROUGH RATHER THAN RECOMPUTED: the
    *  tile counts and the list a tap opens must come from one set, or the tile
-   *  says "3 On" and the panel shows four rows. */
-  allowed?: ReadonlySet<string>,
+   *  says "3 On" and the panel shows four rows. Only `.has` is called. */
+  allowed?: { has(entityId: string): boolean },
 ): SummaryTile[] {
   const all = Object.values(entities);
   const byDomain = (d: string) => all.filter((e) => e.entity_id.startsWith(`${d}.`));
@@ -418,7 +418,7 @@ function SceneMenu({ scenes, canRun, apply }: {
 }
 
 export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
-  const { entities, suppressedEntityIds } = useHA();
+  const { entities, suppressedEntityIds, entityDeviceIds } = useHA();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
   const { role } = useProfile();
   const { config, resolvedRooms } = useConfig();
@@ -440,16 +440,20 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
   // The villa's own devices — the same set the offline badge and the Facility
   // device count use. See lightsGroup for what counting by domain prefix alone
   // got wrong.
-  const villaDevices = useMemo(
-    () => new Set(selectableDeviceIds(config.entityMap, config.deviceGroups,
-                                      mappedEntityIds, visibleEntities,
-                                      config.dismissedEntityIds)),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, visibleEntities,
-     config.dismissedEntityIds],
+  // `visibleEntities`, not the raw store: this bar counts what the profile can
+  // actually see. The set is the value's own now — no caller builds one.
+  const villaDeviceSet = useMemo(
+    () => villaDevices({
+      entityMap: config.entityMap, deviceGroups: config.deviceGroups,
+      dismissedEntityIds: config.dismissedEntityIds,
+      mappedEntityIds, entities: visibleEntities, entityDeviceIds,
+    }),
+    [config.entityMap, config.deviceGroups, config.dismissedEntityIds,
+     mappedEntityIds, visibleEntities, entityDeviceIds],
   );
 
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, villaDevices),
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, villaDeviceSet),
     [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, villaDevices],
   );
 
