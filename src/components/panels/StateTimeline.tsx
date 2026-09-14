@@ -261,7 +261,20 @@ export default function StateTimeline({
             // The minimum width is only needed where cells do NOT tile: in
             // bucket mode they do, and forcing one wider would reintroduce the
             // overlap this mode exists to remove.
-            const size = bucketMs ? `${c.width}%` : `${Math.max(c.width, 0.3)}%`;
+            // ⚠️ THE EXTRA PIXEL IS WHAT CLOSES THE SEAMS. Buckets tile
+            // exactly in percentages, but `left` and `width` are rounded to
+            // device pixels INDEPENDENTLY, so at boundaries that land
+            // mid-pixel the two neighbours each cover part of it and the track
+            // shows through as a hairline. Reported as "white lines between
+            // two green values" on a 24h bar — 144 cells of ~4px each, where a
+            // handful of boundaries round badly. The give-away was a bar that
+            // was a SINGLE segment and still had internal lines: they were
+            // never data. One pixel of overlap costs at most a half-pixel
+            // shift of a colour boundary and cannot leave a gap; the track has
+            // `overflow: hidden`, so the last cell's extra pixel is clipped.
+            const size = bucketMs
+              ? `calc(${c.width}% + 1px)`
+              : `${Math.max(c.width, 0.3)}%`;
             const bg = c.states.length
               ? cellBackground(c.states, colorFor)
               : colorFor(c.baseline ?? "");

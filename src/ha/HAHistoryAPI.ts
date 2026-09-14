@@ -70,23 +70,33 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
 export async function fetchStateHistory(
   entityId: string,
   hours = 24,
-  opts: {
-    /**
-     * Keep `unavailable`/`unknown` points instead of dropping them.
-     *
-     * Dropping them is right for a panel asking "what values did this report",
-     * where a gap is noise — but wrong for any caller whose whole question IS
-     * whether the entity was reachable. The camera panel's status bar was the
-     * second kind and got the first behaviour: it maps `unavailable` to a black
-     * "offline" band, but those points had already been deleted here, so that
-     * branch could never fire. An outage was not drawn as an outage; the state
-     * on either side simply continued across the gap, and a camera that had
-     * dropped for an hour rendered as an hour of ordinary green.
-     */
-    keepUnavailable?: boolean;
-  } = {},
 ): Promise<StateHistoryPoint[]> {
-  const series = await fetchRaw(entityId, hours);
+  // ⚠️ `unavailable` AND `unknown` ARE KEPT, AND THE OPTION TO DROP THEM IS
+  // GONE. It used to default to dropping, which silently deleted every period
+  // a device was offline before the chart ever saw it. Two ways that showed,
+  // both reported 2026-09-14 on a lock that had been flapping all day:
+  //
+  //   • a 1h window whose first in-window change is late renders BLANK up to
+  //     that change, because the state the entity was ALREADY in — the anchor
+  //     HA returns at the window start — was an `unavailable` row and got
+  //     deleted. The bar begins mid-chart with nothing before it.
+  //   • a 12h window renders as ONE solid band of the surviving state, because
+  //     once the `unavailable` rows are gone the remaining rows are all equal
+  //     and the de-duplication below collapses them into a single segment. It
+  //     looks complete and is the worse lie of the two: it claims the device
+  //     held one state for twelve hours when it was offline for most of them.
+  //
+  // ⚠️ AND IT MADE `useStateHistory`'s OWN DEAD-WINDOW TEST VACUOUS. That hook
+  // asks `h.some(pt => !UNKNOWN_STATES.has(pt.state))` to decide whether to
+  // look further back for the last sighting — a question that can only be
+  // answered by data this filter had already removed, so the answer was always
+  // "alive" and the lookback never ran.
+  //
+  // Nothing wanted the old default: all three call sites either passed the
+  // opt-out or were broken by not passing it. Colour is not this module's
+  // business — `stateColors.historyStateColor` already maps these to the amber
+  // the Map colours legend documents.
+const series = await fetchRaw(entityId, hours);
   const points = series
     // ⚠️ COERCED AT THE DOOR, alongside the guard in `statusKeyFor`. Home
     // Assistant sends a null `state` on a freshly added entity's early rows
@@ -96,8 +106,7 @@ export async function fetchStateHistory(
     // travelling any further.
     .map((s) => ({ t: new Date(s.last_changed).getTime(),
                    state: String(s.state ?? "") }))
-    .filter((p) => Number.isFinite(p.t)
-      && (opts.keepUnavailable || (p.state !== "unavailable" && p.state !== "unknown")));
+    .filter((p) => Number.isFinite(p.t));
   // Collapse consecutive duplicate states (can happen when only attributes
   // changed between two reported points) so segment rendering doesn't draw
   // redundant boundaries.
