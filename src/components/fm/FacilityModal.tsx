@@ -18,6 +18,7 @@
 
 import { useMemo, useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import {
   ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog,
 } from "lucide-react";
@@ -41,7 +42,7 @@ import ScheduleEditor from "./ScheduleEditor";
 
 type Tab = "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
 
-const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
+const TABS: ModalTab<Tab>[] = [
   { id: "today", label: "Today", icon: ListChecks },
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "faults", label: "Faults", icon: Wrench },
@@ -179,22 +180,18 @@ export default function FacilityModal({
             <h2>Facility</h2>
           </div>
 
-          <div className="fm-tabs" role="tablist" aria-label="Facility sections">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button
-                  key={t.id}
-                  role="tab"
-                  aria-selected={tab === t.id}
-                  className={`fm-tab${tab === t.id ? " active" : ""}`}
-                  onClick={() => setTab(t.id)}
-                >
-                  <Icon size={16} /><span>{t.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* ⚠️ THE STRIP IS `common/ModalTabs` SINCE ADVANCED SETTINGS GREW
+              ONE TOO. The copy that lived here highlighted the FIRST tab when
+              the dialog was opened straight onto a later one — "report a
+              fault" showed the fault form under a bar that read as Today,
+              because the row scrolls horizontally and nothing scrolled the
+              active button into view. The shared component does. */}
+          <ModalTabs
+            tabs={TABS}
+            active={tab}
+            onSelect={setTab}
+            label="Facility sections"
+          />
 
           <div className="settings-body">
             {saveError && <div className="fm-banner warn">{saveError}</div>}

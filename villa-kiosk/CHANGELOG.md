@@ -1,3 +1,46 @@
+## 2.496.16
+
+### Changed — Advanced Settings is three tabs, not six things to unfold
+Advanced Settings opened as a stack of six headings with nothing under them.
+Every visit began with a click to find out how much was there, and reading two
+sections meant collapsing the first to get back to the second. The Facility
+workspace next door has had a tab strip since it was built, so the screen was
+also the odd one out.
+
+It is three tabs now — **Villa**, **Devices** and **System** — and each holds
+two panels:
+
+* **Villa** — Villa location, and Bound 3D objects.
+* **Devices** — Auto-detected entity settings, and Grouped devices.
+* **System** — Device telemetry, and Session. Owner only; the tab is not in
+  the strip at all for anyone else, rather than being there and empty.
+
+Two panels per tab rather than one per tab is deliberate. Six tabs would have
+traded a long scroll for a row of tabs holding one control each — Villa
+location is two number fields and Session is a single button — which is the
+same clutter wearing a different shape. Paired, each tab is a subject: where
+the villa is, what devices exist, what this box is doing.
+
+Nothing collapses any more. The entity table and the grouped-device list
+already show their first few rows with a filter above and a **Show all**
+beneath, so each states its own size by being looked at; the telemetry log
+pages. Opening Advanced Settings from a device panel's **edit** shortcut still
+lands on that device — it now opens the **Devices** tab with the filter
+pre-filled, where before it expanded the section.
+
+### Fixed — the Facility tab bar could highlight the wrong tab
+Reporting a fault from a device panel opens Facility directly on its **Faults**
+tab. The tab row scrolls sideways when it does not fit, and nothing scrolled
+the selected tab into view, so on a narrow screen the fault form appeared
+underneath a bar that still showed **Today** highlighted at the far left.
+
+Both tab strips are one component now (`common/ModalTabs`), which is what
+fixes this: the copy in Facility never knew it was broken, and hand-copying
+those fifteen lines a second time for Advanced Settings would have dropped the
+same half again — `role`, `aria-selected`, and the scroll. That half is
+invisible to the type checker and to review, and only shows up to someone
+using a screen reader.
+
 ## 2.496.15
 
 ### Fixed — a device's offline time is now drawn, instead of vanishing

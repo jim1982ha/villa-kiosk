@@ -7,9 +7,9 @@
 // nothing to reload on the way out.
 
 import { useState } from "react";
-import CollapsibleSection from "@/components/common/CollapsibleSection";
 import { useModalA11y } from "@/hooks/useModalA11y";
-import { LogOut, Upload } from "lucide-react";
+import { Boxes, Home, LogOut, Upload, Wrench } from "lucide-react";
+import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
 import CentralModelInfo from "./CentralModelInfo";
@@ -18,6 +18,25 @@ import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
+
+/** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
+ *  ACCIDENT. This screen was a stack of six collapsible sections and read as
+ *  clutter; splitting it one-section-per-tab would have traded a long scroll
+ *  for six tabs that each hold one control, which is worse — Location is two
+ *  number fields and Session is one button. Two panels per tab is what makes
+ *  each one a SUBJECT ("where the villa is", "what devices exist", "what this
+ *  box is doing") rather than a container.
+ *
+ *  ⚠️ AND THE NON-OWNER VIEW WAS SIZED TOO. Both System panels are owner-only,
+ *  so that whole tab is filtered out rather than rendered empty — a non-owner
+ *  gets two tabs holding two panels apiece, which is the same shape. */
+type SettingsTab = "villa" | "devices" | "system";
+
+const TABS: (ModalTab<SettingsTab> & { owner?: true })[] = [
+  { id: "villa", label: "Villa", icon: Home },
+  { id: "devices", label: "Devices", icon: Boxes },
+  { id: "system", label: "System", icon: Wrench, owner: true },
+];
 
 interface Props {
   /** Return to the Settings modal this was opened from. */
@@ -28,9 +47,6 @@ interface Props {
   /** A GLB/room-data upload changed the model — remount the canvas to load it. */
   onModelChanged: () => void;
 }
-
-/* `CollapsibleSection` moved to `components/common` — byte-identical to the
-   copy that was here, and TelemetryPanel wanted the same behaviour. */
 
 /** Villa coordinates (drive sun tracking). Applies live on blur rather than
  *  needing a Save button — guards against a half-typed number (e.g. "-8.")
@@ -123,6 +139,16 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
   // Focus trap + Escape + focus restore (see useModalA11y).
   const dialogRef = useModalA11y(onBack);
   const { role } = useProfile();
+  // ⚠️ FILTERED BEFORE THE INITIAL VALUE IS CHOSEN, so a non-owner can never
+  // start on a tab that is not in their strip — which would render an empty
+  // body under a tab bar highlighting nothing.
+  const tabs = TABS.filter((t) => role === "owner" || !t.owner);
+  // ⚠️ THE EDIT SHORTCUT OPENS ON "Devices". Arriving from a device panel's
+  // "edit" and landing on Villa would hide the row the operator came for —
+  // the same defect the old collapse's `defaultOpen` guarded against one level
+  // down, which is the guard this tab replaces rather than drops.
+  const [tab, setTab] = useState<SettingsTab>(
+    focusEntityId ? "devices" : (tabs[0]?.id ?? "villa"));
   const canUploadModel = role === "owner";
   // Central GLB/room-data upload — Owner only. Lives in this modal's OWN
   // header (icon-only, same header-icon-btn treatment as the day/night
@@ -183,49 +209,79 @@ export default function ConfigEditorModal({ onBack, focusEntityId, onModelChange
           )}
         </div>
 
+        {/* ⚠️ OUTSIDE `.settings-body`, LIKE FACILITY'S. The strip is chrome and
+            the body scrolls; putting the tabs inside would scroll them out of
+            reach on the long tabs — the entity table is hundreds of rows. */}
+        <ModalTabs
+          tabs={tabs}
+          active={tab}
+          onSelect={setTab}
+          label="Settings sections"
+        />
+
         <div className="settings-body">
           {glbUpload.uploadMsg && (
             <div className={`test-result ${glbUpload.uploadMsg.ok ? "ok" : "fail"}`} style={{ marginTop: 0 }}>
               {glbUpload.uploadMsg.text}
             </div>
           )}
-          <div className="settings-section-title">Villa location</div>
-          <VillaCoordinates />
-          <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
-            Drives sun position and day/night for this villa.
-          </p>
 
-          {/* Defaults open when arriving via a device panel's "edit" shortcut
-              (focusEntityId set) — otherwise that jump would land on a
-              collapsed section with the target row hidden. */}
-          <CollapsibleSection title="Auto-detected entity settings" defaultOpen={!!focusEntityId}>
-            <ConfigEditor initialSearch={focusEntityId} />
-          </CollapsibleSection>
+          {tab === "villa" && (
+            <>
+              <div className="settings-section-title">Villa location</div>
+              <VillaCoordinates />
+              <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-xs)" }}>
+                Drives sun position and day/night for this villa.
+              </p>
 
-          <CollapsibleSection title="Grouped devices">
-            <GroupedDevices />
-          </CollapsibleSection>
-
-          <CollapsibleSection title="Bound 3D objects">
-            <BindingsTable />
-          </CollapsibleSection>
-
-          {/* Owner only: the endpoint itself 403s other roles (it carries
-              other people's user-agents and error text), so don't render a
-              panel that could only ever show an error for them. */}
-          {role === "owner" && (
-            <CollapsibleSection title="Device telemetry">
-              <TelemetryPanel />
-            </CollapsibleSection>
+              {/* No collapse: `BindingsTable` already opens on its three counts
+                  with the lists themselves behind their own toggles, so this
+                  tab states how much is bound without a click. */}
+              <div className="settings-section-title">Bound 3D objects</div>
+              <BindingsTable />
+            </>
           )}
 
-          {role === "owner" && (
-            <CollapsibleSection title="Session">
+          {tab === "devices" && (
+            <>
+              {/* ⚠️ NO COLLAPSE, AND THE HEADINGS STAY. Both sections used to be
+                  behind a toggle, so this tab would open on two words and
+                  nothing else. Each shows its first few rows with a filter above
+                  and a "Show all" beneath (`common/TruncatedList`), which
+                  answers "how many devices does this villa have" by looking
+                  rather than by clicking. Arriving from a device panel's "edit"
+                  pre-fills the filter, so the row that was come for is one of
+                  the few on screen. */}
+              <div className="settings-section-title">Auto-detected entity settings</div>
+              <ConfigEditor initialSearch={focusEntityId} />
+
+              <div className="settings-section-title">Grouped devices</div>
+              <GroupedDevices />
+            </>
+          )}
+
+          {/* Owner only: the telemetry endpoint itself 403s other roles (it
+              carries other people's user-agents and error text), and logging
+              every device out is an owner act. The tab is not rendered for
+              other roles rather than rendered-and-403 — see the TABS filter. */}
+          {tab === "system" && role === "owner" && (
+            <>
+              {/* `TelemetryPanel` pages its own log, so there is nothing here
+                  for an outer collapse to save — and hiding the section also
+                  hid the Refresh/Copy/Download/Probe buttons, which are the
+                  reason somebody opens this tab. */}
+              <div className="settings-section-title">Device telemetry</div>
+              <TelemetryPanel />
+
+              <div className="settings-section-title">Session</div>
               <LogoutAllSection />
-            </CollapsibleSection>
+            </>
           )}
         </div>
 
+        {/* No Save: every tab here applies LIVE to the 3D scene through
+            `ConfigContext`, which is why the strip above is passed no `commit`
+            and a tab switch can lose nothing. */}
         <div className="settings-footer" style={{ justifyContent: "space-between" }}>
           <span className="muted body-text" style={{ fontSize: "var(--text-xs)" }}>v{__APP_VERSION__}</span>
           <button className="btn primary" onClick={onBack}>Close</button>
