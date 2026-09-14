@@ -8,7 +8,7 @@
 // memory for how this was verified.
 
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
-import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
 import { isTicketResolved, scheduleBoard } from "@/fm/fmEngine";
@@ -156,7 +156,7 @@ export function buildCategoryTiles(
     const mapping = entityMap[id];
     if (!mapping) continue;
     const entity = entities[id];
-    const cat = effectiveCategory(id, mapping.type, mapping.category, entity?.attributes.device_class as string | undefined);
+    const cat = effectiveCategory(subjectOf(id, mapping, entity));
     totals.set(cat, (totals.get(cat) ?? 0) + 1);
     if (isOn(entity)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
   }

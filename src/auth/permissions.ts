@@ -13,7 +13,7 @@
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import type { AppConfig } from "@/config/AppConfig";
-import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import type { Role } from "./roles";
 
 /** Things a profile can DO (beyond seeing devices). */
@@ -121,15 +121,26 @@ export function climateLimits(role: Role): { climateMin: number; climateMax: num
   return PERMISSION_MATRIX[role].controlLimits ?? null;
 }
 
-/** Per-entity check using its stored mapping (falls back to the category
- *  defaults exactly like the rest of the app does). */
-export function isMappingAllowed(role: Role, entityId: string, mapping: EntityMapping): boolean {
-  // effectiveCategory, NOT `mapping.category ?? categoryForEntity(...)`: the
-  // two disagree whenever a stored category merely equals the LEGACY auto
-  // default, which effectiveCategory deliberately ignores so current defaults
-  // apply. This decides what a role is allowed to see, so it disagreeing with
-  // the category the badge/filter actually uses is an RBAC hole, not cosmetic.
-  const category = effectiveCategory(entityId, mapping.type, mapping.category);
+/**
+ * Per-entity check using its stored mapping and its LIVE entity.
+ *
+ * ⚠️ THE ENTITY IS A REQUIRED ARGUMENT, AND ITS ABSENCE WAS THE DEFECT. This
+ * resolved the category from three of the four signals — it could not see
+ * `device_class` — while the badge, the map filter and the settings row all
+ * resolved it from four. The comment that used to sit here claimed the call
+ * was deliberately aligned with "the category the badge/filter actually uses"
+ * and warned that disagreement "is an RBAC hole, not cosmetic". It was not
+ * aligned: two consecutive lines of one filter in `Dashboard` computed the
+ * same entity's category two different ways.
+ *
+ * Pass `undefined` for an entity Home Assistant has not loaded. That is a
+ * statement; omitting it was an accident nothing could see.
+ */
+export function isMappingAllowed(
+  role: Role, entityId: string, mapping: EntityMapping,
+  entity: { attributes?: { device_class?: unknown } } | undefined,
+): boolean {
+  const category = effectiveCategory(subjectOf(entityId, mapping, entity));
   return isEntityAllowed(role, mapping.type, category);
 }
 

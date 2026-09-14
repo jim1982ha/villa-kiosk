@@ -802,6 +802,9 @@ export class SceneManager {
       this.scene, opts.onEntityPicked, opts.config.entityMap, opts.config.meshBindings,
       opts.onEntityLongPressed,
       (x, y) => !!this.visuals.pickBadgeAt(x, y),
+      // The picker must read the SAME category the badge is drawn under —
+      // only EntityVisuals holds the live device_class that decides it.
+      (id, type) => this.visuals.categoryOf(id, type),
     );
     // The construction args above don't carry the RBAC type denials — push
     // them now so a restricted profile's first pick is already filtered.

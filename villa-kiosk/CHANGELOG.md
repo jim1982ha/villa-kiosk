@@ -1,3 +1,49 @@
+## 2.496.19
+
+### Fixed — a device could be filed under one category and judged under another
+Which group a device belongs to — Comfort, Energy, Access, Network — depends on
+four things, and the last of them is Home Assistant's own `device_class`. It
+was an optional argument, and three of the twelve places that asked the
+question left it out. One of those three was the check that decides what a
+profile is allowed to see.
+
+The effect was quiet and confusing rather than dangerous. A sensor whose name
+gives nothing away — `sensor.aqara_x`, say — resolves to **Comfort** when its
+`device_class` says *temperature*, and to **Energy** when nobody looks. The
+badge looked, so a guest saw the device on the map. The permission check did
+not look, so it judged the same device as Energy and quietly declined to act
+on it. Tapping did nothing, with no explanation. The tap handler was a third
+asker that also did not look, so it could disagree with both.
+
+Two consecutive lines of the same filter resolved one device's category two
+different ways.
+
+All four signals now travel together as one thing, and the live entity is a
+required part of it. Saying *"this entity isn't loaded"* is now something a
+caller has to state out loud; leaving it out is no longer possible.
+
+### Fixed — six category choices that snapped straight back
+Picking **Others** for a lock, or **Network** for a camera, did nothing: the
+dropdown reverted to the old value the moment you let go. Six of the entity
+types were affected, and between them they could not be moved to a category
+they had once defaulted to.
+
+The cause was a rule that exists for a good reason. When the category defaults
+are reorganised, devices that were auto-filed under an old default get re-filed
+under the new one — nobody chose the old one, so nothing is lost. But a
+deliberate choice that happened to match an old default was indistinguishable
+from an auto-assignment, and got re-filed with them.
+
+A choice is recorded as a choice now, and is honoured exactly as made.
+Auto-assigned categories still re-file themselves, which is what that rule is
+for.
+
+### Changed — the tap handler asks instead of guessing
+The picker that decides whether a tap on a mesh does anything was resolving the
+category itself, with a signal it has no way to obtain. It asks the part of the
+3D layer that holds the live state now, so the badge you can see and the tap
+that reaches it can no longer disagree.
+
 ## 2.496.18
 
 ### Fixed — the trash can in Advanced Settings now actually removes the device

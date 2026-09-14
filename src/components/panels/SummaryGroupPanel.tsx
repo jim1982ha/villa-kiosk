@@ -21,7 +21,7 @@ import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
-import { effectiveCategory } from "@/config/EntityCategories";
+import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
 import { alertStateFor } from "@/config/BinarySensorClasses";
 import { switchPosition } from "@/utils/entityState";
@@ -304,8 +304,7 @@ export default function SummaryGroupPanel({
     const id = e.entity_id;
     const domain = id.split(".")[0];
     const type = typeOf(id);
-    const cat: Category = effectiveCategory(
-      id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
+    const cat: Category = effectiveCategory(subjectOf(id, config.entityMap[id], e, type));
     const label = entityLabel(id);
     const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
     const curTemp = e.attributes.current_temperature as number | null | undefined;

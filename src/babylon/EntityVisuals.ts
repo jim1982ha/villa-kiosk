@@ -104,7 +104,7 @@ import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
+import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
 import { badgeKindFor, badgeFaceAndRing, type DeviceReading } from "@/utils/deviceActivity";
 import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
@@ -3913,7 +3913,8 @@ export class EntityVisuals {
    *  needed to resolve an enum sensor like a UniFi AP's "State" correctly. */
   categoryOf(entityId: string, type: EntityType): Category {
     const dc = this.lastState.get(entityId)?.attributes?.device_class as string | undefined;
-    return effectiveCategory(entityId, type, this.config.entityMap[entityId]?.category, dc);
+    return effectiveCategory(subjectOf(
+      entityId, this.config.entityMap[entityId], dc ? { attributes: { device_class: dc } } : undefined, type));
   }
 
   /** Follow FloorManager's floor toggle — only the active floor's badges are
@@ -4660,8 +4661,7 @@ export class EntityVisuals {
     // Re-resolve the filter category now that this state may carry the
     // device_class (e.g. an enum sensor → Network) — cullLabels reads it live.
     lbl.category = effectiveCategory(
-      entityId, type, this.config.entityMap[entityId]?.category,
-      entity.attributes.device_class as string | undefined);
+      subjectOf(entityId, this.config.entityMap[entityId], entity, type));
     // FACE from this device's own state, RING from its linked entity — two
     // independent facts, two independent sets of pixels. See badgeFaceAndRing.
     // (badgeKind still folds the linked signal into ONE value for everything
