@@ -1,3 +1,37 @@
+## 2.496.15
+
+### Fixed — a device's offline time is now drawn, instead of vanishing
+The mini history bar on a device panel was throwing away every period the
+device had lost contact, before the chart was even drawn. That showed up two
+ways, and the second is the worse one.
+
+Picking **1h** on a device that had been offline since before the hour started
+left the bar **blank** until the first moment it came back — no colour, no
+explanation, just an empty stretch.
+
+Picking **12h** or **24h** on the same device looked *complete* — one solid
+band, edge to edge. That was the lie: with the offline stretches deleted, the
+states either side of them were identical and got merged into one. The bar
+claimed the device held a single state all day when it had actually dropped
+out repeatedly.
+
+Offline now appears in its own colour — the amber that **Map colours** already
+documents as "Home Assistant has lost contact". A lock that flapped twelve
+times today now reads as twelve bands instead of one.
+
+### Fixed — the faint white lines between blocks on the history bar
+The bar is drawn as a row of tiled blocks, and the browser rounded each block's
+position and width to whole screen pixels separately. Where a boundary fell
+between pixels, neither block quite covered it and the background showed
+through as a hairline — including *inside* a single unbroken run of one colour,
+which is what gave it away as a drawing artefact rather than real data.
+
+### Fixed — "last seen" on a device that has been offline all along
+A panel is meant to shift its window back and say *"Last hour before 3 Sep
+14:20"* when the device has no data in the period you asked for. It never
+could: the check that decides this looks for offline readings, and those were
+the very readings being deleted. It works now.
+
 ## 2.496.14
 
 ### Changed — Settings now has a Save button, and closing it asks
