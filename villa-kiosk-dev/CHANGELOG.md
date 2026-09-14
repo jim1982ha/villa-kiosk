@@ -1,3 +1,48 @@
+## 2.974.0
+
+### Fixed — alerts now tell you the time on the villa's own clock
+An alert arrived reading *"a brief connectivity glitch on 2026-09-12 at 12:20
+UTC"*. The dropout was real and the arithmetic was right — 12:20 UTC is 20:20
+here — but nobody standing in the villa reads UTC, and an alert you have to
+convert by hand before you can judge it is an alert you will eventually convert
+wrong.
+
+Two things were broken at once, and either alone would have done it.
+
+**Home Assistant hands its history and automation traces back in UTC**, and
+those stamps went to the assistant exactly as they arrived.
+
+**And the assistant was never told what time it is here.** Not in its
+instructions, not in its briefing, and deliberately not in the villa summary —
+that summary carries no timestamps at all on purpose, because a time in it
+would change on every call and quietly destroy the prompt cache. Given UTC and
+told nothing, the assistant repeated UTC, which is the only honest thing it
+could have done.
+
+Both halves are fixed. Every timestamp the assistant is given now arrives on
+the villa's clock with its offset attached — `2026-09-12T20:20:27+08:00` — and
+it is told, once, which clock the property keeps and that it must never write
+UTC. The villa's timezone is the one Home Assistant already reports; nothing
+needs setting.
+
+### Fixed — the assistant's timezone setting was never actually learned
+The setting carried a comment saying it was *"read from discovery where
+possible rather than typed"*. Nothing ever read it. Its only writer was the
+settings screen, so on any install where nobody typed one, every part of the
+assistant that needed the villa's clock silently fell back to UTC — eight hours
+out, with no sign that anything had gone wrong.
+
+It now falls back to the timezone the reporting side already asks Home
+Assistant for and remembers, so the property is asked once and both halves keep
+the same clock. Setting it by hand is still possible and still wins.
+
+### Fixed — an evening's readings were filed under the next day
+The ranking that decides which of a thousand devices the assistant looks at
+groups readings by day, and it took the day by chopping the first ten
+characters off a UTC timestamp. Everything after 4pm local therefore landed in
+**tomorrow's** bucket, so an evening reading was compared against the wrong
+day's neighbours — every day, invisibly.
+
 ## 2.973.0
 
 ### Fixed — the buttons on a Telegram alert work again, for everyone in the chat
