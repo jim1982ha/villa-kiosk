@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { dismissedEntitySet } from "@/config/dismissedEntities";
+import { dismissedEntitySet, forgetEntities } from "@/config/dismissedEntities";
 import { useHA } from "@/ha/HAStateStore";
 import EntityMapRow from "./EntityMapRow";
 import type { EntityMapping } from "@/types/scene.types";
@@ -97,17 +97,15 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   }, [haReady, allEntries, entities]);
   const staleSet = useMemo(() => new Set(staleIds), [staleIds]);
 
+  // Both Remove buttons on this screen go through the ONE operation — see
+  // dismissedEntities.forgetEntities. The decision is recorded alongside the
+  // deletion because these ids are also derived from the model (a mesh named
+  // after the entity), so deleting alone regenerated every one of them: the
+  // reported "I press Remove and they come straight back, on this device and
+  // the others".
   const removeStale = useCallback(() => {
-    const next = { ...configRef.current.entityMap };
-    for (const id of staleIds) delete next[id];
-    // Record the DECISION alongside deleting the rows. Deleting alone was
-    // never enough: these ids are also derived from the model (a mesh named
-    // after the entity), so auto-detection and the unavailable-devices list
-    // regenerated every one of them — the reported "I press Remove and they
-    // come straight back, on this device and the others".
-    const dismissed = new Set(configRef.current.dismissedEntityIds);
-    for (const id of staleIds) dismissed.add(id);
-    update({ entityMap: next, dismissedEntityIds: [...dismissed] });
+    update(forgetEntities(
+      configRef.current.entityMap, configRef.current.dismissedEntityIds, staleIds));
   }, [staleIds, update]);
 
   // Live filter by entity id, label or resolved room — the auto-detected list
@@ -148,10 +146,14 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       },
     }), [update]);
 
+  // ⚠️ THE SAME OPERATION AS THE BANNER ABOVE, AND IT USED NOT TO BE. This
+  // deleted the row and recorded nothing, so it could not deliver the removal
+  // it offered: a live entity's row is rebuilt by auto-detection on the next
+  // model load, and a stale one merely disappeared from THIS table while
+  // staying in the fault picker, the offline count and readiness.
   const remove = useCallback((key: string) => {
-    const next = { ...configRef.current.entityMap };
-    delete next[key];
-    update({ entityMap: next });
+    update(forgetEntities(
+      configRef.current.entityMap, configRef.current.dismissedEntityIds, [key]));
   }, [update]);
 
   /**
