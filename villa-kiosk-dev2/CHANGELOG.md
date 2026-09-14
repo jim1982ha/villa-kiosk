@@ -1,3 +1,46 @@
+## 2.496.22
+
+### Fixed — the camera panel's side rail on an iPad in landscape
+When the camera view has room, its controls move to a column down the side and
+the little history bar becomes a vertical strip. Deciding *when* to do that was
+written down twice — once in the stylesheet and once in the code — and only one
+copy was ever corrected.
+
+A fix in v2.81.1 changed the stylesheet to switch on **touch capability** rather
+than screen height, because an iPad in landscape is never short enough to trip
+the old height test and was keeping the portrait layout. The code kept the
+height test.
+
+So on a tablet in landscape the stylesheet rearranged the panel and the code did
+not: the history bar drew its blocks **sideways inside a ten-pixel-wide vertical
+strip**, and the deliberate button order (close at the top, fullscreen second)
+quietly did not apply. The stylesheet comment even spells out that the two
+depend on each other — and nothing could notice when only one moved.
+
+The stylesheet decides now, and the code asks it. There is one copy.
+
+### Changed — the stylesheet is eight files instead of one
+It was a single 4,174-line sheet carrying 413 global style names, which meant
+every part of the app shared one hot spot: a change to the Facility worklist,
+the camera rail or the bottom bar all landed in the same place. It is now eight
+parts, split at section headings that were already there — the villa's base
+look, the HUD, device panels, modals, layout responses, the profile gate,
+Facility, and the shared odds and ends.
+
+**Nothing about the appearance changed, and that is checked rather than
+claimed:** the built stylesheet is byte-for-byte identical to the one the
+single-file version produced. Style order decides which of two competing rules
+wins, so a split that shuffled anything would move pixels; this one provably
+does not.
+
+### Noted, not changed — "a narrow screen" is written four ways
+The stylesheet decides a screen is narrow at 480, 560, 640 **and** 720 pixels
+depending on which part of the app is asking. Collapsing those into one number
+would re-flow real layouts at four different widths, and nothing here can see
+the result, so it is left alone deliberately rather than quietly. What is new is
+that a **fifth** number can no longer appear unnoticed — which is how there came
+to be four.
+
 ## 2.496.21
 
 ### Fixed — tapping the floor could aim at the ceiling
