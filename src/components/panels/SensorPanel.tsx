@@ -16,7 +16,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
-import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
+import { binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 import { binarySensorColor, paletteColorFor, isUnavailable } from "@/utils/stateColors";
 
@@ -59,13 +59,12 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // wording/icon/danger-styling below matches what's actually being
   // monitored instead of assuming every binary_sensor is a leak alarm.
   const classInfo = binarySensorClassInfo(entity?.attributes.device_class);
-  // A per-entity threshold override (config.alertThresholds, currently only
-  // seeded from DEFAULT_THRESHOLDS — no in-app editor) always wins; otherwise
-  // fall back to the device_class's default problem state ("none" = this
-  // class is purely informational — e.g. motion/occupancy — so it's never
-  // auto-flagged as an alert).
-  const defaultAlarmState = classInfo.alarmState === "none" ? undefined : classInfo.alarmState;
-  const alertState = threshold?.alertState ?? defaultAlarmState;
+  // The same rule the map badge now reads — see BinarySensorClasses.alertStateFor.
+  // This combination (per-entity override wins, else the device_class default,
+  // "none" meaning never a fault) used to live here alone, which is why the
+  // badge and this panel disagreed about every motion sensor in the villa.
+  const alertState = alertStateFor(
+    entity?.attributes.device_class as string | undefined, threshold?.alertState);
   const level: AlertLevel =
     isBinary
       ? alertState !== undefined && entity?.state === alertState ? "danger" : "normal"

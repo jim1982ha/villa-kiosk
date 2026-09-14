@@ -32,6 +32,7 @@ import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
 import { effectiveCategory, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
+import { alertStateFor } from "@/config/BinarySensorClasses";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -900,7 +901,13 @@ export default function Dashboard() {
                 // state only — it is Babylon-side, and predicting scene
                 // appearance is the thing that was rightly reverted before.
                 ...(() => {
-                  const b = badgeFaceAndRing(mapping.type, ent ?? phantomEntity(entityId), linkedAlert);
+                  const e0 = ent ?? phantomEntity(entityId);
+                  const b = badgeFaceAndRing({
+                    type: mapping.type, entity: e0, linkedOn: linkedAlert,
+                    alertState: alertStateFor(
+                      e0.attributes.device_class as string | undefined,
+                      config.alertThresholds[entityId]?.alertState),
+                  });
                   return { state: b.face, ringState: b.ring };
                 })(),
               };

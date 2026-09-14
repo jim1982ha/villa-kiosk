@@ -105,7 +105,8 @@ import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
-import { badgeKindFor, badgeFaceAndRing } from "@/utils/deviceActivity";
+import { badgeKindFor, badgeFaceAndRing, type DeviceReading } from "@/utils/deviceActivity";
+import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
@@ -894,8 +895,8 @@ interface ShownLabel {
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
 // NOMINAL = "all good, nothing to report" — its value is hidden (the badge is
 // neutral by default, so "Connected" is just clutter). ALERT states (which
-// drive the badge ring — see utils/deviceActivity's SENSOR_ALERT_STATES,
-// shared with badgeKind below) are the mirror image: their value stays
+// drive the badge ring — resolved through `statusKeyFor`, the one status
+// table the Map-colours legend documents) are the mirror image: their value stays
 // SHOWN, so a real change is never silently swallowed. An unrecognised enum
 // value (e.g. a weather "sunny") is neither: it's shown, un-ringed, as before.
 // ⚠️ THE TABLE ITSELF NOW LIVES IN `utils/entityValue.ts` (exported as
@@ -4668,7 +4669,7 @@ export class EntityVisuals {
     // group's — because those all mean "is anything here demanding attention",
     // which a linked entity being on genuinely is.)
     const { face: state, ring: ringState } =
-      badgeFaceAndRing(type, entity, this.linkActiveIds.has(entityId));
+      badgeFaceAndRing(this.reading(type, entity, this.linkActiveIds.has(entityId)));
     const iconKey = iconKeyFor(type, entity);
     const override = this.config.entityMap[entityId]?.badgeColor;
 
@@ -8127,7 +8128,7 @@ export class EntityVisuals {
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = badgeFaceAndRing(
-              s2.lbl.type, st, this.linkActiveIds.has(s2.id));
+              this.reading(s2.lbl.type, st, this.linkActiveIds.has(s2.id)));
             c.chips[k].source = badgeImageDataUrl(
               s2.lbl.category, iconKeyFor(s2.lbl.type, st), face,
               this.config.entityMap[s2.id]?.badgeColor,
@@ -8178,7 +8179,7 @@ export class EntityVisuals {
           if (!st) { if (drawn >= 2) ringRed = false; continue; }
           if (drawn >= 2) {
             const { ring } = badgeFaceAndRing(
-              shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id));
+              this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id)));
             if (ring !== "alert") ringRed = false;
           } else {
             const kind = this.badgeKind(shown[i].lbl.type, st);
@@ -9176,6 +9177,18 @@ export class EntityVisuals {
    *  and SummaryGroupPanel's device list, so all three read a device's
    *  activity identically. Only the linkActiveIds overlay below is specific
    *  to the map (a Babylon-side, confirmed-state-only signal). */
+  /** The ONE place this module assembles a `DeviceReading`, so the villa's
+   *  per-entity alert override reaches the map by the same route it reaches
+   *  the panel. Every badge drawn here goes through it. */
+  private reading(type: EntityType, s: HassEntity, linkedOn: boolean): DeviceReading {
+    return {
+      type, entity: s, linkedOn,
+      alertState: alertStateFor(
+        s.attributes.device_class as string | undefined,
+        this.config.alertThresholds[s.entity_id]?.alertState),
+    };
+  }
+
   private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
     // The rule itself lives in utils/deviceActivity (badgeKindFor), shared with
     // every DOM list that draws the same squircle — this method only supplies
@@ -9183,7 +9196,7 @@ export class EntityVisuals {
     // entity is on", fed by state events. A camera's MOTION sensor is
     // deliberately NOT part of it: that drives the beam/room glow
     // (applyMotionRouting), never the ring, so the two read independently.
-    return badgeKindFor(type, s, this.linkActiveIds.has(s.entity_id));
+    return badgeKindFor(this.reading(type, s, this.linkActiveIds.has(s.entity_id)));
   }
 
   /** For a device-group PRIMARY, combine its own reading with its members'

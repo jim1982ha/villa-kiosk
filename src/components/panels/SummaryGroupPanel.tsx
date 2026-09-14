@@ -23,6 +23,8 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
+import { alertStateFor } from "@/config/BinarySensorClasses";
+import { switchPosition } from "@/utils/entityState";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { isUnavailable } from "@/utils/stateColors";
@@ -328,8 +330,18 @@ export default function SummaryGroupPanel({
     // reject the service call, and nothing would ever come back to change the
     // row's state, so the control could only ever look broken.
     const rowInHa = !!entities[id];
-    const canToggle = canControl && rowInHa && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
-    const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
+    // ⚠️ THREE ANSWERS, AND THE THIRD WITHHOLDS THE CONTROL. This was
+    // `isLock ? e.state !== "locked" : !OFF.has(e.state)` — and `!== "locked"`
+    // is also true for `unavailable`, `unknown` and `jammed`, so a lock Home
+    // Assistant had lost contact with rendered its switch in the UNLOCKED
+    // position, announced as "on", while this same row's text said
+    // "Unavailable" and its badge was amber. A switch has two positions and
+    // the villa did not know which one was true, so it now offers none —
+    // the same reasoning `rowInHa` already applies one line up. See
+    // entityState.switchPosition.
+    const position = switchPosition(e, domain);
+    const canToggle = canControl && rowInHa && position !== "unknown"
+      && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
     // EXACTLY what the map paints, via the one shared rule — see
     // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from
     // classifyDeviceActivity plus its own unavailable check, which matched the
@@ -338,13 +350,16 @@ export default function SummaryGroupPanel({
     // pump runs, and every one of them listed here as plain grey. Reported by
     // tapping an entity group of four pump-power badges — two red on the map,
     // four identical rows in the modal.
-    const badge = badgeFaceAndRing(
-      type, e,
+    const badge = badgeFaceAndRing({
+      type, entity: e,
       // "Is the entity this one is linked to switched on" — the map holds the
       // same fact as a live set fed by state events (linkActiveIds); here the
       // store already has every state, so it is one lookup.
-      linkedStateOf(config.entityMap[id]?.linkedEntityId) === "on",
-    );
+      linkedOn: linkedStateOf(config.entityMap[id]?.linkedEntityId) === "on",
+      alertState: alertStateFor(
+        e.attributes.device_class as string | undefined,
+        config.alertThresholds[id]?.alertState),
+    });
     const notInHaRow = !rowInHa;
     // An id HA has no entity for is reported as THAT, not as "not on the map"
     // — it may well have geometry, and saying it is missing from the model
@@ -396,7 +411,7 @@ export default function SummaryGroupPanel({
         {canToggle && (
           <EntityRowToggle
             entityId={id}
-            actualOn={toggleOn}
+            actualOn={position === "on"}
             label={label}
             onToggle={doToggle}
           />
