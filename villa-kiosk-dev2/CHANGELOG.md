@@ -1,3 +1,34 @@
+## 2.496.20
+
+### Fixed — a combo sensor counted as two devices in some places and one in others
+A sensor that reports several things — temperature and humidity, or CO2 and
+pressure — is one physical device, and the villa folds it into one row so you
+are not told about the same thing twice.
+
+It was folding that device two different ways depending on which screen asked.
+Advanced Settings used Home Assistant's own device registry, which knows what
+belongs to what and needs no guessing. Everything else — the Facility fault
+picker, the offline device count, the readiness check — fell back to matching
+entity names against one hardcoded `_temperature`/`_humidity` pair, because the
+registry was never handed to it.
+
+So a combo sensor whose entities happen to be named that way folded everywhere;
+one that reports anything else was **one** device in Settings and **two** in the
+offline count. The registry now reaches every screen.
+
+### Changed — "what devices does this villa have" is asked once per screen
+That question needed five arguments in a particular order, and it was
+reassembled at twelve places — four of them inside the Facility workspace
+alone, which asked it five separate times with five sets of bookkeeping to keep
+in step. Three functions took the same information in three different orders.
+Two of the arguments quietly defaulted to empty, so a forgotten one brought
+removed devices back rather than failing.
+
+There is one answer now, computed once per screen and handed to everything that
+needs it — the device count, the readiness report, the fault picker and the
+offline list all read the same value instead of four recomputations that
+happened to agree.
+
 ## 2.496.19
 
 ### Fixed — a device could be filed under one category and judged under another
