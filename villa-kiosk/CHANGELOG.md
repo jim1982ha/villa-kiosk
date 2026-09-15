@@ -1,3 +1,106 @@
+## 2.496.36
+
+### Fixed — the update dialog described a release five versions old
+This panel is the only account of a release anyone reads, and it had not been
+written since 2.496.29 — so the villa offered 2.496.35 while describing work
+from six releases earlier, and every fix in between went unmentioned.
+
+The missing entries are written, and a release can no longer be published
+unless this file describes the version being offered.
+
+## 2.496.35
+
+### Fixed — the villa's own checks had never actually run
+Before a new version reaches this add-on it is supposed to pass a set of
+automatic checks. Those checks had never once completed: they stopped on their
+very first step every time, and nothing downstream noticed, so eleven versions
+were published while the checks were being reported as their safety net.
+
+Three separate things were wrong, each hiding the next. Nothing made a
+published version wait for the checks at all. The checks themselves could not
+get started. And the one that inspects the part of the add-on handling
+passcodes and permissions could not load the file it was meant to inspect.
+
+All three are fixed, and every check now runs and passes before a version can
+be published. This changes nothing you can see in the villa — it changes what
+has to be true before a version reaches it.
+
+## 2.496.34
+
+### Fixed — a published version no longer skips its own checks
+A version used to be published whether or not its checks had passed, because
+the two ran side by side with no connection between them. They are connected
+now: if a check fails, no version is published and nothing is offered here.
+
+## 2.496.33
+
+### Fixed — the overview shot was framed for one specific villa
+Pulling back to the whole-villa view is meant to measure the building and frame
+it. That measurement never ran, so the view used fixed distances written down
+long ago — which happen to suit this villa closely enough that nobody noticed.
+Any villa of a different size would have landed badly framed, panned into empty
+space and reached its zoom stops in the wrong places.
+
+The building is measured as it loads now.
+
+### Fixed — part of the 3D scene was kept in memory after leaving the page
+Leaving and returning to the villa view left some of the previous scene behind
+each time. Two lists of ceiling and room shapes were not being released, and
+holding either of them holds on to the entire 3D scene.
+
+### Changed — the villa can no longer reach the internet for a 3D component
+The 3D engine can quietly download a decoder from its maker's servers if a
+model needs one. Two such downloads had already been found and replaced with
+files shipped inside the add-on; a third was still open. Rather than close that
+one, every download of this kind now points at this add-on's own address — so a
+villa with no internet keeps working, and anything missing fails where it can
+be seen rather than silently.
+
+## 2.496.31
+
+### Fixed — a device row showed a different reading from its own map badge
+Opening a group of devices showed each one with its badge beside a line of
+text. The badge scaled a reading the way the rest of the villa does — 6.6 kW —
+while the text beside it printed the raw figure, 6570.989 W. Same device, same
+row, two numbers. They agree now, and so does the tile you tapped to get there.
+
+### Fixed — the floor buttons assumed a two-storey villa
+The villa's floor buttons were built from a fixed list of two floors. A villa
+whose model has a third storey could be sent to that floor by other means and
+had no button to get back. The buttons come from the model now.
+
+### Fixed — the device tiles could not see devices arriving with the 3D model
+The tiles along the bottom count the villa's own devices. They were watching
+the wrong thing for changes, so the counts could not update at the one moment
+they most needed to — when the 3D model finishes loading and the villa's
+devices become known.
+
+### Fixed — a spend figure read "of IDR 0" before a cap was set
+The maintenance spend banner compared this month's total against a cap that has
+not been configured yet, and printed the unset value rather than saying so.
+
+### Changed — money is no longer written in one fixed currency
+Amounts in the Facility workspace were written with a currency and a number
+format fixed in the code. Both are now settings, empty by default, so an
+unconfigured villa shows the figure alone rather than labelling it wrongly.
+
+### Fixed — the camera feed sometimes dropped to a lower-quality stream
+Switching between cameras could make the next one fall back to the simpler
+video stream, reporting that the better one had failed when it had not.
+
+### Fixed — a phone or tablet stopped recovering quickly from sleep
+A device waking from sleep or rejoining wifi is meant to check its connection
+immediately rather than wait for the next retry. After certain reloads that
+check was switched off for the rest of the session, leaving the villa to
+reconnect on its own slower schedule.
+
+## 2.496.30
+
+### Fixed — the map badge and the panel could drift apart on a reading
+The reading printed on a map badge was produced by a second, private copy of
+the rule the rest of the villa uses, so the two could be changed apart without
+anything noticing. There is one copy now.
+
 ## 2.496.29
 
 ### Fixed — badge icons stayed blurry after changing the badge size

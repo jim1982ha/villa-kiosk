@@ -122,7 +122,39 @@ for where, got in lock_versions.items():
                         f"(it rewrites both root version fields) so the lockfile "
                         f"the image builds from names this release")
 
-# 6. the manifest must not cite a guard that does not exist — the defect that
+# 6. the release the operator is being offered must be the one the changelog
+#    describes.
+#
+# ⚠️ SIX RELEASES SHIPPED WITHOUT AN ENTRY. villa-kiosk/CHANGELOG.md is what
+# Supervisor renders in the Update dialog — the ONLY account of a release the
+# owner ever reads. Its newest heading said 2.496.29 while the add-on offered
+# 2.496.35, so the update dialog described work five releases old and every
+# fix since was invisible. Nothing generates this file; it is written by hand,
+# and a hand stops.
+#
+# This gate is why it cannot happen again, and it is checked here rather than
+# in a commit hook because the version and the changelog are the same fact: a
+# release is a number a user is offered PLUS what they are told it contains.
+CHANGELOG = ROOT / "villa-kiosk" / "CHANGELOG.md"
+if not CHANGELOG.exists():
+    problems.append("villa-kiosk/CHANGELOG.md is missing — Supervisor renders it "
+                    "in the Update dialog and would show nothing")
+else:
+    cl = CHANGELOG.read_text()
+    headings = re.findall(r"^## (\S+)", cl, re.M)
+    if not headings:
+        problems.append("villa-kiosk/CHANGELOG.md has no `## <version>` headings — "
+                        "the parser found nothing, so this check would pass on any file")
+    elif headings[0] != cfg_v:
+        problems.append(f"the changelog's newest entry is {headings[0]}, but this "
+                        f"release is {cfg_v} — the Update dialog would describe "
+                        f"{headings[0]} to an operator being offered {cfg_v}")
+    # A heading with no prose under it is an entry in name only.
+    body = cl.split("\n## ", 1)[0]
+    if len(body.strip().splitlines()) < 3:
+        problems.append(f"the {cfg_v} changelog entry has a heading and no content")
+
+# 7. the manifest must not cite a guard that does not exist — the defect that
 #    produced this file. Its own comment named tests/security_test.py.
 for m in re.finditer(r"tests/[A-Za-z0-9_/.-]+\.(?:py|mjs|sh|ts)", CFG):
     if not tracked(m.group(0)):
