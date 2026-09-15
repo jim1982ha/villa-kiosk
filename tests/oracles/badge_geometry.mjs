@@ -14,7 +14,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 
-const { arrange, gridCells, MAX_GRID_CHIPS, MAX_TOTAL_CHIPS } =
+const { arrange, cardStruts, gridCells, MAX_GRID_CHIPS, MAX_TOTAL_CHIPS } =
   await import("@/babylon/badgeCard");
 const { chipWidthPx, fitChipLabel } = await import("@/babylon/labelLayout");
 const { onStorey, storeyFloorYAt, nearestFloorRoom, STOREY_MATCH_M } =
@@ -48,6 +48,31 @@ ck("a width budget is respected rather than overrun", wrapped.width <= 120);
 
 ck("a non-finite count is zero cells, not NaN", gridCells(Number.NaN) === 0);
 ck("a negative count is zero cells", gridCells(-3) === 0);
+
+/* ── a card's width: the parts ARE the whole ───────────────────────────── */
+// ⚠️ IT WAS COMPUTED TWICE, FROM DISJOINT CONSTANTS. The solver modelled a card
+// as `cardPadLeftPx + cardHeightPx + valueWidth` while the renderer built it
+// from six struts, sharing one term out of six — so every card reserved about
+// 25% more width than it drew, three to five times the minimum gap the metrics
+// table exists to tune. Both now read `cardStruts`; this pins that its parts
+// sum to what it reports, which is what stops them drifting apart again.
+console.log("\n  a card's width:");
+const bare = cardStruts(28, 22, 0);
+const val = cardStruts(28, 22, 12);
+console.log(`      bare ${bare.width.toFixed(2)}  ·  with a value ${val.width.toFixed(2)}`);
+ck("a bare card is its three visible struts",
+   Math.abs(bare.padl + bare.glyph + bare.padr - bare.width) < 1e-9);
+ck("a valued card is all six",
+   Math.abs(val.padl + val.glyph + val.valgap + val.value + val.valtail + val.padr
+            - val.width) < 1e-9);
+ck("a value makes the card wider", val.width > bare.width);
+ck("the value's own struts are reported even when nothing is shown",
+   bare.valgap > 0 && bare.valtail > 0);
+ck("  ...but do not count toward a bare card's width",
+   bare.width < bare.padl + bare.glyph + bare.padr + bare.valgap);
+ck("the left margin is short by the ink the icon insets",
+   bare.padl < bare.padr);
+ck("a taller card pads more", cardStruts(40, 22, 0).padr > bare.padr);
 
 /* ── the chip width model ──────────────────────────────────────────────── */
 console.log("\n  the chip width model:");

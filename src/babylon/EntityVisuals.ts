@@ -83,7 +83,7 @@ import {
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
   PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
   GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
-  SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE, CARD_VALUE_MARGIN_OF_ICON_PAD,
+  SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -126,7 +126,7 @@ import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
-  arrange, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
+  arrange, cardStruts, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
@@ -4279,12 +4279,15 @@ export class EntityVisuals {
       const glyphPx = this.glyphPxFor(card);
       // Half the card's leftover height: the same clear space on all four
       // sides of the chip, and it makes a bare-icon card square (see below).
-      const iconPadX = card ? (m.cardHeightPx - glyphPx) / 2 : 0;
-      /** The transparent margin `badgeImageDataUrl` bakes around the chip's
-       *  squircle, so the ink stops this far inside its own control. Both the
-       *  card's left padding and the value gap are measured against the INK,
-       *  not the control — see their two sites. */
-      const inkInset = card ? glyphPx * BADGE_INSET_CARD : 0;
+      // ⚠️ `iconPadX` AND `inkInset` ARE GONE FROM HERE. Both now live inside
+      // `cardStruts`, which is the whole point: the two expressions that
+      // computed a card's width shared one term out of six, and `tsc` reporting
+      // these as unused is the proof the second copy has no reader left.
+      // ⚠️ ONE OWNER FOR THE CARD'S WIDTH TERMS — see badgeCard.cardStruts.
+      // These four strut widths and the layout's estimate were two disjoint
+      // expressions until 2.496.28; they are the same six numbers now, so the
+      // solver cannot reserve a size the renderer does not draw.
+      const st = card ? cardStruts(m.cardHeightPx, glyphPx, 1) : null;
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -4441,7 +4444,7 @@ export class EntityVisuals {
         // Unrounded, like the two on the value's side (2.454.0): these are
         // PRE-scale CSS px and rounding 0.65 to 1 is a 35% error on the very
         // quantity the `visL/gap/visR` readout exists to make checkable.
-        row.addControl(strut("padl", iconPadX - inkInset));
+        row.addControl(strut("padl", st!.padl));
       }
       (row ?? badge).addControl(glyph);
 
@@ -4522,8 +4525,7 @@ export class EntityVisuals {
         // effectiveScale (3.2 on this capture), so rounding 3.375 to 3 is a
         // 1.2 render-px error on a 2 px quantity — and it lands on exactly the
         // equality the pin checks. The struts take fractional widths fine.
-        valueSpacer.width =
-          `${Math.max(0, CARD_VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset)}px`;
+        valueSpacer.width = `${st!.valgap}px`;
         valueSpacer.isVisible = false;
         row!.addControl(valueSpacer);
         row!.addControl(valueWrap);
@@ -4534,13 +4536,13 @@ export class EntityVisuals {
         // card. With a value: visR = this + padr = 1.5·iconPadX, which is the
         // visible gap on the other side of the text. Without one: it collapses
         // and the card is symmetric exactly as before.
-        valueTail = strut("valtail", (CARD_VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX);
+        valueTail = strut("valtail", st!.valtail);
         valueTail.isVisible = false;
         row!.addControl(valueTail);
         // The right margin proper, LAST in the row. It is the counterpart of
         // `padl` above and the reason the card no longer collects its padding
         // on one side. Always present.
-        row!.addControl(strut("padr", iconPadX));
+        row!.addControl(strut("padr", st!.padr));
       } else {
         valueWrap.height = `${m.valueChipHeightPx}px`;
         valueWrap.cornerRadius = m.valueChipHeightPx / 2;
@@ -6798,10 +6800,13 @@ export class EntityVisuals {
       boxes[i] = b;
       if (card) {
         const hasVal = s.lbl.valueWrap.isVisible;
-        const valW = hasVal
-          ? s.lbl.valueText.text.length * m.cardValueCharPx + m.cardValuePadPx
-          : 0;
-        const cardW = m.cardPadLeftPx + m.cardHeightPx + valW;
+        // ⚠️ THE RENDERER'S OWN STRUTS — see badgeCard.cardStruts. This read
+        // `cardPadLeftPx + cardHeightPx + valW`, which shares exactly one term
+        // with what `rebuildLabels` actually builds, and over-reserved about
+        // 10 CSS px per card: three to five times `minGapPx`, on the very
+        // estimate the gap constants are tuned against.
+        const valW = hasVal ? s.lbl.valueText.text.length * m.cardValueCharPx : 0;
+        const cardW = cardStruts(m.cardHeightPx, this.glyphPxFor(true), valW).width;
         b.halfW = (cardW / 2) * scale;
         b.halfH = (m.cardHeightPx / 2 + 1) * scale;
         // The card IS the container now, so its centre is the container's
