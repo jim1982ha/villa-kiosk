@@ -24,6 +24,13 @@ tests/*
 # refused the very next guard added beside it. A negation naming one file is a
 # negation somebody has to remember; naming the shape is one nobody does.
 !tests/*.py
+# ⚠️ AND THE DATA A GATE READS, NOT JUST THE GATE. `tests/forbidden-token-hashes.txt`
+# is what lets the villa-name check run on a build server at all, and it landed
+# here as a .txt — so `!tests/*.py` did not reach it, it was never committed,
+# and CI failed on three consecutive releases with the check correctly refusing
+# to pass without it. The lesson written three lines above, re-learned one
+# extension over.
+!tests/*.txt
 # Local scratch inside the tracked directories stays ignored.
 tests/oracles/*.log
 tests/**/node_modules/

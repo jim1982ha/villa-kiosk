@@ -1,3 +1,16 @@
+## 2.496.41
+
+### Fixed — the last four releases could not be published
+The check that keeps this property's name out of the published source needs a
+small data file to work from. That file was never actually added to the
+repository — the rule listing what may be added covers programs, and this is
+data — so on the build servers the check found nothing to work with and
+correctly refused to pass. Everything since 2.496.37 was held back.
+
+The file is included now, and the check was verified by running it the way a
+build server does, against a copy containing only what the servers receive.
+Releases 2.496.38 to 2.496.40 are all included here.
+
 ## 2.496.40
 
 ### Fixed — the new name check flagged sixteen files that were perfectly fine

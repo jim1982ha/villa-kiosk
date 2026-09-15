@@ -1,0 +1,28 @@
+# SHA-256 of each villa-specific token, lowercased and whitespace-normalised.
+#
+# ⚠️ TRACKED, AND LEAKS NOTHING. The plaintext list is gitignored, so on every CI
+# runner it does not exist, `token_file.exists()` was False by construction, and
+# the check printed SKIP and exited 0. The clause guarding the villa's own name
+# and hostname in a PUBLIC repository had never run anywhere but one laptop.
+#
+# ⚠️ ONLY WHOLE TOKENS ARE HASHED, NEVER A PART OF ONE. The first version also
+# hashed each word of a multi-word token that was 5+ characters, on the theory
+# that a distinctive part is worth catching. One of those parts is an ordinary
+# English word, and the guard flagged SIXTEEN innocent tracked files — README,
+# CameraController, Dashboard. A check that fires on clean code is worse than no
+# check, because the only way to make the build pass is to stop believing it.
+#
+# The joined forms are kept: a hostname or filename spells the same phrase
+# without spaces, and those are not words anyone writes by accident.
+#
+# hard-rules.py builds n-grams of consecutive words up to max-ngram and hashes
+# each, which is how a multi-word phrase is reachable at all.
+#
+# max-ngram: 3
+#
+# Regenerate after editing the plaintext list — see tests/hard-rules.py.
+1202d3cbe761181b54f016e06b637db9c79e1682172612a384f78e95caf9802a
+7bdbce7d8b634796d1adcdd56c863cc97fcaa8724a087cb85e41e2f52f62934f
+b71bf54a36832dcd32401106fe6497a3e8b0516e7d0fb70306ad72d2e73f7010
+d3e92369ed02d645f3b5292dc927765260e4288fabb0a7a889e8d21a528f9f86
+de4a768a99da36edb42dcab277eacb2b749732ee2d6b36636494e50acac42989
