@@ -23,7 +23,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { formatIdr } from "@/fm/fmEngine";
+import { formatMoney } from "@/fm/fmEngine";
 import type { FmTicket, FmTicketStatus } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import NotesField from "./NotesField";
@@ -141,7 +141,7 @@ export default function FaultStageModal({
                 </select>
               </label>
               <div className="fm-row-sub muted">
-                Records {formatIdr(amountIdr)} against this fault.
+                Records {formatMoney(amountIdr)} against this fault.
               </div>
             </>
           )}

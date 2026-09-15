@@ -454,7 +454,12 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
 
   const deviceTiles = useMemo(
     () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, villaDeviceSet),
-    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, villaDevices],
+    // ⚠️ villaDeviceSet, NOT villaDevices. This read `villaDevices` — the
+    // imported FUNCTION, a module constant that never changes — so the two
+    // inputs unique to the set above (mappedEntityIds, entityDeviceIds) could
+    // not invalidate the tiles. mappedEntityIds arrives late, when the GLB
+    // finishes loading, which is exactly the moment the counts must move.
+    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, villaDeviceSet],
   );
 
   // A scene spans categories — allow running one if the profile may control ANY.

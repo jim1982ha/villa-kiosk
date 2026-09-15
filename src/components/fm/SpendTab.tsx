@@ -13,9 +13,9 @@ import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { resolveSiteTitle } from "@/config/AppConfig";
 import { useFmData } from "@/fm/FmDataContext";
-import { budgetStatus, formatIdr, monthKey, localStamp } from "@/fm/fmEngine";
+import { budgetStatus, formatMoney, monthKey, localStamp } from "@/fm/fmEngine";
+import { MONEY_CURRENCY } from "@/fm/fmTypes";
 import { buildSpendStatement } from "@/fm/fmReport";
-import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
 import type { FmCost, FmSavedDocument } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import DeviceSearchPicker, { type DeviceOption } from "./DeviceSearchPicker";
@@ -120,9 +120,9 @@ export default function SpendTab(
 
       <div className={`fm-cap ${b.state}`}>
         <div className="fm-cap-head">
-          <strong>{formatIdr(b.minorIdr)}</strong>
+          <strong>{formatMoney(b.minorIdr)}</strong>
           <span className="muted">
-            {b.capIdr > 0 ? `of ${formatIdr(b.capIdr)} Minor Maintenance cap` : "Minor Maintenance spend (no cap configured)"}
+            {b.capIdr > 0 ? `of ${formatMoney(b.capIdr)} Minor Maintenance cap` : "Minor Maintenance spend (no cap configured)"}
           </span>
         </div>
         {b.capIdr > 0 && (
@@ -144,7 +144,7 @@ export default function SpendTab(
         )}
         {b.majorIdr > 0 && (
           <p className="fm-cap-note">
-            Plus {formatIdr(b.majorIdr)} recorded as Major maintenance (Owner&rsquo;s
+            Plus {formatMoney(b.majorIdr)} recorded as Major maintenance (Owner&rsquo;s
             account, outside the cap).
           </p>
         )}
@@ -185,7 +185,7 @@ export default function SpendTab(
             placeholder="e.g. Second refill this quarter — check for a leak"
           />
           <label className="fm-field">
-            <span>Amount (IDR)</span>
+            <span>Amount{MONEY_CURRENCY ? ` (${MONEY_CURRENCY})` : ""}</span>
             <input value={amount} inputMode="numeric"
               onChange={(e) => setAmount(e.target.value)} placeholder="450000" />
           </label>
@@ -199,7 +199,13 @@ export default function SpendTab(
 
           {category === "minor" && amountIdr > 0 && (
             <div className={`fm-banner ${projectedOver ? "warn" : ""}`}>
-              This month would become {formatIdr(projected)} of {formatIdr(MINOR_MAINTENANCE_CAP_IDR)}
+              {/* b.capIdr, NOT the raw constant — see fmEngine's budgetStatus, where
+                  capIdr <= 0 means "no cap configured yet" and every other line in
+                  this file already gates on it. This one did not, and the shipped
+                  default is 0, so an unconfigured install read "…would become
+                  IDR 450,000 of IDR 0" while projectedOver was correctly false —
+                  a number with no warning attached to it. */}
+              This month would become {formatMoney(projected)} of {formatMoney(b.capIdr)}
               {projectedOver && " — over the cap. Consider recording it as Major maintenance instead."}
             </div>
           )}
@@ -241,7 +247,7 @@ export default function SpendTab(
         {b.entries.sort((a, c) => Date.parse(c.at) - Date.parse(a.at)).map((c) => (
           <ErasableRow
             key={c.id}
-            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${formatIdr(c.amountIdr)}` }}
+            intent={{ title: "Erase this spend entry", detail: `${c.label} — ${formatMoney(c.amountIdr)}` }}
             erase={(token) => removeCost(c.id, token)}
             onOpen={() => openEditor(c)}
           >
@@ -272,7 +278,7 @@ export default function SpendTab(
                 </div>
               )}
             </div>
-            <span className="fm-amount">{formatIdr(c.amountIdr)}</span>
+            <span className="fm-amount">{formatMoney(c.amountIdr)}</span>
           </ErasableRow>
         ))}
       </div>

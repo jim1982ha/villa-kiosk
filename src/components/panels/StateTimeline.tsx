@@ -11,6 +11,12 @@
 import { useMemo, useState } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { fmtChartTime, fmtChartStamp } from "./chartUtils";
+// ⚠️ NOT A LOCAL COPY. This file carried its own `prettyState` — same two
+// operations, and already disagreeing with the owner on the empty string (it
+// returned the raw input, the owner returns ""). It feeds every tooltip in
+// every panel's history bar and the camera's status rail, so the drift would
+// have shown as one word spelled two ways on one screen.
+import { prettyState } from "@/utils/entityValue";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -121,11 +127,7 @@ function cellBackground(states: string[], colorFor: (s: string) => string): stri
   return `repeating-linear-gradient(45deg, ${stops})`;
 }
 
-/** Tidy a raw HA state for display: "not_home" → "Not home", "on" → "On". */
-function prettyState(s: string): string {
-  const t = s.replace(/_/g, " ").trim();
-  return t ? t[0].toUpperCase() + t.slice(1) : s;
-}
+
 
 export default function StateTimeline({
   data, hours, colorFor, height, legend, loading, vertical, bucketMinutes,

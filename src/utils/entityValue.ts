@@ -135,6 +135,40 @@ export function formatSensorValue(
   return p.unit ? `${p.value} ${p.unit}` : p.value;
 }
 
+/**
+ * The reading a DEVICE ROW writes beside its badge, in a list panel.
+ *
+ * ⚠️ THIS IS THE THIRD SURFACE, AND IT WAS THE ONE STILL DISAGREEING. The
+ * header above says this module was extracted because the badge and the panel
+ * spelled one reading two ways — and names SummaryGroupPanel. That file then
+ * imported `prettyState` and nothing else, so the ENUM half was unified while
+ * the numeric half stayed inline as `pretty(state) + " " + unit`: no scaling at
+ * all. The result was one row reading "6.6 kW" on its badge and "6570.989 W" in
+ * the text beside it, opened from a tile that also said 6.6 kW.
+ *
+ * Two things genuinely differ from the badge, and they are why this is its own
+ * case rather than a call to `compactValue`:
+ *   • A row has room, so it does NOT clamp and does NOT hide a nominal status —
+ *     the same two flags a tapped panel passes, for the same reason.
+ *   • A climate row shows CURRENT → TARGET, where the badge shows current
+ *     alone. A lone number with no label was reported as ambiguous ("is this
+ *     26° the room or the setpoint?"); the arrow keeps both in the space the
+ *     row already had for one.
+ * Everything else — scaling, unit hugging, enum tidying — is the shared rule.
+ */
+export function deviceRowText(s: HassEntity, domain: string): string {
+  if (isUnavailable(s)) return "Unavailable";
+  if (domain === "climate") {
+    const cur = s.attributes.current_temperature as number | null | undefined;
+    const target = s.attributes.temperature as number | null | undefined;
+    if (cur == null) return target == null ? "--" : `→ ${Math.round(target)}°`;
+    return target == null
+      ? `${Math.round(cur)}°`
+      : `${Math.round(cur)}° → ${Math.round(target)}°`;
+  }
+  return formatSensorValue(s);
+}
+
 /** Every type `compactValue` can EVER return non-empty text for.
  *
  *  ⚠️ IT LIVES HERE BECAUSE IT IS A FACT ABOUT THE SWITCH BELOW, and a reader

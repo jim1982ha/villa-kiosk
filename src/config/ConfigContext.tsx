@@ -4,7 +4,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
 } from "react";
-import { type AppConfig, loadConfig, saveConfig, resetConfig } from "./AppConfig";
+import { type AppConfig, loadConfig, saveConfig, resetConfig, normaliseConfig } from "./AppConfig";
 import { resolveEffectiveTheme } from "@/utils/themeTime";
 import { beginSpan } from "@/utils/perfSpans";
 
@@ -34,11 +34,21 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [resolvedRooms, setResolvedRooms] = useState<Record<string, string>>({});
 
   const update = useCallback((patch: Partial<AppConfig>) => {
-    setConfig((prev) => ({ ...prev, ...patch }));
+    // ⚠️ NORMALISE ONLY WHEN THE PATCH CARRIES ONE OF THE TWO MAPS IT CLEANS.
+    // This is the seam DeviceConfigSync's pull arrives through — see
+    // normaliseConfig for why a server patch needs the same migrations a
+    // localStorage read gets. It is NOT run unconditionally: update() fires on
+    // every keystroke in Advanced Settings, and the migrations walk the whole
+    // entityMap. A patch that carries neither map cannot dirty either one.
+    const touchesMaps = patch.entityMap !== undefined || patch.meshBindings !== undefined;
+    setConfig((prev) => {
+      const next = { ...prev, ...patch };
+      return touchesMaps ? normaliseConfig(next) : next;
+    });
   }, []);
 
   const replace = useCallback((next: AppConfig) => {
-    setConfig(next);
+    setConfig(normaliseConfig(next));
   }, []);
 
   const reset = useCallback(() => {

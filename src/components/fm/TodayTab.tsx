@@ -9,9 +9,9 @@
 import { useState } from "react";
 import { Check, CalendarClock, Trash2 } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { formatIdr, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
-import { MINOR_MAINTENANCE_CAP_IDR } from "@/fm/fmTypes";
+import { formatMoney, isTicketOpen, localStamp, scheduleBoard, shortDate, type ScheduleStatus } from "@/fm/fmEngine";
 import { budgetStatus, wouldExceedCap } from "@/fm/fmEngine";
+import { MONEY_CURRENCY } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
@@ -81,7 +81,13 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
           <span className="l">open faults</span>
         </div>
         <div className="fm-stat">
-          <span className="n">{formatIdr(budgetStatus(data.costs).minorIdr).replace("IDR ", "")}</span>
+          <span className="n">{/* A bare figure by design — this stat reads as a number under the
+              words "spent this month". It got there via
+              formatMoney(...).replace("IDR ", ""), stripping the prefix by
+              matching the literal the formatter used to hardcode: correct
+              exactly while the currency could never be anything else, and
+              silently wrong the moment it can. Asking for none says it. */}
+          {formatMoney(budgetStatus(data.costs).minorIdr, "")}</span>
           <span className="l">spent this month</span>
         </div>
       </div>
@@ -162,7 +168,7 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 
 /** The completion form. Cost is optional and defaults to Minor — but the moment
  *  it would take the month past the configured Minor Maintenance cap (see
- *  fmTypes.ts's MINOR_MAINTENANCE_CAP_IDR), the operator is told BEFORE
+ *  fmEngine's budgetStatus().capIdr), the operator is told BEFORE
  *  saving, because that is when the minor-vs-major decision is still theirs
  *  to make. No-op with no cap configured — wouldExceedCap is never true then. */
 function LogCompletion({
@@ -205,14 +211,14 @@ function LogCompletion({
       />
 
       <label className="fm-field">
-        <span>Cost (optional, IDR)</span>
+        <span>Cost (optional{MONEY_CURRENCY ? `, ${MONEY_CURRENCY}` : ""})</span>
         <input value={amount} inputMode="numeric"
           onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 450000" />
       </label>
 
       {willExceed && (
         <div className="fm-banner warn">
-          This takes the month past the {formatIdr(MINOR_MAINTENANCE_CAP_IDR)} Minor
+          This takes the month past the {formatMoney(budgetStatus(data.costs).capIdr)} Minor
           Maintenance cap. Spend beyond it is Major maintenance — record it as that
           category instead if that's what your own agreement calls for.
         </div>

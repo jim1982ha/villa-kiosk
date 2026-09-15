@@ -98,7 +98,7 @@ import {
 import { clampIconScale } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
+import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
 import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
 import { badgeKindFor, badgeFaceAndRing, type DeviceReading } from "@/utils/deviceActivity";
@@ -2402,7 +2402,9 @@ export class EntityVisuals {
     // Also flag any entity whose id STILL carries a "__<variant>" suffix — a
     // sign normalisation didn't collapse it onto its base (stale config, or a
     // mesh-name mangling stripExportArtifacts didn't catch).
-    const orphanIds = Array.from(this.byEntity.keys()).filter((id) => /__[a-z0-9]+$/i.test(id));
+    // hasVariantSuffix, not a local regex: the authority strips export
+    // artifacts first, so a Blender-duplicated "…__open.001" counts here too.
+    const orphanIds = Array.from(this.byEntity.keys()).filter(hasVariantSuffix);
     if (variantSummary.length || orphanIds.length) {
       tapDebug(
         `mesh variant groups:\n  ${variantSummary.join("\n  ") || "(none)"}`

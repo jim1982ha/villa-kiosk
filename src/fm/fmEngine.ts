@@ -9,6 +9,7 @@
 
 import {
   MINOR_MAINTENANCE_CAP_IDR,
+  MONEY_CURRENCY,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket,
 } from "./fmTypes";
 
@@ -236,8 +237,18 @@ export function localStamp(at: string | number | Date = Date.now()): string {
     + `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function formatIdr(n: number): string {
-  return `IDR ${Math.round(n).toLocaleString("en-US")}`;
+/** Write a money amount for display.
+ *
+ *  ⚠️ NEITHER THE CURRENCY NOR THE GROUPING IS BAKED IN ANY MORE. This was
+ *  `IDR ${n.toLocaleString("en-US")}` — one site's currency and one country's
+ *  digit grouping, in a redistributable add-on, applied to every install.
+ *  `MONEY_CURRENCY` is empty by default, so an unconfigured install prints the
+ *  number alone rather than mislabelling it; `[]` hands the grouping to the
+ *  viewer's own locale, which is what a reader in front of the screen expects.
+ *  The rounding is unchanged — these are whole-unit amounts by contract. */
+export function formatMoney(n: number, currency: string = MONEY_CURRENCY): string {
+  const amount = Math.round(n).toLocaleString([]);
+  return currency ? `${currency} ${amount}` : amount;
 }
 
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date

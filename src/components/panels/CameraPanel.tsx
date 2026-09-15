@@ -674,7 +674,14 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         // only teardown on this path.
         hlsInstanceRef.current.destroy();
         hlsInstanceRef.current = null;
-        usingHlsJsRef.current = false;
+        // ⚠️ usingHlsJsRef IS DELIBERATELY NOT CLEARED HERE. destroy() above
+        // triggers a native <video> error that arrives ASYNCHRONOUSLY, and the
+        // onError guard reads this ref to tell "our own teardown" from "the
+        // native path actually failed". Clearing it synchronously made that
+        // guard see false and fire fallBackToStream for a stream that never
+        // failed — so cycling cameras silently dropped the next one to MJPEG
+        // and logged "HLS unavailable" for it. The ref's own docstring already
+        // says it is never reset once set; this line used to contradict it.
       } else {
         // Native HLS — we set video.src ourselves, so we clear it too.
         video.removeAttribute("src");

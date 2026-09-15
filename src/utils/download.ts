@@ -47,14 +47,3 @@ export function downloadFile(
     URL.revokeObjectURL(url);
   }
 }
-
-/** A name safe to put in a filename: lower-case, spaces to hyphens.
- *
- *  ⚠️ IT WAS WRITTEN TWICE, in `SpendTab` and `ReportTab`, both times as
- *  `villaName.replace(/\s+/g, "-").toLowerCase()` — a villa called "Villa Del
- *  Mar" becoming `villa-del-mar`. Two is where a third becomes likely, and it
- *  belongs beside the function whose argument it feeds.
- */
-export function filenameSlug(name: string): string {
-  return String(name || "").trim().replace(/\s+/g, "-").toLowerCase();
-}

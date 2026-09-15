@@ -11,6 +11,7 @@
 // performance clauses exist to protect, whatever they happen to say.
 
 import type { HassEntity } from "@/types/ha.types";
+import { OFF_STATES } from "@/utils/entityState";
 import { isUnavailable } from "@/utils/stateColors";
 import type { VillaDevices } from "@/config/deviceGroups";
 import { isTicketOpen, scheduleStatus } from "./fmEngine";
@@ -36,7 +37,12 @@ export interface ReadinessReport {
   overall: CheckState;
 }
 
-const OFF_LIKE = new Set(["off", "unavailable", "unknown", ""]);
+// ⚠️ OFF_STATES, not a fourth copy. This was `new Set(["off", "unavailable",
+// "unknown", ""])` — byte-identical to entityState's, which is the set every
+// other surface counts "on" against. A readiness check that disagreed with the
+// HUD about what "off" means would put a number in the owner's report that no
+// screen backs up.
+const OFF_LIKE = OFF_STATES;
 
 /**
  * Build the readiness checks.

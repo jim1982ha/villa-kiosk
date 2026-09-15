@@ -15,7 +15,7 @@
 // archived as plain text years later for a dispute.
 
 import {
-  budgetStatus, completionsInMonth, formatIdr, monthKey, scheduleStatus, shortDate, ticketStats,
+  budgetStatus, completionsInMonth, formatMoney, monthKey, scheduleStatus, shortDate, ticketStats,
 } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 import type { ReadinessReport } from "./readiness";
@@ -104,10 +104,10 @@ export function buildMonthlyReport(input: ReportInput): string {
   // ── 2. Maintenance spend ──────────────────────────────────────────────────
   const b = budgetStatus(fm.costs, month);
   L.push(`## 2. Maintenance spend`);
-  L.push(`- **Minor Maintenance this month:** ${formatIdr(b.minorIdr)} of the `
-    + `${formatIdr(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
+  L.push(`- **Minor Maintenance this month:** ${formatMoney(b.minorIdr)} of the `
+    + `${formatMoney(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
   if (b.majorIdr > 0) {
-    L.push(`- **Major maintenance (Owner's account):** ${formatIdr(b.majorIdr)}`);
+    L.push(`- **Major maintenance (Owner's account):** ${formatMoney(b.majorIdr)}`);
   }
   if (b.state === "exceeded") {
     L.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
@@ -119,7 +119,7 @@ export function buildMonthlyReport(input: ReportInput): string {
     L.push(`|---|---|---|---|`);
     for (const c of b.entries.sort((x, y) => Date.parse(x.at) - Date.parse(y.at))) {
       L.push(`| ${shortDate(c.at)} | ${c.label.replace(/\|/g, "/")} `
-        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatIdr(c.amountIdr)} |`);
+        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatMoney(c.amountIdr)} |`);
     }
     L.push("");
   }
@@ -192,10 +192,10 @@ export function buildSpendStatement(fm: FmData, month: string, villaName: string
     "maintenance spend against the configured Minor Maintenance cap.",
   ));
 
-  L.push(`- **Minor Maintenance this month:** ${formatIdr(b.minorIdr)} of the `
-    + `${formatIdr(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
+  L.push(`- **Minor Maintenance this month:** ${formatMoney(b.minorIdr)} of the `
+    + `${formatMoney(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
   if (b.majorIdr > 0) {
-    L.push(`- **Major maintenance (Owner's account):** ${formatIdr(b.majorIdr)}`);
+    L.push(`- **Major maintenance (Owner's account):** ${formatMoney(b.majorIdr)}`);
   }
   if (b.state === "exceeded") {
     L.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
@@ -208,7 +208,7 @@ export function buildSpendStatement(fm: FmData, month: string, villaName: string
     L.push(`|---|---|---|---|`);
     for (const c of b.entries.sort((x, y) => Date.parse(x.at) - Date.parse(y.at))) {
       L.push(`| ${shortDate(c.at)} | ${c.label.replace(/\|/g, "/")} `
-        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatIdr(c.amountIdr)} |`);
+        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatMoney(c.amountIdr)} |`);
     }
   } else {
     L.push(`_No spend recorded in this period._`);

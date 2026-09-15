@@ -804,7 +804,6 @@ export default function Dashboard() {
       <HUD
         currentFloor={currentFloor}
         floorsAvailable={floorsAvailable}
-        onSwitchFloor={onFloorChange}
         onShowFloor={handleShowFloor}
         onOpenTeleport={() => setTeleportOpen(true)}
         onNavigateRoom={handleTeleport}

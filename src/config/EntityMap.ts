@@ -242,15 +242,16 @@ export function resolveEntityFloor(
   return geometricFloor;
 }
 
-/** Passthrough kept for its call sites. Categories are no longer pinned onto a
- *  mapping — they're derived from device type + device_class at read time (see
- *  effectiveCategory / EntityCategories.ts), so a mapping's `category` is left
- *  as-is: undefined for auto devices, set only when the user picked one. */
-function withCategory(m: EntityMapping): EntityMapping {
-  return m;
-}
 
-/** Build a usable EntityMapping for an entity_id, falling back to inference. */
+/** Build a usable EntityMapping for an entity_id, falling back to inference.
+ *
+ *  A mapping's `category` is left exactly as stored — undefined for an auto
+ *  device, set only when the user picked one — because categories are DERIVED
+ *  at read time from device type + device_class (see effectiveCategory in
+ *  EntityCategories.ts) rather than pinned on here. That fact used to be
+ *  carried by a `withCategory()` wrapper around all five returns below whose
+ *  whole body was `return m`; the note survives, the identity function does
+ *  not. */
 export function mappingForEntityId(
   entityId: string,
   map: Record<string, EntityMapping>,
@@ -265,9 +266,9 @@ export function mappingForEntityId(
       !entityId.startsWith("binary_sensor.")
     ) {
       const upgraded = inferTypeFromEntityId(entityId);
-      if (upgraded) return withCategory({ ...m, type: upgraded });
+      if (upgraded) return { ...m, type: upgraded };
     }
-    return withCategory(m);
+    return m;
   }
   const inferred = inferTypeFromEntityId(entityId);
   if (!inferred) return null;
@@ -345,6 +346,21 @@ export function normaliseMeshName(meshName: string): string {
  * hidden by state. A villa that never uses this convention is completely
  * unaffected by it.
  */
+/** Does this name carry a "__<variant>" suffix? The yes/no form of
+ *  {@link extractVariantSuffix}, and the ONLY one anything outside this file
+ *  should ask.
+ *
+ *  ⚠️ IT EXISTS BECAUSE TWO CALLERS HAND-WROTE THE REGEX. AppConfig's stale-
+ *  variant migration and EntityVisuals' orphan sweep each tested
+ *  `/__[a-z0-9]+$/i` directly — and both therefore skipped the
+ *  `stripExportArtifacts` pass this file applies first, so a Blender-duplicated
+ *  `cover.x__open.001` was a variant to the authority and NOT a variant to
+ *  either of them. The looping-strip fix that made that work was live in one of
+ *  the three copies. */
+export function hasVariantSuffix(name: string): boolean {
+  return extractVariantSuffix(name) !== null;
+}
+
 export function extractVariantSuffix(meshName: string): string | null {
   const m = /__([a-z0-9]+)$/i.exec(stripExportArtifacts(meshName));
   return m ? m[1].toLowerCase() : null;
@@ -393,17 +409,17 @@ function resolveMeshUnchecked(
   if (boundId) return mappingForEntityId(boundId, map);
 
   // 1) Exact entity_id match (mesh named with the entity_id).
-  if (map[base]) return withCategory(map[base]);
+  if (map[base]) return map[base];
 
   // 2) Spec alias "[type]_[room]".
-  if (MESH_ALIASES[base] && map[MESH_ALIASES[base]]) return withCategory(map[MESH_ALIASES[base]]);
+  if (MESH_ALIASES[base] && map[MESH_ALIASES[base]]) return map[MESH_ALIASES[base]];
 
   // 3) Sanitised form: some exporters turn "camera.livingroom_cam" into
   //    "camera_livingroom_cam". Re-insert the first underscore as a dot.
   const firstUnderscore = base.indexOf("_");
   if (firstUnderscore > 0) {
     const candidate = base.slice(0, firstUnderscore) + "." + base.slice(firstUnderscore + 1);
-    if (map[candidate]) return withCategory(map[candidate]);
+    if (map[candidate]) return map[candidate];
   }
 
   // 4) Looks like an entity_id we simply don't have metadata for yet — build a

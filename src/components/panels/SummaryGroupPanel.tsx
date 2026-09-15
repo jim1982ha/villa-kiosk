@@ -9,7 +9,7 @@
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
 import { useState, type ComponentType } from "react";
-import { prettyState } from "@/utils/entityValue";
+import { deviceRowText } from "@/utils/entityValue";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
@@ -24,10 +24,9 @@ import { iconKeyFor } from "@/babylon/badgeIconKeys";
 import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
 import { alertStateFor } from "@/config/BinarySensorClasses";
-import { switchPosition } from "@/utils/entityState";
+import { isOn, switchPosition } from "@/utils/entityState";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
@@ -76,14 +75,14 @@ interface Props {
   roomScenes?: HaSceneInfo[];
 }
 
-const OFF = new Set(["off", "unavailable", "unknown", ""]);
-
-// ⚠️ THE SECOND PRETTIFIER IS GONE. This capitalised first and replaced
-// underscores after; `entityValue.prettyState` does it the other way round.
-// They agree on every state either has been shown, and disagree on one
-// beginning with an underscore — which is the kind of difference nobody finds
-// until a reader reports two spellings of one word.
-const pretty = prettyState;
+// ⚠️ THE SECOND PRETTIFIER AND THE SECOND OFF-SET ARE BOTH GONE. The prettifier
+// capitalised first and replaced underscores after, where `entityValue`'s does
+// it the other way round — they disagreed on a state beginning with an
+// underscore. The off-set was a byte-identical copy of `entityState.OFF_STATES`
+// in a file that already imported from that very module; `isOn` is the same
+// question asked of the owner. Both are the defect this repo has now produced
+// three times: a rule copied beside the module that owns it, where nothing can
+// see the two drift apart.
 
 /** Bucket a list of entities by their resolved room (ConfigContext's
  *  resolvedRooms — HA's own Area assignment, falling back to GLB geometric
@@ -181,7 +180,7 @@ export default function SummaryGroupPanel({
   // and the row could never reflect it either way.
   const toggleables = [...onMap, ...offMap]
     .filter((e) => TOGGLEABLE_DOMAINS.has(e.entity_id.split(".")[0]));
-  const anyOn = toggleables.some((e) => !OFF.has(e.state));
+  const anyOn = toggleables.some(isOn);
 
   const typeOf = (id: string): EntityType =>
     (config.entityMap[id]?.type ?? inferTypeFromEntityId(id) ?? "sensor");
@@ -306,22 +305,11 @@ export default function SummaryGroupPanel({
     const type = typeOf(id);
     const cat: Category = effectiveCategory(subjectOf(id, config.entityMap[id], e, type));
     const label = entityLabel(id);
-    const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
-    const curTemp = e.attributes.current_temperature as number | null | undefined;
-    const targetTemp = e.attributes.temperature as number | null | undefined;
-    // Current AND target, not current alone — the bottom summary bar's own
-    // "AC" tile only ever shows a real current-temperature average (never a
-    // target substituted in its place, see SummaryBar.tsx), and a lone
-    // number here with no label reads exactly as ambiguously: reported as
-    // "is this 26° the room or the setpoint?". "→" keeps both in the same
-    // compact space this row already had for one.
-    const stateText = isUnavailable(e)
-      ? "Unavailable"
-      : domain === "climate"
-        ? (curTemp == null
-            ? (targetTemp == null ? "--" : `→ ${Math.round(targetTemp)}°`)
-            : (targetTemp == null ? `${Math.round(curTemp)}°` : `${Math.round(curTemp)}° → ${Math.round(targetTemp)}°`))
-        : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
+    // ⚠️ ONE OWNER, AND THIS ROW USED NOT TO USE IT. This was written out here
+    // as `pretty(state) + " " + unit` — no scaling — so the row printed
+    // "6570.989 W" beside a badge that said "6.6 kW". The climate arrow and the
+    // room-vs-setpoint reasoning moved with it; see deviceRowText.
+    const stateText = deviceRowText(e, domain);
 
     const isLock = domain === "lock";
     // `rowInHa` gates every CONTROL on the row. A phantom is rendered so the
