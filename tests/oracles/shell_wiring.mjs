@@ -12,6 +12,7 @@
 // Each assertion names the defect it prevents, so a future reader deleting one
 // knows exactly what comes back.
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 const ROOT = new URL("../../", import.meta.url).pathname;
 const read = (f) => readFileSync(ROOT + f, "utf8");
@@ -104,11 +105,22 @@ for (const f of screens) {
   eq(`${f.split("/").pop()} reads budgetStatus().capIdr`,
      /MINOR_MAINTENANCE_CAP_IDR/.test(code(f)), false);
 }
-const ENG = code("src/fm/fmEngine.ts");
-eq("and the currency is not baked into the formatter",
-   /`IDR \$\{/.test(ENG), false);
-eq("...nor is a grouping locale",
-   /toLocaleString\("en-[A-Z]{2}"\)/.test(ENG), false);
+// ⚠️ THE WHOLE OF src/fm/, NOT THE ONE FILE THE LAST DEFECT WAS IN. This read
+// only fmEngine.ts and matched only `toLocaleString(` — so fmReport.ts's
+// `toLocaleDateString("en-GB")` and `toLocaleString("en-GB")`, in the file that
+// writes the owner's report, were outside the ban on both counts. hard-rules.py
+// names this exact failure in its own header: "a guard scoped to where the last
+// defect was found, rather than to everything the rule applies to".
+const FM = execFileSync("git", ["ls-files", "src/fm", "src/components/fm"],
+                        { encoding: "utf8", cwd: ROOT })
+  .split("\n").filter((f) => f.endsWith(".ts") || f.endsWith(".tsx"));
+eq("the fm scan found files", FM.length > 5, true);
+const baked = FM.filter((f) => {
+  const c = code(f);
+  return /`IDR \$\{/.test(c) || /toLocale(?:Date|Time)?String\(\s*"[a-z]{2}-[A-Z]{2}"/.test(c);
+});
+eq("no currency or locale is baked into any money or date the owner reads",
+   baked.length ? baked : "none", "none");
 // SpendTab printed "of IDR 0" on an unconfigured install: it read the raw
 // constant where every neighbouring line reads b.capIdr and gates on > 0.
 

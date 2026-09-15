@@ -1,3 +1,41 @@
+## 2.496.37
+
+### Fixed — the report could call an unread maintenance record "on schedule"
+A scheduled task whose last completion date could not be read was reported as
+on schedule. Every comparison against an unreadable date is false, so the task
+fell past "overdue" and past "due soon" and landed on compliant — the one
+direction a facility report must never fail in. Such a record now reads as
+never recorded.
+
+### Fixed — "0 of the 0 monthly cap" in the owner's documents
+Both the facility report and the maintenance spend statement printed the
+Minor Maintenance cap even when no cap has been set, so an unconfigured villa
+read "0 of the 0 monthly cap (0%)". They now say there is no cap configured.
+The two documents were carrying their own copies of these lines; they share one
+now, so they cannot describe one month's money two ways.
+
+### Fixed — "mean time to resolution" could cover fewer faults than it named
+A fault marked resolved without a usable resolution time counts in the resolved
+total and cannot count toward the average. The report could show twenty resolved
+alongside an average drawn from three, with nothing saying so. It now says how
+many the average covers whenever that differs.
+
+### Fixed — dates and money in the report assumed one country
+Dates were written in a fixed British format and money in a fixed currency with
+American digit grouping. Dates now follow the reader's own device, and the
+"Generated" stamp uses an unambiguous fixed form suitable for an archived
+document.
+
+### Fixed — a villa could only ever have two floors
+The floor number was a type that permitted only 1 or 2, and a third storey read
+from the model was quietly filed under the second. The model's own answer is
+used now. This is the third place that assumption was found.
+
+### Changed — the guest A/C range is no longer a fixed comfort band
+Guests were offered a temperature range fixed at 22–28°, one villa's comfort
+band applied to every installation. The A/C controls now use the limits the
+device itself reports until a range is configured.
+
 ## 2.496.36
 
 ### Fixed — the update dialog described a release five versions old

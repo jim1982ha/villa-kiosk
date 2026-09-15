@@ -148,7 +148,9 @@ export interface AppConfig {
    */
   northOffsetDeg: number;
   theme: "dark" | "light" | "auto" | "night";
-  currentFloor: 1 | 2;
+  /** The storey being shown. 1-based; see TeleportPoint.floor for why this
+   *  is not a two-value union. */
+  currentFloor: number;
   /** entity_id -> metadata (panel type, label, room). Editable at runtime. */
   entityMap: Record<string, EntityMapping>;
   /**

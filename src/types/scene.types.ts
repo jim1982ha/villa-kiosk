@@ -104,7 +104,17 @@ export interface Vec3 {
 
 export interface TeleportPoint {
   name: string;
-  floor: 1 | 2;
+  /** 1-based storey index — 1 is the ground floor.
+   *
+   *  ⚠️ NOT `1 | 2`. It was, and SceneManager clamped a third storey down onto
+   *  the second to satisfy it, under a comment calling a third floor
+   *  "hypothetical". In a redistributable add-on it is not hypothetical, it is
+   *  the first hard rule: no villa dimension ships. The GLB parser has always
+   *  read the honest type (sh3dParser's `floor: number`), so the pipeline read
+   *  N storeys and this union threw away everything past two. Third instance of
+   *  the same assumption found in one day — HUD's `[1, 2]` and FloorManager's
+   *  FLOOR_SPLIT_Y were the others. */
+  floor: number;
   /** FIRST-PERSON teleport destination (a standing pose). The bird's-eye
    *  framing is NOT stored: it's derived per room from the floor plan's own
    *  footprint on arrival — see SceneManager.computeRoomOverviewPose. There

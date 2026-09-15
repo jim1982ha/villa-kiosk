@@ -83,10 +83,22 @@ eq("nobody re-implements prettyState inline",
 
 console.log("\n  the device row asks the owner, it does not spell a reading:");
 const SGP = src.get("src/components/panels/SummaryGroupPanel.tsx") ?? "";
-eq("SummaryGroupPanel imports deviceRowText",
-   /import \{[^}]*\bdeviceRowText\b[^}]*\} from "@\/utils\/entityValue"/.test(SGP), true);
-eq("...and no longer pastes a raw state beside a raw unit",
-   /\$\{unit \? ` \$\{unit\}` : ""\}/.test(SGP), false);
+// ⚠️ CALL SITES, NOT THE IMPORT LINE — AND THIS FILE GOT IT WRONG FIRST.
+// The pin here was `/import \{...deviceRowText...\}/`, which survives deleting
+// every call: the import stays (a comment beside it names the function too),
+// the row goes back to pasting a raw state, and this line stays green. Its own
+// sibling entity_value.mjs had already learned to count — "the badge has call
+// sites for it" — and the file documenting that lesson committed the defect one
+// directory over, the same day.
+const sgpCode = SGP.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+eq("SummaryGroupPanel calls deviceRowText, not just imports it",
+   (sgpCode.match(/(?<!\.)\bdeviceRowText\(/g) ?? []).length >= 1, true);
+eq("...and it is the module's, not a local redeclaration",
+   /(?:function|const)\s+deviceRowText\b/.test(sgpCode), false);
+// An exact-literal absence pin is unmatchable after any whitespace edit, so
+// this asks the question by SHAPE: a unit appended to a state, however spaced.
+eq("...and no raw state is pasted beside a raw unit anywhere in the file",
+   /\$\{\s*unit\s*\?/.test(sgpCode), false);
 
 console.log("\n  what the row actually writes:");
 const E = (state, unit, attrs = {}) => ({

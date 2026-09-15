@@ -2048,7 +2048,7 @@ export class SceneManager {
    * Structure geometry contains the baked stairs, which is what floorProbe uses
    * and for the same reason.
    */
-  private standable(x: number, z: number, floor: 1 | 2): boolean {
+  private standable(x: number, z: number, floor: number): boolean {
     const floorY = this.estimateFloorY(x, z, floor);
     // ⚠️ NO GLOBAL "IS THIS THE LOWEST FLOOR IN THE VILLA" TEST HERE (2.463.0).
     // It was here, and it rejected the Living Room and Bedroom 1 outright, which
@@ -3160,9 +3160,10 @@ export class SceneManager {
     const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
     for (const room of rooms) {
       const pts = room.points.map((p) => planToWorld(p.x, p.y));
-      // TeleportPoint.floor (and the rest of the app) only models two
-      // storeys — clamp rather than widen that union for a hypothetical 3rd.
-      const floor: 1 | 2 = (room.floor ?? 1) >= 2 ? 2 : 1;
+      // The storey the plan actually recorded. This used to be
+      // `(room.floor ?? 1) >= 2 ? 2 : 1` — a clamp onto a `1 | 2` union, so a
+      // three-storey villa had its top floor's rooms filed under the second.
+      const floor = room.floor ?? 1;
       const c = polygonCentroid(room.points);
       const wc = planToWorld(c.x, c.y);
       const floorY = this.estimateFloorY(wc.x, wc.z, floor);
