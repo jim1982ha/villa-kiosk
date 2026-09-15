@@ -1,3 +1,15 @@
+## 2.496.42
+
+### Fixed — the add-on image would not build
+A safety check added in 2.496.39 runs as part of building the app. The list of
+files excluded when packaging the add-on left that check out, so building the
+image failed on a missing file — the check meant to protect the build was
+stopping it instead.
+
+The checks the build runs are included in the package now, verified by building
+the image. They add nothing to what is installed. Releases 2.496.38 to 2.496.41
+are all included here.
+
 ## 2.496.41
 
 ### Fixed — the last four releases could not be published

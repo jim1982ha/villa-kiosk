@@ -13,6 +13,16 @@ villa-kiosk
 MODEL_PIPELINE.md
 CLAUDE.md
 tests
+# ⚠️ EXCEPT THE GATES `npm run build` ITSELF RUNS. `prebuild` runs the service
+# worker's lifecycle oracle, because a throw from a vite plugin hook is
+# swallowed by this bundler and the only place a non-zero exit is honoured is a
+# script. Excluding all of tests/ therefore made `RUN npm run build` fail inside
+# the image with the file simply absent — a gate added to protect the build,
+# breaking it. They are tiny, they never reach the final image (only /app/dist
+# is copied out of the build stage), and keeping them here means the image is
+# built by the same command, with the same checks, that a developer runs.
+!tests/oracles
+!tests/consistency
 
 # Model pipeline working files (source GLBs, SweetHome exports, Blender
 # intermediates) — 1.6GB+ locally, gitignored, and never read by the
