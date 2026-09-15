@@ -1,3 +1,15 @@
+## 2.496.43
+
+### Changed — releases are checked the way the build servers check them
+Five releases in a row were held back by checks that passed here and failed on
+the build servers. Nothing was ever wrong with the villa itself — each time it
+was a check being verified in the wrong place.
+
+There is now a single command that reproduces what the servers do: it takes only
+the files actually published, runs every check exactly as they run it, and
+builds the add-on image for real. It is run before every release. Replaying all
+seven of the past failures against it, each one is caught.
+
 ## 2.496.42
 
 ### Fixed — the add-on image would not build
