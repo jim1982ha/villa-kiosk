@@ -1,3 +1,21 @@
+## 2.496.44
+
+### Fixed — badges overlapping, and one drawn behind another
+Badges kept apart correctly near the middle of the plan could still overlap
+towards the far side, with one partly hidden behind its neighbour.
+
+The spacing is worked out on a flat map of the villa at a single scale, while
+the picture you see is a perspective view where anything further away is drawn
+smaller. Two badges far from the camera are therefore drawn closer together
+than the spacing calculation expected, and it let them touch. The further away,
+the worse: at the far end of a villa a pair judged to be just clear could
+overlap by about a fifth of a badge.
+
+Each badge now asks for exactly the extra room its own distance will cost it.
+Badges near the camera are unaffected, so nothing groups together earlier than
+it used to — which is what the previous attempt at this, years ago, got wrong
+and had to be removed.
+
 ## 2.496.43
 
 ### Changed — releases are checked the way the build servers check them

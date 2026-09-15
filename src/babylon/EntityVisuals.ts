@@ -1155,7 +1155,7 @@ export class EntityVisuals {
   private camForward = new Vector3();
   /** Scratch for projectToView. Reused because it runs once per badge per
    *  layout pass and per rung of solveRoomZoomRadius's ~40-rung ladder. */
-  private projPlane: ProjectedPoint = { px: 0, py: 0, pz: 0 };
+  private projPlane: ProjectedPoint = { px: 0, py: 0, pz: 0, pd: 0 };
 
   /** Something that can change WHERE or WHETHER a badge draws has happened —
    *  recompute the layout on the next frame. Cheap and deliberately generous:
@@ -3338,7 +3338,7 @@ export class EntityVisuals {
     // have to survive the whole rung walk. This runs once per tap, so the
     // allocation is not on any hot path.
     const plane = members.map(
-      (mm) => projectToView(basis, mm.wx, mm.wy, mm.wz, { px: 0, py: 0, pz: 0 }));
+      (mm) => projectToView(basis, mm.wx, mm.wy, mm.wz, { px: 0, py: 0, pz: 0, pd: 0 }));
     const items: PlacementItem[] = members.map(() => ({
       sx: 0, sy: 0, sz: 0,
       // rank/sortKey/category/room are unused by markContacts (it is a
@@ -3360,7 +3360,7 @@ export class EntityVisuals {
     // tested separately here.
     const framePlane = members.map((m) =>
       projectToView(view.frame, m.wx - view.cx, m.wy - view.cy, m.wz - view.cz,
-        { px: 0, py: 0, pz: 0 }));
+        { px: 0, py: 0, pz: 0, pd: 0 }));
     const mine: number[] = [];
     for (let i = 0; i < n; i++) if (members[i].mine) mine.push(i);
 
@@ -5976,7 +5976,8 @@ export class EntityVisuals {
    */
   private screenClearance(
     shown: ShownLabel[],
-  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis } | null {
+  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
+       refDepth: number } | null {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
@@ -5997,6 +5998,7 @@ export class EntityVisuals {
       minSep: this.metrics.minCentrePitchPx * this.cssToGui() * shrink,
       allow: 1 - GROUP_OVERLAP_ALLOW_WIDTHS,
       basis: this.currentViewBasis(),
+      refDepth: this.rungReferenceDepth(pxPerWorld),
     };
   }
 
@@ -6030,7 +6032,7 @@ export class EntityVisuals {
   private placementItems(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis },
+    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number },
   ): PlacementItem[] {
     const pool = this.placeItems;
     const focus = this.focusedRooms;
@@ -6046,8 +6048,35 @@ export class EntityVisuals {
       projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
       s.sx = p.px * k; s.sy = p.py * k + boxes[i].cy; s.sz = p.pz * k;
       it.sx = s.sx; it.sy = s.sy; it.sz = s.sz;
-      it.reach = boxes[i].halfW * clearance.allow;
-      it.reachY = boxes[i].halfH * clearance.allow;
+      // ── THE DEPTH CORRECTION ──────────────────────────────────────────
+      // Placement measures on an orthographic plane at ONE pixels-per-world
+      // for the whole scene; the renderer divides every drawn thing by its OWN
+      // depth. So two badges further from the camera than the rung's reference
+      // depth DRAW CLOSER TOGETHER than the plane predicted, by the ratio of
+      // those depths — and the solver, believing them clear, lets them overlap.
+      // Reported as badges sitting on top of one another on the far side of
+      // the villa, which is exactly where the ratio is largest.
+      //
+      // Measured before it was changed: a pair the solver judged EXACTLY
+      // touching overlaps by 9% of a badge width 8 m beyond the reference
+      // depth, 14% at 12 m, 22% at 20 m. Zero at the reference depth itself.
+      //
+      // ⚠️ THIS IS NOT THE BLANKET MARGIN, AND MUST NOT BECOME ONE.
+      // GROUP_OVERLAP_ALLOW_WIDTHS bought the same headroom by making
+      // EVERYTHING merge earlier, including badges near the camera where the
+      // residual is zero or negative; it was set to 0 in 2.173.0 with "it
+      // should stay there", and it does. This asks each badge for exactly the
+      // extra room its OWN depth will cost it, so a near badge is untouched.
+      //
+      // Clamped at 1: a badge NEARER than the reference draws further apart
+      // than the plane predicted, and shrinking its claim on that basis would
+      // group it late — an error in the direction this subsystem has spent
+      // several releases removing. One-sided, like the CEIL on the rung.
+      const depthPull = clearance.refDepth > 0
+        ? Math.max(1, (clearance.refDepth + p.pd) / clearance.refDepth)
+        : 1;
+      it.reach = boxes[i].halfW * clearance.allow * depthPull;
+      it.reachY = boxes[i].halfH * clearance.allow * depthPull;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
       // Tiebreak only, never a gate — see PlacementItem.category.
@@ -6243,6 +6272,7 @@ export class EntityVisuals {
     boxes: { halfW: number; halfH: number; cy: number }[],
     clearance: {
       pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
+      refDepth: number;
     },
     /** The summaries that SURVIVED placement — not the ones the solver asked
      *  for. A dropped one still leaves its members marked as covered. */
@@ -6681,6 +6711,43 @@ export class EntityVisuals {
    *  2.417.0 is that the icon scale is the rung measured against this. */
   private static pxPerWorldAt(vpH: number, fov: number, dist: number): number {
     return vpH / (2 * dist * Math.tan(fov / 2));
+  }
+
+  /**
+   * The depth at which a rung's single scene-wide scale is EXACT.
+   *
+   * ⚠️ THIS IS ALGEBRA ON THE RUNG, NOT A CAMERA QUERY, AND THAT DISTINCTION IS
+   * THE WHOLE POINT. `pxPerWorldAt` is `vpH / (2 · dist · tan(fov/2))`, so the
+   * distance it was taken at is recoverable from the scale itself. Inverting
+   * the SNAPPED value rather than reusing the raw camera distance is what keeps
+   * one rung meaning one thing: the depth and the scale then agree exactly, and
+   * both move only when the lattice steps.
+   *
+   * ⚠️ THE FILE SAID THIS COULD NOT BE KNOWN. The residual note above reads
+   * "nothing inside a position-invariant metric can know that ratio — knowing
+   * it is precisely what 'invariant to where the camera stands' forbids." That
+   * is too strong, and it cost the villa a documented class of overlapping
+   * badges. What invariance forbids is reading the LIVE camera every frame;
+   * this reads a number the rung already fixed. Measured: a pair the solver
+   * judged exactly touching overlaps by 9% of a badge width 8 m beyond this
+   * depth, 14% at 12 m and 22% at 20 m — which is the far side of a villa, and
+   * is exactly where the overlapping badges were reported.
+   */
+  /** This pass's reference depth, from the same viewport and field of view the
+   *  rung was measured with. 0 when either is unavailable, which reads as "no
+   *  correction" everywhere downstream. */
+  private rungReferenceDepth(pxPerWorld: number): number {
+    const cam = this.scene.activeCamera;
+    if (!cam) return 0;
+    const vpH = this.scene.getEngine().getRenderHeight();
+    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
+    return EntityVisuals.referenceDepthAt(vpH, fov, pxPerWorld);
+  }
+
+  private static referenceDepthAt(vpH: number, fov: number, pxPerWorld: number): number {
+    const t = Math.tan(fov / 2);
+    if (!(pxPerWorld > 0) || !(t > 0) || !(vpH > 0)) return 0;
+    return vpH / (2 * pxPerWorld * t);
   }
 
   /**

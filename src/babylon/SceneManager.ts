@@ -456,7 +456,7 @@ export class SceneManager {
   /** Scratch for computeRoomOverviewPose's four-corner footprint projection.
    *  Runs once per room tap, but projectToView writes into a caller-owned
    *  point by contract and this keeps that contract honest. */
-  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0 };
+  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0, pd: 0 };
 
   /**
    * The stair rooms' surface-hugging glow, carried across loads.
