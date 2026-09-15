@@ -54,6 +54,10 @@ jobs:
       - name: The two hard rules
         run: npm run test:hard-rules
 
+      - name: The proxy's security rules
+        # ⚠️ THE FIRST TEST ON THIS BRANCH THAT REACHES THE PROXY AT ALL.
+        run: npm run test:proxy
+
       - name: The proxy parses
         # ⚠️ THE CHEAPEST CHECK HERE AND THE ONE WITH THE WORST FAILURE MODE.
         # Nothing else in this pipeline loads the proxy at all.

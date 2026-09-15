@@ -20,7 +20,10 @@ CLAUDE.md
 tests/*
 !tests/oracles/
 !tests/consistency/
-!tests/hard-rules.py
+# ⚠️ THE PATTERN, NOT ONE FILE. This read `!tests/hard-rules.py` and git
+# refused the very next guard added beside it. A negation naming one file is a
+# negation somebody has to remember; naming the shape is one nobody does.
+!tests/*.py
 # Local scratch inside the tracked directories stays ignored.
 tests/oracles/*.log
 tests/**/node_modules/
