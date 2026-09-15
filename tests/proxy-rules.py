@@ -28,6 +28,17 @@ PROXY = ROOT / "rootfs" / "usr" / "bin" / "supervisor-proxy.py"
 
 spec = importlib.util.spec_from_file_location("vk_proxy", PROXY)
 assert spec and spec.loader
+# ⚠️ NAME THE MISSING DEPENDENCY RATHER THAN TRACEBACK THROUGH IT. The proxy
+# imports aiohttp at module scope, so on a machine without it this file dies
+# 200 lines away from the cause, inside a module it was only trying to read.
+try:
+    import aiohttp  # noqa: F401
+except ModuleNotFoundError:
+    print("  FAIL  aiohttp is not installed — supervisor-proxy.py imports it at "
+          "module scope, so none of the rules below can be checked. "
+          "`python3 -m pip install aiohttp` (the image ships py3-aiohttp).")
+    sys.exit(1)
+
 proxy = importlib.util.module_from_spec(spec)
 sys.modules["vk_proxy"] = proxy
 spec.loader.exec_module(proxy)

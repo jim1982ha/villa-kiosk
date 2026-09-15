@@ -76,6 +76,16 @@ jobs:
       - name: The two hard rules
         run: npm run test:hard-rules
 
+      - name: The proxy's runtime dependency
+        # ⚠️ WITHOUT THIS, THE NEXT STEP CANNOT EVEN IMPORT ITS SUBJECT.
+        # supervisor-proxy.py does `from aiohttp import ...` at module scope and
+        # proxy-rules.py EXECUTES the module (importlib, because the filename is
+        # hyphenated). A bare runner has no aiohttp, so that gate failed on the
+        # import and had never run in CI — the same as every other gate here,
+        # which could not run at all until 2.496.34. The image installs the same
+        # dependency as an apk (py3-aiohttp); this is CI's half of that fact.
+        run: python3 -m pip install --quiet aiohttp
+
       - name: The proxy's security rules
         # ⚠️ THE FIRST TEST ON THIS BRANCH THAT REACHES THE PROXY AT ALL.
         run: npm run test:proxy
