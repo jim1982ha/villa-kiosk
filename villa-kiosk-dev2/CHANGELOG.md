@@ -1,3 +1,85 @@
+## 2.496.42
+
+### Fixed — the add-on image would not build
+A safety check added in 2.496.39 runs as part of building the app. The list of
+files excluded when packaging the add-on left that check out, so building the
+image failed on a missing file — the check meant to protect the build was
+stopping it instead.
+
+The checks the build runs are included in the package now, verified by building
+the image. They add nothing to what is installed. Releases 2.496.38 to 2.496.41
+are all included here.
+
+## 2.496.41
+
+### Fixed — the last four releases could not be published
+The check that keeps this property's name out of the published source needs a
+small data file to work from. That file was never actually added to the
+repository — the rule listing what may be added covers programs, and this is
+data — so on the build servers the check found nothing to work with and
+correctly refused to pass. Everything since 2.496.37 was held back.
+
+The file is included now, and the check was verified by running it the way a
+build server does, against a copy containing only what the servers receive.
+Releases 2.496.38 to 2.496.40 are all included here.
+
+## 2.496.40
+
+### Fixed — the new name check flagged sixteen files that were perfectly fine
+The check added in 2.496.38, which keeps this property's name out of the
+published source, also looked for individual words from inside a multi-word
+name. One of those words is an ordinary English word, so it matched sixteen
+files that contain nothing private at all — and because that only happens on the
+build servers, it blocked the last two releases from being published.
+
+It now looks only for whole names, and for the way a name is written into a
+filename or a hostname. Nothing else changes; 2.496.38 and 2.496.39 are included
+here.
+
+## 2.496.39
+
+### Fixed — the kiosk's offline store grew with every update and never shrank
+The villa keeps a copy of the app on the device so it starts without the
+network. That copy was labelled with a name nobody changed between releases, so
+the routine meant to clear out the previous version's files never found anything
+to clear — and every update added another few megabytes that stayed forever. On
+a tablet left running, that ends in a device with no room left.
+
+Each release now keeps its own copy and the one before it, and everything older
+is removed.
+
+⚠️ Making only that change would have been worse than the problem. The app also
+took over any page that was already open the moment a new version arrived — so
+clearing the old files would have pulled them out from under a villa mid-use,
+leaving a blank screen that only a physical visit could fix. A new version now
+waits until the app is next opened fresh, which is what makes clearing the old
+copy safe. The update simply applies on the next open rather than mid-session.
+
+## 2.496.38
+
+### Fixed — a damaged maintenance file could delete its own photographs
+If the stored maintenance record became unreadable, the add-on treated it as
+empty. The safeguard that requires the superadmin code before anything is
+deleted compares what was there against what is being saved — so with "what was
+there" reading as nothing, it saw no deletions, asked for nothing, and allowed
+the save. The cleanup that follows then removed every photograph belonging to
+the records that could not be read, and the app was told the save succeeded.
+
+A file that cannot be read is now treated as a question rather than as an empty
+one. The save is refused with an explanation, nothing is changed or deleted, and
+the file is still there to recover from.
+
+### Fixed — the check protecting this villa's name had never run
+A check exists to keep the property's name, hostname and model filename out of
+the published source. The list it reads is deliberately kept off the repository,
+which meant that on the build servers the file was never there, the check
+reported that it had been skipped, and the build passed anyway. It has therefore
+only ever run on one machine.
+
+It now works from fingerprints of those words rather than the words themselves,
+so it runs everywhere without publishing what it is looking for — and a build
+that cannot run it at all now fails instead of passing.
+
 ## 2.496.37
 
 ### Fixed — the report could call an unread maintenance record "on schedule"
