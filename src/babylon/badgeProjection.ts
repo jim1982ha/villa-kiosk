@@ -8,7 +8,7 @@
 // Same reason badgePlacement.ts imports nothing: it is the only thing that
 // makes any of this testable without a browser, in a project whose only
 // verification is a person looking at screenshots on two phones. Everything
-// here is arithmetic on plain numbers; `npm run test:placement` runs it under
+// here is arithmetic on plain numbers; `tests/oracles/badge_geometry.mjs` runs it under
 // Node with the types stripped.
 //
 // ── The bug this file exists to end ──────────────────────────────────────

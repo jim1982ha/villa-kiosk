@@ -22,7 +22,7 @@
 //     reintroduced along the vertical axis — where the wall is a whole slab.
 //
 // IMPORTS NOTHING, for the reason `badgePlacement` and `badgeMetrics` import
-// nothing: that is what lets `npm run test:geometry` pin it with no runner and
+// nothing: that is what lets `tests/oracles/badge_geometry.mjs` pin it with no runner and
 // no dependency, and this is exactly the kind of rule that regresses silently.
 // The containment half stays with its caller (EntityVisuals already holds
 // `pointInPolygon`); what lives here is the JUDGMENT — which storey a height

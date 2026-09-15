@@ -1,3 +1,28 @@
+## 2.496.27
+
+### Changed — the arithmetic that decides what a badge looks like now has tests
+Roughly 1,800 lines work out how big a badge is, how its grouped card is laid
+out, which storey a room sits on, how the text is trimmed to fit and where a
+badge lands on screen. None of it had ever been run by anything.
+
+Worse, **seven places in the code claimed it was already covered**, naming two
+commands that have never existed on this branch. One went as far as explaining
+how a particular constant was checked; nothing read that constant. Anyone
+reading through the sizing code would have concluded it was guarded.
+
+It is guarded now, and the claims point at the tests that actually exist.
+
+### Fixed — badge sizes could jump a step if the size were ever recalculated twice
+Badges resize in fixed steps as you zoom, so they do not shimmer while the
+camera moves. Four of those twenty-five steps had a rounding flaw: feeding an
+already-stepped size back through the calculation pushed it up to the **next
+step**, a 6% jump.
+
+Nothing does that today, so nothing jumped — every caller works from a raw
+value. But "rounding twice is the same as rounding once" is the entire point of
+having fixed steps, and the first thing to ever run this function found it
+untrue.
+
 ## 2.496.26
 
 ### Fixed — devices swapping between grouped cards when an unrelated number changed

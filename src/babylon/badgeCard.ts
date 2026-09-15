@@ -2,7 +2,7 @@
 // The geometry of a summary CARD — the control a group of badges collapses to
 // when it can still show every one of its devices. Pure: no imports at all, in
 // the same spirit as badgePlacement.ts and badgeMetrics.ts, which is what lets
-// `npm run test:placement` cover it. This file's arithmetic is the easiest part
+// `tests/oracles/badge_geometry.mjs` covers it. This file's arithmetic is the easiest part
 // of the subsystem to get wrong and there is no other way to guard it: nothing
 // in the repo can exercise EntityVisuals without a browser.
 //

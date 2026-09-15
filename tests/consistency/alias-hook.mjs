@@ -9,7 +9,7 @@
 // is that both runtimes derive their answers from the SHIPPED rule; a copy
 // transcribed for testing would agree with itself forever while the app moved,
 // which is the failure being guarded against. `node --experimental-strip-types`
-// runs TypeScript directly — `test:placement` already relies on that — but it
+// runs TypeScript directly — every oracle here relies on that — but it
 // applies neither of the two conventions above, because both are Vite's.
 //
 // ⚠️ NO DEPENDENCY, DELIBERATELY. There is no JS test runner configured in this

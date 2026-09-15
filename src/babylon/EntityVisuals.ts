@@ -3088,7 +3088,7 @@ export class EntityVisuals {
 
   /** The floor height of the storey a world Y stands on. Delegates to
    *  roomStorey.ts, which owns the two tolerances and is pinned by
-   *  `npm run test:geometry`; shared by `roomPolyAt` and the light pool's
+   *  `tests/oracles/badge_geometry.mjs`; shared by `roomPolyAt` and the light pool's
    *  no-room fallback so the two cannot disagree about which storey a fixture
    *  belongs to. */
   private storeyFloorYAt(y: number): number {
