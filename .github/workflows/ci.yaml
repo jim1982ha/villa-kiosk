@@ -74,7 +74,12 @@ jobs:
         run: npm run test:oracles
 
       - name: The two hard rules
-        run: npm run test:hard-rules
+        # ⚠️ THE HASH PATH IS THE ONLY ONE THAT EXISTS HERE. The plaintext token
+        # list is gitignored, so `checkout` never produces it — which is how
+        # this clause came to print SKIP and exit 0 on every runner for eleven
+        # releases. `npm run test:hard-rules:ci` is the same command a developer
+        # can run locally to exercise THIS branch rather than their own.
+        run: npm run test:hard-rules:ci
 
       - name: The proxy's runtime dependency
         # ⚠️ WITHOUT THIS, THE NEXT STEP CANNOT EVEN IMPORT ITS SUBJECT.

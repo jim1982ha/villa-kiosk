@@ -162,7 +162,14 @@ def main() -> int:
         # How many words the longest token has. A length is not a leak, and
         # without it the scan cannot know how wide a window to build.
         max_ngram = int(m.group(1)) if m else 1
-    if token_file.exists():
+    # ⚠️ VK_HASH_ONLY=1 RUNS THE PATH CI RUNS. The plaintext list exists only on
+    # the owner's machine, so `npm run test:hard-rules` locally exercises a
+    # DIFFERENT branch from every build server — and the first hash list shipped
+    # green here and failed on sixteen innocent files there, because it had been
+    # checked by planting tokens and never once run against the clean tree the
+    # way CI would. "It passes locally" was a statement about the other branch.
+    hash_only = os.environ.get("VK_HASH_ONLY") == "1"
+    if token_file.exists() and not hash_only:
         tokens = [t.strip() for t in token_file.read_text().split("\n")
                   if t.strip() and not t.startswith("#")]
         checked_tokens = len(tokens)
@@ -205,7 +212,7 @@ def main() -> int:
     report("an entity_id is hardcoded in executable code", ids,
            "no entity_id in executable code")
 
-    if token_file.exists():
+    if token_file.exists() and not hash_only:
         report("a villa-specific token is in a shipped file", leaks,
                f"none of the {checked_tokens} villa tokens appears in a shipped file")
     elif token_hashes:

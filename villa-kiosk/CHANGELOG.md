@@ -1,3 +1,16 @@
+## 2.496.40
+
+### Fixed — the new name check flagged sixteen files that were perfectly fine
+The check added in 2.496.38, which keeps this property's name out of the
+published source, also looked for individual words from inside a multi-word
+name. One of those words is an ordinary English word, so it matched sixteen
+files that contain nothing private at all — and because that only happens on the
+build servers, it blocked the last two releases from being published.
+
+It now looks only for whole names, and for the way a name is written into a
+filename or a hostname. Nothing else changes; 2.496.38 and 2.496.39 are included
+here.
+
 ## 2.496.39
 
 ### Fixed — the kiosk's offline store grew with every update and never shrank
