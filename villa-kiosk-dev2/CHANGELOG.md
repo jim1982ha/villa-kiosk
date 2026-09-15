@@ -1,3 +1,42 @@
+## 2.496.24
+
+### Fixed — mistyped passcodes never expired, so the villa would eventually lock itself out
+There is a backstop that locks a profile after 50 wrong passcodes from all
+devices combined. It was counting them **for as long as the add-on had been
+running**, and nothing ever aged the count down.
+
+So the fiftieth cumulative mistake — a guest fumbling the pad last week, someone
+else the week before, on an add-on that runs for months — locked that profile
+out **for everyone, including you**, for fifteen minutes. And then again on the
+next mistake, and the next.
+
+It counts *when* the mistakes happened now, not just how many. Fifty inside one
+fifteen-minute window still locks, which is what it is for; a slow trickle never
+does. Someone who stops guessing is released as soon as their oldest attempt
+ages out.
+
+### Fixed — "Log out all devices" could not reach a tablet that was already open
+Signing every device out works by invalidating the saved sign-ins. That reaches
+anything that asks again — but the villa's live connection, the one that
+actually operates lights and locks, checked who you were **once** when it
+opened and never again.
+
+So the tablet you were signing out because it went missing kept working: its
+connection had already been approved, and nothing re-asked. The same gap meant
+shortening "stay signed in for" did not shorten a connection opened before the
+change.
+
+The live connection now re-checks — always before anything that operates a
+device, and otherwise every thirty seconds — and closes itself the moment the
+sign-in stops being valid.
+
+### Changed — the sign-in backend now has tests, for the first time on this branch
+Roughly 2,000 lines decide who may do what, and nothing had ever run any of it.
+A good part is plain logic — given this profile and this request, yes or no —
+and now has a test, including the seven malformed requests that once reached
+Home Assistant from a guest session and are listed in the code as the reason
+that rule exists.
+
 ## 2.496.23
 
 ### Changed — this add-on now has automated checks before it is built
