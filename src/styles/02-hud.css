@@ -57,7 +57,7 @@
      row. */
   padding: 0 16px 0 0;
   /* Never let the villa name WRAP as its 1fr grid track is squeezed. Without
-     this a long name ("The Lys House") broke onto three lines on a narrowed
+     this a long name ("a long property name") broke onto three lines on a narrowed
      desktop window, ballooning the chip vertically until it covered the floor
      switch below the bar. It truncates instead (see .hud-title), and the
      progressive rules further down drop the clock, then the name entirely,

@@ -1,0 +1,60 @@
+# The first automated gate this branch has had beyond `tsc -b` inside the image.
+#
+# ⚠️ dev2 SHIPPED TO PRODUCTION WITH ONE GATE, AND IT COULD NOT SEE THE PYTHON.
+# Until 2.496.23 this directory held only `build.yaml`: the sole automated check
+# on 55,000 lines of TypeScript, 2,073 lines of proxy and both hard rules was
+# `RUN npm run build` in the Dockerfile. A syntax error in `supervisor-proxy.py`
+# produced a GREEN BUILD and a container serving static HTML with no auth
+# backend behind it, because nothing in the pipeline so much as parsed it.
+#
+# ⚠️ AND THE PINS THAT DID EXIST WERE INVISIBLE. Eighteen oracles sat in a
+# `tests/` directory that `.gitignore` excluded wholesale — not tracked, so a
+# fresh clone had none and CI had none. That is fixed in the same release; see
+# `.gitignore`'s own note on why `tests/*` and not `tests/`.
+name: CI
+
+on:
+  push:
+    branches: [dev2, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: kiosk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # ⚠️ 24, BECAUSE THE ORACLES IMPORT THE SHIPPED TYPESCRIPT DIRECTLY.
+          # They run under plain `node` with type stripping and the repo's own
+          # alias hook (tests/consistency/) rather than a test runner — which is
+          # what makes them test the module that ships instead of a copy of it.
+          node-version: "24"
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Types and bundle
+        # The gate that already existed, hoisted out of the image so it fails
+        # in seconds rather than after a multi-arch build.
+        run: npm run build
+
+      - name: Oracles
+        # Each pins a defect that was found, reproduced and fixed. `open/` holds
+        # ones that fail BY DESIGN against known-open defects; run-all.sh
+        # reports those separately and does not fail on them.
+        run: npm run test:oracles
+
+      - name: The two hard rules
+        run: npm run test:hard-rules
+
+      - name: The proxy parses
+        # ⚠️ THE CHEAPEST CHECK HERE AND THE ONE WITH THE WORST FAILURE MODE.
+        # Nothing else in this pipeline loads the proxy at all.
+        run: python3 -c "import ast, pathlib; ast.parse(pathlib.Path('rootfs/usr/bin/supervisor-proxy.py').read_text())"
