@@ -1,3 +1,21 @@
+## 2.496.28
+
+### Fixed — badges grouped together while there was still room between them
+When badges are close enough to overlap, the villa gathers them onto a shared
+card. Working out "close enough" needs to know how wide each badge is — and the
+answer was calculated twice, in two places, from two different sets of numbers
+that had exactly one in common.
+
+The version used for spacing decisions reserved about **a quarter more width
+than the badge actually draws** — roughly ten pixels of nothing per badge,
+which is three to five times the minimum gap the villa tries to keep between
+them. So badges merged onto one card while there was visibly space left, and
+adjusting the gap setting could never quite fix it, because the measurement it
+was being adjusted against was wrong.
+
+There is one width now. The badge is built from six pieces, and the spacing
+decision adds up the same six.
+
 ## 2.496.27
 
 ### Changed — the arithmetic that decides what a badge looks like now has tests
