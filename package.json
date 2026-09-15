@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.496.38",
+  "version": "2.496.39",
   "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
@@ -9,7 +9,7 @@
     "clean": "rm -rf dist node_modules/.vite tsconfig.tsbuildinfo",
     "predev": "npm run clean",
     "dev": "vite",
-    "prebuild": "npm run clean",
+    "prebuild": "npm run clean && node tests/oracles/sw_lifecycle.mjs",
     "build": "tsc -b && vite build",
     "prepreview": "npm run build",
     "preview": "vite preview --host",

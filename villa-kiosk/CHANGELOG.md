@@ -1,3 +1,22 @@
+## 2.496.39
+
+### Fixed — the kiosk's offline store grew with every update and never shrank
+The villa keeps a copy of the app on the device so it starts without the
+network. That copy was labelled with a name nobody changed between releases, so
+the routine meant to clear out the previous version's files never found anything
+to clear — and every update added another few megabytes that stayed forever. On
+a tablet left running, that ends in a device with no room left.
+
+Each release now keeps its own copy and the one before it, and everything older
+is removed.
+
+⚠️ Making only that change would have been worse than the problem. The app also
+took over any page that was already open the moment a new version arrived — so
+clearing the old files would have pulled them out from under a villa mid-use,
+leaving a blank screen that only a physical visit could fix. A new version now
+waits until the app is next opened fresh, which is what makes clearing the old
+copy safe. The update simply applies on the next open rather than mid-session.
+
 ## 2.496.38
 
 ### Fixed — a damaged maintenance file could delete its own photographs

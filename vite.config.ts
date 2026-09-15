@@ -13,10 +13,29 @@ import { fileURLToPath, URL } from "node:url";
 // one of those chunks pays its full download cost live, in the loading
 // spinner, on whichever open happens to be the first after the update — see
 // public/sw.js's install handler, which fetches this file.
-function assetManifestPlugin(): Plugin {
+function assetManifestPlugin(pkgVersion: string): Plugin {
   return {
     name: "villa-kiosk-asset-manifest",
     apply: "build",
+    // ⚠️ THIS CHECK CANNOT FAIL THE BUILD, AND THAT IS WHY IT IS NOT THE GATE.
+    // A throw from buildStart OR writeBundle is swallowed by this bundler — the
+    // build printed its chunk table and exited 0 with the placeholder removed
+    // and no message anywhere. The real gate is `prebuild`, which runs
+    // tests/oracles/sw_lifecycle.mjs where a non-zero exit is honoured. This
+    // stays as a fast local signal for anyone reading the config.
+    buildStart() {
+      const swSrc = path.resolve("public/sw.js");
+      if (!fs.existsSync(swSrc)) {
+        throw new Error("[villa-kiosk] public/sw.js is missing — the kiosk has no service worker");
+      }
+      if (!fs.readFileSync(swSrc, "utf8").includes("__SW_BUILD__")) {
+        throw new Error(
+          "[villa-kiosk] public/sw.js has no __SW_BUILD__ placeholder. Its cache name must "
+          + "be per-build, or `activate` evicts nothing and the cache grows until the "
+          + "device's storage quota stops the kiosk. See the CACHE note in public/sw.js.",
+        );
+      }
+    },
     writeBundle(options) {
       const outDir = options.dir ?? "dist";
       const assetsDir = path.join(outDir, "assets");
@@ -29,6 +48,27 @@ function assetManifestPlugin(): Plugin {
         path.join(outDir, "asset-manifest.json"),
         JSON.stringify({ assets }),
       );
+
+      // ⚠️ STAMP THE SERVICE WORKER'S CACHE NAME WITH THIS BUILD, AND FAIL THE
+      // BUILD IF THE PLACEHOLDER IS GONE. public/ is copied verbatim, so sw.js
+      // never sees `define` and cannot read __APP_VERSION__ — which is how its
+      // cache name came to be a hand-edited literal that no release bumped, and
+      // therefore how `activate`'s eviction became a permanent no-op while every
+      // release added ~5 MB to one cache nothing pruned.
+      //
+      // Throwing rather than warning is the point: a silent skip here restores
+      // a constant cache name, and the symptom (a kiosk that fills its storage
+      // quota over days) appears far from the cause. writeBundle runs after
+      // public/ has been copied, so this rewrites the emitted copy and never
+      // touches the source.
+      const swPath = path.join(outDir, "sw.js");
+      if (!fs.existsSync(swPath)) {
+        throw new Error("[villa-kiosk] dist/sw.js is missing — the service worker did not reach the build");
+      }
+      const sw = fs.readFileSync(swPath, "utf8");
+      // buildStart already refused a source with no placeholder, so reaching
+      // here without one means public/ was not copied as expected.
+      fs.writeFileSync(swPath, sw.split("__SW_BUILD__").join(pkgVersion));
     },
   };
 }
@@ -85,7 +125,7 @@ export default defineConfig(({ command }) => {
     },
     plugins: [
       react(),
-      assetManifestPlugin(),
+      assetManifestPlugin(pkgVersion),
       // Only fall back to a self-signed cert when no trusted cert is provided.
       ...(serving && !haveTrustedCert ? [basicSsl()] : []),
     ],
