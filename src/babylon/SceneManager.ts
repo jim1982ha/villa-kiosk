@@ -1759,6 +1759,55 @@ export class SceneManager {
    * one controller owns canvas pointer input at a time (no capture race), and
    * picking always follows scene.activeCamera so tapping entities works in both.
    */
+  /**
+   * Frame the overview camera on THIS model: pan bounds, zoom limits, landing
+   * radius and the icon-zoom reference, all derived from the loaded extents.
+   *
+   * ⚠️ THIS USED TO RUN ONLY ON A VIEW-MODE CHANGE, AND THEREFORE NEVER RAN.
+   * It was the body of setViewMode's `mode === "overview"` branch. But
+   * setViewMode early-returns when the mode it is handed already matches, and
+   * the constructor records `viewMode = "overview"` while the model loads — a
+   * later fix, added so the sky dome stays lit during the wait (it had been
+   * reported three times). The constructor comment twenty lines above that
+   * assignment still says the opposite: "viewMode intentionally stays
+   * first-person here so the Dashboard's on-ready setViewMode('overview')
+   * still runs the real auto-fit". Two comments, opposite invariants, one
+   * block apart. The assignment won, and took the framing with it.
+   *
+   * The only boot path — Dashboard's onReady setViewMode("overview") — has
+   * therefore been a no-op for the framing ever since, so what actually frames
+   * a freshly booted villa is OverviewController's own constructor defaults:
+   * radius 30, pan bounds ±20 m, lowerRadiusLimit 3, upperRadiusLimit 200,
+   * fitRadius 30. Those are per-site numbers. This villa's span happens to make
+   * the fit radius land near 30, so the accident is invisible HERE and only
+   * here; on any other villa the landing shot, the pan limits, the zoom stops
+   * and the badge-shrink reference are all wrong — and the first hard rule is
+   * that no villa dimension ships.
+   *
+   * So it hangs off the MODEL, which is what it is a function of, rather than
+   * off a state transition that startup deliberately pre-empts. Idempotent and
+   * cheap enough to call from both places that can change the answer.
+   */
+  private adoptModelExtents(): void {
+    if (!this.loadedMeshes.length) return;
+    const ext = this.worldExtends(this.loadedMeshes);
+    this.overview.fitTo({ min: ext.min, max: ext.max });
+    // A saved per-device default (see saveOverviewDefault) overrides the
+    // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
+    // bounds and icon-zoom reference are correct for THIS model.
+    const saved = loadOverviewView();
+    if (saved) {
+      this.overview.applyPose({
+        alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
+        target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
+      });
+    }
+    // The badge-shrink reference is a function of the fit radius, so it is
+    // republished here rather than only where the overview is enabled.
+    this.visuals.setIconZoomFit(
+      this.viewMode === "overview" ? this.overview.getFitRadius() : 0);
+  }
+
   setViewMode(mode: "first-person" | "overview"): void {
     if (mode === this.viewMode) return;
     this.viewMode = mode;
@@ -1771,20 +1820,7 @@ export class SceneManager {
     if (mode === "overview") {
       this.camera.setMovement(0, 0); // stop any in-flight walk
       this.camera.detachInput();
-      if (this.loadedMeshes.length) {
-        const ext = this.worldExtends(this.loadedMeshes);
-        this.overview.fitTo({ min: ext.min, max: ext.max });
-        // A saved per-device default (see saveOverviewDefault) overrides the
-        // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
-        // bounds and icon-zoom reference are correct for THIS model.
-        const saved = loadOverviewView();
-        if (saved) {
-          this.overview.applyPose({
-            alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
-            target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
-          });
-        }
-      }
+      this.adoptModelExtents();
       this.overview.enable();
       this.scene.activeCamera = this.overview.camera;
       this.floors.setFirstPerson(false); // walker camera is parked; don't let its Y drive floors
@@ -2974,6 +3010,11 @@ export class SceneManager {
     // the overview does not), so the badge occluder pass is told which one it
     // landed in rather than waiting for a toggle that may never come.
     this.visuals.setFirstPerson(this.viewMode === "first-person");
+    // The extents are final now (normalizeScale + recenterModel have run and
+    // loadedMeshes is populated), so this is the first moment the overview can
+    // be framed on the real model — and, since the constructor already put us
+    // in overview, the only moment anything will.
+    this.adoptModelExtents();
     mark("applyStructure");
 
     // The villa is correct and interactive now — reveal it. The first-person
@@ -4539,6 +4580,18 @@ export class SceneManager {
     // villa hangs off these fields. So drop them all, and a retained manager
     // becomes an empty shell instead of the anchor for the whole scene.
     this.loadedMeshes = [];
+    // ⚠️ ceilingMeshes AND worldRoomPolys WERE MISSING FROM THIS LIST. The
+    // mapped-type sweep below explains why IT is a mapped type — "renaming a
+    // field is a compile error here instead of a silently missed reference that
+    // quietly restores the leak" — and that guarantee was applied to the public
+    // fields and not to this hand-written block above it, which is exactly the
+    // list of names it disclaims. ceilingMeshes holds 11-16 meshes; Babylon's
+    // Node.dispose() does not null `_scene`, so a retained shell holding them
+    // retains the whole scene graph through mesh._scene, which is the 35 MB-per-
+    // remount leak 2.231.0 priced. leakWatch still reports retained shells, and
+    // they are only "empty" if every collection here is cleared.
+    this.ceilingMeshes = [];
+    this.worldRoomPolys = [];
     this.highlightedMeshes = [];
     this.calibratedPoints = null;
     this.lastNavigatedRoom = null;

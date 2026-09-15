@@ -9,6 +9,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DracoCompression } from "@babylonjs/core/Meshes/Compression/dracoCompression";
 import { KhronosTextureContainer2 } from "@babylonjs/core/Misc/khronosTextureContainer2";
+import { Tools } from "@babylonjs/core/Misc/tools";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
@@ -51,6 +52,34 @@ import "./babylonSideEffects";
 // bigger pool does cost one WASM instance per worker on a wall-mounted iPad.
 // DO NOT raise it again expecting a win; it has been measured and disproved.
 // The remaining lever is FEWER PRIMITIVES in the GLB, a pipeline change.
+// ⚠️ THE BACKSTOP FOR EVERY BABYLON DEFAULT THAT REACHES THE INTERNET — NOT
+// JUST THE TWO BELOW.
+//
+// Draco and KTX2 were each found reaching cdn.babylonjs.com and each fixed by
+// naming the asset. `EXT_meshopt_compression` is the third member of that set
+// and was missed: importing "@babylonjs/loaders/glTF" registers the whole
+// extension barrel, and MeshoptCompression's shipped default is
+// `${Tools._DefaultCdnUrl}/meshopt_decoder.js`. Nothing in this app configured
+// it, so a GLB carrying that extension would fetch a decoder from the public
+// internet at load time — on a villa iPad with no WAN, a model that never
+// loads. `gltf-transform meshopt` is the sibling command of the `draco` and
+// `etc1s` this pipeline already runs, so it is one pipeline edit away.
+//
+// tests/hard-rules.py structurally CANNOT catch this: it walks `git ls-files`,
+// and the offending URL lives in node_modules. The rule is about what the app
+// FETCHES; that guard covers what the repo CONTAINS. Its own docstring names
+// this exact failure — "a guard scoped to where the last defect was found,
+// rather than to everything the rule applies to".
+//
+// So rather than enumerate Babylon's CDN defaults one incident at a time, this
+// rewrites the host for ALL of them (Tools.GetBabylonScriptURL swaps any URL
+// beginning with the default CDN for this base). Pointed at our own origin, a
+// default we forgot to configure 404s on the LAN instead of silently reaching
+// the internet — it fails where we can see it, never where we cannot. The
+// pipeline emits draco+etc1s and no meshopt, so nothing legitimately needs a
+// decoder from here today.
+Tools.ScriptBaseUrl = typeof window !== "undefined" ? window.location.origin : "";
+
 DracoCompression.Configuration = {
   decoder: {
     wasmUrl: dracoWrapperUrl,

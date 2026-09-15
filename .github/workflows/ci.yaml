@@ -18,6 +18,19 @@ on:
     branches: [dev2, main]
   pull_request:
   workflow_dispatch:
+  # ⚠️ CALLABLE, SO THE IMAGE BUILD CAN DEPEND ON IT. Until this was added,
+  # build.yaml and this file were two INDEPENDENT workflows on the same push
+  # trigger: nothing in build.yaml referenced these checks, its GHCR step is an
+  # unconditional `push: true`, and its manifest-sync job needs only `build`.
+  # So a commit that reddened every gate below still published an image to GHCR
+  # and still committed the manifest to main that makes Home Assistant offer
+  # it. The iPad on the wall updated to a build whose gates had failed, and the
+  # red X sat on a DIFFERENT workflow from the one that shipped.
+  #
+  # GitHub Actions has no cross-workflow `needs:`, so build.yaml calls this as
+  # a reusable workflow and gates its own build job on the result. Every gate
+  # in this file was advisory before that edge existed.
+  workflow_call:
 
 permissions:
   contents: read
@@ -60,6 +73,14 @@ jobs:
 
       - name: The path lists agree
         run: npm run test:routes
+
+      - name: The add-on manifest agrees with what an operator reads
+        # ⚠️ config.yaml PROMISED THIS GUARD AND IT DID NOT EXIST — its comment
+        # beside the options block named a security_test.py that is not tracked
+        # on this branch. A field missing from translations/en.yaml
+        # renders on Supervisor's Configuration page as its raw key with no
+        # help text, and that is the page where the PINs are set.
+        run: npm run test:manifest
 
       - name: The proxy parses
         # ⚠️ THE CHEAPEST CHECK HERE AND THE ONE WITH THE WORST FAILURE MODE.

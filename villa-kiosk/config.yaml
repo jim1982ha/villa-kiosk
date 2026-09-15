@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA
-version: "2.496.31"
+version: "2.496.33"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -89,8 +89,8 @@ startup: application
 # it as separate from the everyday passcodes.
 # NOTE: the help text an operator actually SEES on the Configuration page lives
 # in translations/en.yaml — Supervisor renders that, never these comments. Add
-# a field there whenever you add one here (tests/security_test.py fails if you
-# forget). What stays here is the WHY behind each default, which belongs next
+# a field there whenever you add one here (tests/addon-manifest.py fails if you
+# forget — it also checks the reverse, and that options and schema agree). What stays here is the WHY behind each default, which belongs next
 # to the value it explains.
 #
 # ── Tunable policy ──────────────────────────────────────────────────────────

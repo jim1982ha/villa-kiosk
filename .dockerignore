@@ -26,3 +26,16 @@ sources
 # without this a stale local __pycache__/*.pyc would get baked in too.
 __pycache__/
 *.pyc
+
+# ⚠️ THE VILLA'S OWN VOCABULARY AND THE LOCAL TLS KEYS. .gitignore protects both
+# and this file did not know about either. On the "Local build fallback" path
+# above, `COPY . .` bakes .scratch/forbidden-tokens.txt — the villa's name,
+# hostname and model filename, the exact strings tests/hard-rules.py exists to
+# keep out of a public repo — and any mkcert private key into the build stage.
+# They do not reach the final image (only /app/dist is copied out), but
+# build.yaml exports every stage with `cache-to: type=gha,mode=max`, so those
+# bytes would land in a shared build cache. CI is safe only by the accident
+# that actions/checkout cannot produce an untracked file — which is the same
+# accident that makes the token check SKIP there.
+.scratch
+certs

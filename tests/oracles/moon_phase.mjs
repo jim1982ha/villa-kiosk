@@ -1,4 +1,20 @@
-// Oracle for the moon terminator. Replays the exact canvas path arithmetic and
+// Oracle for the moon terminator.
+//
+// ⚠️ READ THIS BEFORE TRUSTING THE GREEN. Everything below REPLAYS the canvas
+// path rather than calling it — there is no way to run a real CanvasRenderingp
+// context under bare node — so on its own it is a DECISION RECORD (it proves
+// which sweep flag is right) and not a regression guard. For the life of this
+// file it had no imports and no readFileSync at all: NightSky.drawMoon could
+// have been rewritten to draw a square and not one line here would have gone
+// red. That is exactly the defect entity_value.mjs warns about — a pinned copy
+// with no production caller — with the copy on the ORACLE's side this time.
+//
+// The static pin at the bottom is what ties the replay to the source. It is the
+// cheap half of the real fix (lifting the path arithmetic out of drawMoon so it
+// can be called); until that happens, this at least fails when the thing it
+// replays stops matching.
+//
+// Replays the exact canvas path arithmetic and
 // measures the ENCLOSED AREA by the shoelace formula, so "97% lit draws black"
 // becomes a number instead of a description.
 const R = 100, N = 2000;
@@ -58,4 +74,30 @@ function verdict(name, rule) {
 const mOk = verdict("main  (lit > 0.5)", MAIN);
 const dOk = verdict("dev   (lit < 0.5)", DEV);
 console.log(`\n  => main ${mOk ? "PASSES" : "FAILS"}, dev ${dOk ? "PASSES" : "FAILS"}`);
-process.exit(dOk && !mOk ? 0 : 1);
+
+// ── the replay above must still match the source ─────────────────────────
+import { readFileSync } from "node:fs";
+const NS = readFileSync(new URL("../../src/babylon/NightSky.ts", import.meta.url), "utf8");
+let pinFail = 0;
+const pin = (name, ok) => {
+  console.log(`    ${ok ? "PASS" : "FAIL"}  ${name}`);
+  if (!ok) pinFail++;
+};
+console.log("\n  and the source still draws what this file replays:");
+pin("drawMoon exists to be replayed", /drawMoon\s*\(/.test(NS));
+// The three facts the replay depends on. Change any one in NightSky and the
+// areas computed above stop describing the moon anyone sees.
+pin("the terminator is still an ellipse, not an arc",
+    /ctx\.ellipse\(/.test(NS));
+pin("its semi-minor axis is still R * |1 - 2*lit|",
+    /R \* Math\.abs\(1 - 2 \* lit\)/.test(NS));
+pin("the sweep flag is still `lit < 0.5` — the fix this file argued for",
+    /Math\.PI \/ 2, -Math\.PI \/ 2, lit < 0\.5\)/.test(NS));
+// ⚠️ `lit > 0.5` is what main ships and what the areas above prove wrong:
+// under it a 97%-lit moon encloses 3% of a disc, i.e. draws almost black at
+// the brightest phase. Kept as a named rule here so the comparison stays
+// legible rather than becoming a bare boolean.
+// ⚠️ THE EXIT MOVED TO THE END. It sat above this block, so everything
+// below was dead code on the first attempt — the pin printed nothing and
+// could not fail. An unreachable assertion is the same as no assertion.
+process.exit(dOk && !mOk && !pinFail ? 0 : 1);

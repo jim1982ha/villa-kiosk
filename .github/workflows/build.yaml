@@ -32,7 +32,18 @@ permissions:
   packages: write
 
 jobs:
+  # ⚠️ THE GATES RUN FIRST, AND THE IMAGE WAITS FOR THEM. This job did not
+  # exist: build.yaml and ci.yaml both fired on a push to dev2/main and neither
+  # knew about the other, so `push: true` below published whatever the commit
+  # contained and `sync-dev2-manifest` (needs: build) then made Home Assistant
+  # offer it. The only gate that could actually stop a release was
+  # `RUN npm run build` inside the Dockerfile — which is the single gate
+  # ci.yaml's own banner was written to complain about.
+  checks:
+    uses: ./.github/workflows/ci.yaml
+
   build:
+    needs: [checks]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

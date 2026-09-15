@@ -19,7 +19,6 @@ import { fileURLToPath } from "node:url";
 
 register("../consistency/alias-hook.mjs", import.meta.url);
 const { rayTargets, isHelperMesh } = await import("@/babylon/meshRoles");
-const { FrameClock } = await import("@/babylon/frameClock");
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../../src");
 const walk = (d, out = []) => {
@@ -35,18 +34,25 @@ const BABYLON = FILES.filter((f) => f.includes("/babylon/") || f.includes("/canv
 const read = (f) => readFileSync(f, "utf8");
 const rel = (f) => f.slice(SRC.length + 1);
 
-/* ── 1. every caller of a patched API declares the patches ────────────── */
-// Each of these is a stub on the base class until a sibling module is imported
-// for its side effects.
-const PATCHED = /\.(createPickingRay|pickWithRay|multiPickWithRay|multiPick|pickWithBoundingInfo|beginDirectAnimation|beginAnimation)\(|\.pick\(|renderOutline|outlineWidth|createOrUpdateSelectionOctree/;
-const undeclared = BABYLON.filter((f) => {
-  const src = read(f);
-  if (f.endsWith("babylonSideEffects.ts")) return false;
-  // strip comments so a mention in prose is not a call
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-  if (!PATCHED.test(code)) return false;
-  return !/import "\.\/babylonSideEffects"/.test(src);
-}).map(rel);
+/* ── 1. moved out ─────────────────────────────────────────────────────── */
+// The patched-Babylon-API check and the FrameClock block used to live here.
+// They now live in the two oracles the MODULES' OWN DOCSTRINGS name —
+// tests/oracles/babylon_side_effects.mjs and tests/oracles/frame_clock.mjs —
+// which for eleven releases named files that did not exist.
+//
+// ⚠️ THAT MIS-CITATION NEARLY COST A DUPLICATE. Writing the missing guards, I
+// trusted the docstring's filename instead of grepping for the assertion, and
+// got most of the way through a second copy of a check that was already here
+// under a different name. The check was real; only its address was wrong. One
+// rule, one oracle, named after the module it guards — the same principle
+// one_reading_rule.mjs enforces on the source.
+//
+// The versions that moved are STRICTER than what stood here: they scan the
+// whole tracked tree rather than src/babylon + src/canvas (a .tsx calling
+// scene.pick is exactly as broken), they cover `.pick(` — which was matched
+// here but the glTF loader was not — they assert the owner imports each
+// sibling, they refuse a pattern with no caller, and they check nobody
+// hand-imports a sibling behind the owner's back.
 
 /* ── 2. nothing can widen a ray back onto a ceiling ───────────────────── */
 const mesh = (over = {}) => ({
@@ -91,19 +97,6 @@ const handRolled = BABYLON.filter((f) => {
   return /metadata\?\.isMarker|\/\^\(halo_/.test(code);
 }).map(rel);
 
-/* ── 5. the frame clock is the only clock ─────────────────────────────── */
-const deltaCallers = FILES.filter((f) => {
-  const code = read(f).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
-  return /getDeltaTime\s*\(/.test(code);
-}).map(rel);
-
-const c = new FrameClock();
-const first = c.step(1000);
-const normal = c.step(1016);
-const afterIdle = c.step(9016);      // an 8-second idle
-c.reset();
-const afterReset = c.step(50000);
-
 /* ── 6. what the constructor registers, dispose detaches ──────────────── */
 const ev = read(join(SRC, "babylon/EntityVisuals.ts"));
 const registers = /scene\.registerBeforeRender\(/.test(ev)
@@ -112,20 +105,16 @@ const detaches = /unregisterBeforeRender\(/.test(ev)
   && /onAfterRenderObservable\.remove\(/.test(ev);
 
 console.log(`  scanned ${FILES.length} files, ${BABYLON.length} in the 3D layer`);
-if (undeclared.length) console.log(`      undeclared side-effect imports: ${undeclared.join(", ")}`);
 if (handRolled.length) console.log(`      hand-rolled ray predicate: ${handRolled.join(", ")}`);
-if (deltaCallers.length) console.log(`      calls getDeltaTime: ${deltaCallers.join(", ")}`);
 console.log(`  rayTargets over all ${combos.length} flag combinations:`);
 console.log(`      admits a ceiling : ${admitsCeiling.length}`);
 console.log(`      admits a helper  : ${admitsHelper.length}`);
 console.log(`      admits the floor : ${admitsFloor.length}`);
-console.log(`  FrameClock steps: first=${first} normal=${normal} idle=${afterIdle} reset=${afterReset}`);
 
 let fail = 0;
 const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!ok) fail++; };
 console.log("\n  assertions:");
 ck("the scan reached the 3D layer", BABYLON.length > 20);
-ck("every caller of a patched Babylon API declares the patches", undeclared.length === 0);
 ck("NO flag combination admits a ceiling", admitsCeiling.length === 0);
 ck("NO flag combination admits a helper mesh", admitsHelper.length === 0);
 ck("...while the floor is admitted by every one of them", admitsFloor.length === combos.length);
@@ -134,11 +123,6 @@ ck("each flag genuinely gates its term",
 ck("no hand-rolled ray predicate is left", handRolled.length === 0);
 ck("isHelperMesh covers both conventions",
    isHelperMesh(HALO) && isHelperMesh(MARKER) && !isHelperMesh(FLOOR));
-ck("nothing calls engine.getDeltaTime()", deltaCallers.length === 0);
-ck("the first step is seeded, not a jump", first === 16);
-ck("a normal step is the real elapsed time", normal === 16);
-ck("a long idle is clamped", afterIdle === 100);
-ck("reset makes the next step a first one again", afterReset === 16);
 ck("EntityVisuals detaches what it registers", registers && detaches);
 
 /* ── 7. a glyph is baked at the size it is drawn ──────────────────────── */
