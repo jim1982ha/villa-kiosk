@@ -126,7 +126,16 @@ export default defineConfig(({ command }) => {
       ...(process.env.VITE_DEV_PROXY
         ? {
             proxy: Object.fromEntries(
-              ["/core", "/auth", "/addon-config", "/model", "/model-upload"].map((p) => [
+              // ⚠️ EVERY DYNAMIC PREFIX, AND IT USED TO BE FIVE OF NINE. The
+              // app also reaches `device-config`, `fm-data`, `fm-evidence` and
+              // `telemetry` through `ingressPath()` — so `npm run dev` against
+              // a real add-on silently 404'd the shared device configuration
+              // and the entire Facility workspace, which is the one thing a
+              // developer would assume was wired. Kept in the same order as
+              // nginx's own locations; `tests/routes.py` fails the build if
+              // this list and the proxy's routes disagree.
+              ["/core", "/auth", "/addon-config", "/model", "/model-upload",
+               "/device-config", "/fm-data", "/fm-evidence", "/telemetry"].map((p) => [
                 p,
                 {
                   target: process.env.VITE_DEV_PROXY,

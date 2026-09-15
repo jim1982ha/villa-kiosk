@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.496.24",
+  "version": "2.496.25",
   "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
@@ -16,7 +16,8 @@
     "typecheck": "tsc -b --noEmit",
     "test:oracles": "sh tests/oracles/run-all.sh",
     "test:hard-rules": "python3 tests/hard-rules.py",
-    "test:proxy": "python3 tests/proxy-rules.py"
+    "test:proxy": "python3 tests/proxy-rules.py",
+    "test:routes": "python3 tests/routes.py"
   },
   "dependencies": {
     "@babylonjs/core": "^7.37.2",
