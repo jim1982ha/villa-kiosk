@@ -20,20 +20,21 @@ FROM --platform=${BUILDPLATFORM:-$TARGETPLATFORM} node:24-alpine AS build
 WORKDIR /app
 # Install deps first so this layer caches across code edits.
 #
-# ⚠️ `npm ci`, THE SAME COMMAND CI RUNS. This said `npm install` under a comment
-# claiming "`npm ci` would hard-fail" on an unresolved transitive peer
-# (babylonjs-gltf2interface). That claim is stale — `npm ci --dry-run` exits 0
-# on this lockfile — and while it stood, the image and CI installed through two
-# different resolvers: `npm install` may legally resolve a tree the lock does
-# not pin, so a green "Types and bundle" in CI did not prove the image's build
-# stage would produce the same bytes, or succeed at all. Two implementations of
-# one interface, with no test that they agree.
+# ⚠️ `npm install`, AND CI USES THE SAME — BUT NOT FOR THE REASON THIS COMMENT
+# ONCE GAVE. It used to say "`npm ci` would hard-fail" on an unresolved
+# transitive peer (babylonjs-gltf2interface). 2.496.33 called that stale on the
+# strength of `npm ci --dry-run` exiting 0 locally and switched this line to
+# `npm ci`. That was the wrong test: `npm ci` succeeds in a clean local
+# checkout of this exact lockfile AND fails on a GitHub runner, every time,
+# which is why ci.yaml's Install step had never once passed. The two facts
+# together say the failure is environmental, not a lockfile defect — and the
+# command that provably builds this image on a runner is this one.
 #
-# If this ever does hard-fail, CI fails FIRST — it runs the same command, and
-# build.yaml now gates the image on it — so the failure arrives before an
-# unbuildable image rather than after one.
+# The original point stands and is now actually met: ONE resolver on both
+# paths, so a green CI build says something about the image's build stage.
+# Do not switch either side alone.
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 COPY . .
 RUN npm run build
 

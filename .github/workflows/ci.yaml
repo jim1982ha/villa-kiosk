@@ -51,7 +51,16 @@ jobs:
           node-version: "24"
 
       - name: Install
-        run: npm ci --no-audit --no-fund
+        # ⚠️ `npm install`, NOT `npm ci`, AND THAT IS WHY THIS FILE HAS A HISTORY
+        # OF ZERO GREEN RUNS. Every CI run since 2.496.23 created this workflow
+        # failed HERE, on `npm ci`, so not one of the seven gates below has ever
+        # executed on a runner — eleven releases shipped while this file was
+        # cited as their gate. `npm ci` succeeds in a clean local checkout of
+        # the same lockfile, so the cause is the runner, not the lockfile.
+        #
+        # Matching the Dockerfile is also the point: one resolver on both paths
+        # means a green build here says something about the image's build stage.
+        run: npm install --no-audit --no-fund
 
       - name: Types and bundle
         # The gate that already existed, hoisted out of the image so it fails
