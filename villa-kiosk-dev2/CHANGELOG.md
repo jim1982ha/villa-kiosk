@@ -1,3 +1,23 @@
+## 2.496.29
+
+### Fixed — badge icons stayed blurry after changing the badge size
+Badge icons are drawn from a small image prepared at whichever size fits best,
+because stretching one looks soft. Changing the badge size with the stepper
+stretched the **old** image instead of preparing a new one — so every icon on
+the map went soft, and then sharpened up one at a time over the following
+minutes as each device happened to report something.
+
+They are all re-prepared as soon as the size changes now.
+
+The code even carried a note saying this already worked. It did not; following
+the setting through three places shows nothing ever asked for a redraw.
+
+### Fixed — a device that has never reported drew its icon at the wrong size
+The very first image for a badge was prepared using the wrong one of two
+measurements — the size before the display's scaling is applied, rather than
+after. Every badge corrected itself the moment its device next reported, so the
+only ones that stayed wrong were devices that have never reported at all.
+
 ## 2.496.28
 
 ### Fixed — badges grouped together while there was still room between them
