@@ -1,5 +1,6 @@
-import { formatSensorParts, formatSensorValue, formatUnitValue, prettyState, compactValue }
-  from "../../src/utils/entityValue.ts";
+import { formatSensorParts, formatSensorValue, formatUnitValue, prettyState, compactValue,
+  VALUE_CAPABLE_TYPES } from "../../src/utils/entityValue.ts";
+import { readFileSync } from "node:fs";
 
 const E = (state, unit, attrs = {}) => ({
   entity_id: "sensor.x", state: String(state),
@@ -50,4 +51,40 @@ console.log("\n  other domains the badge reads by attribute:");
 eq("light brightness",  compactValue("light",   E("on",  "", { brightness: 128 })), "50%");
 eq("cover position",    compactValue("cover",   E("open","", { current_position: 40 })), "40%");
 eq("climate current",   compactValue("climate", E("heat","", { current_temperature: 21.6 })), "22°");
+
+// ---------------------------------------------------------------------------
+// ⚠️ EVERYTHING BELOW IS WHAT MADE THIS FILE LOAD-BEARING.
+//
+// For the whole time the assertions above were green, `compactValue` had NO
+// production caller: the badge called a byte-identical PRIVATE copy inside
+// EntityVisuals, and the export existed only for this oracle to read. A
+// change to the text the screen actually draws could not have failed a line
+// of it. These pins are what stop that coming back.
+// ---------------------------------------------------------------------------
+const EV = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
+
+console.log("\n  the badge reads THIS function, not a copy of it:");
+eq("EntityVisuals imports compactValue",
+   /import \{[^}]*\bcompactValue\b[^}]*\} from "@\/utils\/entityValue"/.test(EV), true);
+eq("EntityVisuals declares no compactValue of its own",
+   /(private|function|const)\s+compactValue\b/.test(EV), false);
+eq("...and calls it as a free function, never as a method",
+   /this\.compactValue\(/.test(EV), false);
+eq("the badge has call sites for it",
+   (EV.match(/(?<!\.)\bcompactValue\(/g) ?? []).length >= 2, true);
+
+console.log("\n  the capability set agrees with the switch it describes:");
+// Read the `case "x":` labels straight out of compactValue's body, so adding a
+// domain to the switch and forgetting the set fails HERE rather than on the
+// wall, where it shows as a value drawn into clearance nobody reserved.
+const SRC = readFileSync(new URL("../../src/utils/entityValue.ts", import.meta.url), "utf8");
+const body = SRC.slice(SRC.indexOf("export function compactValue"));
+const cases = [...body.slice(0, body.indexOf("\n}")).matchAll(/case "([a-z_]+)":/g)].map((m) => m[1]);
+eq("the switch was found at all", cases.length >= 5, true);
+for (const c of cases) eq(`case "${c}" is declared value-capable`, VALUE_CAPABLE_TYPES.has(c), true);
+eq("and the set claims nothing the switch cannot serve",
+   [...VALUE_CAPABLE_TYPES].every((t) => cases.includes(t)), true);
+eq("no second copy of the set survives in the badge",
+   /new Set<EntityType>\(\["light"/.test(EV), false);
+
 process.exit(fail ? 1 : 0);

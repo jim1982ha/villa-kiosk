@@ -135,8 +135,25 @@ export function formatSensorValue(
   return p.unit ? `${p.value} ${p.unit}` : p.value;
 }
 
+/** Every type `compactValue` can EVER return non-empty text for.
+ *
+ *  ⚠️ IT LIVES HERE BECAUSE IT IS A FACT ABOUT THE SWITCH BELOW, and a reader
+ *  changing that switch has to be able to SEE it. It was a `const` in
+ *  `EntityVisuals` with a comment asking the next person to "keep it in sync"
+ *  with a switch two files away — the badge solver sizes a pill's clearance
+ *  from it, so a type added to the switch and not to the set draws text into
+ *  a box reserved without room for it.
+ *
+ *  "Capable of a value", not "has one now": a light that is off has no
+ *  percentage to show, but turning it on must not have to re-solve placement,
+ *  so the clearance is reserved for the type, not for the current state. */
+export const VALUE_CAPABLE_TYPES: ReadonlySet<EntityType> = new Set<EntityType>([
+  "light", "fan", "cover", "climate", "sensor",
+]);
+
 /** The badge's reading: the sensor rule above plus the per-domain attribute
- *  each other type reports its level through. */
+ *  each other type reports its level through. Every `case` here must have its
+ *  type in {@link VALUE_CAPABLE_TYPES} directly above. */
 export function compactValue(type: EntityType, s: HassEntity): string {
   if (isUnavailable(s)) return "";
   switch (type) {

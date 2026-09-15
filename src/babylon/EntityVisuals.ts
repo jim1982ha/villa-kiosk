@@ -106,7 +106,7 @@ import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
 import { isUnavailable } from "@/utils/stateColors";
-import { formatSensorValue } from "@/utils/entityValue";
+import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
 import { mergeOverlapping } from "./boxMerge";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
@@ -453,12 +453,6 @@ const TAP_RING_UNIT: readonly number[] = (() => {
 // this constant is only the classic pill's.
 const PILL_TEXT = "#f8fafc";
 
-// Entity types compactValue() can EVER return non-empty text for — must stay
-// in sync with that switch. Used by labelBoxes to reserve pill-sized
-// clearance around these regardless of whether the current state actually
-// has a pill showing (see the long comment there for why "capable of" beats
-// "currently has one" for collision-box sizing).
-const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climate", "sensor"]);
 
 /**
  * Badge layout: EVERY visible badge sits at a fixed pixel offset directly
@@ -4795,7 +4789,7 @@ export class EntityVisuals {
     // (compactValue short-circuits to "" for every type when state is
     // unavailable/unknown — see below), so it needs no alpha of its own.
 
-    const value = this.groupedValue(entityId, this.compactValue(type, entity));
+    const value = this.groupedValue(entityId, compactValue(type, entity));
     lbl.valueText.text = value;
     this.setValueVisible(lbl, value.length > 0);
     const dirty = lbl.category !== prevCategory
@@ -6865,7 +6859,7 @@ export class EntityVisuals {
       // at this exact moment. Only the WIDTH still adapts to the actual pill
       // text when one is shown (a wide value still needs proportionally more
       // horizontal room than a narrow one).
-      const pillCapable = PILL_CAPABLE_TYPES.has(s.lbl.type);
+      const pillCapable = VALUE_CAPABLE_TYPES.has(s.lbl.type);
       const pillHalfW = hasPill
         ? (s.lbl.valueText.text.length * m.pillValueCharPx + m.pillValuePadPx) / 2
         : 0;
@@ -9259,7 +9253,7 @@ export class EntityVisuals {
       const st = this.lastState.get(member);
       if (!st) continue;
       const t = this.config.entityMap[member]?.type ?? inferTypeFromEntityId(member) ?? "sensor";
-      const v = this.compactValue(t, st);
+      const v = compactValue(t, st);
       if (v) parts.push(v);
     }
     // ⚠️ THE JOIN IS CLAMPED, NOT JUST EACH PART. clampPill bounds a single
@@ -9292,34 +9286,15 @@ export class EntityVisuals {
     return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text;
   }
 
-  /** Tiny chip text under the badge for entities whose state is a reading, not just on/off. */
-  private compactValue(type: EntityType, s: HassEntity): string {
-    if (s.state === "unavailable" || s.state === "unknown") return "";
-    switch (type) {
-      case "light": {
-        const b = s.attributes.brightness as number | undefined;
-        return s.state === "on" && b ? `${Math.round((b / 255) * 100)}%` : "";
-      }
-      case "fan": {
-        const p = s.attributes.percentage as number | undefined;
-        return s.state === "on" && p != null ? `${Math.round(p)}%` : "";
-      }
-      case "cover": {
-        const pos = s.attributes.current_position as number | undefined;
-        return pos != null ? `${Math.round(pos)}%` : "";
-      }
-      case "climate": {
-        const cur = s.attributes.current_temperature as number | undefined;
-        return cur != null ? `${Math.round(cur)}°` : "";
-      }
-      case "sensor":
-        return formatSensorValue(s, { hideNominal: true, clamp: true });
-      default:
-        return "";
-    }
-  }
-
-  /* ⚠️ `formatSensorValue` AND `clampPill` MOVED TO `utils/entityValue.ts`.
+  /* ⚠️ `compactValue`, `formatSensorValue` AND `clampPill` ALL LIVE IN
+   * `utils/entityValue.ts` — this class owns none of them.
+   *
+   * `compactValue` was the one that got away: it was COPIED there rather than
+   * moved, and the private original kept serving every badge for the whole
+   * time an oracle pinned the export. Two bodies, one pinned, and the pinned
+   * one had no production caller at all — so the oracle could have gone green
+   * through any change to the text the screen actually draws.
+   *
    * They were private methods on this class, so the DOM panels could not reach
    * them and each wrote a reading its own way: the same 6570.989 W sensor read
    * "6.6 kW" on this badge and "6570.989 W" in the panel a tap opens. The rule
