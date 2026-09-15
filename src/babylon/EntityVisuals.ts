@@ -1750,6 +1750,17 @@ export class EntityVisuals {
       // explicit "ignore the hysteresis once" flag; removing hysteresis
       // removed the need for it.
       this.applyIconScale();
+      // ⚠️ AND RE-BAKE, WHICH THIS DID NOT DO. `applyIconScale` sets
+      // `container.scaleX/Y` and never touches `glyph.source`, so stepping the
+      // size from 1.0 to 2.5 upscaled the OLD bitmap 2.5x — precisely the blur
+      // the bake ladder exists to remove. Badges then re-sharpened one at a
+      // time, as each device happened to change state.
+      //
+      // ⚠️ THE DOCSTRING SAID THIS WAS ALREADY HANDLED. `glyphBakePx` claims
+      // "the user moves the size stepper … both of those already repaint".
+      // Traced through HUD -> SceneManager.updateConfig (which classifies this
+      // as cosmetic and skips `repaintBadges`) -> here: nothing repainted.
+      this.repaintGlyphs();
     }
     // Labels are always shown; rebuild when a device group is created/edited
     // (a member's badge must appear/disappear without needing a full
@@ -1958,8 +1969,11 @@ export class EntityVisuals {
    * only ever leave the bitmap LARGER than the paint — a mild downscale, which
    * is the direction BAKE_LADDER's headroom exists to absorb and the direction
    * WebKit handles acceptably. The two factors that are left change only when
-   * the resolution valve fires or the user moves the size stepper, and both of
-   * those already repaint.
+   * the resolution valve fires or the user moves the size stepper, which re-bakes through
+   *  `repaintGlyphs` — and did NOT until 2.496.29. The claim that used to
+   *  stand here ("both of those already repaint") was false: the stepper
+   *  only re-scaled, so every badge wore an upscaled bitmap until its own
+   *  device next reported.
    */
   private glyphBakePx(card: boolean): number {
     return this.glyphPxFor(card) * this.iconUserScale * this.bestCssToGui();
@@ -4422,7 +4436,14 @@ export class EntityVisuals {
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
           // Card only: the glyph is bolder there — see ICON_STROKE_VIEWBOX_BOLD.
-          undefined, card, glyphPx, card));
+          // ⚠️ `glyphBakePx`, NOT `glyphPx`. This argument is the bake size in
+          // RENDER pixels; every other number here is unscaled CSS px. Passing
+          // the CSS one baked the first version of every badge at the wrong
+          // rung — the exact mistake `glyphBakePx`'s own docstring was written
+          // to describe ("true of the two NUMBERS, and false of the pixels").
+          // It self-healed on the badge's first state change, so the one badge
+          // it stayed wrong for was a device that had never reported.
+          undefined, card, this.glyphBakePx(card), card));
 
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -4660,6 +4681,20 @@ export class EntityVisuals {
    * them. Everything else this method touches — fill, ring, glyph, alpha — is
    * colour at fixed geometry.
    */
+  /** Re-bake every badge's glyph at the current size.
+   *
+   *  ⚠️ IT GOES THROUGH `updateLabel` RATHER THAN CALLING THE BAKE ITSELF, so
+   *  there is still exactly one place that decides a glyph's source. A second
+   *  call site would be a second answer to "what size is this icon", which is
+   *  the defect this method exists to fix. */
+  private repaintGlyphs(): void {
+    for (const id of this.labels.keys()) {
+      const st = this.lastState.get(id);
+      const map = this.mapping.get(id);
+      if (st && map) this.updateLabel(id, map.type, st);
+    }
+  }
+
   private updateLabel(entityId: string, type: EntityType, entity: HassEntity): boolean {
     const lbl = this.labels.get(entityId);
     if (!lbl) return false;

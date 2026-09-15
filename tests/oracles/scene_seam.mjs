@@ -140,4 +140,18 @@ ck("a normal step is the real elapsed time", normal === 16);
 ck("a long idle is clamped", afterIdle === 100);
 ck("reset makes the next step a first one again", afterReset === 16);
 ck("EntityVisuals detaches what it registers", registers && detaches);
+
+/* ── 7. a glyph is baked at the size it is drawn ──────────────────────── */
+// The bake-size argument is in RENDER pixels while every other number in the
+// pipeline is unscaled CSS px, so the unit lives in a private method rather
+// than in the callee's signature. Two of three in-scene callers got it wrong.
+const bakes = [...ev.matchAll(/badgeImageDataUrl\(([\s\S]{0,420}?)\)\)?;/g)]
+  .map((m) => m[1]);
+const cssPxBake = ev.includes("undefined, card, glyphPx, card)");
+const rebakesOnStep = /iconUserScale = wantScale;[\s\S]{0,1600}?repaintGlyphs\(\)/.test(ev);
+const oneBakeOwner = (ev.match(/glyph\.source = badgeImageDataUrl\(/g) ?? []).length;
+console.log(`  badgeImageDataUrl call sites: ${bakes.length}`);
+ck("no bake is handed the UNSCALED size", !cssPxBake);
+ck("changing the badge size re-bakes the glyphs", rebakesOnStep);
+ck("a glyph's source has one owner", oneBakeOwner <= 2);
 process.exit(fail ? 1 : 0);
