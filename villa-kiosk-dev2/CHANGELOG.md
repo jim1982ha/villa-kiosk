@@ -1,3 +1,20 @@
+## 2.496.26
+
+### Fixed — devices swapping between grouped cards when an unrelated number changed
+Tapping a room gathers badges that would otherwise overlap into shared cards.
+Which devices ended up on which card was partly decided by **the order they
+happened to be held in**, rather than by where they are.
+
+That order is not stable, because a badge's width comes from the text it shows.
+So a reading ticking from `9 W` to `10 W` — one extra character, on a device
+elsewhere in the room — was enough to re-cut the grouping, and a device would
+hop onto a different card with nothing about it having changed.
+
+The grouping now picks the most-overlapped pair rather than the first one in
+the list. That is a property of where things are on screen, so the same room
+gives the same answer every time, and it still groups no more than the overlap
+actually requires.
+
 ## 2.496.25
 
 ### Fixed — an address the add-on published but could never answer
