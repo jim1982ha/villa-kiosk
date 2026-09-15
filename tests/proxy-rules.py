@@ -20,6 +20,7 @@ Run: python3 tests/proxy-rules.py   (also `npm run test:proxy`)
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -144,10 +145,47 @@ ck("a superadmin failure lands in the superadmin bucket",
 # wrong tier AND leave the superadmin one never accumulating. Testing the helper
 # alone stays green straight through that; it did.
 _src = PROXY.read_text()
-_elevate = _src[_src.index("def superadmin"):] if "def superadmin" in _src else _src
-ck("  ...and the handler charges SUPERADMIN, not the caller's role",
-   "_note_global_failure(SUPERADMIN" in _src
-   and "_note_global_failure(role" in _src)
+# ⚠️ THE CALL SITE, AND THIS CHECK USED NOT TO FIND IT. It localised the
+# superadmin handler into `_elevate` and then searched `_src` — the whole
+# 2,200-line file — so it proved only that both strings exist SOMEWHERE. Move
+# the SUPERADMIN charge out of the handler into any other function and it stayed
+# green; a comment containing the text satisfied it too. `_elevate` was computed
+# and never read: the vestige of the check that was intended.
+# The old form searched for "def superadmin", which is not the handler's name —
+# it is `auth_elevate_handler` — so the guard clause was never true and the
+# check ALWAYS scanned the whole file. Asking which function ENCLOSES each call
+# is the question that was meant, and it cannot be fooled by a rename.
+_code = re.sub(r"#.*", "", _src)          # a mention in prose is not a call
+def _enclosing(needle: str) -> str:
+    """Which function contains the first CALL matching `needle`.
+
+    ⚠️ SKIPS THE DEFINITION. The first attempt matched
+    `def _note_global_failure(role: str, ...)` — the function's own signature —
+    and reported it as the call site, which is the same mistake as pinning a
+    symbol by its import line. Callers are matched by the argument list they
+    pass, and any line beginning `def`/`async def` is refused outright.
+    """
+    i = -1
+    while True:
+        i = _code.find(needle, i + 1)
+        if i < 0:
+            return ""
+        line_start = _code.rfind("\n", 0, i) + 1
+        if not _code[line_start:i].lstrip().startswith(("def ", "async def ")):
+            break
+    if i < 0:
+        return ""
+    j = _code.rfind("\ndef ", 0, i)
+    k = _code.rfind("\nasync def ", 0, i)
+    start = max(j, k)
+    if start < 0:
+        return ""
+    return _code[start + 1:_code.index("(", start)].replace("async def ", "").replace("def ", "")
+
+ck("  the SUPERADMIN charge sits in the elevation handler",
+   _enclosing("_note_global_failure(SUPERADMIN,") == "auth_elevate_handler")
+ck("  ...and the caller's-role charge sits in the passcode handler",
+   _enclosing("_note_global_failure(role,") == "auth_verify_handler")
 
 # ── the REST allow-list fails CLOSED ──────────────────────────────────────
 # Every string below reached Core from a guest session before the rule became a
@@ -211,6 +249,63 @@ print("\n  service calls:")
 ck("a guest may not call an arbitrary domain",
    not proxy._service_call_allowed("guest", "shell_command", "anything"))
 ck("the owner may", proxy._service_call_allowed("owner", "shell_command", "anything"))
+
+# ── a store that cannot be read is not an empty store ─────────────────────
+# ⚠️ THE ONE THAT DESTROYED DATA. Absent and unreadable both degraded to
+# `empty`, so the facility delete guard — whose entire question is "what
+# disappeared" — diffed against nothing, found nothing removed, skipped the
+# superadmin elevation, and let the write through. The evidence sweep then ran
+# with the same empty baseline and deleted every photo the unreadable records
+# referenced. The caller saw {"ok": true}.
+print("\n  a store that cannot be read:")
+with tempfile.TemporaryDirectory() as tmp:
+    missing = os.path.join(tmp, "never-written.json")
+    v, ok = proxy._read_json_store_status(missing, {})
+    ck("an ABSENT store is empty, and readable — nothing has been written yet",
+       v == {} and ok is True)
+
+    corrupt = os.path.join(tmp, "corrupt.json")
+    with open(corrupt, "w") as fh:
+        fh.write("{not json at all")
+    v, ok = proxy._read_json_store_status(corrupt, {})
+    ck("a CORRUPT store reads as empty but is NOT readable", v == {} and ok is False)
+
+    wrong = os.path.join(tmp, "wrong-type.json")
+    with open(wrong, "w") as fh:
+        fh.write('["a list where an object belongs"]')
+    v, ok = proxy._read_json_store_status(wrong, {})
+    ck("  ...and so does one holding the wrong top-level type",
+       v == {} and ok is False)
+
+    good = os.path.join(tmp, "good.json")
+    with open(good, "w") as fh:
+        fh.write('{"tickets": []}')
+    v, ok = proxy._read_json_store_status(good, {})
+    ck("a readable store comes back with its contents",
+       v == {"tickets": []} and ok is True)
+
+    ck("the degrading read still exists for callers that only render",
+       proxy._read_json_store(corrupt, {}) == {})
+
+# The sweep must not delete on a baseline nobody could read, whichever caller
+# reaches it — the PUT path refuses such a write, and this is the second lock.
+with tempfile.TemporaryDirectory() as tmp:
+    proxy.FM_EVIDENCE_DIR = tmp
+    photo = os.path.join(tmp, "a" * 32 + ".jpg")
+    with open(photo, "wb") as fh:
+        fh.write(b"\xff\xd8\xff")
+    # ⚠️ A CURRENT MTIME, ON PURPOSE. The first attempt set this to epoch 0,
+    # and the assertion failed on correct code: retention still runs on an
+    # unreadable baseline (it is time-based and asks no document anything), so
+    # an ancient file is collected whatever the references say. The fixture was
+    # measuring retention while claiming to measure the reference sweep.
+    old_doc = {"tickets": [{"id": "t", "photoIds": ["a" * 32]}]}
+    proxy._fm_after_write({}, {"tickets": []}, False)
+    ck("an unreadable baseline deletes NO referenced evidence",
+       os.path.exists(photo))
+    proxy._fm_after_write(old_doc, {"tickets": []}, True)
+    ck("  ...while a real delete against a READ baseline still collects it",
+       not os.path.exists(photo))
 
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0

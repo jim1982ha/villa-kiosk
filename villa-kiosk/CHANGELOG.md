@@ -1,3 +1,28 @@
+## 2.496.38
+
+### Fixed — a damaged maintenance file could delete its own photographs
+If the stored maintenance record became unreadable, the add-on treated it as
+empty. The safeguard that requires the superadmin code before anything is
+deleted compares what was there against what is being saved — so with "what was
+there" reading as nothing, it saw no deletions, asked for nothing, and allowed
+the save. The cleanup that follows then removed every photograph belonging to
+the records that could not be read, and the app was told the save succeeded.
+
+A file that cannot be read is now treated as a question rather than as an empty
+one. The save is refused with an explanation, nothing is changed or deleted, and
+the file is still there to recover from.
+
+### Fixed — the check protecting this villa's name had never run
+A check exists to keep the property's name, hostname and model filename out of
+the published source. The list it reads is deliberately kept off the repository,
+which meant that on the build servers the file was never there, the check
+reported that it had been skipped, and the build passed anyway. It has therefore
+only ever run on one machine.
+
+It now works from fingerprints of those words rather than the words themselves,
+so it runs everywhere without publishing what it is looking for — and a build
+that cannot run it at all now fails instead of passing.
+
 ## 2.496.37
 
 ### Fixed — the report could call an unread maintenance record "on schedule"

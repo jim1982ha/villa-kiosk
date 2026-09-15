@@ -1335,7 +1335,7 @@ def _delete_evidence(photo_id: str) -> bool:
         return False
 
 
-def _fm_after_write(old, new) -> None:
+def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
     """Collect evidence photos the maintenance record no longer points at.
 
     Runs on EVERY write, not only on a delete. The earlier version only fired
@@ -1354,6 +1354,22 @@ def _fm_after_write(old, new) -> None:
     referenced), so both run here.
     """
     referenced = _fm_referenced_photo_ids(new)
+
+    # ⚠️ NOTHING REFERENCE-BASED RUNS ON A BASELINE WE COULD NOT READ. Steps 1
+    # and 2 both answer "does anything still point at this photo?", and both
+    # read that answer out of documents. If the stored document was unusable,
+    # `old` is an empty stand-in and every photo looks unreferenced — so the
+    # sweep would delete exactly the evidence belonging to the records that
+    # could not be read. The PUT handler already refuses such a write; this is
+    # the second lock on the same door, because the caller is the only thing
+    # that knows, and a future third caller will not.
+    #
+    # Step 3 (retention) still runs: it is time-based, asks no document
+    # anything, and is what keeps a villa that stops uploading from growing
+    # forever.
+    if not baseline_readable:
+        _prune_fm_evidence()
+        return
 
     # 1. Anything this write dropped a reference to goes immediately: it was
     #    referenced a moment ago, so there is no in-flight form to protect.
@@ -1781,16 +1797,44 @@ async def atomic_write_async(dest: str, write_body, binary: bool = True,
         raise
 
 
-def _read_json_store(path: str, empty):
-    """Parse a shared store, degrading to `empty` for absent/corrupt/wrong-typed
-    files — a store that can't be read must never take the kiosk down, it just
-    reads as "nothing configured yet"."""
+def _read_json_store_status(path: str, empty) -> tuple[object, bool]:
+    """Parse a shared store, returning (value, readable).
+
+    ⚠️ "ABSENT" AND "UNREADABLE" ARE DIFFERENT ANSWERS, AND CONFLATING THEM
+    DESTROYED DATA. Both used to degrade to `empty`, which is right for a store
+    that is merely not configured yet — and catastrophic for one the facility
+    manager's delete guard diffs against. That guard's whole question is *what
+    disappeared*: with `old` forced to empty, every removed-id set came out
+    empty, `removed` was falsy, the superadmin elevation requirement evaporated,
+    and the write was waved through. The evidence sweep then ran with the same
+    empty baseline and deleted every photo the lost records referenced. The
+    caller saw {"ok": true}.
+
+    A missing file IS legitimately empty — nothing has been written yet. A file
+    that exists and will not parse, or holds the wrong top-level type, is a
+    question, and the callers below are the ones that must answer it.
+    """
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return empty
-    return data if isinstance(data, type(empty)) else empty
+    except FileNotFoundError:
+        return empty, True          # never written — genuinely empty
+    except (json.JSONDecodeError, OSError):
+        return empty, False         # present and unusable — say so
+    if not isinstance(data, type(empty)):
+        return empty, False         # wrong shape is also unusable
+    return data, True
+
+
+def _read_json_store(path: str, empty):
+    """The degrading read, for callers with nothing destructive behind them.
+
+    Kept because a store that can't be read must never take the kiosk down —
+    a GET that returns "nothing configured yet" is the right answer for a
+    client that is only going to render it. Anything that DELETES on the
+    strength of the result must use _read_json_store_status instead."""
+    value, _ = _read_json_store_status(path, empty)
+    return value
 
 
 def _write_json_store(path: str, payload: str) -> None:
@@ -1837,9 +1881,15 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 
     `write_guard(request, body, old, new)` may veto a write by returning a
     response (used to require a superadmin elevation before any record is
-    DELETED); `after_write(old, new)` runs once the write has landed (used to
-    purge evidence photos an authorised delete orphaned). Both are optional
-    hooks on this one factory rather than a reason to fork it again.
+    DELETED); `after_write(old, new, baseline_readable)` runs once the write has
+    landed (used to purge evidence photos an authorised delete orphaned). Both
+    are optional hooks on this one factory rather than a reason to fork it again.
+
+    ⚠️ `baseline_readable` IS FALSE WHEN THE STORED DOCUMENT COULD NOT BE
+    PARSED. The PUT path refuses such a write outright, so a hook should never
+    see it — the flag exists because a hook that DELETES on the strength of
+    `old` must not depend on a caller three hundred lines away remembering
+    that. See _read_json_store_status.
 
     ⚠️ TWO STORES ARE DELIBERATELY *NOT* BUILT HERE, AND CONVERGING EITHER ONE
     WOULD BE A PRIVILEGE BUG, NOT A TIDY-UP (found by /dry-audit, 2026-08-19,
@@ -1925,7 +1975,22 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         if len(payload.encode("utf-8")) > max_bytes:
             return web.json_response({"error": f"{key} payload too large"}, status=413)
         async with lock:
-            stored = _read_json_store(path, empty)
+            stored, readable = _read_json_store_status(path, empty)
+            if not readable:
+                # ⚠️ REFUSED, NOT DEGRADED. Every write here is computed by the
+                # client against a document it fetched; if the copy on disk is
+                # now unusable, this write's diff describes a baseline nobody
+                # has. Accepting it silently replaces records the guard could
+                # not check and orphans the photos they referenced. Failing
+                # loudly keeps both, and the file is still on disk to recover
+                # from — the GET beside this one degrades to empty on purpose,
+                # so a client can still read, re-enter and push a whole
+                # document once someone has looked.
+                return web.json_response(
+                    {"error": f"the stored {key} document could not be read, so this "
+                              f"write cannot be checked against it. Nothing has been "
+                              f"changed or deleted. Check /data for a corrupt file."},
+                    status=409, headers={"Cache-Control": "no-store"})
             if expected_rev is not None:
                 current_rev = _store_revision(path)
                 if expected_rev != current_rev:
@@ -1944,7 +2009,7 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
             _write_json_store(path, payload)
             new_rev = _store_revision(path)
             if after_write is not None:
-                after_write(stored, value)
+                after_write(stored, value, readable)
         return web.json_response({"ok": True, "count": len(value), "rev": new_rev})
 
     return get_handler, put_handler

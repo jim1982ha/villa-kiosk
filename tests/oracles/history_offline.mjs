@@ -1,54 +1,84 @@
+// tests/oracles/history_offline.mjs
+//
 // Does a device's OFFLINE time survive the fetch and reach the chart?
-// Replayed over the real rows HA holds for the master-bedroom lock on
-// 2026-09-14, a device that flapped unlocked<->unavailable all day.
-const UNKNOWN = new Set(["unavailable", "unknown"]);
+//
+// ⚠️ THIS FILE USED TO REPLAY THE PIPELINE INSTEAD OF RUNNING IT. It declared
+// an OLD transform (drop unknown states, then collapse duplicates) and a NEW
+// one, ran both over recorded rows and compared them. That proved the decision
+// and pinned nothing: `fetchStateHistory` could have gone back to dropping
+// `unavailable` and not one line here would have gone red — which is precisely
+// the regression the file is named for.
+//
+// It drives the shipped function now. `fetchStateHistory` fetches, so the two
+// things it reaches for are stubbed: `window.location` (ingressApiBase builds a
+// same-origin URL from it) and `fetch` (which returns the recorded rows). Both
+// are three lines, and they are the only reason this was ever called untestable.
+// An EMPTY origin, not a plausible hostname. The first version used one, and
+// tests/hard-rules.py's third-party-host clause caught it immediately — the
+// guard doing its job on a file written minutes earlier. `fetch` is stubbed, so
+// the URL is never dialled and only its shape matters.
+globalThis.window = { location: { origin: "", pathname: "/" } };
 
-// the pipeline as it was: drop unknown states, then collapse consecutive dupes
-const OLD = (rows) => {
-  const kept = rows.filter(([, s]) => !UNKNOWN.has(s));
-  const out = [];
-  for (const p of kept) if (!out.length || out[out.length - 1][1] !== p[1]) out.push(p);
-  return out;
-};
-// the pipeline now: keep everything, then collapse consecutive dupes
-const NEW = (rows) => {
-  const out = [];
-  for (const p of rows) if (!out.length || out[out.length - 1][1] !== p[1]) out.push(p);
-  return out;
-};
-
-const TWELVE_H = [
-  ["08:03:40","unlocked"],["15:34:32","unavailable"],["15:37:46","unlocked"],
-  ["16:27:33","unavailable"],["16:42:22","unlocked"],["17:31:54","unavailable"],
-  ["17:38:56","unlocked"],["18:15:09","unavailable"],["18:15:10","unlocked"],
-  ["18:38:49","unavailable"],["19:23:32","unlocked"],["19:37:11","unavailable"],
-];
-// HA returns the state active AT the window start as the first row
-const ONE_H = [["19:05:00","unavailable"],["19:23:32","unlocked"],["19:37:11","unavailable"]];
+import { register } from "node:module";
+register("../consistency/alias-hook.mjs", import.meta.url);
 
 let fail = 0;
-const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!ok) fail++; };
+const eq = (name, got, want) => {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  console.log(`    ${ok ? "PASS" : "FAIL"}  ${name}  →  ${JSON.stringify(got)}${ok ? "" : `  (wanted ${JSON.stringify(want)})`}`);
+  if (!ok) fail++;
+};
 
-for (const [name, rows] of [["1h", ONE_H], ["12h", TWELVE_H]]) {
-  const o = OLD(rows), n = NEW(rows);
-  console.log(`\n  ${name} window — ${rows.length} rows from HA`);
-  console.log(`    before: ${o.length} segment(s), first at ${o[0]?.[0] ?? "—"}`);
-  console.log(`    after : ${n.length} segment(s), first at ${n[0]?.[0] ?? "—"}`);
-}
+// Real rows for a master-bedroom lock on 2026-09-14 — a device that flapped
+// between unlocked and unavailable all day. The ids are fixture names; the
+// SHAPE and the sequence are what was recorded.
+const T = (min) => new Date(Date.UTC(2026, 8, 14, 0, min)).toISOString();
+const ROWS = [
+  { state: "unavailable", last_changed: T(0) },   // the window-start anchor
+  { state: "unlocked",    last_changed: T(20) },
+  { state: "unavailable", last_changed: T(21) },
+  { state: "unlocked",    last_changed: T(48) },
+  { state: "unlocked",    last_changed: T(49) },  // attribute-only change
+  { state: "unavailable", last_changed: T(90) },
+];
+globalThis.fetch = async () => ({ ok: true, json: async () => [ROWS] });
 
-console.log("\n  assertions:");
-ck("1h now starts at the window edge, not mid-chart", NEW(ONE_H)[0][0] === "19:05:00");
-ck("1h before it began late (the blank gap)", OLD(ONE_H)[0][0] === "19:23:32");
-ck("12h no longer collapses to one false band", NEW(TWELVE_H).length === 12);
-ck("12h before it did", OLD(TWELVE_H).length === 1);
-ck("offline periods now reach the chart",
-   NEW(TWELVE_H).filter(([, s]) => UNKNOWN.has(s)).length === 6);
-ck("none reached it before",
-   OLD(TWELVE_H).filter(([, s]) => UNKNOWN.has(s)).length === 0);
+const { fetchStateHistory } = await import("@/ha/HAHistoryAPI");
+const points = await fetchStateHistory("lock.fixture", 24);
+const states = points.map((p) => p.state);
+console.log(`  ${ROWS.length} recorded rows → ${points.length} points\n`);
 
-console.log("\n  the dead-window lookback in useStateHistory:");
-const alive = (rows) => rows.some(([, s]) => !UNKNOWN.has(s));
-const DEAD = [["19:05:00","unavailable"],["19:20:00","unavailable"]];
-ck("a fully-offline window is now seen as dead", alive(NEW(DEAD)) === false);
-ck("before, the filter emptied it and the test could not tell", alive(OLD(DEAD)) === false && OLD(DEAD).length === 0);
+console.log("  offline time survives the fetch:");
+// ⚠️ THE OLD DEFAULT DROPPED THESE BEFORE THE CHART EVER SAW THEM, two ways:
+// a window whose first in-window change is late rendered BLANK up to it,
+// because the anchor row HA returns at the window start WAS an `unavailable`;
+// and a long window collapsed to ONE solid band of the surviving state — the
+// worse lie, since it claims a device held one state for twelve hours when it
+// was offline for most of them.
+eq("`unavailable` reaches the chart", states.includes("unavailable"), true);
+eq("...including the window-start anchor, so nothing renders blank",
+   states[0], "unavailable");
+eq("the real alternation is preserved, not flattened",
+   states, ["unavailable", "unlocked", "unavailable", "unlocked", "unavailable"]);
+
+console.log("\n  and consecutive duplicates are still collapsed:");
+// An attribute-only change reports the same state twice; drawing a boundary
+// there would put a visible seam in one continuous segment.
+eq("two identical rows become one point", points.filter((p) => p.state === "unlocked").length, 2);
+eq("no two adjacent points share a state",
+   states.every((s, i) => i === 0 || s !== states[i - 1]), true);
+
+console.log("\n  and the rows are ordered and real:");
+eq("timestamps are finite", points.every((p) => Number.isFinite(p.t)), true);
+eq("...and ascending", points.every((p, i) => i === 0 || p.t >= points[i - 1].t), true);
+
+console.log("\n  a null state does not travel:");
+globalThis.fetch = async () => ({ ok: true, json: async () => [[
+  { state: null, last_changed: T(0) }, { state: "on", last_changed: T(5) },
+]] });
+const withNull = await fetchStateHistory("sensor.fresh", 24);
+eq("HA's null on a fresh entity is coerced at the door",
+   withNull.every((p) => typeof p.state === "string"), true);
+
+console.log(`\n${fail ? `❌ ${fail} failed` : "✅ offline time reaches the chart"}`);
 process.exit(fail ? 1 : 0);
