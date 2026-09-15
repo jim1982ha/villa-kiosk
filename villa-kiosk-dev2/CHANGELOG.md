@@ -1,3 +1,25 @@
+## 2.496.25
+
+### Fixed — an address the add-on published but could never answer
+The web server still advertised a path for shared kiosk scenes, under a comment
+describing where they were stored. That feature was removed when the kiosk
+started reading Home Assistant's own scenes directly — but the address outlived
+it, so anything reaching it got a bare 404 from a route the add-on no longer
+had.
+
+Nothing used it, so nothing was broken. It is gone now, and a new check walks
+the web server's address list against the ones the add-on actually answers, in
+both directions, so a published-but-dead address cannot survive again.
+
+### Fixed — the Facility workspace did not work in local development
+Running the kiosk locally against a real Home Assistant forwards a list of
+addresses to the add-on. That list had five of the nine the app actually uses —
+so the shared device configuration, the whole Facility workspace and the
+diagnostics all quietly returned 404 to anyone working on them locally.
+
+The list is complete now, and the same new check compares it against what the
+app requests, so a tenth address cannot be added without it.
+
 ## 2.496.24
 
 ### Fixed — mistyped passcodes never expired, so the villa would eventually lock itself out
