@@ -1,3 +1,28 @@
+## 2.496.47
+
+### Added — a sky with the sun in it, for surfaces that reflect
+Settings → Render now offers **Sky reflections**, with a **Haze** slider.
+
+Until now, every reflective surface in the villa — glass, worktops, polished
+floors — was reflecting a stand-in sky made of three colours blended from top
+to bottom. Nothing in it changed with the direction a surface faced, so no
+surface could catch the sun, and the different finishes the villa's materials
+already carry had almost nothing to show against.
+
+Choosing **Realistic sky** replaces that with a sky worked out from where the
+sun actually is above the villa, and it follows the sun through the day and
+fades out at night alongside the rest of the lighting. Haze runs from crisp
+air, with a tight bright sun, to a soft overcast light.
+
+**It is off by default, and nothing changes until you turn it on.** It alters
+how the whole villa looks and asks more of the screen's memory, so it is yours
+to switch on and judge on the wall rather than something that arrives in an
+update. If a screen cannot manage it, it quietly goes back to the simple sky
+and says so under the setting.
+
+Still no internet needed: the sky is calculated in the villa, not downloaded,
+and nothing was added to the 3D model file.
+
 ## 2.496.46
 
 ### Changed — one answer to "is this device reachable", instead of seven
