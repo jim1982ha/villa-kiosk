@@ -32,7 +32,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { tapDebug } from "@/utils/tapDebug";
 import { WHEEL_IDLE_MS, swipeStep, wheelOwner, wheelStep } from "./cameraGestures";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { STATUS_COLOR, UNKNOWN_STATES } from "@/utils/stateColors";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { mergeStateHistories } from "./chartUtils";
@@ -391,7 +391,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
       setStatusHistory(mergeStateHistories(
         { camera: camHist, motion: motionHist },
         (cur) => {
-          if (!cur.camera || cur.camera === "unavailable" || cur.camera === "unknown") return "offline";
+          if (!cur.camera || UNKNOWN_STATES.has(cur.camera)) return "offline";
           if (motionId && cur.motion === "on") return "motion";
           return "online";
         },

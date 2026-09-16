@@ -17,6 +17,7 @@
 import { useEffect, useState } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { UNKNOWN_STATES } from "@/utils/stateColors";
 
 export interface StateHistoryResult {
   data: StateHistoryPoint[];
@@ -48,7 +49,7 @@ export function useStateHistory(entityId: string, hours = 24): StateHistoryResul
     // look further back for the last moment it reported and show the SAME
     // window ending there, so the chart always answers "when did this stop".
     const alive = (h: StateHistoryPoint[]) =>
-      h.some((pt) => pt.state !== "unavailable" && pt.state !== "unknown");
+      h.some((pt) => !UNKNOWN_STATES.has(pt.state));
     fetchStateHistory(entityId, hours)
       .then(async (h) => {
         if (cancelled) return;
@@ -57,7 +58,7 @@ export function useStateHistory(entityId: string, hours = 24): StateHistoryResul
         if (cancelled) return;
         let seen = 0;
         for (const pt of deep) {
-          if (pt.state !== "unavailable" && pt.state !== "unknown" && pt.t > seen) seen = pt.t;
+          if (!UNKNOWN_STATES.has(pt.state) && pt.t > seen) seen = pt.t;
         }
         if (seen === 0) { setHistory(h); setLoading(false); return; }
         // Keep the window's own length; only move where it ends.

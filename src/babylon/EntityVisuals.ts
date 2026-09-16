@@ -105,7 +105,7 @@ import { badgeKindFor, badgeFaceAndRing, type DeviceReading } from "@/utils/devi
 import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable } from "@/utils/stateColors";
+import { isUnavailable, UNKNOWN_STATES } from "@/utils/stateColors";
 import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
 import { mergeOverlapping } from "./boxMerge";
 import { phantomEntity } from "@/utils/phantomEntity";
@@ -9698,7 +9698,7 @@ export class EntityVisuals {
 
       case "climate": {
         setEmissive?.(Color3.Black());
-        const running = state.state !== "off" && state.state !== "unavailable" && state.state !== "unknown";
+        const running = state.state !== "off" && !UNKNOWN_STATES.has(state.state);
         this.applyClimateOutline(mesh, running);
         break;
       }

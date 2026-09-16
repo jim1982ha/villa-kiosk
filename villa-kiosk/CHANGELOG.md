@@ -1,3 +1,19 @@
+## 2.496.46
+
+### Changed — one answer to "is this device reachable", instead of seven
+Seven different parts of the app each carried their own copy of the two words
+Home Assistant uses when a device cannot be reached. They all agreed, so
+nothing was wrong on screen — but the next part to be written would have
+carried an eighth copy, and copies drift. That is how a lock the villa had lost
+contact with once rendered as a confirmed "UNLOCKED".
+
+There is now one definition and every reader uses it, with a check that fails
+the build if a new reader writes its own. Two places deliberately stay wider
+than that definition, because "nothing to report" and "cannot be reached" are
+the same colour and not the same fact; the check knows about both.
+
+Nothing you see changes.
+
 ## 2.496.45
 
 ### Changed — nothing you can see; a note that described a fault as the design

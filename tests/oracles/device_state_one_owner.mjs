@@ -19,8 +19,9 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 
 const { classifyDeviceActivity, badgeFaceAndRing } = await import("@/utils/deviceActivity");
 const { alertStateFor, binarySensorClassInfo } = await import("@/config/BinarySensorClasses");
-const { switchPosition } = await import("@/utils/entityState");
-const { statusKeyFor, STATUS_COLOR } = await import("@/utils/stateColors");
+const { switchPosition, OFF_STATES } = await import("@/utils/entityState");
+const { statusKeyFor, STATUS_COLOR, UNKNOWN_STATES, isUnavailable } =
+  await import("@/utils/stateColors");
 
 const ent = (id, state, dc) => ({
   entity_id: id, state, attributes: dc ? { device_class: dc } : {},
@@ -108,6 +109,50 @@ console.log(`\n  scanned ${FILES.length} source files`);
 if (privateLists.length) console.log(`      second alert list in: ${privateLists.join(", ")}`);
 if (overrideCombos.length) console.log(`      override re-combined in: ${overrideCombos.join(", ")}`);
 
+/* ── 7. "the value is not known" has ONE owner, and it is a SET ────────── */
+// The pair `"unavailable"`/`"unknown"` was spelled out in SEVEN places on this
+// branch. Two of them held a `HassEntity` and could have called `isUnavailable`
+// and did not; the other four read a bare state STRING — a history point, a
+// merged status map, a camera's own status — where that predicate does not fit
+// at all. So the shared thing has to be the SET.
+//
+// ⚠️ THE BEHAVIOURAL HALF ALONE WOULD NOT CATCH THE REGRESSION. Every reader
+// agrees today whether or not they share a definition; what breaks is the
+// EIGHTH reader, written next year, spelling the pair out again and then
+// diverging. So the scan below is the real assertion and the calls above it
+// only prove the set is the one actually in use.
+const unknownReaders = [
+  ["badgeKindFor (map badge)", badgeFaceAndRing(read("lock", ent("lock.a", "unavailable"))).face],
+  ["statusKeyFor (history bar)", statusKeyFor("unavailable", "lock")],
+  ["isUnavailable (panels)", isUnavailable(ent("lock.a", "unknown"))],
+];
+const bothMembersAgree = ["unavailable", "unknown"].every((st) =>
+  UNKNOWN_STATES.has(st)
+  && badgeFaceAndRing(read("lock", ent("lock.a", st))).face === "unavailable"
+  && statusKeyFor(st, "lock") === "unavailable"
+  && isUnavailable(ent("lock.a", st)) === true);
+
+// A line of CODE (not a comment) naming both members, anywhere but the owner.
+const OWNER = "utils/stateColors.ts";
+const inlinePairs = FILES.filter((f) => {
+  const rel = f.slice(SRC.length + 1);
+  if (rel === OWNER) return false;
+  return readFileSync(f, "utf8").split("\n").some((ln) => {
+    const code = ln.replace(/\/\/.*$/, "").replace(/\/\*.*?\*\//g, "");
+    return /"unavailable"/.test(code) && /"unknown"/.test(code);
+  });
+}).map((f) => f.slice(SRC.length + 1));
+
+// ⚠️ `OFF_STATES` IS NOT ONE OF THESE AND MUST NOT BECOME ONE. It is wider on
+// purpose — it carries `"off"` and `""` as well — so it answers "is this thing
+// not on", which is a different question from "is this thing unreachable".
+// Same reason `statusKeyFor`'s blank branch keeps `""`/`"none"` spelled out.
+const WIDER_ON_PURPOSE = ["utils/entityState.ts"];
+const strayPairs = inlinePairs.filter((f) => !WIDER_ON_PURPOSE.includes(f));
+
+console.log(`\n  unknown-state readers: ${unknownReaders.map(([n, v]) => `${n}=${v}`).join(", ")}`);
+if (strayPairs.length) console.log(`      pair spelled out again in: ${strayPairs.join(", ")}`);
+
 console.log("\n  assertions:");
 ck("the scan reached the source tree", FILES.length > 100);
 ck("a motion sensor does not ring as a fault", motionBadge.face === "active");
@@ -129,4 +174,8 @@ ck("the status table's alert words now reach the badge", nowAlerts);
 ck("no second alert word-list in the tree", privateLists.length === 0);
 ck("the device_class override is combined in exactly one module", overrideCombos.length === 0);
 ck("the device_class table is still consulted", binarySensorClassInfo("moisture").alarmState === "on");
+ck("both members of UNKNOWN_STATES reach every reader the same way", bothMembersAgree);
+ck("no reader spells the pair out for itself", strayPairs.length === 0);
+ck("  ...and the deliberately wider set is still wider",
+   OFF_STATES.has("off") && OFF_STATES.has("") && !UNKNOWN_STATES.has("off"));
 process.exit(fail ? 1 : 0);

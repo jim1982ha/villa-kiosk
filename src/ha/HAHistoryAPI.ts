@@ -96,7 +96,7 @@ export async function fetchStateHistory(
   // opt-out or were broken by not passing it. Colour is not this module's
   // business — `stateColors.historyStateColor` already maps these to the amber
   // the Map colours legend documents.
-const series = await fetchRaw(entityId, hours);
+  const series = await fetchRaw(entityId, hours);
   const points = series
     // ⚠️ COERCED AT THE DOOR, alongside the guard in `statusKeyFor`. Home
     // Assistant sends a null `state` on a freshly added entity's early rows
