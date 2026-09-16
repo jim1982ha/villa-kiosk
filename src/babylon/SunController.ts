@@ -41,6 +41,15 @@ export class SunController {
   // the windows stay day-bright white panels all night). Driven with the
   // same twilight factor as nightBlend, in baked AND unbaked modes.
   private glassDim: ((t: number) => void) | null = null;
+  /**
+   * Optional consumer of the sun direction — RenderEnhancements, when the IBL
+   * is in "sky" mode and the environment cube has a real sun in it.
+   *
+   * ⚠️ A SINK RATHER THAN A CONSTRUCTOR ARGUMENT because SceneManager builds
+   * this controller long before it builds RenderEnhancements. Optional so the
+   * default ("gradient") path is byte-for-byte what it was.
+   */
+  private skySink: { setSun(dir: { x: number; y: number; z: number }, nightT: number): void } | null = null;
 
   constructor(
     scene: Scene,
@@ -146,6 +155,11 @@ export class SunController {
    */
   private modelAzimuth(azimuth: number): number {
     return azimuth + ((this.config.northOffsetDeg ?? 0) * Math.PI) / 180;
+  }
+
+  /** Give the procedural-sky environment a feed of the sun. Null detaches. */
+  setSkySink(sink: { setSun(dir: { x: number; y: number; z: number }, nightT: number): void } | null): void {
+    this.skySink = sink;
   }
 
   /** Compute lighting from the computed sun altitude/azimuth right now. */
@@ -399,6 +413,14 @@ export class SunController {
     // for scene lighting. clearColor is kept as a fallback for when the sky
     // dome is absent.
     this.sky?.update(skyDir, isDay);
+    // ⚠️ NEGATED, BECAUSE `skyDir` POINTS FROM THE SUN TO THE SCENE. It is the
+    // vector a DirectionalLight takes, and SkyDome negates it too (see the
+    // `const x = -this.sunDir.x` that places the disc). proceduralSky wants a
+    // vector pointing AT the sun, so the sign is flipped exactly once, here,
+    // where the convention is visible next to its two other readers — getting
+    // it wrong puts the villa's reflected sun on the opposite wall, which is
+    // entirely plausible in a screenshot.
+    this.skySink?.setSun({ x: -skyDir.x, y: -skyDir.y, z: -skyDir.z }, nightT);
     // In overview mode bgOverride pins a calm dark backdrop; otherwise the empty
     // space tracks the day/night sky colour.
     this.scene.clearColor = this.bgOverride ?? (isDay
