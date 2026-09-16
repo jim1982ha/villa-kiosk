@@ -367,52 +367,6 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
           {(manager?.renderFx.isBaked() ?? false) && " Villa lighting forces this villa's baked day or night look, or follows the real cycle on Auto — it relights the 3D model, unlike the Interface theme in the header, which only recolours the panels."}
         </p>
 
-        {/* ── Sky reflections ──────────────────────────────────────────────
-            Which procedural environment the PBR materials reflect. Both are
-            computed in-app and neither fetches anything, so both hold on a
-            villa with no internet.
-
-            ⚠️ OFF BY DEFAULT AND THAT IS DELIBERATE — see RenderConfig.iblMode.
-            It changes the villa's whole look and costs ~2.1 MB of VRAM against
-            393 KB, so it is something the owner turns on and judges on the
-            wall, not something that arrives in an update.
-
-            The haze slider only appears once Sky is chosen: a control that
-            cannot do anything is worse than a missing one. */}
-        <label style={{ marginTop: 14 }}>Sky reflections</label>
-        <div className="segmented" role="group" aria-label="Sky reflections">
-          {([
-            { key: "gradient", label: "Simple", hint: "A plain sky-to-ground tint. The original look." },
-            { key: "sky", label: "Realistic sky", hint: "A computed sky with the villa's real sun in it, so surfaces reflect the sun's side of the sky." },
-          ] as const).map(({ key, label, hint }) => (
-            <button
-              key={key}
-              className={(render.iblMode ?? "gradient") === key ? "active" : ""}
-              onClick={() => applyRender({ iblMode: key })}
-              aria-pressed={(render.iblMode ?? "gradient") === key}
-              title={hint}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {(render.iblMode ?? "gradient") === "sky" && (
-          <>
-            <label style={{ marginTop: 10 }}>Haze · {render.skyTurbidity.toFixed(0)}</label>
-            <input
-              type="range" min={1} max={10} step={1} value={render.skyTurbidity}
-              onChange={(e) => applyRender({ skyTurbidity: Number(e.target.value) })}
-            />
-          </>
-        )}
-        <p className="muted body-text" style={{ marginTop: 6, fontSize: "var(--text-2xs)" }}>
-          {(render.iblMode ?? "gradient") === "sky"
-            ? (manager?.renderFx.isSkyUnavailable()
-              ? "This screen could not use the realistic sky, so the simple one is being shown instead."
-              : "Glass, worktops and polished floors reflect the sun's side of the sky, and follow it through the day. Haze goes from crisp air to a soft, overcast light.")
-            : "A plain tint from sky to ground. Nothing in it changes with the direction a surface faces."}
-        </p>
-
         {/* Light effect strength scales a lit fixture's room illumination in
             BOTH villa flavours (2.31.0): the floor "light pool" decal in
             baked-lighting villas (see babylon/LightPools.ts — their unlit

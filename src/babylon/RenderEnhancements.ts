@@ -8,10 +8,7 @@
 //   1. Tone mapping + exposure/contrast  — rolls off blown-out white highlights.
 //   2. Light rebalance (hemi intensity)  — less flat fill ⇒ directional contrast.
 //   3. SSAO2                             — darkens corners/contacts (depth).
-//   4. IBL — soft ambient for PBR, from one of TWO procedural environments:
-//      "gradient" (the original three-colour cube) or "sky" (an analytic sky
-//      with the real sun in it, babylon/proceduralSky.ts). Both are computed
-//      in-app; neither fetches anything.
+//   4. IBL (procedural gradient cube)    — soft sky/ground ambient for PBR.
 
 import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
 import { SSAO2RenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline";
@@ -19,7 +16,6 @@ import { RawCubeTexture } from "@babylonjs/core/Materials/Textures/rawCubeTextur
 import { Constants } from "@babylonjs/core/Engines/constants";
 import type { Scene } from "@babylonjs/core/scene";
 import type { RenderConfig } from "@/config/AppConfig";
-import { buildSkyFaces, SKY_FACE_SIZE, type Dir3 } from "./proceduralSky";
 import { devLog } from "@/utils/devLog";
 
 const TONE_MAP: Record<string, number> = {
@@ -34,22 +30,6 @@ export class RenderEnhancements {
   private ssao: SSAO2RenderingPipeline | null = null;
   private ssaoAttached = false;
   private env: RawCubeTexture | null = null;
-  /** Signature of the sky `env` was built for — mode/turbidity/sun/night. */
-  private envKey = "";
-  /** Latest sun from SunController. Identity (straight up) until it reports,
-   *  so a sky built before the first tick is still a legal sky. */
-  private sunDir: Dir3 = { x: 0, y: 1, z: 0 };
-  private nightT = 0;
-  /**
-   * Set once a float cube has failed to allocate on THIS device. The sky mode
-   * then behaves exactly as "gradient" for the rest of the session.
-   *
-   * ⚠️ THE FALLBACK IS THE POINT, NOT AN AFTERTHOUGHT. A float RGBA cube with
-   * mips is a WebGL capability, and this app's target is an iPad — the
-   * platform that breaks first here. A mode that throws on the wall and works
-   * on the desk would be worse than not shipping it.
-   */
-  private skyUnavailable = false;
 
   private cfg: RenderConfig | null = null;
   private baked = false;
@@ -134,109 +114,14 @@ export class RenderEnhancements {
     }
   }
 
-  /**
-   * The sun moved, or day/night did. Called by SunController on the same beat
-   * that drives the villa's own lighting, so the sky and the baked atlas
-   * crossfade can never disagree about the time of day.
-   *
-   * Cheap and idempotent: it only records the sun, and `applyIBL` decides
-   * whether that is a big enough change to be worth re-evaluating 98,304
-   * texels for. Safe to call every tick.
-   */
-  setSun(dir: Dir3, nightT: number): void {
-    this.sunDir = dir;
-    this.nightT = nightT;
-    if (this.cfg) this.applyIBL(this.cfg);
-  }
-
-  /**
-   * Whether the sky mode is currently degraded to the gradient because this
-   * device could not allocate a float cube. Lets Settings say so instead of
-   * showing a selected option that is not what the screen is doing.
-   */
-  isSkyUnavailable(): boolean {
-    return this.skyUnavailable;
-  }
-
-  /**
-   * Signature of the environment worth rebuilding for.
-   *
-   * ⚠️ THE SUN IS QUANTISED, AND THAT IS THE WHOLE COST CONTROL. SunController
-   * ticks far more often than the sky meaningfully changes — the real sun moves
-   * about a quarter of a degree per minute — so rebuilding on every tick would
-   * burn ~98k radiance evaluations for a picture nobody could tell apart.
-   * Rounding the direction to ~1.4° buckets means a rebuild happens a few times
-   * an hour, and each one is a few milliseconds.
-   */
-  private skySignature(cfg: RenderConfig): string {
-    const q = (v: number) => Math.round(v * 40);
-    return `sky:${cfg.skyTurbidity}:${q(this.sunDir.x)},${q(this.sunDir.y)},${q(this.sunDir.z)}:${Math.round(this.nightT * 20)}`;
-  }
-
-  // ── 4. IBL — one of two procedural environments (offline, no asset) ───────
+  // ── 4. IBL — procedural sky/ground gradient cube (offline, no asset) ──────
   private applyIBL(cfg: RenderConfig): void {
-    if (!cfg.ibl) {
-      if (this.scene.environmentTexture && this.scene.environmentTexture === this.env) {
-        this.scene.environmentTexture = null;
-      }
-      return;
-    }
-
-    const wantSky = cfg.iblMode === "sky" && !this.skyUnavailable;
-    const key = wantSky ? this.skySignature(cfg) : "gradient";
-
-    if (!this.env || this.envKey !== key) {
-      const next = wantSky ? this.buildSkyEnv(cfg) : this.buildGradientEnv();
-      // ⚠️ DISPOSE THE OLD ONE, AND ONLY AFTER THE NEW ONE EXISTS. The sky is
-      // rebuilt repeatedly across a day, unlike the gradient which was built
-      // once and lived for the session — so the leak this guards against did
-      // not exist before this mode and would have been a slow one: a 2.1 MB
-      // cube abandoned every few minutes, on a device that is never reloaded.
-      if (this.env) this.env.dispose();
-      this.env = next;
-      this.envKey = wantSky ? key : "gradient";
-    }
-
-    this.scene.environmentTexture = this.env;
-    this.scene.environmentIntensity = cfg.environmentIntensity;
-  }
-
-  /**
-   * Build the analytic sky as a FLOAT cube.
-   *
-   * Float because the sun is the entire reason this mode exists and 8 bits
-   * cannot hold one: clamped to 255 the disc would be no brighter than white
-   * paper and would drive no highlight worth having.
-   *
-   * Falls back to the gradient — permanently, for the session — if the device
-   * refuses the allocation, rather than leaving the scene with no environment
-   * at all. `skyUnavailable` is what Settings reads to stop claiming the sky
-   * is on when it is not.
-   */
-  private buildSkyEnv(cfg: RenderConfig): RawCubeTexture {
-    try {
-      const faces = buildSkyFaces({
-        sun: this.sunDir,
-        turbidity: cfg.skyTurbidity,
-        nightT: this.nightT,
-      });
-      const tex = new RawCubeTexture(
-        this.scene,
-        faces as unknown as ArrayBufferView[],
-        SKY_FACE_SIZE,
-        Constants.TEXTUREFORMAT_RGBA,
-        Constants.TEXTURETYPE_FLOAT,
-        true,  // generateMipMaps — roughness picks the mip, so this is required
-        false, // invertY
-      );
-      // Already linear radiance, unlike the sRGB gradient next door.
-      tex.gammaSpace = false;
-      tex.name = "villaProceduralSky";
-      return tex;
-    } catch (err) {
-      devLog("[Render] float cube unavailable — sky falls back to gradient:", err);
-      this.skyUnavailable = true;
-      return this.buildGradientEnv();
+    if (cfg.ibl) {
+      if (!this.env) this.env = this.buildGradientEnv();
+      this.scene.environmentTexture = this.env;
+      this.scene.environmentIntensity = cfg.environmentIntensity;
+    } else if (this.scene.environmentTexture && this.scene.environmentTexture === this.env) {
+      this.scene.environmentTexture = null;
     }
   }
 
@@ -341,6 +226,5 @@ export class RenderEnhancements {
       this.ssao = null;
     }
     if (this.env) { this.env.dispose(); this.env = null; }
-    this.envKey = "";
   }
 }

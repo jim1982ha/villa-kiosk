@@ -31,9 +31,6 @@ export function clampIconScale(v: number | undefined): number {
 /** Tone-mapping operator applied to the whole scene (see RenderConfig). */
 export type ToneMappingMode = "none" | "standard" | "aces" | "khr_neutral";
 
-/** Which procedural environment RenderEnhancements builds. See RenderConfig.iblMode. */
-export type IblMode = "gradient" | "sky";
-
 /**
  * Render-quality / look knobs. Every effect is independently toggle-able and
  * tunable so the look can be iterated at runtime (Settings → Render quality)
@@ -63,25 +60,6 @@ export interface RenderConfig {
   ambientIntensity: number;
   /** Image-based lighting from a procedural sky/ground gradient cube. */
   ibl: boolean;
-  /**
-   * WHICH procedural environment `ibl` builds. Both are computed in-app and
-   * neither fetches anything, so both satisfy the offline rule.
-   *
-   * "gradient" — the original: three colours interpolated by HEIGHT alone
-   *              (RenderEnhancements.buildGradientEnv). Nothing in it varies
-   *              with compass direction.
-   * "sky"      — an analytic sky with the real sun in it, rebuilt as the sun
-   *              moves (babylon/proceduralSky.ts).
-   *
-   * ⚠️ DEFAULTS TO "gradient" ON PURPOSE. This is the villa's whole look, the
-   * new mode costs ~2.1 MB of VRAM against 393 KB, and the float cube it needs
-   * is the kind of capability that is present on a desk and absent on the one
-   * iPad that matters. Opt in, judge it on the wall, and it falls back to
-   * "gradient" on its own if the device cannot allocate it.
-   */
-  iblMode: IblMode;
-  /** Haze for iblMode "sky": 1 = crisp, 10 = thick. Ignored by "gradient". */
-  skyTurbidity: number;
   /** IBL contribution (scene.environmentIntensity). */
   environmentIntensity: number;
   /** Screen-space ambient occlusion (corner/contact darkening). */
@@ -139,7 +117,7 @@ export const DEFAULT_RENDER: RenderConfig = {
   // memory, on CPU, or on the heap.
   toneMapping: "khr_neutral", exposure: 1.0, contrast: 1.30,
   hemiIntensity: 0.45, sunIntensity: 1.05, ambientIntensity: 0.6,
-  ibl: true, iblMode: "gradient", skyTurbidity: 3, environmentIntensity: 0.6,
+  ibl: true, environmentIntensity: 0.6,
   ssao: true, ssaoRadius: 6, ssaoStrength: 0.25, ssaoSamples: 16,
   nightDimming: 0.5, lightPoolIntensity: 1.0,
 };

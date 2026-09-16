@@ -874,11 +874,6 @@ export class SceneManager {
     // initial apply() pushes config.render onto the freshly-built scene.
     this.renderFx = new RenderEnhancements(this.scene);
     this.renderFx.apply(this.deviceRenderConfig(opts.config.render));
-    // The IBL's "sky" mode puts the REAL sun in the environment cube, so it has
-    // to be fed the same sun the villa is lit by. Attached here rather than
-    // passed to SunController's constructor because that runs hundreds of lines
-    // earlier, before this object exists. A no-op in "gradient" mode.
-    this.sun.setSkySink(this.renderFx);
     // renderFx.apply() sets the *base* IBL intensity and builds the env texture.
     // Re-run the sun pass now so SunController gets the final word on the values
     // it owns (fill light + day/night-scaled IBL) with the texture in place.
@@ -4543,10 +4538,6 @@ export class SceneManager {
     // does not necessarily reclaim — dispose each explicitly. (visuals holds a
     // fullscreen GUI AdvancedDynamicTexture + per-entity lights/shadow maps;
     // camera/overview hold canvas pointer/key listeners.)
-    // Detach BEFORE disposing: SunController outlives nothing here, but its
-    // timers can fire during teardown, and a tick landing on a disposed
-    // RenderEnhancements would rebuild a cube into a dead scene.
-    this.sun.setSkySink(null);
     this.renderFx.dispose();
     this.sky.dispose();
     this.nightSky.dispose();
