@@ -1,3 +1,15 @@
+## 2.496.45
+
+### Changed — nothing you can see; a note that described a fault as the design
+Version 2.496.26 fixed which devices are grouped onto one card in a crowded
+room. The explanation written beside that code was not updated with it, and
+went on stating the old rule — the one that caused the fault — as though it
+were deliberate. Anyone reading it later would have been told, in writing, that
+putting the fault back was a tidy-up.
+
+The note now records what it used to claim, why that claim was wrong, and what
+the code actually does. The villa behaves exactly as it did in 2.496.44.
+
 ## 2.496.44
 
 ### Fixed — badges overlapping, and one drawn behind another
