@@ -968,6 +968,18 @@ export function solvePlacement(
 /** An axis-aligned box on the view plane: centre plus half-extents. */
 export interface PileBox { cx: number; cy: number; hw: number; hh: number; }
 
+/** Lexicographic order on a PAIR of boxes, for breaking an exact overlap tie.
+ *  Geometry only: two piles whose boxes compare equal are interchangeable, so
+ *  no position-derived value is needed and none is used. */
+function lessThan(i: PileBox, j: PileBox, a: PileBox, b: PileBox): boolean {
+  const key = (p: PileBox, q: PileBox) => [p.cx, p.cy, p.hw, p.hh, q.cx, q.cy, q.hw, q.hh];
+  const lhs = key(i, j), rhs = key(a, b);
+  for (let k = 0; k < lhs.length; k++) {
+    if (lhs[k] !== rhs[k]) return lhs[k] < rhs[k];
+  }
+  return false;
+}
+
 /**
  * Merge piles whose DRAWN boxes overlap, repeatedly, until none do.
  *
@@ -992,24 +1004,22 @@ export interface PileBox { cx: number; cy: number; hw: number; hh: number; }
  * (every pass either breaks or removes a pile) and there is no bound to get
  * wrong.
  *
- * Merges the FIRST colliding pair found in index order, which is the canonical
- * (rank, entity_id) order its caller built the piles in — so the result is a
- * function of geometry and rank only, like everything else here.
+ * ⚠️ THIS USED TO SAY "merges the FIRST colliding pair found in index order,
+ * … so the result is a function of geometry and rank only". That sentence
+ * survived 2.496.26, which deleted exactly the rule it describes, and it is
+ * recorded here rather than simply replaced because it argued the defect WAS
+ * the design — a reader trusting it would restore the array scan as a
+ * simplification. Read the loop, not this paragraph.
+ *
+ * The rule now: merge the MOST OVERLAPPED colliding pair, ties broken on the
+ * boxes themselves (`lessThan`). The claim the old sentence made is only true
+ * of a box that COVERS its parents, and the caller's does not — it is centred
+ * on the pile's centroid with a size from the row count, so fusing MOVES the
+ * survivor. Without monotonicity the fixpoint is not unique, and which devices
+ * shared a card moved with the order the piles arrived in.
  *
  * Mutates `piles` in place and returns it.
  */
-/** Lexicographic order on a PAIR of boxes, for breaking an exact overlap tie.
- *  Geometry only: two piles whose boxes compare equal are interchangeable, so
- *  no position-derived value is needed and none is used. */
-function lessThan(i: PileBox, j: PileBox, a: PileBox, b: PileBox): boolean {
-  const key = (p: PileBox, q: PileBox) => [p.cx, p.cy, p.hw, p.hh, q.cx, q.cy, q.hw, q.hh];
-  const lhs = key(i, j), rhs = key(a, b);
-  for (let k = 0; k < lhs.length; k++) {
-    if (lhs[k] !== rhs[k]) return lhs[k] < rhs[k];
-  }
-  return false;
-}
-
 export function mergeCollidingPiles<T>(
   piles: T[][],
   boxOf: (pile: T[]) => PileBox,
