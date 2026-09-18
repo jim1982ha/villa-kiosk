@@ -357,6 +357,22 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
             "2026-08-22 03:14:01 WARNING (MainThread) "
             "[homeassistant.components.zha] sensor.probe_temperature is "
             "unavailable"], refs=table),
+        # ⚠️ IDS IN EVERY FIELD THAT COULD CARRY ONE. This tool's source speaks
+        # entity ids by construction — it reads Home Assistant's Energy
+        # dashboard, whose whole content is statistic ids — so the fixture puts
+        # a real one in `entity_id` AND in `parent_id`, which is the field with
+        # no counterpart in any other tool here: a circuit names the meter it
+        # sits inside, and echoing that raw was the obvious way to write it.
+        ha.ReadEnergy(source=lambda: {
+            "configured": True,
+            "total": 42.0,
+            "unit": "W",
+            "rows": [{"entity_id": "sensor.pool_pump_power", "state": "8.8",
+                      "label": "Pool", "unit": "W", "kind": "property_meter"},
+                     {"entity_id": "automation.a_rule", "state": "1.0",
+                      "label": "Lights", "unit": "W", "kind": "circuit",
+                      "parent_id": "sensor.pool_pump_power"}],
+        }, refs=table),
         ledger.ReadLedger(source=lambda: {}),
         # ⚠️ POINTED AT THE REAL SHIPPED TREE, not a stub. This tool's "source"
         # is the content the add-on ships, so sweeping it here scans all 25

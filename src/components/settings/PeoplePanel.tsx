@@ -202,8 +202,21 @@ export default function PeoplePanel() {
                   villa is the ordinary case; the chat below is the exception,
                   and leading with the exception is what made the row read as
                   two addresses for one person. */}
+              {/* ⚠️ THIS ONE FIELD IS DELIBERATELY UNLABELLED, WHICH PARTLY
+                  REVERSES THE RULE ABOVE — owner's call, 2026-09-18: "it's
+                  redundant and takes some space I want to reduce". The reversal
+                  is narrow and the reasoning is not the same as the report that
+                  added the labels. That report was about three BARE SELECTS,
+                  which carry no clue to what they set; this control is a button
+                  showing a send glyph and the destination's own name, so it
+                  already answers "who gets this". The label also repeated on
+                  every row while saying nothing that changed between them.
+                  ⚠️ NOTHING IS LOST FOR A SCREEN READER: `RecipientButton`
+                  carries `aria-label="Recipients: …"` of its own (see
+                  brief/components/DestinationList). Do not remove `Profile`'s
+                  label on this precedent — a select is the case the report was
+                  actually about. */}
               <label className="people-field">
-                <span>Devices — briefings are sent here</span>
                 <RecipientButton
                   targets={row.targets ?? []}
                   available={targets}

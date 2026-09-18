@@ -319,4 +319,91 @@ def _clamp(value: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, out))
 
 
-HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule)
+class ReadEnergy(BaseTool):
+    name = "read_energy"
+    description = (
+        "What this property is drawing RIGHT NOW, and which circuits it is "
+        "metered by — taken from the property's own Home Assistant Energy "
+        "dashboard. Use this for any question about total or whole-house "
+        "consumption. Do NOT try to assemble a total by searching for power "
+        "sensors and adding them up: circuits overlap, so that sum is wrong, "
+        "and this tool already knows which meters are top-level and which are "
+        "counted inside them.")
+    inputSchema = {"type": "object", "properties": {}}
+    mode = "READ"
+
+    def __init__(self, source: Any = None, refs: Any = None) -> None:
+        self._source = source
+        self._refs = refs
+
+    async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
+        try:
+            read = await resolved(self._source())
+        except Exception as err:  # noqa: BLE001
+            return [fail("unavailable", f"Home Assistant did not answer: {err}")]
+        if not isinstance(read, Mapping):
+            return [fail("unavailable", _UNWIRED)]
+
+        # ⚠️ "NOT DECLARED" IS NOT "NOTHING". A villa whose owner never set the
+        # Energy dashboard up must hear that it has no meter CONFIGURED, with
+        # the one action that fixes it — never a total of zero, and never the
+        # agent's old answer that no global sensor exists, which was a claim
+        # about this property that was simply untrue.
+        if not read.get("configured"):
+            return [data({
+                "kind": "energy",
+                "note": ("This property has not set up Home Assistant's Energy "
+                         "dashboard, so it has not declared which meter is its "
+                         "whole-property supply. Configuring the grid source "
+                         "there is what makes a house total answerable."),
+                "count": 0,
+            })]
+
+        rows: List[Dict[str, Any]] = []
+        for row in read.get("rows") or []:
+            if not isinstance(row, Mapping):
+                continue
+            entity_id = str(row.get("entity_id") or "")
+            if not entity_id:
+                continue
+            # ⚠️ MINTED HERE, BECAUSE THE TOOL OWNS THE REF TABLE. The adapter
+            # and the source both speak entity ids; this is the boundary where
+            # they stop, and the leak sweep in `test_refs` is what proves it.
+            pair = (self._refs.describe(entity_id, str(row.get("label") or ""))
+                    if self._refs else {"ref": "", "label": ""})
+            out: Dict[str, Any] = {
+                "kind": str(row.get("kind") or ""),
+                "ref": pair["ref"],
+                "label": pair["label"],
+                "state": str(row.get("state") or ""),
+                "unit": str(row.get("unit") or ""),
+            }
+            parent = str(row.get("parent_id") or "")
+            if parent and self._refs:
+                out["basis"] = ("already counted inside "
+                                + self._refs.ref_for(parent))
+            rows.append(out)
+
+        total = read.get("total")
+        return [data({
+            "kind": "energy",
+            # ⚠️ THE SUM IS COMPUTED, NOT LEFT TO THE MODEL. Adding the
+            # top-level meters is arithmetic with one trap in it — the
+            # sub-circuits must NOT join the sum — and a model that adds every
+            # row it was handed gets a number that is too big and perfectly
+            # plausible. `adapters/energy.total_of` owns it, and refuses
+            # outright when a meter is unavailable rather than under-reporting.
+            "state": ("" if total is None else str(total)),
+            "unit": str(read.get("unit") or ""),
+            "count": len(rows),
+            "states": rows,
+            "note": ("" if total is not None else
+                     "One of this property's meters is not reporting, so a "
+                     "whole-property total cannot be stated right now — the "
+                     "individual circuits below are still good."),
+        })]
+
+
+HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule, ReadEnergy)

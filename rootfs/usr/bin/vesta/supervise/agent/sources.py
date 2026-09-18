@@ -1130,7 +1130,79 @@ def ha_readers(session: Any) -> Dict[Any, Optional[Callable[..., Any]]]:
         ha_tools.ReadHistory: history_reader(session),
         ha_tools.ReadAutomationTrace: trace_reader(session),
         ha_tools.ReadSchedule: schedule_reader(session),
+        ha_tools.ReadEnergy: energy_reader(session),
     }
+
+
+def energy_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read() -> {configured, rows, total, unit}` for `read_energy`.
+
+    ⚠️ THE LAYOUT IS THE PROPERTY'S OWN, NEVER THIS FILE'S. Everything about
+    which sensor is the house meter comes out of `energy/get_prefs` at runtime
+    — see `adapters/energy` for why that is both the hard rule and the only
+    version of this that survives the owner re-wiring their dashboard.
+
+    ⚠️ ONE REST CALL PER DECLARED STATISTIC, and that is the cost ceiling: a
+    property declares a handful of meters and a dozen circuits, not 1,300
+    entities. The old answer to "what is the house using" was the model calling
+    a search tool until it ran out of tokens, which is the fan-out this exists
+    to replace.
+    """
+    if session is None:
+        return None
+
+    async def read() -> Dict[str, Any]:
+        from vesta.adapters import energy as energy_mod
+        from vesta.adapters.hass import rest_get
+
+        layout = await energy_mod.read(session)
+        if not layout.configured:
+            return {"configured": False, "rows": [], "total": None, "unit": ""}
+
+        async def state_of(entity_id: str) -> Dict[str, Any]:
+            row = await rest_get(session, f"states/{entity_id}")
+            row = row if isinstance(row, Mapping) else {}
+            attrs = row.get("attributes")
+            attrs = attrs if isinstance(attrs, Mapping) else {}
+            return {
+                "entity_id": entity_id,
+                "state": str(row.get("state") or ""),
+                "label": str(attrs.get("friendly_name") or ""),
+                "unit": str(attrs.get("unit_of_measurement") or ""),
+            }
+
+        def numeric(state: str) -> Optional[float]:
+            # ⚠️ "unavailable"/"unknown" MUST NOT BECOME 0. A meter that is not
+            # reporting is not a meter reading zero, and `total_of` refuses the
+            # sum when any part is None — the same distinction the kiosk's
+            # charts had to learn the hard way.
+            try:
+                return float(state)
+            except (TypeError, ValueError):
+                return None
+
+        rows: List[Dict[str, Any]] = []
+        for entity_id in layout.grid_energy:
+            rows.append({**await state_of(entity_id), "kind": "grid_total_energy"})
+        meter_values: List[Optional[float]] = []
+        unit = ""
+        for entity_id in layout.meters:
+            row = await state_of(entity_id)
+            meter_values.append(numeric(row["state"]))
+            unit = unit or row["unit"]
+            rows.append({**row, "kind": "property_meter"})
+        for entity_id, parent in layout.circuits:
+            rows.append({**await state_of(entity_id), "kind": "circuit",
+                         "parent_id": parent})
+
+        return {
+            "configured": True,
+            "rows": rows,
+            "total": energy_mod.total_of(meter_values),
+            "unit": unit,
+        }
+
+    return read
 
 
 def state_reader(session: Any) -> Optional[Callable[..., Any]]:
