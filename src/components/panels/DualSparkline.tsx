@@ -7,6 +7,7 @@
 // Crosshair + tooltip reads BOTH series at the hovered time.
 
 import { useCallback, useMemo, useState } from "react";
+import { stepped } from "@/utils/stepSeries";
 import type { HistoryPoint } from "@/types/ha.types";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
@@ -60,9 +61,14 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
     const sb = scaleOf(b.data);
     const ptsA = a.data.map((d) => ({ x: sx(d.t), y: sa.sy(d.v), t: d.t, v: d.v }));
     const ptsB = b.data.map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t, v: d.v }));
+    // ⚠️ BOTH SERIES ARE STEPPED, for the reason in utils/stepSeries — and
+    // BOTH, because a fix applied to one of two charts is the half-rollout
+    // this repository keeps paying for.
+    const lineA = stepped(a.data).map((d) => ({ x: sx(d.t), y: sa.sy(d.v) }));
+    const lineB = stepped(b.data).map((d) => ({ x: sx(d.t), y: sb.sy(d.v) }));
     // The crosshair rides the denser series' x positions.
     const railPts = ptsA.length >= ptsB.length ? ptsA : ptsB;
-    return { minX, maxX, sx, sa, sb, ptsA, ptsB, railPts };
+    return { minX, maxX, sx, sa, sb, ptsA, ptsB, lineA, lineB, railPts };
   }, [a.data, b.data, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
@@ -106,10 +112,10 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
             className="spark-axis">{fmtChartTime(t)}</text>
         ))}
         {a.data.length >= 2 && (
-          <polyline points={toStr(geom.ptsA)} fill="none" stroke={a.color} strokeWidth={2} strokeLinejoin="round" />
+          <polyline points={toStr(geom.lineA)} fill="none" stroke={a.color} strokeWidth={2} strokeLinejoin="round" />
         )}
         {b.data.length >= 2 && (
-          <polyline points={toStr(geom.ptsB)} fill="none" stroke={b.color} strokeWidth={2} strokeLinejoin="round" strokeDasharray="4 3" />
+          <polyline points={toStr(geom.lineB)} fill="none" stroke={b.color} strokeWidth={2} strokeLinejoin="round" strokeDasharray="4 3" />
         )}
         {railX != null && (
           <g>

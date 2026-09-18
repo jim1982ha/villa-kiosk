@@ -1,3 +1,24 @@
+## 2.998.0
+
+### Fixed — trend charts drew ramps where the value had not moved
+You asked why a pump's power trend showed repeating ramps with apparently
+nothing between the peaks. The data was fine: no gaps, nothing unavailable, and
+the pump reading zero almost all day.
+
+The chart was at fault. Home Assistant records a value when it CHANGES, not at
+a fixed rhythm — so a device sitting at 0 W for forty-two minutes produces one
+reading, not forty-two. The chart joined each recorded point to the next with a
+straight line, which turned those forty-two minutes of nothing into a smooth
+climb up to the next blip. Every sawtooth you saw was one stretch of zero drawn
+as a rise.
+
+A reading now holds until it changes, the way Home Assistant's own charts draw
+it: flat, then a vertical step. The peaks were always in the right place; what
+was between them was invented.
+
+Both trend charts are fixed, and hovering still reports only real readings —
+never a point on a flat stretch that nobody measured.
+
 ## 2.997.0
 
 ### Fixed — counting a list is guessing, and VESTA was doing it

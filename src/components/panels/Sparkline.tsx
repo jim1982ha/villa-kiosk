@@ -5,6 +5,7 @@
 // text stays crisp instead of being stretched by preserveAspectRatio="none".
 
 import { useCallback, useMemo, useState } from "react";
+import { stepped } from "@/utils/stepSeries";
 import type { HistoryPoint } from "@/types/ha.types";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
@@ -41,7 +42,12 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
     const sx = (t: number) => M.left + ((t - minX) / spanX) * plotW;
     const sy = (v: number) => M.top + (1 - (v - minY) / spanY) * plotH;
     const pts = data.map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t, v: d.v }));
-    return { pts, minX, maxX, minY, maxY, sx, sy };
+    // ⚠️ THE LINE IS STEPPED; THE POINTS ARE NOT. A reading holds until the
+    // next one, so the line holds flat and then rises — see utils/stepSeries.
+    // `pts` stays the real readings because it is what hover reports, and a
+    // hover over a flat run must not name a measurement nobody took.
+    const line = stepped(data).map((d) => ({ x: sx(d.t), y: sy(d.v) }));
+    return { pts, line, minX, maxX, minY, maxY, sx, sy };
   }, [data, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
@@ -57,7 +63,7 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
       : <div ref={ref} className="muted body-text">Not enough history yet.</div>;
   }
 
-  const polyline = geom.pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const polyline = geom.line.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const hp = hover != null ? geom.pts[hover] : null;
   const yTicks = [geom.maxY, (geom.maxY + geom.minY) / 2, geom.minY];
   const xTicks = [geom.minX, (geom.minX + geom.maxX) / 2, geom.maxX];
