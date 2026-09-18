@@ -57,6 +57,13 @@ _STOP_WORDS: Dict[str, Tuple[str, ...]] = {
                    "não", "onde", "isso", "mas", "você"),
     "Dutch": ("de", "het", "een", "en", "zijn", "niet", "voor",
               "met", "hoe", "wat", "waar", "ik", "wij", "jij", "ook"),
+    # ⚠️ ADDED 2026-09-18, AFTER A REAL QUESTION WENT UNRECOGNISED. Note the
+    # absence of "di": it is a heavily used Italian preposition as well, and a
+    # word that can swing two languages is exactly what the disjointness rule
+    # above exists to keep out.
+    "Indonesian": ("yang", "dan", "ini", "itu", "untuk", "dengan", "tidak",
+                   "adalah", "saya", "anda", "apakah", "bagaimana", "berapa",
+                   "sekarang", "bisakah", "atau", "sudah"),
 }
 
 #: Minimum hits before this will name a language at all. Two is the smallest
@@ -66,6 +73,22 @@ _MIN_HITS = 2
 #: How far ahead the winner must be. A message scoring 2 for one language and
 #: 2 for another has identified nothing, and saying so is the point.
 _MARGIN = 2
+
+#: Words above which a message is long enough to be judged at all.
+#:
+#: ⚠️ THE DISTINCTION THIS CONSTANT DRAWS IS THE ONE 2.977.0 GOT WRONG, AND IT
+#: MADE THAT RELEASE WORSE THAN NO MECHANISM AT ALL. "Cannot identify" is two
+#: different answers wearing one None: a two-word turn nobody could call, and a
+#: twenty-word sentence in a language these sets do not cover. The first must
+#: INHERIT the thread. The second must CLEAR it — it is plainly a language, and
+#: carrying the previous one forward tells the model to answer a question in a
+#: language the asker did not use.
+#:
+#: Reported from the villa the same day: a 20-word Indonesian question arrived
+#: on an English thread, was not identified, inherited "English", and the model
+#: was then explicitly INSTRUCTED to answer in English. Before the mechanism
+#: existed it would have read the message and replied in Indonesian.
+_ENOUGH_TO_JUDGE = 6
 
 _WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 
@@ -131,12 +154,25 @@ def detect(text: str) -> Optional[str]:
 def sticky(previous: str, text: str) -> str:
     """The thread's language after this turn.
 
-    ⚠️ AN UNIDENTIFIABLE TURN CHANGES NOTHING. That is what makes a two-word
-    reply safe, and it is the difference between this and calling `detect` at
-    the point of use.
+    Three outcomes, and conflating the last two is the defect `_ENOUGH_TO_JUDGE`
+    describes:
+
+    * identified        → that language
+    * too short to tell → whatever the thread already had
+    * long, unmatched   → NOTHING, because it is a language and not one of ours
+
+    ⚠️ CLEARING IS THE SAFE ANSWER, NOT A GIVING-UP. An empty language produces
+    an empty instruction, the prompt's own "answer in the language of the
+    question" rule stays in charge, and the model reads the message in front of
+    it — which is exactly what it did correctly before any of this existed. The
+    mechanism must never be able to assert a language the asker did not use.
     """
     found = detect(text)
-    return found if found else str(previous or "")
+    if found:
+        return found
+    if len(_words(text)) >= _ENOUGH_TO_JUDGE:
+        return ""
+    return str(previous or "")
 
 
 def instruction(language: str) -> str:

@@ -88,10 +88,45 @@ def test_a_few_latin_words_do_not_rename_a_non_latin_message():
     assert language.detect(mixed) is None
 
 
-def test_an_unidentifiable_turn_inherits_the_thread():
+def test_an_unidentifiable_SHORT_turn_inherits_the_thread():
+    """Short is the only case that may inherit — see the next test for why
+    that qualifier is load-bearing."""
     assert language.sticky("French", "Ben vas-y") == "French"
     assert language.sticky("French", "ok") == "French"
     assert language.sticky("", "ok") == ""
+
+
+# ⚠️ THE REGRESSION 2.977.0 SHIPPED, REPORTED FROM THE VILLA THE SAME DAY. The
+# owner asked a full question in Indonesian on a thread that had been in
+# English. It was not identified, `sticky` INHERITED "English", and the model
+# was then explicitly instructed to answer in English — which it did. Before
+# the mechanism existed the model read the message and would have answered in
+# Indonesian, so the release made this case worse than no fix at all.
+INDONESIAN_QUESTION = (
+    "Berapakah tekanan relatif di luar ruangan saat ini dan arah anginnya? "
+    "Bisakah Anda memperkirakan cuaca untuk beberapa jam ke depan?"
+)
+
+
+def test_the_reported_indonesian_question_is_identified():
+    assert language.detect(INDONESIAN_QUESTION) == "Indonesian"
+    assert language.sticky("English", INDONESIAN_QUESTION) == "Indonesian"
+
+
+@pytest.mark.parametrize("text", [
+    # Tagalog — a real language none of these sets cover.
+    "Sino ang nasa bahay ngayon at magkano ang kuryente na ginagamit natin",
+    # Long, and in a script that cannot be named.
+    "Сколько электроэнергии потребляет дом прямо сейчас и сколько вчера",
+])
+def test_a_LONG_turn_in_an_unknown_language_clears_rather_than_inherits(text):
+    """⚠️ THE FIX FOR THE ABOVE, AND IT MUST CLEAR RATHER THAN GUESS. A message
+    this long is plainly a language; carrying the thread's previous one forward
+    would instruct the model to answer in a language the asker did not use.
+    Empty means no instruction at all, which hands the judgement back to the
+    model reading the message — correct behaviour, and what it did before."""
+    assert language.sticky("English", text) == ""
+    assert language.instruction(language.sticky("English", text)) == ""
 
 
 def test_a_confident_switch_moves_the_thread():

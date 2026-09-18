@@ -1,3 +1,24 @@
+## 2.978.0
+
+### Fixed — a question in Indonesian was answered in English
+Reported within the hour of 2.977.0 installing, and caused by it.
+
+That release made a conversation remember which language it was being held in.
+It could recognise seven European languages; anything else it could not name,
+and it then kept whatever the conversation had been in before. So an Indonesian
+question asked on a conversation that had been in English was answered in
+English — and worse, VESTA was explicitly told to answer in English, which it
+had never been told before. For any language outside that set, 2.977.0 was a
+step backwards.
+
+Two changes. **Indonesian is now recognised.** And more importantly, a full
+question VESTA cannot place is no longer treated like a two-word reply: a short
+"ok" keeps the conversation's language, but a whole sentence in an unrecognised
+language clears it and VESTA simply reads the message in front of it, as it did
+before any of this existed.
+
+The rule is now that this can never assert a language you did not write in.
+
 ## 2.977.0
 
 ### Fixed — the language of a reply no longer drifts as a conversation runs
