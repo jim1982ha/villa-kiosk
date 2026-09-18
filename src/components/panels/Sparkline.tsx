@@ -7,6 +7,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { splitAtGaps, gapBand } from "@/utils/historyGaps";
+import { stepped } from "@/utils/stepSeries";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
@@ -52,7 +53,15 @@ export default function Sparkline({ data, gaps = [], color = "var(--accent-teal)
     const bands = gaps
       .map((g) => gapBand(g, sx, M.left, right))
       .filter((b): b is { x: number; w: number } => b !== null);
-    return { pts, minX, maxX, minY, maxY, sx, sy, bands, runs: splitAtGaps(pts, gaps) };
+    // ⚠️ THE LINE IS STEPPED AND THEN SPLIT, IN THAT ORDER. A reading holds
+    // until it changes (utils/stepSeries), and the runs are what survives the
+    // outages (utils/historyGaps) — two different truths about the same
+    // series, and the second must be applied to the first. `pts` stays the
+    // real readings: it is what hover reports, and a hover on a flat stretch
+    // must not name a measurement nobody took.
+    const linePts = stepped(data).map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t }));
+    return { pts, minX, maxX, minY, maxY, sx, sy, bands,
+             runs: splitAtGaps(linePts, gaps) };
   }, [data, gaps, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
