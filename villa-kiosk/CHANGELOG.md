@@ -1,3 +1,26 @@
+## 2.986.0
+
+### Fixed — the electricity question, validated this time rather than reasoned about
+The chain VESTA has to walk is: ask Home Assistant which meter is the property's
+supply, then ask for that meter's figures over the period. Step one hands back a
+private handle for the meter — deliberately, so no device identifier travels to
+the assistant. Step two then passed that handle straight to Home Assistant,
+which has never heard of it, and got nothing back.
+
+So VESTA told you it had no access to the energy statistics, about a property
+whose recorder answers that question in milliseconds. Every other part of VESTA
+already translated handles before using them; this one did not.
+
+Fixed, and — the important part — **checked**. The figures for this villa were
+read from Home Assistant first to confirm the question has an answer at all,
+then the whole chain was run against the exact shapes Home Assistant returns,
+and it produces the right total. Removing the fix makes that check fail. The
+previous five releases were each reasoned about instead, which is why each one
+fixed something real and none of them fixed your question.
+
+VESTA is also now told the two-step shape directly, so it does not have to
+discover it each time.
+
 ## 2.985.0
 
 ### Fixed — "I don't have access to the history for that period"

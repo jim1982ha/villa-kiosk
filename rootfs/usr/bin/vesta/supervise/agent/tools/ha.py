@@ -404,6 +404,30 @@ def _flatten_text(value: Any) -> str:
         return str(value)
 
 
+
+def _with_ids(value: Any, refs: Any) -> Any:
+    """Every handle in an outgoing payload, replaced by its entity id.
+
+    ⚠️ RECURSIVE, BECAUSE THE PAYLOAD'S SHAPE IS HOME ASSISTANT'S AND NOT OURS.
+    `statistic_ids` is a list of strings today; the next command's may be nested
+    under a key nobody here has seen. Walking the structure means a handle is
+    translated wherever it appears rather than only where somebody predicted.
+
+    ⚠️ AND AN UNKNOWN STRING IS LEFT ALONE. Most values are not handles — a
+    period name, an ISO timestamp, a unit — and refusing or blanking them would
+    break every call that mixes the two.
+    """
+    if refs is None:
+        return value
+    if isinstance(value, str):
+        return refs.resolve(value) or value
+    if isinstance(value, Mapping):
+        return {k: _with_ids(v, refs) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_with_ids(v, refs) for v in value]
+    return value
+
+
 class ReadConfiguration(BaseTool):
     name = "read_configuration"
     description = (
@@ -441,8 +465,25 @@ class ReadConfiguration(BaseTool):
         if not callable(self._source):
             return [fail("unavailable", _UNWIRED)]
         try:
-            out = await resolved(self._source(str(args.get("command") or ""),
-                                              dict(args.get("data") or {})))
+            # ⚠️ HANDLES BACK TO IDS ON THE WAY OUT, AND THIS WAS THE WHOLE
+            # BUG. Every other tool here resolves a ref before it calls
+            # anything; this one passed `data` through untouched. So the chain
+            # the model must walk was broken in the middle:
+            #
+            #   read_configuration("energy/get_prefs")
+            #     -> the response names statistics, pseudonymised to handles
+            #   read_configuration("recorder/statistics_during_period",
+            #                      data={"statistic_ids": ["d12"], ...})
+            #     -> Home Assistant has never heard of d12, returns nothing
+            #
+            # and the villa told its owner it had no access to the energy
+            # statistics — about a property whose recorder answers that query
+            # in milliseconds. `pseudonymise` is the inbound half; this is its
+            # outbound counterpart, and without both the tool can only ask
+            # questions that name nothing.
+            out = await resolved(self._source(
+                str(args.get("command") or ""),
+                _with_ids(args.get("data") or {}, self._refs)))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         if not isinstance(out, Mapping):
