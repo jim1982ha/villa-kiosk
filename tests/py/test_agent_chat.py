@@ -1023,3 +1023,41 @@ def test_a_chat_run_that_called_NOTHING_says_so(capsys) -> None:
     _handle(_event(), provider=FakeProvider([says("Nothing is on.")]))
     printed = capsys.readouterr().out
     assert "tools used: NONE" in printed
+
+
+# ── the villa's clock reaches the model ─────────────────────────────────────
+def test_the_current_time_is_in_the_context() -> None:
+    """⚠️ IT WAS NOT, AND THE VILLA ASKED ITS OWNER WHAT TIME IT WAS. The
+    cached system prefix carries the villa's TIMEZONE and deliberately no
+    instant — `playbooks._clock_sentence` says "NO INSTANT IN IT", correctly,
+    because interpolating "now" there would change the cached prefix on every
+    call. Nobody followed the consequence through: asked "how much since 5pm"
+    the model could not tell how long ago that was, and asked the reader.
+
+    A message is the right home precisely because messages sit BELOW the cache
+    boundary, so a value that changes every second is free here.
+    """
+    msg = chat.parse(_event())
+    assert msg is not None
+    joined = " ".join(str(m["content"]) for m in chat.context_for(msg))
+    assert "time at the villa right now" in joined, (
+        "the model cannot resolve 'since 5pm' without knowing the time now")
+
+
+def test_the_time_sentence_is_a_REAL_stamp_not_an_empty_string() -> None:
+    """⚠️ THE NEAR-MISS THIS PINS. The first cut passed `_now()` — unix seconds,
+    what this module uses everywhere else — to `wallclock.for_reader`, which
+    goes through `instants.as_utc` and returns "" for a float. The sentence
+    would have been EMPTY on the villa while every test about its presence
+    passed, which is the silent no-op this whole thread has been made of.
+    """
+    import re as _re
+
+    from vesta.supervise.agent import clock as clock_mod
+
+    sentence = chat._now_sentence()
+    if not sentence:                      # no timezone configured in this env
+        pytest.skip("no villa timezone available here")
+    assert clock_mod.villa_zone() is not None
+    assert _re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", sentence), (
+        f"no readable instant in: {sentence!r}")

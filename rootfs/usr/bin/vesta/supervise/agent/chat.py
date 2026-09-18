@@ -359,6 +359,38 @@ def note_delivered(key: str, concern_id: str, title: str,
         thread.concerns = thread.concerns[-MAX_CONCERNS:]
 
 
+
+def _now_sentence() -> str:
+    """The villa's own wall clock, right now, for the turn that needs it.
+
+    ⚠️ RELATIVE PHRASES ARE THE WHOLE POINT. "Since 5pm", "this morning", "in
+    the last hour" are how people ask, and every one of them resolves against
+    an instant the model was never given. Degrades to "" rather than raising:
+    a clock this cannot read must not cost the reader their answer.
+    """
+    try:
+        import datetime as _dt
+
+        from vesta.shared import wallclock
+        from vesta.supervise.agent import clock as clock_mod
+        zone = clock_mod.villa_zone()
+        # ⚠️ A datetime, NOT `_now()`. `for_reader` goes through
+        # `instants.as_utc`, which reads ISO strings and datetimes and returns
+        # "" for a float — so passing the unix seconds this module uses
+        # everywhere else would have produced an EMPTY sentence on the villa
+        # and looked exactly like a working change. Checked before shipping,
+        # which is the only reason it is not the next silent no-op.
+        stamp = wallclock.for_reader(
+            _dt.datetime.now(_dt.timezone.utc), zone)
+        if not stamp:
+            return ""
+        return (f"The time at the villa right now is {stamp}. Resolve every "
+                "relative time in the message against it — and if a named hour "
+                "is still ahead of it today, the reader means yesterday.")
+    except Exception:  # noqa: BLE001 - a clock is not worth a failed answer
+        return ""
+
+
 def context_for(message: Message, *,
                 now: Optional[float] = None) -> List[Dict[str, str]]:
     """The messages a chat run starts from: prior turns, then this one.
@@ -386,6 +418,20 @@ def context_for(message: Message, *,
         })
     for turn in thread.turns:
         out.append({"role": turn.role, "content": turn.text})
+    # ⚠️ THE CURRENT INSTANT, IN A MESSAGE, BECAUSE IT CANNOT GO IN THE PREFIX.
+    # `playbooks._clock_sentence` says so in its own docstring — "NO INSTANT IN
+    # IT" — and it is right: interpolating "now" into a SYSTEM block would
+    # change the cached prefix on every single call. The consequence nobody
+    # followed through was that the model then knows the villa's timezone and
+    # not the time, so "how much since 5pm" is unanswerable — it cannot tell
+    # how long ago that was. Asked exactly that, it asked the owner what time
+    # it was, which is the only honest move it had.
+    #
+    # ⚠️ A MESSAGE IS THE RIGHT PLACE PRECISELY BECAUSE MESSAGES ARE NOT CACHED.
+    # The cache boundary sits above them, so a value that changes every second
+    # costs nothing here and would have cost the whole prefix up there. Same
+    # reasoning as the concerns block and the language rule below it.
+    out.append({"role": "user", "content": _now_sentence()})
     # ⚠️ ONE STATIC LINE, AND DELIBERATELY NOT A LANGUAGE DETECTOR (2.979.0).
     # 2.977.0 shipped one — stop-word scoring over seven European languages,
     # pinned on the thread — and it regressed every language outside that set
