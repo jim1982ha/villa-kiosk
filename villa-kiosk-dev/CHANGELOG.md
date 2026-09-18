@@ -1,3 +1,18 @@
+## 2.991.0
+
+### Fixed — VESTA did not know what time it was
+Asked for the consumption since 5pm, it asked you what the time was. It was not
+being difficult: it genuinely did not know.
+
+VESTA is told which clock the villa keeps, but never the current moment — on
+purpose, because putting a constantly-changing value in that part of its briefing
+would throw away a cache on every single message. What nobody followed through
+is that "since 5pm", "this morning" and "in the last hour" all need the current
+moment to mean anything.
+
+It is now told the time with each message, where it costs nothing, along with
+the note that an hour still ahead of now means yesterday.
+
 ## 2.990.0
 
 ### Fixed — VESTA reported a meter fault that does not exist
