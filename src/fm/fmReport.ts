@@ -15,9 +15,11 @@
 // archived as plain text years later for a dispute.
 
 import {
-  budgetStatus, completionsInMonth, formatIdr, monthKey, scheduleStatus, shortDate, ticketStats,
+  budgetStatus, completionsInMonth, formatMoney, localStamp, monthKey, monthLabel,
+  scheduleStatus, shortDate, ticketStats,
 } from "./fmEngine";
 import type { FmData } from "./fmTypes";
+import type { BudgetStatus } from "./fmEngine";
 import type { ReadinessReport } from "./readiness";
 
 export interface ReportInput {
@@ -31,12 +33,59 @@ export interface ReportInput {
   totalDeviceCount?: number;
 }
 
-export function monthLabel(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  return new Date(y, (m ?? 1) - 1, 1)
-    .toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+/**
+ * The maintenance-spend lines, for whichever document is asking.
+ *
+ * ⚠️ WRITTEN TWICE, AND ONLY ONE COPY WOULD HAVE BEEN FIXED. The facility
+ * report and the standalone spend statement each carried this block verbatim —
+ * the cap line, the major-maintenance line and the cap warning — so the two
+ * documents an owner receives could describe one month's money two ways.
+ *
+ * ⚠️ AND THE CAP LINE WAS THE "of 0" DEFECT AGAIN. budgetStatus treats
+ * capIdr <= 0 as "no cap configured yet" and reports state "ok" with fraction
+ * 0; this line printed the unset value regardless, so an unconfigured villa
+ * read "0 of the 0 monthly cap (0%)" in the document it keeps as a record.
+ * SpendTab and TodayTab were corrected in 2.496.31 — the pin written alongside
+ * them listed only those two files, which is exactly how the rule's third and
+ * fourth readers survived the sweep meant to catch them. Roll a shared rule out
+ * by what it APPLIES to, not by the call sites you happen to have open.
+ */
+export function spendSummary(b: BudgetStatus): string[] {
+  const out: string[] = [
+    b.capIdr > 0
+      ? `- **Minor Maintenance this month:** ${formatMoney(b.minorIdr)} of the `
+        + `${formatMoney(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`
+      : `- **Minor Maintenance this month:** ${formatMoney(b.minorIdr)} `
+        + `(no monthly cap configured)`,
+  ];
+  if (b.majorIdr > 0) {
+    out.push(`- **Major maintenance (Owner's account):** ${formatMoney(b.majorIdr)}`);
+  }
+  if (b.state === "exceeded") {
+    out.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
+      + `maintenance and falls to the Owner.`);
+  }
+  return out;
 }
 
+/** The itemised spend rows, oldest first. Same two callers as spendSummary.
+ *
+ *  ⚠️ EVERY FREE-TEXT COLUMN IS PIPE-ESCAPED. An operator's label containing a
+ *  "|" splits the markdown row and shifts every column after it — found once by
+ *  rendering the table, and the fix that followed escaped some columns and not
+ *  others. Anything an operator typed gets the same treatment here. */
+export function spendTable(b: BudgetStatus): string[] {
+  const cell = (v: string) => v.replace(/\|/g, "/");
+  return [
+    `| Date | Item | Category | Amount |`,
+    `|---|---|---|---|`,
+    ...b.entries.slice().sort((x, y) => Date.parse(x.at) - Date.parse(y.at)).map(
+      (c) => `| ${shortDate(c.at)} | ${cell(c.label)} `
+        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatMoney(c.amountIdr)} |`),
+  ];
+}
+
+export 
 /** Shared `# title` / Period / Generated / Scope preamble both report flavours below
  *  open with — kept in one place so the financial-reporting disclaimer can't drift
  *  between them. */
@@ -44,7 +93,9 @@ function reportHeader(titleSuffix: string, villaName: string, month: string, sco
   return [
     `# ${villaName} — ${titleSuffix}`,
     `**Period:** ${monthLabel(month)}  `,
-    `**Generated:** ${new Date().toLocaleString("en-GB")}  `,
+    // localStamp: a fixed, unambiguous YYYY-MM-DD HH:MM in the reader's own
+    // time — an archived document should not change shape with a browser.
+    `**Generated:** ${localStamp()}  `,
     `**Scope:** ${scopeDescription} `
       + `Financial reporting — revenue, commissions and payout — is out of scope and provided separately.`,
     "",
@@ -104,23 +155,10 @@ export function buildMonthlyReport(input: ReportInput): string {
   // ── 2. Maintenance spend ──────────────────────────────────────────────────
   const b = budgetStatus(fm.costs, month);
   L.push(`## 2. Maintenance spend`);
-  L.push(`- **Minor Maintenance this month:** ${formatIdr(b.minorIdr)} of the `
-    + `${formatIdr(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
-  if (b.majorIdr > 0) {
-    L.push(`- **Major maintenance (Owner's account):** ${formatIdr(b.majorIdr)}`);
-  }
-  if (b.state === "exceeded") {
-    L.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
-      + `maintenance and falls to the Owner.`);
-  }
+  L.push(...spendSummary(b));
   L.push("");
   if (b.entries.length) {
-    L.push(`| Date | Item | Category | Amount |`);
-    L.push(`|---|---|---|---|`);
-    for (const c of b.entries.sort((x, y) => Date.parse(x.at) - Date.parse(y.at))) {
-      L.push(`| ${shortDate(c.at)} | ${c.label.replace(/\|/g, "/")} `
-        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatIdr(c.amountIdr)} |`);
-    }
+    L.push(...spendTable(b));
     L.push("");
   }
 
@@ -132,7 +170,12 @@ export function buildMonthlyReport(input: ReportInput): string {
   L.push(`## 3. Faults and response`);
   L.push(`- Open: **${stats.open}** · In progress: **${stats.inProgress}** · Resolved (all time): **${stats.resolved}**`);
   if (stats.meanResolutionHours !== null) {
-    L.push(`- Mean time to resolution: **${stats.meanResolutionHours.toFixed(1)} hours**`);
+    // Named when it covers fewer tickets than "Resolved" reports, so the two
+    // figures cannot be read as describing the same set when they do not.
+    const covers = stats.meanCoversTickets === stats.resolved
+      ? "" : ` (from ${stats.meanCoversTickets} of ${stats.resolved} — the rest `
+        + `carry no usable resolution time)`;
+    L.push(`- Mean time to resolution: **${stats.meanResolutionHours.toFixed(1)} hours**${covers}`);
   }
   L.push("");
   if (inMonth.length) {
@@ -192,24 +235,11 @@ export function buildSpendStatement(fm: FmData, month: string, villaName: string
     "maintenance spend against the configured Minor Maintenance cap.",
   ));
 
-  L.push(`- **Minor Maintenance this month:** ${formatIdr(b.minorIdr)} of the `
-    + `${formatIdr(b.capIdr)} monthly cap (${Math.round(b.fraction * 100)}%)`);
-  if (b.majorIdr > 0) {
-    L.push(`- **Major maintenance (Owner's account):** ${formatIdr(b.majorIdr)}`);
-  }
-  if (b.state === "exceeded") {
-    L.push(`- ⚠️ The Minor Maintenance cap was reached. Spend beyond it is Major `
-      + `maintenance and falls to the Owner.`);
-  }
+  L.push(...spendSummary(b));
   L.push("");
 
   if (b.entries.length) {
-    L.push(`| Date | Item | Category | Amount |`);
-    L.push(`|---|---|---|---|`);
-    for (const c of b.entries.sort((x, y) => Date.parse(x.at) - Date.parse(y.at))) {
-      L.push(`| ${shortDate(c.at)} | ${c.label.replace(/\|/g, "/")} `
-        + `| ${c.category === "minor" ? "Minor" : "Major"} | ${formatIdr(c.amountIdr)} |`);
-    }
+    L.push(...spendTable(b));
   } else {
     L.push(`_No spend recorded in this period._`);
   }

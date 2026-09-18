@@ -52,6 +52,26 @@ export const COSMETIC_MAPPING_FIELDS = [
  *  and paid a full multi-second indexMeshes for a config that had not changed
  *  at all. Telemetry caught it: five full re-indexes in ninety seconds of
  *  idle use, two of them one second apart. */
+/**
+ * Did this config slice actually change, by CONTENT?
+ *
+ * ⚠️ THE REFERENCE CHECK FIRST IS THE CHEAP PATH, NOT THE ANSWER. Every
+ * SHARED_CONFIG_KEY arrives freshly JSON-parsed from `DeviceConfigSync.pull()`
+ * — including a no-op pull that ran purely because the tab regained focus — so
+ * it is never `===` the previous object even when nothing changed. A bare
+ * reference check therefore reports "changed" on every focus regain and buys a
+ * full multi-second rebuild for a config nobody touched.
+ *
+ * ⚠️ THIS WAS FIXED FOUR SEPARATE TIMES IN THE FIELD, once per key —
+ * `entityMap`, then `meshBindings`, then `deviceGroups` (which disposed and
+ * recreated hundreds of GUI controls on every focus), then `teleportPoints` —
+ * because each fix was written at the site that had been REPORTED rather than
+ * at the rule. Naming it is what stops a fifth.
+ */
+export function sliceChanged(a: unknown, b: unknown): boolean {
+  return a !== b && JSON.stringify(a) !== JSON.stringify(b);
+}
+
 export type EntityMapDelta = "identical" | "cosmetic" | "structural";
 
 /** Classify a replacement. "cosmetic" means identical key sets with every

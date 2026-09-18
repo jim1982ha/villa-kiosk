@@ -4,22 +4,10 @@
 // handled via moveWithCollisions each frame. Look-around uses Babylon's built-in
 // touch/mouse rotation.
 
+import { FrameClock } from "./frameClock";
 import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Animation } from "@babylonjs/core/Animations/animation";
-// Side-effect only: registers Scene.prototype.beginDirectAnimation (used below).
-// @babylonjs/core's barrel used to pull this in for free; a deep import to just
-// "Animations/animation" does NOT — the extension lives in this sibling file.
-import "@babylonjs/core/Animations/animatable";
-// Side-effect only: registers Scene.CollisionCoordinatorFactory, which
-// moveWithCollisions (triggered below by any non-zero camera.cameraDirection —
-// i.e. every frame this controller is actually walking, never while only
-// rotating) needs to exist at all. Without it Babylon throws "DefaultCollision-
-// Coordinator needs to be imported before..." on every such frame — this is
-// the actual cause of first-person movement freezing the UI while look-around
-// stayed smooth; see SceneManager.ts's own copy of this import for the fuller
-// trace (confirmed via production WINDOW_ERROR telemetry).
-import "@babylonjs/core/Collisions/collisionCoordinator";
 import { CubicEase, EasingFunction } from "@babylonjs/core/Animations/easing";
 import { Axis } from "@babylonjs/core/Maths/math.axis";
 import { Ray } from "@babylonjs/core/Culling/ray";
@@ -30,8 +18,10 @@ import { roomKey } from "@/config/roomKey";
 import type { TeleportPoint } from "@/types/scene.types";
 import { clamp, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { nearestFloorRoom } from "./roomStorey";
-import { isResolvedCeiling } from "./meshRoles";
+import { rayTargets } from "./meshRoles";
 import { TapRecognizer } from "./TapRecognizer";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 interface CameraCallbacks {
   onRoomChange: (room: string | null) => void;
@@ -318,7 +308,11 @@ export class CameraController {
     const pick = this.scene.pick(
       clientX - rect.left,
       clientY - rect.top,
-      (m) => m.isPickable && m.isVisible && m.isEnabled() && !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name),
+      // ⚠️ THIS ONE HAD NO CEILING TERM, and it is wired live from the tap
+      // handler. `groundCamera` below documents being "the FOURTH asker of
+      // what is the floor here"; this was the fifth, and the only one still
+      // able to answer a tap with the slab over your head.
+      rayTargets(),
     );
     if (pick?.hit && pick.pickedPoint) this.walkTo(pick.pickedPoint.x, pick.pickedPoint.z);
   }
@@ -387,8 +381,18 @@ export class CameraController {
    * configured pace on any device. Capped so a long stall (tab switch) can't
    * fling the camera on the next frame.
    */
+  private readonly walkClock = new FrameClock();
+
   private frameFactor(): number {
-    const dt = this.scene.getEngine().getDeltaTime(); // ms since last frame
+    // ⚠️ THIS CALLED `engine.getDeltaTime()`, THE ONE FUNCTION THE PROJECT'S
+    // OWN RULE BANS — and it is the rule's own subject, since it exists to hold
+    // walking speed constant across frame rates. It was right only by accident
+    // and nonlocally: walking fires `onActivity`, which keeps the render loop
+    // uncapped, so tick rate happened to equal render rate for the duration of
+    // a walk. Correctness that depends on a callback in another module firing
+    // on every step is not correctness. `FrameClock` measures the frames this
+    // actually steps on.
+    const dt = this.walkClock.step(performance.now());
     if (!Number.isFinite(dt) || dt <= 0) return 1;
     return Math.min(3, dt / 16.667);
   }
@@ -541,12 +545,11 @@ export class CameraController {
 
   /** Called by SceneManager after every model load — see `floorCandidates`. */
   setFloorCandidates(meshes: AbstractMesh[]): void {
+    // Liveness is deliberately NOT required here: this set is resolved ONCE
+    // at load and each ray re-checks what it needs, which is the whole point
+    // of keeping it.
     this.floorCandidates = meshes.filter(
-      // Same rule as groundCamera and floorProbe: you cannot walk on a ceiling.
-      // Resolved ONCE here rather than per ray, which is the whole point of
-      // this set.
-      (m) => !m.metadata?.isMarker && !/^(halo_|label_)/i.test(m.name)
-        && !isResolvedCeiling(m));
+      rayTargets({ pickable: false, visible: false, enabled: false }));
     this.invalidateFloorProbe();
   }
 
@@ -755,15 +758,11 @@ export class CameraController {
     // points and missed the camera's, which CLAUDE.md calls out as the FOURTH
     // asker of "what is the floor here" and the one that deliberately does not
     // share that module.
-    const notCeiling = (m: AbstractMesh) =>
-      !isResolvedCeiling(m);
-    const base = (m: AbstractMesh) =>
-      m.isPickable && m.isVisible && m.isEnabled() && !/^(halo_|label_)/i.test(m.name)
-      && !m.metadata?.isMarker && notCeiling(m);
+    const base = rayTargets();
     // Prefer the STRUCTURAL shell (floor slabs) so we land on the actual floor,
     // never on a table/bed/sofa top the generic ray would hit first ("landing
     // above an asset"). Fall back to any surface for GLBs without tagged structure.
-    const structural = (m: AbstractMesh) => base(m) && m.metadata?.isStructure === true;
+    const structural = rayTargets({ structural: true });
 
     // Try directly below, then a ring of nearby points, in case the exact spot is
     // over a gap (doorway, L-shaped notch). Cast from high above to catch any floor.

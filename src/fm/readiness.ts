@@ -11,11 +11,10 @@
 // performance clauses exist to protect, whatever they happen to say.
 
 import type { HassEntity } from "@/types/ha.types";
-import type { EntityMapping } from "@/types/scene.types";
-import type { DeviceGroup } from "@/config/AppConfig";
+import { OFF_STATES } from "@/utils/entityState";
 import { isUnavailable } from "@/utils/stateColors";
-import { unavailableDeviceIds } from "@/config/deviceGroups";
-import { scheduleStatus } from "./fmEngine";
+import type { VillaDevices } from "@/config/deviceGroups";
+import { isTicketOpen, scheduleStatus } from "./fmEngine";
 import type { FmData } from "./fmTypes";
 
 export type CheckState = "pass" | "warn" | "fail";
@@ -38,7 +37,12 @@ export interface ReadinessReport {
   overall: CheckState;
 }
 
-const OFF_LIKE = new Set(["off", "unavailable", "unknown", ""]);
+// ⚠️ OFF_STATES, not a fourth copy. This was `new Set(["off", "unavailable",
+// "unknown", ""])` — byte-identical to entityState's, which is the set every
+// other surface counts "on" against. A readiness check that disagreed with the
+// HUD about what "off" means would put a number in the owner's report that no
+// screen backs up.
+const OFF_LIKE = OFF_STATES;
 
 /**
  * Build the readiness checks.
@@ -49,25 +53,27 @@ const OFF_LIKE = new Set(["off", "unavailable", "unknown", ""]);
  */
 export function buildReadiness(
   entities: Record<string, HassEntity>,
-  entityMap: Record<string, EntityMapping>,
-  mappedEntityIds: Set<string>,
   fm: FmData,
-  /** Same folding/debris rules as the HUD's unavailable-devices badge — see
-   *  unavailableDeviceIds. Optional (defaults to none) only for a caller with
-   *  no groups configured yet; every real caller has config.deviceGroups. */
-  deviceGroups: readonly DeviceGroup[] = [],
-  /** See AppConfig.dismissedEntityIds — an entity the owner removed as gone
-   *  from HA must not keep the readiness check red forever either. */
-  dismissedEntityIds: readonly string[] = [],
+  /** The villa's own devices, already resolved — see config/deviceGroups'
+   *  villaDevices. ⚠️ THIS REPLACED TWO OPTIONAL ARGUMENTS in a seven-argument
+   *  list that re-ordered the same nouns a third way. Both defaulted to empty,
+   *  so a caller that forgot one silently resurrected dismissed devices and
+   *  unfolded every combo sensor rather than failing. */
+  devices: VillaDevices,
   now = Date.now(),
 ): ReadinessReport {
   const checks: ReadinessCheck[] = [];
 
-  const relevant = (id: string) =>
-    !entityMap[id]?.disabled && (mappedEntityIds.has(id) || !!entities[id]);
-
+  // ⚠️ THE VILLA'S OWN DEVICES, NOT EVERYTHING HOME ASSISTANT KNOWS. The old
+  // predicate here was `!disabled && (mapped || entities[id])`, and that second
+  // clause admits EVERY entity HA has — so a helper, a neighbouring
+  // integration or a light in another building counted toward "all lights off"
+  // and "all doors locked". `selectableDeviceIds` is the same set the offline
+  // badge and the Facility device count already use, so all three now answer
+  // from one list instead of three predicates that happened to agree.
   const byDomain = (d: string) =>
-    Object.values(entities).filter((e) => e.entity_id.startsWith(`${d}.`) && relevant(e.entity_id));
+    Object.values(entities).filter(
+      (e) => e.entity_id.startsWith(`${d}.`) && devices.has(e.entity_id));
 
   // ── Devices online ───────────────────────────────────────────────────────
   // Shared with the HUD's unavailable-devices badge — deliberately the SAME
@@ -75,8 +81,7 @@ export function buildReadiness(
   // check counted raw candidates with no device-folding or debris filtering,
   // so a two-entity combo sensor could read as two broken devices here and
   // one on the HUD badge); see unavailableDeviceIds's docstring.
-  const offline = unavailableDeviceIds(
-    entityMap, [...deviceGroups], mappedEntityIds, entities, dismissedEntityIds);
+  const offline = devices.unavailable as string[];
   checks.push({
     id: "devices-online",
     label: "All devices reporting",
@@ -165,7 +170,7 @@ export function buildReadiness(
   }
 
   // ── Nothing broken and unresolved ────────────────────────────────────────
-  const openTickets = fm.tickets.filter((t) => t.status !== "resolved");
+  const openTickets = fm.tickets.filter(isTicketOpen);
   checks.push({
     id: "tickets",
     label: "No unresolved faults",

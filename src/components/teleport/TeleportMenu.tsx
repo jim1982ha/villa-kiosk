@@ -87,7 +87,7 @@ export default function TeleportMenu({ manager, currentFloor, onClose, onTelepor
     if (clash) return `"${clash.name}" already exists — remove or rename it first.`;
     const { position, target } = captureCurrentPose();
     update({
-      teleportPoints: [...config.teleportPoints, { name, floor: currentFloor as 1 | 2, position, target }],
+      teleportPoints: [...config.teleportPoints, { name, floor: currentFloor, position, target }],
     });
     setAsk(null);
   };

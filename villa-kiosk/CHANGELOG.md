@@ -1,3 +1,1040 @@
+## 2.496.49
+
+### Fixed — a trend chart drew a reading where the device reported nothing
+A device that goes offline left no mark on its own trend chart. The line simply
+joined the last reading before the outage to the first one after it, so an
+Onsen pump that was off from 22:15 and unreachable overnight appeared to climb
+steadily back to full power all night. It reported nothing at all in those
+hours.
+
+Those stretches are now shaded in the same grey the rest of the app uses for
+"unavailable", and the line is broken across them instead of drawn through —
+because a shaded "nothing here" panel with a line running through it says two
+opposite things at once. This is what the bar-style history charts have always
+done; the number-style ones could not, because the reading was thrown away
+before the chart ever saw it.
+
+Applies to every trend chart that draws a line, including the two-series ones,
+where each series shades its own half so you can tell which one dropped out. A
+brief outage still gets a visible mark rather than being rounded away, and an
+outage still running is drawn up to now rather than stopping short and implying
+the device came back.
+
+## 2.496.48
+
+### Removed — the Sky reflections setting, added in 2.496.47
+Settings → Render is back to what it was in 2.496.46. The setting and its Haze
+slider are gone.
+
+It did not make the villa look more realistic, and on this villa it never
+could: the 3D model has its lighting painted into it, so the walls, floors,
+ceilings and furniture ignore the surrounding light entirely by design. That
+leaves only the window glass able to reflect anything, which is not what
+"more realistic" means.
+
+Nothing else changed, and nothing you had set was affected — the feature was
+off unless you turned it on.
+
+## 2.496.46
+
+### Changed — one answer to "is this device reachable", instead of seven
+Seven different parts of the app each carried their own copy of the two words
+Home Assistant uses when a device cannot be reached. They all agreed, so
+nothing was wrong on screen — but the next part to be written would have
+carried an eighth copy, and copies drift. That is how a lock the villa had lost
+contact with once rendered as a confirmed "UNLOCKED".
+
+There is now one definition and every reader uses it, with a check that fails
+the build if a new reader writes its own. Two places deliberately stay wider
+than that definition, because "nothing to report" and "cannot be reached" are
+the same colour and not the same fact; the check knows about both.
+
+Nothing you see changes.
+
+## 2.496.45
+
+### Changed — nothing you can see; a note that described a fault as the design
+Version 2.496.26 fixed which devices are grouped onto one card in a crowded
+room. The explanation written beside that code was not updated with it, and
+went on stating the old rule — the one that caused the fault — as though it
+were deliberate. Anyone reading it later would have been told, in writing, that
+putting the fault back was a tidy-up.
+
+The note now records what it used to claim, why that claim was wrong, and what
+the code actually does. The villa behaves exactly as it did in 2.496.44.
+
+## 2.496.44
+
+### Fixed — badges overlapping, and one drawn behind another
+Badges kept apart correctly near the middle of the plan could still overlap
+towards the far side, with one partly hidden behind its neighbour.
+
+The spacing is worked out on a flat map of the villa at a single scale, while
+the picture you see is a perspective view where anything further away is drawn
+smaller. Two badges far from the camera are therefore drawn closer together
+than the spacing calculation expected, and it let them touch. The further away,
+the worse: at the far end of a villa a pair judged to be just clear could
+overlap by about a fifth of a badge.
+
+Each badge now asks for exactly the extra room its own distance will cost it.
+Badges near the camera are unaffected, so nothing groups together earlier than
+it used to — which is what the previous attempt at this, years ago, got wrong
+and had to be removed.
+
+## 2.496.43
+
+### Changed — releases are checked the way the build servers check them
+Five releases in a row were held back by checks that passed here and failed on
+the build servers. Nothing was ever wrong with the villa itself — each time it
+was a check being verified in the wrong place.
+
+There is now a single command that reproduces what the servers do: it takes only
+the files actually published, runs every check exactly as they run it, and
+builds the add-on image for real. It is run before every release. Replaying all
+seven of the past failures against it, each one is caught.
+
+## 2.496.42
+
+### Fixed — the add-on image would not build
+A safety check added in 2.496.39 runs as part of building the app. The list of
+files excluded when packaging the add-on left that check out, so building the
+image failed on a missing file — the check meant to protect the build was
+stopping it instead.
+
+The checks the build runs are included in the package now, verified by building
+the image. They add nothing to what is installed. Releases 2.496.38 to 2.496.41
+are all included here.
+
+## 2.496.41
+
+### Fixed — the last four releases could not be published
+The check that keeps this property's name out of the published source needs a
+small data file to work from. That file was never actually added to the
+repository — the rule listing what may be added covers programs, and this is
+data — so on the build servers the check found nothing to work with and
+correctly refused to pass. Everything since 2.496.37 was held back.
+
+The file is included now, and the check was verified by running it the way a
+build server does, against a copy containing only what the servers receive.
+Releases 2.496.38 to 2.496.40 are all included here.
+
+## 2.496.40
+
+### Fixed — the new name check flagged sixteen files that were perfectly fine
+The check added in 2.496.38, which keeps this property's name out of the
+published source, also looked for individual words from inside a multi-word
+name. One of those words is an ordinary English word, so it matched sixteen
+files that contain nothing private at all — and because that only happens on the
+build servers, it blocked the last two releases from being published.
+
+It now looks only for whole names, and for the way a name is written into a
+filename or a hostname. Nothing else changes; 2.496.38 and 2.496.39 are included
+here.
+
+## 2.496.39
+
+### Fixed — the kiosk's offline store grew with every update and never shrank
+The villa keeps a copy of the app on the device so it starts without the
+network. That copy was labelled with a name nobody changed between releases, so
+the routine meant to clear out the previous version's files never found anything
+to clear — and every update added another few megabytes that stayed forever. On
+a tablet left running, that ends in a device with no room left.
+
+Each release now keeps its own copy and the one before it, and everything older
+is removed.
+
+⚠️ Making only that change would have been worse than the problem. The app also
+took over any page that was already open the moment a new version arrived — so
+clearing the old files would have pulled them out from under a villa mid-use,
+leaving a blank screen that only a physical visit could fix. A new version now
+waits until the app is next opened fresh, which is what makes clearing the old
+copy safe. The update simply applies on the next open rather than mid-session.
+
+## 2.496.38
+
+### Fixed — a damaged maintenance file could delete its own photographs
+If the stored maintenance record became unreadable, the add-on treated it as
+empty. The safeguard that requires the superadmin code before anything is
+deleted compares what was there against what is being saved — so with "what was
+there" reading as nothing, it saw no deletions, asked for nothing, and allowed
+the save. The cleanup that follows then removed every photograph belonging to
+the records that could not be read, and the app was told the save succeeded.
+
+A file that cannot be read is now treated as a question rather than as an empty
+one. The save is refused with an explanation, nothing is changed or deleted, and
+the file is still there to recover from.
+
+### Fixed — the check protecting this villa's name had never run
+A check exists to keep the property's name, hostname and model filename out of
+the published source. The list it reads is deliberately kept off the repository,
+which meant that on the build servers the file was never there, the check
+reported that it had been skipped, and the build passed anyway. It has therefore
+only ever run on one machine.
+
+It now works from fingerprints of those words rather than the words themselves,
+so it runs everywhere without publishing what it is looking for — and a build
+that cannot run it at all now fails instead of passing.
+
+## 2.496.37
+
+### Fixed — the report could call an unread maintenance record "on schedule"
+A scheduled task whose last completion date could not be read was reported as
+on schedule. Every comparison against an unreadable date is false, so the task
+fell past "overdue" and past "due soon" and landed on compliant — the one
+direction a facility report must never fail in. Such a record now reads as
+never recorded.
+
+### Fixed — "0 of the 0 monthly cap" in the owner's documents
+Both the facility report and the maintenance spend statement printed the
+Minor Maintenance cap even when no cap has been set, so an unconfigured villa
+read "0 of the 0 monthly cap (0%)". They now say there is no cap configured.
+The two documents were carrying their own copies of these lines; they share one
+now, so they cannot describe one month's money two ways.
+
+### Fixed — "mean time to resolution" could cover fewer faults than it named
+A fault marked resolved without a usable resolution time counts in the resolved
+total and cannot count toward the average. The report could show twenty resolved
+alongside an average drawn from three, with nothing saying so. It now says how
+many the average covers whenever that differs.
+
+### Fixed — dates and money in the report assumed one country
+Dates were written in a fixed British format and money in a fixed currency with
+American digit grouping. Dates now follow the reader's own device, and the
+"Generated" stamp uses an unambiguous fixed form suitable for an archived
+document.
+
+### Fixed — a villa could only ever have two floors
+The floor number was a type that permitted only 1 or 2, and a third storey read
+from the model was quietly filed under the second. The model's own answer is
+used now. This is the third place that assumption was found.
+
+### Changed — the guest A/C range is no longer a fixed comfort band
+Guests were offered a temperature range fixed at 22–28°, one villa's comfort
+band applied to every installation. The A/C controls now use the limits the
+device itself reports until a range is configured.
+
+## 2.496.36
+
+### Fixed — the update dialog described a release five versions old
+This panel is the only account of a release anyone reads, and it had not been
+written since 2.496.29 — so the villa offered 2.496.35 while describing work
+from six releases earlier, and every fix in between went unmentioned.
+
+The missing entries are written, and a release can no longer be published
+unless this file describes the version being offered.
+
+## 2.496.35
+
+### Fixed — the villa's own checks had never actually run
+Before a new version reaches this add-on it is supposed to pass a set of
+automatic checks. Those checks had never once completed: they stopped on their
+very first step every time, and nothing downstream noticed, so eleven versions
+were published while the checks were being reported as their safety net.
+
+Three separate things were wrong, each hiding the next. Nothing made a
+published version wait for the checks at all. The checks themselves could not
+get started. And the one that inspects the part of the add-on handling
+passcodes and permissions could not load the file it was meant to inspect.
+
+All three are fixed, and every check now runs and passes before a version can
+be published. This changes nothing you can see in the villa — it changes what
+has to be true before a version reaches it.
+
+## 2.496.34
+
+### Fixed — a published version no longer skips its own checks
+A version used to be published whether or not its checks had passed, because
+the two ran side by side with no connection between them. They are connected
+now: if a check fails, no version is published and nothing is offered here.
+
+## 2.496.33
+
+### Fixed — the overview shot was framed for one specific villa
+Pulling back to the whole-villa view is meant to measure the building and frame
+it. That measurement never ran, so the view used fixed distances written down
+long ago — which happen to suit this villa closely enough that nobody noticed.
+Any villa of a different size would have landed badly framed, panned into empty
+space and reached its zoom stops in the wrong places.
+
+The building is measured as it loads now.
+
+### Fixed — part of the 3D scene was kept in memory after leaving the page
+Leaving and returning to the villa view left some of the previous scene behind
+each time. Two lists of ceiling and room shapes were not being released, and
+holding either of them holds on to the entire 3D scene.
+
+### Changed — the villa can no longer reach the internet for a 3D component
+The 3D engine can quietly download a decoder from its maker's servers if a
+model needs one. Two such downloads had already been found and replaced with
+files shipped inside the add-on; a third was still open. Rather than close that
+one, every download of this kind now points at this add-on's own address — so a
+villa with no internet keeps working, and anything missing fails where it can
+be seen rather than silently.
+
+## 2.496.31
+
+### Fixed — a device row showed a different reading from its own map badge
+Opening a group of devices showed each one with its badge beside a line of
+text. The badge scaled a reading the way the rest of the villa does — 6.6 kW —
+while the text beside it printed the raw figure, 6570.989 W. Same device, same
+row, two numbers. They agree now, and so does the tile you tapped to get there.
+
+### Fixed — the floor buttons assumed a two-storey villa
+The villa's floor buttons were built from a fixed list of two floors. A villa
+whose model has a third storey could be sent to that floor by other means and
+had no button to get back. The buttons come from the model now.
+
+### Fixed — the device tiles could not see devices arriving with the 3D model
+The tiles along the bottom count the villa's own devices. They were watching
+the wrong thing for changes, so the counts could not update at the one moment
+they most needed to — when the 3D model finishes loading and the villa's
+devices become known.
+
+### Fixed — a spend figure read "of IDR 0" before a cap was set
+The maintenance spend banner compared this month's total against a cap that has
+not been configured yet, and printed the unset value rather than saying so.
+
+### Changed — money is no longer written in one fixed currency
+Amounts in the Facility workspace were written with a currency and a number
+format fixed in the code. Both are now settings, empty by default, so an
+unconfigured villa shows the figure alone rather than labelling it wrongly.
+
+### Fixed — the camera feed sometimes dropped to a lower-quality stream
+Switching between cameras could make the next one fall back to the simpler
+video stream, reporting that the better one had failed when it had not.
+
+### Fixed — a phone or tablet stopped recovering quickly from sleep
+A device waking from sleep or rejoining wifi is meant to check its connection
+immediately rather than wait for the next retry. After certain reloads that
+check was switched off for the rest of the session, leaving the villa to
+reconnect on its own slower schedule.
+
+## 2.496.30
+
+### Fixed — the map badge and the panel could drift apart on a reading
+The reading printed on a map badge was produced by a second, private copy of
+the rule the rest of the villa uses, so the two could be changed apart without
+anything noticing. There is one copy now.
+
+## 2.496.29
+
+### Fixed — badge icons stayed blurry after changing the badge size
+Badge icons are drawn from a small image prepared at whichever size fits best,
+because stretching one looks soft. Changing the badge size with the stepper
+stretched the **old** image instead of preparing a new one — so every icon on
+the map went soft, and then sharpened up one at a time over the following
+minutes as each device happened to report something.
+
+They are all re-prepared as soon as the size changes now.
+
+The code even carried a note saying this already worked. It did not; following
+the setting through three places shows nothing ever asked for a redraw.
+
+### Fixed — a device that has never reported drew its icon at the wrong size
+The very first image for a badge was prepared using the wrong one of two
+measurements — the size before the display's scaling is applied, rather than
+after. Every badge corrected itself the moment its device next reported, so the
+only ones that stayed wrong were devices that have never reported at all.
+
+## 2.496.28
+
+### Fixed — badges grouped together while there was still room between them
+When badges are close enough to overlap, the villa gathers them onto a shared
+card. Working out "close enough" needs to know how wide each badge is — and the
+answer was calculated twice, in two places, from two different sets of numbers
+that had exactly one in common.
+
+The version used for spacing decisions reserved about **a quarter more width
+than the badge actually draws** — roughly ten pixels of nothing per badge,
+which is three to five times the minimum gap the villa tries to keep between
+them. So badges merged onto one card while there was visibly space left, and
+adjusting the gap setting could never quite fix it, because the measurement it
+was being adjusted against was wrong.
+
+There is one width now. The badge is built from six pieces, and the spacing
+decision adds up the same six.
+
+## 2.496.27
+
+### Changed — the arithmetic that decides what a badge looks like now has tests
+Roughly 1,800 lines work out how big a badge is, how its grouped card is laid
+out, which storey a room sits on, how the text is trimmed to fit and where a
+badge lands on screen. None of it had ever been run by anything.
+
+Worse, **seven places in the code claimed it was already covered**, naming two
+commands that have never existed on this branch. One went as far as explaining
+how a particular constant was checked; nothing read that constant. Anyone
+reading through the sizing code would have concluded it was guarded.
+
+It is guarded now, and the claims point at the tests that actually exist.
+
+### Fixed — badge sizes could jump a step if the size were ever recalculated twice
+Badges resize in fixed steps as you zoom, so they do not shimmer while the
+camera moves. Four of those twenty-five steps had a rounding flaw: feeding an
+already-stepped size back through the calculation pushed it up to the **next
+step**, a 6% jump.
+
+Nothing does that today, so nothing jumped — every caller works from a raw
+value. But "rounding twice is the same as rounding once" is the entire point of
+having fixed steps, and the first thing to ever run this function found it
+untrue.
+
+## 2.496.26
+
+### Fixed — devices swapping between grouped cards when an unrelated number changed
+Tapping a room gathers badges that would otherwise overlap into shared cards.
+Which devices ended up on which card was partly decided by **the order they
+happened to be held in**, rather than by where they are.
+
+That order is not stable, because a badge's width comes from the text it shows.
+So a reading ticking from `9 W` to `10 W` — one extra character, on a device
+elsewhere in the room — was enough to re-cut the grouping, and a device would
+hop onto a different card with nothing about it having changed.
+
+The grouping now picks the most-overlapped pair rather than the first one in
+the list. That is a property of where things are on screen, so the same room
+gives the same answer every time, and it still groups no more than the overlap
+actually requires.
+
+## 2.496.25
+
+### Fixed — an address the add-on published but could never answer
+The web server still advertised a path for shared kiosk scenes, under a comment
+describing where they were stored. That feature was removed when the kiosk
+started reading Home Assistant's own scenes directly — but the address outlived
+it, so anything reaching it got a bare 404 from a route the add-on no longer
+had.
+
+Nothing used it, so nothing was broken. It is gone now, and a new check walks
+the web server's address list against the ones the add-on actually answers, in
+both directions, so a published-but-dead address cannot survive again.
+
+### Fixed — the Facility workspace did not work in local development
+Running the kiosk locally against a real Home Assistant forwards a list of
+addresses to the add-on. That list had five of the nine the app actually uses —
+so the shared device configuration, the whole Facility workspace and the
+diagnostics all quietly returned 404 to anyone working on them locally.
+
+The list is complete now, and the same new check compares it against what the
+app requests, so a tenth address cannot be added without it.
+
+## 2.496.24
+
+### Fixed — mistyped passcodes never expired, so the villa would eventually lock itself out
+There is a backstop that locks a profile after 50 wrong passcodes from all
+devices combined. It was counting them **for as long as the add-on had been
+running**, and nothing ever aged the count down.
+
+So the fiftieth cumulative mistake — a guest fumbling the pad last week, someone
+else the week before, on an add-on that runs for months — locked that profile
+out **for everyone, including you**, for fifteen minutes. And then again on the
+next mistake, and the next.
+
+It counts *when* the mistakes happened now, not just how many. Fifty inside one
+fifteen-minute window still locks, which is what it is for; a slow trickle never
+does. Someone who stops guessing is released as soon as their oldest attempt
+ages out.
+
+### Fixed — "Log out all devices" could not reach a tablet that was already open
+Signing every device out works by invalidating the saved sign-ins. That reaches
+anything that asks again — but the villa's live connection, the one that
+actually operates lights and locks, checked who you were **once** when it
+opened and never again.
+
+So the tablet you were signing out because it went missing kept working: its
+connection had already been approved, and nothing re-asked. The same gap meant
+shortening "stay signed in for" did not shorten a connection opened before the
+change.
+
+The live connection now re-checks — always before anything that operates a
+device, and otherwise every thirty seconds — and closes itself the moment the
+sign-in stops being valid.
+
+### Changed — the sign-in backend now has tests, for the first time on this branch
+Roughly 2,000 lines decide who may do what, and nothing had ever run any of it.
+A good part is plain logic — given this profile and this request, yes or no —
+and now has a test, including the seven malformed requests that once reached
+Home Assistant from a guest session and are listed in the code as the reason
+that rule exists.
+
+## 2.496.23
+
+### Changed — this add-on now has automated checks before it is built
+Until now the only thing standing between a change and your villa was the type
+checker, and it ran *inside* the image build. Nothing checked the Python that
+handles sign-in, nothing checked that the add-on still works without internet,
+and nothing checked that no part of one specific property had been baked into
+an add-on meant for any of them.
+
+Every push is now checked for all four before an image is built: the types, the
+regression tests, both of those rules, and — the cheapest and most important —
+that the sign-in backend is still a valid Python file at all. Before this, a
+typo in it produced a **successful build** and a kiosk that loads, looks
+normal, and cannot sign anyone in.
+
+The tests themselves existed. They were sitting in a folder the repository was
+configured to ignore wholesale, so they lived on one laptop: not in a fresh
+copy, not in the build. That folder is tracked now, which took a one-character
+change nobody had noticed was needed.
+
+Two commands the project advertised — `test:placement` and `test:geometry` —
+pointed at files that do not exist on this branch and had never been able to
+run. They are gone, replaced by the two that do.
+
+### Fixed — the add-on still asked permission to reach Google's font servers
+The kiosk is built to work in a villa with no internet at all, and its fonts are
+served by the add-on itself. But its security policy still listed Google Fonts
+as an allowed source, in two places.
+
+Nothing ever fetched from there, so nothing was broken and nothing would have
+shown up in a log. What it was, was standing permission — the kind that works
+perfectly on a developer's desk and is simply missing on a wall-mounted tablet.
+Removed, and the new check refuses any outside address anywhere in what ships.
+
+### Fixed — the villa's own name and address were in files that are published
+Your property's name, its Home Assistant address and its model filename had
+found their way into the changelog and a styling note. Both are in the public
+repository, and Home Assistant displays the changelog in the add-on's Update
+dialog.
+
+They have been replaced with generic wording. The new check reads a list of your
+property's own words from a local file that is never published, and refuses any
+build where one of them has reached a file that is — which is the only way to
+check this without writing them down somewhere public in the process.
+
+## 2.496.22
+
+### Fixed — the camera panel's side rail on an iPad in landscape
+When the camera view has room, its controls move to a column down the side and
+the little history bar becomes a vertical strip. Deciding *when* to do that was
+written down twice — once in the stylesheet and once in the code — and only one
+copy was ever corrected.
+
+A fix in v2.81.1 changed the stylesheet to switch on **touch capability** rather
+than screen height, because an iPad in landscape is never short enough to trip
+the old height test and was keeping the portrait layout. The code kept the
+height test.
+
+So on a tablet in landscape the stylesheet rearranged the panel and the code did
+not: the history bar drew its blocks **sideways inside a ten-pixel-wide vertical
+strip**, and the deliberate button order (close at the top, fullscreen second)
+quietly did not apply. The stylesheet comment even spells out that the two
+depend on each other — and nothing could notice when only one moved.
+
+The stylesheet decides now, and the code asks it. There is one copy.
+
+### Changed — the stylesheet is eight files instead of one
+It was a single 4,174-line sheet carrying 413 global style names, which meant
+every part of the app shared one hot spot: a change to the Facility worklist,
+the camera rail or the bottom bar all landed in the same place. It is now eight
+parts, split at section headings that were already there — the villa's base
+look, the HUD, device panels, modals, layout responses, the profile gate,
+Facility, and the shared odds and ends.
+
+**Nothing about the appearance changed, and that is checked rather than
+claimed:** the built stylesheet is byte-for-byte identical to the one the
+single-file version produced. Style order decides which of two competing rules
+wins, so a split that shuffled anything would move pixels; this one provably
+does not.
+
+### Noted, not changed — "a narrow screen" is written four ways
+The stylesheet decides a screen is narrow at 480, 560, 640 **and** 720 pixels
+depending on which part of the app is asking. Collapsing those into one number
+would re-flow real layouts at four different widths, and nothing here can see
+the result, so it is left alone deliberately rather than quietly. What is new is
+that a **fifth** number can no longer appear unnoticed — which is how there came
+to be four.
+
+## 2.496.21
+
+### Fixed — tapping the floor could aim at the ceiling
+Tapping a spot on the floor to walk there asks the 3D model what is under your
+finger. That question is asked in seven different places in the villa view —
+walking, being placed on arrival, following stairs, deciding which way to face —
+and **three of the seven never excluded ceilings**.
+
+A ceiling is part of the building's structure exactly as a floor is, so a ray
+looking for something solid will happily answer with the slab over your head.
+The villa already carries the scar: a previous release grounded the walker
+**on top of** the living-room ceiling, an eye 4.1 m above a floor measured at
+zero. That was fixed in the two places it was reported, then a third and fourth,
+and the one wired to *tapping* was never among them.
+
+All seven now ask one rule, and that rule cannot be relaxed: every option it
+takes can only ever narrow what a ray may hit. There is no way to ask it for a
+ceiling.
+
+### Fixed — a latent crash in the overview drag, invisible to the build
+Some of the 3D engine's functions exist only once a companion module has been
+loaded; without it they either throw or quietly do nothing, and the type checker
+cannot tell the difference because the function appears to exist either way.
+
+Two parts of the villa view were relying on companions they never asked for.
+Dragging the overview map would have thrown outright, and — worse — the handler
+that decides what you tapped would have silently reported that you tapped
+nothing, so **no device in the villa would respond to a tap**, with nothing but a
+line in the browser console to say why.
+
+Both worked only because unrelated files happened to pull those companions in.
+The dependency is declared in one place now, and the build fails if a file uses
+one of those functions without saying so.
+
+### Fixed — the 3D view leaked two live callbacks on teardown
+Rebuilding the scene left two per-frame callbacks attached to the old one, still
+stepping animations over data that had just been cleared.
+
+### Changed — one clock for every animation in the villa
+The rule that keeps a fan spinning at the same speed on a 60 Hz tablet and a
+120 Hz phone was written down and then implemented twice, word for word — while
+a third animation, the one that keeps walking speed steady, used the very
+function the rule forbids. It was right only by accident. There is one clock
+now, and nothing else left to call.
+
+## 2.496.20
+
+### Fixed — a combo sensor counted as two devices in some places and one in others
+A sensor that reports several things — temperature and humidity, or CO2 and
+pressure — is one physical device, and the villa folds it into one row so you
+are not told about the same thing twice.
+
+It was folding that device two different ways depending on which screen asked.
+Advanced Settings used Home Assistant's own device registry, which knows what
+belongs to what and needs no guessing. Everything else — the Facility fault
+picker, the offline device count, the readiness check — fell back to matching
+entity names against one hardcoded `_temperature`/`_humidity` pair, because the
+registry was never handed to it.
+
+So a combo sensor whose entities happen to be named that way folded everywhere;
+one that reports anything else was **one** device in Settings and **two** in the
+offline count. The registry now reaches every screen.
+
+### Changed — "what devices does this villa have" is asked once per screen
+That question needed five arguments in a particular order, and it was
+reassembled at twelve places — four of them inside the Facility workspace
+alone, which asked it five separate times with five sets of bookkeeping to keep
+in step. Three functions took the same information in three different orders.
+Two of the arguments quietly defaulted to empty, so a forgotten one brought
+removed devices back rather than failing.
+
+There is one answer now, computed once per screen and handed to everything that
+needs it — the device count, the readiness report, the fault picker and the
+offline list all read the same value instead of four recomputations that
+happened to agree.
+
+## 2.496.19
+
+### Fixed — a device could be filed under one category and judged under another
+Which group a device belongs to — Comfort, Energy, Access, Network — depends on
+four things, and the last of them is Home Assistant's own `device_class`. It
+was an optional argument, and three of the twelve places that asked the
+question left it out. One of those three was the check that decides what a
+profile is allowed to see.
+
+The effect was quiet and confusing rather than dangerous. A sensor whose name
+gives nothing away — `sensor.aqara_x`, say — resolves to **Comfort** when its
+`device_class` says *temperature*, and to **Energy** when nobody looks. The
+badge looked, so a guest saw the device on the map. The permission check did
+not look, so it judged the same device as Energy and quietly declined to act
+on it. Tapping did nothing, with no explanation. The tap handler was a third
+asker that also did not look, so it could disagree with both.
+
+Two consecutive lines of the same filter resolved one device's category two
+different ways.
+
+All four signals now travel together as one thing, and the live entity is a
+required part of it. Saying *"this entity isn't loaded"* is now something a
+caller has to state out loud; leaving it out is no longer possible.
+
+### Fixed — six category choices that snapped straight back
+Picking **Others** for a lock, or **Network** for a camera, did nothing: the
+dropdown reverted to the old value the moment you let go. Six of the entity
+types were affected, and between them they could not be moved to a category
+they had once defaulted to.
+
+The cause was a rule that exists for a good reason. When the category defaults
+are reorganised, devices that were auto-filed under an old default get re-filed
+under the new one — nobody chose the old one, so nothing is lost. But a
+deliberate choice that happened to match an old default was indistinguishable
+from an auto-assignment, and got re-filed with them.
+
+A choice is recorded as a choice now, and is honoured exactly as made.
+Auto-assigned categories still re-file themselves, which is what that rule is
+for.
+
+### Changed — the tap handler asks instead of guessing
+The picker that decides whether a tap on a mesh does anything was resolving the
+category itself, with a signal it has no way to obtain. It asks the part of the
+3D layer that holds the live state now, so the badge you can see and the tap
+that reaches it can no longer disagree.
+
+## 2.496.18
+
+### Fixed — the trash can in Advanced Settings now actually removes the device
+There are two Remove buttons on that screen and they did different things.
+
+The banner at the top — *"N entities no longer in Home Assistant → Remove N"* —
+deletes the row **and records the decision**, which is what makes a removal
+stick. The trash can on every individual row deleted the row and recorded
+nothing.
+
+That is the difference between a device going away and a device appearing to.
+A row you deleted with the trash can either came straight back on the next
+model load, or vanished from Advanced Settings while the device carried on
+showing up in the Facility fault picker, the offline device count and the
+readiness check — because those read the ids the 3D model itself supplies, not
+the table you deleted from.
+
+It is the same symptom you reported that the banner was built to fix. It was
+still reachable, one button along, on the same screen.
+
+Removing a device is one operation now, and it returns both halves together,
+so there is no longer a way to call it and get only the half that does not
+stick.
+
+## 2.496.17
+
+### Fixed — a lock the villa cannot see no longer says the door is unlocked
+A device row's switch was thrown from `state !== "locked"` — and that is also
+true of `unavailable`, `unknown` and `jammed`. So a lock Home Assistant had
+lost contact with rendered its switch in the **unlocked** position, announced
+to a screen reader as "on", while the very same row's text read *Unavailable*
+and its badge was amber. One row, three readings, and the wrong one was the
+one shaped like a door.
+
+A switch has two positions and the villa did not know which was true, so it
+now offers neither: where the state has not been observed, the control is
+withheld and the row simply reports what it knows. That is the rule the row's
+own "not in Home Assistant" guard already followed one line above.
+
+A **jammed** lock is deliberately not treated this way. It did report: the
+bolt failed to throw, the door is definitely not secured, and the retry is the
+one thing you want at a jammed door — so the switch stays, reading unlocked.
+A lock **mid-motion** claims nothing, because it is on its way somewhere.
+
+### Fixed — a motion sensor doing its job no longer rings red on the map
+Three surfaces described one motion sensor three different ways. The map badge
+rang **red**. The panel pill said **Motion detected** in its calm category
+colour. The history bar directly beneath that pill painted the same instant
+**green**. And **Map colours** told you red means *"the device needs attention
+— an unlocked door, a leak, low battery"*.
+
+The badge was the odd one out: it read a bare `state == "on"` and had no idea
+`device_class` existed, so every PIR, occupancy sensor, door contact and
+presence sensor in the villa was painted as a fault. They are informational
+now, exactly as the device-class table has always said, and the badge, the
+pill and the history bar give one answer.
+
+A **connectivity** sensor was worse than inconsistent — it was inverted. Its
+problem state is *off*, so the badge alerted while the access point was
+**connected** and went quiet when it dropped off the network. It alerts when
+the device is down now.
+
+Leak, smoke, gas, CO, tamper, battery and safety sensors are unchanged: they
+alert, as they always did.
+
+### Changed — where a reading is a fault is decided in one place
+Two lists of "words that mean something is wrong" sat in two modules under a
+comment claiming they were deliberately identical. They were not: the status
+table also carried `jammed` and `triggered`, which the badge's private copy
+lacked, so a sensor reporting either drew a red history segment under a badge
+that stayed quiet. There is one list now — the one **Map colours** documents.
+
+Your own per-entity override now reaches the map as well as the panel. It
+could only ever be seen by the panel before, because the badge was never given
+it: the badge is built from a single reading that carries the device's type,
+its live state, its linked entity and that override together, so no caller can
+quietly leave one out.
+
+## 2.496.16
+
+### Changed — Advanced Settings is three tabs, not six things to unfold
+Advanced Settings opened as a stack of six headings with nothing under them.
+Every visit began with a click to find out how much was there, and reading two
+sections meant collapsing the first to get back to the second. The Facility
+workspace next door has had a tab strip since it was built, so the screen was
+also the odd one out.
+
+It is three tabs now — **Villa**, **Devices** and **System** — and each holds
+two panels:
+
+* **Villa** — Villa location, and Bound 3D objects.
+* **Devices** — Auto-detected entity settings, and Grouped devices.
+* **System** — Device telemetry, and Session. Owner only; the tab is not in
+  the strip at all for anyone else, rather than being there and empty.
+
+Two panels per tab rather than one per tab is deliberate. Six tabs would have
+traded a long scroll for a row of tabs holding one control each — Villa
+location is two number fields and Session is a single button — which is the
+same clutter wearing a different shape. Paired, each tab is a subject: where
+the villa is, what devices exist, what this box is doing.
+
+Nothing collapses any more. The entity table and the grouped-device list
+already show their first few rows with a filter above and a **Show all**
+beneath, so each states its own size by being looked at; the telemetry log
+pages. Opening Advanced Settings from a device panel's **edit** shortcut still
+lands on that device — it now opens the **Devices** tab with the filter
+pre-filled, where before it expanded the section.
+
+### Fixed — the Facility tab bar could highlight the wrong tab
+Reporting a fault from a device panel opens Facility directly on its **Faults**
+tab. The tab row scrolls sideways when it does not fit, and nothing scrolled
+the selected tab into view, so on a narrow screen the fault form appeared
+underneath a bar that still showed **Today** highlighted at the far left.
+
+Both tab strips are one component now (`common/ModalTabs`), which is what
+fixes this: the copy in Facility never knew it was broken, and hand-copying
+those fifteen lines a second time for Advanced Settings would have dropped the
+same half again — `role`, `aria-selected`, and the scroll. That half is
+invisible to the type checker and to review, and only shows up to someone
+using a screen reader.
+
+## 2.496.15
+
+### Fixed — a device's offline time is now drawn, instead of vanishing
+The mini history bar on a device panel was throwing away every period the
+device had lost contact, before the chart was even drawn. That showed up two
+ways, and the second is the worse one.
+
+Picking **1h** on a device that had been offline since before the hour started
+left the bar **blank** until the first moment it came back — no colour, no
+explanation, just an empty stretch.
+
+Picking **12h** or **24h** on the same device looked *complete* — one solid
+band, edge to edge. That was the lie: with the offline stretches deleted, the
+states either side of them were identical and got merged into one. The bar
+claimed the device held a single state all day when it had actually dropped
+out repeatedly.
+
+Offline now appears in its own colour — the amber that **Map colours** already
+documents as "Home Assistant has lost contact". A lock that flapped twelve
+times today now reads as twelve bands instead of one.
+
+### Fixed — the faint white lines between blocks on the history bar
+The bar is drawn as a row of tiled blocks, and the browser rounded each block's
+position and width to whole screen pixels separately. Where a boundary fell
+between pixels, neither block quite covered it and the background showed
+through as a hairline — including *inside* a single unbroken run of one colour,
+which is what gave it away as a drawing artefact rather than real data.
+
+### Fixed — "last seen" on a device that has been offline all along
+A panel is meant to shift its window back and say *"Last hour before 3 Sep
+14:20"* when the device has no data in the period you asked for. It never
+could: the check that decides this looks for offline readings, and those were
+the very readings being deleted. It works now.
+
+## 2.496.14
+
+### Changed — Settings now has a Save button, and closing it asks
+Until now every control in Settings applied and kept itself the moment you
+touched it. That worked, but it gave you no way back: to undo a change you had
+to remember the old value and type it in again.
+
+Settings now keeps a **snapshot of how things were when you opened it**.
+
+* Sliders and switches still preview **live** — you still see the villa change
+  as you drag, because a setting you cannot see the effect of cannot be tuned.
+* **Save** keeps what you have and becomes the new starting point. It does not
+  close the panel, so you can carry on.
+* **Close** asks first, if you changed anything: **Save**, **Discard**, or
+  **Stay**. Discard puts everything back the way it was when you opened it — the
+  villa included.
+* Pressing Escape, or tapping outside the panel, asks the same question. Escape
+  while that question is up means **Stay**, so you cannot lose an edit by
+  reaching for the keyboard.
+
+If you have changed nothing, Close just closes — a question with one sensible
+answer is only noise.
+
+⚠️ One thing worth knowing: a change is still written as you make it, so it
+survives the tablet restarting. **Discard** is what undoes it, not closing the
+panel by accident.
+
+## 2.496.13
+
+### Fixed — every on/off row in Settings is now a finger-sized target
+The switch rows throughout Settings were **22 pixels** tall — half the 44 pixels
+this app sets as its own minimum for anything operated by finger. Nothing looked
+wrong, because the row spans the full width and reads as a comfortable target
+sideways; only its height was short. On a wall-mounted tablet that is the
+difference between a tap that lands and a tap that does nothing.
+
+### Added — Settings copes with a villa that has many devices
+Three lists in Settings assumed a short villa.
+
+**Grouped devices** had no filter: every group rendered, always. There is now a
+filter box that matches both the entity name and the label you gave it.
+
+**The entity table** sat behind a collapse, so the section opened on a heading
+and nothing else — and how many entities there were was invisible until you
+clicked. It now shows its first rows straight away, with **Show all** beneath.
+Typing in the filter narrows the list and the top of the *results* is what you
+see.
+
+**Diagnostic events** showed the newest ten and told you to use Copy or Download
+for the rest, which made event 11 of 500 unreachable on the one screen meant for
+reading them. It now pages through all of them.
+
+## 2.496.12
+
+### Changed — one rule for "did this setting actually change"
+Whenever the app re-reads its settings — which happens simply by returning to
+the tab — it receives a fresh copy of them, even when nothing was edited. Each
+part of the app that had to tell a real edit from an identical re-read worked
+that out for itself, and the same fix had been written four separate times, once
+per setting, each time at whichever place happened to be reported.
+
+There is now one rule and five places ask it. Nothing changes on screen; it
+makes a fix that had to be repeated four times unable to be missed a fifth.
+
+One of the five was still comparing by identity rather than content, and got
+away with it only because its single caller checked first. It no longer relies
+on that.
+
+## 2.496.11
+
+### Changed — "is this fault still open" is now decided in one place
+Eleven places in the app each decided for themselves whether a fault counted as
+open or resolved, by comparing its status to a piece of text. They agreed —
+except one, which 2.496.6 corrected — but nothing held them together, so the
+next edit to any of them could have split the answer again. That is how the
+report's totals came to contradict the alert count in the top bar.
+
+There is now one rule, and everything asks it: the top bar's count, the faults
+list, the Today tab, the readiness checks, the report totals, the status colours
+on each row, and the moment a fault is marked resolved.
+
+No numbers change in this release. It makes the previous fix permanent rather
+than correcting anything new.
+
+## 2.496.10
+
+### Fixed — the Energy tile under-counted the villa's largest draw by 1000×
+The summary bar's **Energy** figure adds up every power sensor. It added their
+raw numbers together as if all of them reported watts — but Home Assistant lets
+a power sensor report kilowatts, and whole-house meters usually do. A mains
+meter reading **3.2 kW** therefore contributed **3.2** to the total, not 3200.
+
+On a villa with a 3.2 kW mains reading plus about a kilowatt of appliances, the
+tile showed **1.6 kW** where the truth was **4.3 kW** — and the bigger the main
+draw, the more of it went missing. Every reading is now converted to a single
+unit before being added.
+
+Two smaller things came with it. A power sensor that reports only a unit and no
+device class (some plugs do) was already understood elsewhere in the app and is
+now counted here too. And a unit the app cannot interpret with certainty
+contributes **nothing** rather than a number in the wrong unit — "cannot say" is
+not zero.
+
+## 2.496.9
+
+### Fixed — a merged room label no longer changes name between loads
+When two or more room labels sit too close to draw apart, they combine into one
+— "Kitchen +2". Which room got to give the combined label its name was decided
+by the order the rooms happened to be processed in, not by anything on screen.
+So the same villa, at the same zoom, could show "Kitchen +2" on one load and
+"Terrace +2" on the next, with nothing having changed.
+
+Measured on a villa whose rooms sit on a grid — four labels, equally spaced,
+one device each: **four different answers** depending on processing order. It is
+now one answer, every time, decided by where the labels actually are.
+
+The comment in the code claimed this was already order-independent, and had
+done for several releases. It was not: three separate tie-breaks still fell back
+on processing order.
+
+## 2.496.8
+
+### Fixed — a sensor now reads the same on the villa badge and in its own panel
+Tapping a badge in the 3D villa opens a panel about that sensor, and the two
+could print the same reading differently. A power sensor showing **6.6 kW** on
+the badge read **6570.989** in the panel beside it — the same sensor, on the
+same screen, at the same moment. Temperatures, percentages and text states like
+"not_home" had the same split.
+
+There is now one rule for how a reading is written, and every surface asks it:
+the badge, the sensor panel, the grouped-device panel, the summary tiles and the
+group list. Where the surfaces genuinely differ they still do, but deliberately:
+the badge shortens a long value to fit a chip and hides an "all is well" status
+because its colour already says so, while a panel row — which has room and no
+colour ring — shows both in full.
+
+One visible knock-on: the Energy tile now reads **3 kW** where it read "3.0 kW",
+which is how the badge has always written it.
+
+## 2.496.7
+
+### Fixed — a fresh install no longer opens on a dead end
+Before a 3D model has been uploaded, the first screen says "Ask the owner to set
+up the villa's 3D model" — to a person who usually **is** the owner, but has not
+signed in as one yet. It named the one action they could not take and offered no
+way to take it. There is now a **Switch profile** button on that screen.
+
+The profile switcher was always in the top bar, but it is a small icon (and
+behind the ⋯ menu on a phone) on a screen that is otherwise empty. Cancelling
+the picker returns you to this screen rather than signing you out.
+
+### Fixed — summary counts and readiness checks counted devices that are not the villa's
+The lights and locks tiles, and the Facility readiness checks behind them,
+gathered **every** light and lock Home Assistant knows about — anything from
+another integration, a helper, or equipment in another building. So the tile
+could report "3 of 11 lights on" for a villa with six lights, and a single lock
+belonging to something else could hold "All doors locked" at **not locked**
+however carefully the villa was shut up.
+
+All of these now count the villa's own configured devices — the same list the
+offline-devices badge and the Facility device count already used, so the three
+agree instead of each deciding for itself.
+
+## 2.496.6
+
+### Fixed — the moon in the night sky was drawn inside out
+The moon showed the exact opposite of its real phase, at every phase: a full
+moon was drawn as a black disc, a new moon as a bright full one, and a crescent
+appeared on the wrong side. One setting in the drawing code was reversed, and
+the note beside it explaining which way round it went was reversed too, which is
+how it survived. Measured across eight phases before and after: a moon that is
+97% lit was drawing 3% of itself, and now draws 97%.
+
+### Fixed — faults with an unreadable status no longer disappear from the report
+The facility report counted a fault as **resolved** whenever it could not read
+that fault's status — if the field was empty, missing, or held something this
+version does not recognise. So a fault could quietly vanish from the report
+because of a bad record rather than because anyone fixed it.
+
+Anything not explicitly marked resolved now counts as **open**. This is also
+what the rest of the app already did: the alert count in the top bar, the
+faults list and the Today tab all treated an unreadable status as open, so the
+report's totals could contradict the number shown on the very same screen.
+
+### Fixed — the example entity name in Advanced Settings named a real camera here
+The Devices tab explains how to type an entity name and gave an example. The
+example was one of this property's own cameras — a name that means nothing on
+any other installation, and which no longer exists on this one either. It now
+shows a generic example.
+
+### Added — the version is readable from the browser console
+Diagnostic snippets captured from a browser can now report which build produced
+them by reading `__VK_VERSION__`. A capture that does not say which build it
+came from cannot be read properly: a fix that has not reached the tablet looks
+exactly like a fix that did not work.
+
+## 2.496.5
+
+### Added — a third add-on, "VESTA (dev2)", for trying a fix before it is released
+Until now there were two: the released **VESTA**, and **VESTA (dev)**, which
+carries the assistant features. Fixes for the released version had nowhere to be
+tried — they went straight onto the release and you saw them for the first time
+there.
+
+**VESTA (dev2)** is that missing middle. It is the released version plus the
+fixes being prepared for the next release, and nothing else — none of the
+assistant features from VESTA (dev). It installs alongside the other two, so you
+can put a fix on the wall tablet, look at it, and only then decide it is ready.
+
+Nothing about the released VESTA changes in this release, and nothing about
+VESTA (dev) changes either. All three keep their own version number, their own
+settings and their own place in the add-on list.
+
 ## 2.496.4
 
 ### Fixed — a swipe across a camera feed can no longer zoom it by mistake
@@ -9096,7 +10133,7 @@ So overlapping chips are no longer displaced at all; they **merge**. Every chip 
 ## 2.35.91
 
 ### Changes
-- Batch of 16 field-reported fixes/requests across the bottom bar, notifications, Facility, HUD layout and infra. Door locks: a relay-controlled door (e.g. a doorbell/intercom strike modelled as a bare `switch.*`, not HA's `lock` domain) now shows up in the Door Lock tile AND the Facility "Doors locked" check automatically — reuses the existing SWITCH_PURPOSE_HINTS lock-glyph classification (EntityCategories.isLockLikeSwitch) as the single source of truth, no new hardcoded pattern, and assumes the standard energise-to-unlock relay convention (documented, not guessed). Motion notifications: unified to always read "Motion detected · <room>" — the camera-motion vs. plain-sensor cases used to differ (one showed just a device label, the other appended "— <device label>" after the room), now both drop the device label whenever a room is known. GLB import: the central-upload GLB picker now accepts multi-select, so the .glb and its .rooms.json sidecar can be chosen together in one OS file dialog and upload sequentially in one action — a real filesystem-sibling auto-discovery isn't possible from a browser file input, so this is the closest "automatic" gets within that constraint; the more optimal fix (folding room data into the GLB's own glTF extras, same mechanism as vk_role/vk_level) needs a pipeline change, noted for next time sources/ is available. Swimming Pool bottom-bar tile: added a second rule (device's configured `room` matches "pool"/"jacuzzi"/"spa") alongside the existing name-based one. Camera status bars: were a fixed 75% of their flex space, so a camera with fewer control buttons (no linked-entity toggle, no prev/next) visibly showed a WIDER bar than one with more — changed to fill 100% of the available space up to the buttons, consistent regardless of button count. "Not on the map": a device with no mesh of its own but used as another device's `linkedEntityId` or a camera's `motionEntityId` is no longer reported as off-map — it's reachable via its host device's badge. Facility Report/Spend tabs: both now support Save / Reopen / Delete of generated documents (new FmSavedDocument type + FmDataContext.saveDocument/removeDocument, one shared SavedDocumentsList renderer), and Spend gained its own "Generate/Save spend statement" workflow (fmReport.buildSpendStatement) mirroring the Report tab's explicit generate-then-save shape. Facility Readiness tab: the "View unavailable devices" shortcut moved onto the same line as its card's title (was stacked below, making that one card taller than its neighbours); the same treatment extended to new "View doors"/"View lights" shortcuts on the Doors-locked/Lights-off cards; tab label text now has `line-height:1` to fix the icon/label vertical-centring; the Report tab's preview area got a `min-height` so generating a report doesn't visibly resize the whole modal (and shift the header/tabs on screen) below the desktop fixed-height breakpoint. HUD left column: the default-view "anchor" button moved out of the standalone bottom-left view-toggle corner and into the 1F/2F/Rooms stack as its 4th button (ViewControls split into the toggle-only default export plus a new DefaultViewButton); that stack's squircle radius is now a shared `--radius-squircle` token also applied to the villa-name/clock brand chip (previously a mismatched full capsule — the one HUD section whose shape didn't match the rest), and the stack's left inset now lines up exactly with the brand chip's own left padding. iOS Dynamic Island: audited every top-of-screen overlay for safe-area handling — the top bar and error/service toasts already reserved `env(safe-area-inset-top)` correctly, but the room-name banner didn't (flat 64px), so it could render under the island on a Dynamic-Island iPhone; fixed to match the toast's existing pattern. PWA "Failed to fetch" reconnect: root-caused from the field telemetry, not guessed — a standalone PWA tab with a large heap (400-500MB+, consistent with the app's known slow memory drift) gets evicted by the OS/browser while backgrounded; on foreground it does a full cold reload (not a bfcache restore — heap resets to ~24MB, `pageshow` reports `persisted:false`) and re-fetches the model right as the device's own network stack is still reassociating Wi-Fi/DNS after resuming from background/sleep. The existing `fetchModelWithRetry` 120s backoff-retry budget is already generous and was hit almost exactly (report timestamp lines up with page-resume + ~2 minutes), so this was a genuinely sustained (if transient) local network gap, not a code bug or a Cloudflare-side failure — `Online: true` and the surrounding successful loads confirm the network and Cloudflare hop are otherwise healthy. Shipped one low-risk improvement: the retry backoff now also wakes early on the browser's own `online` event instead of always sitting out the full delay, shortening recovery in exactly this scenario without changing the worst-case budget. Cloudflare Security Insights review: of the 7 findings, only "Security.txt not configured" was origin-actionable — added `public/.well-known/security.txt` (RFC 9116). The rest (HSTS, Always-Use-HTTPS, Bot Fight Mode, AI-bot blocking/Labyrinth) are Cloudflare dashboard-only toggles; HSTS specifically is already sent correctly by this add-on's own nginx (verified in rootfs/etc/nginx/nginx.conf) for the direct hostname, but `ha-thelyshouse.*` is Home Assistant Core's own web server (outside this add-on's code) so Cloudflare's edge-level HSTS toggle is the only fix available for that domain. Typecheck and production build clean throughout.
+- Batch of 16 field-reported fixes/requests across the bottom bar, notifications, Facility, HUD layout and infra. Door locks: a relay-controlled door (e.g. a doorbell/intercom strike modelled as a bare `switch.*`, not HA's `lock` domain) now shows up in the Door Lock tile AND the Facility "Doors locked" check automatically — reuses the existing SWITCH_PURPOSE_HINTS lock-glyph classification (EntityCategories.isLockLikeSwitch) as the single source of truth, no new hardcoded pattern, and assumes the standard energise-to-unlock relay convention (documented, not guessed). Motion notifications: unified to always read "Motion detected · <room>" — the camera-motion vs. plain-sensor cases used to differ (one showed just a device label, the other appended "— <device label>" after the room), now both drop the device label whenever a room is known. GLB import: the central-upload GLB picker now accepts multi-select, so the .glb and its .rooms.json sidecar can be chosen together in one OS file dialog and upload sequentially in one action — a real filesystem-sibling auto-discovery isn't possible from a browser file input, so this is the closest "automatic" gets within that constraint; the more optimal fix (folding room data into the GLB's own glTF extras, same mechanism as vk_role/vk_level) needs a pipeline change, noted for next time sources/ is available. Swimming Pool bottom-bar tile: added a second rule (device's configured `room` matches "pool"/"jacuzzi"/"spa") alongside the existing name-based one. Camera status bars: were a fixed 75% of their flex space, so a camera with fewer control buttons (no linked-entity toggle, no prev/next) visibly showed a WIDER bar than one with more — changed to fill 100% of the available space up to the buttons, consistent regardless of button count. "Not on the map": a device with no mesh of its own but used as another device's `linkedEntityId` or a camera's `motionEntityId` is no longer reported as off-map — it's reachable via its host device's badge. Facility Report/Spend tabs: both now support Save / Reopen / Delete of generated documents (new FmSavedDocument type + FmDataContext.saveDocument/removeDocument, one shared SavedDocumentsList renderer), and Spend gained its own "Generate/Save spend statement" workflow (fmReport.buildSpendStatement) mirroring the Report tab's explicit generate-then-save shape. Facility Readiness tab: the "View unavailable devices" shortcut moved onto the same line as its card's title (was stacked below, making that one card taller than its neighbours); the same treatment extended to new "View doors"/"View lights" shortcuts on the Doors-locked/Lights-off cards; tab label text now has `line-height:1` to fix the icon/label vertical-centring; the Report tab's preview area got a `min-height` so generating a report doesn't visibly resize the whole modal (and shift the header/tabs on screen) below the desktop fixed-height breakpoint. HUD left column: the default-view "anchor" button moved out of the standalone bottom-left view-toggle corner and into the 1F/2F/Rooms stack as its 4th button (ViewControls split into the toggle-only default export plus a new DefaultViewButton); that stack's squircle radius is now a shared `--radius-squircle` token also applied to the villa-name/clock brand chip (previously a mismatched full capsule — the one HUD section whose shape didn't match the rest), and the stack's left inset now lines up exactly with the brand chip's own left padding. iOS Dynamic Island: audited every top-of-screen overlay for safe-area handling — the top bar and error/service toasts already reserved `env(safe-area-inset-top)` correctly, but the room-name banner didn't (flat 64px), so it could render under the island on a Dynamic-Island iPhone; fixed to match the toast's existing pattern. PWA "Failed to fetch" reconnect: root-caused from the field telemetry, not guessed — a standalone PWA tab with a large heap (400-500MB+, consistent with the app's known slow memory drift) gets evicted by the OS/browser while backgrounded; on foreground it does a full cold reload (not a bfcache restore — heap resets to ~24MB, `pageshow` reports `persisted:false`) and re-fetches the model right as the device's own network stack is still reassociating Wi-Fi/DNS after resuming from background/sleep. The existing `fetchModelWithRetry` 120s backoff-retry budget is already generous and was hit almost exactly (report timestamp lines up with page-resume + ~2 minutes), so this was a genuinely sustained (if transient) local network gap, not a code bug or a Cloudflare-side failure — `Online: true` and the surrounding successful loads confirm the network and Cloudflare hop are otherwise healthy. Shipped one low-risk improvement: the retry backoff now also wakes early on the browser's own `online` event instead of always sitting out the full delay, shortening recovery in exactly this scenario without changing the worst-case budget. Cloudflare Security Insights review: of the 7 findings, only "Security.txt not configured" was origin-actionable — added `public/.well-known/security.txt` (RFC 9116). The rest (HSTS, Always-Use-HTTPS, Bot Fight Mode, AI-bot blocking/Labyrinth) are Cloudflare dashboard-only toggles; HSTS specifically is already sent correctly by this add-on's own nginx (verified in rootfs/etc/nginx/nginx.conf) for the direct hostname, but `the villa's own hostname*` is Home Assistant Core's own web server (outside this add-on's code) so Cloudflare's edge-level HSTS toggle is the only fix available for that domain. Typecheck and production build clean throughout.
 
 ---
 
@@ -12010,7 +13047,7 @@ First-person navigation UX pass — three fixes:
 - **The ⓘ panel now has an "Uploaded" row with the original filename and time
   of the last central upload.** A central upload overwrites the file AT the
   configured `model_path`, so the served name never changes (always e.g.
-  `TheLysHouse_1F.glb`) no matter which file you picked — which repeatedly
+  `villa_1F.glb`) no matter which file you picked — which repeatedly
   read as "the info panel shows the wrong file". The add-on now records the
   browser-side filename in a sidecar (`<model>.upload.json`) on every upload
   and reports it via `/addon-config`; the panel shows it next to the served

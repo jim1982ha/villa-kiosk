@@ -8,6 +8,8 @@
 // token-less through the add-on's Supervisor proxy, so there's nothing to enter.
 
 import { useState } from "react";
+import ModalFooter from "@/components/common/ModalFooter";
+import UnsavedChanges from "@/components/common/UnsavedChanges";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
   Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
@@ -53,7 +55,78 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
   const scheduleCommit = (patch: Partial<AppConfig>) =>
     pending.draft(SETTINGS_DRAFT_KEY, { ...pending.drafts[SETTINGS_DRAFT_KEY], ...patch });
   const flushPending = () => pending.flush(SETTINGS_DRAFT_KEY);
-  const closeModal = () => { flushPending(); onClose(); };
+
+  // ⚠️ THIS DIALOG APPLIES LIVE AND STILL HAS A REAL DRAFT, and those are not
+  // in conflict. Live preview is the POINT of these controls: a walk-speed
+  // slider that only took effect on Save would be untunable, so every tick
+  // still reaches the scene. What was missing is the other half — a BASELINE to
+  // return to. So:
+  //
+  //   the scene previews on every tick   (unchanged, and load-bearing)
+  //   dirty   = the live config differs from the baseline taken at open
+  //   Save    = keep it, and make THIS the new baseline
+  //   Discard = write the baseline back, which reverts the scene AND the store
+  //
+  // ⚠️ DISCARD REVERTS BY WRITING, not by withholding a write. Persistence here
+  // is eager by design, so there is no un-written state to drop — undoing means
+  // putting the old values back through the same path any control uses, which
+  // is also why the scene follows for free.
+  //
+  // ⚠️ THE BASELINE IS EVERY KEY THIS DIALOG WRITES, listed once. A key added
+  // to a control and not to this list is silently un-revertable: Discard would
+  // restore its nine siblings and leave that one changed, which is worse than
+  // not offering Discard at all. Pinned by tests/oracles/settings_baseline.mjs,
+  // which derives the list from the update()/scheduleCommit() call sites here
+  // and fails if they disagree.
+  const SETTINGS_KEYS = [
+    "badgeStyle", "eyeHeight", "highlightInteractive", "naturalScrolling",
+    "northOffsetDeg", "render", "showSummaryBar", "siteTitle", "theme",
+    "walkSpeed",
+  ] as const;
+  const slice = (c: AppConfig): Partial<AppConfig> => {
+    const out: Record<string, unknown> = {};
+    for (const k of SETTINGS_KEYS) out[k] = c[k];
+    return out as Partial<AppConfig>;
+  };
+  // Captured once, on open. `useState`'s initialiser — not a live read — so a
+  // config change while the dialog is open moves `dirty`, which is the whole
+  // point, rather than moving the thing dirty is measured against.
+  const [baseline, setBaseline] = useState<Partial<AppConfig>>(() => slice(config));
+  // Content comparison, never reference: `render` is an object rebuilt by every
+  // one of its own controls, so `!==` would report dirty forever.
+  const dirty = JSON.stringify(slice(config)) !== JSON.stringify(baseline)
+    || Object.keys(pending.drafts).length > 0;
+
+  const [askingClose, setAskingClose] = useState(false);
+
+  const commit = {
+    dirty,
+    save: () => {
+      flushPending();
+      setBaseline(slice({ ...config, ...pending.drafts[SETTINGS_DRAFT_KEY] } as AppConfig));
+    },
+    // ⚠️ THE LOCAL ECHOES ARE RE-SEEDED TOO. They are what the sliders and text
+    // fields render from, and a reverted config behind a stale echo is the same
+    // lie one layer up — the value would read as changed while the villa showed
+    // the old one.
+    discard: () => {
+      pending.cancel(SETTINGS_DRAFT_KEY);
+      update(baseline);
+      setSiteTitle(baseline.siteTitle ?? "");
+      setEyeHeight(baseline.eyeHeight ?? 1.7);
+      setWalkSpeed(baseline.walkSpeed ?? 1);
+      setRender(baseline.render ?? DEFAULT_RENDER);
+      if (baseline.render) manager?.setRenderConfig(baseline.render);
+    },
+  };
+
+  // ⚠️ CLOSE ASKS WHEN THERE IS SOMETHING TO LOSE, and closes straight away
+  // when there is not — a question with only one sensible answer is noise.
+  const closeModal = () => {
+    if (dirty) { setAskingClose(true); return; }
+    flushPending();
+    onClose();
+  };
   // Focus trap + Escape + focus restore (see useModalA11y). Declared AFTER
   // closeModal deliberately — it closes over it, and this modal's close path
   // has to flush the debounced settings draft, so Escape must run the same
@@ -451,19 +524,28 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
 
         </div>{/* end settings-body */}
 
-        <div className="settings-footer">
-          {/* Advanced Settings opens as a modal over the live villa (no reload). */}
-          {can("editConfig") ? (
+        {/* ⚠️ THE FOOTER OWNS THE CLOSE QUESTION for its own button; this file
+            owns it for Escape and the backdrop. Both raise the SAME
+            `UnsavedChanges` component, so the wording, the button order and —
+            the one that matters — which answer the backdrop maps to cannot
+            drift apart between the two gestures. */}
+        <ModalFooter
+          leading={can("editConfig") ? (
             <button className="btn ghost" onClick={onOpenConfigEditor}>
               <Sliders size={18} /> Advanced Settings
             </button>
-          ) : <span />}
-          {/* Single Close button — everything above already applied + persisted
-              live, so there's nothing to Cancel and nothing left to Save.
-              Matches Advanced Settings' own footer (ConfigEditorModal). */}
-          <button className="btn primary" onClick={closeModal}>Close</button>
-        </div>
+          ) : undefined}
+          commit={commit}
+          onClose={() => { flushPending(); onClose(); }}
+        />
       </div>
+      {askingClose && (
+        <UnsavedChanges
+          onSave={() => { commit.save(); setAskingClose(false); onClose(); }}
+          onDiscard={() => { commit.discard(); setAskingClose(false); onClose(); }}
+          onStay={() => setAskingClose(false)}
+        />
+      )}
     </div>
   );
 }

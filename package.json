@@ -1,7 +1,7 @@
 {
   "name": "villa-kiosk",
   "private": true,
-  "version": "2.496.4",
+  "version": "2.496.49",
   "description": "VESTA \u2014 a 3D interactive villa dashboard for Home Assistant",
   "license": "UNLICENSED",
   "type": "module",
@@ -9,13 +9,19 @@
     "clean": "rm -rf dist node_modules/.vite tsconfig.tsbuildinfo",
     "predev": "npm run clean",
     "dev": "vite",
-    "prebuild": "npm run clean",
+    "prebuild": "npm run clean && node tests/oracles/sw_lifecycle.mjs",
     "build": "tsc -b && vite build",
     "prepreview": "npm run build",
     "preview": "vite preview --host",
     "typecheck": "tsc -b --noEmit",
-    "test:placement": "node tests/badge_placement_test.ts",
-    "test:geometry": "node tests/geometry_test.ts"
+    "test:oracles": "sh tests/oracles/run-all.sh",
+    "test:hard-rules": "python3 tests/hard-rules.py",
+    "test:proxy": "python3 tests/proxy-rules.py",
+    "test:routes": "python3 tests/routes.py",
+    "test:manifest": "python3 tests/addon-manifest.py",
+    "test:hard-rules:ci": "VK_HASH_ONLY=1 python3 tests/hard-rules.py",
+    "preflight": "bash tests/preflight.sh",
+    "test:proxy-parse": "python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('rootfs/usr/bin/supervisor-proxy.py').read_text())\""
   },
   "dependencies": {
     "@babylonjs/core": "^7.37.2",

@@ -968,6 +968,18 @@ export function solvePlacement(
 /** An axis-aligned box on the view plane: centre plus half-extents. */
 export interface PileBox { cx: number; cy: number; hw: number; hh: number; }
 
+/** Lexicographic order on a PAIR of boxes, for breaking an exact overlap tie.
+ *  Geometry only: two piles whose boxes compare equal are interchangeable, so
+ *  no position-derived value is needed and none is used. */
+function lessThan(i: PileBox, j: PileBox, a: PileBox, b: PileBox): boolean {
+  const key = (p: PileBox, q: PileBox) => [p.cx, p.cy, p.hw, p.hh, q.cx, q.cy, q.hw, q.hh];
+  const lhs = key(i, j), rhs = key(a, b);
+  for (let k = 0; k < lhs.length; k++) {
+    if (lhs[k] !== rhs[k]) return lhs[k] < rhs[k];
+  }
+  return false;
+}
+
 /**
  * Merge piles whose DRAWN boxes overlap, repeatedly, until none do.
  *
@@ -992,9 +1004,19 @@ export interface PileBox { cx: number; cy: number; hw: number; hh: number; }
  * (every pass either breaks or removes a pile) and there is no bound to get
  * wrong.
  *
- * Merges the FIRST colliding pair found in index order, which is the canonical
- * (rank, entity_id) order its caller built the piles in — so the result is a
- * function of geometry and rank only, like everything else here.
+ * ⚠️ THIS USED TO SAY "merges the FIRST colliding pair found in index order,
+ * … so the result is a function of geometry and rank only". That sentence
+ * survived 2.496.26, which deleted exactly the rule it describes, and it is
+ * recorded here rather than simply replaced because it argued the defect WAS
+ * the design — a reader trusting it would restore the array scan as a
+ * simplification. Read the loop, not this paragraph.
+ *
+ * The rule now: merge the MOST OVERLAPPED colliding pair, ties broken on the
+ * boxes themselves (`lessThan`). The claim the old sentence made is only true
+ * of a box that COVERS its parents, and the caller's does not — it is centred
+ * on the pile's centroid with a size from the row count, so fusing MOVES the
+ * survivor. Without monotonicity the fixpoint is not unique, and which devices
+ * shared a card moved with the order the piles arrived in.
  *
  * Mutates `piles` in place and returns it.
  */
@@ -1004,13 +1026,36 @@ export function mergeCollidingPiles<T>(
 ): T[][] {
   while (piles.length > 1) {
     const boxes = piles.map(boxOf);
-    let a = -1, b = -1;
-    outer:
+    let a = -1, b = -1, best = -Infinity;
     for (let i = 0; i < piles.length; i++) {
       for (let j = i + 1; j < piles.length; j++) {
-        if (Math.abs(boxes[i].cx - boxes[j].cx) < boxes[i].hw + boxes[j].hw
-          && Math.abs(boxes[i].cy - boxes[j].cy) < boxes[i].hh + boxes[j].hh) {
-          a = i; b = j; break outer;
+        const dx = (boxes[i].hw + boxes[j].hw) - Math.abs(boxes[i].cx - boxes[j].cx);
+        const dy = (boxes[i].hh + boxes[j].hh) - Math.abs(boxes[i].cy - boxes[j].cy);
+        if (dx <= 0 || dy <= 0) continue;                 // not colliding
+        // ⚠️ THE MOST OVERLAPPED PAIR, NOT THE FIRST ONE BY INDEX. This read
+        // `break outer` on the first hit of an ascending i/j scan, so which
+        // pair fused was a pure function of array position — and because the
+        // caller's box is centred on the pile's CENTROID (EntityVisuals'
+        // `boxOf`), fusing MOVES the survivor rather than covering its
+        // parents. Monotonicity is what makes a "merge until nothing
+        // collides" loop confluent; a moving box destroys it, so the same
+        // three badges partitioned two different ways depending on the order
+        // they arrived in.
+        //
+        // ⚠️ AND THE ORDER THEY ARRIVE IN MOVES WITH THE READINGS. A badge's
+        // half-width comes from its value's text length, so "9 W" ticking to
+        // "10 W" on an unrelated sensor re-cut which devices shared a card —
+        // a device hopping to another card with nothing about it having
+        // changed.
+        //
+        // The overlap AREA is intrinsic to the geometry, so the pair chosen
+        // is the same whatever order the piles are in. Ties break on the
+        // boxes themselves, never on position. This keeps the one-pair-at-a-
+        // time shape — merging no more than the overlap actually requires —
+        // which merging whole connected components at once would not.
+        const area = dx * dy;
+        if (area > best || (area === best && a >= 0 && lessThan(boxes[i], boxes[j], boxes[a], boxes[b]))) {
+          best = area; a = i; b = j;
         }
       }
     }

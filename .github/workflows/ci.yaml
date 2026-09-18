@@ -1,0 +1,112 @@
+# The first automated gate this branch has had beyond `tsc -b` inside the image.
+#
+# ⚠️ dev2 SHIPPED TO PRODUCTION WITH ONE GATE, AND IT COULD NOT SEE THE PYTHON.
+# Until 2.496.23 this directory held only `build.yaml`: the sole automated check
+# on 55,000 lines of TypeScript, 2,073 lines of proxy and both hard rules was
+# `RUN npm run build` in the Dockerfile. A syntax error in `supervisor-proxy.py`
+# produced a GREEN BUILD and a container serving static HTML with no auth
+# backend behind it, because nothing in the pipeline so much as parsed it.
+#
+# ⚠️ AND THE PINS THAT DID EXIST WERE INVISIBLE. Eighteen oracles sat in a
+# `tests/` directory that `.gitignore` excluded wholesale — not tracked, so a
+# fresh clone had none and CI had none. That is fixed in the same release; see
+# `.gitignore`'s own note on why `tests/*` and not `tests/`.
+name: CI
+
+on:
+  push:
+    branches: [dev2, main]
+  pull_request:
+  workflow_dispatch:
+  # ⚠️ CALLABLE, SO THE IMAGE BUILD CAN DEPEND ON IT. Until this was added,
+  # build.yaml and this file were two INDEPENDENT workflows on the same push
+  # trigger: nothing in build.yaml referenced these checks, its GHCR step is an
+  # unconditional `push: true`, and its manifest-sync job needs only `build`.
+  # So a commit that reddened every gate below still published an image to GHCR
+  # and still committed the manifest to main that makes Home Assistant offer
+  # it. The iPad on the wall updated to a build whose gates had failed, and the
+  # red X sat on a DIFFERENT workflow from the one that shipped.
+  #
+  # GitHub Actions has no cross-workflow `needs:`, so build.yaml calls this as
+  # a reusable workflow and gates its own build job on the result. Every gate
+  # in this file was advisory before that edge existed.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: kiosk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # ⚠️ 24, BECAUSE THE ORACLES IMPORT THE SHIPPED TYPESCRIPT DIRECTLY.
+          # They run under plain `node` with type stripping and the repo's own
+          # alias hook (tests/consistency/) rather than a test runner — which is
+          # what makes them test the module that ships instead of a copy of it.
+          node-version: "24"
+
+      - name: Install
+        # ⚠️ `npm install`, NOT `npm ci`, AND THAT IS WHY THIS FILE HAS A HISTORY
+        # OF ZERO GREEN RUNS. Every CI run since 2.496.23 created this workflow
+        # failed HERE, on `npm ci`, so not one of the seven gates below has ever
+        # executed on a runner — eleven releases shipped while this file was
+        # cited as their gate. `npm ci` succeeds in a clean local checkout of
+        # the same lockfile, so the cause is the runner, not the lockfile.
+        #
+        # Matching the Dockerfile is also the point: one resolver on both paths
+        # means a green build here says something about the image's build stage.
+        run: npm install --no-audit --no-fund
+
+      - name: Types and bundle
+        # The gate that already existed, hoisted out of the image so it fails
+        # in seconds rather than after a multi-arch build.
+        run: npm run build
+
+      - name: Oracles
+        # Each pins a defect that was found, reproduced and fixed. `open/` holds
+        # ones that fail BY DESIGN against known-open defects; run-all.sh
+        # reports those separately and does not fail on them.
+        run: npm run test:oracles
+
+      - name: The two hard rules
+        # ⚠️ THE HASH PATH IS THE ONLY ONE THAT EXISTS HERE. The plaintext token
+        # list is gitignored, so `checkout` never produces it — which is how
+        # this clause came to print SKIP and exit 0 on every runner for eleven
+        # releases. `npm run test:hard-rules:ci` is the same command a developer
+        # can run locally to exercise THIS branch rather than their own.
+        run: npm run test:hard-rules:ci
+
+      - name: The proxy's runtime dependency
+        # ⚠️ WITHOUT THIS, THE NEXT STEP CANNOT EVEN IMPORT ITS SUBJECT.
+        # supervisor-proxy.py does `from aiohttp import ...` at module scope and
+        # proxy-rules.py EXECUTES the module (importlib, because the filename is
+        # hyphenated). A bare runner has no aiohttp, so that gate failed on the
+        # import and had never run in CI — the same as every other gate here,
+        # which could not run at all until 2.496.34. The image installs the same
+        # dependency as an apk (py3-aiohttp); this is CI's half of that fact.
+        run: python3 -m pip install --quiet aiohttp
+
+      - name: The proxy's security rules
+        # ⚠️ THE FIRST TEST ON THIS BRANCH THAT REACHES THE PROXY AT ALL.
+        run: npm run test:proxy
+
+      - name: The path lists agree
+        run: npm run test:routes
+
+      - name: The add-on manifest agrees with what an operator reads
+        # ⚠️ config.yaml PROMISED THIS GUARD AND IT DID NOT EXIST — its comment
+        # beside the options block named a security_test.py that is not tracked
+        # on this branch. A field missing from translations/en.yaml
+        # renders on Supervisor's Configuration page as its raw key with no
+        # help text, and that is the page where the PINs are set.
+        run: npm run test:manifest
+
+      - name: The proxy parses
+        # ⚠️ THE CHEAPEST CHECK HERE AND THE ONE WITH THE WORST FAILURE MODE.
+        # Nothing else in this pipeline loads the proxy at all.
+        run: npm run test:proxy-parse

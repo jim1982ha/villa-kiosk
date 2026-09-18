@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type Hls from "hls.js";
 import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
+import { useRailLayout } from "@/utils/railLayout";
 import { usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
@@ -31,7 +32,7 @@ import { useModalA11y } from "@/hooks/useModalA11y";
 import { useBackToClose } from "@/hooks/useBackToClose";
 import { tapDebug } from "@/utils/tapDebug";
 import { WHEEL_IDLE_MS, swipeStep, wheelOwner, wheelStep } from "./cameraGestures";
-import { STATUS_COLOR } from "@/utils/stateColors";
+import { STATUS_COLOR, UNKNOWN_STATES } from "@/utils/stateColors";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { mergeStateHistories } from "./chartUtils";
@@ -146,14 +147,12 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   const motionActive = mapping.motionEntityId
     ? entities[mapping.motionEntityId]?.state === "on"
     : false;
-  const [railVertical, setRailVertical] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(orientation: landscape) and (max-height: 560px)");
-    const sync = () => setRailVertical(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
+  // ⚠️ ASKED, NOT RESTATED. This was a second copy of the stylesheet's media
+  // query and it drifted: v2.81.1 changed the CSS to `(pointer: coarse)` and
+  // left `(max-height: 560px)` here, so an iPad in landscape got rail layout
+  // from the stylesheet and `vertical={false}` from this file — a history bar
+  // drawing its segments along X inside a ten-pixel-wide vertical strip.
+  const railVertical = useRailLayout();
   // Reorders .camera-controls' vertical (phone-landscape) column ONLY — the
   // portrait row keeps its natural DOM order untouched. Close-top/fullscreen-
   // 2nd/next-above-previous reads more natural for a one-handed reach down a
@@ -371,8 +370,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     let cancelled = false;
     setStatusLoading(true);
     const motionId = mapping.motionEntityId;
-    // keepUnavailable on BOTH series — this bar's entire subject is
-    // reachability, so a gap is the signal, not noise:
+    // ⚠️ THIS BAR'S SUBJECT IS REACHABILITY, so a gap is the signal, not
+    // noise. Both series used to pass a `keepUnavailable` opt-out to get that;
+    // the flag is gone because keeping them is now the only behaviour — every
+    // other caller was broken by the old default. Why it matters here:
     //   * the camera's own `unavailable` is what the "offline" band below is
     //     for, and without this it never arrives to be drawn;
     //   * the motion sensor's matters too, in the other direction — dropping
@@ -381,16 +382,16 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     //     whole outage. Kept, it stops being `on` and the bar stops claiming
     //     motion nobody detected.
     Promise.all([
-      fetchStateHistory(mapping.entityId, 24, { keepUnavailable: true }),
+      fetchStateHistory(mapping.entityId, 24),
       motionId
-        ? fetchStateHistory(motionId, 24, { keepUnavailable: true })
+        ? fetchStateHistory(motionId, 24)
         : Promise.resolve<StateHistoryPoint[]>([]),
     ]).then(([camHist, motionHist]) => {
       if (cancelled) return;
       setStatusHistory(mergeStateHistories(
         { camera: camHist, motion: motionHist },
         (cur) => {
-          if (!cur.camera || cur.camera === "unavailable" || cur.camera === "unknown") return "offline";
+          if (!cur.camera || UNKNOWN_STATES.has(cur.camera)) return "offline";
           if (motionId && cur.motion === "on") return "motion";
           return "online";
         },
@@ -673,7 +674,14 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         // only teardown on this path.
         hlsInstanceRef.current.destroy();
         hlsInstanceRef.current = null;
-        usingHlsJsRef.current = false;
+        // ⚠️ usingHlsJsRef IS DELIBERATELY NOT CLEARED HERE. destroy() above
+        // triggers a native <video> error that arrives ASYNCHRONOUSLY, and the
+        // onError guard reads this ref to tell "our own teardown" from "the
+        // native path actually failed". Clearing it synchronously made that
+        // guard see false and fire fallBackToStream for a stream that never
+        // failed — so cycling cameras silently dropped the next one to MJPEG
+        // and logged "HLS unavailable" for it. The ref's own docstring already
+        // says it is never reset once set; this line used to contradict it.
       } else {
         // Native HLS — we set video.src ourselves, so we clear it too.
         video.removeAttribute("src");

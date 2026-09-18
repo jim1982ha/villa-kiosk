@@ -1,6 +1,39 @@
 .claude
 CLAUDE.md
-tests/
+# ⚠️ `.scratch/` HOLDS THE VILLA'S OWN VOCABULARY AND MUST NEVER BE TRACKED.
+# `forbidden-tokens.txt` lists the property's name, hostname and model filename
+# so `tests/hard-rules.py` can check they are absent from everything shipped —
+# writing them into a tracked guard would BE the leak the guard exists to
+# prevent. It was NOT ignored on this branch until 2.496.24, which was found by
+# the guard's own first run trying to add its token list.
+.scratch/
+# ⚠️ `tests/*` AND NOT `tests/`, AND THE DIFFERENCE IS THE WHOLE POINT. Git
+# cannot re-include anything whose PARENT directory is excluded, so `tests/`
+# followed by `!tests/oracles/` silently keeps ignoring the whole tree — the
+# negation never gets a chance to match. Matching the CHILDREN leaves the
+# directory itself considered, so the negations below work.
+#
+# ⚠️ THIS BRANCH HAD THE BROKEN FORM UNTIL 2.496.23, AND IT IS WHY dev2 SHIPPED
+# TO PRODUCTION WITH ONE GATE. Eighteen oracles existed and not one of them was
+# tracked: a fresh clone had none, CI had none, and every pin written here was
+# invisible the moment it left this machine.
+tests/*
+!tests/oracles/
+!tests/consistency/
+# ⚠️ THE PATTERN, NOT ONE FILE. This read `!tests/hard-rules.py` and git
+# refused the very next guard added beside it. A negation naming one file is a
+# negation somebody has to remember; naming the shape is one nobody does.
+!tests/*.py
+# ⚠️ AND THE DATA A GATE READS, NOT JUST THE GATE. `tests/forbidden-token-hashes.txt`
+# is what lets the villa-name check run on a build server at all, and it landed
+# here as a .txt — so `!tests/*.py` did not reach it, it was never committed,
+# and CI failed on three consecutive releases with the check correctly refusing
+# to pass without it. The lesson written three lines above, re-learned one
+# extension over.
+!tests/*.txt
+# Local scratch inside the tracked directories stays ignored.
+tests/oracles/*.log
+tests/**/node_modules/
 node_modules
 dist
 dist-ssr

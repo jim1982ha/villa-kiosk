@@ -2,7 +2,7 @@
 // The geometry of a summary CARD — the control a group of badges collapses to
 // when it can still show every one of its devices. Pure: no imports at all, in
 // the same spirit as badgePlacement.ts and badgeMetrics.ts, which is what lets
-// `npm run test:placement` cover it. This file's arithmetic is the easiest part
+// `tests/oracles/badge_geometry.mjs` covers it. This file's arithmetic is the easiest part
 // of the subsystem to get wrong and there is no other way to guard it: nothing
 // in the repo can exercise EntityVisuals without a browser.
 //
@@ -258,5 +258,75 @@ export function arrange(
     },
     zoneW: unit,
     zoneH: unit,
+  };
+}
+
+//: The value's clear space, as a multiple of the icon's own padding. Mirrors
+//: `badgeMetrics.CARD_VALUE_MARGIN_OF_ICON_PAD`; kept here so this module stays
+//: import-free and therefore runnable under a bare `node`.
+const VALUE_MARGIN_OF_ICON_PAD = 1.5;
+//: The transparent margin the icon bakes around its own squircle — mirrors
+//: `badgeIcons.BADGE_INSET_CARD`, for the same reason.
+const INK_INSET_FRACTION = 0.10;
+
+/** The six struts a card badge's row is built from, in order, and their sum. */
+export interface CardStruts {
+  padl: number;
+  glyph: number;
+  /** Zero-width and hidden when the badge shows no value. */
+  valgap: number;
+  value: number;
+  valtail: number;
+  padr: number;
+  /** What the row actually measures. */
+  width: number;
+}
+
+/**
+ * THE width of one card badge, from the same terms the renderer lays out.
+ *
+ * ⚠️ IT WAS COMPUTED TWICE, FROM TWO DISJOINT SETS OF CONSTANTS. The layout
+ * modelled a card as `cardPadLeftPx + cardHeightPx + valueWidth`; the renderer
+ * built it from six struts and shared exactly ONE term with that expression.
+ * `cardPadLeftPx` and `cardValuePadPx` were read only by the layout,
+ * `CARD_VALUE_MARGIN_OF_ICON_PAD` and the ink inset only by the renderer — two
+ * sets of dials for one number, with nothing saying which was authoritative.
+ *
+ * On coarse metrics the layout reserved 40.0px where the renderer drew 29.6 —
+ * about 10px of nothing per card, three to five times the minimum gap the
+ * metrics table spends thirty lines tuning. So the loop "badges group too
+ * eagerly, adjust a gap constant" could not converge: the estimate being tuned
+ * against was biased, and three separate docstrings asserted the opposite —
+ * "a layout decision cannot be made about a badge of a different size from the
+ * one on screen". True of the scale, true of the classic badge, false here.
+ *
+ * ⚠️ THE RENDERER ADDS THESE STRUTS BY NAME. It does not re-derive them, so the
+ * two cannot drift again; `tests/oracles/badge_geometry.mjs` pins that the parts
+ * sum to the whole.
+ */
+export function cardStruts(
+  cardHeightPx: number,
+  glyphPx: number,
+  /** The drawn width of the value text, or 0 for a bare-icon card. */
+  valueWidthPx: number,
+): CardStruts {
+  // Half the card's leftover height: the same clear space on all four sides of
+  // the chip, which is what makes a bare-icon card square.
+  const iconPadX = (cardHeightPx - glyphPx) / 2;
+  // The ink stops this far inside its own control, so the LEFT margin is short
+  // by exactly that much and the two VISIBLE margins match.
+  const inkInset = glyphPx * INK_INSET_FRACTION;
+  // ⚠️ THE VALUE'S STRUTS ARE REPORTED WHATEVER `valueWidthPx` IS, because the
+  // renderer builds them once and toggles their VISIBILITY with the value —
+  // a badge with no value must not carry a gap to nothing. `width` is what the
+  // row measures given what is actually shown.
+  const padl = iconPadX - inkInset;
+  const valgap = Math.max(0, VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset);
+  const valtail = (VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX;
+  const padr = iconPadX;
+  const shown = valueWidthPx > 0 ? valgap + valueWidthPx + valtail : 0;
+  return {
+    padl, glyph: glyphPx, valgap, value: valueWidthPx, valtail, padr,
+    width: padl + glyphPx + shown + padr,
   };
 }

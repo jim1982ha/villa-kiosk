@@ -11,6 +11,12 @@
 import { useMemo, useState } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { fmtChartTime, fmtChartStamp } from "./chartUtils";
+// ⚠️ NOT A LOCAL COPY. This file carried its own `prettyState` — same two
+// operations, and already disagreeing with the owner on the empty string (it
+// returned the raw input, the owner returns ""). It feeds every tooltip in
+// every panel's history bar and the camera's status rail, so the drift would
+// have shown as one word spelled two ways on one screen.
+import { prettyState } from "@/utils/entityValue";
 
 export interface TimelineLegendEntry {
   state: string;
@@ -121,11 +127,7 @@ function cellBackground(states: string[], colorFor: (s: string) => string): stri
   return `repeating-linear-gradient(45deg, ${stops})`;
 }
 
-/** Tidy a raw HA state for display: "not_home" → "Not home", "on" → "On". */
-function prettyState(s: string): string {
-  const t = s.replace(/_/g, " ").trim();
-  return t ? t[0].toUpperCase() + t.slice(1) : s;
-}
+
 
 export default function StateTimeline({
   data, hours, colorFor, height, legend, loading, vertical, bucketMinutes,
@@ -261,7 +263,20 @@ export default function StateTimeline({
             // The minimum width is only needed where cells do NOT tile: in
             // bucket mode they do, and forcing one wider would reintroduce the
             // overlap this mode exists to remove.
-            const size = bucketMs ? `${c.width}%` : `${Math.max(c.width, 0.3)}%`;
+            // ⚠️ THE EXTRA PIXEL IS WHAT CLOSES THE SEAMS. Buckets tile
+            // exactly in percentages, but `left` and `width` are rounded to
+            // device pixels INDEPENDENTLY, so at boundaries that land
+            // mid-pixel the two neighbours each cover part of it and the track
+            // shows through as a hairline. Reported as "white lines between
+            // two green values" on a 24h bar — 144 cells of ~4px each, where a
+            // handful of boundaries round badly. The give-away was a bar that
+            // was a SINGLE segment and still had internal lines: they were
+            // never data. One pixel of overlap costs at most a half-pixel
+            // shift of a colour boundary and cannot leave a gap; the track has
+            // `overflow: hidden`, so the last cell's extra pixel is clipped.
+            const size = bucketMs
+              ? `calc(${c.width}% + 1px)`
+              : `${Math.max(c.width, 0.3)}%`;
             const bg = c.states.length
               ? cellBackground(c.states, colorFor)
               : colorFor(c.baseline ?? "");

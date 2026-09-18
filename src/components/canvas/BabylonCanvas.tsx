@@ -2,6 +2,7 @@
 // Owns the <canvas> + SceneManager lifecycle and wires HA state -> 3D visuals.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { sliceChanged } from "@/babylon/entityMapDiff";
 import { AlertTriangle, X } from "lucide-react";
 import { SceneManager } from "@/babylon/SceneManager";
 import { formatProbe, registerProbeRunner } from "@/babylon/perfProbe";
@@ -75,7 +76,7 @@ export default function BabylonCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SceneManager | null>(null);
   const { config, update } = useConfig();
-  const { role } = useProfile();
+  const { role, beginSwitch } = useProfile();
   const { subscribeAll, getEntitiesSnapshot } = useHA();
   // What the SCENE is allowed to show for the active profile: role-denied
   // categories folded into the hidden set, denied entities stripped from the
@@ -280,8 +281,12 @@ export default function BabylonCanvas({
       // arrays every open, so a reference check would force the
       // rebuild on every load even when nothing actually changed.
       const cur = configRef.current;
-      const sameRooms = JSON.stringify(cur.sh3dRooms ?? []) === JSON.stringify(rooms);
-      const sameEnts = JSON.stringify(cur.sh3dEntities ?? []) === JSON.stringify(sh3dEntities);
+      // ⚠️ `sliceChanged` IS THE SHARED RULE, and this site is why it is worth
+      // naming: sh3dRooms/sh3dEntities are NOT shared config keys, but they
+      // have the identical hazard — `parseRoomData` returns fresh arrays every
+      // open. The rule is about fresh objects, not about the sync layer.
+      const sameRooms = !sliceChanged(cur.sh3dRooms ?? [], rooms);
+      const sameEnts = !sliceChanged(cur.sh3dEntities ?? [], sh3dEntities);
       if (sameRooms && sameEnts) return; // the common re-open case — nothing to do
       // If the central plan's room SET changed (admin swapped the
       // file), drop stale rooms so only the new plan's remain — the
@@ -959,9 +964,33 @@ export default function BabylonCanvas({
         <div className="center-overlay">
           <div className="body-text">No 3D model loaded yet.</div>
           {!canManageModel ? (
-            <div className="muted body-text">
-              Ask the owner to set up the villa's 3D model.
-            </div>
+            <>
+              <div className="muted body-text">
+                Ask the owner to set up the villa's 3D model.
+              </div>
+              {/* ⚠️ THE WAY OUT, ON THE ONE SCREEN THAT HAS NO OTHER CONTENT.
+                  On a fresh install this is the FIRST thing anyone sees, and
+                  the person reading it is usually the owner who has not signed
+                  in as one yet — so telling them to "ask the owner" and
+                  offering nothing else reads as a dead end. Reported exactly
+                  that way from a clean instance.
+
+                  The HUD's own profile switcher is present and always was, but
+                  it is a small icon in the top bar (and behind the ⋯ overflow
+                  on a phone) on a screen that is otherwise empty black; being
+                  reachable is not the same as being findable.
+
+                  `beginSwitch`, not `logout`: it overlays the picker over the
+                  live session, so cancelling returns you exactly here rather
+                  than ending a session the user never asked to end. */}
+              <button
+                type="button"
+                className="btn primary"
+                onClick={beginSwitch}
+              >
+                Switch profile
+              </button>
+            </>
           ) : (
             <>
               <div className="muted body-text">

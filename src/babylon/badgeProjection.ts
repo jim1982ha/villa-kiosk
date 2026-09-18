@@ -8,7 +8,7 @@
 // Same reason badgePlacement.ts imports nothing: it is the only thing that
 // makes any of this testable without a browser, in a project whose only
 // verification is a person looking at screenshots on two phones. Everything
-// here is arithmetic on plain numbers; `npm run test:placement` runs it under
+// here is arithmetic on plain numbers; `tests/oracles/badge_geometry.mjs` runs it under
 // Node with the types stripped.
 //
 // ── The bug this file exists to end ──────────────────────────────────────
@@ -109,6 +109,24 @@ export interface ProjectedPoint {
   px: number;
   py: number;
   pz: number;
+  /**
+   * Distance ALONG the view axis from the projection's origin, in world units.
+   * Positive is further from the camera.
+   *
+   * ⚠️ NOT `pz`, WHICH IS ZERO IN PLANE MODE AND LOAD-BEARING WHERE IT IS NOT.
+   * `pz` carries the along-view residual for the WALK camera only, and the
+   * solver folds it into its HORIZONTAL term and into the spatial hash — so
+   * making it non-zero under the orbit camera would silently re-cut every
+   * grouping in the villa. This is the same number, reported separately and
+   * read by nothing that positions anything.
+   *
+   * It exists because placement measures on an orthographic plane at ONE
+   * pixels-per-world for the whole scene while the renderer divides each drawn
+   * thing by its OWN depth — so two badges further from the camera than the
+   * rung's reference depth draw CLOSER TOGETHER than the plane predicted, by
+   * the ratio of those depths. This is that ratio's numerator.
+   */
+  pd: number;
 }
 
 /**
@@ -247,6 +265,9 @@ export function projectToView(
   const across = x * b.rx + z * b.rz;
   const along = x * b.ax + z * b.az;
   out.px = across;
+  // Reported in BOTH modes — it is a property of the world position and the
+  // basis, not of which screen axis this mode folds it onto.
+  out.pd = along;
   if (b.mode === "plane") {
     // The one line this whole file is about: depth and height are the SAME
     // screen axis, added — not two axes added in quadrature.

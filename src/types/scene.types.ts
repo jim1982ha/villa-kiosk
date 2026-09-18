@@ -18,6 +18,18 @@ export interface EntityMapping {
   // own room organisation. See config/EntityMap.ts's resolveEntityRoom and
   // ConfigContext's resolvedRooms.
   category?: Category; // Map filter grouping; falls back to categoryForEntity() when unset
+  /** The owner picked `category` by hand, rather than it having been
+   *  auto-assigned.
+   *
+   *  ⚠️ WITHOUT THIS, A PICK COULD NOT BE DISTINGUISHED FROM A DEFAULT, AND
+   *  SIX CHOICES WERE UNSELECTABLE. `effectiveCategory` discards a stored
+   *  category that happens to equal the LEGACY default for its type, so a
+   *  defaults re-org re-buckets devices nobody ever chose for — which is
+   *  right, and was indistinguishable from a deliberate choice. Picking
+   *  "Others" for a lock, or "Network" for a camera, round-tripped straight
+   *  back to the default in the dropdown, because the dropdown's own value is
+   *  that function. A recorded pick is honoured verbatim. */
+  categoryPicked?: true;
   /** Hide this device from the 3D view entirely: no badge/label, no blue
    *  highlight, not tappable — the mesh stays as plain geometry. For devices
    *  modelled ahead of their Home Assistant integration (e.g. ceiling fans not
@@ -92,7 +104,17 @@ export interface Vec3 {
 
 export interface TeleportPoint {
   name: string;
-  floor: 1 | 2;
+  /** 1-based storey index — 1 is the ground floor.
+   *
+   *  ⚠️ NOT `1 | 2`. It was, and SceneManager clamped a third storey down onto
+   *  the second to satisfy it, under a comment calling a third floor
+   *  "hypothetical". In a redistributable add-on it is not hypothetical, it is
+   *  the first hard rule: no villa dimension ships. The GLB parser has always
+   *  read the honest type (sh3dParser's `floor: number`), so the pipeline read
+   *  N storeys and this union threw away everything past two. Third instance of
+   *  the same assumption found in one day — HUD's `[1, 2]` and FloorManager's
+   *  FLOOR_SPLIT_Y were the others. */
+  floor: number;
   /** FIRST-PERSON teleport destination (a standing pose). The bird's-eye
    *  framing is NOT stored: it's derived per room from the floor plan's own
    *  footprint on arrival — see SceneManager.computeRoomOverviewPose. There

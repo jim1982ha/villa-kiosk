@@ -8,6 +8,7 @@
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
 import { Engine } from "@babylonjs/core/Engines/engine";
+import { sliceChanged } from "./entityMapDiff";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
@@ -19,34 +20,6 @@ import { Ray } from "@babylonjs/core/Culling/ray";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import "@babylonjs/loaders/glTF";
-// Side-effect only: patches Mesh.prototype's renderOutline/renderOverlay
-// setters (used by applyHighlight below, the blue "clickable" glow) so they
-// actually lazy-load Babylon's OutlineRenderer instead of silently doing
-// nothing. @babylonjs/core's full barrel used to pull this in for free; this
-// codebase's deep, tree-shaking-friendly imports do not — the same class of
-// gap as Scene.pickWithRay (Culling/ray) and beginDirectAnimation
-// (Animations/animatable) below and in CameraController.ts, both patched
-// onto a prototype by a sibling file TypeScript's types can't distinguish
-// from the one holding the class itself. Without this import,
-// `mesh.renderOutline = true` is a plain, inert property assignment: no
-// error, no outline, which is exactly why this bug passed every type check.
-import "@babylonjs/core/Rendering/outlineRenderer";
-// Side-effect only: patches AbstractMesh.prototype.createOrUpdateSubmeshesOctree
-// (used by applyStructure below) — same prototype-patch pattern as the import
-// just above.
-import "@babylonjs/core/Culling/Octrees/octreeSceneComponent";
-// Side-effect only, and this is the actual first-person-movement-freeze fix:
-// registers Scene.CollisionCoordinatorFactory. Without it, `scene.
-// collisionCoordinator` (accessed internally by Babylon's own moveWithCollisions
-// — triggered the instant camera.cameraDirection is non-zero, i.e. only while
-// actually walking, never while just looking around) throws "DefaultCollision-
-// Coordinator needs to be imported before as it contains a side-effect required
-// by your code" on EVERY SINGLE FRAME of movement — confirmed via production
-// telemetry (WINDOW_ERROR, same message, every app version back to 2.132.0).
-// `scene.collisionsEnabled = true` below only sets a flag; it never pulls this
-// module in on its own. Same prototype-patch pattern as the two imports above.
-import "@babylonjs/core/Collisions/collisionCoordinator";
 import { roomKey } from "@/config/roomKey";
 
 import { CameraController } from "./CameraController";
@@ -69,7 +42,7 @@ import { runPerfProbe, type ProbeRow } from "./perfProbe";
 import { axisWorldScale } from "./meshUnits";
 import { ENTITY_CALIBRATION_CM, ROOM_POLYGONS_CM, polygonCentroid } from "@/config/Sh3dCalibration";
 import { solvePlanToWorld, planAngleToDir } from "./roomCalibration";
-import { isCeilingMesh, structureRole, isResolvedCeiling } from "./meshRoles";
+import { isCeilingMesh, structureRole, rayTargets, isHelperMesh } from "./meshRoles";
 import type { PlanWorldPair } from "@/utils/affineFit";
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { devLog, debugFlagEnabled } from "@/utils/devLog";
@@ -82,6 +55,8 @@ import { entityMapDelta } from "./entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
 import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 import { cameraFrame } from "./cameraFrame";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 // Cosmetic-vs-structural entityMap diffing lives in its own pure module (no
 // Babylon, no scene state) — see entityMapDiff.ts for the full reasoning about
@@ -481,7 +456,7 @@ export class SceneManager {
   /** Scratch for computeRoomOverviewPose's four-corner footprint projection.
    *  Runs once per room tap, but projectToView writes into a caller-owned
    *  point by contract and this keeps that contract honest. */
-  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0 };
+  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0, pd: 0 };
 
   /**
    * The stair rooms' surface-hugging glow, carried across loads.
@@ -801,6 +776,9 @@ export class SceneManager {
       this.scene, opts.onEntityPicked, opts.config.entityMap, opts.config.meshBindings,
       opts.onEntityLongPressed,
       (x, y) => !!this.visuals.pickBadgeAt(x, y),
+      // The picker must read the SAME category the badge is drawn under —
+      // only EntityVisuals holds the live device_class that decides it.
+      (id, type) => this.visuals.categoryOf(id, type),
     );
     // The construction args above don't carry the RBAC type denials — push
     // them now so a restricted profile's first pick is already filtered.
@@ -1769,7 +1747,9 @@ export class SceneManager {
     const rect = canvas?.getBoundingClientRect();
     const pick = this.scene.pick(
       clientX - (rect?.left ?? 0), clientY - (rect?.top ?? 0),
-      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker,
+      // No ceiling term here either — the seventh asker. `enabled: false`
+      // preserves what this site actually tested.
+      rayTargets({ enabled: false }),
     );
     return pick?.hit && pick.pickedPoint ? pick.pickedPoint : null;
   }
@@ -1779,6 +1759,55 @@ export class SceneManager {
    * one controller owns canvas pointer input at a time (no capture race), and
    * picking always follows scene.activeCamera so tapping entities works in both.
    */
+  /**
+   * Frame the overview camera on THIS model: pan bounds, zoom limits, landing
+   * radius and the icon-zoom reference, all derived from the loaded extents.
+   *
+   * ⚠️ THIS USED TO RUN ONLY ON A VIEW-MODE CHANGE, AND THEREFORE NEVER RAN.
+   * It was the body of setViewMode's `mode === "overview"` branch. But
+   * setViewMode early-returns when the mode it is handed already matches, and
+   * the constructor records `viewMode = "overview"` while the model loads — a
+   * later fix, added so the sky dome stays lit during the wait (it had been
+   * reported three times). The constructor comment twenty lines above that
+   * assignment still says the opposite: "viewMode intentionally stays
+   * first-person here so the Dashboard's on-ready setViewMode('overview')
+   * still runs the real auto-fit". Two comments, opposite invariants, one
+   * block apart. The assignment won, and took the framing with it.
+   *
+   * The only boot path — Dashboard's onReady setViewMode("overview") — has
+   * therefore been a no-op for the framing ever since, so what actually frames
+   * a freshly booted villa is OverviewController's own constructor defaults:
+   * radius 30, pan bounds ±20 m, lowerRadiusLimit 3, upperRadiusLimit 200,
+   * fitRadius 30. Those are per-site numbers. This villa's span happens to make
+   * the fit radius land near 30, so the accident is invisible HERE and only
+   * here; on any other villa the landing shot, the pan limits, the zoom stops
+   * and the badge-shrink reference are all wrong — and the first hard rule is
+   * that no villa dimension ships.
+   *
+   * So it hangs off the MODEL, which is what it is a function of, rather than
+   * off a state transition that startup deliberately pre-empts. Idempotent and
+   * cheap enough to call from both places that can change the answer.
+   */
+  private adoptModelExtents(): void {
+    if (!this.loadedMeshes.length) return;
+    const ext = this.worldExtends(this.loadedMeshes);
+    this.overview.fitTo({ min: ext.min, max: ext.max });
+    // A saved per-device default (see saveOverviewDefault) overrides the
+    // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
+    // bounds and icon-zoom reference are correct for THIS model.
+    const saved = loadOverviewView();
+    if (saved) {
+      this.overview.applyPose({
+        alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
+        target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
+      });
+    }
+    // The badge-shrink reference is a function of the fit radius, so it is
+    // republished here rather than only where the overview is enabled.
+    this.visuals.setIconZoomFit(
+      this.viewMode === "overview" ? this.overview.getFitRadius() : 0);
+  }
+
   setViewMode(mode: "first-person" | "overview"): void {
     if (mode === this.viewMode) return;
     this.viewMode = mode;
@@ -1791,20 +1820,7 @@ export class SceneManager {
     if (mode === "overview") {
       this.camera.setMovement(0, 0); // stop any in-flight walk
       this.camera.detachInput();
-      if (this.loadedMeshes.length) {
-        const ext = this.worldExtends(this.loadedMeshes);
-        this.overview.fitTo({ min: ext.min, max: ext.max });
-        // A saved per-device default (see saveOverviewDefault) overrides the
-        // auto-fit angle/tilt/zoom/pan — fitTo() still ran first so the pan
-        // bounds and icon-zoom reference are correct for THIS model.
-        const saved = loadOverviewView();
-        if (saved) {
-          this.overview.applyPose({
-            alpha: saved.alpha, beta: saved.beta, radius: saved.radius,
-            target: { x: saved.targetX, y: saved.targetY, z: saved.targetZ },
-          });
-        }
-      }
+      this.adoptModelExtents();
       this.overview.enable();
       this.scene.activeCamera = this.overview.camera;
       this.floors.setFirstPerson(false); // walker camera is parked; don't let its Y drive floors
@@ -1989,8 +2005,7 @@ export class SceneManager {
   private bestFacing(x: number, z: number, y: number): { x: number; y: number; z: number } {
     const DIRS = 16;
     const REACH = 8;
-    const blocks = (m: AbstractMesh) =>
-      m.isPickable && m.isVisible && m.isEnabled() && m.checkCollisions && !m.metadata?.isMarker;
+    const blocks = rayTargets({ collidable: true });
     let bestAng = 0;
     let bestDist = -1;
     for (let i = 0; i < DIRS; i++) {
@@ -2033,7 +2048,7 @@ export class SceneManager {
    * Structure geometry contains the baked stairs, which is what floorProbe uses
    * and for the same reason.
    */
-  private standable(x: number, z: number, floor: 1 | 2): boolean {
+  private standable(x: number, z: number, floor: number): boolean {
     const floorY = this.estimateFloorY(x, z, floor);
     // ⚠️ NO GLOBAL "IS THIS THE LOWEST FLOOR IN THE VILLA" TEST HERE (2.463.0).
     // It was here, and it rejected the Living Room and Bedroom 1 outright, which
@@ -2066,9 +2081,9 @@ export class SceneManager {
     if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
     const need = (this.config.eyeHeight ?? 1.7) + 0.15;
     const R = 0.3;
-    const blocks = (m: AbstractMesh) =>
-      m.isPickable && m.isEnabled() && m.metadata?.isStructure === true
-      && !isResolvedCeiling(m);
+    // `visible: false` on purpose — `applyStructure` hides structure per view,
+    // and a wall you cannot see still stops you standing there.
+    const blocks = rayTargets({ visible: false, structural: true });
 
     // ⚠️ THE PROBED FLOOR IS NOT ALWAYS THE SURFACE YOU STAND ON (2.464.0).
     // `estimateFloorY` -> `floorProbe.storeyFloorY` deliberately takes the
@@ -2995,6 +3010,11 @@ export class SceneManager {
     // the overview does not), so the badge occluder pass is told which one it
     // landed in rather than waiting for a toggle that may never come.
     this.visuals.setFirstPerson(this.viewMode === "first-person");
+    // The extents are final now (normalizeScale + recenterModel have run and
+    // loadedMeshes is populated), so this is the first moment the overview can
+    // be framed on the real model — and, since the constructor already put us
+    // in overview, the only moment anything will.
+    this.adoptModelExtents();
     mark("applyStructure");
 
     // The villa is correct and interactive now — reveal it. The first-person
@@ -3101,17 +3121,18 @@ export class SceneManager {
       modelWidth: ext.max.x - ext.min.x,
       modelDepth: ext.max.z - ext.min.z,
       hitsFloorAt: (wx, wz) => {
+        const _calibrationFloor = rayTargets({ enabled: false });
         const hit = this.scene.pickWithRay(
           new Ray(new Vector3(wx, 20, wz), new Vector3(0, -1, 0), 40),
           (m) => {
-            if (!m.isPickable || !m.isVisible || m.metadata?.isMarker) return false;
             // ⚠️ A CEILING IS THIN TOO (2.478.0, /dry-audit). This ray starts at
             // y=20 and the thinness test alone happily accepts a 2.44 m ceiling
             // slab on the way down, answering "there is floor here" from the
             // lid rather than the floor. Harmless where a floor is directly
             // beneath, wrong wherever a ceiling overhangs past one — and it
             // feeds CALIBRATION, so a wrong answer moves the whole plan fit.
-            if (isResolvedCeiling(m)) return false;
+            // The ceiling rule is `rayTargets`' now and cannot be dropped.
+            if (!_calibrationFloor(m)) return false;
             const bb = m.getBoundingInfo().boundingBox;
             return (bb.maximumWorld.y - bb.minimumWorld.y) < 0.8; // flat = floor/ground
           },
@@ -3139,9 +3160,10 @@ export class SceneManager {
     const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
     for (const room of rooms) {
       const pts = room.points.map((p) => planToWorld(p.x, p.y));
-      // TeleportPoint.floor (and the rest of the app) only models two
-      // storeys — clamp rather than widen that union for a hypothetical 3rd.
-      const floor: 1 | 2 = (room.floor ?? 1) >= 2 ? 2 : 1;
+      // The storey the plan actually recorded. This used to be
+      // `(room.floor ?? 1) >= 2 ? 2 : 1` — a clamp onto a `1 | 2` union, so a
+      // three-storey villa had its top floor's rooms filed under the second.
+      const floor = room.floor ?? 1;
       const c = polygonCentroid(room.points);
       const wc = planToWorld(c.x, c.y);
       const floorY = this.estimateFloorY(wc.x, wc.z, floor);
@@ -3569,7 +3591,7 @@ export class SceneManager {
 
     for (const m of meshes) {
       const name = m.name;
-      if (/^(halo_|label_)/i.test(name) || m.metadata?.isMarker) continue;
+      if (isHelperMesh(m)) continue;
 
       // HA entity fixtures (light.*, cover.*, fan.*, …) are owned entirely by
       // EntityVisuals — the structural pass must never hide or collide them.
@@ -4306,8 +4328,14 @@ export class SceneManager {
     // calibrateRooms() to pick them up — the Rooms menu kept showing
     // whatever was calibrated at the PREVIOUS model load until a second full
     // reload happened to already have the fresh data cached from last time.
+    // ⚠️ BY CONTENT HERE TOO, THOUGH BabylonCanvas ALREADY GUARDS ITS CALLER.
+    // `parseRoomData` returns fresh arrays every open, so a bare reference
+    // check is wrong for the same reason it was wrong for the four keys above;
+    // it survives only because the one caller happens to check first. A second
+    // caller would not know that.
     const sh3dChanged =
-      prev.sh3dRooms !== config.sh3dRooms || prev.sh3dEntities !== config.sh3dEntities;
+      sliceChanged(prev.sh3dRooms, config.sh3dRooms)
+      || sliceChanged(prev.sh3dEntities, config.sh3dEntities);
 
     // A COSMETIC per-entity edit (label, room, category, badge colour, linked/
     // motion entity, light intensity) changes entityMap by reference like any
@@ -4336,9 +4364,7 @@ export class SceneManager {
     // there's no cosmetic/structural split to make here — any REAL change to
     // which mesh is which entity is inherently structural — so this only
     // needs a same-content check, not a delta classifier.
-    const meshBindingsChanged =
-      prev.meshBindings !== config.meshBindings &&
-      JSON.stringify(prev.meshBindings) !== JSON.stringify(config.meshBindings);
+    const meshBindingsChanged = sliceChanged(prev.meshBindings, config.meshBindings);
     const cosmeticOnly =
       mapDelta === "cosmetic" &&
       !meshBindingsChanged &&
@@ -4392,8 +4418,7 @@ export class SceneManager {
     // old height until a reload. Same class of defect from the other side: a
     // consumer that does not re-run when one of its inputs moves.
     const roomPointsChanged =
-      (prev.teleportPoints !== config.teleportPoints
-        && JSON.stringify(prev.teleportPoints) !== JSON.stringify(config.teleportPoints))
+      sliceChanged(prev.teleportPoints, config.teleportPoints)
       || prev.eyeHeight !== config.eyeHeight;
     if (roomPointsChanged) {
       this.syncRoomPoints();
@@ -4556,6 +4581,18 @@ export class SceneManager {
     // villa hangs off these fields. So drop them all, and a retained manager
     // becomes an empty shell instead of the anchor for the whole scene.
     this.loadedMeshes = [];
+    // ⚠️ ceilingMeshes AND worldRoomPolys WERE MISSING FROM THIS LIST. The
+    // mapped-type sweep below explains why IT is a mapped type — "renaming a
+    // field is a compile error here instead of a silently missed reference that
+    // quietly restores the leak" — and that guarantee was applied to the public
+    // fields and not to this hand-written block above it, which is exactly the
+    // list of names it disclaims. ceilingMeshes holds 11-16 meshes; Babylon's
+    // Node.dispose() does not null `_scene`, so a retained shell holding them
+    // retains the whole scene graph through mesh._scene, which is the 35 MB-per-
+    // remount leak 2.231.0 priced. leakWatch still reports retained shells, and
+    // they are only "empty" if every collection here is cleared.
+    this.ceilingMeshes = [];
+    this.worldRoomPolys = [];
     this.highlightedMeshes = [];
     this.calibratedPoints = null;
     this.lastNavigatedRoom = null;

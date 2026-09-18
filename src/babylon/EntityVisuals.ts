@@ -45,7 +45,10 @@
 //
 //   See desiredVariantWord / orderVariantWords / applyStateNamedVariant.
 
+import type { Observer } from "@babylonjs/core/Misc/observable";
+import { FrameClock } from "./frameClock";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { sliceChanged } from "./entityMapDiff";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
@@ -66,12 +69,6 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Camera } from "@babylonjs/core/Cameras/camera";
 import { Ray } from "@babylonjs/core/Culling/ray";
 import type { Scene } from "@babylonjs/core/scene";
-// Side-effect only: patches the renderOutline/renderOverlay setters onto
-// Mesh.prototype (used below for the climate red outline). @babylonjs/core's
-// barrel used to pull this in for free; a deep import doesn't — see
-// SceneManager.ts's own copy of this import for the fuller explanation and
-// the sibling-file convention (Ray/beginDirectAnimation) this follows.
-import "@babylonjs/core/Rendering/outlineRenderer";
 import { AdvancedDynamicTexture } from "@babylonjs/gui/2D/advancedDynamicTexture";
 import { Rectangle } from "@babylonjs/gui/2D/controls/rectangle";
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
@@ -86,7 +83,7 @@ import {
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
   PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
   GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
-  SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE, CARD_VALUE_MARGIN_OF_ICON_PAD,
+  SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE,
 } from "./badgeMetrics";
 import { badgeRank } from "./badgePriority";
 import {
@@ -101,13 +98,16 @@ import {
 import { clampIconScale } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
-import { resolveMeshToMapping, extractVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
+import { resolveMeshToMapping, extractVariantSuffix, hasVariantSuffix, inferTypeFromEntityId } from "@/config/EntityMap";
 import { groupMemberIds, groupForPrimary } from "@/config/deviceGroups";
-import { effectiveCategory, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
-import { badgeKindFor, badgeFaceAndRing } from "@/utils/deviceActivity";
+import { effectiveCategory, subjectOf, categorySurface, categorySurfaceRinged } from "@/config/EntityCategories";
+import { badgeKindFor, badgeFaceAndRing, type DeviceReading } from "@/utils/deviceActivity";
+import { alertStateFor } from "@/config/BinarySensorClasses";
 import type { BadgeKind } from "@/utils/deviceActivity";
 import { hsToRgb, kelvinToRgb } from "@/utils/colorUtils";
-import { isUnavailable } from "@/utils/stateColors";
+import { isUnavailable, UNKNOWN_STATES } from "@/utils/stateColors";
+import { compactValue, VALUE_CAPABLE_TYPES } from "@/utils/entityValue";
+import { mergeOverlapping } from "./boxMerge";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
@@ -116,7 +116,7 @@ import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
-import { blocksCameraBeam, isResolvedCeiling } from "./meshRoles";
+import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
 import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
@@ -126,7 +126,7 @@ import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
 import { cameraFrame } from "./cameraFrame";
 import {
-  arrange, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
+  arrange, cardStruts, gridCells, MAX_TOTAL_CHIPS, MAX_GRID_CHIPS, PHONE_MAX_GRID_CHIPS,
   type CardArrangement,
 } from "./badgeCard";
 import { iconKeyFor } from "./badgeIconKeys";
@@ -140,6 +140,8 @@ import {
 } from "./meshVariants";
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 const MAX_LIGHT_INTENSITY = 1.3;
@@ -451,12 +453,6 @@ const TAP_RING_UNIT: readonly number[] = (() => {
 // this constant is only the classic pill's.
 const PILL_TEXT = "#f8fafc";
 
-// Entity types compactValue() can EVER return non-empty text for — must stay
-// in sync with that switch. Used by labelBoxes to reserve pill-sized
-// clearance around these regardless of whether the current state actually
-// has a pill showing (see the long comment there for why "capable of" beats
-// "currently has one" for collision-box sizing).
-const PILL_CAPABLE_TYPES = new Set<EntityType>(["light", "fan", "cover", "climate", "sensor"]);
 
 /**
  * Badge layout: EVERY visible badge sits at a fixed pixel offset directly
@@ -891,14 +887,13 @@ interface ShownLabel {
 // Status/enum SENSOR states (a text sensor like an AP's connectivity state).
 // NOMINAL = "all good, nothing to report" — its value is hidden (the badge is
 // neutral by default, so "Connected" is just clutter). ALERT states (which
-// drive the badge ring — see utils/deviceActivity's SENSOR_ALERT_STATES,
-// shared with badgeKind below) are the mirror image: their value stays
+// drive the badge ring — resolved through `statusKeyFor`, the one status
+// table the Map-colours legend documents) are the mirror image: their value stays
 // SHOWN, so a real change is never silently swallowed. An unrecognised enum
 // value (e.g. a weather "sunny") is neither: it's shown, un-ringed, as before.
-const SENSOR_NOMINAL_STATES = new Set([
-  "connected", "online", "ok", "okay", "normal", "nominal", "available",
-  "ready", "clear", "operational", "up", "good", "healthy", "active",
-]);
+// ⚠️ THE TABLE ITSELF NOW LIVES IN `utils/entityValue.ts` (exported as
+// SENSOR_NOMINAL_STATES) so the badge and the panels cannot drift apart on
+// which statuses count as "nothing to report".
 
 // Pulse animation speed in radians per second (was 0.06 per frame at ~60 fps).
 // Advanced by real elapsed time so the alert pulse breathes at the same rate on
@@ -1087,7 +1082,10 @@ export class EntityVisuals {
   private requestRender: () => void;
   private requestAnimationRender: () => void;
   /** performance.now() of the last animation step — see registerBeforeRender. */
-  private lastAnimTickAt = 0;
+  private readonly animClock = new FrameClock();
+  /** Held so `dispose()` can detach them — see the registrations. */
+  private onBeforeRender: (() => void) | null = null;
+  private afterRenderObserver: Observer<Scene> | null = null;
 
   /** entity_id -> meshes (one entity can drive several meshes, e.g. curtains). */
   private byEntity = new Map<string, AbstractMesh[]>();
@@ -1157,7 +1155,7 @@ export class EntityVisuals {
   private camForward = new Vector3();
   /** Scratch for projectToView. Reused because it runs once per badge per
    *  layout pass and per rung of solveRoomZoomRadius's ~40-rung ladder. */
-  private projPlane: ProjectedPoint = { px: 0, py: 0, pz: 0 };
+  private projPlane: ProjectedPoint = { px: 0, py: 0, pz: 0, pd: 0 };
 
   /** Something that can change WHERE or WHETHER a badge draws has happened —
    *  recompute the layout on the next frame. Cheap and deliberately generous:
@@ -1564,33 +1562,28 @@ export class EntityVisuals {
     this.probe.setRoomResolver((x, y, z) => this.roomContaining(x, y, z));
     this.roomHighlight = new RoomHighlight(scene, requestRender, this.probe, this.requestAnimationRender);
     this.beams = new CameraBeams(scene);
-    scene.registerBeforeRender(() => {
-      // Elapsed time measured HERE, not from engine.getDeltaTime().
-      //
-      // Babylon sets its delta in beginFrame(), which its render loop calls on
-      // every requestAnimationFrame tick — BEFORE the loop body decides whether
-      // to actually render. So getDeltaTime() reports tick-to-tick (~16.7ms at
-      // 60Hz) rather than render-to-render, and the moment continuous animation
-      // became rate-capped (SceneManager.ANIMATION_FRAME_MS) every animation
-      // was told 16.7ms had passed when 33ms really had — running at half speed
-      // while idle and snapping back to full speed during interaction, which
-      // reads as a fan surging. This clock counts real time between the frames
-      // these animations are actually stepped on, whatever the cadence.
-      const now = performance.now();
-      // Clamped: the on-demand loop can idle for seconds, and a raw delta after
-      // such a gap would make everything jump. First tick has no predecessor.
-      const dtMs = this.lastAnimTickAt ? Math.min(now - this.lastAnimTickAt, 100) : 16;
-      this.lastAnimTickAt = now;
+    // ⚠️ KEPT SO `dispose()` CAN DETACH THEM. Both observers below used to be
+    // registered and never removed, while this class's own dispose() docstring
+    // promised it was "safe to run before scene.dispose()" — which is exactly
+    // the order under which they keep firing against maps this teardown has
+    // just cleared. `registerBeforeRender` has no handle of its own, so the
+    // callback is held here for `unregisterBeforeRender`.
+    this.onBeforeRender = () => {
+      // Real time between the frames these animations are actually stepped
+      // on, whatever the render cadence — see babylon/frameClock for why
+      // engine.getDeltaTime() cannot answer this.
+      const dtMs = this.animClock.step(performance.now());
       this.animatePulse(dtMs);
       this.animateFans(dtMs);
       this.cullLabels();
-    });
+    };
+    scene.registerBeforeRender(this.onBeforeRender);
     // AFTER render, not before: Babylon reprojects every linkWithMesh control
     // during the frame, so the drawn `leftInPixels` this reads is only the
     // real one once the frame is done. Reading it in beforeRender would report
     // the PREVIOUS frame's projection and could never see the jump at all —
     // the same class of mistake as watching the world centre.
-    scene.onAfterRenderObservable.add(() => {
+    this.afterRenderObserver = scene.onAfterRenderObservable.add(() => {
       this.watchChipJump();
       this.logBadgeGeometry();
       if (this.wakeTrace > 0) { this.wakeTrace--; this.traceWake(); }
@@ -1751,6 +1744,17 @@ export class EntityVisuals {
       // explicit "ignore the hysteresis once" flag; removing hysteresis
       // removed the need for it.
       this.applyIconScale();
+      // ⚠️ AND RE-BAKE, WHICH THIS DID NOT DO. `applyIconScale` sets
+      // `container.scaleX/Y` and never touches `glyph.source`, so stepping the
+      // size from 1.0 to 2.5 upscaled the OLD bitmap 2.5x — precisely the blur
+      // the bake ladder exists to remove. Badges then re-sharpened one at a
+      // time, as each device happened to change state.
+      //
+      // ⚠️ THE DOCSTRING SAID THIS WAS ALREADY HANDLED. `glyphBakePx` claims
+      // "the user moves the size stepper … both of those already repaint".
+      // Traced through HUD -> SceneManager.updateConfig (which classifies this
+      // as cosmetic and skips `repaintBadges`) -> here: nothing repainted.
+      this.repaintGlyphs();
     }
     // Labels are always shown; rebuild when a device group is created/edited
     // (a member's badge must appear/disappear without needing a full
@@ -1761,9 +1765,7 @@ export class EntityVisuals {
     // from the same pull — it is a SHARED_CONFIG_KEY too, so it also arrives
     // freshly parsed on every focus. badgeStyle is a per-device string and
     // compares by value already.
-    const groupsChanged =
-      config.deviceGroups !== prevGroups
-      && JSON.stringify(config.deviceGroups) !== JSON.stringify(prevGroups);
+    const groupsChanged = sliceChanged(config.deviceGroups, prevGroups);
     if (needsRepaint || groupsChanged || config.badgeStyle !== prevBadgeStyle) {
       this.rebuildLabels();
     }
@@ -1961,8 +1963,11 @@ export class EntityVisuals {
    * only ever leave the bitmap LARGER than the paint — a mild downscale, which
    * is the direction BAKE_LADDER's headroom exists to absorb and the direction
    * WebKit handles acceptably. The two factors that are left change only when
-   * the resolution valve fires or the user moves the size stepper, and both of
-   * those already repaint.
+   * the resolution valve fires or the user moves the size stepper, which re-bakes through
+   *  `repaintGlyphs` — and did NOT until 2.496.29. The claim that used to
+   *  stand here ("both of those already repaint") was false: the stepper
+   *  only re-scaled, so every badge wore an upscaled bitmap until its own
+   *  device next reported.
    */
   private glyphBakePx(card: boolean): number {
     return this.glyphPxFor(card) * this.iconUserScale * this.bestCssToGui();
@@ -2064,7 +2069,7 @@ export class EntityVisuals {
         // Everything that isn't a bound entity is villa shell / furniture: it can
         // block a lamp's light, so keep it as a potential shadow caster. Skip the
         // helper meshes (markers, halos, labels) that aren't real geometry.
-        if (m.getTotalVertices() > 0 && !/^(halo_|label_|marker)/i.test(m.name)) {
+        if (m.getTotalVertices() > 0 && !isHelperMesh(m)) {
           this.shadowCasters.push(m);
         }
         continue;
@@ -2397,7 +2402,9 @@ export class EntityVisuals {
     // Also flag any entity whose id STILL carries a "__<variant>" suffix — a
     // sign normalisation didn't collapse it onto its base (stale config, or a
     // mesh-name mangling stripExportArtifacts didn't catch).
-    const orphanIds = Array.from(this.byEntity.keys()).filter((id) => /__[a-z0-9]+$/i.test(id));
+    // hasVariantSuffix, not a local regex: the authority strips export
+    // artifacts first, so a Blender-duplicated "…__open.001" counts here too.
+    const orphanIds = Array.from(this.byEntity.keys()).filter(hasVariantSuffix);
     if (variantSummary.length || orphanIds.length) {
       tapDebug(
         `mesh variant groups:\n  ${variantSummary.join("\n  ") || "(none)"}`
@@ -2708,6 +2715,16 @@ export class EntityVisuals {
    *  (beams, roomHighlight) have their own dispose(). Called by
    *  SceneManager.dispose(); safe to run before scene.dispose(). */
   dispose(): void {
+    // ⚠️ THE TWO SCENE OBSERVERS COME OFF FIRST, AND THEY USED NOT TO COME OFF
+    // AT ALL. This method's own docstring says it is safe to run before
+    // `scene.dispose()`; under that order a beforeRender still stepping
+    // animations over cleared maps is precisely what "safe" has to exclude.
+    if (this.onBeforeRender) {
+      this.scene.unregisterBeforeRender(this.onBeforeRender);
+      this.onBeforeRender = null;
+    }
+    this.scene.onAfterRenderObservable.remove(this.afterRenderObserver);
+    this.afterRenderObserver = null;
     document.removeEventListener("visibilitychange", this.onWake);
     this.offPointerClass?.();
     this.offPointerClass = null;
@@ -3081,7 +3098,7 @@ export class EntityVisuals {
 
   /** The floor height of the storey a world Y stands on. Delegates to
    *  roomStorey.ts, which owns the two tolerances and is pinned by
-   *  `npm run test:geometry`; shared by `roomPolyAt` and the light pool's
+   *  `tests/oracles/badge_geometry.mjs`; shared by `roomPolyAt` and the light pool's
    *  no-room fallback so the two cannot disagree about which storey a fixture
    *  belongs to. */
   private storeyFloorYAt(y: number): number {
@@ -3321,7 +3338,7 @@ export class EntityVisuals {
     // have to survive the whole rung walk. This runs once per tap, so the
     // allocation is not on any hot path.
     const plane = members.map(
-      (mm) => projectToView(basis, mm.wx, mm.wy, mm.wz, { px: 0, py: 0, pz: 0 }));
+      (mm) => projectToView(basis, mm.wx, mm.wy, mm.wz, { px: 0, py: 0, pz: 0, pd: 0 }));
     const items: PlacementItem[] = members.map(() => ({
       sx: 0, sy: 0, sz: 0,
       // rank/sortKey/category/room are unused by markContacts (it is a
@@ -3343,7 +3360,7 @@ export class EntityVisuals {
     // tested separately here.
     const framePlane = members.map((m) =>
       projectToView(view.frame, m.wx - view.cx, m.wy - view.cy, m.wz - view.cz,
-        { px: 0, py: 0, pz: 0 }));
+        { px: 0, py: 0, pz: 0, pd: 0 }));
     const mine: number[] = [];
     for (let i = 0; i < n; i++) if (members[i].mine) mine.push(i);
 
@@ -3912,7 +3929,8 @@ export class EntityVisuals {
    *  needed to resolve an enum sensor like a UniFi AP's "State" correctly. */
   categoryOf(entityId: string, type: EntityType): Category {
     const dc = this.lastState.get(entityId)?.attributes?.device_class as string | undefined;
-    return effectiveCategory(entityId, type, this.config.entityMap[entityId]?.category, dc);
+    return effectiveCategory(subjectOf(
+      entityId, this.config.entityMap[entityId], dc ? { attributes: { device_class: dc } } : undefined, type));
   }
 
   /** Follow FloorManager's floor toggle — only the active floor's badges are
@@ -4271,12 +4289,15 @@ export class EntityVisuals {
       const glyphPx = this.glyphPxFor(card);
       // Half the card's leftover height: the same clear space on all four
       // sides of the chip, and it makes a bare-icon card square (see below).
-      const iconPadX = card ? (m.cardHeightPx - glyphPx) / 2 : 0;
-      /** The transparent margin `badgeImageDataUrl` bakes around the chip's
-       *  squircle, so the ink stops this far inside its own control. Both the
-       *  card's left padding and the value gap are measured against the INK,
-       *  not the control — see their two sites. */
-      const inkInset = card ? glyphPx * BADGE_INSET_CARD : 0;
+      // ⚠️ `iconPadX` AND `inkInset` ARE GONE FROM HERE. Both now live inside
+      // `cardStruts`, which is the whole point: the two expressions that
+      // computed a card's width shared one term out of six, and `tsc` reporting
+      // these as unused is the proof the second copy has no reader left.
+      // ⚠️ ONE OWNER FOR THE CARD'S WIDTH TERMS — see badgeCard.cardStruts.
+      // These four strut widths and the layout's estimate were two disjoint
+      // expressions until 2.496.28; they are the same six numbers now, so the
+      // solver cannot reserve a size the renderer does not draw.
+      const st = card ? cardStruts(m.cardHeightPx, glyphPx, 1) : null;
 
       const container = new StackPanel(`lbl_${entityId}`);
       container.isVertical = true;
@@ -4411,7 +4432,14 @@ export class EntityVisuals {
           // ring of its own — see updateLabel for the doubled outline this
           // stops. Classic: the image IS the badge and carries its own.
           // Card only: the glyph is bolder there — see ICON_STROKE_VIEWBOX_BOLD.
-          undefined, card, glyphPx, card));
+          // ⚠️ `glyphBakePx`, NOT `glyphPx`. This argument is the bake size in
+          // RENDER pixels; every other number here is unscaled CSS px. Passing
+          // the CSS one baked the first version of every badge at the wrong
+          // rung — the exact mistake `glyphBakePx`'s own docstring was written
+          // to describe ("true of the two NUMBERS, and false of the pixels").
+          // It self-healed on the badge's first state change, so the one badge
+          // it stayed wrong for was a device that had never reported.
+          undefined, card, this.glyphBakePx(card), card));
 
       glyph.width = `${glyphPx}px`;
       glyph.height = `${glyphPx}px`;
@@ -4433,7 +4461,7 @@ export class EntityVisuals {
         // Unrounded, like the two on the value's side (2.454.0): these are
         // PRE-scale CSS px and rounding 0.65 to 1 is a 35% error on the very
         // quantity the `visL/gap/visR` readout exists to make checkable.
-        row.addControl(strut("padl", iconPadX - inkInset));
+        row.addControl(strut("padl", st!.padl));
       }
       (row ?? badge).addControl(glyph);
 
@@ -4514,8 +4542,7 @@ export class EntityVisuals {
         // effectiveScale (3.2 on this capture), so rounding 3.375 to 3 is a
         // 1.2 render-px error on a 2 px quantity — and it lands on exactly the
         // equality the pin checks. The struts take fractional widths fine.
-        valueSpacer.width =
-          `${Math.max(0, CARD_VALUE_MARGIN_OF_ICON_PAD * iconPadX - inkInset)}px`;
+        valueSpacer.width = `${st!.valgap}px`;
         valueSpacer.isVisible = false;
         row!.addControl(valueSpacer);
         row!.addControl(valueWrap);
@@ -4526,13 +4553,13 @@ export class EntityVisuals {
         // card. With a value: visR = this + padr = 1.5·iconPadX, which is the
         // visible gap on the other side of the text. Without one: it collapses
         // and the card is symmetric exactly as before.
-        valueTail = strut("valtail", (CARD_VALUE_MARGIN_OF_ICON_PAD - 1) * iconPadX);
+        valueTail = strut("valtail", st!.valtail);
         valueTail.isVisible = false;
         row!.addControl(valueTail);
         // The right margin proper, LAST in the row. It is the counterpart of
         // `padl` above and the reason the card no longer collects its padding
         // on one side. Always present.
-        row!.addControl(strut("padr", iconPadX));
+        row!.addControl(strut("padr", st!.padr));
       } else {
         valueWrap.height = `${m.valueChipHeightPx}px`;
         valueWrap.cornerRadius = m.valueChipHeightPx / 2;
@@ -4650,6 +4677,20 @@ export class EntityVisuals {
    * them. Everything else this method touches — fill, ring, glyph, alpha — is
    * colour at fixed geometry.
    */
+  /** Re-bake every badge's glyph at the current size.
+   *
+   *  ⚠️ IT GOES THROUGH `updateLabel` RATHER THAN CALLING THE BAKE ITSELF, so
+   *  there is still exactly one place that decides a glyph's source. A second
+   *  call site would be a second answer to "what size is this icon", which is
+   *  the defect this method exists to fix. */
+  private repaintGlyphs(): void {
+    for (const id of this.labels.keys()) {
+      const st = this.lastState.get(id);
+      const map = this.mapping.get(id);
+      if (st && map) this.updateLabel(id, map.type, st);
+    }
+  }
+
   private updateLabel(entityId: string, type: EntityType, entity: HassEntity): boolean {
     const lbl = this.labels.get(entityId);
     if (!lbl) return false;
@@ -4659,8 +4700,7 @@ export class EntityVisuals {
     // Re-resolve the filter category now that this state may carry the
     // device_class (e.g. an enum sensor → Network) — cullLabels reads it live.
     lbl.category = effectiveCategory(
-      entityId, type, this.config.entityMap[entityId]?.category,
-      entity.attributes.device_class as string | undefined);
+      subjectOf(entityId, this.config.entityMap[entityId], entity, type));
     // FACE from this device's own state, RING from its linked entity — two
     // independent facts, two independent sets of pixels. See badgeFaceAndRing.
     // (badgeKind still folds the linked signal into ONE value for everything
@@ -4668,7 +4708,7 @@ export class EntityVisuals {
     // group's — because those all mean "is anything here demanding attention",
     // which a linked entity being on genuinely is.)
     const { face: state, ring: ringState } =
-      badgeFaceAndRing(type, entity, this.linkActiveIds.has(entityId));
+      badgeFaceAndRing(this.reading(type, entity, this.linkActiveIds.has(entityId)));
     const iconKey = iconKeyFor(type, entity);
     const override = this.config.entityMap[entityId]?.badgeColor;
 
@@ -4751,7 +4791,7 @@ export class EntityVisuals {
     // (compactValue short-circuits to "" for every type when state is
     // unavailable/unknown — see below), so it needs no alpha of its own.
 
-    const value = this.groupedValue(entityId, this.compactValue(type, entity));
+    const value = this.groupedValue(entityId, compactValue(type, entity));
     lbl.valueText.text = value;
     this.setValueVisible(lbl, value.length > 0);
     const dirty = lbl.category !== prevCategory
@@ -5936,7 +5976,8 @@ export class EntityVisuals {
    */
   private screenClearance(
     shown: ShownLabel[],
-  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis } | null {
+  ): { pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
+       refDepth: number } | null {
     const pxPerWorld = this.quantisedPixelsPerWorldUnit(shown);
     if (!(pxPerWorld > 0)) return null;
     const scale = this.effectiveScale();
@@ -5957,6 +5998,7 @@ export class EntityVisuals {
       minSep: this.metrics.minCentrePitchPx * this.cssToGui() * shrink,
       allow: 1 - GROUP_OVERLAP_ALLOW_WIDTHS,
       basis: this.currentViewBasis(),
+      refDepth: this.rungReferenceDepth(pxPerWorld),
     };
   }
 
@@ -5990,7 +6032,7 @@ export class EntityVisuals {
   private placementItems(
     shown: ShownLabel[],
     boxes: { halfW: number; halfH: number; cy: number }[],
-    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis },
+    clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number },
   ): PlacementItem[] {
     const pool = this.placeItems;
     const focus = this.focusedRooms;
@@ -6006,8 +6048,35 @@ export class EntityVisuals {
       projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
       s.sx = p.px * k; s.sy = p.py * k + boxes[i].cy; s.sz = p.pz * k;
       it.sx = s.sx; it.sy = s.sy; it.sz = s.sz;
-      it.reach = boxes[i].halfW * clearance.allow;
-      it.reachY = boxes[i].halfH * clearance.allow;
+      // ── THE DEPTH CORRECTION ──────────────────────────────────────────
+      // Placement measures on an orthographic plane at ONE pixels-per-world
+      // for the whole scene; the renderer divides every drawn thing by its OWN
+      // depth. So two badges further from the camera than the rung's reference
+      // depth DRAW CLOSER TOGETHER than the plane predicted, by the ratio of
+      // those depths — and the solver, believing them clear, lets them overlap.
+      // Reported as badges sitting on top of one another on the far side of
+      // the villa, which is exactly where the ratio is largest.
+      //
+      // Measured before it was changed: a pair the solver judged EXACTLY
+      // touching overlaps by 9% of a badge width 8 m beyond the reference
+      // depth, 14% at 12 m, 22% at 20 m. Zero at the reference depth itself.
+      //
+      // ⚠️ THIS IS NOT THE BLANKET MARGIN, AND MUST NOT BECOME ONE.
+      // GROUP_OVERLAP_ALLOW_WIDTHS bought the same headroom by making
+      // EVERYTHING merge earlier, including badges near the camera where the
+      // residual is zero or negative; it was set to 0 in 2.173.0 with "it
+      // should stay there", and it does. This asks each badge for exactly the
+      // extra room its OWN depth will cost it, so a near badge is untouched.
+      //
+      // Clamped at 1: a badge NEARER than the reference draws further apart
+      // than the plane predicted, and shrinking its claim on that basis would
+      // group it late — an error in the direction this subsystem has spent
+      // several releases removing. One-sided, like the CEIL on the rung.
+      const depthPull = clearance.refDepth > 0
+        ? Math.max(1, (clearance.refDepth + p.pd) / clearance.refDepth)
+        : 1;
+      it.reach = boxes[i].halfW * clearance.allow * depthPull;
+      it.reachY = boxes[i].halfH * clearance.allow * depthPull;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
       // Tiebreak only, never a gate — see PlacementItem.category.
@@ -6203,6 +6272,7 @@ export class EntityVisuals {
     boxes: { halfW: number; halfH: number; cy: number }[],
     clearance: {
       pxPerWorld: number; gap: number; minSep: number; allow: number; basis: ViewBasis;
+      refDepth: number;
     },
     /** The summaries that SURVIVED placement — not the ones the solver asked
      *  for. A dropped one still leaves its members marked as covered. */
@@ -6644,6 +6714,43 @@ export class EntityVisuals {
   }
 
   /**
+   * The depth at which a rung's single scene-wide scale is EXACT.
+   *
+   * ⚠️ THIS IS ALGEBRA ON THE RUNG, NOT A CAMERA QUERY, AND THAT DISTINCTION IS
+   * THE WHOLE POINT. `pxPerWorldAt` is `vpH / (2 · dist · tan(fov/2))`, so the
+   * distance it was taken at is recoverable from the scale itself. Inverting
+   * the SNAPPED value rather than reusing the raw camera distance is what keeps
+   * one rung meaning one thing: the depth and the scale then agree exactly, and
+   * both move only when the lattice steps.
+   *
+   * ⚠️ THE FILE SAID THIS COULD NOT BE KNOWN. The residual note above reads
+   * "nothing inside a position-invariant metric can know that ratio — knowing
+   * it is precisely what 'invariant to where the camera stands' forbids." That
+   * is too strong, and it cost the villa a documented class of overlapping
+   * badges. What invariance forbids is reading the LIVE camera every frame;
+   * this reads a number the rung already fixed. Measured: a pair the solver
+   * judged exactly touching overlaps by 9% of a badge width 8 m beyond this
+   * depth, 14% at 12 m and 22% at 20 m — which is the far side of a villa, and
+   * is exactly where the overlapping badges were reported.
+   */
+  /** This pass's reference depth, from the same viewport and field of view the
+   *  rung was measured with. 0 when either is unavailable, which reads as "no
+   *  correction" everywhere downstream. */
+  private rungReferenceDepth(pxPerWorld: number): number {
+    const cam = this.scene.activeCamera;
+    if (!cam) return 0;
+    const vpH = this.scene.getEngine().getRenderHeight();
+    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
+    return EntityVisuals.referenceDepthAt(vpH, fov, pxPerWorld);
+  }
+
+  private static referenceDepthAt(vpH: number, fov: number, pxPerWorld: number): number {
+    const t = Math.tan(fov / 2);
+    if (!(pxPerWorld > 0) || !(t > 0) || !(vpH > 0)) return 0;
+    return vpH / (2 * pxPerWorld * t);
+  }
+
+  /**
    * ── THE ICON SCALE IS A FUNCTION OF THE RUNG. NOT OF THE RADIUS. ─────────
    * Two quantities scale badge layout with zoom: the RUNG scales the positions
    * the solver measures, and this scales the boxes it measures them against.
@@ -6791,10 +6898,13 @@ export class EntityVisuals {
       boxes[i] = b;
       if (card) {
         const hasVal = s.lbl.valueWrap.isVisible;
-        const valW = hasVal
-          ? s.lbl.valueText.text.length * m.cardValueCharPx + m.cardValuePadPx
-          : 0;
-        const cardW = m.cardPadLeftPx + m.cardHeightPx + valW;
+        // ⚠️ THE RENDERER'S OWN STRUTS — see badgeCard.cardStruts. This read
+        // `cardPadLeftPx + cardHeightPx + valW`, which shares exactly one term
+        // with what `rebuildLabels` actually builds, and over-reserved about
+        // 10 CSS px per card: three to five times `minGapPx`, on the very
+        // estimate the gap constants are tuned against.
+        const valW = hasVal ? s.lbl.valueText.text.length * m.cardValueCharPx : 0;
+        const cardW = cardStruts(m.cardHeightPx, this.glyphPxFor(true), valW).width;
         b.halfW = (cardW / 2) * scale;
         b.halfH = (m.cardHeightPx / 2 + 1) * scale;
         // The card IS the container now, so its centre is the container's
@@ -6818,7 +6928,7 @@ export class EntityVisuals {
       // at this exact moment. Only the WIDTH still adapts to the actual pill
       // text when one is shown (a wide value still needs proportionally more
       // horizontal room than a narrow one).
-      const pillCapable = PILL_CAPABLE_TYPES.has(s.lbl.type);
+      const pillCapable = VALUE_CAPABLE_TYPES.has(s.lbl.type);
       const pillHalfW = hasPill
         ? (s.lbl.valueText.text.length * m.pillValueCharPx + m.pillValuePadPx) / 2
         : 0;
@@ -8127,7 +8237,7 @@ export class EntityVisuals {
             const s2 = shown[g.members[k]];
             const st = this.lastState.get(s2.id) ?? phantomEntity(s2.id);
             const { face, ring } = badgeFaceAndRing(
-              s2.lbl.type, st, this.linkActiveIds.has(s2.id));
+              this.reading(s2.lbl.type, st, this.linkActiveIds.has(s2.id)));
             c.chips[k].source = badgeImageDataUrl(
               s2.lbl.category, iconKeyFor(s2.lbl.type, st), face,
               this.config.entityMap[s2.id]?.badgeColor,
@@ -8178,7 +8288,7 @@ export class EntityVisuals {
           if (!st) { if (drawn >= 2) ringRed = false; continue; }
           if (drawn >= 2) {
             const { ring } = badgeFaceAndRing(
-              shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id));
+              this.reading(shown[i].lbl.type, st, this.linkActiveIds.has(shown[i].id)));
             if (ring !== "alert") ringRed = false;
           } else {
             const kind = this.badgeKind(shown[i].lbl.type, st);
@@ -8559,8 +8669,11 @@ export class EntityVisuals {
     // an overlap is resolved is by two chips becoming one. Both properties hold
     // literally and at every zoom level.
     //
-    // Merging is by worst overlap first and repeats until nothing overlaps, so
-    // the outcome does not depend on room iteration order. The survivor keeps
+    // Merging is by worst overlap first and repeats until nothing overlaps.
+    // ⚠️ THAT ALONE DOES NOT MAKE IT ORDER-INDEPENDENT — this comment claimed
+    // it did for several releases while three tie-breaks still read array
+    // order. See the merge call below; `boxMerge.ts` owns the rule. The
+    // survivor keeps
     // the BUSIER room's name (the more informative one) plus a "+N" suffix, its
     // anchor becomes the device-count-weighted centroid of the merged rooms —
     // so it still sits among the devices it represents — and it owns the union
@@ -8627,36 +8740,42 @@ export class EntityVisuals {
       // ever wants to be tighter or looser. `chipGapPx` is deleted, not
       // aliased, so nothing can drift back apart.
       const gap = this.metrics.minGapPx * scale;
-      for (;;) {
-        let bi = -1, bj = -1, worst = 0;
-        for (let i = 0; i < chips.length; i++) {
-          for (let j = i + 1; j < chips.length; j++) {
-            const a = chips[i], b = chips[j];
-            const ox = a.halfW + b.halfW + gap - Math.abs(b.x - a.x);
-            const oy = a.halfH + b.halfH + gap - Math.abs(b.y - a.y);
-            if (ox <= 0 || oy <= 0) continue; // clear on at least one axis
-            const severity = Math.min(ox, oy);
-            if (severity > worst) { worst = severity; bi = i; bj = j; }
-          }
-        }
-        if (bi < 0) break; // nothing overlaps — done
-        const a = chips[bi], b = chips[bj];
-        const keep = a.ids.length >= b.ids.length ? a : b;
-        const drop = keep === a ? b : a;
-        const na = a.ids.length, nb = b.ids.length;
-        keep.centre = a.centre.scale(na / (na + nb))
-          .addInPlace(b.centre.scale(nb / (na + nb)));
-        keep.ids = keep.ids.concat(drop.ids);
-        keep.rooms = a.rooms + b.rooms;
-      // Keep the NAMES, not just the count: a merged chip has to be able to
-      // offer the rooms it swallowed when it is tapped, and "+2" cannot.
-      keep.roomNames = [...a.roomNames, ...b.roomNames];
-        keep.keys = [...a.keys, ...b.keys];
-        keep.ringRed = a.ringRed || b.ringRed;
-        keep.unavailable = a.unavailable || b.unavailable;
-        chips.splice(chips.indexOf(drop), 1);
-        measure(keep);
-      }
+      // ⚠️ THE FIXPOINT IS `boxMerge.ts` NOW, AND THE COMMENT ABOVE WAS WRONG.
+      // It claimed "the outcome does not depend on room iteration order", and
+      // this loop settled ties with `severity > worst` — so on an exact tie the
+      // first pair in ARRAY order won, and array order is room iteration order.
+      // Ties are not exotic: two equal-width chips at equal spacing produce
+      // them, and villas are frequently laid out on a grid.
+      //
+      // THREE things had to be made total, not one: which PAIR merges, which of
+      // the pair SURVIVES (`a.ids.length >= b.ids.length` handed it to whoever
+      // arrived first whenever the counts matched — two rooms with one device
+      // each, the common case), and the ORDER the survivors come back in.
+      // Measured over all 24 orderings of four tied chips: EIGHT distinct
+      // outcomes before, one after.
+      //
+      // Same defect class as the badge placement order-dependence fixed in
+      // 2.366.0 — in the very subsystem that fix was written for.
+      mergeOverlapping(
+        chips,
+        gap,
+        (c) => c.ids.length,
+        (keep, drop) => {
+          const a = keep, b = drop;
+          const na = a.ids.length, nb = b.ids.length;
+          keep.centre = a.centre.scale(na / (na + nb))
+            .addInPlace(b.centre.scale(nb / (na + nb)));
+          keep.ids = keep.ids.concat(drop.ids);
+          keep.rooms = a.rooms + b.rooms;
+          // Keep the NAMES, not just the count: a merged chip has to be able to
+          // offer the rooms it swallowed when it is tapped, and "+2" cannot.
+          keep.roomNames = [...a.roomNames, ...b.roomNames];
+          keep.keys = [...a.keys, ...b.keys];
+          keep.ringRed = a.ringRed || b.ringRed;
+          keep.unavailable = a.unavailable || b.unavailable;
+          measure(keep);
+        },
+      );
     }
 
     return chips;
@@ -9167,6 +9286,18 @@ export class EntityVisuals {
    *  and SummaryGroupPanel's device list, so all three read a device's
    *  activity identically. Only the linkActiveIds overlay below is specific
    *  to the map (a Babylon-side, confirmed-state-only signal). */
+  /** The ONE place this module assembles a `DeviceReading`, so the villa's
+   *  per-entity alert override reaches the map by the same route it reaches
+   *  the panel. Every badge drawn here goes through it. */
+  private reading(type: EntityType, s: HassEntity, linkedOn: boolean): DeviceReading {
+    return {
+      type, entity: s, linkedOn,
+      alertState: alertStateFor(
+        s.attributes.device_class as string | undefined,
+        this.config.alertThresholds[s.entity_id]?.alertState),
+    };
+  }
+
   private badgeKind(type: EntityType, s: HassEntity): BadgeKind {
     // The rule itself lives in utils/deviceActivity (badgeKindFor), shared with
     // every DOM list that draws the same squircle — this method only supplies
@@ -9174,7 +9305,7 @@ export class EntityVisuals {
     // entity is on", fed by state events. A camera's MOTION sensor is
     // deliberately NOT part of it: that drives the beam/room glow
     // (applyMotionRouting), never the ring, so the two read independently.
-    return badgeKindFor(type, s, this.linkActiveIds.has(s.entity_id));
+    return badgeKindFor(this.reading(type, s, this.linkActiveIds.has(s.entity_id)));
   }
 
   /** For a device-group PRIMARY, combine its own reading with its members'
@@ -9191,7 +9322,7 @@ export class EntityVisuals {
       const st = this.lastState.get(member);
       if (!st) continue;
       const t = this.config.entityMap[member]?.type ?? inferTypeFromEntityId(member) ?? "sensor";
-      const v = this.compactValue(t, st);
+      const v = compactValue(t, st);
       if (v) parts.push(v);
     }
     // ⚠️ THE JOIN IS CLAMPED, NOT JUST EACH PART. clampPill bounds a single
@@ -9224,86 +9355,22 @@ export class EntityVisuals {
     return text.length > max ? `${text.slice(0, Math.max(1, max - 1))}…` : text;
   }
 
-  /** Tiny chip text under the badge for entities whose state is a reading, not just on/off. */
-  private compactValue(type: EntityType, s: HassEntity): string {
-    if (s.state === "unavailable" || s.state === "unknown") return "";
-    switch (type) {
-      case "light": {
-        const b = s.attributes.brightness as number | undefined;
-        return s.state === "on" && b ? `${Math.round((b / 255) * 100)}%` : "";
-      }
-      case "fan": {
-        const p = s.attributes.percentage as number | undefined;
-        return s.state === "on" && p != null ? `${Math.round(p)}%` : "";
-      }
-      case "cover": {
-        const pos = s.attributes.current_position as number | undefined;
-        return pos != null ? `${Math.round(pos)}%` : "";
-      }
-      case "climate": {
-        const cur = s.attributes.current_temperature as number | undefined;
-        return cur != null ? `${Math.round(cur)}°` : "";
-      }
-      case "sensor":
-        return this.formatSensorValue(s);
-      default:
-        return "";
-    }
-  }
+  /* ⚠️ `compactValue`, `formatSensorValue` AND `clampPill` ALL LIVE IN
+   * `utils/entityValue.ts` — this class owns none of them.
+   *
+   * `compactValue` was the one that got away: it was COPIED there rather than
+   * moved, and the private original kept serving every badge for the whole
+   * time an oracle pinned the export. Two bodies, one pinned, and the pinned
+   * one had no production caller at all — so the oracle could have gone green
+   * through any change to the text the screen actually draws.
+   *
+   * They were private methods on this class, so the DOM panels could not reach
+   * them and each wrote a reading its own way: the same 6570.989 W sensor read
+   * "6.6 kW" on this badge and "6570.989 W" in the panel a tap opens. The rule
+   * is unchanged — only its address is — and the badge passes the two flags
+   * that were previously implicit here: hide a nominal status, clamp to 16
+   * characters. A panel passes neither, because it has room and no ring. */
 
-  /**
-   * Compact, readable value for the pill — exhaustive across the kinds of state
-   * HA reports, so nothing crowds the chip:
-   *   • Numbers → rounded to a sensible precision, with large power/energy scaled
-   *     to k-units (6570.989 W → "6.6 kW", 25.05 °C → "25.1°C").
-   *   • Enum / text states → tidied (underscores→spaces, Sentence case) so a raw
-   *     "not_home" reads "Not home", "connected" reads "Connected".
-   *   • Anything still long is ellipsised so the pill can never blow out.
-   */
-  private formatSensorValue(s: HassEntity): string {
-    const unit = ((s.attributes.unit_of_measurement as string | undefined) ?? "").trim();
-    const n = Number(s.state);
-
-    // ── Non-numeric (enum / status text) ──────────────────────────────────
-    if (s.state.trim() === "" || !Number.isFinite(n)) {
-      // Hide a NOMINAL/healthy status ("Connected", "OK", "Normal"…) — the
-      // badge is already category-coloured, so the word is redundant clutter.
-      // Any OTHER value stays shown (and a known-bad one rings red, see
-      // badgeKind), so a state change is never silently lost.
-      if (SENSOR_NOMINAL_STATES.has(s.state.trim().toLowerCase())) return "";
-      const words = String(s.state).replace(/_/g, " ").trim();
-      const pretty = words.charAt(0).toUpperCase() + words.slice(1);
-      return this.clampPill(pretty);
-    }
-
-    // ── Numeric ───────────────────────────────────────────────────────────
-    const abs = Math.abs(n);
-    const u = unit.toLowerCase();
-    // Round to `d` decimals and drop trailing zeros ("25.0"→"25", "6.60"→"6.6").
-    const trim = (v: number, d: number) => String(Number(v.toFixed(d)));
-
-    let out: string;
-    if (u === "w" && abs >= 1000) out = `${trim(n / 1000, 1)} kW`;
-    else if (u === "wh" && abs >= 1000) out = `${trim(n / 1000, 1)} kWh`;
-    else if (u === "va" && abs >= 1000) out = `${trim(n / 1000, 1)} kVA`;
-    else if (u === "%") out = `${Math.round(n)}%`;                        // percent hugs its sign
-    else if (u === "°c" || u === "°f" || u === "°") out = `${trim(n, 1)}${unit}`; // degrees hug too
-    // Units that read cleanest as whole numbers.
-    else if (u === "w" || u === "wh" || u === "va" || u === "lx" || u === "ppm" || u === "ppb")
-      out = unit ? `${Math.round(n)} ${unit}` : String(Math.round(n));
-    // Generic: whole numbers as-is, otherwise up to 1 decimal.
-    else {
-      const val = Number.isInteger(n) ? String(n) : trim(n, 1);
-      out = unit ? `${val} ${unit}` : val;
-    }
-    return this.clampPill(out);
-  }
-
-  /** Hard cap on pill text so an unexpectedly long value can never blow out the
-   *  chip; keeps every pill to a tidy, uniform footprint. */
-  private clampPill(text: string): string {
-    return text.length > 16 ? `${text.slice(0, 15)}…` : text;
-  }
 
   // ---------------------------------------------------------------------------
   // Mesh visuals
@@ -9631,7 +9698,7 @@ export class EntityVisuals {
 
       case "climate": {
         setEmissive?.(Color3.Black());
-        const running = state.state !== "off" && state.state !== "unavailable" && state.state !== "unknown";
+        const running = state.state !== "off" && !UNKNOWN_STATES.has(state.state);
         this.applyClimateOutline(mesh, running);
         break;
       }

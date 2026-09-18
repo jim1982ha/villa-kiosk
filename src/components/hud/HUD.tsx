@@ -45,7 +45,7 @@ import LegendModal from "./LegendModal";
 import CockpitModal from "@/components/cockpit/CockpitModal";
 import { useVillaAttention } from "@/components/cockpit/useVillaAttention";
 import { useFmData } from "@/fm/FmDataContext";
-import { scheduleBoard } from "@/fm/fmEngine";
+import { isTicketOpen, scheduleBoard } from "@/fm/fmEngine";
 import { formatCountBadge } from "@/utils/countBadge";
 
 // Label-size stepper (next to the category filter): each click moves
@@ -58,7 +58,6 @@ const LABEL_SCALE_STEP = 0.25;
 interface Props {
   currentFloor: number;
   floorsAvailable: number[];
-  onSwitchFloor: (floor: number) => void;
   /** Rooms-dial floor pick: switch to that floor AND frame its whole bird's-eye
    *  view (saved default), not just toggle visibility. */
   onShowFloor: (floor: number) => void;
@@ -121,7 +120,6 @@ export default function HUD({
   const { role, beginSwitch } = useProfile();
   const clock = useClock();
   const title = resolveSiteTitle(config, haConfig?.location_name);
-  const floors = [1, 2];
   const { flash: homeFlash, buttonProps: homeButtonProps } =
     useHomeAnchor(onApplyOverviewDefault, onSaveOverviewDefault);
 
@@ -148,7 +146,7 @@ export default function HUD({
   const facilityAttention = useMemo(() => {
     const lateTasks = scheduleBoard(fmData).filter(
       (s) => s.state === "overdue" || s.state === "never").length;
-    const openFaults = fmData.tickets.filter((t) => t.status !== "resolved").length;
+    const openFaults = fmData.tickets.filter(isTicketOpen).length;
     return lateTasks + openFaults;
   }, [fmData]);
 
@@ -171,7 +169,14 @@ export default function HUD({
   const floorLongTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const floorLongFired = useRef(false);
 
-  const availFloors = floors.filter((f) => floorsAvailable.includes(f));
+  // ⚠️ THE MODEL DECIDES HOW MANY STOREYS THERE ARE, NOT THIS LINE. This used
+  // to be `[1, 2].filter((f) => floorsAvailable.includes(f))` — an intersection
+  // with a literal, so a villa whose GLB detects a third storey got a floor 3
+  // it could reach (FloorManager.getFloorsDetected feeds floorsAvailable, and
+  // Dashboard.onFloorChange will switch to it) and no button to reach it with.
+  // Sorted because the detection order is the mesh index's, not the reader's.
+  const availFloors = useMemo(
+    () => [...floorsAvailable].sort((a, b) => a - b), [floorsAvailable]);
   const ROOM_R = 228;         // baseline outer-arc radius — the original, always-fine "few rooms" size
   const ROOM_MIN_ARC_PX = 48; // safe arc-length per room AT that baseline (228px radius, ~12° steps)
   const ROOM_VIEWPORT_PAD = 40; // top/bottom breathing room — matches the cy-clamp margin below

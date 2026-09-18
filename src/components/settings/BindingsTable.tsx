@@ -164,6 +164,10 @@ export default function BindingsTable() {
           mesh={mesh}
           entityId={config.meshBindings[mesh]}
           meta={config.entityMap[config.meshBindings[mesh]]}
+          // This row's own entity, not the whole map — the category dropdown
+          // cannot be resolved without its device_class, and a narrow slice
+          // keeps the row's memoisation intact.
+          entity={entities[config.meshBindings[mesh]]}
           onBind={bind}
           onUnbind={unbind}
           onPatch={patchMeta}

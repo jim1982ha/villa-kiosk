@@ -17,9 +17,10 @@
 // THEM changed.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ShowAll, useTruncated } from "@/components/common/TruncatedList";
 import { Search } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
-import { dismissedEntitySet } from "@/config/dismissedEntities";
+import { dismissedEntitySet, forgetEntities } from "@/config/dismissedEntities";
 import { useHA } from "@/ha/HAStateStore";
 import EntityMapRow from "./EntityMapRow";
 import type { EntityMapping } from "@/types/scene.types";
@@ -96,17 +97,15 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
   }, [haReady, allEntries, entities]);
   const staleSet = useMemo(() => new Set(staleIds), [staleIds]);
 
+  // Both Remove buttons on this screen go through the ONE operation — see
+  // dismissedEntities.forgetEntities. The decision is recorded alongside the
+  // deletion because these ids are also derived from the model (a mesh named
+  // after the entity), so deleting alone regenerated every one of them: the
+  // reported "I press Remove and they come straight back, on this device and
+  // the others".
   const removeStale = useCallback(() => {
-    const next = { ...configRef.current.entityMap };
-    for (const id of staleIds) delete next[id];
-    // Record the DECISION alongside deleting the rows. Deleting alone was
-    // never enough: these ids are also derived from the model (a mesh named
-    // after the entity), so auto-detection and the unavailable-devices list
-    // regenerated every one of them — the reported "I press Remove and they
-    // come straight back, on this device and the others".
-    const dismissed = new Set(configRef.current.dismissedEntityIds);
-    for (const id of staleIds) dismissed.add(id);
-    update({ entityMap: next, dismissedEntityIds: [...dismissed] });
+    update(forgetEntities(
+      configRef.current.entityMap, configRef.current.dismissedEntityIds, staleIds));
   }, [staleIds, update]);
 
   // Live filter by entity id, label or resolved room — the auto-detected list
@@ -122,6 +121,13 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       || (m.label ?? "").toLowerCase().includes(q)
       || (resolvedRooms[key] ?? "").toLowerCase().includes(q));
   }, [allEntries, search, resolvedRooms]);
+
+  // ⚠️ THE FIRST FEW, NOT A COLLAPSE, and applied AFTER the filter above — so
+  // typing narrows the list and the top of the RESULTS is what shows. This
+  // table used to sit behind a collapse toggle, so the section opened on a
+  // heading and nothing else, and the number of entities was invisible until
+  // you clicked.
+  const shown = useTruncated(entries);
 
   // Stable-identity commit path: reads the LATEST config through a ref rather
   // than closing over `config` directly, so `patch`'s own function identity
@@ -140,10 +146,14 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       },
     }), [update]);
 
+  // ⚠️ THE SAME OPERATION AS THE BANNER ABOVE, AND IT USED NOT TO BE. This
+  // deleted the row and recorded nothing, so it could not deliver the removal
+  // it offered: a live entity's row is rebuilt by auto-detection on the next
+  // model load, and a stale one merely disappeared from THIS table while
+  // staying in the fault picker, the offline count and readiness.
   const remove = useCallback((key: string) => {
-    const next = { ...configRef.current.entityMap };
-    delete next[key];
-    update({ entityMap: next });
+    update(forgetEntities(
+      configRef.current.entityMap, configRef.current.dismissedEntityIds, [key]));
   }, [update]);
 
   /**
@@ -175,7 +185,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
       <p className="muted body-text" style={{ marginBottom: 12 }}>
         Entities listed here are auto-detected because their 3D object in the
         model is already named with the entity ID (e.g.{" "}
-        <code style={{ fontSize: "var(--text-2xs)" }}>camera.patio_1f_cam</code>). Edit the
+        <code style={{ fontSize: "var(--text-2xs)" }}>camera.driveway</code>). Edit the
         display name, room or panel type without reloading the model.{" "}
         <strong>Changes here apply to every device</strong> that opens the
         kiosk — this configuration is stored centrally by the add-on, like the
@@ -237,7 +247,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
             </tr>
           </thead>
           <tbody>
-            {entries.map(([key, m0]) => (
+            {shown.visible.map(([key, m0]) => (
               <EntityMapRow
                 key={key}
                 entryKey={key}
@@ -260,6 +270,7 @@ export default function ConfigEditor({ initialSearch }: { initialSearch?: string
           </tbody>
         </table>
       )}
+      <ShowAll list={shown} noun="entity" />
 
     </div>
   );

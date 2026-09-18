@@ -5,17 +5,18 @@
 // isEnum below.
 
 import { useEffect, useState } from "react";
+import { formatSensorParts } from "@/utils/entityValue";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
 import Sparkline from "./Sparkline";
 import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import type { HistoryPoint, StateHistoryPoint } from "@/types/ha.types";
+import type { HistorySeries, StateHistoryPoint } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
-import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
+import { binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 import { binarySensorColor, paletteColorFor, isUnavailable } from "@/utils/stateColors";
 
@@ -27,7 +28,7 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
 
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [history, setHistory] = useState<HistorySeries>({ points: [], gaps: [] });
   const [stateHistory, setStateHistory] = useState<StateHistoryPoint[]>([]);
   // Distinguishes "still fetching" from "HA genuinely has no history yet" —
   // see useStateHistory's docstring for why this matters (same gap, this
@@ -50,19 +51,20 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   // instead of the numeric Sparkline one.
   const isEnum = !isBinary && entity != null && !Number.isFinite(numeric);
   const unit = entity?.attributes.unit_of_measurement ?? "";
+  // One reading, written once — see utils/entityValue.
+  const formatted = entity ? formatSensorParts(entity) : { value: "", unit: "" };
   const threshold = config.alertThresholds[mapping.entityId];
   // What this SPECIFIC binary_sensor reports — a leak sensor, a motion PIR, a
   // door contact, etc. — read from HA's own device_class attribute, so the
   // wording/icon/danger-styling below matches what's actually being
   // monitored instead of assuming every binary_sensor is a leak alarm.
   const classInfo = binarySensorClassInfo(entity?.attributes.device_class);
-  // A per-entity threshold override (config.alertThresholds, currently only
-  // seeded from DEFAULT_THRESHOLDS — no in-app editor) always wins; otherwise
-  // fall back to the device_class's default problem state ("none" = this
-  // class is purely informational — e.g. motion/occupancy — so it's never
-  // auto-flagged as an alert).
-  const defaultAlarmState = classInfo.alarmState === "none" ? undefined : classInfo.alarmState;
-  const alertState = threshold?.alertState ?? defaultAlarmState;
+  // The same rule the map badge now reads — see BinarySensorClasses.alertStateFor.
+  // This combination (per-entity override wins, else the device_class default,
+  // "none" meaning never a fault) used to live here alone, which is why the
+  // badge and this panel disagreed about every motion sensor in the villa.
+  const alertState = alertStateFor(
+    entity?.attributes.device_class as string | undefined, threshold?.alertState);
   const level: AlertLevel =
     isBinary
       ? alertState !== undefined && entity?.state === alertState ? "danger" : "normal"
@@ -140,9 +142,16 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
               className="value-large"
               style={{ color: unavailable ? "var(--status-warning)" : isEnum ? "var(--text-primary)" : LEVEL_COLOR[level] }}
             >
-              {unavailable ? "Unavailable" : isEnum ? (entity?.state ?? "--") : Number.isFinite(numeric) ? numeric : entity?.state ?? "--"}
+              {/* ⚠️ THE SAME RULE THE BADGE USES (utils/entityValue). This
+                  printed the RAW state and the RAW unit, so a 6570.989 W
+                  sensor read "6570.989" here and "6.6 kW" on the badge in the
+                  villa behind it — the same sensor, one screen, two numbers.
+                  No `clamp` and no `hideNominal`: this surface has room, and a
+                  nominal status belongs on a row that has no coloured ring to
+                  say it for them. */}
+              {unavailable ? "Unavailable" : formatted.value || (entity?.state ?? "--")}
             </span>{" "}
-            {!unavailable && !isEnum && <span className="value-unit">{unit}</span>}
+            {!unavailable && formatted.unit && <span className="value-unit">{formatted.unit}</span>}
           </div>
           <div className="field">
             <HistoryHeader title={range.title} picker={picker} />
@@ -156,7 +165,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 bucketMinutes={range.bucketMinutes}
               />
             ) : (
-              <Sparkline data={history} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
+              <Sparkline data={history.points} gaps={history.gaps} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
             )}
           </div>
         </>

@@ -30,6 +30,9 @@ import { CATEGORY_ORDER, categorySurface, type DeviceSurfaceState } from "@/conf
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
+import { formatUnitValue } from "@/utils/entityValue";
+import { effectiveSensorClass, toBaseUnit } from "@/config/SensorClasses";
+import { villaDevices } from "@/config/deviceGroups";
 import { isOn, onOffSummary, OFF_STATES } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
 import type { HassEntity } from "@/types/ha.types";
@@ -63,6 +66,10 @@ function deriveTiles(
   resolvedRooms: Record<string, string>,
   can: (c: Category) => boolean,
   thresholds: Record<string, Threshold>,
+  /** The villa's own devices. ⚠️ THREADED THROUGH RATHER THAN RECOMPUTED: the
+   *  tile counts and the list a tap opens must come from one set, or the tile
+   *  says "3 On" and the panel shows four rows. Only `.has` is called. */
+  allowed?: { has(entityId: string): boolean },
 ): SummaryTile[] {
   const all = Object.values(entities);
   const byDomain = (d: string) => all.filter((e) => e.entity_id.startsWith(`${d}.`));
@@ -75,7 +82,7 @@ function deriveTiles(
   // an unanchored "door" substring — reverted). Shared with the Facility
   // Readiness tab's "View doors" shortcut (see summaryGroups.ts) so both
   // open the identical group, not two independently-derived lists.
-  const locksG = locksGroup(entities, entityMap);
+  const locksG = locksGroup(entities, entityMap, allowed);
   if (locksG) {
     const locks = locksG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
     const lockedN = locks.filter((l) => l.state === "locked").length;
@@ -147,7 +154,7 @@ function deriveTiles(
   // Shared with the Facility Readiness tab's "View lights" shortcut (see
   // summaryGroups.ts) so both open the identical full list of lights, not
   // just the ones a readiness check happens to flag as still lit.
-  const lightsG = lightsGroup(entities);
+  const lightsG = lightsGroup(entities, allowed);
   if (lightsG) {
     const lights = lightsG.entityIds.map((id) => entities[id]).filter((e): e is HassEntity => !!e);
     const n = lights.filter(isOn).length;
@@ -193,17 +200,33 @@ function deriveTiles(
   }
 
   // ── Energy → total instantaneous power across power sensors (read-only) ─
+  // ⚠️ BY CLASS, NOT BY A REGEX OVER THE UNIT. The old predicate was
+  // `/(^|_)w$|watt/i` — an entity-id-shaped pattern applied to a unit string,
+  // so it matched "W" and could not match "kW" — OR'd with a device_class test
+  // that DID admit kilowatts. `SensorClasses` has mapped "kw" → "power" all
+  // along, three files away; this now asks it.
   const powerSensors = byDomain("sensor").filter(
-    (e) => e.attributes.device_class === "power" || /(^|_)w$|watt/i.test(e.attributes.unit_of_measurement ?? ""),
+    (e) => effectiveSensorClass(e.attributes.device_class as string | undefined,
+                                e.attributes.unit_of_measurement as string | undefined)
+           === "power",
   );
   if (powerSensors.length) {
-    const totalW = powerSensors.reduce((sum, e) => {
-      const v = Number(e.state);
-      return sum + (Number.isFinite(v) ? v : 0);
-    }, 0);
+    // ⚠️ NORMALISED BEFORE SUMMING, SCALED BACK BY `formatUnitValue` AFTER.
+    // This added every member's RAW state into a total labelled watts, so a
+    // mains meter reporting 3.2 kW contributed 3.2 — the villa's largest draw,
+    // under-reported by 1000×, on the most-glanced tile on the wall. A member
+    // whose unit this app cannot scale contributes nothing rather than a number
+    // in the wrong unit.
+    const totalW = powerSensors.reduce(
+      (sum, e) => sum + (toBaseUnit(e.state, e.attributes.unit_of_measurement as string | undefined) ?? 0),
+      0);
     tiles.push({
       id: "__energy", icon: Zap, label: "Energy",
-      value: totalW >= 1000 ? `${(totalW / 1000).toFixed(1)} kW` : `${Math.round(totalW)} W`,
+      // ⚠️ ASKED, NOT RESTATED. This was a third copy of the ≥1000 → kW rule,
+      // alongside the badge's and (by omission) the panel's. `formatUnitValue`
+      // also drops a trailing zero, so 3000 W now reads "3 kW" rather than
+      // "3.0 kW" — the same spelling the badge has always used.
+      value: formatUnitValue(totalW, "W"),
       // A HARDCODED `totalW > 3000` used to live here, and it was exactly the
       // per-site tuning constant CLAUDE.md's first hard rule forbids: 3 kW is
       // an idle afternoon in a villa with a pool pump and an alarming spike in
@@ -395,7 +418,7 @@ function SceneMenu({ scenes, canRun, apply }: {
 }
 
 export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Props) {
-  const { entities, suppressedEntityIds } = useHA();
+  const { entities, suppressedEntityIds, entityDeviceIds } = useHA();
   const { ask: askScene, dialog: sceneDialog } = useSceneConfirm();
   const { role } = useProfile();
   const { config, resolvedRooms } = useConfig();
@@ -414,9 +437,29 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
     return out;
   }, [entities, suppressedEntityIds]);
 
+  // The villa's own devices — the same set the offline badge and the Facility
+  // device count use. See lightsGroup for what counting by domain prefix alone
+  // got wrong.
+  // `visibleEntities`, not the raw store: this bar counts what the profile can
+  // actually see. The set is the value's own now — no caller builds one.
+  const villaDeviceSet = useMemo(
+    () => villaDevices({
+      entityMap: config.entityMap, deviceGroups: config.deviceGroups,
+      dismissedEntityIds: config.dismissedEntityIds,
+      mappedEntityIds, entities: visibleEntities, entityDeviceIds,
+    }),
+    [config.entityMap, config.deviceGroups, config.dismissedEntityIds,
+     mappedEntityIds, visibleEntities, entityDeviceIds],
+  );
+
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds),
-    [visibleEntities, config.entityMap, resolvedRooms, role],
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, villaDeviceSet),
+    // ⚠️ villaDeviceSet, NOT villaDevices. This read `villaDevices` — the
+    // imported FUNCTION, a module constant that never changes — so the two
+    // inputs unique to the set above (mappedEntityIds, entityDeviceIds) could
+    // not invalidate the tiles. mappedEntityIds arrives late, when the GLB
+    // finishes loading, which is exactly the moment the counts must move.
+    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, villaDeviceSet],
   );
 
   // A scene spans categories — allow running one if the profile may control ANY.

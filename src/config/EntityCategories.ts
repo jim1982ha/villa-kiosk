@@ -388,12 +388,61 @@ function categoryForEntity(entityId: string, type: EntityType, deviceClass?: str
  *  wins, but a stored value that merely equals the legacy auto-default is
  *  ignored so the current defaults (above) apply — including retroactively to
  *  already-detected devices whose category was auto-pinned. */
-export function effectiveCategory(
+/**
+ * Everything that decides which map filter group a device belongs to, as ONE
+ * argument.
+ *
+ * ⚠️ IT WAS FOUR POSITIONAL PARAMETERS WITH THE LAST TWO OPTIONAL, AND THE
+ * FOURTH DECIDED A PERMISSION. `deviceClass` changes the answer, and three of
+ * the twelve callers omitted it — one of them `isMappingAllowed`, whose own
+ * comment says it is deliberately aligned with "the category the badge/filter
+ * actually uses" and warns that disagreement "is an RBAC hole, not cosmetic".
+ * Two consecutive lines of one filter in Dashboard computed the same entity's
+ * category two different ways.
+ *
+ * ⚠️ EVERY FIELD IS REQUIRED, AND `deviceClass` MAY BE `undefined`. "This
+ * entity is not loaded, so I have no device_class" is a statement the caller
+ * makes; omitting an argument is an accident that looks identical to it and
+ * that neither `tsc` nor review can see.
+ */
+export interface CategorySubject {
+  entityId: string;
+  type: EntityType;
+  /** The stored pick from the entityMap, if any. */
+  storedCategory: Category | undefined;
+  /** Home Assistant's own `device_class` for this entity. `undefined` when
+   *  the entity is not loaded or reports none. */
+  deviceClass: string | undefined;
+  /** The stored category was chosen by hand — honour it verbatim. */
+  picked: boolean;
+}
+
+/**
+ * Build the subject from what every caller already holds: the mapping and the
+ * LIVE entity. The entity is a required argument — passing `undefined` says
+ * "not loaded", which is a different statement from having forgotten to look.
+ */
+export function subjectOf(
   entityId: string,
-  type: EntityType,
-  storedCategory?: Category,
-  deviceClass?: string,
-): Category {
+  mapping: { type: EntityType; category?: Category; categoryPicked?: true } | undefined,
+  entity: { attributes?: { device_class?: unknown } } | undefined,
+  fallbackType?: EntityType,
+): CategorySubject {
+  const type = mapping?.type ?? fallbackType;
+  if (!type) throw new Error(`subjectOf: no type for ${entityId}`);
+  return {
+    entityId, type,
+    storedCategory: mapping?.category,
+    deviceClass: entity?.attributes?.device_class as string | undefined,
+    picked: mapping?.categoryPicked === true,
+  };
+}
+
+export function effectiveCategory(subject: CategorySubject): Category {
+  const { entityId, type, storedCategory, deviceClass, picked } = subject;
+  // A hand-picked category is honoured exactly as picked — see
+  // EntityMapping.categoryPicked. Only an auto-assigned one is re-bucketed.
+  if (picked && storedCategory) return storedCategory;
   if (storedCategory && storedCategory !== legacyDefaultCategory(type)) return storedCategory;
   return categoryForEntity(entityId, type, deviceClass);
 }

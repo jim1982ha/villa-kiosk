@@ -18,6 +18,7 @@
 
 import { useMemo, useState } from "react";
 import { useModalA11y } from "@/hooks/useModalA11y";
+import ModalTabs, { type ModalTab } from "@/components/common/ModalTabs";
 import {
   ClipboardCheck, ListChecks, Wrench, Wallet, FileText, CalendarCog,
 } from "lucide-react";
@@ -27,7 +28,7 @@ import { useProfile } from "@/auth/ProfileContext";
 import { hasCapability } from "@/auth/permissions";
 import { useFmData, useFacilityLiveView } from "@/fm/FmDataContext";
 import { buildReadiness, type ReadinessCheck } from "@/fm/readiness";
-import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
+import { villaDevices } from "@/config/deviceGroups";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import SummaryGroupPanel, { type SummaryGroup } from "@/components/panels/SummaryGroupPanel";
 import CockpitModal from "@/components/cockpit/CockpitModal";
@@ -41,7 +42,7 @@ import ScheduleEditor from "./ScheduleEditor";
 
 type Tab = "today" | "readiness" | "faults" | "spend" | "schedule" | "report";
 
-const TABS: { id: Tab; label: string; icon: typeof ListChecks }[] = [
+const TABS: ModalTab<Tab>[] = [
   { id: "today", label: "Today", icon: ListChecks },
   { id: "readiness", label: "Readiness", icon: ClipboardCheck },
   { id: "faults", label: "Faults", icon: Wrench },
@@ -74,7 +75,7 @@ export default function FacilityModal({
   // Landing on Faults rather than Today when the operator arrived by tapping
   // "report a fault" on a device: they have already said what they want.
   const [tab, setTab] = useState<Tab>(reportFaultFor ? "faults" : "today");
-  const { entities } = useHA();
+  const { entities, entityDeviceIds } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { role } = useProfile();
   const { data, ready, saveError } = useFmData();
@@ -96,10 +97,26 @@ export default function FacilityModal({
   // (every lock, not just the currently-unlocked ones), so this opens the
   // identical group locksGroup/lightsGroup already build for that tile (see
   // summaryGroups.ts) rather than a second, differently-scoped view.
+  // ⚠️ ONE CALL, AND IT USED TO BE FIVE. This modal reassembled the same
+  // five-argument tuple for the device count, the readiness report, the fault
+  // picker and the offline list — four dependency arrays that had to stay in
+  // step, plus a third argument ORDER inside buildReadiness. One value now,
+  // handed to everything that needs it.
+  const devices = useMemo(
+    () => villaDevices({
+      entityMap: config.entityMap, deviceGroups: config.deviceGroups,
+      dismissedEntityIds: config.dismissedEntityIds,
+      mappedEntityIds, entities, entityDeviceIds,
+    }),
+    [config.entityMap, config.deviceGroups, config.dismissedEntityIds,
+     mappedEntityIds, entities, entityDeviceIds],
+  );
+  const totalDeviceCount = devices.ids.length;
+
   const [checkPanelGroup, setCheckPanelGroup] = useState<SummaryGroup | null>(null);
   const openCheckDevices = (check: ReadinessCheck) => {
-    const group = check.id === "locks" ? locksGroup(entities)
-      : check.id === "lights" ? lightsGroup(entities)
+    const group = check.id === "locks" ? locksGroup(entities, config.entityMap, devices)
+      : check.id === "lights" ? lightsGroup(entities, devices)
       : null;
     if (group) setCheckPanelGroup(group);
   };
@@ -107,10 +124,8 @@ export default function FacilityModal({
   // Shared by the Readiness tab and the Report tab, so the report can never
   // disagree with what the operator just looked at.
   const readiness = useMemo(
-    () => buildReadiness(
-      entities, config.entityMap, mappedEntityIds, data, config.deviceGroups,
-      config.dismissedEntityIds),
-    [entities, config.entityMap, mappedEntityIds, data, config.deviceGroups, config.dismissedEntityIds],
+    () => buildReadiness(entities, data, devices),
+    [entities, data, devices],
   );
 
   // The report's DENOMINATOR, and it has to come from the same rule its
@@ -122,11 +137,10 @@ export default function FacilityModal({
   // applies none of those, so the report divided a strictly-filtered numerator
   // by an unfiltered total and understated the offline share. deviceGroups.ts
   // already records this drift happening once before, to the fault picker.
-  const totalDeviceCount = useMemo(
-    () => selectableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds,
-                              entities, config.dismissedEntityIds).length,
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
+  //
+  // ⚠️ THE SET, NOT JUST ITS SIZE. The readiness tiles below need the same list
+  // to decide which locks and lights are the VILLA's (see summaryGroups), and
+  // deriving the count from a second call would be two answers to one question.
 
   // Same list the HUD's own unavailable-devices badge shows (see
   // unavailableDeviceIds) — the Readiness tab's quick-link opens the same
@@ -139,16 +153,11 @@ export default function FacilityModal({
   // starting point is precisely how the picker ended up offering rows no
   // other screen would show.
   const deviceOptions = useMemo(
-    () => buildDeviceOptions(config.entityMap, entities, resolvedRooms, config.deviceGroups,
-                             mappedEntityIds, config.dismissedEntityIds),
-    [config.entityMap, entities, resolvedRooms, config.deviceGroups, mappedEntityIds, config.dismissedEntityIds],
+    () => buildDeviceOptions(devices, config.entityMap, entities, resolvedRooms),
+    [devices, config.entityMap, entities, resolvedRooms],
   );
 
-  const unavailableIds = useMemo(
-    () => unavailableDeviceIds(
-      config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
+  const unavailableIds = devices.unavailable as string[];
   const canControl = role != null && hasCapability(role, "controlEntities");
 
   return (
@@ -173,22 +182,18 @@ export default function FacilityModal({
             <h2>Facility</h2>
           </div>
 
-          <div className="fm-tabs" role="tablist" aria-label="Facility sections">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button
-                  key={t.id}
-                  role="tab"
-                  aria-selected={tab === t.id}
-                  className={`fm-tab${tab === t.id ? " active" : ""}`}
-                  onClick={() => setTab(t.id)}
-                >
-                  <Icon size={16} /><span>{t.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* ⚠️ THE STRIP IS `common/ModalTabs` SINCE ADVANCED SETTINGS GREW
+              ONE TOO. The copy that lived here highlighted the FIRST tab when
+              the dialog was opened straight onto a later one — "report a
+              fault" showed the fault form under a bar that read as Today,
+              because the row scrolls horizontally and nothing scrolled the
+              active button into view. The shared component does. */}
+          <ModalTabs
+            tabs={TABS}
+            active={tab}
+            onSelect={setTab}
+            label="Facility sections"
+          />
 
           <div className="settings-body">
             {saveError && <div className="fm-banner warn">{saveError}</div>}

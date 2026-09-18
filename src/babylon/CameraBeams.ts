@@ -17,6 +17,8 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Scene } from "@babylonjs/core/scene";
 import { ModelKeyedStore } from "./modelStore";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
 // A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:

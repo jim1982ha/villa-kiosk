@@ -1,7 +1,8 @@
 // src/ha/HAHistoryAPI.ts
 // Fetch recent entity history via the REST API for panel sparklines/timelines.
 
-import type { HistoryPoint, StateHistoryPoint } from "@/types/ha.types";
+import { gapsFrom } from "@/utils/historyGaps";
+import type { StateHistoryPoint, HistorySeries } from "@/types/ha.types";
 import { ingressApiBase } from "./ingress";
 
 interface RawHistoryState {
@@ -44,10 +45,20 @@ export function numericState(raw: unknown): number {
   return s === "" ? NaN : Number(s);
 }
 
-/** Fetch the last `hours` of NUMERIC history for an entity (line sparklines). */
-export async function fetchHistory(entityId: string, hours = 24): Promise<HistoryPoint[]> {
+/**
+ * Fetch the last `hours` of NUMERIC history for an entity (line sparklines),
+ * AND the stretches in which it reported nothing usable.
+ *
+ * ⚠️ THE GAPS ARE PART OF THE RETURN VALUE, NOT AN OPTION. Dropping the
+ * unusable rows and saying nothing is what drew a pump "ramping up" all night
+ * while it was offline — the chart joined the last reading before the outage to
+ * the first one after it and called that a measurement. Returning one object
+ * makes the honest drawing the only drawing a caller can produce: there is no
+ * overload that hands back points alone.
+ */
+export async function fetchHistory(entityId: string, hours = 24): Promise<HistorySeries> {
   const series = await fetchRaw(entityId, hours);
-  return series
+  const rows = series
     // ⚠️ A MISSING READING MUST BECOME NaN, NEVER 0. `Number(null)` is 0 and so
     // is `Number("")`, and both are `Number.isFinite`, so the filter below —
     // which exists to drop unparseable rows — passed them through as a real
@@ -55,8 +66,14 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
     // reads as "the device stopped drawing power"; on a temperature it reads as
     // 0°C. Same wire and same lie about the declared type as the null-state
     // crash fixed alongside this, silent instead of loud.
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }))
-    .filter((p) => Number.isFinite(p.v));
+    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }));
+  return {
+    points: rows.filter((p) => Number.isFinite(p.v)),
+    // `Date.now()` rather than the last row's stamp: an entity that is
+    // unavailable NOW has an outage that has not ended. The chart clamps the
+    // band to its own plot, so an end beyond the last point is safe here.
+    gaps: gapsFrom(rows, Date.now()),
+  };
 }
 
 /**
@@ -70,22 +87,32 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
 export async function fetchStateHistory(
   entityId: string,
   hours = 24,
-  opts: {
-    /**
-     * Keep `unavailable`/`unknown` points instead of dropping them.
-     *
-     * Dropping them is right for a panel asking "what values did this report",
-     * where a gap is noise — but wrong for any caller whose whole question IS
-     * whether the entity was reachable. The camera panel's status bar was the
-     * second kind and got the first behaviour: it maps `unavailable` to a black
-     * "offline" band, but those points had already been deleted here, so that
-     * branch could never fire. An outage was not drawn as an outage; the state
-     * on either side simply continued across the gap, and a camera that had
-     * dropped for an hour rendered as an hour of ordinary green.
-     */
-    keepUnavailable?: boolean;
-  } = {},
 ): Promise<StateHistoryPoint[]> {
+  // ⚠️ `unavailable` AND `unknown` ARE KEPT, AND THE OPTION TO DROP THEM IS
+  // GONE. It used to default to dropping, which silently deleted every period
+  // a device was offline before the chart ever saw it. Two ways that showed,
+  // both reported 2026-09-14 on a lock that had been flapping all day:
+  //
+  //   • a 1h window whose first in-window change is late renders BLANK up to
+  //     that change, because the state the entity was ALREADY in — the anchor
+  //     HA returns at the window start — was an `unavailable` row and got
+  //     deleted. The bar begins mid-chart with nothing before it.
+  //   • a 12h window renders as ONE solid band of the surviving state, because
+  //     once the `unavailable` rows are gone the remaining rows are all equal
+  //     and the de-duplication below collapses them into a single segment. It
+  //     looks complete and is the worse lie of the two: it claims the device
+  //     held one state for twelve hours when it was offline for most of them.
+  //
+  // ⚠️ AND IT MADE `useStateHistory`'s OWN DEAD-WINDOW TEST VACUOUS. That hook
+  // asks `h.some(pt => !UNKNOWN_STATES.has(pt.state))` to decide whether to
+  // look further back for the last sighting — a question that can only be
+  // answered by data this filter had already removed, so the answer was always
+  // "alive" and the lookback never ran.
+  //
+  // Nothing wanted the old default: all three call sites either passed the
+  // opt-out or were broken by not passing it. Colour is not this module's
+  // business — `stateColors.historyStateColor` already maps these to the amber
+  // the Map colours legend documents.
   const series = await fetchRaw(entityId, hours);
   const points = series
     // ⚠️ COERCED AT THE DOOR, alongside the guard in `statusKeyFor`. Home
@@ -96,8 +123,7 @@ export async function fetchStateHistory(
     // travelling any further.
     .map((s) => ({ t: new Date(s.last_changed).getTime(),
                    state: String(s.state ?? "") }))
-    .filter((p) => Number.isFinite(p.t)
-      && (opts.keepUnavailable || (p.state !== "unavailable" && p.state !== "unknown")));
+    .filter((p) => Number.isFinite(p.t));
   // Collapse consecutive duplicate states (can happen when only attributes
   // changed between two reported points) so segment rendering doesn't draw
   // redundant boundaries.

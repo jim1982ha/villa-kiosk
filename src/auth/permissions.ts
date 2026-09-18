@@ -13,7 +13,7 @@
 
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import type { AppConfig } from "@/config/AppConfig";
-import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import type { Role } from "./roles";
 
 /** Things a profile can DO (beyond seeing devices). */
@@ -49,8 +49,26 @@ export interface RolePermissions {
   /** Device types hidden even inside an allowed category. */
   deniedTypes: EntityType[];
   capabilities: Capability[];
-  /** Bounded controls (spec: guests get a clamped A/C range). */
-  controlLimits?: { climateMin: number; climateMax: number };
+  /**
+   * A narrower A/C range to offer this profile, when one is configured.
+   *
+   * ⚠️ THIS IS A UI AFFORDANCE, NOT AN ENFORCED CONTROL, AND ITS OLD NAME SAID
+   * OTHERWISE. It was `controlLimits`, inside a record this file's own header
+   * calls "THE role-based access control matrix" — vocabulary that reads as
+   * enforced. It is not: the add-on permits `climate` service calls for any
+   * signed-in role and places no bound on the temperature payload
+   * (supervisor-proxy's _service_call_allowed), so this only narrows the
+   * stepper a guest is shown. Every other denial in this file has a server
+   * mirror, and the proxy says so where it mirrors one; this one never had.
+   *
+   * ⚠️ AND THE VALUES WERE ONE VILLA'S. It shipped `{ climateMin: 22,
+   * climateMax: 28 }` — a tropical comfort band applied to every install, in a
+   * redistributable add-on. Empty now, the same posture as the maintenance cap:
+   * unset means the device's own min_temp/max_temp govern, which is the honest
+   * default. Wiring it to per-install config is the follow-up; a "helpful" seed
+   * here would be the hardcoding again in a friendlier shape.
+   */
+  comfortRange?: { climateMin: number; climateMax: number };
 }
 
 /**
@@ -73,7 +91,8 @@ const PERMISSION_MATRIX: Record<Role, RolePermissions> = {
     allowedCategories: ["comfort", "light", "network", "access_control"],
     deniedTypes: ["camera", "binary_sensor"],
     capabilities: ["controlEntities", "openSettings", "customizeAppearance", "reportFault"],
-    controlLimits: { climateMin: 22, climateMax: 28 },
+    // comfortRange deliberately unset — see its declaration. The A/C stepper
+    // falls back to the device's own reported limits.
   },
   owner: {
     allowedCategories: "all",
@@ -118,18 +137,29 @@ function isEntityAllowed(role: Role, type: EntityType, category: Category): bool
 
 /** The guest-style bounded climate range, when the role has one. */
 export function climateLimits(role: Role): { climateMin: number; climateMax: number } | null {
-  return PERMISSION_MATRIX[role].controlLimits ?? null;
+  return PERMISSION_MATRIX[role].comfortRange ?? null;
 }
 
-/** Per-entity check using its stored mapping (falls back to the category
- *  defaults exactly like the rest of the app does). */
-export function isMappingAllowed(role: Role, entityId: string, mapping: EntityMapping): boolean {
-  // effectiveCategory, NOT `mapping.category ?? categoryForEntity(...)`: the
-  // two disagree whenever a stored category merely equals the LEGACY auto
-  // default, which effectiveCategory deliberately ignores so current defaults
-  // apply. This decides what a role is allowed to see, so it disagreeing with
-  // the category the badge/filter actually uses is an RBAC hole, not cosmetic.
-  const category = effectiveCategory(entityId, mapping.type, mapping.category);
+/**
+ * Per-entity check using its stored mapping and its LIVE entity.
+ *
+ * ⚠️ THE ENTITY IS A REQUIRED ARGUMENT, AND ITS ABSENCE WAS THE DEFECT. This
+ * resolved the category from three of the four signals — it could not see
+ * `device_class` — while the badge, the map filter and the settings row all
+ * resolved it from four. The comment that used to sit here claimed the call
+ * was deliberately aligned with "the category the badge/filter actually uses"
+ * and warned that disagreement "is an RBAC hole, not cosmetic". It was not
+ * aligned: two consecutive lines of one filter in `Dashboard` computed the
+ * same entity's category two different ways.
+ *
+ * Pass `undefined` for an entity Home Assistant has not loaded. That is a
+ * statement; omitting it was an accident nothing could see.
+ */
+export function isMappingAllowed(
+  role: Role, entityId: string, mapping: EntityMapping,
+  entity: { attributes?: { device_class?: unknown } } | undefined,
+): boolean {
+  const category = effectiveCategory(subjectOf(entityId, mapping, entity));
   return isEntityAllowed(role, mapping.type, category);
 }
 

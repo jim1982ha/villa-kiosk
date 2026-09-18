@@ -8,10 +8,10 @@
 // memory for how this was verified.
 
 import { binarySensorClassInfo } from "@/config/BinarySensorClasses";
-import { CATEGORY_ORDER, effectiveCategory } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { displayLabelFor } from "@/config/EntityMap";
 import { roomKey, NO_ROOM_LABEL } from "@/config/roomKey";
-import { scheduleBoard } from "@/fm/fmEngine";
+import { isTicketResolved, scheduleBoard } from "@/fm/fmEngine";
 import type { FmData } from "@/fm/fmTypes";
 import { isOn } from "@/utils/entityState";
 import type { HassEntity, RawLogbookEntry } from "@/types/ha.types";
@@ -65,7 +65,7 @@ export function buildAttentionItems(opts: {
   }
 
   for (const t of fmData.tickets) {
-    if (t.status === "resolved") continue;
+    if (isTicketResolved(t)) continue;
     items.push({
       id: `fault:${t.id}`,
       kind: "fault",
@@ -156,7 +156,7 @@ export function buildCategoryTiles(
     const mapping = entityMap[id];
     if (!mapping) continue;
     const entity = entities[id];
-    const cat = effectiveCategory(id, mapping.type, mapping.category, entity?.attributes.device_class as string | undefined);
+    const cat = effectiveCategory(subjectOf(id, mapping, entity));
     totals.set(cat, (totals.get(cat) ?? 0) + 1);
     if (isOn(entity)) ons.set(cat, (ons.get(cat) ?? 0) + 1);
   }

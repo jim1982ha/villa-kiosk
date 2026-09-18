@@ -104,6 +104,11 @@ export default function DeviceConfigSync() {
   // (which would re-register the focus listener on every single config edit).
   const localRef = useRef(local);
   localRef.current = local;
+  /** Read by pushOwnDiff's gate. A ref rather than the closed-over `role` so a
+   *  push already scheduled when the profile changes is judged by the role that
+   *  holds when it RUNS, not the one that held when it was queued. */
+  const roleRef = useRef(role);
+  roleRef.current = role;
   /** The FULL config, not the shared slice. mergeSharedConfig needs it: the
    *  slice has already had this device's derived items filtered out, so
    *  merging against it would find nothing to carry across and would blank
@@ -151,6 +156,15 @@ export default function DeviceConfigSync() {
   // fresher copy if another device's write lands in the gap. See the file
   // header for why a whole-object PUT of `local` can't be used here.
   const pushOwnDiff = useCallback(async () => {
+    // ⚠️ THE ROLE GATE LIVES HERE, NOT AT THE CALL SITES. It used to be only on
+    // the push effect below, so the pull's "pending-local-edit" abort branch —
+    // which retries the push to unwedge a device holding an unsent edit — ran it
+    // for EVERY role. A non-owner whose local slice had drifted from a baseline
+    // persisted on that browser then re-ran the whole fetch-rebase-write loop on
+    // every focus, visibilitychange and heartbeat tick, forever: the server 403s,
+    // saveSharedConfig maps that to {ok:false, conflict:false}, and nothing ever
+    // clears the divergence. One gate, at the one place that writes.
+    if (roleRef.current !== "owner") return;
     const baseline = baselineRef.current;
     if (!baseline) return; // rule 1: no pull yet
 

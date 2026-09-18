@@ -5,12 +5,17 @@
 // text stays crisp instead of being stretched by preserveAspectRatio="none".
 
 import { useCallback, useMemo, useState } from "react";
-import type { HistoryPoint } from "@/types/ha.types";
+import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
+import { splitAtGaps, gapBand } from "@/utils/historyGaps";
+import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
 
 interface Props {
   data: HistoryPoint[];
+  /** Stretches in which the entity reported nothing usable. Shaded, and the
+   *  line is broken across them — see utils/historyGaps for why both. */
+  gaps?: HistoryGap[];
   color?: string;
   height?: number;
   unit?: string;
@@ -21,7 +26,7 @@ interface Props {
 
 const M = { top: 8, right: 10, bottom: 18, left: 38 };
 
-export default function Sparkline({ data, color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
+export default function Sparkline({ data, gaps = [], color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
   // Span of the data itself: this chart scales its x-axis to what it was given.
   const spanHours = data.length > 1
     ? (data[data.length - 1].t - data[0].t) / 3_600_000 : 0;
@@ -41,8 +46,14 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
     const sx = (t: number) => M.left + ((t - minX) / spanX) * plotW;
     const sy = (v: number) => M.top + (1 - (v - minY) / spanY) * plotH;
     const pts = data.map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t, v: d.v }));
-    return { pts, minX, maxX, minY, maxY, sx, sy };
-  }, [data, W, height]);
+    const right = M.left + plotW;
+    // One band per outage, already clamped to the plot — a gap that runs to
+    // `now` routinely extends past the last plotted reading.
+    const bands = gaps
+      .map((g) => gapBand(g, sx, M.left, right))
+      .filter((b): b is { x: number; w: number } => b !== null);
+    return { pts, minX, maxX, minY, maxY, sx, sy, bands, runs: splitAtGaps(pts, gaps) };
+  }, [data, gaps, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!geom) return;
@@ -57,7 +68,9 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
       : <div ref={ref} className="muted body-text">Not enough history yet.</div>;
   }
 
-  const polyline = geom.pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const polylines = geom.runs
+    .filter((r) => r.length >= 2)
+    .map((r) => r.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
   const hp = hover != null ? geom.pts[hover] : null;
   const yTicks = [geom.maxY, (geom.maxY + geom.minY) / 2, geom.minY];
   const xTicks = [geom.minX, (geom.minX + geom.maxX) / 2, geom.maxX];
@@ -68,6 +81,15 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
         className="sparkline" width={W} height={height} style={{ height, touchAction: "none" }}
         onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}
       >
+        {/* ⚠️ FIRST IN THE SVG, so the band is BEHIND the grid and the line.
+            SVG has no z-index — paint order is document order — so moving this
+            below the polyline would hide the data behind the shading. */}
+        {geom.bands.map((b, i) => (
+          <rect
+            key={`gap${i}`} x={b.x} y={M.top} width={b.w} height={Math.max(1, height - M.top - M.bottom)}
+            fill={STATUS_COLOR.unavailable} opacity={0.18}
+          />
+        ))}
         {yTicks.map((v, i) => {
           const y = geom.sy(v);
           return (
@@ -88,7 +110,9 @@ export default function Sparkline({ data, color = "var(--accent-teal)", height =
             {fmtChartTime(t)}
           </text>
         ))}
-        <polyline points={polyline} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {polylines.map((pl, i) => (
+          <polyline key={`run${i}`} points={pl} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        ))}
         {hp && (
           <g>
             <line x1={hp.x} y1={M.top} x2={hp.x} y2={height - M.bottom} className="spark-crosshair" />

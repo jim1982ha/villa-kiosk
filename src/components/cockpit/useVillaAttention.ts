@@ -17,7 +17,7 @@ import { useMemo } from "react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import { useFmData } from "@/fm/FmDataContext";
-import { unavailableDeviceIds, selectableDeviceIds } from "@/config/deviceGroups";
+import { villaDevices } from "@/config/deviceGroups";
 import { buildAttentionItems, villaHealthFrom, type AttentionItem, type VillaHealth } from "./cockpitData";
 
 export interface VillaAttention {
@@ -28,18 +28,23 @@ export interface VillaAttention {
 }
 
 export function useVillaAttention(mappedEntityIds: Set<string>): VillaAttention {
-  const { entities } = useHA();
+  const { entities, entityDeviceIds } = useHA();
   const { config, resolvedRooms } = useConfig();
   const { data: fmData } = useFmData();
 
-  const unavailableIds = useMemo(
-    () => unavailableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
+  // ONE call, one memo — this was two, each restating the same five-tuple in
+  // the same order and each with its own dependency array to keep in step.
+  const devices = useMemo(
+    () => villaDevices({
+      entityMap: config.entityMap, deviceGroups: config.deviceGroups,
+      dismissedEntityIds: config.dismissedEntityIds,
+      mappedEntityIds, entities, entityDeviceIds,
+    }),
+    [config.entityMap, config.deviceGroups, config.dismissedEntityIds,
+     mappedEntityIds, entities, entityDeviceIds],
   );
-  const selectableIds = useMemo(
-    () => selectableDeviceIds(config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds),
-    [config.entityMap, config.deviceGroups, mappedEntityIds, entities, config.dismissedEntityIds],
-  );
+  const unavailableIds = devices.unavailable as string[];
+  const selectableIds = devices.ids as string[];
   const attentionItems = useMemo(
     () => buildAttentionItems({ unavailableIds, entities, entityMap: config.entityMap, resolvedRooms, fmData, selectableIds }),
     [unavailableIds, entities, config.entityMap, resolvedRooms, fmData, selectableIds],

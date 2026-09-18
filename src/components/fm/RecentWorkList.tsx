@@ -16,7 +16,7 @@
 import { useMemo } from "react";
 import { CalendarCheck, Wrench } from "lucide-react";
 import { useFmData } from "@/fm/FmDataContext";
-import { localStamp, formatIdr } from "@/fm/fmEngine";
+import { localStamp, formatMoney } from "@/fm/fmEngine";
 import EvidenceRow from "./EvidenceRow";
 import ErasableRow from "./ErasableRow";
 
@@ -75,7 +75,7 @@ export default function RecentWorkList({ limit = 12 }: { limit?: number }) {
                 <EvidenceRow photoIds={c.photoIds} disabled />
               )}
             </div>
-            {cost && <span className="fm-amount">{formatIdr(cost.amountIdr)}</span>}
+            {cost && <span className="fm-amount">{formatMoney(cost.amountIdr)}</span>}
           </ErasableRow>
         ))}
       </div>

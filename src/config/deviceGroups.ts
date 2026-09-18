@@ -181,15 +181,16 @@ export function suggestDeviceGroups(
  *   • group members fold into their primary, so one physical device with
  *     three entities is one row.
  */
-export function selectableDeviceIds(
+function selectableDeviceIds(
   entityMap: Record<string, EntityMapping>,
   deviceGroups: DeviceGroup[],
   mappedEntityIds: ReadonlySet<string>,
   entities: Record<string, HassEntity>,
-  dismissedEntityIds: readonly string[] = [],
+  dismissedEntityIds: readonly string[],
+  entityDeviceIds: Record<string, string>,
 ): string[] {
   const dismissed = dismissedEntitySet(dismissedEntityIds, entities);
-  const repOf = primaryByMember(entityMap, deviceGroups);
+  const repOf = primaryByMember(entityMap, deviceGroups, entityDeviceIds);
   const reps = new Set<string>();
   for (const id of new Set([...mappedEntityIds, ...Object.keys(entityMap)])) {
     if (entityMap[id]?.disabled) continue;
@@ -206,35 +207,84 @@ export function selectableDeviceIds(
 function primaryByMember(
   entityMap: Record<string, EntityMapping>,
   deviceGroups: DeviceGroup[],
+  entityDeviceIds: Record<string, string>,
 ): Map<string, string> {
   const repOf = new Map<string, string>();
   for (const g of deviceGroups) {
     for (const memberId of g.memberEntityIds) repOf.set(memberId, g.primaryEntityId);
   }
-  for (const s of suggestDeviceGroups(entityMap, deviceGroups)) {
+  // ⚠️ THE REGISTRY IS PASSED NOW, AND IT USED NOT TO BE. This called
+  // `suggestDeviceGroups(entityMap, deviceGroups)` with the third argument
+  // omitted, so the fold behind the fault picker, the offline count and
+  // readiness fell back to matching one hardcoded `_temperature`/`_humidity`
+  // suffix pair — while Advanced Settings, which DOES pass it, folded by Home
+  // Assistant's own device registry. A combo sensor HA links by `device_id`
+  // but whose entities do not match that pair was ONE device in Settings and
+  // TWO in the offline count: exactly the drift `unavailableDeviceIds`'
+  // docstring claims was paid for and ended.
+  for (const s of suggestDeviceGroups(entityMap, deviceGroups, entityDeviceIds)) {
     if (!repOf.has(s.memberEntityId)) repOf.set(s.memberEntityId, s.primaryEntityId);
   }
   return repOf;
 }
 
-export function unavailableDeviceIds(
-  entityMap: Record<string, EntityMapping>,
-  deviceGroups: DeviceGroup[],
-  mappedEntityIds: ReadonlySet<string>,
-  entities: Record<string, HassEntity>,
-  /** See AppConfig.dismissedEntityIds. Deleting the entityMap row was never
-   *  enough on its own: `candidates` below also draws from mappedEntityIds
-   *  (mesh-derived), so an entity whose MESH still carries its name came
-   *  straight back into this list the moment the owner removed it — on the
-   *  very device that removed it, and on every other one. Reported as
-   *  "I click Remove and they're still in Unavailable devices". */
-  dismissedEntityIds: readonly string[] = [],
-): string[] {
-  // "Which real devices are currently offline" — the reality filter (hidden,
-  // config debris, dismissed, group folding) is selectableDeviceIds' job, so
-  // the two lists cannot drift apart. They did once: the fault picker had its
-  // own, laxer idea of what counted as a device.
-  return selectableDeviceIds(entityMap, deviceGroups, mappedEntityIds, entities,
-                             dismissedEntityIds)
-    .filter((id) => isUnavailable(entities[id]));
+/**
+ * THE villa's own devices, as one value.
+ *
+ * ⚠️ IT WAS A FIVE-POSITIONAL-ARGUMENT TUPLE RESTATED AT TWELVE CALL SITES,
+ * and three functions re-ordered the same nouns three different ways
+ * (`selectableDeviceIds`, `unavailableDeviceIds`, `buildReadiness`,
+ * `buildDeviceOptions`). Four of the five arguments were slices of one config
+ * document; the caller had to know as much to ask the question as this module
+ * knows to answer it, which is no leverage at all. `FacilityModal` alone
+ * reassembled the tuple five times, each with its own matching dependency
+ * array.
+ *
+ * ⚠️ AND TWO OF THOSE ARGUMENTS DEFAULTED TO EMPTY, so a forgotten one
+ * silently resurrected dismissed devices rather than failing. Every field here
+ * is required. `entityDeviceIds` in particular was not merely defaulted but
+ * genuinely dropped on the path the fault picker, the offline count and
+ * readiness all take — see primaryByMember.
+ */
+export interface VillaDeviceInput {
+  entityMap: Record<string, EntityMapping>;
+  deviceGroups: readonly DeviceGroup[];
+  /** See AppConfig.dismissedEntityIds. */
+  dismissedEntityIds: readonly string[];
+  /** Entity ids the 3D model itself carries — a device can be one of these
+   *  without Home Assistant knowing it, and vice versa. */
+  mappedEntityIds: ReadonlySet<string>;
+  entities: Record<string, HassEntity>;
+  /** Home Assistant's own device registry, entity_id → device_id. The
+   *  AUTHORITATIVE folding signal: it needs no naming convention and covers
+   *  however many entities one physical device exposes. */
+  entityDeviceIds: Record<string, string>;
+}
+
+export interface VillaDevices {
+  /** Every device the villa actually has — real, not hidden, not dismissed,
+   *  folded so a multi-entity device appears once. */
+  readonly ids: readonly string[];
+  /** The subset Home Assistant currently reports as unavailable/unknown or
+   *  has never heard report. */
+  readonly unavailable: readonly string[];
+  /** Is this entity one of the villa's devices? Provided so callers stop
+   *  building their own `Set` from `ids` — five of them did. */
+  has(entityId: string): boolean;
+}
+
+export function villaDevices(input: VillaDeviceInput): VillaDevices {
+  const ids = selectableDeviceIds(
+    input.entityMap, [...input.deviceGroups], input.mappedEntityIds,
+    input.entities, input.dismissedEntityIds, input.entityDeviceIds);
+  const set = new Set(ids);
+  return {
+    ids,
+    // "Which real devices are currently offline" — the reality filter
+    // (hidden, config debris, dismissed, group folding) is the list above's
+    // job, so the two cannot drift apart. They did once: the fault picker had
+    // its own, laxer idea of what counted as a device.
+    unavailable: ids.filter((id) => isUnavailable(input.entities[id])),
+    has: (id) => set.has(id),
+  };
 }

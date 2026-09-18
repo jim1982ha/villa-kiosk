@@ -17,7 +17,7 @@
 //
 // Neither half could be tested, because `CameraPanel` is a `.tsx` and node
 // refuses those outright. This module is a `.ts` importing nothing, so
-// `tests/consistency/camera_gesture_test.ts` runs it under bare node — the same
+// `tests/oracles/camera_gestures.mjs` runs it under bare node — the same
 // treatment `twoFingerGesture.ts` and `tapThresholds.ts` had, for the same
 // reason: a misread gesture does not look like a wrong branch, it looks like
 // the app ignoring you.

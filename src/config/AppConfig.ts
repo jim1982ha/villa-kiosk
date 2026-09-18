@@ -2,6 +2,7 @@
 // Config schema + defaults + load/save (localStorage). All runtime-editable.
 
 import type { Category, EntityMapping, EntityType, TeleportPoint } from "@/types/scene.types";
+import { hasVariantSuffix } from "./EntityMap";
 import { ENTITY_MAP } from "./EntityMap";
 import { TELEPORT_POINTS } from "./TeleportPoints";
 import { DEFAULT_THRESHOLDS, type Threshold } from "./ThresholdConfig";
@@ -147,7 +148,9 @@ export interface AppConfig {
    */
   northOffsetDeg: number;
   theme: "dark" | "light" | "auto" | "night";
-  currentFloor: 1 | 2;
+  /** The storey being shown. 1-based; see TeleportPoint.floor for why this
+   *  is not a two-value union. */
+  currentFloor: number;
   /** entity_id -> metadata (panel type, label, room). Editable at runtime. */
   entityMap: Record<string, EntityMapping>;
   /**
@@ -331,7 +334,6 @@ export const DEFAULT_CONFIG: AppConfig = {
  * entity re-auto-detects cleanly from the mesh names on the next model index.
  */
 function stripStaleVariantEntities(config: AppConfig): AppConfig {
-  const hasVariantSuffix = (id: string) => /__[a-z0-9]+$/i.test(id);
   const entityMap = Object.fromEntries(
     Object.entries(config.entityMap).filter(([id]) => !hasVariantSuffix(id)),
   );
@@ -374,12 +376,33 @@ function migrateMotionEntityId(config: AppConfig): AppConfig {
   return changed ? { ...config, entityMap } : config;
 }
 
+/**
+ * Every migration a config must pass through, wherever it came from.
+ *
+ * ⚠️ THIS EXISTS BECAUSE THE TWO READ PATHS DID NOT AGREE. Both migrations
+ * below used to be applied inside loadConfig() alone — i.e. only to config
+ * arriving from localStorage. But entityMap and meshBindings ALSO arrive from
+ * the shared store: DeviceConfigSync's pull hands the server's slice straight
+ * to update(), which touched neither. So one device still on a pre-2.35.0
+ * build pushed `cover.x__open` variant keys up, every other device pulled them
+ * in unmigrated and persisted them, the next local load stripped them, and the
+ * next pull put them back — a value the read path normalises and the write path
+ * re-introduces, which is the exact shape of the seeded-default resurrection
+ * bug this repo already lived through, just arriving over the network instead.
+ *
+ * Exported so ConfigContext can apply it to a SERVER patch too. Anything that
+ * puts a whole AppConfig into memory goes through here.
+ */
+export function normaliseConfig(config: AppConfig): AppConfig {
+  return migrateMotionEntityId(stripStaleVariantEntities(config));
+}
+
 export function loadConfig(): AppConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
     if (!raw) return { ...DEFAULT_CONFIG };
     const stored = JSON.parse(raw) as Partial<AppConfig>;
-    return migrateMotionEntityId(stripStaleVariantEntities({
+    return normaliseConfig({
       ...DEFAULT_CONFIG,
       ...stored,
       entityMap: { ...DEFAULT_CONFIG.entityMap, ...(stored.entityMap ?? {}) },
@@ -387,7 +410,7 @@ export function loadConfig(): AppConfig {
       alertThresholds: { ...DEFAULT_CONFIG.alertThresholds, ...(stored.alertThresholds ?? {}) },
       render: adoptRenderLookDefaults({ ...DEFAULT_CONFIG.render, ...(stored.render ?? {}) }),
       teleportPoints: stored.teleportPoints?.length ? stored.teleportPoints : DEFAULT_CONFIG.teleportPoints,
-    }));
+    });
   } catch (err) {
     console.warn("[AppConfig] failed to load, using defaults", err);
     return { ...DEFAULT_CONFIG };

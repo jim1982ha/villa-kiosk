@@ -59,8 +59,10 @@ import type { PickingInfo } from "@babylonjs/core/Collisions/pickingInfo";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { roomKey } from "@/config/roomKey";
-import { structureRole, isResolvedCeiling } from "./meshRoles";
+import { structureRole, isResolvedCeiling, rayTargets, isHelperMesh } from "./meshRoles";
 import { ModelKeyedStore } from "./modelStore";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 /** Fallback bucket size for a point that belongs to no room polygon. Only the
  *  fallback — see this file's header for why a grid is the wrong primary key. */
@@ -140,7 +142,7 @@ export class FloorProbe {
    *  the thing it is diagnosing. */
   private readonly acceptsAsFloor = (candidate: AbstractMesh): boolean => {
     if (candidate.getTotalVertices() === 0) return false;
-    if (/^(halo_|label_|marker)/i.test(candidate.name)) return false;
+    if (isHelperMesh(candidate)) return false;
     const role = structureRole(candidate);
     if (!role.isStructure) return false;
     // The stamp first; the metadata flag catches a legacy GLB whose ceiling was
@@ -454,8 +456,7 @@ export class FloorProbe {
   surfaceUnder(x: number, z: number, fromY: number, depth: number): PickingInfo | null {
     const hit = this.scene.pickWithRay(
       new Ray(new Vector3(x, fromY, z), Vector3.Down(), depth),
-      (m) => m.isPickable && m.isVisible && !m.metadata?.isMarker
-        && !isResolvedCeiling(m),
+      rayTargets({ enabled: false }),
     );
     return hit?.hit && hit.pickedMesh && hit.pickedPoint ? hit : null;
   }

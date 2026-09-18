@@ -1,0 +1,530 @@
+/* --- Loading / overlay --- */
+/* Shared full-screen state for loading / no-model / error / crash-loop (see
+   BabylonCanvas + ErrorReport). MUST paint above the HUD (topbar z-index 22,
+   left column z-index 21, both always-rendered siblings in Dashboard — the
+   3D scene not being up yet doesn't hide them) and fully occlude it with a
+   real background, not just outrank it in z-order: an error/loading screen
+   with no background let the topbar's own text/icons show through and
+   visually overlap the report (the "l to fetch" / "odel" clipping bug — the
+   topbar was painting OVER the top of the error text since it had the
+   higher z-index despite this being the "on top" logical state). Top padding
+   mirrors .hud-topbar's own height calc (52px + the same safe-area inset) so
+   content on a notched phone still starts clear of the status bar, matching
+   the topbar's own mobile treatment below. */
+.center-overlay {
+  position: absolute; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  text-align: center;
+  padding: calc(52px + var(--safe-top) + 24px) 24px 24px;
+  background: var(--bg-base);
+}
+/* will-change promotes this to its own compositing layer so WebKit runs the
+   rotation on the COMPOSITOR rather than the main thread. That matters here
+   more than almost anywhere else in the app: this spinner is on screen
+   precisely while the model is being parsed, and that parse is a long
+   main-thread block on a tablet (see BabylonCanvas's note on the ~11.6s
+   blocking task, and parseMs dominating every recorded load). A main-thread
+   rotation freezes for the duration — so the one element whose whole job is
+   to prove the app has not hung is the one that stops moving when it is
+   working hardest.
+   `will-change` is usually a smell because it is left on permanently; here
+   the element only exists during loading and is unmounted the moment the
+   villa appears, which is the case it was designed for. */
+.spinner {
+  width: 44px; height: 44px;
+  border: 4px solid var(--bg-input); border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  will-change: transform;
+}
+
+/* Shared "last 24 hours" graph height for Sparkline/DualSparkline/
+   StateTimeline — bumped from 60px now that panels no longer spend that
+   space on a redundant "Updated …" / "Running for …" footer line (removed
+   in favour of taller, more readable graphs). */
+.sparkline { width: 100%; display: block; }
+.spark-wrap { position: relative; width: 100%; }
+/* --text-muted / --border were never defined in either theme (only
+   --text-secondary / --hairline exist as the app's actual muted-text and
+   border tokens) — an undefined custom property falls back to the SVG/CSS
+   initial value (fill: black for text/stroke), which is why the axis labels
+   were nearly invisible specifically in dark mode (black text on a dark
+   panel) and the grid/tooltip border was similarly off in both themes. */
+.spark-grid { stroke: var(--hairline); stroke-width: 1; opacity: 0.35; }
+.spark-axis { font-size: var(--text-2xs); fill: var(--text-secondary); }
+.spark-crosshair { stroke: var(--text-secondary); stroke-width: 1; opacity: 0.55; }
+.spark-tip {
+  position: absolute; z-index: 5; pointer-events: none;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 5px 8px; border-radius: 8px; white-space: nowrap;
+  background: var(--bg-overlay); backdrop-filter: blur(8px);
+  border: 1px solid var(--hairline); box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  font-size: var(--text-xs); color: var(--text-primary); line-height: 1.35;
+}
+.spark-tip strong { font-size: var(--text-sm); }
+.spark-tip .spark-tip-time, .spark-tip span:last-child { color: var(--text-secondary); font-size: var(--text-2xs); }
+/* A bucketed timeline's tip lists N events as siblings, so the generic
+   span:last-child rule above would single the final one out as if it were the
+   dimmed timestamp line of the two-line variant. Every event reads the same. */
+.spark-tip .spark-tip-event, .spark-tip span.spark-tip-event:last-child {
+  color: var(--text-primary); font-size: var(--text-xs);
+}
+.state-timeline { position: relative; width: 100%; height: 78px; border-radius: 8px; overflow: hidden; background: var(--bg-input); }
+.state-timeline-seg { position: absolute; top: 0; bottom: 0; }
+.state-timeline-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 0 3px rgba(0,0,0,0.5); pointer-events: none; }
+/* Vertical variant: segments span the full WIDTH and are positioned/sized on
+   the Y axis instead (the inline styles switch axis to match — see
+   StateTimeline's `vertical`), so the two orientations share one component
+   and one set of segment maths rather than being reimplemented. */
+.state-timeline-vertical .state-timeline-seg { top: auto; bottom: auto; left: 0; right: 0; }
+.state-timeline-vertical .state-timeline-cursor { top: auto; bottom: auto; left: 0; right: 0; width: auto; height: 2px; }
+/* Loading placeholder — same footprint as the real bar, so nothing jumps
+   when history actually arrives. A soft sweep, not spinner/text, so it
+   doesn't compete with the rest of the panel while it's still settling. */
+.state-timeline-skeleton {
+  width: 100%; height: 78px; border-radius: 8px;
+  background: linear-gradient(90deg, var(--bg-input) 25%, var(--bg-panel) 50%, var(--bg-input) 75%);
+  background-size: 200% 100%;
+  animation: state-timeline-sweep 1.4s ease-in-out infinite;
+}
+@keyframes state-timeline-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* --- Animations --- */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeSlide { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* --- Central .sh3d background-refresh failure banner --- */
+.sh3d-sync-banner {
+  position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+  z-index: 45; display: flex; align-items: center; gap: 10px;
+  background: var(--bg-overlay); backdrop-filter: blur(12px);
+  border: 1px solid var(--status-danger); border-radius: 14px;
+  padding: 10px 14px; max-width: 92vw;
+  box-shadow: 0 6px 24px var(--shadow);
+  font-size: var(--text-sm); color: var(--text-primary);
+}
+.sh3d-sync-banner svg:first-child { color: var(--status-danger); flex-shrink: 0; }
+.sh3d-sync-banner button {
+  background: none; border: none; color: var(--text-secondary); cursor: pointer;
+  display: flex; padding: 2px; flex-shrink: 0;
+}
+
+.muted { color: var(--text-secondary); }
+.danger-text { color: var(--status-danger); }
+.row { display: flex; align-items: center; gap: 10px; }
+.spread { justify-content: space-between; }
+.mt { margin-top: 16px; }
+.center { text-align: center; }
+
+/* --- Mobile / notch safe areas --- */
+/* Keep the top bar clear of the phone status bar / notch. --hud-side-pad is
+   the ONE value both .hud-topbar's left padding AND .hud-left-col's left
+   offset read (see .hud-left-col below) — they used to be two separately
+   hardcoded 18px's that agreed only by coincidence: the desktop media query
+   further down bumps .hud-topbar's to 24px but nothing told .hud-left-col,
+   so above 1024px the floor/rooms stack sat 6px left of the brand chip's own
+   edge instead of lined up under it. */
+:root { --hud-side-pad: 18px; }
+.hud-topbar {
+  height: calc(52px + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
+}
+
+/* --- Tablet / desktop polish --- */
+/* On roomy screens the modals read better a touch wider and the left control
+   column sits comfortably away from the edge. */
+@media (min-width: 1024px) {
+  .modal { max-width: 560px; }
+  /* These come AFTER `.modal { max-width: 560px }` at equal specificity, so they
+     win — without them the desktop rule above clamped the (wider) Settings and
+     Config Editor modals back to 560. */
+  .settings-modal { max-width: 780px; }
+  .config-editor-modal { max-width: 780px; }
+  .teleport-grid .tp-cards { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  :root { --hud-side-pad: 24px; }
+  .hud-topbar { padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px)); }
+}
+
+/* --- Narrow DESKTOP window: shed the top bar's optional parts in order of
+   how little they're needed, well before the phone breakpoint takes over.
+   Previously nothing happened between "full desktop" and 640px, so a
+   half-width browser window squeezed the brand chip until the villa name
+   wrapped over three lines and covered the floor switch. Each step below
+   removes exactly one thing, so the bar degrades predictably instead of
+   collapsing all at once at one threshold. --- */
+@media (max-width: 1180px) {
+  /* Clock first: the OS already shows one, and it's the least load-bearing
+     thing in the bar. */
+  .hud-clock { display: none; }
+}
+@media (max-width: 1000px) {
+  /* Then the profile's NAME (the logout icon beside it stays, so switching
+     profiles is still one click) and some chrome padding. */
+  .hud-profile .hud-profile-name { display: none; }
+  /* Sets --hud-side-pad too (not just padding) so .hud-left-col's left
+     offset — which reads that same variable — stays lined up with the
+     brand chip at this width tier as well. */
+  :root { --hud-side-pad: 10px; }
+  /* left/right ONLY — never the `padding` SHORTHAND here. This used to be
+     `padding: 0 var(--hud-side-pad)`, which sets padding-top AND
+     padding-bottom to 0 as a side effect of the shorthand, silently
+     overriding the base rule's `padding-top: var(--safe-top)` for EVERY
+     phone (this query matches virtually all of them) — real, confirmed field
+     bug: the topbar's icon row rendered too close to the status bar/Dynamic
+     Island specifically in the standalone PWA (where --safe-top is a real
+     non-zero value), while the HA-Ingress case happened to look fine only by
+     coincidence (--safe-top is ALREADY forced to 0 there — see .vk-ingress —
+     so the accidental override changed nothing visible). Nothing below this
+     breakpoint (the ≤640px query further down) ever redeclared padding-top
+     either, so the override stuck all the way down to the smallest phones. */
+  /* BOTH sides carry the safe-area inset. Only padding-right did (see the
+     desktop rule above), so on any device with a left inset the top bar's
+     content started at --hud-side-pad while .hud-left-col — which adds the
+     inset — started further in, and the app icon and the floor stack below it
+     could not line up. Portrait phones have a zero left inset, which is why
+     this survived: it is exactly the class of bug --hud-side-pad's own comment
+     was written to prevent, reintroduced on the other axis. */
+  .hud-topbar {
+    padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+    padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
+    gap: 8px;
+  }
+  .hud-center { gap: 8px; }
+}
+@media (max-width: 860px) {
+  /* Then the villa NAME itself — the home icon + connection dot still
+     identify the chip, and the name is also the document title. This is the
+     last step before the phone layout hides the brand outright. */
+  .hud-title { display: none; }
+  /* Title hidden → the chip holds only the mark, so its padding goes
+     SYMMETRIC and tight: a wide pill sized for absent text reads as a stray
+     white box with a small glyph rattling around in it (reported from a
+     screenshot). Square, it matches the .icon-btn family — the overflow
+     button opposite it and the floor stack below — which is what the
+     background is for in the first place: the mark has to stay legible over
+     a bright sky or a dark night, exactly like every other HUD control. */
+  /* No left inset at this tier either — see the base rule; the capsule that
+     the 4px used to sit inside no longer exists. */
+  .hud-brand { padding: 0; gap: 8px; }
+}
+
+@media (max-width: 640px), (max-height: 560px) {
+  /* --- Compact top bar so nothing wraps or gets cropped on a phone --- */
+  :root {
+    --hud-side-pad: 10px;
+    /* Matches .hud-center's icon-btn shrinking to 32px below (32 + 2×4px
+       padding + 2×1px border) — keeps .hud-brand the same height as the
+       category pill at this tier too, not just the wider ones above. */
+    --hud-pill-h: 42px;
+  }
+  .hud-topbar {
+    gap: 6px;
+    padding-left: calc(var(--hud-side-pad) + env(safe-area-inset-left, 0px));
+    padding-right: calc(var(--hud-side-pad) + env(safe-area-inset-right, 0px));
+    /* Keeps the base 3-column grid (brand | center | right) rather than
+       dropping to 2 columns — .hud-brand no longer force-hides below (it
+       already shrinks to icon+dot only via the ≤860px tier above), and the
+       two equal-weight side tracks are what CENTRES .hud-center in the
+       middle of the bar, same algebra as the desktop layout. */
+  }
+  /* Tighter gap; icon buttons shrink further below. .hud-brand is NOT hidden
+     here — it already dropped its title/clock in the wider tiers above, so
+     what's left is just the villa icon (+ connection dot in wider tiers).
+     The dot itself drops at THIS tier — see .hud-brand .conn-dot below — a
+     real reported overflow, the brand chip's content colliding with the
+     category row, not just a tight-but-fitting layout. */
+  .hud-center { gap: 4px; }
+  .hud-right { gap: 6px; }
+  /* ONE declaration for every top-bar section icon at this tier — the centred
+     category row and the right-edge Settings pill are peers and must never be
+     two different sizes (they were, at 32 vs 40, which is what made the lone
+     button read as lopsided). --hud-pill-h above is derived from this number. */
+  .hud-center .icon-btn, .hud-overflow .icon-btn { width: 32px; height: 32px; }
+  /* These shrink to 32px because the centred category row genuinely runs out
+     of width on a phone (the comments around this block record real overflow
+     bugs fixed by exactly that) — but 32px is below both this codebase's own
+     --touch-min (44px) and the WCAG 2.5.8 / Apple HIG minimum, on the most-
+     tapped controls in the app, on the device where a mis-tap costs the most.
+     Growing them back would re-break the layout that was hard-won here.
+     Instead the VISUAL size stays 32px and the TOUCH target is expanded to 44
+     with a centred invisible overlay — which is what the accessibility
+     guidance actually measures (the pointer target area, not the painted
+     pixels). The overlay is the button's own ::after so it moves with it and
+     needs no markup change; it can overlap a neighbour's visual box without
+     stealing its taps, because the row's 4px gap plus each button's own
+     overlay means the nearest competing CENTRE is still ~36px away. */
+  .hud-center .icon-btn, .hud-overflow .icon-btn, .hud-menu-stepper .icon-btn { position: relative; }
+  .hud-center .icon-btn::after,
+  .hud-overflow .icon-btn::after,
+  .hud-menu-stepper .icon-btn::after {
+    content: "";
+    position: absolute; top: 50%; left: 50%;
+    width: var(--touch-min); height: var(--touch-min);
+    transform: translate(-50%, -50%);
+    /* Purely a hit area — never paints, never affects layout. */
+  }
+  /* Dropped, not just visually redundant: it's ALREADY duplicated in the
+     overflow menu's header (see HUD.tsx, the hud-menu-header conn-dot) so
+     reachability doesn't regress, and removing it is what actually frees
+     enough width for the brand chip to stop colliding with the centred
+     category row at this tier — the real fix, not a cosmetic one. */
+  .hud-brand .conn-dot { display: none; }
+  /* Right side collapses to just the overflow button: Settings/profile/view
+     toggle move into its dropdown (hud-menu) instead of showing inline. The
+     overflow button lives in its OWN single-icon .hud-group pill inside
+     .hud-right (see JSX) — not inside the centered category group — so the
+     grid's third (justify-self: end) track pins it to the true right edge of
+     the bar while .hud-center's two equal side tracks keep the category row
+     centred, instead of both drifting toward the middle together. Its icon is
+     sized by the SAME declaration as .hud-center's (see the 32px rule above,
+     which names both) rather than falling back to .hud-group .icon-btn's
+     wider 40px default — a real HUD read as visibly lopsided (a noticeably
+     bigger, rounder single button off to one side) with every OTHER icon at
+     32px. Everything else about the pill — plate, hairline, blur, 4px
+     padding, --hud-pill-h, --panel-radius — comes from .hud-group untouched,
+     so it cannot drift from the category section beside it. */
+  .hud-right-inline { display: none; }
+  .hud-overflow { display: flex; }
+  /* The label-size stepper's whole pill (not just its two now-hidden
+     buttons) — an empty .hud-group still renders its own padding/border/
+     background, which read as a stray blank rounded box sitting between the
+     category row and the overflow button once both its children were
+     display:none. Its controls live in the overflow dropdown instead. */
+  .hud-labelsize-group { display: none; }
+  /* Inline colour-legend (?) collapses into the overflow dropdown too (the
+     label-size buttons' own display:none is now redundant with the whole
+     group above, but harmless to keep — see .hud-labelsize-group). Declared
+     HERE (not next to .hud-cat-sep, where it reads more naturally) because
+     .icon-btn's `display: flex` sits below that spot at equal specificity
+     and would win the cascade; the .hud-center prefix also raises
+     specificity so this can't be re-broken by another equal-weight rule
+     later. */
+  .hud-center .hud-cat-help, .hud-center .hud-labelsize-btn { display: none; }
+
+  /* ── The category pill FILLS the row, and the top scrim goes with it ──────
+     On a phone the pill hugged its six 32px buttons and left ~68px of bare
+     bar beside it (measured at 402px CSS). The top bar covered that gap with
+     a fade — `linear-gradient(180deg, var(--topbar-fade), transparent)` —
+     which over a dark sky reads as a grey haze across the status-bar area
+     rather than as chrome. Reported as exactly that.
+
+     Filling the row removes the thing the fade was hiding, so the fade goes.
+     The pills carry their own panel material (background, blur, hairline), so
+     nothing depends on the scrim for legibility — the floor switch and the
+     bottom bar have always floated on the scene without one.
+
+     Buttons stay 32x32 on purpose. The ≤640px tier shrank them to that to fix
+     a real overflow, and their TOUCH target is already 44px via .icon-btn's
+     ::after overlay — which is what the accessibility guidance actually
+     measures. This widens the BAR, not the controls.
+
+     space-between only bites when the row has slack; once the buttons
+     overflow, .hud-group-scroll pans horizontally exactly as before. That is
+     the "when there is enough space" half of the request, expressed by the
+     layout rather than by another breakpoint.
+
+     :has() guards the case a fixed rule gets wrong — an RBAC-restricted
+     profile (permissions.ts) can see as few as two categories, and two chips
+     pinned to opposite screen edges reads as a broken row, not a filled one.
+     Below four buttons the pill keeps hugging them, centred. A browser without
+     :has() simply keeps today's layout, which is the right fallback.
+
+     MUST stay ABOVE the landscape block below: that one restores the hugging
+     layout for a short-but-WIDE viewport, both carry the same specificity, and
+     source order is the only thing deciding which wins. */
+  /* ⚠️ ONLY the scrim is dropped at this tier now. 2.303.0 also switched the
+     grid to `auto minmax(0,1fr) auto` and stretched the centre section to fill
+     the row, which was the right answer to "make the bar wider so the top fade
+     isn't needed" and the wrong shape once the fade was gone for good: the pill
+     became a full-width surface with six icons floating in the middle of it and
+     a hand's width of empty glass either side. Reported as the middle section
+     being too wide for what it holds.
+     The desktop grid — equal 1fr side tracks, `minmax(0, auto)` centre — is
+     what makes the section exactly as wide as its buttons and centred on the
+     SCREEN rather than on whatever is left between the app icon and the
+     overflow button, which are different widths. One layout for every width is
+     also one layout to reason about. */
+  .hud-topbar { background: none; }
+  /* The section keeps the full row width (justify-self: stretch above, which
+     is what removed the need for the top scrim in 2.303.0) — but the BUTTONS
+     group in its middle rather than being pushed to its two ends. 2.303.0 used
+     space-between, which spread six icons from edge to edge and read as three
+     unrelated controls rather than one filter row. `center` is the whole fix;
+     the gap keeps the spacing even. Once the buttons do overflow, a centred
+     flex row in a scroll container would put its overflow on BOTH sides and
+     strand the first button behind the scroll origin — `margin: auto` on the
+     track is the standard way to say "centre while it fits, pack from the
+     start once it doesn't".
+
+     ⚠️ `safe center`, and NOT auto margins on :first-child/:last-child, which
+     is what 2.310.0 used and got wrong. This row's last children are the (?)
+     legend, the label-size stepper and their separator, all `display: none` at
+     this tier — and `display: none` removes the BOX, not the child. So
+     `:last-child` still matched a hidden element, its `margin-right: auto` had
+     nothing to apply to, and only the left margin absorbed any space: every
+     icon was pushed to the right of the pill. Reported as "the icons are not
+     centered, they appear slightly aligned on the right".
+
+     The `safe` keyword is the property's own answer to the overflow problem
+     auto margins were reaching for: centre while it fits, fall back to start
+     alignment the moment centring would push content out of reach.
+
+     Plain `center` is declared first as a fallback, and the MINIFIER DROPS IT
+     — it dedupes the pair once browserslist says every target parses `safe`
+     (Chrome 93+, Safari 15.4+), which for this app is true. Keep the fallback
+     in the source anyway: it costs nothing, it documents the intent, and it
+     starts shipping again by itself the day the target set widens. Checked in
+     the built CSS, not assumed. */
+
+/* ── Short but NOT narrow: a phone in landscape ───────────────────────────
+   The compact query above fires on `(max-width: 640px), (max-height: 560px)`,
+   and it does two unrelated kinds of thing. Shrinking the pill height and the
+   icons is genuinely driven by EITHER dimension being tight. Hiding the
+   inline right-hand controls, the label-size stepper and the (?) legend is
+   about horizontal room only — there is nothing about a short viewport that
+   makes a row of icons not fit side by side.
+
+   A phone in landscape is short (~270-400px) and comfortably wide, so it was
+   matching on height and losing half the top bar for no reason — reported as
+   the category section not being fully displayed in landscape. This restores
+   exactly the horizontal-room rules for viewports that have the width, while
+   leaving every height-driven size reduction in place. */
+@media (min-width: 641px) and (max-height: 560px) {
+  .hud-right-inline { display: flex; }
+  .hud-labelsize-group { display: flex; }
+  .hud-center .hud-labelsize-btn { display: flex; }
+  .hud-center .hud-cat-help { display: block; }
+  /* …and with the inline controls back, the overflow duplicate goes away. */
+  .hud-overflow { display: none; }
+  /* …and the scrim comes back. That is ALL that is left here: this block used
+     to also restore the grid and un-stretch the centre section, and since the
+     phone tier stopped changing either there is nothing to restore. Dead
+     restores are worse than none — they read as a live pairing and the next
+     person keeps both halves in step for no reason. */
+  .hud-topbar { background: linear-gradient(180deg, var(--topbar-fade), transparent); }
+}
+  /* Left control stack (1F/2F/rooms): sized to match the bottom bar's own
+     icon chips (.summary-tile-icon's mobile size, see its media query) so
+     the two floating icon groups read as the same family of control instead
+     of the stack looking undersized next to the summary tiles below it. */
+  .hud-stack .icon-btn { width: 40px; height: 40px; }
+  /* No size override at this tier: the base rule already tracks --hud-pill-h,
+     which does not change on phones, so the app icon stays the same height as
+     the category section beside it here too. The 44px touch target is
+     independent either way — it comes from .hud-home-btn::before. */
+
+  /* Dialogs fill the small screen and never crop their header/footer. The body
+     scrolls between a pinned header and footer; dvh tracks the real visible
+     height as the mobile URL bar shows/hides. */
+  .modal-backdrop {
+    padding: 0;
+    align-items: flex-start;
+    justify-content: stretch;
+  }
+  .modal {
+    max-width: 100%;
+    width: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+    /* Inset content from the notch / home indicator. */
+    padding-top: var(--safe-top);
+  }
+  /* Settings-family modals (Settings, Advanced Settings, Facility, Legend)
+     take the FULL screen height on mobile, not just up to it — a plain
+     max-height cap (the base .modal rule above) lets the dialog shrink to
+     fit short content instead, which for a tabbed workspace like Facility
+     meant the whole dialog's height (and the footer's position) visibly
+     jumped between tabs ("No faults recorded" vs. a long Faults list).
+     .settings-body's own flex:1 1 auto + overflow-y:auto already does the
+     rest — body scrolls/leaves blank space as needed, header and footer
+     stay pinned to a stable full-height sheet either way. Deliberately NOT
+     applied to .panel-modal (device panels, the group/room-cluster modal):
+     those are short by design and read better as a small centered card —
+     see that family's own mobile override below. */
+  .modal.settings-modal {
+    height: 100dvh;
+  }
+  /* left/right env() on every section (not just .modal's own padding-top)
+     since this sheet is full-bleed (width:100%): in landscape on a
+     Dynamic-Island-class phone, the island's clearance shows up as
+     inset-left/right, not inset-top, so a header/body/footer with only a
+     flat 18px had no protection from it on that side. */
+  .settings-header {
+    padding: 16px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
+  }
+  .settings-body {
+    padding: 8px calc(18px + env(safe-area-inset-right, 0px)) 12px calc(18px + env(safe-area-inset-left, 0px));
+  }
+  /* Keep the footer on one line — Config Editor left, Cancel/Save right — like
+     desktop, instead of wrapping. */
+  .settings-footer {
+    padding: 12px calc(18px + env(safe-area-inset-right, 0px)) max(12px, var(--safe-bottom)) calc(18px + env(safe-area-inset-left, 0px));
+    flex-wrap: nowrap;
+  }
+  .settings-footer .btn { padding-left: 12px; padding-right: 12px; }
+  /* Facility's tab row sits between .settings-header and .settings-body but
+     used to keep its flat desktop 22px padding on mobile instead of picking
+     up the same safe-area-aware inset those two get here — the one thing on
+     this modal that didn't match the rest, most visible on a Dynamic-Island
+     phone rotated to landscape (left/right inset, not top). */
+  .fm-tabs {
+    padding: 10px calc(18px + env(safe-area-inset-right, 0px)) 10px calc(18px + env(safe-area-inset-left, 0px));
+  }
+  /* Plain (non-settings) modals scroll their own content on tiny screens. */
+  .modal:not(.settings-modal) {
+    overflow-y: auto;
+    padding: calc(20px + var(--safe-top)) calc(18px + env(safe-area-inset-right, 0px))
+             max(20px, var(--safe-bottom)) calc(18px + env(safe-area-inset-left, 0px));
+  }
+  /* The device panel is short (a few rows + a small graph) and reads far
+     better as a small centered card than the full-screen top-anchored sheet
+     above — which is sized for Settings' long forms. Override back to a
+     centered dialog on phones too. */
+  .panel-modal-backdrop {
+    padding: 16px;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal.panel-modal {
+    width: 100%;
+    max-width: 420px;
+    max-height: 80dvh;
+    border-radius: 20px;
+    border: 1px solid var(--hairline-strong);
+    padding: 20px;
+  }
+  /* first-run-tips borrows panel-modal's centered-card SHAPE but brings its
+     own header/body/footer padding (built on the .settings-* structure,
+     unlike the badge/device panels which have no inner padding) — so drop
+     the card's own 20px to avoid doubling it up on every side. legend-modal
+     no longer needs this: it's a plain .settings-modal now, same as
+     Settings/Config Editor, so it already gets their standard mobile
+     full-screen-sheet treatment with no special-casing here. */
+  .modal.panel-modal.first-run-tips {
+    padding: 0;
+  }
+
+  /* (Config table is card-styled at all widths now — see the base rules.) */
+
+  /* Room badge: smaller display type so longer names stay on one centred line. */
+  .room-label { top: calc(58px + var(--safe-top)); padding: 7px 18px; }
+  .room-title { font-size: var(--text-xl); }
+
+  /* A device panel's Mode/Fan-speed/Preset row (ACPanel, FanPanel) is short
+     by desktop standards but on a narrow phone its buttons routinely exceed
+     the panel's width — up to 7-8 HVAC/fan modes side by side. The base
+     .scroll variant handles that with flex-wrap:nowrap + overflow-x:auto,
+     which is fine on desktop (there's usually room, and a mouse can scroll
+     the overflow) but on a touchscreen with no visible scrollbar it just
+     reads as a cut-off button: the last item is sliced by the panel's own
+     edge with no affordance hinting there's more to swipe to. Every button
+     is a single short word already (see MODE_LABELS/fan modes), so letting
+     the row wrap instead — same as the plain .row-buttons variant — shows
+     every option without needing to discover a hidden scroll. */
+  .row-buttons.scroll { flex-wrap: wrap; overflow-x: visible; padding-bottom: 0; }
+}

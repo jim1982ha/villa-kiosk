@@ -30,8 +30,9 @@ import GuestReportModal from "@/components/fm/GuestReportModal";
 import { useHA } from "@/ha/HAStateStore";
 import { mappingForEntityId, displayLabelFor, resolveEntityRoom } from "@/config/EntityMap";
 import { deriveHaScenes, scenesForRoom } from "@/config/haScenes";
-import { effectiveCategory, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
+import { effectiveCategory, subjectOf, categoryColor, CATEGORY_ICONS, CATEGORY_LABELS } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
+import { alertStateFor } from "@/config/BinarySensorClasses";
 import { dismissedEntitySet } from "@/config/dismissedEntities";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
@@ -183,9 +184,11 @@ export default function Dashboard() {
         // here (reported: gone from Advanced Settings, still in the category
         // modal) whenever the entityMap delete itself hasn't propagated yet.
         if (dismissedIds.has(id)) return false;
-        if (!isMappingAllowed(role, id, mapping)) return false;
-        const dc = entities[id]?.attributes.device_class as string | undefined;
-        if (effectiveCategory(id, mapping.type, mapping.category, dc) !== categoryGroup) return false;
+        // ONE subject, read once — these two lines used to resolve the same
+        // entity's category two different ways, one line apart.
+        const subject = subjectOf(id, mapping, entities[id]);
+        if (!isMappingAllowed(role, id, mapping, entities[id])) return false;
+        if (effectiveCategory(subject) !== categoryGroup) return false;
         if (suppressedEntityIds.has(id) && !effectiveMappedEntityIds.has(id)) return false;
         return true;
       })
@@ -296,7 +299,7 @@ export default function Dashboard() {
       if (!mapping) return;
       // RBAC: the scene already hides badges for denied entities, but the raw
       // 3D mesh is still tappable — enforce the permission here too.
-      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
+      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping, entities[entityId])) return;
 
       // Simple on/off entities act in-world without the panel: a tap toggles
       // instantly. A long-press always opens the full panel instead (see
@@ -326,7 +329,7 @@ export default function Dashboard() {
     (entityId: string, clientX: number, clientY: number) => {
       const mapping = mappingForEntityId(entityId, config.entityMap);
       if (!mapping) return;
-      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping)) return;
+      if (!canControl || !role || !isMappingAllowed(role, entityId, mapping, entities[entityId])) return;
       // Acknowledge the HOLD itself, the moment it's recognised (the gesture
       // now fires mid-press, not on release — see TapRecognizer). Every
       // long-press gets this, on desktop mouse as much as on touch: the ripple
@@ -801,7 +804,6 @@ export default function Dashboard() {
       <HUD
         currentFloor={currentFloor}
         floorsAvailable={floorsAvailable}
-        onSwitchFloor={onFloorChange}
         onShowFloor={handleShowFloor}
         onOpenTeleport={() => setTeleportOpen(true)}
         onNavigateRoom={handleTeleport}
@@ -876,9 +878,8 @@ export default function Dashboard() {
               // snapshot taken when the panel opened) — otherwise the header
               // badge wouldn't reflect a just-picked colour until reopened.
               const liveMapping = config.entityMap[entityId] ?? mapping;
-              const category = effectiveCategory(
-                entityId, mapping.type, liveMapping.category ?? mapping.category,
-                ent?.attributes.device_class as string | undefined);
+              const category = effectiveCategory(subjectOf(
+                entityId, { ...mapping, ...liveMapping }, ent, mapping.type));
               // motionEntityId is deliberately NOT an alert source here — it
               // drives the map's detection beam, never a ring (see badgeKind).
               const linkedAlert = !!liveMapping.linkedEntityId && linkedToggle.isOn;
@@ -900,7 +901,13 @@ export default function Dashboard() {
                 // state only — it is Babylon-side, and predicting scene
                 // appearance is the thing that was rightly reverted before.
                 ...(() => {
-                  const b = badgeFaceAndRing(mapping.type, ent ?? phantomEntity(entityId), linkedAlert);
+                  const e0 = ent ?? phantomEntity(entityId);
+                  const b = badgeFaceAndRing({
+                    type: mapping.type, entity: e0, linkedOn: linkedAlert,
+                    alertState: alertStateFor(
+                      e0.attributes.device_class as string | undefined,
+                      config.alertThresholds[entityId]?.alertState),
+                  });
                   return { state: b.face, ringState: b.ring };
                 })(),
               };

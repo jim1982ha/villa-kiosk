@@ -76,6 +76,39 @@ export function binarySensorClassInfo(deviceClass?: string): BinarySensorClassIn
   return BINARY_SENSOR_CLASSES[deviceClass] ?? DEFAULT_INFO;
 }
 
+/**
+ * THE rule for "which state of this binary_sensor is a problem", and the only
+ * place the per-entity override is combined with the device_class default.
+ *
+ * ⚠️ IT EXISTED TWICE, AND THE TWO COPIES DISAGREED ON EVERY MOTION SENSOR.
+ * `SensorPanel` resolved `threshold?.alertState ?? classInfo.alarmState`, so a
+ * PIR reading `on` was "Motion detected" in its calm category colour — which
+ * is what this table says, `alarmState: "none"`. The map badge asked a
+ * different module, which had no idea `device_class` existed and read a bare
+ * `state === "on"` as an alert, so the same sensor rang RED on the villa
+ * while the history bar underneath the panel painted the same instant green
+ * and the Map-colours legend told the resident red means "needs attention".
+ * Three surfaces, three answers, one motion sensor doing its job.
+ *
+ * `connectivity` was worse than inconsistent, it was inverted: its problem
+ * state is `off`, so the badge alerted while the device was CONNECTED and
+ * went quiet when it dropped.
+ *
+ * ⚠️ `override` IS A REQUIRED PARAMETER THAT MAY BE `undefined`. A caller that
+ * holds `config.alertThresholds` and forgets to pass it would otherwise be
+ * indistinguishable from one that has no override to give — the defect
+ * pattern this repo has paid for elsewhere. Saying `undefined` is a
+ * statement; omitting the argument was an accident waiting to happen.
+ */
+export function alertStateFor(
+  deviceClass: string | undefined,
+  override: string | undefined,
+): string | undefined {
+  if (override !== undefined) return override;
+  const alarm = binarySensorClassInfo(deviceClass).alarmState;
+  return alarm === "none" ? undefined : alarm;
+}
+
 /** Device classes whose on/off state is a physical opening's POSITION
  *  (open/closed), not a fault or presence reading — the four classes above
  *  that share the door/closed wording and DoorOpen icon. This is what

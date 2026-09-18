@@ -9,6 +9,7 @@
 
 import {
   MINOR_MAINTENANCE_CAP_IDR,
+  MONEY_CURRENCY,
   type FmCompletion, type FmCost, type FmData, type FmSchedule, type FmTicket,
 } from "./fmTypes";
 
@@ -72,6 +73,18 @@ export function scheduleStatus(
   }
   const dueAt = Date.parse(last.at) + schedule.everyDays * DAY_MS;
   const daysUntilDue = (dueAt - now) / DAY_MS;
+  // ⚠️ AN UNREADABLE DATE MUST NOT READ AS COMPLIANT. An unparseable `last.at`
+  // makes dueAt NaN, and every comparison against NaN is false — so the ladder
+  // below fell through to "ok" and the report printed "On schedule" for a task
+  // whose last completion could not be read at all. That is the direction
+  // ticketStats' own comment forbids further down this file: "a fault wrongly
+  // shown as open is a question someone asks; a fault wrongly shown as resolved
+  // is one nobody ever asks again." A maintenance obligation is the same.
+  // Reported as "never recorded" — the honest reading of an unusable record,
+  // and the state the board already ranks worst.
+  if (!Number.isFinite(daysUntilDue)) {
+    return { schedule, last: null, dueAt: NaN, daysUntilDue: 0, state: "never" };
+  }
   const state: DueState =
     daysUntilDue < 0 ? "overdue"
       : daysUntilDue <= schedule.everyDays * (1 - DUE_SOON_FRACTION) ? "due-soon"
@@ -160,6 +173,33 @@ export interface TicketStats {
    *  the property's own "inspections and supervision" obligation, whatever
    *  the source of that obligation is. */
   meanResolutionHours: number | null;
+  /** Tickets the mean is computed from — see ticketStats. Equal to `resolved`
+   *  unless some resolved ticket carries no usable resolution time. */
+  meanCoversTickets: number;
+}
+
+/** Is this fault closed?
+ *
+ *  ⚠️ THE STATUS DECIDES, NOT `resolvedAt`. A ticket can carry a resolution
+ *  timestamp from an earlier close and be reopened; the status is the field the
+ *  UI writes and the field a person sets.
+ *
+ *  ⚠️ AND ANYTHING ELSE IS OPEN. Missing, empty, or a value this build does not
+ *  recognise all mean "not resolved" — a fault wrongly shown open is a question
+ *  someone asks, while one wrongly shown resolved is one nobody ever asks
+ *  again. `ticketStats` used to disagree with the other seven readers of this
+ *  rule via a bare `else`; see 2.496.6. */
+// ⚠️ THE STATUS IS OPTIONAL IN THE PARAMETER TYPE, DELIBERATELY. The write
+// path in `FmDataContext` asks this of a `Partial<FmTicket>` patch, and a
+// signature requiring the field would push that one caller back to an inline
+// comparison — which is the exact drift this predicate exists to stop. It also
+// matches what the rule already SAYS: a missing status is not resolved.
+export function isTicketResolved(t: { status?: FmTicket["status"] }): boolean {
+  return t.status === "resolved";
+}
+
+export function isTicketOpen(t: { status?: FmTicket["status"] }): boolean {
+  return !isTicketResolved(t);
 }
 
 export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
@@ -167,6 +207,13 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   for (const t of tickets) {
     if (t.status === "open") open++;
     else if (t.status === "in_progress") inProgress++;
+    // ⚠️ EXPLICIT, AND AN UNKNOWN STATUS COUNTS AS OPEN. This was a bare
+    // `else`, so ANY row whose status was missing, empty or corrupt was counted
+    // RESOLVED — a fault silently removed from the facility report by bad data,
+    // which is the one direction this must never fail in. A fault wrongly shown
+    // as open is a question someone asks; a fault wrongly shown as resolved is
+    // one nobody ever asks again.
+    else if (isTicketOpen(t)) open++;
     else {
       resolved++;
       if (t.resolvedAt) {
@@ -178,6 +225,13 @@ export function ticketStats(tickets: readonly FmTicket[]): TicketStats {
   return {
     open, inProgress, resolved,
     meanResolutionHours: timed ? totalMs / timed / 3_600_000 : null,
+    // ⚠️ HOW MANY TICKETS THE MEAN ACTUALLY COVERS. `resolved` and `timed` are
+    // independent counters: a ticket resolved with no resolvedAt, or with a
+    // resolvedAt before its openedAt, counts as resolved and is skipped by the
+    // mean. Without this the report could print "Resolved: 20" beside "Mean
+    // time to resolution: 1.4 hours" where the mean covered three, with no
+    // signal that the two numbers describe different sets.
+    meanCoversTickets: timed,
   };
 }
 
@@ -205,8 +259,18 @@ export function localStamp(at: string | number | Date = Date.now()): string {
     + `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function formatIdr(n: number): string {
-  return `IDR ${Math.round(n).toLocaleString("en-US")}`;
+/** Write a money amount for display.
+ *
+ *  ⚠️ NEITHER THE CURRENCY NOR THE GROUPING IS BAKED IN ANY MORE. This was
+ *  `IDR ${n.toLocaleString("en-US")}` — one site's currency and one country's
+ *  digit grouping, in a redistributable add-on, applied to every install.
+ *  `MONEY_CURRENCY` is empty by default, so an unconfigured install prints the
+ *  number alone rather than mislabelling it; `[]` hands the grouping to the
+ *  viewer's own locale, which is what a reader in front of the screen expects.
+ *  The rounding is unchanged — these are whole-unit amounts by contract. */
+export function formatMoney(n: number, currency: string = MONEY_CURRENCY): string {
+  const amount = Math.round(n).toLocaleString([]);
+  return currency ? `${currency} ${amount}` : amount;
 }
 
 /** Short human date, local time (e.g. "24 Jul 2026") — for a target/due date
@@ -216,6 +280,23 @@ export function formatIdr(n: number): string {
  *  can show the exact same date format the report annex uses, rather than
  *  each screen inventing its own. */
 export function shortDate(at: string | number | Date): string {
+  // ⚠️ THE READER'S LOCALE, NOT "en-GB". A fixed locale here is the same
+  // per-site assumption formatMoney's currency was: this report is generated on
+  // the reader's own device and read there, and every other clock and date in
+  // the app already asks the platform. The FIELDS stay fixed — day, short
+  // month, year — so the shape is stable and unambiguous wherever it renders;
+  // only the ordering and spelling follow the reader.
   const d = new Date(at);
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/** The month a report covers, spelled for a heading (e.g. "July 2026").
+ *  Same reasoning as shortDate: fixed fields, reader's locale. Lived in
+ *  fmReport.ts with its own hardcoded "en-GB". */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  // A malformed month key would otherwise render "Invalid Date" into the
+  // report's own Period heading; say what was actually stored instead.
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return month;
+  return new Date(y, m - 1, 1).toLocaleDateString([], { month: "long", year: "numeric" });
 }

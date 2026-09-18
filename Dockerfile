@@ -18,10 +18,21 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
 # slow QEMU emulation. node:24 ships npm 11 (matches package-lock.json).
 FROM --platform=${BUILDPLATFORM:-$TARGETPLATFORM} node:24-alpine AS build
 WORKDIR /app
-# Install deps first so this layer caches across code edits. We use `npm install`
-# (not the stricter `npm ci`) because the project pins mixed @babylonjs/* minor
-# versions, which leaves a transitive peer (babylonjs-gltf2interface) unresolved
-# in the lockfile — `npm install` reconciles it, `npm ci` would hard-fail.
+# Install deps first so this layer caches across code edits.
+#
+# ⚠️ `npm install`, AND CI USES THE SAME — BUT NOT FOR THE REASON THIS COMMENT
+# ONCE GAVE. It used to say "`npm ci` would hard-fail" on an unresolved
+# transitive peer (babylonjs-gltf2interface). 2.496.33 called that stale on the
+# strength of `npm ci --dry-run` exiting 0 locally and switched this line to
+# `npm ci`. That was the wrong test: `npm ci` succeeds in a clean local
+# checkout of this exact lockfile AND fails on a GitHub runner, every time,
+# which is why ci.yaml's Install step had never once passed. The two facts
+# together say the failure is environmental, not a lockfile defect — and the
+# command that provably builds this image on a runner is this one.
+#
+# The original point stands and is now actually met: ONE resolver on both
+# paths, so a green CI build says something about the image's build stage.
+# Do not switch either side alone.
 COPY package.json package-lock.json ./
 RUN npm install --no-audit --no-fund
 COPY . .
@@ -36,9 +47,16 @@ RUN apk add --no-cache nginx python3 py3-aiohttp && mkdir -p /run/nginx
 
 # Our nginx config, the Supervisor proxy, and the s6 services that run them.
 COPY rootfs /
-RUN chmod a+x /etc/s6-overlay/s6-rc.d/nginx/run \
-              /etc/s6-overlay/s6-rc.d/supervisor-proxy/run \
-              /usr/bin/supervisor-proxy.py
+# ⚠️ THE SHAPE, NOT A LIST OF PATHS. git stores every rootfs file as 0644,
+# including both s6 `run` scripts, so this chmod is load-bearing — and it used
+# to enumerate its targets by hand. Add a third longrun, forget to add its path
+# here, and the image builds green, the push succeeds, the manifest syncs, HA
+# offers the update, and s6 fails to exec the script on the wall. No build-time
+# signal anywhere. .gitignore already records this exact lesson for a different
+# file: "THE PATTERN, NOT ONE FILE. A negation naming one file is a negation
+# somebody has to remember."
+RUN find /etc/s6-overlay/s6-rc.d -name run -exec chmod a+x {} + \
+ && chmod a+x /usr/bin/supervisor-proxy.py
 
 # The compiled SPA from the build stage.
 COPY --from=build /app/dist /var/www

@@ -173,7 +173,26 @@ export const EMPTY_FM_DATA: FmData = {
  *  off. budgetStatus() below treats <= 0 as "not tracked" rather than an
  *  ever-exceeded cap, so a fresh install with nothing configured shows no
  *  false "over cap" warning instead of a wrong number. No in-app editor yet
- *  (same status as ThresholdConfig's alertThresholds) — SpendTab/TodayTab
- *  read this constant directly today; wiring it to real per-install config
- *  is a follow-up, not a hardcoding fix. */
+ *  (same status as ThresholdConfig's alertThresholds), but every SCREEN now
+ *  reads budgetStatus().capIdr rather than this constant — SpendTab printed
+ *  "of IDR 0" on an unconfigured install because it reached past the engine
+ *  for the raw value. Wiring this to real per-install config is the remaining
+ *  follow-up. */
 export const MINOR_MAINTENANCE_CAP_IDR = 0;
+
+/** The currency every money figure in the Facility Manager is written in —
+ *  "" means "not configured", and an unconfigured install prints the number
+ *  alone rather than guessing.
+ *
+ *  ⚠️ SAME HARD RULE AS THE CAP ABOVE, ONE LEVEL DOWN. The cap's AMOUNT was
+ *  correctly emptied when one contract's clause turned out to be shipping to
+ *  every install — but the CURRENCY stayed welded into formatMoney as the
+ *  literal "IDR", alongside an "en-US" grouping locale, so a villa billed in
+ *  euros read "IDR 450,000" and a reader in France got US digit grouping. A
+ *  currency is a per-site value exactly as a cap amount is; the first hard rule
+ *  names business and contract-specific values, and this was one.
+ *
+ *  Empty rather than a "helpful" default, for the reason AppConfig's merge-on-
+ *  load taught this repo: a seed spread underneath stored config resurrects
+ *  what the user deleted. */
+export const MONEY_CURRENCY = "";

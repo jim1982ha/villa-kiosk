@@ -13,8 +13,19 @@ import type { HassEntity } from "@/types/ha.types";
  *  needs to check this FIRST — see LockPanel, the worst case: silently
  *  treating "unavailable" as "not locked" rendered a lock HA has lost contact
  *  with as a confirmed, alarming "UNLOCKED". */
+/** The two states in which an entity's true value is NOT known.
+ *
+ *  ⚠️ NAMED BECAUSE THE PAIR WAS WRITTEN OUT SEVEN TIMES ON THIS BRANCH.
+ *  `isUnavailable` below answers the question for a `HassEntity`, and two
+ *  callers had it inline because they had one — but four more work on a bare
+ *  state STRING (a history point, a merged status map, a camera's own status)
+ *  where the predicate does not fit, so the shared thing that reaches all of
+ *  them is the SET, not the function. This subsystem's most-repeated defect
+ *  shape is one literal copied to each reader with nothing between them. */
+export const UNKNOWN_STATES: ReadonlySet<string> = new Set(["unavailable", "unknown"]);
+
 export function isUnavailable(entity: HassEntity | undefined): boolean {
-  return entity == null || entity.state === "unavailable" || entity.state === "unknown";
+  return entity == null || UNKNOWN_STATES.has(entity.state);
 }
 
 /**
@@ -184,10 +195,18 @@ export function statusKeyFor(state: string, domain?: string): StatusKey {
   // panel to the error screen. Reported 2026-09-08: a newly added smoke
   // detector could not have its badge opened at all.
   //
-  // A missing reading is "nothing to report", which is the same branch as a
-  // blank state below, and lands on the same colour.
+  // ⚠️ AND NULL LANDS ON THE BLANK BRANCH, NOT IN `UNKNOWN_STATES`. The cheap
+  // fix is to add it to that set, and it would be wrong: the set is the FACT
+  // "this entity is unreachable", read by `isUnavailable` and by every string
+  // reader below. A missing history row on a brand-new entity is not an
+  // outage. Same colour, different fact.
   const s = String(state ?? "").trim().toLowerCase();
-  if (s === "" || s === "unavailable" || s === "unknown" || s === "none") {
+  // ⚠️ WIDER THAN `UNKNOWN_STATES` ON PURPOSE, and the two extra members stay
+  // spelled out: a blank state and the literal `"none"` are not "the value is
+  // unknown", they are an entity that has nothing to report. Same COLOUR, not
+  // the same fact — converging them into the set would make `isUnavailable`
+  // start answering true for them.
+  if (s === "" || s === "none" || UNKNOWN_STATES.has(s)) {
     return "unavailable";
   }
   if (domain) {

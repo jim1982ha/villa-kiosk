@@ -1,0 +1,448 @@
+/* ── Facility Manager workspace ──────────────────────────────────────────
+   Shares the Settings modal shell (.settings-modal) so it inherits the app's
+   width/scroll/mobile behaviour for free; only what's specific to an
+   operator worklist is defined here. Colour is semantic throughout — an
+   overdue task must read as overdue before anything is actually read. */
+.fm-tabs {
+  /* Symmetric top/bottom padding — this had ZERO top padding (only 10px at
+     the bottom, before the border), so the tab buttons sat flush against the
+     row's top edge with all the breathing room below them, reading as "not
+     vertically centred" within the header band even though each button's
+     OWN icon+label were centred fine internally. */
+  display: flex; align-items: center; gap: 4px; padding: 10px 22px; overflow-x: auto;
+  scrollbar-width: none; border-bottom: 1px solid var(--hairline);
+}
+.fm-tabs::-webkit-scrollbar { display: none; }
+.fm-tab {
+  display: flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  padding: 8px 13px; border-radius: 10px; border: 1px solid transparent;
+  background: transparent; color: var(--text-secondary);
+  /* line-height:1 — without it the label's line box (taller than its glyphs,
+     per normal font metrics) added asymmetric space the 16px icon next to it
+     doesn't have, so align-items:center still read as the TEXT sitting a
+     couple px off-centre against the icon despite both being flex-centred. */
+  font-size: var(--text-base); line-height: 1; cursor: pointer;
+}
+.fm-tab:hover { background: var(--bg-input); }
+.fm-tab.active { background: var(--accent); color: var(--text-on-accent); }
+/* Keeps the Report tab's own height roughly stable across the empty-
+   placeholder <-> generated-report swap — see ReportTab's docstring on the
+   button. */
+.fm-report-preview-area { min-height: 260px; }
+
+.fm-stack { display: flex; flex-direction: column; gap: 16px; }
+
+/* Summary numbers — the glance layer above the detail. */
+.fm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.fm-stat {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+}
+.fm-stat .n { font-size: var(--text-2xl); font-weight: 700; line-height: 1.1; }
+.fm-stat .l { font-size: var(--text-xs); color: var(--text-dim); }
+.fm-stat.good .n { color: var(--status-on); }
+.fm-stat.warn .n { color: var(--status-warning); }
+.fm-stat.bad  .n { color: var(--status-danger); }
+
+/* Rows: severity is carried by the badge pill (below) and, for a row that
+   actually needs attention right now, a faint full-card tint — not a
+   saturated 3px stoplight bar down the left edge of every card. A coloured
+   stripe on every row regardless of state is the exact "this was clearly
+   generated" tell; a wash this quiet is barely noticeable until something
+   is actually wrong, which is the point — criticality should read as a
+   deliberate, occasional signal, not decoration applied uniformly. */
+.fm-list { display: flex; flex-direction: column; gap: 8px; }
+.fm-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+}
+.fm-row.state-overdue, .fm-row.state-never {
+  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
+}
+.fm-row.state-due-soon {
+  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
+}
+.fm-row-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fm-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* Pushed to the far right of the title line, same row as the label — see
+   ReadinessTab's "All devices reporting" card, the one check with an inline
+   action. */
+.fm-row-title-action { margin-left: auto; }
+.fm-row-sub { font-size: var(--text-xs); }
+
+/* A record that opens for editing when tapped. The cursor and hover lift are
+   the whole affordance — a per-row "Edit" button would compete with the status
+   action already in these rows, and on a phone there is no width for both. */
+.fm-openable { cursor: pointer; }
+.fm-openable:hover { border-color: var(--hairline-strong); }
+.fm-openable:active { transform: translateY(1px); }
+
+/* Evidence thumbnails are buttons (they open the viewer), so they must not
+   inherit the default button chrome. */
+.fm-thumb-open {
+  display: block; width: 100%; height: 100%;
+  padding: 0; border: none; background: none; cursor: zoom-in;
+}
+
+/* Read-only strips sit INSIDE a list row, so they use smaller thumbs — a
+   68px square per photo would make a three-photo fault taller than the text
+   that describes it. */
+.fm-evidence.readonly .fm-thumb { width: 44px; height: 44px; border-radius: 8px; }
+.fm-evidence.readonly .fm-evidence-strip { gap: 6px; margin-top: 4px; }
+
+/* Full-size evidence viewer. Above every modal (the Facility workspace is
+   itself a modal, and this opens from inside it) and inset by the safe area so
+   the close button never lands under a notch. */
+.fm-lightbox {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px
+           max(16px, var(--safe-bottom));
+}
+.fm-lightbox img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; border-radius: 8px;
+}
+.fm-lightbox-close, .fm-lightbox-nav {
+  position: absolute; display: flex; align-items: center; justify-content: center;
+  width: var(--touch-min); height: var(--touch-min);
+  border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer;
+}
+.fm-lightbox-close { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; }
+.fm-lightbox-nav.prev { left: 12px; }
+.fm-lightbox-nav.next { right: 12px; }
+.fm-lightbox-close:hover, .fm-lightbox-nav:hover { background: rgba(0, 0, 0, 0.7); }
+.fm-lightbox-count {
+  position: absolute; bottom: max(14px, var(--safe-bottom));
+  left: 50%; transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.8); font-size: var(--text-xs);
+}
+
+/* Square icon-only variant of .btn, for a secondary action that sits beside a
+   worded one (the panel footer's "report a fault" next to "Edit"). */
+.btn.icon-only {
+  padding: 0; width: var(--touch-min); min-width: var(--touch-min);
+  justify-content: center;
+}
+.panel-footer-left { display: flex; align-items: center; gap: 8px; }
+
+/* The shared free-text field (see NotesField). Vertical resize stays available
+   on desktop as an escape hatch, but the box auto-grows so it is rarely
+   needed; horizontal resize is off because it would break the form's column. */
+.fm-notes {
+  resize: vertical; min-height: 56px; line-height: 1.45;
+  overflow-y: auto;
+}
+
+/* A fault's own history, on its card. Left rail of dots so the sequence reads
+   as a sequence, not three stacked paragraphs. */
+.fm-timeline { list-style: none; margin: 6px 0 0; padding: 0 0 0 2px; display: flex; flex-direction: column; gap: 6px; }
+.fm-timeline li { display: flex; gap: 8px; align-items: flex-start; font-size: var(--text-xs); }
+.fm-timeline-dot {
+  flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 4px;
+  background: var(--text-dim);
+}
+.fm-timeline-dot.in_progress { background: var(--status-warning); }
+.fm-timeline-dot.resolved { background: var(--status-ok); }
+.fm-timeline-head { font-weight: 600; }
+.fm-timeline-note {
+  color: var(--text-secondary); font-size: var(--text-xs); margin-top: 2px;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* A section header that folds its own content away — used for the offline
+   shortlist, which is a useful shortcut when the fault IS one of those
+   devices and pure noise otherwise. */
+.fm-disclosure {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; padding: 4px 0; cursor: pointer;
+  color: var(--text-secondary); font-size: var(--text-xs); text-align: left;
+  min-height: var(--touch-min);
+}
+.fm-disclosure:hover { color: var(--text-primary); }
+
+/* Marks a report filed by a guest: a symptom noticed from inside the villa,
+   not a diagnosis — which is how the row should be read when triaging. */
+.fm-clause.guest {
+  color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+}
+
+/* The guest's one-screen report form. */
+.guest-report { width: min(480px, 100%); }
+.guest-report-done {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 24px; text-align: center; color: var(--status-ok);
+}
+.guest-report-done h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
+.guest-report-done p { max-width: 300px; }
+
+/* Device-picker suggestion rows (Faults/Spend). Two lines: the friendly name,
+   then the entity_id and room. The id is what actually identifies a device —
+   a label like "Bedroom 1" names nothing an operator can act on — so it is
+   always present rather than revealed on hover, which is unusable on a phone.
+   Both lines truncate instead of wrapping: a long entity_id must not push the
+   row's height around and make the list jump while typing. */
+.fm-picker-label {
+  display: flex; align-items: center; gap: 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fm-picker-meta {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: var(--text-2xs); min-width: 0;
+}
+.fm-picker-meta code {
+  font-size: var(--text-2xs); opacity: 0.9;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fm-picker-meta > span { white-space: nowrap; flex: none; }
+.fm-picker-flag {
+  flex: none; font-size: var(--text-2xs); letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 999px;
+}
+.fm-picker-flag.offline {
+  color: var(--status-danger);
+  background: color-mix(in srgb, var(--status-danger) 14%, transparent);
+}
+
+/* Rows whose record can be erased by a superadmin (press and hold, then the
+   6-digit code — see auth/SuperadminGate.tsx). The hint is one small dot in
+   the corner: someone who knows what it means spots it immediately, someone
+   who doesn't reads it as decoration. A louder affordance would be worse in
+   both directions — it advertises a capability most profiles can't use, and
+   the previous experiment with hint dots on the HUD category icons was
+   removed as clutter in v2.59.0.
+   `position: relative` anchors the dot; `user-select` stops a hold from
+   selecting the row's text or raising iOS's callout menu mid-gesture. Scroll
+   is untouched (no touch-action override) — the hold itself cancels on drift
+   rather than the row swallowing the pan. */
+.fm-erasable { position: relative; -webkit-touch-callout: none; user-select: none; }
+.fm-erasable-dot {
+  position: absolute; top: 6px; right: 6px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--text-dim); opacity: 0.45;
+  pointer-events: none;
+}
+.fm-erasable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fm-erasable:focus-visible .fm-erasable-dot { opacity: 0.9; }
+
+/* The elevation prompt: the keypad plus a line naming exactly what is about
+   to be destroyed, because the gesture that opens it is a hold on a row and a
+   mis-held finger must not be able to erase the neighbour. */
+.superadmin-prompt {
+  width: min(360px, 100%);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.superadmin-prompt-head {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--status-danger); font-size: var(--text-sm); letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.superadmin-prompt-detail {
+  margin: 0; text-align: center; font-size: var(--text-sm); color: var(--text-secondary);
+  max-width: 320px;
+}
+.superadmin-prompt-note { margin: 0; text-align: center; font-size: var(--text-sm); max-width: 320px; }
+.fm-amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+
+.fm-clause {
+  font-size: var(--text-2xs); padding: 1px 7px; border-radius: 999px;
+  background: var(--bg-input); color: var(--text-dim); white-space: nowrap;
+}
+/* The actual status carrier: a filled pill, same family as a GitHub/Linear
+   status chip — reads as a deliberate label, not a colour-coded rule. */
+.fm-badge {
+  font-size: var(--text-2xs); font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  white-space: nowrap; background: var(--bg-input); color: var(--text-secondary);
+}
+.fm-badge.overdue, .fm-badge.never { background: var(--status-danger); color: #fff; }
+.fm-badge.due-soon { background: var(--status-warning); color: #fff; }
+.fm-badge.ok { background: var(--status-on); color: #fff; }
+
+.fm-check-icon { flex: 0 0 auto; display: flex; }
+.fm-check-icon.pass { color: var(--status-on); }
+.fm-check-icon.warn { color: var(--status-warning); }
+.fm-check-icon.fail { color: var(--status-danger); }
+
+/* Same treatment as .fm-row above: a coloured icon (matching .fm-check-icon
+   so the headline and the checks below it read as one system) plus a quiet
+   tint, no accent bar. */
+.fm-headline {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; border-radius: 12px; border: 1px solid var(--hairline);
+  background: var(--bg-card);
+}
+.fm-headline-icon { flex: 0 0 auto; display: flex; color: var(--status-on); }
+.fm-headline-text { display: flex; flex-direction: column; gap: 2px; }
+.fm-headline strong { font-size: var(--text-lg); }
+.fm-headline.warn {
+  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
+}
+.fm-headline.warn .fm-headline-icon { color: var(--status-warning); }
+.fm-headline.fail {
+  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
+}
+.fm-headline.fail .fm-headline-icon { color: var(--status-danger); }
+
+/* Chips that jump to a device — interactive, so they look interactive. */
+.fm-chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.fm-entity-chip {
+  font-size: var(--text-xs); padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  background: var(--bg-input); color: var(--text-primary);
+  border: 1px solid var(--hairline);
+}
+.fm-entity-chip:hover { border-color: var(--accent); }
+.fm-entity-chip.on { background: var(--accent); color: var(--text-on-accent); border-color: transparent; }
+
+.fm-form {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline-strong);
+}
+.fm-form h3 { margin: 0; font-size: var(--text-md); }
+.fm-field { display: flex; flex-direction: column; gap: var(--field-label-gap); }
+.fm-field > span { font-size: var(--field-label-size); color: var(--text-secondary); }
+/* DIRECT children only. A descendant selector here reached into every nested
+   component that happens to sit in a field — EvidenceRow's hidden file input
+   (which it un-hid, putting a stray "Choose files / No file chosen" control
+   under the photo strip) and DeviceSearchPicker's search box (which has its
+   own styling and does not want this one). A field styles its OWN control,
+   not whatever a child component renders.
+
+   textarea belongs in this list. Leaving it out meant every multi-line field
+   in the workspace kept the browser's UA defaults — a white box with black
+   text sized by the `cols` attribute — which is invisible until a form
+   actually has one. Grouping the three controls is also what stops the next
+   textarea from needing its own rule. */
+.fm-field > input, .fm-field > select, .fm-field > textarea {
+  padding: 10px 12px; border-radius: 10px; font-size: var(--text-md);
+  background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--hairline);
+  /* Width comes from the column, never from `cols`; the border box keeps the
+     padding inside it so the field lines up with the inputs above and below. */
+  display: block; width: 100%; box-sizing: border-box;
+}
+.fm-field > input:focus, .fm-field > select:focus, .fm-field > textarea:focus {
+  border-color: var(--accent); outline: none;
+}
+/* All three, not just the textarea: a placeholder styled on one control and
+   left to the browser on the one directly above it is a visible mismatch in
+   the same form. */
+.fm-field > input::placeholder, .fm-field > textarea::placeholder { color: var(--text-dim); }
+
+.fm-banner {
+  padding: 10px 12px; border-radius: 10px; font-size: var(--text-sm);
+  background: var(--bg-input); color: var(--text-secondary);
+}
+.fm-banner.warn {
+  background: color-mix(in srgb, var(--status-warning) 15%, transparent);
+  color: var(--text-primary);
+  border: 1px solid var(--status-warning);
+}
+.fm-inline-error { font-size: var(--text-xs); color: var(--status-danger); }
+
+/* Spend-vs-cap meter. The bar fill IS the state indicator — a number alone
+   doesn't convey "how close am I" at a glance, and that proximity is the
+   whole decision — so the card itself only needs a quiet tint once the cap
+   is actually a concern, not a permanent coloured accent bar. */
+.fm-cap {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--hairline);
+}
+.fm-cap.approaching {
+  background: color-mix(in srgb, var(--status-warning) 6%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-warning) 25%, var(--hairline));
+}
+.fm-cap.exceeded {
+  background: color-mix(in srgb, var(--status-danger) 7%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--status-danger) 28%, var(--hairline));
+}
+.fm-cap-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fm-cap-head strong { font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.fm-cap-bar { height: 8px; border-radius: 999px; background: var(--bg-input); overflow: hidden; }
+.fm-cap-bar > span { display: block; height: 100%; background: var(--status-on); }
+.fm-cap.approaching .fm-cap-bar > span { background: var(--status-warning); }
+.fm-cap.exceeded .fm-cap-bar > span { background: var(--status-danger); }
+.fm-cap-note { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+
+/* Evidence thumbnails */
+.fm-evidence { display: flex; flex-direction: column; gap: 6px; }
+.fm-evidence-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.fm-thumb {
+  position: relative; width: 68px; height: 68px; border-radius: 10px;
+  overflow: hidden; background: var(--bg-input); border: 1px solid var(--hairline);
+  flex: 0 0 auto;
+}
+.fm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fm-thumb-x {
+  position: absolute; top: 3px; right: 3px; width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(0,0,0,.6); color: #fff;
+}
+.fm-thumb-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer; color: var(--text-secondary);
+  border-style: dashed; font-size: var(--text-2xs);
+}
+.fm-thumb-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.fm-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 32px 20px; text-align: center; color: var(--text-dim);
+}
+.fm-empty h3 { margin: 0; font-size: var(--text-lg); color: var(--text-primary); }
+.fm-empty p { max-width: 46ch; }
+
+/* The generated report, rendered as a document (ReportPreview) rather than a
+   monospace dump of raw Markdown — the underlying string is unchanged and is
+   exactly what "Download .md" writes; only how it looks on screen differs. */
+.fm-report-doc {
+  padding: 16px 18px; border-radius: 12px; max-height: 45vh; overflow: auto;
+  background: var(--bg-input); border: 1px solid var(--hairline);
+  font-size: var(--text-sm); line-height: 1.55; word-break: break-word;
+}
+.fm-report-h1 {
+  font-family: var(--font-display); font-weight: 400; font-size: var(--text-xl);
+  margin: 0 0 10px;
+}
+.fm-report-h2 {
+  font-size: var(--text-md); font-weight: 700; margin: 20px 0 8px;
+  padding-top: 14px; border-top: 1px solid var(--hairline);
+}
+.fm-report-doc > .fm-report-h2:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.fm-report-h3 { font-size: var(--text-sm); font-weight: 600; margin: 14px 0 6px; color: var(--text-secondary); }
+.fm-report-p { margin: 0 0 8px; }
+.fm-report-note { margin: 0 0 8px; }
+.fm-report-hr { border: none; border-top: 1px solid var(--hairline); margin: 16px 0; }
+.fm-report-ul { margin: 0 0 10px; padding-left: 20px; }
+.fm-report-ul li { margin: 3px 0; }
+.fm-report-table-wrap { overflow-x: auto; margin: 0 0 12px; }
+.fm-report-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+.fm-report-table th, .fm-report-table td {
+  text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+.fm-report-table th { color: var(--text-secondary); font-weight: 600; }
+.fm-report-table td:first-child, .fm-report-table th:first-child { padding-left: 0; }
+
+/* Config Editor: a row whose entity Home Assistant no longer knows about, and
+   the banner offering to clear them out in one go. Flagged rather than
+   auto-removed — the row may still hold a label/room worth re-pointing at the
+   renamed entity via "Change entity ID". */
+.config-row-stale > td { background: color-mix(in srgb, var(--status-danger) 8%, transparent); }
+.config-stale-notice {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-bottom: 12px; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--status-danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-danger) 35%, transparent);
+}
+.config-stale-notice .btn { flex: 0 0 auto; }

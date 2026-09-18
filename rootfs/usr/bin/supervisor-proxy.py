@@ -186,6 +186,11 @@ def _session_secret() -> bytes:
     return fresh
 
 
+#: (mtime_ns, epoch) — see `_session_epoch`. Invalidated by the file changing,
+#: which `_bump_session_epoch`'s atomic replace always does.
+_EPOCH_CACHE = None
+
+
 def _session_epoch() -> int:
     """Monotonic counter mixed into every session signature.
 
@@ -195,12 +200,31 @@ def _session_epoch() -> int:
     month with no way to invalidate it short of destroying the signing key.
     Bumping this epoch invalidates every outstanding session at once while
     KEEPING the signing key, so /auth/logout-all is a supported operation
-    rather than a filesystem intervention."""
+    rather than a filesystem intervention.
+
+    ⚠️ CACHED ON THE FILE'S OWN mtime. This is read on every signature
+    computation — twice per authorised request, since `_authorized` and
+    `_role_for` each resolve the session separately — and now once per
+    re-validated websocket frame as well. Keying the cache on `st_mtime_ns`
+    keeps the property the docstring above promises (a bump takes effect at
+    once, with no restart) while making the common case a stat instead of an
+    open-read-parse.
+    """
+    global _EPOCH_CACHE
+    try:
+        stamp = os.stat(SESSION_EPOCH_FILE).st_mtime_ns
+    except OSError:
+        return 0
+    cached = _EPOCH_CACHE
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
     try:
         with open(SESSION_EPOCH_FILE, "r", encoding="utf-8") as f:
-            return int(f.read().strip() or "0")
+            value = int(f.read().strip() or "0")
     except (OSError, ValueError):
         return 0
+    _EPOCH_CACHE = (stamp, value)
+    return value
 
 
 def _bump_session_epoch() -> int:
@@ -360,6 +384,40 @@ async def ws_handler(request: web.Request):
         # direct caller is rejected before any socket to Core is opened.
         return _unauthorized()
     role = _role_for(request)
+    # ⚠️ THE SESSION IS RE-RESOLVED FOR THE LIFE OF THE SOCKET, AND IT USED NOT
+    # TO BE. `role` was decided here, at the handshake, and captured into the
+    # relay loop below — which never looked at the cookie again. So
+    # `/auth/logout-all`, whose whole docstring calls it "the answer to 'a
+    # device was lost / a PIN was seen'", could not reach a tablet that was
+    # already connected: it bumps the epoch, every COOKIE stops verifying, and
+    # an open socket carries on relaying `call_service` frames. The websocket is
+    # where the kiosk's service calls go — it is the control path, so it was the
+    # lenient one of the two transports. `session_days` had the same hole: a
+    # shorter window did not shorten a connection opened before it.
+    #
+    # ⚠️ RE-CHECKED ON EVERY PRIVILEGED FRAME, AND OTHERWISE ON A CADENCE. A
+    # `call_service` is re-validated before it is relayed, whatever the clock
+    # says; everything else pays at most one check per RECHECK_SECONDS. With the
+    # epoch now cached on its mtime, the common case is a stat.
+    last_check = time.monotonic()
+
+    def _still_valid(force: bool = False) -> bool:
+        nonlocal role, last_check
+        now = time.monotonic()
+        if not force and now - last_check < WS_RECHECK_SECONDS:
+            return True
+        last_check = now
+        # Ingress is re-checked too: the tag is set by nginx per request and a
+        # socket that arrived through it stays owner-equivalent for its life.
+        if _is_ingress(request):
+            role = "owner"
+            return True
+        fresh = _session_role(request.cookies.get(SESSION_COOKIE))
+        if fresh is None:
+            return False
+        role = fresh
+        return True
+
     client = web.WebSocketResponse(heartbeat=30)
     await client.prepare(request)
 
@@ -375,6 +433,16 @@ async def ws_handler(request: web.Request):
                     # The browser has no token, so rewrite the auth handshake.
                     try:
                         obj = json.loads(data)
+                        # ⚠️ BEFORE ANYTHING IS RELAYED. A `call_service` is
+                        # re-validated unconditionally — it is the frame that
+                        # operates the villa's doors — and every other frame at
+                        # most once per WS_RECHECK_SECONDS. A session that has
+                        # been logged out, expired, or had its epoch bumped ends
+                        # the socket here rather than living until the tablet
+                        # happens to disconnect.
+                        if not _still_valid(force=obj.get("type") == "call_service"):
+                            await client.close(code=4401, message=b"session ended")
+                            return
                         if obj.get("type") == "auth":
                             obj["access_token"] = TOKEN
                             data = json.dumps(obj)
@@ -799,13 +867,61 @@ _elevation_tokens: dict = {}     # token -> expiry (time.monotonic)
 # source addresses cannot grow them without limit — the fixed-size-by-
 # construction property of the old role-keyed dict had to be replaced with an
 # explicit bound, not dropped.
+#: How often an OPEN websocket re-resolves its session. Short enough that
+#: "log out all devices" takes effect while somebody is still walking to the
+#: tablet; long enough that an idle socket is not doing work.
+WS_RECHECK_SECONDS = 30
+
 AUTH_MAX_FAILURES = 5            # per client IP, per role
 AUTH_GLOBAL_MAX_FAILURES = 50    # per role, all clients combined
 AUTH_GLOBAL_LOCKOUT_SECONDS = 900
 AUTH_TRACK_MAX_CLIENTS = 2048    # hard cap on tracked (role, ip) pairs
 _auth_failures: dict = {}                                    # (role, ip) -> state
-_auth_failures_global: dict = {r: {"count": 0, "last": 0.0}
-                              for r in (*AUTH_ROLES, SUPERADMIN)}
+
+#: ⚠️ TIMESTAMPS, NOT A COUNT, AND THE DIFFERENCE IS A LOCKED-OUT VILLA. This
+#: was `{"count": 0, "last": 0.0}` per role, written in exactly two places —
+#: incremented on a wrong PIN, and reset inside `_lockout_remaining` only AFTER
+#: it had already fired. Nothing aged it while it was still below the limit, so
+#: it was monotonic from process start to 50: the fiftieth CUMULATIVE mistyped
+#: PIN for a role, across every guest and every tablet, on an add-on that runs
+#: for weeks, locked that role out from every source address for 900 s — the
+#: owner included.
+#:
+#: That is the outcome this limiter was rewritten to prevent, in the note eight
+#: lines above: "A lockout must punish the guesser, not the victim." A backstop
+#: against a distributed guess has to be a RATE, and a rate needs the window
+#: applied while the count is still below the limit.
+#:
+#: Bounded by construction: `_note_global_failure` drops what has aged out and
+#: keeps only the newest `AUTH_GLOBAL_MAX_FAILURES`, which is all the question
+#: "are there N inside the window" can need.
+_auth_failures_global: dict = {r: [] for r in (*AUTH_ROLES, SUPERADMIN)}
+
+
+def _note_global_failure(role: str, now: float = None) -> None:
+    """Record one wrong PIN against a role, from any source address."""
+    moment = time.monotonic() if now is None else now
+    hits = _auth_failures_global[role]
+    hits.append(moment)
+    fresh = [t for t in hits if moment - t < AUTH_GLOBAL_LOCKOUT_SECONDS]
+    hits[:] = fresh[-AUTH_GLOBAL_MAX_FAILURES:]
+
+
+def _global_locked_for(role: str, now: float = None) -> int:
+    """Seconds this ROLE is locked out for, from every address, or 0.
+
+    ⚠️ A RATE: `AUTH_GLOBAL_MAX_FAILURES` failures inside one window. The wait
+    ends when the OLDEST of them ages out, so a guesser who stops is released on
+    the window and one who continues is not.
+    """
+    moment = time.monotonic() if now is None else now
+    hits = [t for t in _auth_failures_global[role]
+            if moment - t < AUTH_GLOBAL_LOCKOUT_SECONDS]
+    _auth_failures_global[role][:] = hits
+    if len(hits) < AUTH_GLOBAL_MAX_FAILURES:
+        return 0
+    remaining = AUTH_GLOBAL_LOCKOUT_SECONDS - (moment - hits[0])
+    return int(remaining) + 1 if remaining > 0 else 0
 
 
 def _option_int(key: str, default: int, lo: int, hi: int) -> int:
@@ -871,10 +987,25 @@ def _client_ip(request: web.Request) -> str:
 
 
 def _prune_auth_failures(now: float) -> None:
-    """Drop expired per-client entries, and hard-trim if still oversized."""
+    """Drop expired per-client entries, age the global tier, and hard-trim if
+    still oversized.
+
+    ⚠️ THE GLOBAL TIER HAD NO DECAY AT ALL — see `_auth_failures_global`. This
+    is the one place that can age it while it is still below the limit, which is
+    what makes it a rate rather than a lifetime accumulator.
+
+    ⚠️ AND THE WINDOW IS READ ONCE. `_auth_lockout_seconds()` was called inside
+    the comprehension's condition, i.e. once per tracked client, and each call
+    opens and parses `/data/options.json` — up to 2,048 blocking file reads, on
+    the auth path, on the same event loop as every camera stream, driven by the
+    one request an attacker controls.
+    """
+    window = _auth_lockout_seconds()
     for key in [k for k, st in _auth_failures.items()
-                if now - st["last"] > _auth_lockout_seconds()]:
+                if now - st["last"] > window]:
         _auth_failures.pop(key, None)
+    for hits in _auth_failures_global.values():
+        hits[:] = [t for t in hits if now - t < AUTH_GLOBAL_LOCKOUT_SECONDS]
     if len(_auth_failures) > AUTH_TRACK_MAX_CLIENTS:
         # Oldest-first eviction. Evicting a still-locked attacker is acceptable:
         # the global tier remains, and the alternative (unbounded growth) is a
@@ -933,18 +1064,15 @@ def _lockout_remaining(role: str, ip: str) -> int:
     now = time.monotonic()
     _prune_auth_failures(now)
     worst = 0
-    for st, limit, window in (
-        (_auth_failures.get((role, ip)), AUTH_MAX_FAILURES, _auth_lockout_seconds()),
-        (_auth_failures_global[role], AUTH_GLOBAL_MAX_FAILURES, AUTH_GLOBAL_LOCKOUT_SECONDS),
-    ):
-        if not st or st["count"] < limit:
-            continue
+    st = _auth_failures.get((role, ip))
+    window = _auth_lockout_seconds()
+    if st and st["count"] >= AUTH_MAX_FAILURES:
         remaining = window - (now - st["last"])
         if remaining <= 0:
             st["count"] = 0
-            continue
-        worst = max(worst, int(remaining) + 1)
-    return worst
+        else:
+            worst = int(remaining) + 1
+    return max(worst, _global_locked_for(role, now))
 
 
 async def auth_roles_handler(request: web.Request) -> web.Response:
@@ -1018,14 +1146,16 @@ async def auth_elevate_handler(request: web.Request) -> web.Response:
     # one correct entry cannot reset a distributed guessing campaign.
     now = time.monotonic()
     st = _auth_failures.setdefault((SUPERADMIN, ip), {"count": 0, "last": 0.0})
-    gst = _auth_failures_global[SUPERADMIN]
     if ok:
         st["count"] = 0
     else:
         st["count"] += 1
         st["last"] = now
-        gst["count"] += 1
-        gst["last"] = now
+        # ⚠️ SUPERADMIN, NOT THE SESSION'S ROLE. This handler is reached by an
+        # owner or a facility manager, so `role` here is theirs — recording a
+        # wrong SUPERADMIN code against it would both blame the wrong bucket
+        # and leave the superadmin tier never accumulating at all.
+        _note_global_failure(SUPERADMIN, now)
         return web.json_response({"error": "incorrect code"}, status=401)
     return web.json_response({"token": _mint_elevation(),
                               "expiresIn": ELEVATION_TTL_SECONDS})
@@ -1205,7 +1335,7 @@ def _delete_evidence(photo_id: str) -> bool:
         return False
 
 
-def _fm_after_write(old, new) -> None:
+def _fm_after_write(old, new, baseline_readable: bool = True) -> None:
     """Collect evidence photos the maintenance record no longer points at.
 
     Runs on EVERY write, not only on a delete. The earlier version only fired
@@ -1224,6 +1354,22 @@ def _fm_after_write(old, new) -> None:
     referenced), so both run here.
     """
     referenced = _fm_referenced_photo_ids(new)
+
+    # ⚠️ NOTHING REFERENCE-BASED RUNS ON A BASELINE WE COULD NOT READ. Steps 1
+    # and 2 both answer "does anything still point at this photo?", and both
+    # read that answer out of documents. If the stored document was unusable,
+    # `old` is an empty stand-in and every photo looks unreferenced — so the
+    # sweep would delete exactly the evidence belonging to the records that
+    # could not be read. The PUT handler already refuses such a write; this is
+    # the second lock on the same door, because the caller is the only thing
+    # that knows, and a future third caller will not.
+    #
+    # Step 3 (retention) still runs: it is time-based, asks no document
+    # anything, and is what keeps a villa that stops uploading from growing
+    # forever.
+    if not baseline_readable:
+        _prune_fm_evidence()
+        return
 
     # 1. Anything this write dropped a reference to goes immediately: it was
     #    referenced a moment ago, so there is no in-flight form to protect.
@@ -1311,7 +1457,6 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
     ok = hmac.compare_digest(pin, configured)
     now = time.monotonic()
     st = _auth_failures.setdefault((role, ip), {"count": 0, "last": 0.0})
-    gst = _auth_failures_global[role]
     if ok:
         # Clear only THIS client's counter. The global tier is left to decay on
         # its own window, so one correct PIN cannot reset a distributed guess.
@@ -1319,8 +1464,7 @@ async def auth_verify_handler(request: web.Request) -> web.Response:
     else:
         st["count"] += 1
         st["last"] = now
-        gst["count"] += 1
-        gst["last"] = now
+        _note_global_failure(role, now)
     resp = web.json_response({"ok": ok})
     if ok:
         _set_session_cookie(resp, role)
@@ -1653,16 +1797,44 @@ async def atomic_write_async(dest: str, write_body, binary: bool = True,
         raise
 
 
-def _read_json_store(path: str, empty):
-    """Parse a shared store, degrading to `empty` for absent/corrupt/wrong-typed
-    files — a store that can't be read must never take the kiosk down, it just
-    reads as "nothing configured yet"."""
+def _read_json_store_status(path: str, empty) -> tuple[object, bool]:
+    """Parse a shared store, returning (value, readable).
+
+    ⚠️ "ABSENT" AND "UNREADABLE" ARE DIFFERENT ANSWERS, AND CONFLATING THEM
+    DESTROYED DATA. Both used to degrade to `empty`, which is right for a store
+    that is merely not configured yet — and catastrophic for one the facility
+    manager's delete guard diffs against. That guard's whole question is *what
+    disappeared*: with `old` forced to empty, every removed-id set came out
+    empty, `removed` was falsy, the superadmin elevation requirement evaporated,
+    and the write was waved through. The evidence sweep then ran with the same
+    empty baseline and deleted every photo the lost records referenced. The
+    caller saw {"ok": true}.
+
+    A missing file IS legitimately empty — nothing has been written yet. A file
+    that exists and will not parse, or holds the wrong top-level type, is a
+    question, and the callers below are the ones that must answer it.
+    """
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return empty
-    return data if isinstance(data, type(empty)) else empty
+    except FileNotFoundError:
+        return empty, True          # never written — genuinely empty
+    except (json.JSONDecodeError, OSError):
+        return empty, False         # present and unusable — say so
+    if not isinstance(data, type(empty)):
+        return empty, False         # wrong shape is also unusable
+    return data, True
+
+
+def _read_json_store(path: str, empty):
+    """The degrading read, for callers with nothing destructive behind them.
+
+    Kept because a store that can't be read must never take the kiosk down —
+    a GET that returns "nothing configured yet" is the right answer for a
+    client that is only going to render it. Anything that DELETES on the
+    strength of the result must use _read_json_store_status instead."""
+    value, _ = _read_json_store_status(path, empty)
+    return value
 
 
 def _write_json_store(path: str, payload: str) -> None:
@@ -1709,9 +1881,15 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
 
     `write_guard(request, body, old, new)` may veto a write by returning a
     response (used to require a superadmin elevation before any record is
-    DELETED); `after_write(old, new)` runs once the write has landed (used to
-    purge evidence photos an authorised delete orphaned). Both are optional
-    hooks on this one factory rather than a reason to fork it again.
+    DELETED); `after_write(old, new, baseline_readable)` runs once the write has
+    landed (used to purge evidence photos an authorised delete orphaned). Both
+    are optional hooks on this one factory rather than a reason to fork it again.
+
+    ⚠️ `baseline_readable` IS FALSE WHEN THE STORED DOCUMENT COULD NOT BE
+    PARSED. The PUT path refuses such a write outright, so a hook should never
+    see it — the flag exists because a hook that DELETES on the strength of
+    `old` must not depend on a caller three hundred lines away remembering
+    that. See _read_json_store_status.
 
     ⚠️ TWO STORES ARE DELIBERATELY *NOT* BUILT HERE, AND CONVERGING EITHER ONE
     WOULD BE A PRIVILEGE BUG, NOT A TIDY-UP (found by /dry-audit, 2026-08-19,
@@ -1797,7 +1975,22 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
         if len(payload.encode("utf-8")) > max_bytes:
             return web.json_response({"error": f"{key} payload too large"}, status=413)
         async with lock:
-            stored = _read_json_store(path, empty)
+            stored, readable = _read_json_store_status(path, empty)
+            if not readable:
+                # ⚠️ REFUSED, NOT DEGRADED. Every write here is computed by the
+                # client against a document it fetched; if the copy on disk is
+                # now unusable, this write's diff describes a baseline nobody
+                # has. Accepting it silently replaces records the guard could
+                # not check and orphans the photos they referenced. Failing
+                # loudly keeps both, and the file is still on disk to recover
+                # from — the GET beside this one degrades to empty on purpose,
+                # so a client can still read, re-enter and push a whole
+                # document once someone has looked.
+                return web.json_response(
+                    {"error": f"the stored {key} document could not be read, so this "
+                              f"write cannot be checked against it. Nothing has been "
+                              f"changed or deleted. Check /data for a corrupt file."},
+                    status=409, headers={"Cache-Control": "no-store"})
             if expected_rev is not None:
                 current_rev = _store_revision(path)
                 if expected_rev != current_rev:
@@ -1816,7 +2009,7 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
             _write_json_store(path, payload)
             new_rev = _store_revision(path)
             if after_write is not None:
-                after_write(stored, value)
+                after_write(stored, value, readable)
         return web.json_response({"ok": True, "count": len(value), "rev": new_rev})
 
     return get_handler, put_handler

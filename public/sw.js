@@ -12,7 +12,33 @@
  *  - Everything else (HA WebSocket is not HTTP; camera proxy, REST history):
  *    network-only — we never want to serve a stale camera frame or sensor value.
  */
-const CACHE = "villa-kiosk-v10";  // v10: evict the removed public/splash/* PNGs + the shell that referenced them
+// ⚠️ THE CACHE NAME IS THE BUILD, AND IT USED TO BE A LITERAL NOBODY BUMPED.
+// `villa-kiosk-v10` was hand-edited, so no release changed it — which made
+// `activate`'s eviction a permanent no-op and every release ADD its ~5 MB of
+// hashed assets to one cache that nothing ever pruned. On this branch's cadence
+// that crosses an iPadOS origin quota in days.
+//
+// ⚠️ AND FIXING THAT ALONE WOULD HAVE BRICKED THE KIOSK. With `skipWaiting` +
+// `clients.claim` below, a new worker seized an ALREADY-OPEN page still running
+// the old chunk hashes. Bump the cache name and `activate` deletes the cache
+// holding them — while the image they came from has been replaced wholesale, so
+// the next lazy import() 404s and the villa goes blank with no way back but
+// physical access. The unbounded growth was load-bearing: it was the only thing
+// keeping the old hashes findable.
+//
+// So the two change together. `skipWaiting`/`claim` are gone, meaning a new
+// worker waits for every page it would control to close before it activates —
+// and by then nothing is using the previous cache, which is what makes evicting
+// it safe. `__SW_BUILD__` is replaced with the package version at build time by
+// vite.config.ts's manifest plugin, which FAILS THE BUILD if the placeholder is
+// missing, so this can never silently go back to being a constant.
+const BUILD = "__SW_BUILD__";
+const CACHE = `villa-kiosk-${BUILD}`;
+// How many generations survive an activate. TWO, not one: an open page that
+// reloads across an update briefly has the new shell asking for new hashes
+// while the old worker is still in control, and a tab that was closed and
+// reopened during a deploy should not pay a full cold download.
+const KEEP_GENERATIONS = 2;
 // The big central 3D model (GLB/SH3D, tens of MB) lives in its OWN cache that
 // survives app updates — it rarely changes and re-downloading it on every open
 // is the main load-time cost. Version-stamped URLs (?v=<etag>) invalidate it.
@@ -66,23 +92,61 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE)
       .then((cache) => cache.addAll(SHELL).then(() => precacheAssets(cache)))
-      .then(() => self.skipWaiting()),
   );
+  // ⚠️ NO skipWaiting. See the CACHE note above: seizing a page that is already
+  // running means seizing it away from the cache holding its own chunks.
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((k) => k !== CACHE && k !== MODEL_CACHE)
-            .map((k) => caches.delete(k)),
-        ),
-      )
-      .then(() => self.clients.claim()),
+/** Newest-first order for our own generation caches. A name that does not parse
+ *  as a version — `villa-kiosk-v10`, the hand-edited literal this replaced —
+ *  sorts oldest, so the legacy cache is the first thing evicted. */
+function generationRank(name) {
+  const m = /^villa-kiosk-(\d+)\.(\d+)\.(\d+)$/.exec(name);
+  return m ? Number(m[1]) * 1e12 + Number(m[2]) * 1e6 + Number(m[3]) : -1;
+}
+
+/**
+ * Which caches this activate should delete. Pure — keys in, keys out — so it
+ * can be exercised without a browser.
+ *
+ * ⚠️ IT IS ONE FUNCTION SO THE ORACLE CAN RUN *THIS*, NOT A COPY OF IT. The
+ * first version of tests/oracles/sw_lifecycle.mjs lifted only `generationRank`
+ * and re-implemented the keep-set itself, so removing the model cache's
+ * exemption here changed nothing it asserted — the same replica defect this
+ * release fixes in three other oracles, committed in the oracle written to
+ * prevent it.
+ */
+function cachesToEvict(keys, current) {
+  // The model cache is never a generation — it holds tens of MB of GLB that
+  // survives app updates on purpose, invalidated by its own ?v= stamp, and it
+  // shares the "villa-kiosk-" prefix, so a prefix match would sweep it and
+  // re-download the whole villa on every release.
+  //
+  // ⚠️ ONLY A PARSEABLE GENERATION CAN BE KEPT. A name from the old scheme
+  // (`villa-kiosk-v10`) is not a generation at all — it is the single cache
+  // every release before this one poured into, so it is both the largest and
+  // the one with no claim on being recent. Counting it as "the previous
+  // generation" kept the bloat alive one release longer. Evicting it is safe
+  // for the same reason the whole scheme is: this runs only once every page
+  // the previous worker controlled has gone.
+  const generations = keys.filter((k) => k !== MODEL_CACHE && generationRank(k) >= 0);
+  const keep = new Set(
+    generations.sort((a, b) => generationRank(b) - generationRank(a))
+      .slice(0, KEEP_GENERATIONS),
   );
+  keep.add(current);          // ours, even on the first activate
+  return keys.filter((k) => k !== MODEL_CACHE && !keep.has(k));
+}
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(cachesToEvict(keys, CACHE).map((k) => caches.delete(k)));
+    // ⚠️ NO clients.claim(). This worker activates only once every page the
+    // previous one controlled has gone, so there is nothing left to claim —
+    // and claiming is precisely how a running page would be handed a cache
+    // that no longer contains the chunks it is mid-import of.
+  })());
 });
 
 self.addEventListener("fetch", (event) => {

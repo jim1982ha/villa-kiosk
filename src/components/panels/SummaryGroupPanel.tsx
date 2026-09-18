@@ -9,6 +9,7 @@
 // panel) and the shared gradient badge (badgeImageDataUrl) so it feels native.
 
 import { useState, type ComponentType } from "react";
+import { deviceRowText } from "@/utils/entityValue";
 import { ChevronRight, Sparkles, Power, PowerOff, EyeOff } from "lucide-react";
 import BasePanel from "./BasePanel";
 import EntityRowToggle from "./EntityRowToggle";
@@ -20,11 +21,12 @@ import type { HaSceneInfo } from "@/config/haScenes";
 import { badgeImageDataUrl } from "@/babylon/badgeIcons";
 import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import { iconKeyFor } from "@/babylon/badgeIconKeys";
-import { effectiveCategory } from "@/config/EntityCategories";
+import { effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import { badgeFaceAndRing } from "@/utils/deviceActivity";
+import { alertStateFor } from "@/config/BinarySensorClasses";
+import { isOn, switchPosition } from "@/utils/entityState";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
-import { isUnavailable } from "@/utils/stateColors";
 import { phantomEntity } from "@/utils/phantomEntity";
 import { TOGGLEABLE_DOMAINS } from "@/utils/quickAction";
 import type { HassEntity } from "@/types/ha.types";
@@ -73,9 +75,14 @@ interface Props {
   roomScenes?: HaSceneInfo[];
 }
 
-const OFF = new Set(["off", "unavailable", "unknown", ""]);
-
-const pretty = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
+// ⚠️ THE SECOND PRETTIFIER AND THE SECOND OFF-SET ARE BOTH GONE. The prettifier
+// capitalised first and replaced underscores after, where `entityValue`'s does
+// it the other way round — they disagreed on a state beginning with an
+// underscore. The off-set was a byte-identical copy of `entityState.OFF_STATES`
+// in a file that already imported from that very module; `isOn` is the same
+// question asked of the owner. Both are the defect this repo has now produced
+// three times: a rule copied beside the module that owns it, where nothing can
+// see the two drift apart.
 
 /** Bucket a list of entities by their resolved room (ConfigContext's
  *  resolvedRooms — HA's own Area assignment, falling back to GLB geometric
@@ -173,7 +180,7 @@ export default function SummaryGroupPanel({
   // and the row could never reflect it either way.
   const toggleables = [...onMap, ...offMap]
     .filter((e) => TOGGLEABLE_DOMAINS.has(e.entity_id.split(".")[0]));
-  const anyOn = toggleables.some((e) => !OFF.has(e.state));
+  const anyOn = toggleables.some(isOn);
 
   const typeOf = (id: string): EntityType =>
     (config.entityMap[id]?.type ?? inferTypeFromEntityId(id) ?? "sensor");
@@ -296,25 +303,13 @@ export default function SummaryGroupPanel({
     const id = e.entity_id;
     const domain = id.split(".")[0];
     const type = typeOf(id);
-    const cat: Category = effectiveCategory(
-      id, type, config.entityMap[id]?.category, e.attributes.device_class as string | undefined);
+    const cat: Category = effectiveCategory(subjectOf(id, config.entityMap[id], e, type));
     const label = entityLabel(id);
-    const unit = (e.attributes.unit_of_measurement as string | undefined) ?? "";
-    const curTemp = e.attributes.current_temperature as number | null | undefined;
-    const targetTemp = e.attributes.temperature as number | null | undefined;
-    // Current AND target, not current alone — the bottom summary bar's own
-    // "AC" tile only ever shows a real current-temperature average (never a
-    // target substituted in its place, see SummaryBar.tsx), and a lone
-    // number here with no label reads exactly as ambiguously: reported as
-    // "is this 26° the room or the setpoint?". "→" keeps both in the same
-    // compact space this row already had for one.
-    const stateText = isUnavailable(e)
-      ? "Unavailable"
-      : domain === "climate"
-        ? (curTemp == null
-            ? (targetTemp == null ? "--" : `→ ${Math.round(targetTemp)}°`)
-            : (targetTemp == null ? `${Math.round(curTemp)}°` : `${Math.round(curTemp)}° → ${Math.round(targetTemp)}°`))
-        : `${pretty(e.state)}${unit ? ` ${unit}` : ""}`;
+    // ⚠️ ONE OWNER, AND THIS ROW USED NOT TO USE IT. This was written out here
+    // as `pretty(state) + " " + unit` — no scaling — so the row printed
+    // "6570.989 W" beside a badge that said "6.6 kW". The climate arrow and the
+    // room-vs-setpoint reasoning moved with it; see deviceRowText.
+    const stateText = deviceRowText(e, domain);
 
     const isLock = domain === "lock";
     // `rowInHa` gates every CONTROL on the row. A phantom is rendered so the
@@ -322,8 +317,18 @@ export default function SummaryGroupPanel({
     // reject the service call, and nothing would ever come back to change the
     // row's state, so the control could only ever look broken.
     const rowInHa = !!entities[id];
-    const canToggle = canControl && rowInHa && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
-    const toggleOn = isLock ? e.state !== "locked" : !OFF.has(e.state);
+    // ⚠️ THREE ANSWERS, AND THE THIRD WITHHOLDS THE CONTROL. This was
+    // `isLock ? e.state !== "locked" : !OFF.has(e.state)` — and `!== "locked"`
+    // is also true for `unavailable`, `unknown` and `jammed`, so a lock Home
+    // Assistant had lost contact with rendered its switch in the UNLOCKED
+    // position, announced as "on", while this same row's text said
+    // "Unavailable" and its badge was amber. A switch has two positions and
+    // the villa did not know which one was true, so it now offers none —
+    // the same reasoning `rowInHa` already applies one line up. See
+    // entityState.switchPosition.
+    const position = switchPosition(e, domain);
+    const canToggle = canControl && rowInHa && position !== "unknown"
+      && (TOGGLEABLE_DOMAINS.has(domain) || isLock);
     // EXACTLY what the map paints, via the one shared rule — see
     // deviceActivity.badgeSurfaceFor. This used to re-derive the surface from
     // classifyDeviceActivity plus its own unavailable check, which matched the
@@ -332,13 +337,16 @@ export default function SummaryGroupPanel({
     // pump runs, and every one of them listed here as plain grey. Reported by
     // tapping an entity group of four pump-power badges — two red on the map,
     // four identical rows in the modal.
-    const badge = badgeFaceAndRing(
-      type, e,
+    const badge = badgeFaceAndRing({
+      type, entity: e,
       // "Is the entity this one is linked to switched on" — the map holds the
       // same fact as a live set fed by state events (linkActiveIds); here the
       // store already has every state, so it is one lookup.
-      linkedStateOf(config.entityMap[id]?.linkedEntityId) === "on",
-    );
+      linkedOn: linkedStateOf(config.entityMap[id]?.linkedEntityId) === "on",
+      alertState: alertStateFor(
+        e.attributes.device_class as string | undefined,
+        config.alertThresholds[id]?.alertState),
+    });
     const notInHaRow = !rowInHa;
     // An id HA has no entity for is reported as THAT, not as "not on the map"
     // — it may well have geometry, and saying it is missing from the model
@@ -390,7 +398,7 @@ export default function SummaryGroupPanel({
         {canToggle && (
           <EntityRowToggle
             entityId={id}
-            actualOn={toggleOn}
+            actualOn={position === "on"}
             label={label}
             onToggle={doToggle}
           />

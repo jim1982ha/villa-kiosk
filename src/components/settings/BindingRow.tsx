@@ -5,10 +5,11 @@
 // Label field re-rendered every other bound row too. Localizing it here means
 // only the row actually being edited re-renders.
 
+import type { HassEntity } from "@/types/ha.types";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
 import { Unlink, Link2 } from "lucide-react";
 import EntityPicker from "./EntityPicker";
-import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import { memo } from "react";
 import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
@@ -25,13 +26,19 @@ interface Props {
   mesh: string;
   entityId: string;
   meta: EntityMapping | undefined;
+  /** This row's OWN live entity — the same narrow slice EntityMapRow takes, so
+   *  the row re-renders when ITS entity changes rather than on every state in
+   *  the house. Required: the category dropdown below cannot be resolved
+   *  without the `device_class` it carries, and this row used to omit it and
+   *  disagree with the identical dropdown one scroll away in the same modal. */
+  entity: HassEntity | undefined;
   onBind: (mesh: string, entityId: string) => void;
   onUnbind: (mesh: string) => void;
   /** Stable identity — see BindingsTable's patchMeta(). */
   onPatch: (entityId: string, change: Partial<EntityMapping>) => void;
 }
 
-function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: Props) {
+function BindingRow({ mesh, entityId, meta: meta0, entity, onBind, onUnbind, onPatch }: Props) {
   const intensity = useDraftCommit<number>((_k, ratio) => onPatch(entityId, { lightIntensityRatio: ratio }), 500);
   const field = useDraftCommit<Partial<EntityMapping>>((_k, change) => onPatch(entityId, change));
   const draftField = (change: Partial<EntityMapping>, delay?: number) =>
@@ -80,8 +87,8 @@ function BindingRow({ mesh, entityId, meta: meta0, onBind, onUnbind, onPatch }: 
           </select>
           <select
             style={{ fontSize: "var(--text-xs)", padding: "5px 8px", borderRadius: 6, background: "var(--bg-input)", color: "var(--text-primary)", border: "none", cursor: "pointer" }}
-            value={effectiveCategory(entityId, meta.type, meta.category)}
-            onChange={(e) => draftField({ category: e.target.value as Category })}
+            value={effectiveCategory(subjectOf(entityId, meta, entity))}
+            onChange={(e) => draftField({ category: e.target.value as Category, categoryPicked: true })}
             title="Which map filter group this device belongs to"
           >
             {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}

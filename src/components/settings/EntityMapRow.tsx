@@ -22,7 +22,7 @@ import { memo, type RefObject } from "react";
 import { Pencil, Trash2, Check, X, ChevronDown, ChevronRight } from "lucide-react";
 import EntityPicker from "./EntityPicker";
 import { useDraftCommit } from "@/hooks/useDraftCommit";
-import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory } from "@/config/EntityCategories";
+import { CATEGORY_ORDER, CATEGORY_LABELS, effectiveCategory, subjectOf } from "@/config/EntityCategories";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
 import type { HassEntity } from "@/types/ha.types";
 import { CONFIRM_GATE_TYPES } from "@/utils/quickAction";
@@ -187,8 +187,11 @@ function EntityMapRow({
           </td>
           <td data-label="Category">
             <select
-              value={effectiveCategory(m.entityId, m.type, m.category, entity?.attributes.device_class as string | undefined)}
-              onChange={(e) => draftField({ category: e.target.value as Category })}
+              value={effectiveCategory(subjectOf(m.entityId, m, entity))}
+              // `categoryPicked` records that this was CHOSEN. Without it the pick
+              // round-trips through the legacy-default discard and the dropdown
+              // snaps straight back — six of the options were unselectable.
+              onChange={(e) => draftField({ category: e.target.value as Category, categoryPicked: true })}
               title="Which map filter group this device belongs to"
             >
               {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}

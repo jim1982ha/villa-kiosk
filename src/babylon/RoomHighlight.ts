@@ -17,6 +17,7 @@
 //     draw a small synthetic circular patch there instead. A name covered by
 //     a real polygon always wins — no redundant circle on top of a real room.
 
+import { FrameClock } from "./frameClock";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -83,7 +84,7 @@ export class RoomHighlight {
   private active = new Set<string>();
   private pulseT = 0;
   /** performance.now() of the last glow step — see animate(). */
-  private lastTickAt = 0;
+  private readonly clock = new FrameClock();
 
   /** The room polygons `setRooms` last received, kept ONLY so a point-room's
    *  synthetic circle can be clipped to whichever room contains it — same fix,
@@ -326,15 +327,8 @@ export class RoomHighlight {
 
   private animate(): void {
     if (this.active.size === 0) return;
-    // Real elapsed time between glow steps, NOT engine.getDeltaTime(): that
-    // is set once per requestAnimationFrame tick regardless of whether the
-    // frame rendered, so under the continuous-animation frame cap it reports
-    // half the time that actually passed and the glow breathes at half speed.
-    // Clamped because the on-demand loop can idle for seconds, and a raw delta
-    // after such a gap would make the glow jump.
-    const now = performance.now();
-    const dtMs = this.lastTickAt ? Math.min(now - this.lastTickAt, 100) : 16;
-    this.lastTickAt = now;
+    // The one clock — see babylon/frameClock.
+    const dtMs = this.clock.step(performance.now());
     this.pulseT += (dtMs / 1000) * PULSE_RAD_PER_SEC;
     const t = (Math.sin(this.pulseT) + 1) / 2; // 0..1
     const alpha = BASE_ALPHA + (PULSE_ALPHA - BASE_ALPHA) * t;

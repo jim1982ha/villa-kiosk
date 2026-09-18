@@ -13,9 +13,36 @@
 import type { HassEntity } from "@/types/ha.types";
 import type { EntityType } from "@/types/scene.types";
 import type { DeviceSurfaceState } from "@/config/EntityCategories";
-import { TRANSITIONAL_STATES } from "@/utils/stateColors";
+import { TRANSITIONAL_STATES, UNKNOWN_STATES, statusKeyFor } from "@/utils/stateColors";
 
 export type DeviceActivity = "on" | "off" | "alert" | "info";
+
+/**
+ * Everything a badge is painted from, as ONE argument.
+ *
+ * ⚠️ IT WAS THREE POSITIONAL PARAMETERS AND A MISSING FOURTH. Whether a
+ * binary_sensor's reading is a problem depends on its `device_class` and on
+ * the villa's own per-entity override — neither of which the old
+ * `(type, entity, linkedOn)` could express, so the badge answered a different
+ * question from the panel that opens when you tap it. Adding a fourth optional
+ * parameter would have reproduced the defect this repo keeps paying for: an
+ * omission that looks exactly like "there is nothing to pass".
+ *
+ * ⚠️ `alertState` IS REQUIRED AND MAY BE `undefined`. "This entity has no
+ * override" is a statement the caller makes; forgetting to look is not.
+ * Resolve it with `alertStateFor(device_class, config.alertThresholds[id]?.alertState)`.
+ */
+export interface DeviceReading {
+  type: EntityType;
+  entity: HassEntity;
+  /** Is the entity this one is LINKED to switched on — the pump behind a
+   *  pump-power sensor. Held differently by each caller (the map keeps a live
+   *  set, a panel reads the store), so the RULE is shared and not the plumbing. */
+  linkedOn: boolean;
+  /** The villa's per-entity alert override, already resolved against the
+   *  device_class default. `undefined` means "this reading is never a fault". */
+  alertState: string | undefined;
+}
 
 /** The five-way live-state reading a badge is painted from: this module's own
  *  four, plus "unavailable", which outranks all of them. */
@@ -48,11 +75,11 @@ export const SURFACE_STATE: Record<BadgeKind, DeviceSurfaceState> = {
  * (EntityVisuals.linkActiveIds), a panel reads the linked entity out of the
  * store it already has. The RULE is what has to be shared, not the plumbing.
  */
-export function badgeKindFor(type: EntityType, s: HassEntity, linkedOn: boolean): BadgeKind {
-  if (s.state === "unavailable" || s.state === "unknown") return "unavailable";
+export function badgeKindFor(r: DeviceReading): BadgeKind {
+  if (UNKNOWN_STATES.has(r.entity.state)) return "unavailable";
   // Outranks the entity's own state vocabulary on purpose — see linkedEntityId.
-  if (linkedOn) return "alert";
-  return classifyDeviceActivity(type, s);
+  if (r.linkedOn) return "alert";
+  return classifyDeviceActivity(r);
 }
 
 /**
@@ -77,30 +104,28 @@ export function badgeKindFor(type: EntityType, s: HassEntity, linkedOn: boolean)
  * observed. It takes the amber dashed ring AND the muted face together.
  */
 export function badgeFaceAndRing(
-  type: EntityType, s: HassEntity, linkedOn: boolean,
+  r: DeviceReading,
 ): { face: DeviceSurfaceState; ring: DeviceSurfaceState } {
-  const own = badgeKindFor(type, s, false);
+  const own = badgeKindFor({ ...r, linkedOn: false });
   if (own === "unavailable") return { face: "unavailable", ring: "unavailable" };
   const face = SURFACE_STATE[own];
-  return { face, ring: linkedOn ? "alert" : face };
+  return { face, ring: r.linkedOn ? "alert" : face };
 }
 
-/** `badgeKindFor` resolved straight to the surface row, for the callers that
- *  only ever want the painted state. */
-export function badgeSurfaceFor(type: EntityType, s: HassEntity, linkedOn: boolean): DeviceSurfaceState {
-  return SURFACE_STATE[badgeKindFor(type, s, linkedOn)];
-}
+/* ⚠️ `badgeSurfaceFor` IS GONE (had zero callers). It resolved `badgeKindFor`
+   straight to a surface row for "callers that only ever want the painted
+   state", and every one of them had since moved to `badgeFaceAndRing` for the
+   ring. Deletion test: complexity did not even move. */
 
-// A known-bad enum/status reading — the value stays shown and the badge
-// rings red/alerts, so a real change is never silently swallowed. An
-// unrecognised value (e.g. a weather "sunny") is neither: shown as "info",
-// un-ringed.
-const SENSOR_ALERT_STATES = new Set([
-  "disconnected", "offline", "error", "fault", "faulted", "failed", "fail",
-  "unreachable", "down", "disabled", "problem", "alarm", "tripped",
-]);
+/* ⚠️ `SENSOR_ALERT_STATES` IS GONE, AND ITS DELETION IS THE FIX. It was a
+   private set of thirteen words, sitting beside a comment in `stateColors`
+   claiming the two lists were "deliberately the same". They were not: the
+   status table also carries `jammed` and `triggered`, which this one lacked,
+   so a sensor reporting `triggered` drew a red history segment under a badge
+   that did not ring. One table now answers, and it is the one the Map-colours
+   legend documents. */
 
-export function classifyDeviceActivity(type: EntityType, s: HassEntity): DeviceActivity {
+export function classifyDeviceActivity({ type, entity: s, alertState }: DeviceReading): DeviceActivity {
   switch (type) {
     // Locked is the normal, secure state — quiet, no signal. Only an
     // unlocked door demands attention (alert, not a plain "on").
@@ -115,7 +140,12 @@ export function classifyDeviceActivity(type: EntityType, s: HassEntity): DeviceA
     case "lock":
       if (s.state === "locked") return "off";
       return TRANSITIONAL_STATES.has(s.state) ? "off" : "alert";
-    case "binary_sensor": return s.state === "on" ? "alert" : "off";
+    // Resolved through the device_class, NOT through a bare `state === "on"`.
+    // See alertStateFor: a motion PIR is informational and reads as plain
+    // "on", a leak sensor alerts, and `connectivity` alerts when it goes OFF.
+    case "binary_sensor":
+      if (alertState !== undefined && s.state === alertState) return "alert";
+      return s.state === "on" ? "on" : "off";
     case "climate":       return s.state === "off" ? "off" : "on";
     case "cover": {
       const pos = s.attributes.current_position as number | undefined;
@@ -132,8 +162,12 @@ export function classifyDeviceActivity(type: EntityType, s: HassEntity): DeviceA
       return s.state === "idle" || s.state === "recording" || s.state === "streaming"
         ? "on" : "off";
     case "assist_satellite": return s.state === "idle" ? "off" : "on"; // listening/processing/responding
+    // The status vocabulary owns which readings are faults — `statusKeyFor`
+    // normalises and consults the same table the history bar and the legend
+    // read. An unrecognised value (a weather "sunny") is "info": shown,
+    // un-ringed, never silently swallowed.
     case "sensor":
-      return SENSOR_ALERT_STATES.has(s.state.trim().toLowerCase()) ? "alert" : "info";
+      return statusKeyFor(s.state, "sensor") === "alert" ? "alert" : "info";
     default:              return s.state === "on" ? "on" : "off"; // light/fan/switch/input_boolean
   }
 }

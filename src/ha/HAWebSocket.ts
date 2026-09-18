@@ -55,17 +55,50 @@ export class HAWebSocket {
   private onVisibility = () => { if (!document.hidden) this.checkHealth(); };
   private onOnline = () => this.checkHealth();
 
-  constructor() {
-    // A phone that slept or roamed Wi-Fi kills the TCP socket without firing
-    // onclose for minutes — the app still says "connected" but every tap goes
-    // into a black hole. Waking the tab / regaining network is the moment to
-    // health-check and, if needed, reconnect NOW instead of on backoff delay.
+  /** True while the wake/online listeners are registered — so arming twice is
+   *  a no-op rather than a second registration that only one removal clears. */
+  private wakeListenersArmed = false;
+
+  /**
+   * Arm the wake/online health checks.
+   *
+   * A phone that slept or roamed Wi-Fi kills the TCP socket without firing
+   * onclose for minutes — the app still says "connected" but every tap goes
+   * into a black hole. Waking the tab / regaining network is the moment to
+   * health-check and, if needed, reconnect NOW instead of on backoff delay.
+   *
+   * ⚠️ CALLED FROM connect(), NOT ONLY FROM THE CONSTRUCTOR. disconnect()
+   * removes these listeners, and connect() used not to put them back — so a
+   * disconnect/connect cycle on one instance (the provider's unmount effect at
+   * HAStateStore's `() => ws.disconnect()`, which React StrictMode runs on
+   * every mount in dev) permanently dropped the wake path for the rest of the
+   * page's life and left the client on backoff-only recovery. On a tablet
+   * bolted to a wall, that is the exact scenario the listeners exist for.
+   */
+  private armWakeListeners() {
+    if (this.wakeListenersArmed) return;
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", this.onVisibility);
     }
     if (typeof window !== "undefined") {
       window.addEventListener("online", this.onOnline);
     }
+    this.wakeListenersArmed = true;
+  }
+
+  private disarmWakeListeners() {
+    if (!this.wakeListenersArmed) return;
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.onVisibility);
+    }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.onOnline);
+    }
+    this.wakeListenersArmed = false;
+  }
+
+  constructor() {
+    this.armWakeListeners();
   }
 
   /** Ping a live-looking connection (dead sockets fail fast via the pong
@@ -115,6 +148,7 @@ export class HAWebSocket {
     }
     this.url = url;
     this.manuallyClosed = false;
+    this.armWakeListeners();   // symmetric with disconnect(), which removes them
     return this.openSocket();
   }
 
@@ -514,12 +548,7 @@ export class HAWebSocket {
     this.ws?.close();
     this.ws = null;
     this.rejectAllPending(new Error("Disconnected"));
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", this.onVisibility);
-    }
-    if (typeof window !== "undefined") {
-      window.removeEventListener("online", this.onOnline);
-    }
+    this.disarmWakeListeners();
     this.setState("disconnected");
   }
 }

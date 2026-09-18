@@ -13,9 +13,10 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { Node } from "@babylonjs/core/node";
 import { resolveMeshToMapping } from "@/config/EntityMap";
-import { effectiveCategory } from "@/config/EntityCategories";
 import { tapDebug } from "@/utils/tapDebug";
 import type { Category, EntityMapping, EntityType } from "@/types/scene.types";
+// Babylon prototype patches this module depends on — see babylonSideEffects.
+import "./babylonSideEffects";
 
 export class PickHandler {
   private scene: Scene;
@@ -39,6 +40,10 @@ export class PickHandler {
    *  reacts to badges, not just 3D meshes (badges have no pointer handling
    *  of their own — see EntityVisuals.pickBadgeAt's docstring). */
   private badgeHitTest: ((clientX: number, clientY: number) => boolean) | null = null;
+  /** Resolves a device's filter category from the LIVE state — supplied by
+   *  SceneManager, which owns it. See resolveMesh. */
+  private categoryOf: (entityId: string, type: EntityType) => Category =
+    () => "others";
 
   constructor(
     scene: Scene,
@@ -47,6 +52,7 @@ export class PickHandler {
     bindings: Record<string, string> = {},
     onLongPicked?: (entityId: string, clientX: number, clientY: number) => void,
     badgeHitTest?: (clientX: number, clientY: number) => boolean,
+    categoryOf?: (entityId: string, type: EntityType) => Category,
   ) {
     this.scene = scene;
     this.onPicked = onPicked;
@@ -55,6 +61,7 @@ export class PickHandler {
     this.entityMap = entityMap;
     this.bindings = bindings;
     this.badgeHitTest = badgeHitTest ?? null;
+    if (categoryOf) this.categoryOf = categoryOf;
 
     scene.onPointerObservable.add((info) => this.handlePointer(info));
   }
@@ -89,7 +96,13 @@ export class PickHandler {
         // a category the HUD filter switched off is not interactive either,
         // matching SceneManager.applyHighlight's own gate (hidden categories
         // don't glow as clickable, so they shouldn't fire on tap either).
-        const category = effectiveCategory(mapping.entityId, mapping.type, mapping.category);
+        // ⚠️ ASKED, NOT RE-DERIVED. This called `effectiveCategory` itself
+        // with no `device_class` — which it has no way to obtain — so an enum
+        // sensor resolved here to a different category than the badge two
+        // pixels away, and a device could be drawn under a visible filter
+        // while being untappable under a hidden one. `categoryOf` belongs to
+        // `EntityVisuals`, which holds the live state.
+        const category = this.categoryOf(mapping.entityId, mapping.type);
         if (!this.hiddenCategories.includes(category)) return mapping;
       }
       node = node.parent;

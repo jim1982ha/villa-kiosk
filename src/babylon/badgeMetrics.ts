@@ -172,7 +172,20 @@ export const GROUP_ZOOM_STEPS_PER_DOUBLING = 12;
 export function snapToZoomLattice(v: number): number {
   if (!(v > 0)) return v;
   const q = GROUP_ZOOM_STEPS_PER_DOUBLING;
-  return Math.pow(2, Math.ceil(Math.log2(v) * q) / q);
+  // ⚠️ THE EPSILON MAKES THE LATTICE IDEMPOTENT, AND WITHOUT IT 4 RUNGS IN 25
+  // WERE NOT. `Math.log2(Math.pow(2, k / q)) * q` does not land exactly on `k`
+  // in binary floating point — it lands a few ulps above — so `ceil` pushed an
+  // already-snapped value up to the NEXT rung, a 5.9% jump in badge size.
+  //
+  // ⚠️ LATENT, NOT LIVE, AND FIXED ANYWAY. All three callers snap a raw value
+  // today, so nothing re-snaps and nothing jumps. But "snapping twice is
+  // snapping once" is the property the whole lattice exists to provide — it is
+  // what stops badges shimmering as the camera moves — and a caller that
+  // cached a snapped value would have resized every badge for free. Found by
+  // `tests/oracles/badge_geometry.mjs`, which is the first thing ever to run
+  // this function.
+  const EPS = 1e-9;
+  return Math.pow(2, Math.ceil(Math.log2(v) * q - EPS) / q);
 }
 
 
@@ -434,7 +447,7 @@ export interface BadgeMetrics {
  *
  * which is one equation — VISIBLE gap == VISIBLE right margin — and it is what
  * `?debug`'s `badge` line already prints as `gap=` and `visR=`. So the rule is
- * now checkable against a capture instead of argued, and `test:placement` pins
+ * now checkable against a capture instead of argued, and `badge_geometry.mjs` pins
  * the equality rather than either number.
  *
  * 1.5 rather than 1 because that keeps the card's WIDTH exactly what it was:
@@ -465,7 +478,7 @@ export const CARD_VALUE_MARGIN_OF_ICON_PAD = 1.5;
  * owner asked for a smaller value THREE times and twice it did not move at all,
  * because `MIN_VALUE_FONT_PX` was clamping the fine-pointer result back up (see
  * there). A ratio that a floor overrides is not a ratio. Both moved together
- * this time, and `npm run test:placement` now reads THIS CONSTANT rather than a
+ * this time. ⚠️ THE CLAIM THAT FOLLOWED — that a pin "reads THIS CONSTANT rather than a
  * copy of its value, so a pin can no longer assert last month's design.
  */
 /**
