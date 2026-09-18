@@ -1,3 +1,30 @@
+## 2.975.0
+
+### Fixed — the villa said it could not see its own electricity meter
+Asked in the chat how much the house was using, VESTA answered that it had no
+access to a global sensor, then spent its whole allowance looking device by
+device and gave up partway through.
+
+The villa has had a whole-house meter all along: it is the grid source of Home
+Assistant's own Energy dashboard, which you configured when you set that
+dashboard up. VESTA now reads it there. It also reads which circuits sit
+*inside* which meters, so it can give a true total instead of adding up
+overlapping readings and reporting a number that is too high.
+
+If a meter is not reporting, it says so rather than quietly returning a smaller
+total. If a property has never set the Energy dashboard up, it says that too —
+and says that configuring the grid source is what makes the question
+answerable.
+
+Nothing about this villa is written into the add-on: the meters, the phases and
+the circuits are all read from your dashboard as it stands, so re-wiring it is
+followed automatically.
+
+### Fixed — answers switching language mid-conversation
+Two replies in French and then, with nothing having changed, a third in
+English. VESTA now answers in the language the question was asked in, and keeps
+to it for the rest of the thread.
+
 ## 2.974.0
 
 ### Fixed — alerts now tell you the time on the villa's own clock
