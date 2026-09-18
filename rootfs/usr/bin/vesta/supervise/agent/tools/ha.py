@@ -414,13 +414,19 @@ class ReadConfiguration(BaseTool):
         "them), areas and floors, integrations, dashboards. Use it whenever a "
         "question depends on how the property is arranged rather than on a "
         "current reading. Examples of commands: 'energy/get_prefs', "
-        "'config/area_registry/list'. Only reading is possible.")
+        "'config/area_registry/list', 'recorder/statistics_during_period' "
+        "(pass its time window in `data`). Only reading is possible.")
     inputSchema = {
         "type": "object",
         "properties": {
             "command": {
                 "type": "string",
                 "description": "A Home Assistant websocket read command.",
+            },
+            "data": {
+                "type": "object",
+                "description": "The command's own arguments — a time window "
+                               "for a statistics query, for example.",
             },
         },
         "required": ["command"],
@@ -435,7 +441,8 @@ class ReadConfiguration(BaseTool):
         if not callable(self._source):
             return [fail("unavailable", _UNWIRED)]
         try:
-            out = await resolved(self._source(str(args.get("command") or "")))
+            out = await resolved(self._source(str(args.get("command") or ""),
+                                              dict(args.get("data") or {})))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         if not isinstance(out, Mapping):

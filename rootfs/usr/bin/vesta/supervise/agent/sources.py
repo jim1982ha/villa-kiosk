@@ -1239,9 +1239,32 @@ def service_reader(session: Any) -> Optional[Callable[..., Any]]:
 #: prefix alone. Positive rule AND negative guard; either alone is one rename
 #: away from wrong.
 _READS = _re.compile(r"^[a-z][a-z0-9_]*(?:/[a-z][a-z0-9_]*)*$")
+
+#: Words a Home Assistant command starts with when it only reads.
+#:
+#: ⚠️ A VOCABULARY OF VERBS, WHICH IS NOT THE SAME AS A LIST OF COMMANDS. A verb
+#: set generalises across every domain Core has and every domain it adds; a
+#: command list is the anticipation trap. The distinction is the whole reason
+#: this is shaped the way it is.
+#:
+#: ⚠️ AND IT BEGAN FAR TOO NARROW, WHICH IS A FAILURE I SHIPPED. The first cut
+#: demanded the final segment equal "list" or start with "get", and so refused
+#: `recorder/list_statistic_ids` (a command THIS REPO ALREADY CALLS),
+#: `recorder/statistics_during_period` — the one that answers "how much since
+#: one o'clock", the question that exposed all of this — and `hassio/addon/info`.
+#: Worse, I wrote a test asserting that last one MUST be refused, which ratified
+#: the implementation's limitation as though it were the requirement. The
+#: requirement is: allow reads, refuse writes.
+_READ_VERBS = (
+    "get", "list", "info", "search", "stats", "statistics", "history",
+    "current", "status", "ping", "validate", "check", "describe", "resolve",
+    "render", "preview", "count", "summary", "read", "fetch", "query",
+)
+
 _MUTATES = ("set", "save", "delete", "remove", "create", "update", "add",
             "call", "fire", "subscribe", "unsubscribe", "reload", "restart",
-            "install", "uninstall", "start", "stop", "reset", "apply")
+            "install", "uninstall", "start", "stop", "reset", "apply",
+            "sign", "move", "rename", "upload", "import", "execute", "run")
 
 
 def _is_read_command(command: str) -> bool:
@@ -1257,8 +1280,12 @@ def _is_read_command(command: str) -> bool:
     for segment in segments:
         if set(segment.split("_")) & set(_MUTATES):
             return False
-    last = segments[-1]
-    return last == "list" or last.startswith("get")
+    # ⚠️ THE FIRST WORD OF THE LAST SEGMENT, so `list_statistic_ids` and
+    # `statistics_during_period` read as what they are. Still fail-closed: a
+    # first word this does not recognise is refused, because the gate admits
+    # what it RECOGNISES as a read rather than everything it fails to recognise
+    # as a write.
+    return segments[-1].split("_")[0] in _READ_VERBS
 
 
 def config_reader(session: Any) -> Optional[Callable[..., Any]]:
@@ -1266,7 +1293,8 @@ def config_reader(session: Any) -> Optional[Callable[..., Any]]:
     if session is None:
         return None
 
-    async def read(command: str = "") -> Dict[str, Any]:
+    async def read(command: str = "",
+                   data: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
         from vesta.adapters.hass import HassClient
         name = str(command or "").strip()
         if not name:
@@ -1280,7 +1308,12 @@ def config_reader(session: Any) -> Optional[Callable[..., Any]]:
                               "are allowed, and none that names a changing "
                               "action.")}
         async with HassClient(session) as hass:
-            return {"body": await hass.command(name)}
+            # ⚠️ ARGUMENTS, BECAUSE A READ COMMAND OFTEN NEEDS THEM. The first
+            # cut passed none, so `statistics_during_period` — which requires a
+            # start time — could not be asked even once it was allowed. A tool
+            # that can name a command but not parameterise it answers only the
+            # commands that happen to take no arguments.
+            return {"body": await hass.command(name, **dict(data or {}))}
 
     return read
 

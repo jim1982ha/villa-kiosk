@@ -1,3 +1,27 @@
+## 2.985.0
+
+### Fixed — "I don't have access to the history for that period"
+Not the expected result, and the cause was the release before it.
+
+2.984.0 let VESTA read the villa's configuration, but decided what counted as
+"reading" far too narrowly: it only recognised a command whose last word was
+exactly *list*, or started with *get*. That refused the very command that
+answers "how much electricity since 1pm", refused another one VESTA already
+uses elsewhere, and refused several plainly harmless ones.
+
+It also gave VESTA no way to pass arguments — so even once that command was
+allowed, it could not say *which* period to report on.
+
+Both fixed. What counts as reading is now a vocabulary of verbs rather than two
+spellings, and a command can carry its own arguments. Anything naming a
+changing action is still refused, and anything whose verb is unrecognised is
+still refused rather than assumed safe.
+
+⚠️ Worth recording plainly: one of the tests shipped in 2.984.0 asserted that a
+harmless read *should* be refused. It was written to match what the code did
+rather than what it was for, so it locked the fault in place instead of finding
+it.
+
 ## 2.984.0
 
 ### Fixed — VESTA can now read how the villa is SET UP, not just what it is doing

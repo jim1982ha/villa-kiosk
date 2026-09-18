@@ -28,7 +28,11 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "rootfs", "usr", "bin"))
 
-from vesta.supervise.agent.sources import _is_read_command  # noqa: E402
+import asyncio  # noqa: E402
+
+from vesta.adapters import hass as hass_mod  # noqa: E402
+from vesta.supervise.agent.sources import (  # noqa: E402
+    _is_read_command, config_reader)
 
 
 @pytest.mark.parametrize("command", [
@@ -89,20 +93,35 @@ def test_the_deny_list_beats_the_prefix(command):
 
 
 @pytest.mark.parametrize("command", [
+    # ⚠️ EVERY ONE OF THESE WAS REFUSED BY THE FIRST CUT, AND A TEST ASSERTED
+    # THAT IT SHOULD BE. I wrote the test to match what my rule did instead of
+    # what the rule is FOR — "allow reads, refuse writes" — which ratified the
+    # limitation and hid it. `recorder/statistics_during_period` is the command
+    # that answers "how much electricity since one o'clock", the question that
+    # exposed the whole chain; `recorder/list_statistic_ids` is one THIS REPO
+    # ALREADY CALLS in discovery.
+    "recorder/statistics_during_period",
+    "recorder/list_statistic_ids",
+    "history/history_during_period",
+    "hassio/addon/info",
     "homeassistant/ping",
     "render_template",
-    "config/auth/sign_path",
-    "hassio/addon/info",
 ])
-def test_a_command_that_is_not_a_READER_is_refused_even_if_it_is_harmless(command):
-    """⚠️ THE CASE ONLY THE POSITIVE RULE CATCHES, and without it the whole
-    test set passed with that rule deleted — every other refusal here is caught
-    by the deny-list, so the convention half was measuring nothing. Found by
-    mutation.
+def test_a_read_that_does_not_start_with_get_is_still_a_read(command):
+    assert _is_read_command(command) is True
 
-    These name no changing verb and some are genuinely harmless. They are still
-    refused: the gate admits what it RECOGNISES as a read, not everything it
-    fails to recognise as a write. Fail closed."""
+
+@pytest.mark.parametrize("command", [
+    "config/auth/sign_path",      # mints a credential
+    "homeassistant/frobnicate",   # a verb this does not recognise
+    "config/thing/wibble",
+])
+def test_an_unrecognised_verb_is_refused_even_though_it_names_no_write(command):
+    """⚠️ THE CASE ONLY THE POSITIVE RULE CATCHES, and without it the whole
+    test set passed with that rule deleted — every other refusal is caught by
+    the deny-list, so the convention half was measuring nothing. Found by
+    mutation. Fail closed: the gate admits what it RECOGNISES as a read, not
+    everything it fails to recognise as a write."""
     assert _is_read_command(command) is False
 
 
@@ -114,3 +133,58 @@ def test_the_gate_names_no_domain_of_any_property():
     src = code_of(sources)
     for named in ("energy/get_prefs", "get_forecasts", "weather"):
         assert named not in src, f"a domain reached the gate: {named}"
+
+
+class _FakeHass:
+    """Records what the reader actually sent to Home Assistant."""
+
+    sent: list = []
+
+    def __init__(self, session):  # noqa: D107
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def command(self, name, **payload):
+        _FakeHass.sent.append((name, payload))
+        return {"ok": True}
+
+
+def _run(reader, *args):
+    original = hass_mod.HassClient
+    hass_mod.HassClient = _FakeHass          # type: ignore[misc]
+    _FakeHass.sent = []
+    try:
+        return asyncio.run(reader(*args))
+    finally:
+        hass_mod.HassClient = original       # type: ignore[misc]
+
+
+def test_the_command_arguments_are_actually_forwarded():
+    """⚠️ NOTHING TESTED THIS AND THE MUTATION SURVIVED. Dropping the payload
+    left every other test green — because they all assert on the GATE, not on
+    the call. `recorder/statistics_during_period` without a time window is the
+    question this whole chain is about, asked in a way that cannot answer it: a
+    tool that can name a command but not parameterise it serves only the
+    commands that happen to take no arguments."""
+    reader = config_reader(object())
+    out = _run(reader, "recorder/statistics_during_period",
+               {"start_time": "2026-09-18T13:00:00+08:00",
+                "statistic_ids": ["x"]})
+    assert out["body"] == {"ok": True}
+    name, payload = _FakeHass.sent[-1]
+    assert name == "recorder/statistics_during_period"
+    assert payload["start_time"] == "2026-09-18T13:00:00+08:00"
+    assert payload["statistic_ids"] == ["x"]
+
+
+def test_a_refused_command_never_reaches_home_assistant():
+    """The gate must stop it BEFORE the socket, not after."""
+    reader = config_reader(object())
+    out = _run(reader, "energy/save_prefs", {"anything": 1})
+    assert out.get("code") == "refused"
+    assert _FakeHass.sent == []
