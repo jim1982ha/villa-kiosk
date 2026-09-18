@@ -1,3 +1,16 @@
+## 2.988.0
+
+### Added — the conversation now records what it actually looked at
+Until now, a chat answer left no trace of which checks VESTA ran. The log showed
+which tools were *available* to it and never which it *used*. So when an answer
+was wrong, there was no way to tell whether VESTA had looked and found nothing,
+or never looked at all — and every diagnosis was guesswork.
+
+Each conversation now logs the tools it called and how many times, and says
+plainly when it called none. That last case is the important one: an answer
+composed without checking anything is exactly what a wrong "I can't see that"
+looks like.
+
 ## 2.987.0
 
 ### Fixed — VESTA was being *told* to refuse

@@ -572,6 +572,28 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
             kind="chat")
         noted = run_limits.collected()
 
+    # ⚠️ THE TRACE CHAT HAS NEVER HAD, AND ITS ABSENCE COST THIS WHOLE DAY.
+    # `runtime.investigate` logs "run <id> tools used: …" for every SCHEDULED
+    # run; chat calls `registry.run` directly and bypasses it, so a chat run
+    # that ANSWERED logged only which tools were PUBLISHED — never which were
+    # CALLED. So "did it look at the Energy dashboard before saying it could
+    # not?" was unanswerable from the log, and every diagnosis of a wrong chat
+    # answer has been a guess dressed as an inference.
+    #
+    # ⚠️ AND A RUN THAT CALLED NOTHING SAYS SO EXPLICITLY. An empty `used` is
+    # the single most diagnostic outcome here — a model that answered from the
+    # document without touching a tool — and printing nothing for it would make
+    # the most important case the invisible one, which is how this started.
+    used: Dict[str, int] = {}
+    for row in result.evidence:
+        name = str(row.get("tool") or "")
+        if name:
+            used[name] = used.get(name, 0) + 1
+    ranked = sorted(used.items(), key=lambda kv: (-kv[1], kv[0]))
+    log(f"chat {result.run_id} {result.status} in {result.turns} turn(s), "
+        f"{result.tool_calls} tool call(s); tools used: "
+        + (" ".join(f"{n}x{c}" for n, c in ranked) if ranked else "NONE"))
+
     # ⚠️ THE ANSWER ITSELF IS DELIVERED HERE, AND FORGETTING THAT COST THE
     # WHOLE FEATURE. `run_loop` returns the model's final prose in
     # `result.text` and stops; nothing downstream sent it. So a run that

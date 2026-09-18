@@ -990,3 +990,36 @@ def test_the_refusal_NAMES_WHICH_RULE_fired_and_by_how_much() -> None:
     src = inspect.getsource(chat.handle_event)
     assert "no readable date" in src, "the two rules log identically"
     assert "backlog window" in src and "limit {MAX_MESSAGE_AGE_S}" in src
+
+
+# ── the trace chat never had ────────────────────────────────────────────────
+def test_a_chat_run_logs_WHICH_TOOLS_IT_CALLED(capsys) -> None:
+    """⚠️ THE INSTRUMENT WHOSE ABSENCE COST A DAY OF GUESSING. Scheduled runs
+    log "run <id> tools used: …" from `runtime.investigate`; chat calls
+    `registry.run` directly and bypassed it, so a chat run that ANSWERED logged
+    only which tools were PUBLISHED — never which were CALLED.
+
+    So "did it read the Energy dashboard before saying it could not total?" was
+    unanswerable from the add-on log, and every diagnosis of a wrong chat answer
+    was a guess presented as an inference. This asserts the line exists and
+    carries the names.
+    """
+    from fake_provider import FakeProvider, says
+
+    _handle(_event(), provider=FakeProvider([says("Nothing is on.")]))
+    printed = capsys.readouterr().out
+    assert "tools used:" in printed, (
+        "a chat run must say what it reached for, or a wrong answer cannot be "
+        "diagnosed from the log at all")
+
+
+def test_a_chat_run_that_called_NOTHING_says_so(capsys) -> None:
+    """⚠️ THE MOST DIAGNOSTIC CASE MUST NOT BE THE SILENT ONE. A model that
+    answers from the villa document without touching a tool is exactly what a
+    wrong "I cannot see that" looks like — printing nothing for an empty list
+    would hide the one outcome worth seeing."""
+    from fake_provider import FakeProvider, says
+
+    _handle(_event(), provider=FakeProvider([says("Nothing is on.")]))
+    printed = capsys.readouterr().out
+    assert "tools used: NONE" in printed
