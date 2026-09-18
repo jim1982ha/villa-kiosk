@@ -197,7 +197,7 @@ DEFAULTS: Final[Dict[str, Any]] = {
     # the cap and not the task decided when to stop. The runs that have since
     # completed at 4 turns answered in 20-21 s with 7 tool calls, and the tier
     # is instructed that a partial-and-labelled answer beats silence
-    # (`registry.LAST_TURN_NOTE`), so a genuinely deep case degrades rather
+    # (`registry.LAST_TURN_NOTICE`), so a genuinely deep case degrades rather
     # than vanishing. Cost is `prefix x turns`; this is the second factor.
     # ⚠️ ONE KEY FOR WHAT WAS TWO (2.756.0), for the same reason as `mode`
     # above. `max_turns` and `max_tool_calls` are not independent dials — they

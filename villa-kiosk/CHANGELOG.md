@@ -1,3 +1,25 @@
+## 2.996.0
+
+### Changed — the rule about not guessing now applies everywhere, not just to chat
+The last release taught VESTA, when you ask it a question, to trust what your
+Energy dashboard says about which meter is the property's rather than going
+looking for a better one. That was written into the instructions for
+conversations only — so the villa's own hourly checks, which ask the same kinds
+of question all day, carried on hunting.
+
+Both rules now live in the single set of instructions every part of VESTA
+reads: work nothing out by hand when it can be measured, and do not go looking
+for something the property has already declared.
+
+### Fixed — a note in the code pointed at something that had been renamed
+Nothing you can see. A comment explaining why a limit was set the way it is
+named a mechanism by a slightly wrong name, and reading it led me to conclude
+the mechanism was missing altogether. It is not, and the limit is sound.
+
+Twenty-three more comments in the codebase name something that no longer
+exists. They are now recorded, and a new one fails the build — the same
+protection the instruction files and the conversation prompt already had.
+
 ## 2.995.0
 
 ### Fixed — VESTA spent twelve steps on a two-step question
