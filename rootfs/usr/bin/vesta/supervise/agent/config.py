@@ -62,6 +62,23 @@ DEPTH: Final[Dict[str, Dict[str, int]]] = {
     "thorough": {"turns": 12, "tool_calls": 36},
 }
 
+#: What a CHAT run may spend — deliberately NOT `DEPTH`.
+#:
+#: ⚠️ ONE DIAL GOVERNED TWO UNRELATED THINGS, AND THE OWNER COULD NOT HAVE
+#: KNOWN. `depth` is the supervision budget: it is spent 96 times a day by
+#: scheduled passes nobody is watching, so an owner who sets "brief" is making a
+#: sensible decision about their monthly bill. Chat borrowed the same numbers —
+#: one question, a person waiting, once in a while — and inherited a FOUR-turn
+#: cap. Asked for outdoor pressure the model searched, was handed a truncated
+#: result, hit the cap and told the owner the property has no weather sensor.
+#:
+#: ⚠️ AND THIS IS AFFORDABLE ONLY BECAUSE THE TOOL SET SHRANK. Cost is
+#: `prefix x turns`, and `registry.CHAT_UPSTREAM` cut the published schemas
+#: from 49 to 16 — measured at 33.2kt of a 41kt prefix. Roughly quartering the
+#: per-turn prefix is what pays for doubling the turns; raising this alone
+#: would simply have cost more.
+CHAT_BUDGET: Final[Dict[str, int]] = {"turns": 8, "tool_calls": 20}
+
 
 DEFAULTS: Final[Dict[str, Any]] = {
     # ── the kill switches, and the address they gate ─────────────────────

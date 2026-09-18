@@ -541,9 +541,18 @@ def test_a_declined_run_TELLS_the_person_who_asked() -> None:
         reply_mod.ReplyTool = original  # type: ignore[misc]
 
     assert got.startswith("declined"), got
-    assert sent and "could not answer" in sent[0]
-    assert "no credit left" in sent[0], (
+    # ⚠️ THE REASON MOVED BUBBLE IN 2.981.0 AND THE INTENT DID NOT. It used to
+    # ride in the reply itself ("That is as far as I got. <reason>"); it is now
+    # the management message underneath, which is where every OTHER limitation
+    # also lands. Asserting across what was delivered keeps this test about
+    # "the reader learns the reason" rather than about where it was printed.
+    assert sent, "a decline must never be silence"
+    joined = "\n".join(sent)
+    assert "could not answer" in joined
+    assert "no credit left" in joined, (
         "the reason was dropped, so the reader learns nothing actionable")
+    assert any(m.startswith("⚠️ About this answer") for m in sent), (
+        "the reason belongs in the management message, not in the answer")
 
 
 def test_a_successful_run_does_not_ALSO_send_a_decline() -> None:

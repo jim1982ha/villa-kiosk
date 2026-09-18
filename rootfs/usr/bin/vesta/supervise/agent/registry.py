@@ -181,11 +181,38 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
         # result carries real entity ids, `redact.audit` refuses any payload
         # holding one, and the model got "the result could not be shown safely"
         # for every question about a named device.
-        built += upstream.tools_for(lambda: session, refs)
+        built += [t for t in upstream.tools_for(lambda: session, refs)
+                  if t.name in CHAT_UPSTREAM]
         return Registry(built, refs=refs)
     except Exception as err:  # noqa: BLE001 - a broken source is not a dead
         swallow("could not wire the tools to this villa", err)   # registry
         return Registry([cls() for cls in ALL_TOOLS])
+
+
+#: The upstream tools CHAT may reach for, out of the ~40 `ha_mcp` publishes.
+#:
+#: ⚠️ THE WHOLE CATALOGUE WAS PUBLISHED TO CHAT AND IT IS WHY AN UNANTICIPATED
+#: QUESTION COULD NOT BE ANSWERED. Measured on the villa, every chat message:
+#:   tools  116,840c / 33.2kt  81% of the prefix  n=49
+#: Forty-nine schemas is 33k tokens spent before the reader has typed a word,
+#: on every turn, against a budget of four turns — the BROADEST tool set paired
+#: with the NARROWEST budget. Asked for outdoor pressure, the model searched,
+#: was handed a truncated result, ran out of turns and told the owner the
+#: property has no weather sensor.
+#:
+#: ⚠️ THESE FOUR ARE CHOSEN AS A BASIS, NOT AS A LIST OF ANSWERABLE QUESTIONS —
+#: which is the trap this repo has now fallen into twice, adding `read_energy`
+#: and `read_weather` one question at a time. Between them they cover FIND
+#: (search), READ (state), COMPUTE (template) and WHERE (floors/areas), which is
+#: enough to answer something nobody anticipated. Adding a fifth needs the same
+#: argument: what shape of question is impossible without it.
+#:
+#: ⚠️ AND NOT `ha_get_history`: `read_history` already serves it against the
+#: villa's own subjects, and two tools for one question is how a model comes to
+#: spend a turn choosing.
+CHAT_UPSTREAM: Tuple[str, ...] = (
+    "ha_search", "ha_get_state", "ha_eval_template", "ha_list_floors_areas",
+)
 
 
 #: ⚠️ THE AUTONOMOUS TIERS DO NOT GET THE UPSTREAM CATALOGUE, AND THAT IS THE

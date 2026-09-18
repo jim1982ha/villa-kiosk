@@ -43,6 +43,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.adapters.log import log
 from vesta.shared.style import inert
+from vesta.supervise.agent import limits
 
 #: The HA event this listens for. ⚠️ LOW-VOLUME BY NATURE — a person typing.
 #: Subscribing to a high-volume type here would put the loop behind the villa's
@@ -540,28 +541,33 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
                               thread_key=message.thread_key)
     registry = registry.with_tool(replier)
 
-    policy = policy_mod.for_run(config, tier="reason",
+    # ⚠️ `tier="chat"`, NOT "reason". It borrowed the reason tier for its whole
+    # life and inherited that tier's budget — the narrowest in the system —
+    # while holding the broadest tool set. See `config.CHAT_BUDGET`.
+    policy = policy_mod.for_run(config, tier="chat",
                                 tool_names=[t["name"] for t in registry.describe()])
-    result = await run_loop(
-        run_id=f"chat{int(_now())}", provider=provider, registry=registry,
-        policy=policy, model=model,
-        # ⚠️ THE CONSTITUTION FIRST, THEN THIS PATH'S OWN INSTRUCTIONS, THEN
-        # THE VILLA. The `_system` playbooks were written, shipped and
-        # CI-gated in 2.641.0 and NOTHING LOADED THEM — /dry-audit found
-        # `playbooks.py` imported by nobody, so the agent had no constitution,
-        # no severity scale, no evidence rule and no voice. The identical shape
-        # as `build_registry()` building tools with no sources: the content
-        # delivered, the wiring forgotten.
-        #
-        # ⚠️ THE VOICE FOLLOWS THE ASKER'S ROLE. A facility manager gets the
-        # file that WANTS the entity id; an owner gets the one that forbids it.
-        # They are deliberately contradictory and only one may load.
-        system=playbooks.system_blocks(
-            playbooks.AUDIENCE_OF_ROLE.get(role, "owner"),
-            instructions=SYSTEM, document=document),
-        messages=context_for(message),
-        config=config, actor=role or "chat", trigger="chat",
-        kind="chat")
+    with limits.scope() as run_limits:
+        result = await run_loop(
+            run_id=f"chat{int(_now())}", provider=provider, registry=registry,
+            policy=policy, model=model,
+            # ⚠️ THE CONSTITUTION FIRST, THEN THIS PATH'S OWN INSTRUCTIONS, THEN
+            # THE VILLA. The `_system` playbooks were written, shipped and
+            # CI-gated in 2.641.0 and NOTHING LOADED THEM — /dry-audit found
+            # `playbooks.py` imported by nobody, so the agent had no constitution,
+            # no severity scale, no evidence rule and no voice. The identical shape
+            # as `build_registry()` building tools with no sources: the content
+            # delivered, the wiring forgotten.
+            #
+            # ⚠️ THE VOICE FOLLOWS THE ASKER'S ROLE. A facility manager gets the
+            # file that WANTS the entity id; an owner gets the one that forbids it.
+            # They are deliberately contradictory and only one may load.
+            system=playbooks.system_blocks(
+                playbooks.AUDIENCE_OF_ROLE.get(role, "owner"),
+                instructions=SYSTEM, document=document),
+            messages=context_for(message),
+            config=config, actor=role or "chat", trigger="chat",
+            kind="chat")
+        noted = run_limits.collected()
 
     # ⚠️ THE ANSWER ITSELF IS DELIVERED HERE, AND FORGETTING THAT COST THE
     # WHOLE FEATURE. `run_loop` returns the model's final prose in
@@ -587,49 +593,46 @@ async def handle_event(event: Mapping[str, Any], *, session: Any,
     if result.text and not replier.sent:
         await replier.call({"text": result.text})
 
-    # ⚠️ A DECLINE MUST NOT BE SILENCE — SOMEBODY IS WAITING FOR AN ANSWER.
-    # The degradation ladder's rule is that nothing on it is silent, and in
-    # chat the person who typed the question IS the instrument: they cannot
-    # read the add-on log, so an unspoken decline is indistinguishable from a
-    # broken bot and they retry, which costs another turn and another refusal.
-    # Measured: a spent API balance declined every message and the villa said
-    # nothing at all.
+    # ── the management message ───────────────────────────────────────────
+    # ⚠️ A SECOND BUBBLE, AND ONLY WHEN THERE IS SOMETHING TO SAY. Owner's
+    # instruction, 2026-09-18: the reader must always be able to judge how
+    # complete an answer is. Until now the only thing that could limit an
+    # answer VISIBLY was a decline; a truncated search or an exhausted tool
+    # budget produced an answer that looked exactly like a whole one.
     #
-    # ⚠️ ONLY TO AN ALREADY-AUTHORISED SENDER, which is guaranteed here — the
-    # allow-list was checked far above, before the text was read. The silence
-    # rule applies to STRANGERS, and telling an owner why their villa cannot
-    # answer is the opposite of leaking anything to one.
+    # ⚠️ IT REPLACES THE OLD DECLINE BRANCH RATHER THAN SITTING BESIDE IT. That
+    # branch sent "That is as far as I got. <reason>" as an ordinary reply, so
+    # a decline and an answer were the same kind of bubble and a limitation
+    # that was NOT a decline had nowhere to go at all. One channel now, one
+    # shape, and the reason joins the other notes instead of outranking them.
     #
-    # ⚠️ AND IT REPORTS OUR OWN REASON, WHICH IS ALREADY REDACTED. Provider
-    # error text reaches here through `anthropic_sdk._redacted`, so a client
-    # that echoed its request headers has had the key removed before this
-    # point; `clean_reply` then flattens and caps it.
-    #
-    # ⚠️ AND IT MUST NOT CONTRADICT AN ANSWER ALREADY DELIVERED. Every OTHER
-    # decline can fire after a mid-run `reply` too — a deadline, a spent
-    # budget, an open breaker — and "I could not answer that" on top of a
-    # correct answer is worse than saying nothing, because it tells the reader
-    # to distrust what they just read. So the message depends on whether this
-    # run has already spoken, and NEITHER branch is silent: a person who got a
-    # partial answer still needs to know it stopped early.
-    #
-    # ⚠️ ON HAVING A REASON, NOT ON THE STATUS, FOR THE SAME REASON AS ABOVE. A
-    # run rescued to `partial` because it gathered evidence but never composed
-    # an answer still owes the asker an explanation, and a status test sent
-    # them the generic "produced no reply" instead of the one useful sentence.
-    elif result.declined_reason:
-        await replier.call({"text": (
-            f"That is as far as I got. {result.declined_reason}"
-            if replier.sent else
-            f"I could not answer that. {result.declined_reason}")})
-
+    # ⚠️ NEITHER BRANCH IS SILENT, which is the rule the old code was right
+    # about and is kept: a person who got a partial answer still needs to know
+    # it stopped early, and a person who got nothing needs to know why.
+    notes = noted
+    if result.declined_reason:
+        notes = notes + [{"kind": "declined",
+                          "detail": f"I stopped before finishing: "
+                                    f"{result.declined_reason}."}]
     # ⚠️ AN `answered` RUN THAT SAID NOTHING AT ALL IS STILL SILENCE, and the
     # silence rule does not care which status produced it. A model that ends its
     # turn with no prose and never called `reply` leaves the asker staring at a
     # bot that read their message and ignored it.
-    elif not replier.sent:
+    #
+    # ⚠️ AND THIS MUST NOT CHAIN OFF THE MANAGEMENT MESSAGE. It briefly did: an
+    # `elif` after it meant a run that produced NO answer but DID hit a
+    # limitation sent the note alone — a "⚠️ About this answer" bubble with no
+    # answer above it, which is worse than the silence it replaced. The two are
+    # independent questions: "was anything said" and "was anything limited".
+    if not replier.sent:
         await replier.call({"text": "I could not answer that. The villa "
                                     "produced no reply."})
+
+    # ⚠️ LAST, SO IT SITS UNDER THE ANSWER IT IS ABOUT. Owner's instruction:
+    # right after the response bubble, and only when there is something to say.
+    management = limits.summary(notes)
+    if management:
+        await replier.call({"text": management})
     # ⚠️ THE OUTCOME NAMES WHERE IT WENT. `answered` alone cost a round trip:
     # the run succeeded, the reply was delivered, and neither the log nor the
     # asker could say to WHOM — so "it worked" and "you got nothing" were the

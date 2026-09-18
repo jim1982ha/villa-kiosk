@@ -1,3 +1,34 @@
+## 2.981.0
+
+### Changed — VESTA can answer questions nobody wrote a tool for
+The last two fixes each added a purpose-built tool for one question — total
+consumption, then the weather. That does not scale: villas differ and questions
+cannot be anticipated. This fixes the general path instead.
+
+**Three things were working against each other.** VESTA was handed all ~40 of
+Home Assistant's own tools, which took 81% of every message before you had
+typed a word. It was given four steps to work with — a budget meant for the
+automatic checks that run 96 times a day, not for a person waiting on an
+answer. And when a search came back too long to read, it was cut short with
+nobody told.
+
+So it now gets four general-purpose Home Assistant tools instead of forty —
+find, read, calculate, and where things are — which together answer far more
+than the forty did, because there is room left to think. The conversation gets
+its own budget, twice the steps, and it costs less than before because each
+step carries a quarter of the baggage.
+
+⚠️ Your investigation depth setting no longer limits conversations. It was only
+ever meant for the automatic checks; it had been quietly capping chat too.
+
+### Added — a note under an answer when the answer was limited
+If something stopped VESTA giving you the full picture — it ran out of steps,
+or something it read was too long to take in, or a service it needed was
+unreachable — it now says so in a short note under the reply.
+
+It appears only when there is something to report. No note means nothing was
+cut.
+
 ## 2.980.0
 
 ### Fixed — VESTA said the villa has no weather sensor. It has one.

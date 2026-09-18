@@ -141,6 +141,11 @@ def truncate(body: str, limit: int = DEFAULT_MAX_RESULT_CHARS,
     if len(body) <= limit:
         return body
     dropped = len(body) - limit
+    # ⚠️ AND SAY SO TO THE READER TOO. The note below is for the MODEL; until
+    # 2.981.0 the person who asked was told nothing, so an answer built on half
+    # a search looked exactly like a complete one. See agent/limits.
+    from vesta.supervise.agent import limits as limits_mod
+    limits_mod.note("truncated", f"{dropped:,} characters not read")
     return (body[:limit]
             + f"\n[... {dropped} more characters not shown. Narrow the query "
               f"— {hint} — rather than asking for all of it.]")

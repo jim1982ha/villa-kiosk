@@ -182,7 +182,12 @@ def for_run(config: Optional[Mapping[str, Any]],
         str(k) for k in (cfg.get("suppressed_subjects") or ())
         if isinstance(k, str)) | _earned_suppressions()
     tools = frozenset(str(n) for n in tool_names)
-    depth = agent_config.depth_of(config)
+    # ⚠️ CHAT DOES NOT SPEND THE SUPERVISION BUDGET. `depth` is the dial for the
+    # scheduled tiers — 96 passes a day, nobody watching — so an owner choosing
+    # "brief" to control their bill was silently capping the person-facing
+    # conversation at four turns too. See `config.CHAT_BUDGET`.
+    depth = (dict(agent_config.CHAT_BUDGET) if str(tier) == "chat"
+             else agent_config.depth_of(config))
     return RunPolicy(
         act_enabled=act,
         allowed_tools=tools,
