@@ -37,7 +37,8 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 from vesta.shared import wallclock
 from vesta.supervise.agent import clock
 from vesta.shared import instants
-from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import (
+    BaseTool, DEFAULT_MAX_RESULT_CHARS, truncate)
 from vesta.supervise.agent.tools.base import data
 from vesta.supervise.agent.tools.base import fail
 from vesta.supervise.agent.tools.base import resolved
@@ -319,110 +320,30 @@ def _clamp(value: Any, default: int, low: int, high: int) -> int:
     return max(low, min(high, out))
 
 
-class ReadEnergy(BaseTool):
-    name = "read_energy"
+class CallReadOnlyService(BaseTool):
+    name = "call_read_only_service"
     description = (
-        "What this property is drawing RIGHT NOW, and which circuits it is "
-        "metered by — taken from the property's own Home Assistant Energy "
-        "dashboard. Use this for any question about total or whole-house "
-        "consumption. Do NOT try to assemble a total by searching for power "
-        "sensors and adding them up: circuits overlap, so that sum is wrong, "
-        "and this tool already knows which meters are top-level and which are "
-        "counted inside them.")
-    inputSchema = {"type": "object", "properties": {}}
-    mode = "READ"
-
-    def __init__(self, source: Any = None, refs: Any = None) -> None:
-        self._source = source
-        self._refs = refs
-
-    async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
-        if not callable(self._source):
-            return [fail("unavailable", _UNWIRED)]
-        try:
-            read = await resolved(self._source())
-        except Exception as err:  # noqa: BLE001
-            return [fail("unavailable", f"Home Assistant did not answer: {err}")]
-        if not isinstance(read, Mapping):
-            return [fail("unavailable", _UNWIRED)]
-
-        # ⚠️ "NOT DECLARED" IS NOT "NOTHING". A villa whose owner never set the
-        # Energy dashboard up must hear that it has no meter CONFIGURED, with
-        # the one action that fixes it — never a total of zero, and never the
-        # agent's old answer that no global sensor exists, which was a claim
-        # about this property that was simply untrue.
-        if not read.get("configured"):
-            return [data({
-                "kind": "energy",
-                "note": ("This property has not set up Home Assistant's Energy "
-                         "dashboard, so it has not declared which meter is its "
-                         "whole-property supply. Configuring the grid source "
-                         "there is what makes a house total answerable."),
-                "count": 0,
-            })]
-
-        rows: List[Dict[str, Any]] = []
-        for row in read.get("rows") or []:
-            if not isinstance(row, Mapping):
-                continue
-            entity_id = str(row.get("entity_id") or "")
-            if not entity_id:
-                continue
-            # ⚠️ MINTED HERE, BECAUSE THE TOOL OWNS THE REF TABLE. The adapter
-            # and the source both speak entity ids; this is the boundary where
-            # they stop, and the leak sweep in `test_refs` is what proves it.
-            pair = (self._refs.describe(entity_id, str(row.get("label") or ""))
-                    if self._refs else {"ref": "", "label": ""})
-            out: Dict[str, Any] = {
-                "kind": str(row.get("kind") or ""),
-                "ref": pair["ref"],
-                "label": pair["label"],
-                "state": str(row.get("state") or ""),
-                "unit": str(row.get("unit") or ""),
-            }
-            parent = str(row.get("parent_id") or "")
-            if parent and self._refs:
-                out["basis"] = ("already counted inside "
-                                + self._refs.ref_for(parent))
-            rows.append(out)
-
-        total = read.get("total")
-        return [data({
-            "kind": "energy",
-            # ⚠️ THE SUM IS COMPUTED, NOT LEFT TO THE MODEL. Adding the
-            # top-level meters is arithmetic with one trap in it — the
-            # sub-circuits must NOT join the sum — and a model that adds every
-            # row it was handed gets a number that is too big and perfectly
-            # plausible. `adapters/energy.total_of` owns it, and refuses
-            # outright when a meter is unavailable rather than under-reporting.
-            "state": ("" if total is None else str(total)),
-            "unit": str(read.get("unit") or ""),
-            "count": len(rows),
-            "states": rows,
-            "note": ("" if total is not None else
-                     "One of this property's meters is not reporting, so a "
-                     "whole-property total cannot be stated right now — the "
-                     "individual circuits below are still good."),
-        })]
-
-
-class ReadWeather(BaseTool):
-    name = "read_weather"
-    description = (
-        "Outdoor conditions at this property right now — temperature, "
-        "humidity, atmospheric pressure, wind speed and bearing, whatever it "
-        "publishes — and the next few hours of forecast where the property has "
-        "one. Use this for any question about the weather, outside, the wind, "
-        "pressure, rain or what is coming. Do NOT answer from memory and do "
-        "NOT tell the reader the property has no weather sensor without "
-        "calling this first: it is the only thing that knows.")
+        "Ask Home Assistant to WORK SOMETHING OUT and hand back the answer — a "
+        "weather forecast, a statistics summary, anything a service computes. "
+        "Only services that cannot change the property are allowed; this can "
+        "never switch, open, unlock or set anything. Use it when reading an "
+        "entity's state is not enough because the answer has to be computed. "
+        "Call with no arguments to see which services this property offers.")
     inputSchema = {
         "type": "object",
         "properties": {
-            "forecast": {
+            "service": {
                 "type": "string",
-                "enum": ["none", "hourly", "daily"],
-                "description": "Ask for a forecast as well as current readings.",
+                "description": "Domain-qualified, e.g. 'weather.get_forecasts'. "
+                               "Omit to list what is available.",
+            },
+            "refs": {
+                "type": "array", "items": {"type": "string"},
+                "description": "Handles of the entities to run it against.",
+            },
+            "data": {
+                "type": "object",
+                "description": "The service's own arguments, from its schema.",
             },
         },
     }
@@ -433,61 +354,55 @@ class ReadWeather(BaseTool):
         self._refs = refs
 
     async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
-        from vesta.adapters import weather as weather_mod
         if not callable(self._source):
             return [fail("unavailable", _UNWIRED)]
-        kind = str(args.get("forecast") or "none")
+        service = str(args.get("service") or "").strip()
+        # ⚠️ RESOLVED FROM HANDLES, NEVER TAKEN AS IDS. A model that could pass
+        # a raw entity id here would be naming devices the ref table never
+        # minted, which is the one thing `refs.py` exists to prevent.
+        entity_ids: List[str] = []
+        for ref in (args.get("refs") or []):
+            resolved_id = self._refs.resolve(str(ref)) if self._refs else None
+            if not resolved_id:
+                return [fail("not_found", f"no such handle: {str(ref)!r}")]
+            entity_ids.append(resolved_id)
         try:
-            read = await resolved(self._source(kind))
+            out = await resolved(self._source(service, entity_ids,
+                                              dict(args.get("data") or {})))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
-        rows = read if isinstance(read, Sequence) else []
+        if not isinstance(out, Mapping):
+            return [fail("unavailable", _UNWIRED)]
+        if out.get("error"):
+            return [fail(str(out.get("code") or "refused"), str(out["error"]))]
 
-        # ⚠️ "NOT CONFIGURED" IS A REAL ANSWER AND MUST NOT SOUND LIKE "NO DATA".
-        # It is also the ONLY circumstance in which the villa may say it has no
-        # weather source — the reported defect was saying exactly that about a
-        # property that has one.
-        if not rows:
-            return [data({
-                "kind": "weather",
-                "count": 0,
-                "note": ("This property has no weather entity in Home "
-                         "Assistant, so it publishes no outdoor conditions. "
-                         "Adding a weather integration is what would make "
-                         "this answerable."),
-            })]
-
-        out: List[Dict[str, Any]] = []
-        for row in rows:
-            if not isinstance(row, Mapping):
-                continue
-            pair = (self._refs.describe(str(row.get("entity_id") or ""),
-                                        str(row.get("label") or ""))
-                    if self._refs else {"ref": "", "label": ""})
-            out.append(data({
-                "kind": "weather",
-                "ref": pair["ref"],
-                "label": pair["label"],
-                "state": str(row.get("state") or ""),
-                "states": [
-                    {"kind": str(r.get("measure") or ""),
-                     "state": str(r.get("value")),
-                     "unit": str(r.get("unit") or "")}
-                    for r in (row.get("readings") or [])
-                    if isinstance(r, Mapping)
-                ],
-                # ⚠️ SHAPED HERE, NOT ONLY IN THE ADAPTER, and the leak sweep
-                # is what proved the difference. `trim_forecast` already
-                # constrains provider rows — but the sweep feeds this TOOL a
-                # leaky source directly, which is exactly the situation a tool
-                # must survive: every other tool in this file filters what it
-                # was handed rather than trusting where it came from. The same
-                # function, applied at the boundary that actually publishes.
-                "points": weather_mod.trim_forecast(row.get("forecast")),
-                "note": ("" if row.get("forecast_capable")
-                         else "This entity measures but publishes no forecast."),
-            }))
-        return out
+        body = _flatten_text(out.get("body"))
+        if self._refs is not None:
+            from vesta.supervise.agent.refs import pseudonymise
+            body = pseudonymise(body, self._refs)
+        return [data({
+            "kind": "service_result",
+            "text": truncate(body, DEFAULT_MAX_RESULT_CHARS),
+            "note": str(out.get("note") or ""),
+            "count": int(out.get("count") or 0),
+        })]
 
 
-HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule, ReadEnergy, ReadWeather)
+def _flatten_text(value: Any) -> str:
+    """A service response as text the model can read.
+
+    ⚠️ JSON, NOT A HAND-ROLLED RENDERING. A service response is an arbitrary
+    structure nobody here designed, and every prettifier written for one of
+    them is a prettifier that silently drops a key from the next.
+    """
+    import json
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    except Exception:  # noqa: BLE001
+        return str(value)
+
+
+HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule,
+            CallReadOnlyService)

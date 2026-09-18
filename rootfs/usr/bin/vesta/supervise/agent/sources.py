@@ -426,7 +426,6 @@ async def refresh_layout(session: Any, *, now: Optional[float] = None,
         return False
     stamp = time.time() if now is None else now
     try:
-        from vesta.adapters import store
         # The clock and the store are `agent/survey`; what stays here is
         # the fetch, the shaping, and this survey's own "is this answer
         # real" refusal below.
@@ -488,7 +487,6 @@ async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
         return False
     stamp = time.time() if now is None else now
     try:
-        from vesta.adapters import store
         # The clock and the store are `agent/survey`; what stays here is
         # the fetch, the shaping, and this survey's own "is this answer
         # real" refusal below.
@@ -920,7 +918,6 @@ async def refresh_measures(session: Any, *, now: Optional[float] = None,
         return False
     stamp = time.time() if now is None else now
     try:
-        from vesta.adapters import store
         # The clock and the store are `agent/survey`; what stays here is
         # the fetch, the shaping, and this survey's own "is this answer
         # real" refusal below.
@@ -1130,102 +1127,87 @@ def ha_readers(session: Any) -> Dict[Any, Optional[Callable[..., Any]]]:
         ha_tools.ReadHistory: history_reader(session),
         ha_tools.ReadAutomationTrace: trace_reader(session),
         ha_tools.ReadSchedule: schedule_reader(session),
-        ha_tools.ReadEnergy: energy_reader(session),
-        ha_tools.ReadWeather: weather_reader(session),
+        ha_tools.CallReadOnlyService: service_reader(session),
     }
 
 
-def energy_reader(session: Any) -> Optional[Callable[..., Any]]:
-    """`read() -> {configured, rows, total, unit}` for `read_energy`.
+#: A service Home Assistant marks as RESPONSE-ONLY cannot change the property:
+#: it exists solely to compute an answer and must be called with
+#: `return_response`. That is Home Assistant's own declaration, which is why
+#: this gate is derived rather than being a list of service names maintained
+#: here — a list would be the anticipation trap one level down, and would go
+#: stale the first time an integration added a service.
+#:
+#: ⚠️ `OPTIONAL` IS NOT ALLOWED AND THE DISTINCTION IS THE WHOLE SAFETY MODEL.
+#: A service that MAY return data may also act; only `ONLY` is guaranteed
+#: inert. Treating the two alike would hand the model a way to switch things on
+#: through a tool whose name promises it cannot.
+#:
+#: ⚠️ TWO SHAPES ACCEPTED, BECAUSE THIS METADATA IS HOME ASSISTANT'S AND I
+#: COULD NOT SEE IT FROM OUTSIDE THE PROPERTY WHEN WRITING THIS. Core serialises
+#: `response: {"optional": bool}` on the websocket; older builds carried a
+#: `supports_response` string. Reading both is not sloppiness — it is the
+#: guessed-field-shape defect this repo has recorded, handled by accepting the
+#: shapes that exist rather than betting on one. If NEITHER is present the
+#: reader says so out loud (see `note`), because a gate that silently allows
+#: nothing is indistinguishable from a property with no such services.
+def _response_only(meta: Mapping[str, Any]) -> bool:
+    response = meta.get("response")
+    if isinstance(response, Mapping):
+        return not bool(response.get("optional", False))
+    supports = str(meta.get("supports_response") or "").lower()
+    return supports == "only"
 
-    ⚠️ THE LAYOUT IS THE PROPERTY'S OWN, NEVER THIS FILE'S. Everything about
-    which sensor is the house meter comes out of `energy/get_prefs` at runtime
-    — see `adapters/energy` for why that is both the hard rule and the only
-    version of this that survives the owner re-wiring their dashboard.
 
-    ⚠️ ONE REST CALL PER DECLARED STATISTIC, and that is the cost ceiling: a
-    property declares a handful of meters and a dozen circuits, not 1,300
-    entities. The old answer to "what is the house using" was the model calling
-    a search tool until it ran out of tokens, which is the fan-out this exists
-    to replace.
+def service_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(service, entity_ids, data) -> {...}` for `call_read_only_service`.
+
+    With no `service` named it LISTS what this property offers, which is what
+    makes the tool usable without anybody having to know the catalogue.
     """
     if session is None:
         return None
 
-    async def read() -> Dict[str, Any]:
-        from vesta.adapters import energy as energy_mod
-        from vesta.adapters.hass import rest_get
+    async def read(service: str = "", entity_ids: Optional[Sequence[str]] = None,
+                   data: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        from vesta.adapters.hass import HassClient
+        async with HassClient(session) as hass:
+            catalogue = await hass.command("get_services")
+            allowed: Dict[str, Dict[str, Any]] = {}
+            declared = 0
+            for domain, services in (catalogue or {}).items():
+                if not isinstance(services, Mapping):
+                    continue
+                for name, meta in services.items():
+                    meta = meta if isinstance(meta, Mapping) else {}
+                    if "response" in meta or "supports_response" in meta:
+                        declared += 1
+                    if _response_only(meta):
+                        allowed[f"{domain}.{name}"] = dict(meta)
 
-        layout = await energy_mod.read(session)
-        if not layout.configured:
-            return {"configured": False, "rows": [], "total": None, "unit": ""}
-
-        async def state_of(entity_id: str) -> Dict[str, Any]:
-            row = await rest_get(session, f"states/{entity_id}")
-            row = row if isinstance(row, Mapping) else {}
-            attrs = row.get("attributes")
-            attrs = attrs if isinstance(attrs, Mapping) else {}
-            return {
-                "entity_id": entity_id,
-                "state": str(row.get("state") or ""),
-                "label": str(attrs.get("friendly_name") or ""),
-                "unit": str(attrs.get("unit_of_measurement") or ""),
-            }
-
-        def numeric(state: str) -> Optional[float]:
-            # ⚠️ "unavailable"/"unknown" MUST NOT BECOME 0. A meter that is not
-            # reporting is not a meter reading zero, and `total_of` refuses the
-            # sum when any part is None — the same distinction the kiosk's
-            # charts had to learn the hard way.
-            try:
-                return float(state)
-            except (TypeError, ValueError):
-                return None
-
-        rows: List[Dict[str, Any]] = []
-        for entity_id in layout.grid_energy:
-            rows.append({**await state_of(entity_id), "kind": "grid_total_energy"})
-        meter_values: List[Optional[float]] = []
-        unit = ""
-        for entity_id in layout.meters:
-            row = await state_of(entity_id)
-            meter_values.append(numeric(row["state"]))
-            unit = unit or row["unit"]
-            rows.append({**row, "kind": "property_meter"})
-        for entity_id, parent in layout.circuits:
-            rows.append({**await state_of(entity_id), "kind": "circuit",
-                         "parent_id": parent})
-
-        return {
-            "configured": True,
-            "rows": rows,
-            "total": energy_mod.total_of(meter_values),
-            "unit": unit,
-        }
-
-    return read
-
-
-def weather_reader(session: Any) -> Optional[Callable[..., Any]]:
-    """`read(kind) -> [weather rows]` for `read_weather`.
-
-    ⚠️ THE FORECAST IS FETCHED ONLY WHEN ASKED FOR AND ONLY FROM AN ENTITY THAT
-    HAS ONE. It costs a websocket round trip per entity, and a station that
-    only measures would answer an error — `supports_forecast` is read from the
-    entity's own `supported_features` rather than guessed.
-    """
-    if session is None:
-        return None
-
-    async def read(kind: str = "none") -> List[Dict[str, Any]]:
-        from vesta.adapters import weather as weather_mod
-        rows = await weather_mod.entities(session)
-        if str(kind or "none") in ("hourly", "daily"):
-            for row in rows:
-                if row.get("forecast_capable"):
-                    row["forecast"] = await weather_mod.forecast(
-                        session, str(row.get("entity_id") or ""), str(kind))
-        return rows
+            if not service:
+                return {
+                    "body": sorted(allowed),
+                    "count": len(allowed),
+                    "note": ("Home Assistant did not declare which of its "
+                             "services return data, so none can be offered "
+                             "safely." if declared == 0 else ""),
+                }
+            if service not in allowed:
+                return {
+                    "code": "refused",
+                    "error": (f"{service} is not a read-only service on this "
+                              "property. Call this with no arguments to see "
+                              "which are."),
+                }
+            result = await hass.command(
+                "call_service",
+                domain=service.split(".", 1)[0], service=service.split(".", 1)[1],
+                service_data=dict(data or {}),
+                target=({"entity_id": list(entity_ids)} if entity_ids else {}),
+                return_response=True)
+        body = (result or {}).get("response") if isinstance(result, Mapping) else result
+        return {"body": body, "count": 1, "note": ""}
 
     return read
 
@@ -1365,7 +1347,6 @@ def build_tools(session: Any = None, *,
     rather than built so that the per-run tool can be handed the SAME table these
     tools mint into.
     """
-    from vesta.supervise.agent.tools import ha as ha_tools
     from vesta.supervise.agent.tools import ledger as ledger_tools
     from vesta.supervise.agent.tools import logs as log_tools
     from vesta.supervise.agent.tools import playbook as playbook_tools

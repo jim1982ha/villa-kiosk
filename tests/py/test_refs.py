@@ -357,33 +357,15 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
             "2026-08-22 03:14:01 WARNING (MainThread) "
             "[homeassistant.components.zha] sensor.probe_temperature is "
             "unavailable"], refs=table),
-        # ⚠️ IDS IN EVERY FIELD THAT COULD CARRY ONE. This tool's source speaks
-        # entity ids by construction — it reads Home Assistant's Energy
-        # dashboard, whose whole content is statistic ids — so the fixture puts
-        # a real one in `entity_id` AND in `parent_id`, which is the field with
-        # no counterpart in any other tool here: a circuit names the meter it
-        # sits inside, and echoing that raw was the obvious way to write it.
-        ha.ReadEnergy(source=lambda: {
-            "configured": True,
-            "total": 42.0,
-            "unit": "W",
-            "rows": [{"entity_id": "sensor.pool_pump_power", "state": "8.8",
-                      "label": "Pool", "unit": "W", "kind": "property_meter"},
-                     {"entity_id": "automation.a_rule", "state": "1.0",
-                      "label": "Lights", "unit": "W", "kind": "circuit",
-                      "parent_id": "sensor.pool_pump_power"}],
+        # ⚠️ A SERVICE RESPONSE IS THE MOST ID-DENSE PAYLOAD THIS TOOL SET
+        # HANDLES — it is whatever an integration chose to return, keyed by
+        # entity id. Nothing in this repo authored it, so the sweep feeds it
+        # one and expects a handle back.
+        ha.CallReadOnlyService(source=lambda service="", ids=(), data=None: {
+            "body": {"sensor.pool_pump_power": {"forecast": [
+                {"condition": "automation.a_rule", "temperature": 29.5}]}},
+            "count": 1, "note": "",
         }, refs=table),
-        # ⚠️ AN ID IN THE LABEL AND IN A FORECAST ROW. This tool's source
-        # speaks entity ids, and its forecast steps are provider-authored dicts
-        # — the one field here whose keys nobody in this repo chose.
-        ha.ReadWeather(source=lambda kind="none": [{
-            "entity_id": "sensor.pool_pump_power", "state": "sunny",
-            "label": "Outside", "forecast_capable": True,
-            "readings": [{"measure": "pressure", "value": 1011.5,
-                          "unit": "hPa"}],
-            "forecast": [{"datetime": "2026-09-18T14:00:00+08:00",
-                          "condition": "automation.a_rule"}],
-        }], refs=table),
         ledger.ReadLedger(source=lambda: {}),
         # ⚠️ POINTED AT THE REAL SHIPPED TREE, not a stub. This tool's "source"
         # is the content the add-on ships, so sweeping it here scans all 25

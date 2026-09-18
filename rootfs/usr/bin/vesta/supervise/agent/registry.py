@@ -200,12 +200,22 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
 #: was handed a truncated result, ran out of turns and told the owner the
 #: property has no weather sensor.
 #:
-#: ⚠️ THESE FOUR ARE CHOSEN AS A BASIS, NOT AS A LIST OF ANSWERABLE QUESTIONS —
-#: which is the trap this repo has now fallen into twice, adding `read_energy`
-#: and `read_weather` one question at a time. Between them they cover FIND
-#: (search), READ (state), COMPUTE (template) and WHERE (floors/areas), which is
-#: enough to answer something nobody anticipated. Adding a fifth needs the same
-#: argument: what shape of question is impossible without it.
+#: ⚠️ THESE FOUR ARE CHOSEN AS A BASIS, NOT AS A LIST OF ANSWERABLE QUESTIONS.
+#: They cover FIND (search), READ (state), COMPUTE (template) and WHERE
+#: (floors/areas); VESTA's own `call_read_only_service` adds the fifth, ASK —
+#: have Home Assistant work something out and hand back the answer. Adding a
+#: sixth needs the same argument: what SHAPE of question is impossible without
+#: it, never which question somebody asked yesterday.
+#:
+#: ⚠️ THE REPO FELL INTO THE OTHER TRAP TWICE AND BOTH ARE NOW DELETED.
+#: `read_energy` (2.979.0) and `read_weather` (2.980.0) each answered ONE
+#: anticipated question; the owner's objection was that villas differ and
+#: questions cannot be enumerated, so that dataset is never finished. What they
+#: could do that search and state could not was call a service that RETURNS
+#: something — a general capability, not a weather one. The correctness rule
+#: `read_energy` carried (circuits nest; never sum overlapping readings) moved
+#: into the shipped constitution, where it applies to any question about
+#: totals rather than to one tool.
 #:
 #: ⚠️ AND NOT `ha_get_history`: `read_history` already serves it against the
 #: villa's own subjects, and two tools for one question is how a model comes to
