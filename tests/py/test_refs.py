@@ -373,6 +373,17 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
                       "label": "Lights", "unit": "W", "kind": "circuit",
                       "parent_id": "sensor.pool_pump_power"}],
         }, refs=table),
+        # ⚠️ AN ID IN THE LABEL AND IN A FORECAST ROW. This tool's source
+        # speaks entity ids, and its forecast steps are provider-authored dicts
+        # — the one field here whose keys nobody in this repo chose.
+        ha.ReadWeather(source=lambda kind="none": [{
+            "entity_id": "sensor.pool_pump_power", "state": "sunny",
+            "label": "Outside", "forecast_capable": True,
+            "readings": [{"measure": "pressure", "value": 1011.5,
+                          "unit": "hPa"}],
+            "forecast": [{"datetime": "2026-09-18T14:00:00+08:00",
+                          "condition": "automation.a_rule"}],
+        }], refs=table),
         ledger.ReadLedger(source=lambda: {}),
         # ⚠️ POINTED AT THE REAL SHIPPED TREE, not a stub. This tool's "source"
         # is the content the add-on ships, so sweeping it here scans all 25

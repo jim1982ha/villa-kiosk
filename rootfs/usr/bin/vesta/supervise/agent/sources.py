@@ -1131,6 +1131,7 @@ def ha_readers(session: Any) -> Dict[Any, Optional[Callable[..., Any]]]:
         ha_tools.ReadAutomationTrace: trace_reader(session),
         ha_tools.ReadSchedule: schedule_reader(session),
         ha_tools.ReadEnergy: energy_reader(session),
+        ha_tools.ReadWeather: weather_reader(session),
     }
 
 
@@ -1201,6 +1202,30 @@ def energy_reader(session: Any) -> Optional[Callable[..., Any]]:
             "total": energy_mod.total_of(meter_values),
             "unit": unit,
         }
+
+    return read
+
+
+def weather_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(kind) -> [weather rows]` for `read_weather`.
+
+    ⚠️ THE FORECAST IS FETCHED ONLY WHEN ASKED FOR AND ONLY FROM AN ENTITY THAT
+    HAS ONE. It costs a websocket round trip per entity, and a station that
+    only measures would answer an error — `supports_forecast` is read from the
+    entity's own `supported_features` rather than guessed.
+    """
+    if session is None:
+        return None
+
+    async def read(kind: str = "none") -> List[Dict[str, Any]]:
+        from vesta.adapters import weather as weather_mod
+        rows = await weather_mod.entities(session)
+        if str(kind or "none") in ("hourly", "daily"):
+            for row in rows:
+                if row.get("forecast_capable"):
+                    row["forecast"] = await weather_mod.forecast(
+                        session, str(row.get("entity_id") or ""), str(kind))
+        return rows
 
     return read
 

@@ -406,4 +406,88 @@ class ReadEnergy(BaseTool):
         })]
 
 
-HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule, ReadEnergy)
+class ReadWeather(BaseTool):
+    name = "read_weather"
+    description = (
+        "Outdoor conditions at this property right now — temperature, "
+        "humidity, atmospheric pressure, wind speed and bearing, whatever it "
+        "publishes — and the next few hours of forecast where the property has "
+        "one. Use this for any question about the weather, outside, the wind, "
+        "pressure, rain or what is coming. Do NOT answer from memory and do "
+        "NOT tell the reader the property has no weather sensor without "
+        "calling this first: it is the only thing that knows.")
+    inputSchema = {
+        "type": "object",
+        "properties": {
+            "forecast": {
+                "type": "string",
+                "enum": ["none", "hourly", "daily"],
+                "description": "Ask for a forecast as well as current readings.",
+            },
+        },
+    }
+    mode = "READ"
+
+    def __init__(self, source: Any = None, refs: Any = None) -> None:
+        self._source = source
+        self._refs = refs
+
+    async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        from vesta.adapters import weather as weather_mod
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
+        kind = str(args.get("forecast") or "none")
+        try:
+            read = await resolved(self._source(kind))
+        except Exception as err:  # noqa: BLE001
+            return [fail("unavailable", f"Home Assistant did not answer: {err}")]
+        rows = read if isinstance(read, Sequence) else []
+
+        # ⚠️ "NOT CONFIGURED" IS A REAL ANSWER AND MUST NOT SOUND LIKE "NO DATA".
+        # It is also the ONLY circumstance in which the villa may say it has no
+        # weather source — the reported defect was saying exactly that about a
+        # property that has one.
+        if not rows:
+            return [data({
+                "kind": "weather",
+                "count": 0,
+                "note": ("This property has no weather entity in Home "
+                         "Assistant, so it publishes no outdoor conditions. "
+                         "Adding a weather integration is what would make "
+                         "this answerable."),
+            })]
+
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            pair = (self._refs.describe(str(row.get("entity_id") or ""),
+                                        str(row.get("label") or ""))
+                    if self._refs else {"ref": "", "label": ""})
+            out.append(data({
+                "kind": "weather",
+                "ref": pair["ref"],
+                "label": pair["label"],
+                "state": str(row.get("state") or ""),
+                "states": [
+                    {"kind": str(r.get("measure") or ""),
+                     "state": str(r.get("value")),
+                     "unit": str(r.get("unit") or "")}
+                    for r in (row.get("readings") or [])
+                    if isinstance(r, Mapping)
+                ],
+                # ⚠️ SHAPED HERE, NOT ONLY IN THE ADAPTER, and the leak sweep
+                # is what proved the difference. `trim_forecast` already
+                # constrains provider rows — but the sweep feeds this TOOL a
+                # leaky source directly, which is exactly the situation a tool
+                # must survive: every other tool in this file filters what it
+                # was handed rather than trusting where it came from. The same
+                # function, applied at the boundary that actually publishes.
+                "points": weather_mod.trim_forecast(row.get("forecast")),
+                "note": ("" if row.get("forecast_capable")
+                         else "This entity measures but publishes no forecast."),
+            }))
+        return out
+
+
+HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule, ReadEnergy, ReadWeather)
