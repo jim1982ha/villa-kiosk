@@ -48,8 +48,8 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 from vesta.shared import wallclock
 from vesta.supervise.agent import clock
 from vesta.shared import instants
-from vesta.supervise.agent.tools.base import (
-    BaseTool, DEFAULT_MAX_RESULT_CHARS)
+from vesta.supervise.agent.tools.base import BaseTool
+from vesta.supervise.agent.tools.base import refuse_if_oversized
 from vesta.supervise.agent.tools.base import data
 from vesta.supervise.agent.tools.base import fail
 from vesta.supervise.agent.tools.base import resolved
@@ -430,25 +430,13 @@ def _json_or_refuse(body: str, what: str) -> Dict[str, Any]:
     9.8 kWh. A wrong number delivered confidently is worse than no number, and
     worst of all when it sends somebody to look at a breaker.
 
-    ⚠️ PROSE MAY BE TRUNCATED; A STRUCTURE MAY NOT. `truncate`'s note ("answer
-    from what you can see, then narrow") is right for a log excerpt, where the
-    first half is still true. Half a JSON document is not half true — the keys
-    that survive are an arbitrary prefix, and any value read from it is an
-    artefact of where the cut landed.
-
-    ⚠️ AND THE REFUSAL CARRIES THE SIZE, so the model can narrow rather than
-    retry the same thing. `fail` is data the model routes around, not an error.
+    ⚠️ THE RULE ITSELF MOVED TO `tools/base.py` AND THAT IS THE POINT. Written
+    here, it guarded our own two tools and left every upstream one truncating
+    JSON — which produced the same false figure six days later through
+    `ha_get_history`. This is now one of two callers of one rule.
     """
-    if len(body) <= DEFAULT_MAX_RESULT_CHARS:
-        return data({"kind": what, "text": body})
-    from vesta.supervise.agent import limits as limits_mod
-    limits_mod.note("too_large", f"{len(body):,} characters")
-    return fail("too_large", (
-        f"that returned {len(body):,} characters, far more than can be read, "
-        f"and a part of it would be meaningless — half a structure is not half "
-        f"an answer. Ask again for less: name the specific thing you want "
-        f"rather than everything, and use a coarser grouping if the command "
-        f"takes one."))
+    refusal = refuse_if_oversized(body)
+    return refusal if refusal is not None else data({"kind": what, "text": body})
 
 
 class ReadConfiguration(BaseTool):

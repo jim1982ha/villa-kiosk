@@ -121,6 +121,57 @@ def flatten_blocks(blocks: Any) -> List[Dict[str, Any]]:
 NARROW_HINT: str = "window, subject or level"
 
 
+def is_structured(body: str) -> bool:
+    """Would cutting this produce INVALID data rather than partial data?
+
+    ⚠️ THE CONTENT DECIDES, NOT THE BRANCH THAT PRODUCED IT, and picking the
+    branch is how the first cut of this rule missed. `upstream._flatten` prefers
+    an MCP `structuredContent` object and falls back to the server's text
+    blocks — but Home Assistant's MCP server puts JSON in those text blocks too,
+    so "did we take the structured branch" answers False for a payload that is
+    every bit as unsafe to cut. A body that opens a brace or a bracket is a
+    structure whatever route it arrived by.
+    """
+    return body.lstrip()[:1] in ("{", "[")
+
+
+def refuse_if_oversized(body: str, limit: int = DEFAULT_MAX_RESULT_CHARS,
+                        hint: str = NARROW_HINT) -> Dict[str, Any] | None:
+    """`None` when `body` fits; a refusal the model can route around when not.
+
+    ⚠️ PROSE MAY BE TRUNCATED; A STRUCTURE MAY NOT. `truncate`'s note ("answer
+    from what you can see, then narrow") is right for a log excerpt, where the
+    first half is still true. Half a JSON document is not half true — the keys
+    that survive are an arbitrary prefix, and any value read from it is an
+    artefact of where the cut landed.
+
+    ⚠️ THIS LIVES HERE BECAUSE PUTTING IT IN ONE TOOL DID NOT HOLD, AND THAT IS
+    THE SECOND HALF OF THE SAME DEFECT. 2.990.0 wrote this rule inside
+    `tools/ha.py`, reached by our own two tools, after a truncated
+    `read_configuration` made the model tell the owner their meter had stopped.
+    Six days later the identical failure arrived through the OTHER door: asked
+    for consumption since 5pm, the model called the upstream `ha_get_history`,
+    whose reply for a meter reporting once a minute is ~45,000 characters;
+    `UpstreamTool` truncated it at 8,000 and the answer came back as 6.67 kWh
+    against a true 3.06 kWh. Rolling a shared rule out by its existing call
+    sites rather than by everything it APPLIES to leaves exactly this.
+
+    ⚠️ AND THE REFUSAL CARRIES THE SIZE AND THE WAY OUT. `fail` is data the
+    model reads and routes around; told only "too big" it re-asks the same
+    question, so `hint` names arguments the called tool actually publishes.
+    """
+    if len(body) <= limit:
+        return None
+    from vesta.supervise.agent import limits as limits_mod
+    limits_mod.note("too_large", f"{len(body):,} characters")
+    return fail("too_large", (
+        f"that returned {len(body):,} characters, far more than can be read, "
+        f"and a part of it would be meaningless — half a structure is not half "
+        f"an answer. Ask again for less: name the specific thing you want "
+        f"rather than everything, narrow by {hint}, and use a coarser grouping "
+        f"or a shorter period if the command takes one."))
+
+
 def truncate(body: str, limit: int = DEFAULT_MAX_RESULT_CHARS,
              hint: str = NARROW_HINT) -> str:
     """Cut to `limit`, and SAY SO.
@@ -146,6 +197,21 @@ def truncate(body: str, limit: int = DEFAULT_MAX_RESULT_CHARS,
     # a search looked exactly like a complete one. See agent/limits.
     from vesta.supervise.agent import limits as limits_mod
     limits_mod.note("truncated", f"{dropped:,} characters not read")
+    # ⚠️ AND IF IT IS A STRUCTURE, THE CALLER SHOULD NOT HAVE BROUGHT IT HERE —
+    # SAY SO IN THE LOG RATHER THAN CUT IT SILENTLY. Twice now a caller has
+    # handed JSON to this function and the model has answered a question with a
+    # figure read out of an arbitrary prefix: `read_configuration` in 2.990.0
+    # (the meter reported as dead) and every upstream tool in 2.992.0 (6.67 kWh
+    # against a true 3.06). Both were found by reading the villa's recorder by
+    # hand, because nothing anywhere announced the cut. A guard in a test only
+    # covers the tools that exist today; this one travels with the function, so
+    # the NEXT caller to make this mistake is visible in the add-on log the
+    # first time it happens rather than after the wrong number reaches somebody.
+    if is_structured(body):
+        from vesta.adapters.log import log as _log
+        _log(f"truncate: cut {dropped:,} characters off a STRUCTURED result — "
+             f"a JSON fragment is invalid data, not partial data; this caller "
+             f"should refuse_if_oversized() instead")
     return (body[:limit]
             + f"\n[... {dropped} more characters not shown. Narrow the query "
               f"— {hint} — rather than asking for all of it.]")

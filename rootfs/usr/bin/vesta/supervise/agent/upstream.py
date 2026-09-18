@@ -39,6 +39,8 @@ from vesta.supervise.agent.tools.base import BaseTool
 from vesta.supervise.agent.tools.base import DEFAULT_MAX_RESULT_CHARS
 from vesta.supervise.agent.tools.base import NARROW_HINT
 from vesta.supervise.agent.tools.base import fail
+from vesta.supervise.agent.tools.base import is_structured
+from vesta.supervise.agent.tools.base import refuse_if_oversized
 from vesta.supervise.agent.tools.base import truncate
 from vesta.adapters.log import log, swallow
 # ⚠️ MODULE LEVEL, NOT INSIDE THE FUNCTION. The path constants below are
@@ -313,9 +315,31 @@ class UpstreamTool(BaseTool):
         if self._refs is not None:
             from vesta.supervise.agent.refs import pseudonymise
             text = pseudonymise(text, self._refs)
+        hint = _narrowing(self.inputSchema, args)
+        # ⚠️ A STRUCTURE IS REFUSED, NEVER CUT — AND THIS IS WHERE THE VILLA WAS
+        # GIVEN A WRONG NUMBER. Asked for consumption since 5pm, the model
+        # reached for the upstream `ha_get_history`; that meter reports once a
+        # minute, so the reply ran to ~45,000 characters, `truncate` cut it at
+        # 8,000 mid-array, and the figure assembled from the surviving prefix
+        # was 6.67 kWh against a true 3.06. The reader was told 5,251 characters
+        # had gone unread — which was honest, and no help at all against a
+        # number that looked finished. `refuse_if_oversized` is the same rule
+        # `tools/ha.py` has applied since 2.990.0; it was written in a tool
+        # instead of in the shared module, so every upstream tool kept cutting.
+        if is_structured(text):
+            refusal = refuse_if_oversized(text, DEFAULT_MAX_RESULT_CHARS, hint)
+            if refusal is not None:
+                # ⚠️ LOGGED WITH THE TOOL'S NAME, because diagnosing the 6.67
+                # meant reading the villa's recorder by hand: the run's trace
+                # named every tool it called and nothing said which result had
+                # been cut. A limitation the reader is told about and the
+                # operator cannot locate is half an instrument.
+                log(f"upstream {self.name}: refused a {len(text):,}-character "
+                    f"structured result rather than cut it")
+                return [refusal]
+            return [{"type": "text", "text": text}]
         return [{"type": "text",
-                 "text": truncate(text, DEFAULT_MAX_RESULT_CHARS,
-                                  hint=_narrowing(self.inputSchema, args))}]
+                 "text": truncate(text, DEFAULT_MAX_RESULT_CHARS, hint=hint)}]
 
 
 def _narrowing(schema: Mapping[str, Any], args: Mapping[str, Any]) -> str:
