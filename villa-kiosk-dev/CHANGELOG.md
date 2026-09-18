@@ -1,3 +1,34 @@
+## 2.987.0
+
+### Fixed — VESTA was being *told* to refuse
+This is the one that was actually producing the wrong answer, and it was my
+doing.
+
+VESTA's standing instructions said: *the Villa Document names this property's
+top-level meters — say you cannot total only when the document names none.*
+Two releases ago I deleted those sentences from the Villa Document, because they
+were written for electricity alone and did not generalise. I did not remove the
+instruction that depended on them.
+
+So the document named none, and the rule therefore told VESTA to say it could
+not total. It obeyed, exactly, every time. Nothing failed, nothing was logged,
+and every test passed — the code and the wording were each fine on their own and
+disagreed with each other.
+
+The rule now points at something that exists: read the Energy dashboard and
+total the top-level meters. And a new check refuses to ship instructions that
+name a tool which does not exist, or that make a refusal depend on what the
+Villa Document happens to contain.
+
+### Fixed — the same identifier bug, everywhere else it lived
+The previous release translated VESTA's private handles back into real device
+identifiers for one tool. Three other paths had the same gap, including the one
+VESTA uses most: search for something, then read what you found. All of them go
+through one shared translation now.
+
+A new check walks every tool that can pass arguments to Home Assistant and fails
+the build if one of them forgets — so the next tool added cannot reintroduce it.
+
 ## 2.986.0
 
 ### Fixed — the electricity question, validated this time rather than reasoned about
