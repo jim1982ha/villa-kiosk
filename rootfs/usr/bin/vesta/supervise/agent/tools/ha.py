@@ -324,11 +324,12 @@ class CallReadOnlyService(BaseTool):
     name = "call_read_only_service"
     description = (
         "Ask Home Assistant to WORK SOMETHING OUT and hand back the answer — a "
-        "weather forecast, a statistics summary, anything a service computes. "
-        "Only services that cannot change the property are allowed; this can "
-        "never switch, open, unlock or set anything. Use it when reading an "
-        "entity's state is not enough because the answer has to be computed. "
-        "Call with no arguments to see which services this property offers.")
+        "weather forecast, for example, or anything else a SERVICE computes. "
+        "⚠️ NOT figures over a time period: totals, history and statistics are "
+        "read_configuration's job, not a service's. Only services that cannot "
+        "change the property are allowed; this can never switch, open, unlock "
+        "or set anything. Call with no arguments to see what this property "
+        "offers.")
     inputSchema = {
         "type": "object",
         "properties": {
@@ -413,15 +414,15 @@ def _flatten_text(value: Any) -> str:
 class ReadConfiguration(BaseTool):
     name = "read_configuration"
     description = (
-        "Read how this property is SET UP, as opposed to what its devices are "
-        "doing. Home Assistant keeps configuration that is not an entity and "
-        "not a service — the Energy dashboard (which meters make up the "
-        "whole-property total, and which circuits are already counted inside "
-        "them), areas and floors, integrations, dashboards. Use it whenever a "
-        "question depends on how the property is arranged rather than on a "
-        "current reading. Examples of commands: 'energy/get_prefs', "
-        "'config/area_registry/list', 'recorder/statistics_during_period' "
-        "(pass its time window in `data`). Only reading is possible.")
+        "Two things, and it is the tool for ANY question about a total or a "
+        "period. (1) FIGURES OVER TIME — "
+        "'recorder/statistics_during_period', with the window and the "
+        "statistic in `data`; that is how you answer 'how much since 1pm'. "
+        "(2) HOW THE PROPERTY IS SET UP — 'energy/get_prefs' names the meters "
+        "that make up the whole-property total and which circuits are already "
+        "counted inside them; also areas, floors, integrations, dashboards. "
+        "The usual pair is (2) then (1): learn which meter, then read it. Only "
+        "reading is possible.")
     inputSchema = {
         "type": "object",
         "properties": {

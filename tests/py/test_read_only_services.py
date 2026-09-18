@@ -73,3 +73,56 @@ def test_the_deleted_question_shaped_tools_are_really_gone():
     assert "read_energy" not in names
     assert "read_weather" not in names
     assert "call_read_only_service" in names
+
+
+# ── what a tool ADVERTISES must be what it can do ───────────────────────────
+def _description(name):
+    from vesta.supervise.agent.tools import ha
+    for cls in ha.HA_TOOLS:
+        if cls.name == name:
+            return cls.description
+    raise AssertionError(f"no tool named {name}")
+
+
+def test_the_service_tool_does_not_advertise_figures_over_time():
+    """⚠️ MEASURED ON THE VILLA, NOT SUPPOSED. The trace read:
+
+        chat … declined in 8 turn(s), 11 tool call(s); tools used:
+          call_read_only_servicex3 read_configurationx3 ha_searchx2 …
+
+    Three of eight turns went to `call_read_only_service` because its
+    description offered "a statistics summary" — and statistics are NOT a
+    service in Home Assistant, they are `recorder/statistics_during_period`,
+    which belongs to `read_configuration`. The model followed the description
+    into a dead end I had written, was refused three times, and ran out of
+    turns with the answer still unassembled.
+
+    A description is an instruction. Advertising a capability a tool does not
+    have costs exactly as much as the capability being missing, and is harder
+    to see because every test still passes.
+
+    ⚠️ AND THE FIRST CUT OF THIS TEST WAS ALSO WRONG, THE SAME WAY. It banned
+    the WORD "statistic" — and the corrected description mentions it inside a
+    DISCLAIMER ("NOT figures over a time period: … statistics are
+    read_configuration's job"), which is the single most useful sentence in it.
+    A banned word is not a banned claim. What must be absent is the OFFER.
+    """
+    text = _description("call_read_only_service").lower()
+    for claimed in ("statistic", "history"):
+        if claimed not in text:
+            continue
+        where = text.index(claimed)
+        window = text[max(0, where - 120):where]
+        assert "not " in window, (
+            f"call_read_only_service mentions {claimed!r} without disclaiming "
+            "it — the model follows a description into whichever tool offers "
+            "the thing, and this one cannot do it")
+
+
+def test_the_configuration_tool_advertises_what_it_actually_owns():
+    """The counterpart: the tool that CAN answer "how much since 1pm" has to
+    say so, or the model has no reason to reach for it."""
+    text = _description("read_configuration").lower()
+    assert "statistics_during_period" in text
+    assert "energy/get_prefs" in text
+    assert "period" in text

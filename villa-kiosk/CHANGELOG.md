@@ -1,3 +1,26 @@
+## 2.989.0
+
+### Fixed — VESTA was sent down a dead end by its own tool description
+The new trace showed exactly what happened, for the first time:
+
+    declined in 8 turn(s), 11 tool call(s); tools used:
+      call_read_only_servicex3  read_configurationx3  ha_searchx2 …
+
+Good news first: VESTA **did** look. It read the Energy dashboard three times.
+It is no longer refusing out of hand.
+
+What went wrong is that it spent three of its eight turns on the wrong tool —
+because that tool's own description offered "a statistics summary", which it
+cannot actually do. Figures over a period come from a different place. VESTA
+followed the description, was refused three times, and ran out of turns before
+it could finish the answer.
+
+The description no longer offers what it cannot do, and now says plainly where
+those figures live. The tool that *can* answer "how much since 1pm" now leads
+with that instead of burying it. And a conversation gets twelve steps instead of
+eight — affordable because trimming the tool list cut the cost of a step to a
+quarter of what it was.
+
 ## 2.988.0
 
 ### Added — the conversation now records what it actually looked at

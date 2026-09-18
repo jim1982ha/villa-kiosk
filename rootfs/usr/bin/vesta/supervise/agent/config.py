@@ -77,7 +77,15 @@ DEPTH: Final[Dict[str, Dict[str, int]]] = {
 #: from 49 to 16 — measured at 33.2kt of a 41kt prefix. Roughly quartering the
 #: per-turn prefix is what pays for doubling the turns; raising this alone
 #: would simply have cost more.
-CHAT_BUDGET: Final[Dict[str, int]] = {"turns": 8, "tool_calls": 20}
+#: ⚠️ 12, NOT 8, AND THE EVIDENCE IS A TRACE NOT A HUNCH. Measured on the villa:
+#: `chat … declined in 8 turn(s), 11 tool call(s)` — it reached the cap while
+#: genuinely working (read_configurationx3, ha_searchx2, ha_get_statex1).
+#: Three of those turns were spent on a dead end this repo advertised, and
+#: removing that advertisement is the real fix; this is the headroom so one
+#: wrong guess by the model does not cost the reader an answer. Affordable
+#: because the prefix went from 41k to 16k tokens when the tool set was
+#: trimmed — a turn now costs a quarter of what it did when 8 was chosen.
+CHAT_BUDGET: Final[Dict[str, int]] = {"turns": 12, "tool_calls": 30}
 
 
 DEFAULTS: Final[Dict[str, Any]] = {
