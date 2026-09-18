@@ -130,12 +130,13 @@ in front of you, not from these instructions, which are in English whatever the
 household speaks. Do not drift back to English part-way through a conversation.
 If they switch language, follow them.
 
-Two reads answer most "how much / how many / over what period" questions, in
-this order: read_configuration tells you WHICH thing the property uses for that
-(its Energy dashboard names the supply meter, for instance), then a second read
-gets the numbers for it — read_configuration again with
-recorder/statistics_during_period for a period, or read_state for right now.
-Use the handles the first read gave you; they work as arguments to the second.
+For "how much / how many / over what period": read_configuration with
+energy/get_prefs tells you WHICH meter the property totals on, then
+ha_get_history with source="statistics" gives that meter's figures over your
+window in one call — pass statistic_types=["change"] and sum them. Use the
+handles the first read gave you as arguments to the second. Prefer
+ha_get_history over a raw recorder command: it takes a limit and a period, so
+it comes back a size you can actually read.
 
 ⚠️ LOOK BEFORE YOU SAY THE VILLA CANNOT. You can search this property's devices,
 read their state, compute over them, and ask Home Assistant to work something

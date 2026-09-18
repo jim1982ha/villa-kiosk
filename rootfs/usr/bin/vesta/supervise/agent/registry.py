@@ -217,11 +217,24 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
 #: into the shipped constitution, where it applies to any question about
 #: totals rather than to one tool.
 #:
-#: ⚠️ AND NOT `ha_get_history`: `read_history` already serves it against the
-#: villa's own subjects, and two tools for one question is how a model comes to
-#: spend a turn choosing.
+#: ⚠️ `ha_get_history` WAS EXCLUDED HERE AND THAT WAS WRONG. The note said
+#: "`read_history` already serves it" — it does not: `read_history` takes a
+#: window in HOURS against the villa's own subjects and cannot aggregate
+#: statistics over a period, which is what "how much since 1pm" is. Measured:
+#: that question is answerable in ONE `ha_get_history(source="statistics")`
+#: call, and without it the agent needed three `read_configuration` calls and
+#: still got it wrong.
+#:
+#: ⚠️ AND THE MCP TOOL IS SHAPED WHERE THE RAW COMMAND IS NOT. It publishes
+#: `limit`, `period`, `statistic_types` and `fields`, so a broad ask comes back
+#: bounded. `recorder/statistics_during_period` through `read_configuration`
+#: has no such shaping, which is how a single call returned ~294,000 characters
+#: and the model read a false zero out of the fragment. Preferring the upstream
+#: tool where one exists is not just fewer turns, it is the one that cannot
+#: produce that failure.
 CHAT_UPSTREAM: Tuple[str, ...] = (
     "ha_search", "ha_get_state", "ha_eval_template", "ha_list_floors_areas",
+    "ha_get_history",
 )
 
 

@@ -188,3 +188,45 @@ def test_a_refused_command_never_reaches_home_assistant():
     out = _run(reader, "energy/save_prefs", {"anything": 1})
     assert out.get("code") == "refused"
     assert _FakeHass.sent == []
+
+
+# ── a structure is refused, never truncated ─────────────────────────────────
+def test_an_oversized_structure_is_REFUSED_not_cut_in_half():
+    """⚠️ THE FALSE ALARM THIS PREVENTS, MEASURED ON THE VILLA. A
+    `read_configuration` call returned ~294,000 characters; the 8,000-character
+    truncation cut it mid-structure; the model read a zero out of the broken
+    prefix and told the owner the main meter had shown NO consumption since 1pm
+    and its wiring should be checked. The meter was fine — the property had used
+    9.8 kWh.
+
+    ⚠️ PROSE MAY BE TRUNCATED; A STRUCTURE MAY NOT. Half a log excerpt is still
+    half true. Half a JSON document is not — whatever survives is an arbitrary
+    prefix, and a value read from it is an artefact of where the cut landed.
+    """
+    from vesta.supervise.agent.tools import ha as ha_tools
+    from vesta.supervise.agent.tools.base import DEFAULT_MAX_RESULT_CHARS
+
+    huge = {f"sensor.example_{i}": [{"start": i, "change": 0}] for i in range(4000)}
+    tool = ha_tools.ReadConfiguration(
+        source=lambda command="", data=None: {"body": huge}, refs=None)
+    out = asyncio.run(tool.run({"command": "recorder/statistics_during_period"}))
+
+    assert "error" in out[0], "an oversized structure must refuse, not truncate"
+    message = str(out[0]["error"]["message"])
+    assert "characters" in message, "the refusal must say how big it was"
+    assert "name the specific thing" in message, (
+        "the refusal must say how to narrow, or the model retries the same call")
+    assert "json" not in str(out[0]).lower() or "text" not in out[0], (
+        "no fragment of the structure may be returned")
+    assert len(str(out[0])) < DEFAULT_MAX_RESULT_CHARS
+
+
+def test_a_structure_that_fits_is_returned_whole():
+    from vesta.supervise.agent.tools import ha as ha_tools
+
+    tool = ha_tools.ReadConfiguration(
+        source=lambda command="", data=None: {"body": {"energy_sources": []}},
+        refs=None)
+    out = asyncio.run(tool.run({"command": "energy/get_prefs"}))
+    assert "error" not in out[0]
+    assert "energy_sources" in str(out[0]["json"]["text"])

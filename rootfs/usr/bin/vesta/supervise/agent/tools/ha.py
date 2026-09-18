@@ -1,12 +1,23 @@
 """Thin wrappers over the websocket client VESTA already holds. ADR-005.
 
-⚠️ WHY NOT `ha_mcp`, WHICH IS INSTALLED AND PUBLISHES ALL OF THIS. Because
-consuming it would mean adding an MCP CLIENT dependency to a process that
-already has a working Home Assistant websocket client three modules away. That
-is a real dependency, a second auth path and a second failure mode, bought to
-avoid roughly a hundred and fifty lines. `ha_mcp` stays exactly as valuable as
-it was — for development, and for any agent OUTSIDE this process, which is what
-`agent/mcp_server.py` will serve.
+⚠️ THIS PARAGRAPH USED TO SAY "WHY NOT `ha_mcp`: IT WOULD MEAN ADDING AN MCP
+CLIENT DEPENDENCY" — AND THAT REASON IS OBSOLETE. `agent/upstream.py` consumes
+`ha_mcp` over exactly such a client, and the chat registry publishes five of its
+tools. The argument was answered by the code and the comment outlived it.
+
+⚠️ THE REASON THESE TOOLS STILL EXIST IS DIFFERENT AND STILL GOOD: `ha_mcp` is a
+SEPARATE ADD-ON and this one is redistributable. `upstream.tools_for` returns
+`[]` when it is not installed, so a villa without it must still be able to read
+a state, a history and a schedule — these are the floor, and `ha_mcp` is an
+enhancement on top. They also serve what no Home Assistant tool can know: this
+add-on's own concerns, briefings, salience and facility record.
+
+⚠️ AND WHERE UPSTREAM PUBLISHES A BETTER-SHAPED TOOL, PREFER IT. Measured:
+`ha_get_history(source="statistics")` answers "how much since 1pm" in ONE call
+and takes a `limit`, a `period` and `statistic_types`, so the result comes back
+bounded. The same question through a raw `recorder/statistics_during_period`
+returned ~294,000 characters and the model read a false zero out of the
+truncated fragment. Shaped beats raw; being ours is not a reason to prefer ours.
 
 ⚠️ EVERY RESULT IS REF-AND-LABEL, NEVER AN ENTITY ID. That is the whole point of
 `refs.py`, and the enforcement is a test that scans real tool output with an
@@ -38,7 +49,7 @@ from vesta.shared import wallclock
 from vesta.supervise.agent import clock
 from vesta.shared import instants
 from vesta.supervise.agent.tools.base import (
-    BaseTool, DEFAULT_MAX_RESULT_CHARS, truncate)
+    BaseTool, DEFAULT_MAX_RESULT_CHARS)
 from vesta.supervise.agent.tools.base import data
 from vesta.supervise.agent.tools.base import fail
 from vesta.supervise.agent.tools.base import resolved
@@ -386,12 +397,7 @@ class CallReadOnlyService(BaseTool):
         if self._refs is not None:
             from vesta.supervise.agent.refs import pseudonymise
             body = pseudonymise(body, self._refs)
-        return [data({
-            "kind": "service_result",
-            "text": truncate(body, DEFAULT_MAX_RESULT_CHARS),
-            "note": str(out.get("note") or ""),
-            "count": int(out.get("count") or 0),
-        })]
+        return [_json_or_refuse(body, "service_result")]
 
 
 def _flatten_text(value: Any) -> str:
@@ -409,6 +415,40 @@ def _flatten_text(value: Any) -> str:
     except Exception:  # noqa: BLE001
         return str(value)
 
+
+
+
+def _json_or_refuse(body: str, what: str) -> Dict[str, Any]:
+    """A structured result, or a refusal — never a truncated fragment.
+
+    ⚠️ TRUNCATED JSON IS NOT PARTIAL DATA, IT IS INVALID DATA, and handing one
+    back cost the owner a false alarm about their own hardware. Measured on the
+    villa: a `read_configuration` call returned ~294,000 characters, `truncate`
+    cut it at 8,000 mid-structure, and the model read a zero out of the broken
+    prefix and reported that the main meter had shown no consumption since 1pm
+    and its wiring should be checked. The meter was fine — the property had used
+    9.8 kWh. A wrong number delivered confidently is worse than no number, and
+    worst of all when it sends somebody to look at a breaker.
+
+    ⚠️ PROSE MAY BE TRUNCATED; A STRUCTURE MAY NOT. `truncate`'s note ("answer
+    from what you can see, then narrow") is right for a log excerpt, where the
+    first half is still true. Half a JSON document is not half true — the keys
+    that survive are an arbitrary prefix, and any value read from it is an
+    artefact of where the cut landed.
+
+    ⚠️ AND THE REFUSAL CARRIES THE SIZE, so the model can narrow rather than
+    retry the same thing. `fail` is data the model routes around, not an error.
+    """
+    if len(body) <= DEFAULT_MAX_RESULT_CHARS:
+        return data({"kind": what, "text": body})
+    from vesta.supervise.agent import limits as limits_mod
+    limits_mod.note("too_large", f"{len(body):,} characters")
+    return fail("too_large", (
+        f"that returned {len(body):,} characters, far more than can be read, "
+        f"and a part of it would be meaningless — half a structure is not half "
+        f"an answer. Ask again for less: name the specific thing you want "
+        f"rather than everything, and use a coarser grouping if the command "
+        f"takes one."))
 
 
 class ReadConfiguration(BaseTool):
@@ -484,10 +524,7 @@ class ReadConfiguration(BaseTool):
         if self._refs is not None:
             from vesta.supervise.agent.refs import pseudonymise
             body = pseudonymise(body, self._refs)
-        return [data({
-            "kind": "configuration",
-            "text": truncate(body, DEFAULT_MAX_RESULT_CHARS),
-        })]
+        return [_json_or_refuse(body, "configuration")]
 
 
 HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule,
