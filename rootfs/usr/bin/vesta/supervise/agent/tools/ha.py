@@ -367,8 +367,13 @@ class CallReadOnlyService(BaseTool):
                 return [fail("not_found", f"no such handle: {str(ref)!r}")]
             entity_ids.append(resolved_id)
         try:
-            out = await resolved(self._source(service, entity_ids,
-                                              dict(args.get("data") or {})))
+            # ⚠️ THE `data` PAYLOAD TOO, NOT ONLY THE `refs` ARRAY. A service's
+            # own arguments can name an entity — and did so silently, because
+            # only the explicit handle list was being resolved.
+            from vesta.supervise.agent.refs import resolve_handles
+            out = await resolved(self._source(
+                service, entity_ids,
+                resolve_handles(dict(args.get("data") or {}), self._refs)))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         if not isinstance(out, Mapping):
@@ -403,29 +408,6 @@ def _flatten_text(value: Any) -> str:
     except Exception:  # noqa: BLE001
         return str(value)
 
-
-
-def _with_ids(value: Any, refs: Any) -> Any:
-    """Every handle in an outgoing payload, replaced by its entity id.
-
-    ⚠️ RECURSIVE, BECAUSE THE PAYLOAD'S SHAPE IS HOME ASSISTANT'S AND NOT OURS.
-    `statistic_ids` is a list of strings today; the next command's may be nested
-    under a key nobody here has seen. Walking the structure means a handle is
-    translated wherever it appears rather than only where somebody predicted.
-
-    ⚠️ AND AN UNKNOWN STRING IS LEFT ALONE. Most values are not handles — a
-    period name, an ISO timestamp, a unit — and refusing or blanking them would
-    break every call that mixes the two.
-    """
-    if refs is None:
-        return value
-    if isinstance(value, str):
-        return refs.resolve(value) or value
-    if isinstance(value, Mapping):
-        return {k: _with_ids(v, refs) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_with_ids(v, refs) for v in value]
-    return value
 
 
 class ReadConfiguration(BaseTool):
@@ -481,9 +463,10 @@ class ReadConfiguration(BaseTool):
             # in milliseconds. `pseudonymise` is the inbound half; this is its
             # outbound counterpart, and without both the tool can only ask
             # questions that name nothing.
+            from vesta.supervise.agent.refs import resolve_handles
             out = await resolved(self._source(
                 str(args.get("command") or ""),
-                _with_ids(args.get("data") or {}, self._refs)))
+                resolve_handles(args.get("data") or {}, self._refs)))
         except Exception as err:  # noqa: BLE001
             return [fail("unavailable", f"Home Assistant did not answer: {err}")]
         if not isinstance(out, Mapping):

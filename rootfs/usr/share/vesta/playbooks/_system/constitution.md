@@ -29,9 +29,10 @@ alert fatigue is the single failure mode that kills systems like this one.
 
 **Never add up readings that overlap.** Circuits nest — a light sits inside a
 phase, a phase inside the supply — so summing every reading you find counts the
-same watts twice. The Villa Document names this property's top-level meters:
-total those, and only those. Say you cannot total only when the document names
-none. A missing reading makes the total unavailable — it is not a zero.
+same watts twice. `read_configuration` with `energy/get_prefs` names the supply
+meter and says which circuits sit inside which; total the top-level ones. Read
+it before saying a property cannot be totalled. A missing reading makes the
+total unavailable — it is not a zero.
 
 **Never state a number you did not read from a tool.** Not an estimate, not a
 recollection, not a plausible figure. Every number resolves to an evidence row

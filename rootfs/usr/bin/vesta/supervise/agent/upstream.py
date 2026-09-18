@@ -273,8 +273,18 @@ class UpstreamTool(BaseTool):
         session = self._session_of()
         if session is None:
             return [fail("unavailable", "no session to reach the MCP server")]
+        # ⚠️ HANDLES BACK TO IDS BEFORE THE CALL, THE MIRROR OF THE
+        # PSEUDONYMISING BELOW. These tools hand the model handles in their
+        # RESULTS and were then given those handles back as ARGUMENTS —
+        # `ha_get_state(entity_id="d12")` — which Home Assistant answers with
+        # nothing. The model's commonest path (`ha_search`, then read what it
+        # found) was broken at the join, while VESTA's own `read_state` worked
+        # because it resolves its refs. Two tools for one job, one of them
+        # quietly useless, and no way for the model to tell which.
+        from vesta.supervise.agent.refs import resolve_handles
         result = await rpc(session, self._url, "tools/call",
-                           {"name": self.name, "arguments": dict(args)})
+                           {"name": self.name,
+                            "arguments": resolve_handles(dict(args), self._refs)})
         if result is None:
             return [fail("unavailable",
                          "the Home Assistant MCP server did not answer")]

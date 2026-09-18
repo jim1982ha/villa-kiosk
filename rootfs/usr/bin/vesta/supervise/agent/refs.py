@@ -30,7 +30,7 @@ unrelated, and that is the point.
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from vesta.shared.text import readable_label
 
@@ -145,6 +145,39 @@ def pseudonymise(text: str, table: "RefTable") -> str:
         return match.group(0).replace(entity_id, table.ref_for(entity_id))
 
     return _ENTITY_ID.sub(swap, str(text))
+
+
+def resolve_handles(value: Any, table: Optional["RefTable"]) -> Any:
+    """Every handle in an OUTGOING payload, replaced by its entity id.
+
+    ⚠️ THE COUNTERPART OF `pseudonymise`, AND IT WAS MISSING FOR THE WHOLE LIFE
+    OF EVERY TOOL THAT TAKES FREE-FORM ARGUMENTS. The inbound half turns ids
+    into handles so no identifier reaches the model; without the outbound half
+    the model can only ask questions that NAME NOTHING — it receives a handle,
+    passes it back, and Home Assistant has never heard of it. The recorder
+    answers an unknown statistic id with an EMPTY RESULT rather than an error,
+    so the villa told its owner it had no access to figures its own database
+    returns in milliseconds, and no log line said otherwise.
+
+    ⚠️ RECURSIVE, BECAUSE THE PAYLOAD'S SHAPE IS HOME ASSISTANT'S AND NOT OURS.
+    `statistic_ids` is a list of strings today; the next command's argument may
+    be nested under a key nobody here has seen. Walking the structure means a
+    handle is translated wherever it appears rather than only where somebody
+    predicted it would.
+
+    ⚠️ AND AN UNKNOWN STRING IS LEFT ALONE. Most values are not handles — a
+    period name, an ISO timestamp, a unit, a free-text query — and blanking or
+    refusing them would break every call that mixes the two.
+    """
+    if table is None:
+        return value
+    if isinstance(value, str):
+        return table.resolve(value) or value
+    if isinstance(value, Mapping):
+        return {k: resolve_handles(v, table) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [resolve_handles(v, table) for v in value]
+    return value
 
 
 def personalise(text: str, table: Optional["RefTable"]) -> str:
