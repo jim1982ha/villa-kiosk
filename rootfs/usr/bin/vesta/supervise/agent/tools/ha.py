@@ -542,15 +542,15 @@ def _json_or_refuse(body: str, what: str) -> Dict[str, Any]:
 class ReadConfiguration(BaseTool):
     name = "read_configuration"
     description = (
-        "Two things, and it is the tool for ANY question about a total or a "
-        "period. (1) FIGURES OVER TIME — "
-        "'recorder/statistics_during_period', with the window and the "
-        "statistic in `data`; that is how you answer 'how much since 1pm'. "
-        "(2) HOW THE PROPERTY IS SET UP — 'energy/get_prefs' names the meters "
-        "that make up the whole-property total and which circuits are already "
-        "counted inside them; also areas, floors, integrations, dashboards. "
-        "The usual pair is (2) then (1): learn which meter, then read it. Only "
-        "reading is possible.")
+        "HOW THE PROPERTY IS SET UP, which is configuration rather than a "
+        "reading: 'energy/get_prefs' names the meters that make up the "
+        "whole-property total and which circuits are already counted inside "
+        "them; also areas, floors, integrations, dashboards. Only reading is "
+        "possible. "
+        "⚠️ NOT FIGURES OVER TIME — a total, an average or a period is "
+        "`measure`'s job, and it returns the number itself instead of rows to "
+        "add up. The usual pair is this tool to learn WHICH meter, then "
+        "`measure` to read it.")
     inputSchema = {
         "type": "object",
         "properties": {

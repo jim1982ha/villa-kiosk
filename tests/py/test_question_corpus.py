@@ -79,8 +79,8 @@ CORPUS = (
     ("How many times did the pump start this week?", "measure", "count_changes"),
     ("Combien de fois la porte s'est ouverte ?", "measure", "count_changes"),
     # ── what is true right now ──────────────────────────────────────────────
-    ("How many lights are on?", "ha_search", ""),
-    ("Combien de lumières sont allumées en ce moment ?", "ha_search", ""),
+    ("How many lights are on?", "ha_eval_template", ""),
+    ("Combien de lumières sont allumées en ce moment ?", "ha_eval_template", ""),
     ("Is the pool pump running?", "read_state", ""),
     ("What is the temperature in the bedroom?", "read_state", ""),
     ("Which doors are unlocked?", "ha_search", ""),
@@ -93,8 +93,9 @@ CORPUS = (
     ("Which meter does the energy dashboard treat as the main supply?",
      "read_configuration", ""),
     ("What is on the schedule for the cleaner?", "read_schedule", ""),
-    ("What does the villa look like — how many devices are there?",
-     "read_villa", ""),
+    ("Give me an overview of the villa.", "read_villa", ""),
+    ("How many doors are unlocked right now?", "ha_eval_template", ""),
+    ("Combien d'appareils sont hors ligne ?", "ha_eval_template", ""),
     # ── why something happened ──────────────────────────────────────────────
     ("Why did the gate open at 3am?", "read_automation_trace", ""),
     ("Did the irrigation run this morning?", "read_automation_trace", ""),
@@ -108,10 +109,22 @@ CORPUS = (
 #: every one of these questions was answered by the model reading rows and
 #: adding them up — which is where all six wrong figures came from.
 ARITHMETIC_WORDS = (
-    "how much", "how long", "how many times", "average", "moyenne",
-    "highest", "lowest", "peak", "coldest", "combien de temps",
-    "combien de fois", "combien d'", "consommation",
+    "how much", "how long", "how many", "average", "moyenne",
+    "highest", "lowest", "peak", "coldest", "combien de", "combien d'",
+    "consommation",
 )
+
+#: Tools that RETURN a number the villa worked out. Everything else hands back
+#: a list or a document, and a number taken from one of those was counted or
+#: summed by the model.
+#:
+#: ⚠️ COUNTING IS ARITHMETIC AND I LEFT IT OUT OF THE FIRST CORPUS. "How many
+#: lights are on" went to `ha_search`, whose published schema caps results at
+#: TEN per surface; the reference property has 31 lights. The model counts the
+#: rows it was given and answers a different question from the one asked —
+#: exactly the shape of the summing defect, in a different unit, and it is half
+#: of the question the owner has been testing with all along.
+COMPUTING_TOOLS = ("measure", "ha_eval_template")
 
 
 def _known_tool_names():
@@ -145,12 +158,14 @@ def test_no_question_asks_the_model_to_do_the_arithmetic(question, tool, reduce)
     lowered = question.lower()
     if not any(word in lowered for word in ARITHMETIC_WORDS):
         return
-    assert tool == "measure", (
-        f"{question!r} needs a figure worked out of a series and is assigned "
-        f"to {tool!r} — whatever that tool returns, the model would have to do "
-        f"the sum, which is where every wrong number came from")
-    assert reduce in ha_tools.MEASURE_REDUCTIONS, (
-        f"{question!r} names reduction {reduce!r}, which measure does not offer")
+    assert tool in COMPUTING_TOOLS, (
+        f"{question!r} asks for a number and is assigned to {tool!r}, which "
+        f"returns a list or a document — so the model would have to count or "
+        f"sum it, which is where every wrong figure came from")
+    if tool == "measure":
+        assert reduce in ha_tools.MEASURE_REDUCTIONS, (
+            f"{question!r} names reduction {reduce!r}, which measure does not "
+            f"offer")
 
 
 def test_the_published_reductions_are_all_exercised():
@@ -386,3 +401,25 @@ def test_what_upstream_still_publishes_is_what_we_genuinely_lack():
     for name in registry_mod.CHAT_UPSTREAM:
         assert name not in SUPERSEDED, (
             f"{name} has a VESTA counterpart and is still published")
+
+
+@pytest.mark.parametrize("question,tool,reduce", CORPUS,
+                         ids=[q[:40] for q, _, _ in CORPUS])
+def test_the_word_list_and_the_assignments_pin_each_other(question, tool, reduce):
+    """⚠️ THE REVERSE DIRECTION, AND WITHOUT IT THE WORD LIST IS DECORATIVE.
+    Found by mutation: deleting "how many" from ARITHMETIC_WORDS broke nothing,
+    because the counting questions were by then correctly assigned to a
+    computing tool and the rule only fires on a MIS-assigned one. So the list
+    could quietly shrink, and the next counting question added to this corpus
+    would be free to point at a listing tool.
+
+    Asserting both directions — every arithmetic question uses a computing
+    tool, and every computing tool answers an arithmetic question — makes each
+    half hold the other up."""
+    if tool not in COMPUTING_TOOLS:
+        return
+    lowered = question.lower()
+    assert any(word in lowered for word in ARITHMETIC_WORDS), (
+        f"{question!r} is answered by {tool!r}, which computes — but no word in "
+        f"ARITHMETIC_WORDS matches it, so the rule that routes questions like "
+        f"this one to a computing tool would not fire for it")

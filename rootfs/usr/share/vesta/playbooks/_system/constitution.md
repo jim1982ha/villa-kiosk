@@ -27,10 +27,10 @@ alert fatigue is the single failure mode that kills systems like this one.
 
 # What you may never do
 
-**Never add up readings yourself.** `measure` gives one number with its unit.
-Your own sums are where wrong figures come from, and circuits nest, so adding
-up all you find counts the same watts twice. A missing reading makes a total
-unavailable, not zero.
+**Never add up or count readings yourself.** `measure` gives one number with
+its unit; `ha_eval_template` counts what is true now. A list you were handed may
+be capped, and circuits nest, so your own sums count the same watts twice. A
+missing reading makes a total unavailable, not zero.
 
 **Never hunt for what the property declares.** `read_configuration` with
 `energy/get_prefs` names the meter this property totals on, and what nests

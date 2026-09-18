@@ -120,9 +120,61 @@ def test_the_service_tool_does_not_advertise_figures_over_time():
 
 
 def test_the_configuration_tool_advertises_what_it_actually_owns():
-    """The counterpart: the tool that CAN answer "how much since 1pm" has to
-    say so, or the model has no reason to reach for it."""
+    """⚠️ THIS TEST PINNED THE OWNERSHIP AND THEN THE OWNERSHIP MOVED, WHICH IS
+    WHY IT IS REWRITTEN RATHER THAN DELETED. It used to require
+    `read_configuration` to advertise `statistics_during_period`, because in
+    2.989.0 that WAS the tool which could answer "how much since 1pm" and the
+    model had no other reason to reach for it.
+
+    2.993.0 gave that job to `measure`, which returns the NUMBER instead of the
+    rows — and I left this description saying `read_configuration` was "the tool
+    for ANY question about a total or a period". Two tools claiming one job, the
+    defect I had just removed between `read_state`/`ha_get_state`, recreated in
+    the same release by not sweeping the descriptions. The villa's trace shows
+    the consequence: `read_configurationx6` in a single answer.
+
+    What it owns now is CONFIGURATION — which meter, which circuits, which
+    areas — and it must point at `measure` for the figure itself."""
     text = _description("read_configuration").lower()
-    assert "statistics_during_period" in text
-    assert "energy/get_prefs" in text
-    assert "period" in text
+    assert "energy/get_prefs" in text, "it must still name the meter lookup"
+    assert "measure" in text, (
+        "it must hand the figure question on, or the model stops here and sums "
+        "rows itself")
+    assert "statistics_during_period" not in text, (
+        "read_configuration is advertising the arithmetic path again")
+
+
+#: Phrases that mean "I can give you a figure over a window".
+_CLAIMS_A_FIGURE = ("how much since", "any question about a total",
+                    "figures over time", "statistics_during_period")
+
+
+def test_exactly_one_published_tool_claims_figures_over_a_period():
+    """⚠️ THE CLASS, NOT THE INSTANCE. Two tools offering one job is now the
+    third time in this subsystem: `read_energy`/`ha_search` (2.982.0),
+    `read_state`/`ha_get_state` (2.993.0), and `read_configuration`/`measure`
+    inside that same release. A model handed two ways to do one thing tries
+    both — measured, six calls and a hit turn cap — and no test noticed,
+    because both tools worked.
+
+    ⚠️ IT READS THE DESCRIPTIONS, WHICH IS WHERE THE CLAIM LIVES. A tool's
+    capability as far as the model is concerned IS its description; asserting
+    on the code would pass while the prose sent it elsewhere."""
+    from vesta.supervise.agent.tools import ha
+
+    claimants = []
+    for cls in ha.HA_TOOLS:
+        text = (cls.description or "").lower()
+        for phrase in _CLAIMS_A_FIGURE:
+            if phrase in text:
+                # A disclaimer is the opposite of a claim: "NOT figures over
+                # time — that is measure's job" must not count as offering it.
+                where = text.index(phrase)
+                window = text[max(0, where - 60):where]
+                if "not " in window or "measure" in window:
+                    continue
+                claimants.append(f"{cls.name} ({phrase!r})")
+                break
+    assert claimants == ["measure"] or not claimants, (
+        "more than one tool offers to work out a figure over a period: "
+        + ", ".join(claimants))
