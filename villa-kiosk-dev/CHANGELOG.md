@@ -1,3 +1,27 @@
+## 2.997.0
+
+### Fixed — counting a list is guessing, and VESTA was doing it
+"How many lights are on?" was answered by searching for lights and counting
+what came back. A search returns the first handful of matches, not all of them
+— ten by default, on a property with thirty-one lights. The count was of the
+rows it happened to be shown, which is a different question from the one you
+asked.
+
+Home Assistant now does the counting, the same way it now does the totals. This
+covers "how many", "which rooms", "are any of them" — anything where the answer
+is a number about what is true right now.
+
+### Fixed — two tools still claimed the same job
+The last release moved totals and averages to a tool that returns the number
+itself. But the tool it took that job FROM still described itself as "the tool
+for any question about a total or a period" — so VESTA kept reaching for it and
+adding up rows by hand. Your last question shows it calling that tool six times
+before answering.
+
+It now describes what it actually owns — which meter, which circuits, which
+rooms — and hands the figure on. A check added: only one tool may offer to work
+out a figure over a period.
+
 ## 2.996.0
 
 ### Changed — the rule about not guessing now applies everywhere, not just to chat
