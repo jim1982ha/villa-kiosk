@@ -1,3 +1,20 @@
+## 2.994.0
+
+### Changed — the security suite is part of the repository now
+Nothing on your screens changes in this release.
+
+VESTA's checks on who is allowed to do what — whether a request needs you to be
+signed in, which actions are owner-only, and how the machine-to-machine door is
+guarded — were written down in a file that was deliberately kept off the
+repository. That meant a fresh copy of the project had none of them, and
+nothing ever ran them except by hand.
+
+It also meant nobody noticed when the file broke. It referred to a feature
+removed a few weeks ago, and rather than reporting one failure it stopped dead
+partway through, so roughly half its checks had quietly not been running for
+twenty releases. Everything passes now that it runs to the end, and it will be
+checked from here on.
+
 ## 2.993.0
 
 ### Changed — VESTA no longer does arithmetic, and stops guessing at it

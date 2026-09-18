@@ -1,7 +1,7 @@
 .claude
 CLAUDE.md
-# Local-only test scaffolding (badge_placement_test.ts, geometry_test.ts,
-# security_test.py) — deliberately not shipped.
+# Local-only test scaffolding (badge_placement_test.ts, geometry_test.ts)
+# — deliberately not shipped.
 #
 # ⚠️ `tests/*` and NOT `tests/`. Git cannot re-include anything whose PARENT
 # directory is excluded, so `tests/` followed by `!tests/py/` silently keeps
@@ -24,6 +24,23 @@ tests/*
 # pass on this machine and skip everywhere else — a guarantee that only holds
 # on the author's laptop is not one.
 !tests/consistency/
+# ...and the security suite, reversing a deliberate choice (owner, 2026-09-19).
+# CLAUDE.md names `python3 tests/security_test.py` as the regression suite for
+# supervisor-proxy.py's auth/RBAC boundary, and it is the only thing anywhere
+# that checks the `/agent-mcp` seam — constant-time token comparison, refusal
+# when no token is configured, no ACT tool exported, unreachable through
+# ingress.
+#
+# ⚠️ AND BEING UNTRACKED IS HOW IT CAME TO BE HALF A SUITE FOR TWENTY RELEASES.
+# It named `agent_chats_handler`, a route deliberately deleted in 2.973.0; the
+# lookup RAISED rather than failed, so the script died at line 580 of 740 and
+# every section below it stopped running. Nothing was wrong once repaired — 140
+# checks running became 271 passing — but no clone, no runner and no reviewer
+# could have told you either way, because the file was not there to look at.
+# The sentence three lines above is the argument, and it applies here with more
+# force than anywhere else it is already made: a guarantee that lives in an
+# ignored directory is not one.
+!tests/security_test.py
 node_modules
 dist
 dist-ssr
