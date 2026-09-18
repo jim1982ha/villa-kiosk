@@ -1,3 +1,24 @@
+## 2.977.0
+
+### Fixed — the language of a reply no longer drifts as a conversation runs
+2.975.0 told VESTA to answer in the language you asked in. That was an
+instruction, and instructions fade: a conversation only keeps its last dozen
+turns, oldest dropped first, so the very messages that established the language
+are the first to disappear. The longer you talked, the weaker it got.
+
+The conversation now remembers which language it is being held in, and that is
+restated to VESTA immediately before every question — so it holds however long
+the conversation runs.
+
+A short reply like "Ben vas-y" cannot be identified by anything, and is not
+treated as a change: the conversation keeps the language it already had. Writing
+a full sentence in another language does switch it, because changing language
+mid-conversation is a normal thing to do.
+
+Where the language cannot be identified at all — anything outside a set of
+common European ones — VESTA behaves exactly as it did before rather than being
+told to guess.
+
 ## 2.976.0
 
 ### Changed — the destination column is labelled again, more briefly

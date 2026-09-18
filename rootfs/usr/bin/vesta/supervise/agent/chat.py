@@ -43,6 +43,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.adapters.log import log
 from vesta.shared.style import inert
+from vesta.supervise.agent import language as language_mod
 
 #: The HA event this listens for. ⚠️ LOW-VOLUME BY NATURE — a person typing.
 #: Subscribing to a high-volume type here would put the loop behind the villa's
@@ -172,6 +173,12 @@ class Thread:
     #: `(concern_id, title)` for every concern delivered into this thread.
     concerns: List[Tuple[str, str]] = field(default_factory=list)
     touched: float = 0.0
+    #: The language this conversation is being held in, once anything has said
+    #: so confidently. ⚠️ ON THE THREAD RATHER THAN RE-READ PER TURN, because
+    #: `MAX_TURNS` trims the OLDEST turns first and those are exactly the ones
+    #: that established the language — the instruction added in 2.975.0 got
+    #: weaker the longer a conversation ran, which is backwards.
+    language: str = ""
 
 
 _THREADS: Dict[str, Thread] = {}
@@ -378,6 +385,22 @@ def context_for(message: Message, *,
         })
     for turn in thread.turns:
         out.append({"role": turn.role, "content": turn.text})
+    # ⚠️ STICKY, SO A TWO-WORD TURN CANNOT FLIP THE THREAD. "Ben vas-y" is a
+    # real turn from the conversation this fixes and no detector can call it;
+    # `sticky` keeps what the thread had unless this message is confidently
+    # something else. See agent/language.
+    thread.language = language_mod.sticky(thread.language, message.text)
+    # ⚠️ IMMEDIATELY BEFORE THE QUESTION, NOT AT THE TOP. This is the last thing
+    # the model reads before the message it must answer, which is where a short
+    # instruction actually holds; led with, it is one line above a dozen turns
+    # of prior conversation in the other language.
+    #
+    # ⚠️ AND EMPTY MEANS SAY NOTHING. A language this cannot name leaves the
+    # prompt's own rule in charge, which is what every non-European thread
+    # already relied on — a default here would make those worse, not better.
+    line = language_mod.instruction(thread.language)
+    if line:
+        out.append({"role": "user", "content": line})
     out.append({"role": "user", "content": message.text})
     return out
 
