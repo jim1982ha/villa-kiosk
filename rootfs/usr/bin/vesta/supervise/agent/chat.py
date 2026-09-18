@@ -43,7 +43,6 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from vesta.adapters.log import log
 from vesta.shared.style import inert
-from vesta.supervise.agent import language as language_mod
 
 #: The HA event this listens for. ⚠️ LOW-VOLUME BY NATURE — a person typing.
 #: Subscribing to a high-volume type here would put the loop behind the villa's
@@ -125,12 +124,10 @@ Never say a number you did not read from a tool. Never present an absence of
 data as good news. Name the thing you are talking about — a room, a device, a
 ticket — never a rule or a check.
 
-⚠️ ANSWER IN THE LANGUAGE THEY WROTE IN, and keep answering in it for the whole
-conversation. Judge it from the message in front of you, not from these
-instructions, which are in English whatever the household speaks. If one thread
-switches language, follow the switch. Reported from the villa: two answers in
-French and then, with nothing having changed, a third in English — the reader
-has to work out whether they are still talking to the same thing.
+⚠️ ANSWER IN THE LANGUAGE THEY WROTE IN, every time. Judge it from the message
+in front of you, not from these instructions, which are in English whatever the
+household speaks. Do not drift back to English part-way through a conversation.
+If they switch language, follow them.
 
 For consumption, load or "how much is the house using", call read_energy. It
 knows which meters this property is metered by and which circuits sit inside
@@ -173,12 +170,6 @@ class Thread:
     #: `(concern_id, title)` for every concern delivered into this thread.
     concerns: List[Tuple[str, str]] = field(default_factory=list)
     touched: float = 0.0
-    #: The language this conversation is being held in, once anything has said
-    #: so confidently. ⚠️ ON THE THREAD RATHER THAN RE-READ PER TURN, because
-    #: `MAX_TURNS` trims the OLDEST turns first and those are exactly the ones
-    #: that established the language — the instruction added in 2.975.0 got
-    #: weaker the longer a conversation ran, which is backwards.
-    language: str = ""
 
 
 _THREADS: Dict[str, Thread] = {}
@@ -385,22 +376,32 @@ def context_for(message: Message, *,
         })
     for turn in thread.turns:
         out.append({"role": turn.role, "content": turn.text})
-    # ⚠️ STICKY, SO A TWO-WORD TURN CANNOT FLIP THE THREAD. "Ben vas-y" is a
-    # real turn from the conversation this fixes and no detector can call it;
-    # `sticky` keeps what the thread had unless this message is confidently
-    # something else. See agent/language.
-    thread.language = language_mod.sticky(thread.language, message.text)
-    # ⚠️ IMMEDIATELY BEFORE THE QUESTION, NOT AT THE TOP. This is the last thing
-    # the model reads before the message it must answer, which is where a short
-    # instruction actually holds; led with, it is one line above a dozen turns
-    # of prior conversation in the other language.
+    # ⚠️ ONE STATIC LINE, AND DELIBERATELY NOT A LANGUAGE DETECTOR (2.979.0).
+    # 2.977.0 shipped one — stop-word scoring over seven European languages,
+    # pinned on the thread — and it regressed every language outside that set
+    # within the hour: a 20-word Indonesian question inherited the thread's
+    # previous English and the model was INSTRUCTED to answer in English, which
+    # it had never been told before the mechanism existed.
     #
-    # ⚠️ AND EMPTY MEANS SAY NOTHING. A language this cannot name leaves the
-    # prompt's own rule in charge, which is what every non-European thread
-    # already relied on — a default here would make those worse, not better.
-    line = language_mod.instruction(thread.language)
-    if line:
-        out.append({"role": "user", "content": line})
+    # ⚠️ THE MODEL IS BETTER AT THIS THAN ANY CLASSIFIER WE COULD SHIP, and it
+    # is already reading the message. Word lists cannot separate Dutch from
+    # German or Spanish from Portuguese; the tools that can are character
+    # n-gram models (fastText, CLD3) and those are a dependency and a binary
+    # blob for a judgement the model makes for free. So the rule is stated —
+    # in the prompt, and again HERE, immediately before the question, because a
+    # rule buried above a dozen turns of prior conversation is the one that
+    # gets missed. Nothing is stored and nothing is inferred, so this cannot
+    # assert a language the asker did not write in.
+    #
+    # ⚠️ IF DRIFT COMES BACK, THE NEXT STEP IS TO ASK THE MODEL, NOT TO GUESS:
+    # have it state the language it read and pin that. Do not reintroduce a
+    # heuristic — this one is on the record as having made things worse.
+    # ⚠️ POSITIVE, AND IT NAMES NO LANGUAGE. The first cut read "...if it is not
+    # English, do not answer in English", which is both anglocentric and the
+    # wrong shape: naming a language in a prohibition puts that language in
+    # front of the model. The test below forbids naming one at all.
+    out.append({"role": "user", "content":
+                "Answer in the language of the message below."})
     out.append({"role": "user", "content": message.text})
     return out
 

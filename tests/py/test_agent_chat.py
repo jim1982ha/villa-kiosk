@@ -251,11 +251,42 @@ def test_a_delivered_concern_is_in_the_next_message_s_context() -> None:
     assert ctx[-1]["content"] == "why?", "the new message must come last"
 
 
-def test_a_thread_with_no_concerns_adds_no_context_line() -> None:
+def test_a_thread_with_no_concerns_adds_no_concern_line() -> None:
+    """⚠️ THE ASSERTION IS ABOUT CONCERNS, AND IT USED TO SAY `len(ctx) == 1`.
+    That conflated "no concern context" with "no context at all", so it broke
+    when 2.979.0 began stating the language rule immediately before the
+    question — a line that is deliberate, not spurious. Pinned by CONTENT now,
+    which is what the test was always about."""
     msg = chat.parse(_event())
     assert msg is not None
     ctx = chat.context_for(msg)
-    assert len(ctx) == 1 and ctx[0]["content"] == "why?"
+    joined = " ".join(str(m["content"]) for m in ctx)
+    assert "Concerns already delivered" not in joined
+    assert ctx[-1]["content"] == "why?", "the new message must come last"
+
+
+def test_the_language_rule_is_restated_immediately_before_the_question() -> None:
+    """⚠️ POSITION IS THE WHOLE POINT, so it is pinned rather than assumed. The
+    rule is also in the system prompt; restating it here is what stops it being
+    buried above a dozen turns of prior conversation, which is where a short
+    instruction gets missed.
+
+    ⚠️ AND IT IS STATIC ON PURPOSE. 2.977.0 shipped a stop-word detector that
+    pinned a language on the thread, and it regressed every language outside
+    the seven it knew — a 20-word Indonesian question inherited the thread's
+    English and the model was told to answer in English. Nothing here inspects
+    the message, so this cannot assert a language the asker did not write in.
+    """
+    chat.note_delivered("telegram:111", "c1", "The pool pump is short-cycling")
+    msg = chat.parse(_event())
+    assert msg is not None
+    ctx = chat.context_for(msg)
+    assert ctx[-1]["content"] == "why?"
+    rule = str(ctx[-2]["content"])
+    assert "language" in rule.lower(), "the rule must sit next to the question"
+    # No language may be named: naming one is what went wrong before.
+    for named in ("French", "English.", "German", "Indonesian", "Dutch"):
+        assert named not in rule, f"the rule must not name a language: {named}"
 
 
 def test_re_delivering_a_concern_does_not_duplicate_it() -> None:

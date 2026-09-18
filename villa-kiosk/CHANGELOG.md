@@ -1,3 +1,21 @@
+## 2.979.0
+
+### Changed — the language guesser is gone; VESTA is simply asked to match you
+2.977.0 added machinery that tried to work out which language a conversation
+was in and remember it. 2.978.0 patched the hole that opened up. This removes
+it altogether.
+
+It was the wrong approach. Guessing a language from a list of common words
+cannot reliably tell Dutch from German, or Spanish from Portuguese, and every
+time it guesses wrong it argues VESTA into answering in a language you did not
+write in — which is worse than never having tried. It had already done exactly
+that to a question in Indonesian.
+
+VESTA reads your message anyway and is far better at this than any word list we
+could ship. So it is now simply told, right next to your question, to answer in
+the language you used. Nothing is stored, nothing is inferred, and there is no
+longer any way for the villa to decide you wrote in a language you didn't.
+
 ## 2.978.0
 
 ### Fixed — a question in Indonesian was answered in English
