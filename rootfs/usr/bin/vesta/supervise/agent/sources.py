@@ -1130,6 +1130,7 @@ def ha_readers(session: Any) -> Dict[Any, Optional[Callable[..., Any]]]:
     return {
         ha_tools.ReadState: state_reader(session),
         ha_tools.ReadHistory: history_reader(session),
+        ha_tools.Measure: measure_reader(session),
         ha_tools.ReadAutomationTrace: trace_reader(session),
         ha_tools.ReadSchedule: schedule_reader(session),
         ha_tools.CallReadOnlyService: service_reader(session),
@@ -1354,6 +1355,265 @@ def history_reader(session: Any) -> Optional[Callable[..., Any]]:
             session, entity_id, _since_iso(None, int(window_hours)))
 
     return read
+
+
+#: What a measurement may ask the villa to work out, and where it comes from.
+#:
+#: ⚠️ FIVE REDUCTIONS, NOT A LIST OF QUESTIONS. `read_energy` and `read_weather`
+#: were deleted in 2.982.0 because a tool per anticipated question is a dataset
+#: nobody can finish. A REDUCTION is the opposite: nothing here knows what
+#: electricity is, and the same five answer water, gas, rainfall, temperature,
+#: a pump's running time and a door's openings. If a sixth is ever needed it
+#: will be a shape of arithmetic, never a subject.
+_FROM_STATISTICS: Dict[str, str] = {
+    "total": "change", "mean": "mean", "min": "min", "max": "max"}
+_FROM_HISTORY: tuple = ("time_in_state", "count_changes")
+
+#: ⚠️ THE TOOL PUBLISHES THE SET; THIS MODULE IMPLEMENTS IT. `tools/ha.Measure`
+#: carries `MEASURE_REDUCTIONS` because a published schema is a contract with
+#: the model, and importing it here at module scope would be a cycle (the tool
+#: module is imported lazily by `ha_readers` for exactly that reason). So the
+#: two are separate declarations and `test_measure` asserts they are the same
+#: set — a reduction the tool offers and this cannot compute would be refused
+#: at run time with no test catching it, which is the "two correct halves"
+#: defect this repository has produced thirteen times.
+_REDUCTIONS: tuple = tuple(_FROM_STATISTICS) + _FROM_HISTORY
+
+#: Above this span the villa asks for hourly buckets instead of 5-minute ones.
+#: ⚠️ THE FINER BUCKET IS NOT A REFINEMENT, IT IS THE ANSWER. Home Assistant's
+#: hourly buckets tile only whole hours, so "since 5pm" asked at 21:20 covers
+#: 17:00-21:00 and silently drops 20 minutes — 2.83 kWh against a true 3.06.
+#: Short-term statistics are kept for the recorder's purge window (10 days by
+#: default), so a recent window gets them and an old one falls back to hourly
+#: with the gap named in `covers`.
+_FINE_BUCKET_HOURS: int = 24
+
+
+def _instant(value: Any, zone: Any) -> Optional[Any]:
+    """One ISO stamp as an aware UTC datetime.
+
+    ⚠️ A NAIVE STAMP MEANS THE VILLA'S WALL CLOCK HERE, AND `instants.as_utc`
+    READS IT AS UTC. That is the right default in `shared`, where the values
+    come from Home Assistant and are UTC; it is the wrong one for a value a
+    MODEL wrote, because the model is handed the villa's own local time and
+    will answer "since 5pm" with the villa's 5pm. On a UTC+8 property the
+    difference is eight hours of the wrong day — the class of defect
+    `wallclock` exists for, arriving from the opposite direction.
+    """
+    from datetime import datetime, timezone
+    try:
+        moment = datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    if moment.tzinfo is None:
+        try:
+            moment = moment.replace(tzinfo=zone) if zone else \
+                moment.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def _numbers(rows: Any, key: str) -> List[float]:
+    """Every usable number under `key`. ⚠️ A ROW WITHOUT ONE IS SKIPPED, NOT
+    COUNTED AS ZERO — see `stats.total_change`, which is the same rule and the
+    reason this returns a list rather than a sum."""
+    out: List[float] = []
+    for row in rows if isinstance(rows, Sequence) else ():
+        if isinstance(row, Mapping) and isinstance(row.get(key), (int, float)):
+            out.append(float(row[key]))
+    return out
+
+
+def _state_numbers(rows: Any) -> List[float]:
+    """The numeric readings of a raw history series, in order."""
+    out: List[float] = []
+    for row in rows if isinstance(rows, Sequence) else ():
+        value = _numeric(row.get("state")) if isinstance(row, Mapping) else None
+        if value is not None:
+            out.append(value)
+    return out
+
+
+def measure_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(entity_id, reduce, since, until, state) -> one number` for `measure`.
+
+    ⚠️ THE VILLA DOES THE ARITHMETIC, AND THAT IS THE WHOLE POINT OF THIS
+    FUNCTION EXISTING. Every wrong figure this agent has put in front of the
+    owner came from the model adding up rows it had been handed: 2.990.0 (a
+    truncated configuration read as a meter showing zero, reported as dead
+    hardware) and 2.992.0 (267 history rows cut at 8,000 characters, summed to
+    6.67 kWh against a true 3.06). Both were fixed by making the DATA safe to
+    read. Neither fixed the shape of the mistake, because the model was still
+    the thing doing the sum. Here it chooses WHAT to compute and receives a
+    number; there is nothing left for it to get wrong arithmetically.
+
+    ⚠️ AND IT NEVER RETURNS 0 FOR "NOTHING WAS RECORDED". A duty-cycled device
+    reads zero most of the day, so zero is a measurement and absence is not —
+    conflating them is how a false "stopped reporting" alert once reached the
+    owner about a sensor with 1,056 state changes. `value: null` with a note
+    saying the window held no readings is the honest answer.
+    """
+    if session is None:
+        return None
+
+    async def read(entity_id: str, reduce: str, since: Any,
+                   until: Any = None, state: Any = None) -> Dict[str, Any]:
+        from datetime import datetime, timezone
+        from vesta.adapters import automations as automations_mod
+        from vesta.adapters import stats as stats_mod
+        from vesta.adapters.hass import HassClient, rest_get
+        from vesta.shared import wallclock
+        from vesta.supervise.agent import clock as clock_mod
+
+        if reduce not in _REDUCTIONS:
+            return {"error": f"{reduce!r} is not something the villa can work "
+                             f"out; it knows {', '.join(_REDUCTIONS)}"}
+        zone = clock_mod.villa_zone()
+        start = _instant(since, zone)
+        end = _instant(until, zone) if until else datetime.now(timezone.utc)
+        if start is None:
+            return {"error": f"could not read {since!r} as a time"}
+        if end is None:
+            return {"error": f"could not read {until!r} as a time"}
+        if end <= start:
+            return {"error": "the window ends before it starts"}
+
+        span_h = (end - start).total_seconds() / 3600.0
+        covers = {"from": wallclock.for_reader(start, zone),
+                  "to": wallclock.for_reader(end, zone)}
+
+        # The device's own unit, so the number is never bare. A measurement
+        # without one is a number the reader has to guess the meaning of.
+        unit = ""
+        try:
+            row = await rest_get(session, f"states/{entity_id}")
+            if isinstance(row, Mapping):
+                unit = str((row.get("attributes") or {}).get(
+                    "unit_of_measurement") or "")
+        except Exception as err:  # noqa: BLE001 - a missing unit is not fatal
+            swallow(f"could not read the unit of {entity_id}", err)
+
+        def answer(value: Any, source: str, rows: int, note: str = "",
+                   in_unit: Optional[str] = None) -> Dict[str, Any]:
+            return {"value": value,
+                    "unit": unit if in_unit is None else in_unit,
+                    "reduce": reduce, "source": source, "rows": rows,
+                    "covers": covers, "note": note}
+
+        async def history() -> List[Dict[str, Any]]:
+            rows = await automations_mod.fetch_history(
+                session, entity_id, start.isoformat())
+            kept: List[Dict[str, Any]] = []
+            for item in rows if isinstance(rows, Sequence) else ():
+                if not isinstance(item, Mapping):
+                    continue
+                at = _instant(item.get("at"), None)
+                if at is None or at <= end:
+                    kept.append(dict(item))
+            return kept
+
+        # ── the four the recorder already aggregates ────────────────────────
+        if reduce in _FROM_STATISTICS:
+            field = _FROM_STATISTICS[reduce]
+            period = "5minute" if span_h <= _FINE_BUCKET_HOURS else "hour"
+            series: List[Dict[str, Any]] = []
+            try:
+                async with HassClient(session) as hass:
+                    merged = await stats_mod.statistics_during_period(
+                        hass, [entity_id], start, end,
+                        period=period, types=[field])
+                series = list(merged.get(entity_id) or [])
+            except Exception as err:  # noqa: BLE001 - fall back, never fail
+                swallow(f"statistics for {entity_id} failed", err)
+
+            values = _numbers(series, field)
+            if values:
+                if reduce == "total":
+                    computed: Any = float(sum(values))
+                elif reduce == "mean":
+                    computed = sum(values) / len(values)
+                elif reduce == "min":
+                    computed = min(values)
+                else:
+                    computed = max(values)
+                note = (f"From {len(values)} {period} buckets. The last bucket "
+                        f"may end before the window does."
+                        if period == "hour" else
+                        f"From {len(values)} five-minute buckets.")
+                return answer(round(computed, 4), "statistics", len(values), note)
+
+            # ⚠️ NO STATISTICS IS NOT NO DATA. A sensor without `state_class`
+            # is never aggregated by the recorder and is perfectly readable
+            # from its raw history — refusing here would make this tool
+            # answer only for the devices that happen to be metered.
+            raw = await history()
+            numbers = _state_numbers(raw)
+            if not numbers:
+                return answer(None, "history", len(raw),
+                              "Home Assistant recorded no readings for this "
+                              "device in that window. That is not a reading of "
+                              "zero — it is the absence of one.")
+            if reduce == "total":
+                computed = numbers[-1] - numbers[0]
+                note = ("This device keeps no statistics, so the total is the "
+                        "difference between its first and last reading in the "
+                        "window. A meter that reset would read low.")
+            elif reduce == "mean":
+                computed, note = sum(numbers) / len(numbers), _RAW_NOTE
+            elif reduce == "min":
+                computed, note = min(numbers), _RAW_NOTE
+            else:
+                computed, note = max(numbers), _RAW_NOTE
+            return answer(round(computed, 4), "history", len(numbers), note)
+
+        # ── the two that are about states, not numbers ──────────────────────
+        raw = await history()
+        if not raw:
+            return answer(None, "history", 0,
+                          "Home Assistant recorded nothing for this device in "
+                          "that window.", in_unit="")
+        if reduce == "count_changes":
+            wanted = str(state) if state is not None else ""
+            count, previous = 0, None
+            for item in raw:
+                now_state = str(item.get("state"))
+                if previous is not None and now_state != previous:
+                    if not wanted or now_state == wanted:
+                        count += 1
+                previous = now_state
+            return answer(count, "history", len(raw),
+                          (f"Times it became {wanted!r}." if wanted
+                           else "Every state change, whatever it changed to."),
+                          in_unit="times")
+
+        # time_in_state
+        if state is None:
+            return {"error": "time_in_state needs the state to time, "
+                             "for example 'on'"}
+        wanted = str(state)
+        seconds, previous_at, previous_state = 0.0, None, None
+        for item in raw:
+            at = _instant(item.get("at"), None)
+            if at is None:
+                continue
+            if previous_at is not None and previous_state == wanted:
+                seconds += (at - previous_at).total_seconds()
+            previous_at, previous_state = at, str(item.get("state"))
+        if previous_at is not None and previous_state == wanted:
+            seconds += (end - previous_at).total_seconds()
+        return answer(round(seconds / 60.0, 1), "history", len(raw),
+                      f"Minutes spent in state {wanted!r} during the window.",
+                      in_unit="minutes")
+
+    return read
+
+
+#: Said whenever a reduction came from raw readings rather than the recorder's
+#: own aggregate: the readings are whatever the device happened to report, so
+#: an average over them is unweighted.
+_RAW_NOTE: str = ("This device keeps no statistics, so this is computed over "
+                  "its raw readings, which are not evenly spaced.")
 
 
 def trace_reader(session: Any) -> Optional[Callable[..., Any]]:

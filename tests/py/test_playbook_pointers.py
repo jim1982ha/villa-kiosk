@@ -92,3 +92,59 @@ def test_no_instruction_makes_a_refusal_depend_on_the_villa_document():
     assert not offenders, (
         "a refusal is conditioned on the villa document's contents: "
         + ", ".join(offenders))
+
+
+# ── the same rule, applied to the OTHER shipped instruction ─────────────────
+#: A tool name as an instruction writes it. `read_*` and `ha_*` cannot be
+#: ordinary English; anything else must be backticked to count, so prose about
+#: "measuring the tank" is not mistaken for a claim about the `measure` tool.
+_IN_PROSE = re.compile(r"\b(read_[a-z_]+|ha_[a-z_]+)\b|`([a-z][a-z0-9_]*)`")
+
+
+def _named_in(text):
+    found = set()
+    for bare, quoted in _IN_PROSE.findall(text):
+        name = bare or quoted
+        if name:
+            found.add(name)
+    return found
+
+
+def test_the_chat_prompt_names_only_tools_chat_can_actually_reach():
+    """⚠️ THE SAME DEFECT AS THE CONSTITUTION'S, THROUGH THE OTHER DOOR — AND
+    IT SHIPPED. 2.987.0 fixed a rule in `constitution.md` that pointed at prose
+    a later release had deleted, and this file was written to stop that class.
+    It guarded the PLAYBOOKS, because playbooks were what had failed.
+
+    The chat tier's system prompt is a shipped instruction too, and nothing
+    here read it. When `ha_get_history` was withdrawn from `CHAT_UPSTREAM` in
+    2.993.0 the prompt still spent a paragraph telling the model to call it —
+    and worse, to "sum them", which is the arithmetic that produced every wrong
+    figure. Rolled out by the call sites in front of me instead of by
+    everything the rule applies to, one more time.
+
+    ⚠️ IT CHECKS THE TOOLS CHAT IS PUBLISHED, not every tool that exists: an
+    instruction naming a tool the reasoning tier has and chat does not sends
+    the model somewhere it cannot go, which is the same failure wearing a
+    tidier disguise.
+    """
+    from vesta.supervise.agent import chat as chat_mod
+    from vesta.supervise.agent import registry as registry_mod
+
+    reachable = {cls.name for cls in registry_mod.ALL_TOOLS
+                 if getattr(cls, "name", "")}
+    reachable |= set(registry_mod.CHAT_UPSTREAM)
+    # Per-run tools the registry adds rather than holding: see build_tools.
+    reachable |= {"raise_concern", "act_service", "reply"}
+
+    named = _named_in(chat_mod.SYSTEM)
+    # Only judge names that LOOK like this system's tools; the prompt also
+    # backticks ordinary words and Home Assistant commands.
+    candidates = {n for n in named
+                  if n.startswith(("read_", "ha_")) or n in reachable
+                  or n in {"measure"}}
+    missing = sorted(n for n in candidates
+                     if n not in reachable and "/" not in n)
+    assert not missing, (
+        "the chat system prompt names tools chat cannot reach: "
+        + ", ".join(missing))

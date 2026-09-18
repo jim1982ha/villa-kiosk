@@ -314,6 +314,48 @@ def test_an_unreadable_ledger_degrades() -> None:
 
 # ── the whole registry, swept ──────────────────────────────────────────────
 
+#: A plausible value for a required argument the schema does not otherwise pin.
+_SWEEP_VALUES: Dict[str, Any] = {
+    "name": "pump-anomaly",
+    "since": "2026-09-18T17:00:00+08:00",
+    "until": "2026-09-18T21:20:00+08:00",
+}
+
+
+def _arguments_for(tool: Any) -> Dict[str, Any]:
+    """Every REQUIRED argument of `tool`, derived from its own schema.
+
+    ⚠️ DERIVED, NEVER LISTED. A hand-kept table of arguments per tool goes stale
+    the moment a tool gains a required field — and staleness here does not fail
+    loudly, it makes the tool REFUSE, which the sweep used to read as clean.
+    Reading the schema means a tool added tomorrow is swept properly with no
+    change to this file.
+    """
+    schema = getattr(tool, "inputSchema", {}) or {}
+    props = schema.get("properties") or {}
+    args: Dict[str, Any] = {}
+    for name in schema.get("required", []) or []:
+        spec = props.get(name)
+        spec = spec if isinstance(spec, dict) else {}
+        if spec.get("enum"):
+            args[name] = list(spec["enum"])[0]
+        elif spec.get("type") == "array":
+            args[name] = ["d1"]
+        elif spec.get("type") == "integer":
+            args[name] = 1
+        elif spec.get("type") == "number":
+            args[name] = 1.0
+        elif spec.get("type") == "boolean":
+            args[name] = True
+        elif spec.get("type") == "object":
+            args[name] = {}
+        elif name == "ref" or name.endswith("_ref"):
+            args[name] = "d1"
+        else:
+            args[name] = _SWEEP_VALUES.get(name, "pump-anomaly")
+    return args
+
+
 def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
     """⚠️ THE SWEEP, not a spot check. Every tool is called with a source that
     returns real-looking ids, and every result is scanned. A tool added later
@@ -337,6 +379,18 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
         read.ReadCoverage(discovered=lambda: {}),
         ha.ReadState(source=lambda i: leaky, refs=table),
         ha.ReadHistory(source=lambda e, h: [1, 2, 3], refs=table),
+        # ⚠️ A DELIBERATELY LEAKY MEASUREMENT SOURCE. `measure` returns a
+        # NUMBER, so it looks like the one tool that cannot leak an id — and
+        # its first cut splatted the source's whole dict into the result, which
+        # would have published any field a future source added. The source here
+        # carries an entity id in a plausible place precisely to prove the tool
+        # copies only the fields it promises.
+        ha.Measure(source=lambda e, r, s_, u=None, st=None: {
+            "value": 3.06, "unit": "kWh", "reduce": "total",
+            "source": "statistics", "rows": 52,
+            "covers": {"from": "17:00", "to": "21:20"}, "note": "",
+            "entity_id": "sensor.pool_pump_power",
+            "statistic_id": "sensor.pool_pump_power"}, refs=table),
         ha.ReadAutomationTrace(source=lambda e, n: [{"at": "x", "outcome": "ok"}],
                                refs=table),
         # ⚠️ A BLOCK THAT CARRIES AN ID IN ITS TEXT, for the reason stated of
@@ -369,7 +423,7 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
         # ⚠️ CONFIGURATION IS THE MOST ID-DENSE PAYLOAD HOME ASSISTANT HAS —
         # the Energy dashboard is nothing but statistic ids — so this fixture
         # is a realistic one and the sweep expects handles back.
-        ha.ReadConfiguration(source=lambda command="": {"body": {
+        ha.ReadConfiguration(source=lambda command="", data=None: {"body": {
             "energy_sources": [{"type": "grid",
                                 "stat_energy_from": "sensor.pool_pump_power"}],
             "device_consumption": [{"stat_consumption": "automation.a_rule"}],
@@ -402,17 +456,21 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
     assert len(built) == len(ALL_TOOLS), (
         "a tool was added to the registry without being swept here")
     for tool in built:
-        args: Dict[str, Any] = {}
-        if "refs" in tool.inputSchema.get("required", []):
-            args = {"refs": ["d1"]}
-        elif "ref" in tool.inputSchema.get("required", []):
-            args = {"ref": "d1"}
-        elif "name" in tool.inputSchema.get("required", []):
-            # ⚠️ A REAL NAME. `{}` would make this tool refuse, and a refusal
-            # leaks nothing — the sweep would pass without reading a byte of
-            # what it exists to scan.
-            args = {"name": "pump-anomaly"}
-        leaked = refs_mod.entity_ids_in(_run(tool.call(args)))
+        blocks = _run(tool.call(_arguments_for(tool)))
+        # ⚠️ A REFUSAL FAILS THE SWEEP, AND UNTIL 2.993.0 IT SILENTLY PASSED IT.
+        # The note below used to sit beside a hand-written `if/elif` that filled
+        # ONE argument — whichever matched first — and every tool here happened
+        # to have exactly one required argument, so it worked by coincidence.
+        # `measure` was the first with three: it was handed `{"ref": "d1"}`,
+        # refused for the two missing ones, and a refusal leaks nothing. The
+        # tool was COUNTED by the length assertion above and SCANNED not at all,
+        # which is the shape of instrument this repository keeps being caught
+        # by — a guard that reports green over the case it exists to measure.
+        assert "error" not in blocks[0], (
+            f"{tool.name} refused the sweep's arguments "
+            f"({blocks[0].get('error')}) — a refusal carries no payload, so "
+            f"this tool would be scanned for nothing")
+        leaked = refs_mod.entity_ids_in(blocks)
         assert leaked == [], f"{tool.name} leaked {leaked}"
 
 

@@ -40,7 +40,16 @@ from vesta.supervise.agent import upstream
 SHIPPED = os.path.join(REPO_ROOT, "rootfs", "usr", "bin")
 
 #: One READ tool, in the shape `tools/list` returns.
-SPEC = {"name": "ha_get_state", "description": "read one entity",
+#:
+#: ⚠️ ITS NAME IS TAKEN FROM `CHAT_UPSTREAM`, NEVER TYPED HERE. It was
+#: `ha_get_state`, which was correct until 2.993.0 withdrew that tool as a
+#: duplicate of `read_state` — and the whole file then tested nothing, because
+#: `build_registry` filters the catalogue by that tuple and the fixture was no
+#: longer in it. The blindness assertion below caught it, which is the only
+#: reason this was a failure rather than a silently green file. Deriving the
+#: name means the next change to the published set cannot blind it again.
+UPSTREAM_NAME = reg.CHAT_UPSTREAM[0]
+SPEC = {"name": UPSTREAM_NAME, "description": "read one entity",
         "inputSchema": {"type": "object", "properties": {}},
         "annotations": {"readOnlyHint": True}}
 
@@ -59,7 +68,7 @@ def test_a_SESSIONLESS_registry_publishes_HA_and_cannot_call_it(
     passes by measuring nothing."""
     _with_catalogue(monkeypatch)
     built = reg.build_registry(config={})
-    tool = built.get("ha_get_state")
+    tool = built.get(UPSTREAM_NAME)
     assert tool is not None, "the catalogue patch did not take — this test is blind"
 
     blocks = asyncio.run(tool.call({}))
@@ -79,7 +88,7 @@ def test_a_session_REACHES_the_upstream_tool(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(upstream, "rpc", fake_rpc)
     marker = object()
-    tool = reg.build_registry(config={}, session=marker).get("ha_get_state")
+    tool = reg.build_registry(config={}, session=marker).get(UPSTREAM_NAME)
     assert tool is not None
     asyncio.run(tool.call({}))
     assert seen == [marker], "the session did not reach the upstream call"

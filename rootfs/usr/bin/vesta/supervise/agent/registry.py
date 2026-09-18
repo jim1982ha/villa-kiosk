@@ -232,9 +232,35 @@ def build_registry(tools: Optional[Sequence[BaseTool]] = None, *,
 #: and the model read a false zero out of the fragment. Preferring the upstream
 #: tool where one exists is not just fewer turns, it is the one that cannot
 #: produce that failure.
+#: ⚠️ ONLY WHAT THIS ADD-ON CANNOT DO ITSELF (2.993.0). `ha_get_state` and
+#: `ha_get_history` were here beside `read_state` and `read_history`, which do
+#: the same two jobs — and the villa's own trace shows the model using BOTH
+#: surfaces inside one answer:
+#:
+#:   chat ... answered in 7 turn(s), 11 tool call(s); tools used:
+#:     ha_searchx4 ha_get_historyx2 ha_get_statex2 read_configurationx2 read_statex1
+#:
+#: Two tools for one job is the shape the owner has already ruled on twice
+#: tonight, on `read_energy` and `read_weather`: a description that explains
+#: which of two overlapping tools to reach for is the anticipation trap one
+#: level down. It also cost 8,829 characters of schema on every turn, in the
+#: tier where schemas are already more than half the prefix.
+#:
+#: ⚠️ AND OURS WIN, WHICH IS NOT THE OBVIOUS CHOICE. The upstream tools are
+#: better maintained and richer. But `read_state` returns handles, labels and a
+#: curated attribute set — bounded, already pseudonymised — where `ha_get_state`
+#: returns whatever Home Assistant holds; and `read_history` DOWNSAMPLES and
+#: says it did, where `ha_get_history` returns every row (267 of them for one
+#: evening on a meter reporting each minute, which is the payload that produced
+#: 6.67 kWh against a true 3.06). Keeping ours also means a property with no
+#: `ha_mcp` loses nothing here, which REQ-067 asks for and which no conditional
+#: code now has to arrange.
+#:
+#: What remains is what this add-on genuinely has no answer for: entity SEARCH
+#: (the absence that ADR-023 exists for), Home Assistant's template engine, and
+#: the floor/area tree.
 CHAT_UPSTREAM: Tuple[str, ...] = (
-    "ha_search", "ha_get_state", "ha_eval_template", "ha_list_floors_areas",
-    "ha_get_history",
+    "ha_search", "ha_eval_template", "ha_list_floors_areas",
 )
 
 

@@ -12,12 +12,20 @@ a state, a history and a schedule — these are the floor, and `ha_mcp` is an
 enhancement on top. They also serve what no Home Assistant tool can know: this
 add-on's own concerns, briefings, salience and facility record.
 
-⚠️ AND WHERE UPSTREAM PUBLISHES A BETTER-SHAPED TOOL, PREFER IT. Measured:
-`ha_get_history(source="statistics")` answers "how much since 1pm" in ONE call
-and takes a `limit`, a `period` and `statistic_types`, so the result comes back
-bounded. The same question through a raw `recorder/statistics_during_period`
-returned ~294,000 characters and the model read a false zero out of the
-truncated fragment. Shaped beats raw; being ours is not a reason to prefer ours.
+⚠️ THIS PARAGRAPH USED TO ARGUE FOR A TOOL THAT THEN CAUSED THE FAILURE, AND
+THE CORRECTION IS THE POINT. It read: prefer `ha_get_history(source=
+"statistics")`, it answers "how much since 1pm" in ONE call and takes a `limit`
+and a `period`, so the result comes back bounded. The principle is right —
+shaped beats raw, and being ours is no reason to prefer ours. The example was
+wrong. A tool that ACCEPTS a limit is not a tool that RETURNS a bounded result:
+asked without one, on a meter reporting every minute, it returned 267 rows and
+~45,000 characters, and the figure assembled from the truncated remains was
+6.67 kWh against a true 3.06.
+
+⚠️ SO THE RULE IS NARROWER NOW: prefer the tool that cannot return the wrong
+shape. For a FIGURE that is `measure`, which returns one number and never a
+series; the choice is no longer between two ways of handing a model rows to
+add up. `registry.CHAT_UPSTREAM` says which upstream tools survive and why.
 
 ⚠️ EVERY RESULT IS REF-AND-LABEL, NEVER AN ENTITY ID. That is the whole point of
 `refs.py`, and the enforcement is a test that scans real tool output with an
@@ -180,6 +188,98 @@ class ReadHistory(BaseTool):
             # points from 4,000 without being told will read gaps as outages.
             "note": (f"Downsampled: every {step}th point of {len(series)}."
                      if step > 1 else "Complete series."),
+        })]
+
+
+#: The arithmetic the villa will do on a device's own record.
+#:
+#: ⚠️ PUBLISHED HERE BECAUSE A SCHEMA IS A CONTRACT WITH THE MODEL, and a
+#: description that offers something the code cannot do costs exactly as much
+#: as the capability being missing — measured in 2.989.0, where
+#: `call_read_only_service` advertised "a statistics summary" it could not
+#: produce and three of eight turns went into the dead end before the run
+#: expired. `sources._REDUCTIONS` implements this set and `test_measure`
+#: asserts the two agree.
+MEASURE_REDUCTIONS: Tuple[str, ...] = (
+    "total", "mean", "min", "max", "time_in_state", "count_changes")
+
+
+class Measure(BaseTool):
+    name = "measure"
+    description = (
+        "ONE number, worked out BY THE VILLA from a device's own record over a "
+        "window. Use this for any question containing how much, how long, how "
+        "many times, average, highest, lowest, or a period like 'since 5pm' or "
+        "'today'. "
+        "`reduce` chooses the arithmetic: total (how much was used or "
+        "produced), mean / min / max (a reading that moves), time_in_state "
+        "(how long it sat in one state), count_changes (how many times it "
+        "changed). `since` and `until` are times at the villa. "
+        "You are given the number, its unit and the window actually covered. "
+        "⚠️ DO NOT ADD ANYTHING UP YOURSELF. If you find yourself summing rows "
+        "from read_history or read_configuration, that is this tool's job and "
+        "the sum will be wrong. One device per call — call it again for each.")
+    inputSchema = {
+        "type": "object",
+        "properties": {
+            "ref": {"type": "string", "description": "One device handle."},
+            "reduce": {"type": "string", "enum": list(MEASURE_REDUCTIONS),
+                       "description": "Which arithmetic the villa should do."},
+            "since": {
+                "type": "string",
+                "description": "When the window starts, at the villa "
+                               "(e.g. 2026-09-18T17:00:00+08:00)."},
+            "until": {
+                "type": "string",
+                "description": "When it ends. Defaults to now."},
+            "state": {
+                "type": "string",
+                "description": "Which state to time or to count, for "
+                               "time_in_state and count_changes (e.g. 'on')."},
+        },
+        "required": ["ref", "reduce", "since"],
+    }
+    mode = "READ"
+
+    def __init__(self, source: Any = None, refs: Any = None) -> None:
+        self._source = source
+        self._refs = refs
+
+    async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        ref = str(args.get("ref") or "")
+        entity_id = self._refs.resolve(ref) if self._refs else None
+        if not entity_id:
+            return [fail("not_found", f"no such handle: {ref!r}")]
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
+        reduce = str(args.get("reduce") or "")
+        try:
+            out = await resolved(self._source(
+                entity_id, reduce, args.get("since"), args.get("until"),
+                args.get("state")))
+        except Exception as err:  # noqa: BLE001
+            return [fail("unavailable", f"Home Assistant did not answer: {err}")]
+        if not isinstance(out, Mapping):
+            return [fail("internal", "the villa returned no measurement")]
+        if out.get("error"):
+            return [fail("invalid_args", str(out["error"]))]
+        # ⚠️ THE LABEL TRAVELS WITH THE NUMBER. A bare figure makes the model
+        # write "the total is 3.06" about whichever device it last mentioned,
+        # and the reader cannot tell which one was measured.
+        #
+        # ⚠️ NAMED FIELDS, NEVER `**out`. The first cut splatted whatever the
+        # source returned, so a source that one day carried an `entity_id`
+        # alongside its number would have published one to the model —
+        # `redact.audit` refuses any payload holding an id, so the whole
+        # measurement would come back as "the result could not be shown
+        # safely", which is how the upstream integration went dark for six
+        # releases. Copying only what this tool promises fails closed.
+        return [data({
+            "ref": ref, "label": self._refs.label(ref),
+            "value": out.get("value"), "unit": out.get("unit"),
+            "reduce": out.get("reduce"), "source": out.get("source"),
+            "rows": out.get("rows"), "covers": out.get("covers"),
+            "note": out.get("note"),
         })]
 
 
@@ -515,5 +615,5 @@ class ReadConfiguration(BaseTool):
         return [_json_or_refuse(body, "configuration")]
 
 
-HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule,
-            CallReadOnlyService, ReadConfiguration)
+HA_TOOLS = (ReadState, ReadHistory, Measure, ReadAutomationTrace,
+            ReadSchedule, CallReadOnlyService, ReadConfiguration)

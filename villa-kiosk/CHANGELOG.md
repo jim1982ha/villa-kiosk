@@ -1,3 +1,37 @@
+## 2.993.0
+
+### Changed — VESTA no longer does arithmetic, and stops guessing at it
+Every wrong figure VESTA has given you came from the same thing: it read rows of
+data and added them up itself. Asked how much electricity had been used since
+5pm it answered 6,67 kWh; the true figure was 3,06. Before that it read a zero
+out of a broken result and told you your main meter had failed.
+
+The villa now does the sums. VESTA chooses what to work out — a total, an
+average, a highest or lowest, how long something was on, how many times it
+changed — and is handed back one number with its unit and the window it
+actually covers. There is nothing left for it to add up wrongly.
+
+The arithmetic is also finer than before. Home Assistant groups readings by the
+hour, so "since 5pm" asked at 21:20 used to quietly stop at 21:00 and lose
+twenty minutes. It now reads five-minute groups for a recent window, and says
+which window it really covered.
+
+### Changed — two tools for one job, removed
+VESTA could read a device's state two different ways and its history two
+different ways, and its own trace shows it using both in a single answer.
+Neither was broken, so nothing ever failed — it simply cost a choice it had to
+get right every time, and a large slice of every message. The duplicates are
+gone.
+
+### Added — forty questions that are checked on every build
+The reason the same question was answered wrongly six times is that the only
+place it was ever tested was your villa, after the wrong answer had already
+reached your phone. Forty real questions — in English and French, about
+electricity, water, temperature, doors, pumps and schedules — now run on every
+build against recorded data, checking that each has a tool that can answer it,
+that none of them needs VESTA to do sums, and that the sums themselves come out
+right.
+
 ## 2.991.0
 
 ### Fixed — VESTA did not know what time it was
