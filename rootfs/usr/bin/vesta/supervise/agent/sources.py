@@ -499,8 +499,14 @@ async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
             # ⚠️ AN UNREACHABLE HOME ASSISTANT IS NOT A SURVEY. Writing this
             # would record "no capabilities" as a finding about the villa.
             return False
-        sentences = snapshot_mod.absent_sentences(found)
-        survey_mod.save(CAPABILITIES_FILE, {"sentences": list(sentences)},
+        # ⚠️ WHAT THE VILLA HAS, NOT ONLY WHAT IT LACKS. This survey published
+        # absences for its whole life, so the model was told what was missing
+        # and never told how the property IS metered — which is the fact the
+        # constitution's no-double-counting rule needs in order to be
+        # satisfiable rather than merely obeyed by refusing.
+        sentences = (list(snapshot_mod.absent_sentences(found))
+                     + list(snapshot_mod.metering_sentences(found)))
+        survey_mod.save(CAPABILITIES_FILE, {"sentences": sentences},
                         now=stamp)
     except Exception as err:  # noqa: BLE001 - a survey is not worth a failed pass
         swallow("could not survey the villa's capabilities", err)

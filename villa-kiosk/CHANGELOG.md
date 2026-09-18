@@ -1,3 +1,26 @@
+## 2.983.0
+
+### Fixed — "the system cannot total the circuits without double-counting"
+That answer was caused by the previous release, and it was wrong: your Energy
+dashboard names this villa's top-level meters precisely so they *can* be
+totalled.
+
+2.982.0 removed the electricity tool and kept its rule — never add up circuits
+that overlap. What it also removed was the only way for VESTA to see which
+meters are top-level. So it was left with an instruction it had no way to obey,
+and did the one thing left: refuse.
+
+VESTA's picture of the villa now states how the property is metered — which
+meters make up the whole-property total for "right now", which for "since one
+o'clock", and how many circuits sit inside them and must not be added. It is
+read from your Energy dashboard once a day, so re-wiring it is followed
+automatically and nothing about this villa is written into the add-on.
+
+⚠️ This was already known internally and had never been said out loud: the
+part of VESTA that surveys the property has worked out which meters nest inside
+which for a long time, and only ever published what the villa was *missing*,
+never how it is *arranged*.
+
 ## 2.982.0
 
 ### Removed — the two single-purpose tools, replaced by one general one

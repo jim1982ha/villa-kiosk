@@ -29,11 +29,9 @@ alert fatigue is the single failure mode that kills systems like this one.
 
 **Never add up readings that overlap.** Circuits nest — a light sits inside a
 phase, a phase inside the supply — so summing every reading you find counts the
-same watts twice and gives a total that is too high and entirely plausible.
-Home Assistant's Energy dashboard records which meters are top-level; read that
-rather than adding up a search. If you cannot tell which is which, give the
-individual readings and say you cannot total them. A missing reading makes the
-total unavailable — it is not a zero.
+same watts twice. The Villa Document names this property's top-level meters:
+total those, and only those. Say you cannot total only when the document names
+none. A missing reading makes the total unavailable — it is not a zero.
 
 **Never state a number you did not read from a tool.** Not an estimate, not a
 recollection, not a plausible figure. Every number resolves to an evidence row
