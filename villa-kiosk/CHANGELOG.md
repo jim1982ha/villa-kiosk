@@ -1,3 +1,13 @@
+## 2.976.0
+
+### Changed — the destination column is labelled again, more briefly
+Settings → Who may talk to it. The label removed in 2.975.0 is back, now
+reading **Notif destination**.
+
+What was wrong with it was its length, not its presence: the old wording wrapped
+and repeated itself on every row. The short label fits the column and still says
+what the control is.
+
 ## 2.975.0
 
 ### Fixed — the villa said it could not see its own electricity meter

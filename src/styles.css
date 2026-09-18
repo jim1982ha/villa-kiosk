@@ -5308,17 +5308,7 @@ button.cockpit-attention-row.tappable:hover { background: color-mix(in srgb, var
    that exactly where a reader has least context. `.people-field > span` already
    ellipsises. */
 .editable-row-tight { flex-wrap: nowrap; }
-/* ⚠️ BOTTOM-ALIGNED, BECAUSE ONE OF THESE FIELDS HAS NO LABEL (2.975.0). The
-   container centres its items, which is right only while every field is the
-   same height — drop the Devices label and its button would centre against the
-   full label-plus-select stack beside it, landing a few pixels off the select
-   it is meant to line up with. The bottom edge is the one thing a labelled
-   field and a bare one have in common, which is the same reasoning the delete
-   button above already settled on.
-   ⚠️ `align-self` ON THE ITEM, NOT `align-items` ON THE ROW. `.editable-row-
-   tight` is shared with ActuableDevicesPanel and RecentChecks; neither has a
-   `.people-field` child, so scoping it this way cannot reach them. */
-.editable-row-tight > .people-field { flex: 1 1 0; min-width: 0; align-self: flex-end; }
+.editable-row-tight > .people-field { flex: 1 1 0; min-width: 0; }
 .editable-row-tight > .people-field > .btn { padding: 0 8px; }
 
 /* A concern's severity, as a short word rather than a colour alone.
