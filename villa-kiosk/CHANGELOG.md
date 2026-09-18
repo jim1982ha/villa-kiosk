@@ -1,3 +1,30 @@
+## 2.984.0
+
+### Fixed — VESTA can now read how the villa is SET UP, not just what it is doing
+It could look at devices and ask Home Assistant to calculate things. It could
+not read the villa's **configuration** — and the Energy dashboard, which says
+which meters add up to the whole property, is configuration. That is why it kept
+saying it could not find a whole-property meter.
+
+Every previous attempt at this patched one question: a tool for electricity,
+then a tool for the weather, then a paragraph about electricity written into
+VESTA's notes. That paragraph ignored the water and gas sitting in the very same
+configuration, which is the proof it never generalised.
+
+VESTA can now read configuration generally — the Energy dashboard, areas and
+floors, integrations, dashboards — so the same ability answers electricity,
+water, gas, and whatever is asked next without anything being added.
+
+**It can only read.** What is allowed is worked out from Home Assistant's own
+naming rather than a list somebody maintains, and anything naming a changing
+action is refused even if it otherwise looks like a read.
+
+### Fixed — a change to what VESTA knows no longer waits a day to appear
+VESTA surveys the property once a day and reuses the answer in between. After an
+update it kept reusing the answer recorded by the *previous* version, so a
+correction could sit invisible for up to 24 hours — which is exactly what
+happened yesterday. A survey recorded by an earlier run is now always redone.
+
 ## 2.983.0
 
 ### Fixed — "the system cannot total the circuits without double-counting"

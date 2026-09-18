@@ -577,50 +577,6 @@ async def _area_count(hass: HassClient) -> int:
 
 
 
-def _metering_labels(prefs: Dict[str, Any], independent: Sequence[str],
-                     states: Sequence[Any]) -> Dict[str, Any]:
-    """How this property is metered, in names a person would recognise.
-
-    ⚠️ DERIVED ENTIRELY FROM THE PROPERTY'S OWN ENERGY DASHBOARD. No meter
-    name, phase count or circuit appears in this add-on; a villa with one meter
-    and a villa with three are the same code, and re-wiring the dashboard is
-    followed with no release.
-
-    ⚠️ AND IT NAMES THE INSTANTANEOUS METER SEPARATELY. "What is the house
-    using right now" and "how much since one o'clock" are answered by different
-    statistics — `stat_rate` is the live power, `stat_consumption` the
-    cumulative energy — and a document that offered only one of them would send
-    the model to the wrong sensor for half the questions asked.
-    """
-    labels: Dict[str, str] = {}
-    for row in states:
-        if not isinstance(row, dict):
-            continue
-        entity_id = row.get("entity_id")
-        attrs = row.get("attributes")
-        if isinstance(entity_id, str) and isinstance(attrs, dict):
-            name = attrs.get("friendly_name")
-            if isinstance(name, str) and name:
-                labels[entity_id] = name
-
-    top = set(independent)
-    power: List[str] = []
-    energy: List[str] = []
-    for device in _device_stats(prefs):
-        stat = device.get("stat_consumption")
-        if not isinstance(stat, str) or stat not in top:
-            continue
-        energy.append(labels.get(stat, ""))
-        rate = device.get("stat_rate")
-        if isinstance(rate, str):
-            power.append(labels.get(rate, ""))
-    return {
-        "total_energy": sorted(n for n in energy if n),
-        "total_power": sorted(n for n in power if n),
-        "nested": len(_device_stats(prefs)) - len(top),
-    }
-
-
 async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dict[str, Any]:
     """Everything the report pipeline needs to know about this deployment.
 
@@ -722,30 +678,13 @@ async def discover(session: ClientSession, now_iso: Optional[str] = None) -> Dic
                               f"service id.",
                 })
 
-            independent = sorted(set(device_ids) - set(rolled_up))
             inventory["energy"] = {
                 "grid": grid_ids,
                 "devices": device_ids,
                 "water": water_ids,
                 "rolled_up_into": rolled_up,
-                "independent_devices": independent,
+                "independent_devices": sorted(set(device_ids) - set(rolled_up)),
             }
-            # ⚠️ THIS LAYOUT WAS KNOWN HERE AND NEVER REACHED THE MODEL, and
-            # that gap answered the owner in French with "the system measures
-            # circuits individually but cannot total them without
-            # double-counting" — a property whose Energy dashboard names its
-            # top-level meters precisely so they CAN be totalled. Discovery
-            # computed `rolled_up` for exactly this reason ("recorded here so no
-            # analysis module has to rediscover it") and only the capability
-            # FLAGS were ever published. Two correct halves.
-            #
-            # ⚠️ LABELS, NEVER STATISTIC IDS. This is written into the villa
-            # document, which is sent to the model and must carry no entity id —
-            # `redact.audit` refuses a payload holding one. A friendly name is
-            # admitted by design and is what a person calls the meter anyway.
-            inventory["metering"] = _metering_labels(
-                prefs, independent,
-                states if isinstance(states, list) else [])
             inventory["notify_targets"] = targets
             config: Any = await hass.command("get_config")
             reachable = True

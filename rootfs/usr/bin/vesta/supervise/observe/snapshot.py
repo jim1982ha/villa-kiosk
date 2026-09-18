@@ -478,57 +478,6 @@ def cache_prefix_of(document: str) -> str:
     return "" if marker < 0 else document[:marker + len(CACHE_BREAKPOINT)]
 
 
-def metering_sentences(discovered: Optional[Mapping[str, Any]]) -> List[str]:
-    """How this property is metered, stated so the model never has to guess.
-
-    ⚠️ THE SENTENCE THAT WAS MISSING WHEN THE VILLA SAID IT COULD NOT TOTAL.
-    The constitution forbids adding up overlapping circuits — correctly — and
-    without this the model had a prohibition and no way to satisfy it, so it
-    refused a question its own property could answer. A rule with no route to
-    compliance is a rule that teaches refusal.
-
-    ⚠️ EMPTY WHEN NOTHING IS DECLARED, never a reassuring default. A property
-    with no Energy dashboard must produce no sentence here, so the document
-    does not claim a total exists that nobody configured.
-    """
-    if not isinstance(discovered, Mapping):
-        return []
-    inventory = discovered.get("inventory")
-    metering = (inventory.get("metering")
-                if isinstance(inventory, Mapping) else None)
-    if not isinstance(metering, Mapping):
-        return []
-    # ⚠️ `str(None)` IS "None" AND IS TRUTHY. The first cut filtered on
-    # `if str(n)`, so a meter whose `friendly_name` was absent reached the
-    # document as the literal word None — a name a reader would go looking for.
-    # Caught by this module's own test on the way in.
-    def _named(values: Any) -> List[str]:
-        return [n.strip() for n in (values or [])
-                if isinstance(n, str) and n.strip()]
-
-    power = _named(metering.get("total_power"))
-    energy = _named(metering.get("total_energy"))
-    if not power and not energy:
-        return []
-
-    out: List[str] = []
-    if power:
-        out.append(
-            "Whole-property electricity use RIGHT NOW is the sum of these "
-            f"top-level meters, and only these: {', '.join(power)}.")
-    if energy:
-        out.append(
-            "Whole-property electricity use OVER A PERIOD is the sum of these "
-            f"cumulative meters, and only these: {', '.join(energy)}.")
-    nested = metering.get("nested")
-    if isinstance(nested, int) and nested > 0:
-        out.append(
-            f"{nested} further circuits are already counted inside those "
-            "meters; adding them to the total would count the same power "
-            "twice.")
-    return out
-
-
 def absent_sentences(discovered: Optional[Mapping[str, Any]]) -> List[str]:
     """discovery's own sentences for the capabilities this villa lacks.
 

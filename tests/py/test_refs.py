@@ -366,6 +366,14 @@ def test_no_tool_in_the_registry_leaks_an_id_from_a_leaky_source() -> None:
                 {"condition": "automation.a_rule", "temperature": 29.5}]}},
             "count": 1, "note": "",
         }, refs=table),
+        # ⚠️ CONFIGURATION IS THE MOST ID-DENSE PAYLOAD HOME ASSISTANT HAS —
+        # the Energy dashboard is nothing but statistic ids — so this fixture
+        # is a realistic one and the sweep expects handles back.
+        ha.ReadConfiguration(source=lambda command="": {"body": {
+            "energy_sources": [{"type": "grid",
+                                "stat_energy_from": "sensor.pool_pump_power"}],
+            "device_consumption": [{"stat_consumption": "automation.a_rule"}],
+        }}, refs=table),
         ledger.ReadLedger(source=lambda: {}),
         # ⚠️ POINTED AT THE REAL SHIPPED TREE, not a stub. This tool's "source"
         # is the content the add-on ships, so sweeping it here scans all 25

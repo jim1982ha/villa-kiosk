@@ -52,17 +52,41 @@ MAX_AGE_H: Final[int] = 24
 AT_KEY: Final[str] = "at"
 
 
+#: When this process started. A survey stamped before it was produced by a
+#: DIFFERENT RUN of this add-on, and possibly by different code.
+#:
+#: ⚠️ THIS EXISTS BECAUSE A CORRECT FIX WAS INVISIBLE FOR A DAY. 2.983.0 taught
+#: the capability survey to publish how the property is metered; the stored
+#: answer was hours old and therefore "fresh", so the villa kept reading the
+#: PREVIOUS shape and kept telling the owner it could not find a whole-property
+#: meter. The code was right, the cache was not, and nothing said so.
+#:
+#: ⚠️ A PROCESS STAMP RATHER THAN A VERSION CONSTANT, DELIBERATELY. A `SHAPE`
+#: integer somebody must remember to bump is a discipline, and the release that
+#: forgets it reproduces this bug exactly — silently, and only on villas that
+#: happen to have a warm cache. Every upgrade restarts the container, so this
+#: catches the real trigger with nothing to remember. The cost is one extra
+#: survey per restart, which is the cost of being right.
+_PROCESS_STARTED: Final[float] = time.time()
+
+
 def is_fresh(path: str, *, now: Optional[float] = None,
-             max_age_h: Optional[int] = None) -> bool:
-    """Is the stored answer young enough to keep?
+             max_age_h: Optional[int] = None,
+             started: Optional[float] = None) -> bool:
+    """Is the stored answer young enough, AND produced by this run?
 
     ⚠️ A MISSING OR UNREADABLE FILE IS NOT FRESH, so a villa that has never been
     surveyed surveys on the next pass rather than never.
+
+    ⚠️ AND NEITHER IS ONE FROM A PREVIOUS RUN. Age alone cannot see a survey
+    whose SHAPE changed under it — see `_PROCESS_STARTED`.
     """
     stamp = time.time() if now is None else float(now)
     hours = MAX_AGE_H if max_age_h is None else max_age_h
     raw = store.read_json(path, {})
     at = float(raw.get(AT_KEY) or 0) if isinstance(raw, Mapping) else 0.0
+    if at < (_PROCESS_STARTED if started is None else float(started)):
+        return False
     return stamp - at < max(1, hours) * 3600.0
 
 

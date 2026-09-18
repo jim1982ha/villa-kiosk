@@ -404,5 +404,59 @@ def _flatten_text(value: Any) -> str:
         return str(value)
 
 
+class ReadConfiguration(BaseTool):
+    name = "read_configuration"
+    description = (
+        "Read how this property is SET UP, as opposed to what its devices are "
+        "doing. Home Assistant keeps configuration that is not an entity and "
+        "not a service — the Energy dashboard (which meters make up the "
+        "whole-property total, and which circuits are already counted inside "
+        "them), areas and floors, integrations, dashboards. Use it whenever a "
+        "question depends on how the property is arranged rather than on a "
+        "current reading. Examples of commands: 'energy/get_prefs', "
+        "'config/area_registry/list'. Only reading is possible.")
+    inputSchema = {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": "A Home Assistant websocket read command.",
+            },
+        },
+        "required": ["command"],
+    }
+    mode = "READ"
+
+    def __init__(self, source: Any = None, refs: Any = None) -> None:
+        self._source = source
+        self._refs = refs
+
+    async def run(self, args: Mapping[str, Any]) -> List[Dict[str, Any]]:
+        if not callable(self._source):
+            return [fail("unavailable", _UNWIRED)]
+        try:
+            out = await resolved(self._source(str(args.get("command") or "")))
+        except Exception as err:  # noqa: BLE001
+            return [fail("unavailable", f"Home Assistant did not answer: {err}")]
+        if not isinstance(out, Mapping):
+            return [fail("unavailable", _UNWIRED)]
+        if out.get("error"):
+            return [fail(str(out.get("code") or "refused"), str(out["error"]))]
+        # ⚠️ CONFIGURATION IS THE MOST ID-DENSE PAYLOAD IN HOME ASSISTANT — the
+        # Energy dashboard is nothing BUT statistic ids — so this is
+        # pseudonymised before `redact` ever sees it, exactly as the upstream
+        # tools are. Without it the audit refuses the whole result and the model
+        # is handed nothing, which is how the integration went dark for six
+        # releases once already.
+        body = _flatten_text(out.get("body"))
+        if self._refs is not None:
+            from vesta.supervise.agent.refs import pseudonymise
+            body = pseudonymise(body, self._refs)
+        return [data({
+            "kind": "configuration",
+            "text": truncate(body, DEFAULT_MAX_RESULT_CHARS),
+        })]
+
+
 HA_TOOLS = (ReadState, ReadHistory, ReadAutomationTrace, ReadSchedule,
-            CallReadOnlyService)
+            CallReadOnlyService, ReadConfiguration)

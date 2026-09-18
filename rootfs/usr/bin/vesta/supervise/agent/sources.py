@@ -499,15 +499,14 @@ async def refresh_capabilities(session: Any, *, now: Optional[float] = None,
             # ⚠️ AN UNREACHABLE HOME ASSISTANT IS NOT A SURVEY. Writing this
             # would record "no capabilities" as a finding about the villa.
             return False
-        # ⚠️ WHAT THE VILLA HAS, NOT ONLY WHAT IT LACKS. This survey published
-        # absences for its whole life, so the model was told what was missing
-        # and never told how the property IS metered — which is the fact the
-        # constitution's no-double-counting rule needs in order to be
-        # satisfiable rather than merely obeyed by refusing.
-        sentences = (list(snapshot_mod.absent_sentences(found))
-                     + list(snapshot_mod.metering_sentences(found)))
+        sentences = list(snapshot_mod.absent_sentences(found))
         survey_mod.save(CAPABILITIES_FILE, {"sentences": sentences},
                         now=stamp)
+        # ⚠️ SAID OUT LOUD, BECAUSE "DID MY CHANGE REACH THE DOCUMENT" WAS
+        # UNANSWERABLE. 2.983.0 shipped correct code that stayed invisible
+        # behind a warm cache for a day, and the only way to tell was to ask
+        # the villa a question and read the answer. One line names the count.
+        note(f"survey: {len(sentences)} villa sentence(s) recorded")
     except Exception as err:  # noqa: BLE001 - a survey is not worth a failed pass
         swallow("could not survey the villa's capabilities", err)
         return False
@@ -1134,6 +1133,7 @@ def ha_readers(session: Any) -> Dict[Any, Optional[Callable[..., Any]]]:
         ha_tools.ReadAutomationTrace: trace_reader(session),
         ha_tools.ReadSchedule: schedule_reader(session),
         ha_tools.CallReadOnlyService: service_reader(session),
+        ha_tools.ReadConfiguration: config_reader(session),
     }
 
 
@@ -1214,6 +1214,73 @@ def service_reader(session: Any) -> Optional[Callable[..., Any]]:
                 return_response=True)
         body = (result or {}).get("response") if isinstance(result, Mapping) else result
         return {"body": body, "count": 1, "note": ""}
+
+    return read
+
+
+#: A Home Assistant websocket command that only READS.
+#:
+#: ⚠️ THE MODEL COULD REACH ENTITIES AND SERVICES AND NOT CONFIGURATION, and
+#: that gap is what kept producing domain-shaped patches. The Energy dashboard
+#: is configuration — not an entity, not a service — so "which meters are
+#: top-level" was unreachable, and the answer each time was another hand-written
+#: block for one domain. Water and gas sit in that same config and every one of
+#: those patches ignored them. This is the third surface, once, for all of them.
+#:
+#: ⚠️ GATED ON HOME ASSISTANT'S OWN NAMING, NOT ON A LIST OF COMMANDS. Core's
+#: websocket API names readers `get…`/`list…` in the final segment
+#: (`energy/get_prefs`, `config/area_registry/list`, `get_services`). A list of
+#: permitted commands would be the anticipation trap one level down and would go
+#: stale the first time Core added one. A convention scales; a list does not.
+#:
+#: ⚠️ AND A DENY-LIST GUARDS THE CONVENTION, because a convention is weaker than
+#: a declaration. Anything naming a mutating verb is refused whatever else it
+#: matches, so a future `config/thing/get_and_reset` cannot slip through on its
+#: prefix alone. Positive rule AND negative guard; either alone is one rename
+#: away from wrong.
+_READS = _re.compile(r"^[a-z][a-z0-9_]*(?:/[a-z][a-z0-9_]*)*$")
+_MUTATES = ("set", "save", "delete", "remove", "create", "update", "add",
+            "call", "fire", "subscribe", "unsubscribe", "reload", "restart",
+            "install", "uninstall", "start", "stop", "reset", "apply")
+
+
+def _is_read_command(command: str) -> bool:
+    name = str(command or "").strip()
+    if not name or not _READS.match(name):
+        return False
+    # ⚠️ EVERY WORD OF EVERY SEGMENT, NOT THE START OF ONE. The first cut asked
+    # whether a segment BEGAN with a mutating verb, which let
+    # `config/thing/get_and_reset` through — it starts with `get`, so the
+    # positive rule admitted it and the guard never looked past the prefix.
+    # Caught by this rule's own test. A verb anywhere in the name is a refusal.
+    segments = name.split("/")
+    for segment in segments:
+        if set(segment.split("_")) & set(_MUTATES):
+            return False
+    last = segments[-1]
+    return last == "list" or last.startswith("get")
+
+
+def config_reader(session: Any) -> Optional[Callable[..., Any]]:
+    """`read(command) -> {...}` for `read_configuration`."""
+    if session is None:
+        return None
+
+    async def read(command: str = "") -> Dict[str, Any]:
+        from vesta.adapters.hass import HassClient
+        name = str(command or "").strip()
+        if not name:
+            return {"code": "refused",
+                    "error": ("Name a Home Assistant websocket read command, "
+                              "such as one ending in /get_prefs or /list.")}
+        if not _is_read_command(name):
+            return {"code": "refused",
+                    "error": (f"{name} is not a read command. Only commands "
+                              "whose last part is 'list' or starts with 'get' "
+                              "are allowed, and none that names a changing "
+                              "action.")}
+        async with HassClient(session) as hass:
+            return {"body": await hass.command(name)}
 
     return read
 
