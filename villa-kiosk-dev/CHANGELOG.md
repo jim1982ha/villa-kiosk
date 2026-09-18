@@ -1,3 +1,26 @@
+## 2.982.0
+
+### Removed — the two single-purpose tools, replaced by one general one
+Two releases ago VESTA gained a tool for reading the electricity total, and one
+release ago a tool for reading the weather. Each answered one question somebody
+had already asked. That does not scale: every villa is different and the next
+question is always one nobody wrote a tool for.
+
+Both are gone. What they could do that ordinary searching could not was ask
+Home Assistant to *work something out* and hand back the answer — a forecast, a
+summary, a calculation. That is now one general ability, so the next question of
+that shape works without anything being added.
+
+**It cannot change anything.** Only services Home Assistant itself declares as
+answer-only are allowed — those exist purely to compute and cannot switch, open
+or unlock. Anything that could act is refused, including anything whose
+description is unclear.
+
+The one piece of real knowledge the electricity tool carried — that circuits
+nest, so adding up every reading you find double-counts and gives a total that
+is too high — has moved into VESTA's standing instructions, where it now applies
+to any question about totals rather than to one tool.
+
 ## 2.981.0
 
 ### Changed — VESTA can answer questions nobody wrote a tool for
