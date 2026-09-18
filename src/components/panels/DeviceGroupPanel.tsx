@@ -18,7 +18,7 @@ import { fetchHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
-import type { HistoryPoint } from "@/types/ha.types";
+import type { HistorySeries } from "@/types/ha.types";
 import { isUnavailable } from "@/utils/stateColors";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 
@@ -50,7 +50,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   const { entities } = useHA();
   const entityLabel = useEntityLabel();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
-  const [history, setHistory] = useState<Record<string, HistoryPoint[]>>({});
+  const [history, setHistory] = useState<Record<string, HistorySeries>>({});
 
   const rows = ids.map((id) => {
     const entity = entities[id];
@@ -129,8 +129,8 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
         <div className="field">
           <HistoryHeader title={range.title} picker={picker} />
           <DualSparkline
-            a={{ data: history[numericRows[0].id] ?? [], color: SERIES_COLORS[0], unit: numericRows[0].unit, label: numericRows[0].label }}
-            b={{ data: history[numericRows[1].id] ?? [], color: SERIES_COLORS[1], unit: numericRows[1].unit, label: numericRows[1].label }}
+            a={{ data: history[numericRows[0].id]?.points ?? [], gaps: history[numericRows[0].id]?.gaps ?? [], color: SERIES_COLORS[0], unit: numericRows[0].unit, label: numericRows[0].label }}
+            b={{ data: history[numericRows[1].id]?.points ?? [], gaps: history[numericRows[1].id]?.gaps ?? [], color: SERIES_COLORS[1], unit: numericRows[1].unit, label: numericRows[1].label }}
           />
           <div className="row" style={{ gap: 16, marginTop: 8, fontSize: "var(--text-xs)" }}>
             <span className="muted">
@@ -150,7 +150,7 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
             {i === 0
               ? <HistoryHeader title={`${r.label} — ${range.title.toLowerCase()}`} picker={picker} />
               : <label className="entity-label">{r.label} — {range.title.toLowerCase()}</label>}
-            <Sparkline data={history[r.id] ?? []} color={SERIES_COLORS[i % SERIES_COLORS.length]} unit={r.unit} />
+            <Sparkline data={history[r.id]?.points ?? []} gaps={history[r.id]?.gaps ?? []} color={SERIES_COLORS[i % SERIES_COLORS.length]} unit={r.unit} />
           </div>
         ))
       )}

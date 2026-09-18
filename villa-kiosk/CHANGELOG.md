@@ -1,3 +1,25 @@
+## 2.496.49
+
+### Fixed — a trend chart drew a reading where the device reported nothing
+A device that goes offline left no mark on its own trend chart. The line simply
+joined the last reading before the outage to the first one after it, so an
+Onsen pump that was off from 22:15 and unreachable overnight appeared to climb
+steadily back to full power all night. It reported nothing at all in those
+hours.
+
+Those stretches are now shaded in the same grey the rest of the app uses for
+"unavailable", and the line is broken across them instead of drawn through —
+because a shaded "nothing here" panel with a line running through it says two
+opposite things at once. This is what the bar-style history charts have always
+done; the number-style ones could not, because the reading was thrown away
+before the chart ever saw it.
+
+Applies to every trend chart that draws a line, including the two-series ones,
+where each series shades its own half so you can tell which one dropped out. A
+brief outage still gets a visible mark rather than being rounded away, and an
+outage still running is drawn up to now rather than stopping short and implying
+the device came back.
+
 ## 2.496.48
 
 ### Removed — the Sky reflections setting, added in 2.496.47

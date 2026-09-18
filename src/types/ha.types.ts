@@ -187,6 +187,25 @@ export interface HistoryPoint {
   v: number; // numeric value
 }
 
+/** A stretch in which a numeric entity reported NOTHING USABLE — unavailable,
+ *  unknown, blank, or any state that is not a number.
+ *
+ *  ⚠️ CARRIED BESIDE THE POINTS, NEVER ENCODED IN ONE. The numeric path's
+ *  oldest defect is a number standing in for "no reading" (`Number(null)` is
+ *  0); a span is the shape that cannot be mistaken for a measurement. */
+export interface HistoryGap {
+  from: number; // epoch ms
+  to: number;   // epoch ms — `now` while the outage is still running
+}
+
+/** What a numeric history fetch returns: the readings, AND where there were
+ *  none. Both halves are needed to draw an honest line, which is why they are
+ *  one return value rather than two functions somebody could call one of. */
+export interface HistorySeries {
+  points: HistoryPoint[];
+  gaps: HistoryGap[];
+}
+
 /** A single state-change point (for StateTimeline) — the RAW state string, no
  *  numeric parsing, so it also works for on/off, enum and free-text sensors
  *  (e.g. an access point's "connected"/"disconnected"). */

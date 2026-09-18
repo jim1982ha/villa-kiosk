@@ -1,7 +1,8 @@
 // src/ha/HAHistoryAPI.ts
 // Fetch recent entity history via the REST API for panel sparklines/timelines.
 
-import type { HistoryPoint, StateHistoryPoint } from "@/types/ha.types";
+import { gapsFrom } from "@/utils/historyGaps";
+import type { StateHistoryPoint, HistorySeries } from "@/types/ha.types";
 import { ingressApiBase } from "./ingress";
 
 interface RawHistoryState {
@@ -44,10 +45,20 @@ export function numericState(raw: unknown): number {
   return s === "" ? NaN : Number(s);
 }
 
-/** Fetch the last `hours` of NUMERIC history for an entity (line sparklines). */
-export async function fetchHistory(entityId: string, hours = 24): Promise<HistoryPoint[]> {
+/**
+ * Fetch the last `hours` of NUMERIC history for an entity (line sparklines),
+ * AND the stretches in which it reported nothing usable.
+ *
+ * ⚠️ THE GAPS ARE PART OF THE RETURN VALUE, NOT AN OPTION. Dropping the
+ * unusable rows and saying nothing is what drew a pump "ramping up" all night
+ * while it was offline — the chart joined the last reading before the outage to
+ * the first one after it and called that a measurement. Returning one object
+ * makes the honest drawing the only drawing a caller can produce: there is no
+ * overload that hands back points alone.
+ */
+export async function fetchHistory(entityId: string, hours = 24): Promise<HistorySeries> {
   const series = await fetchRaw(entityId, hours);
-  return series
+  const rows = series
     // ⚠️ A MISSING READING MUST BECOME NaN, NEVER 0. `Number(null)` is 0 and so
     // is `Number("")`, and both are `Number.isFinite`, so the filter below —
     // which exists to drop unparseable rows — passed them through as a real
@@ -55,8 +66,14 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
     // reads as "the device stopped drawing power"; on a temperature it reads as
     // 0°C. Same wire and same lie about the declared type as the null-state
     // crash fixed alongside this, silent instead of loud.
-    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }))
-    .filter((p) => Number.isFinite(p.v));
+    .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }));
+  return {
+    points: rows.filter((p) => Number.isFinite(p.v)),
+    // `Date.now()` rather than the last row's stamp: an entity that is
+    // unavailable NOW has an outage that has not ended. The chart clamps the
+    // band to its own plot, so an end beyond the last point is safe here.
+    gaps: gapsFrom(rows, Date.now()),
+  };
 }
 
 /**

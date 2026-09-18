@@ -7,7 +7,9 @@
 // Crosshair + tooltip reads BOTH series at the hovered time.
 
 import { useCallback, useMemo, useState } from "react";
-import type { HistoryPoint } from "@/types/ha.types";
+import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
+import { splitAtGaps, gapBand } from "@/utils/historyGaps";
+import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
 
@@ -20,6 +22,8 @@ function spanHoursOf(...series: HistoryPoint[][]): number {
 
 interface Series {
   data: HistoryPoint[];
+  /** Stretches in which this series reported nothing usable. */
+  gaps?: HistoryGap[];
   color: string;
   unit?: string;
   label?: string;
@@ -62,8 +66,25 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
     const ptsB = b.data.map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t, v: d.v }));
     // The crosshair rides the denser series' x positions.
     const railPts = ptsA.length >= ptsB.length ? ptsA : ptsB;
-    return { minX, maxX, sx, sa, sb, ptsA, ptsB, railPts };
-  }, [a.data, b.data, W, height]);
+
+    // ⚠️ A BAND PER SERIES, IN ITS OWN HALF — NOT ONE FULL-HEIGHT BAND. Two
+    // series share this plot and each has its own axis (a on the left, b on the
+    // right), so a band spanning the full height could not say WHICH of them
+    // reported nothing. Half-height bands inherit the same left/right reading
+    // the axes already establish; both out at once fills the height, which is
+    // the unambiguous case anyway.
+    const right = M.left + plotW;
+    const bandsOf = (gaps: readonly HistoryGap[] | undefined) =>
+      (gaps ?? [])
+        .map((g) => gapBand(g, sx, M.left, right))
+        .filter((bb): bb is { x: number; w: number } => bb !== null);
+
+    return {
+      minX, maxX, sx, sa, sb, ptsA, ptsB, railPts, plotH,
+      bandsA: bandsOf(a.gaps), bandsB: bandsOf(b.gaps),
+      runsA: splitAtGaps(ptsA, a.gaps ?? []), runsB: splitAtGaps(ptsB, b.gaps ?? []),
+    };
+  }, [a.data, a.gaps, b.data, b.gaps, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!geom || !geom.railPts.length) return;
@@ -100,17 +121,27 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
           <text key={`yb${i}`} x={W - M.right + 5} y={geom.sb.sy(v)} textAnchor="start" dominantBaseline="middle"
             className="spark-axis" style={{ fill: b.color }}>{fmtChartValue(v)}</text>
         ))}
+        {/* ⚠️ FIRST IN THE SVG so the shading sits BEHIND the grid and both
+            lines — SVG paints in document order and has no z-index. */}
+        {geom.bandsA.map((bd, i) => (
+          <rect key={`ga${i}`} x={bd.x} y={M.top} width={bd.w} height={Math.max(1, geom.plotH / 2)}
+            fill={STATUS_COLOR.unavailable} opacity={0.18} />
+        ))}
+        {geom.bandsB.map((bd, i) => (
+          <rect key={`gb${i}`} x={bd.x} y={M.top + geom.plotH / 2} width={bd.w} height={Math.max(1, geom.plotH / 2)}
+            fill={STATUS_COLOR.unavailable} opacity={0.18} />
+        ))}
         {xTicks.map((t, i) => (
           <text key={`x${i}`} x={geom.sx(t)} y={height - 4}
             textAnchor={i === 0 ? "start" : i === xTicks.length - 1 ? "end" : "middle"}
             className="spark-axis">{fmtChartTime(t)}</text>
         ))}
-        {a.data.length >= 2 && (
-          <polyline points={toStr(geom.ptsA)} fill="none" stroke={a.color} strokeWidth={2} strokeLinejoin="round" />
-        )}
-        {b.data.length >= 2 && (
-          <polyline points={toStr(geom.ptsB)} fill="none" stroke={b.color} strokeWidth={2} strokeLinejoin="round" strokeDasharray="4 3" />
-        )}
+        {geom.runsA.filter((r) => r.length >= 2).map((r, i) => (
+          <polyline key={`ra${i}`} points={toStr(r)} fill="none" stroke={a.color} strokeWidth={2} strokeLinejoin="round" />
+        ))}
+        {geom.runsB.filter((r) => r.length >= 2).map((r, i) => (
+          <polyline key={`rb${i}`} points={toStr(r)} fill="none" stroke={b.color} strokeWidth={2} strokeLinejoin="round" strokeDasharray="4 3" />
+        ))}
         {railX != null && (
           <g>
             <line x1={railX} y1={M.top} x2={railX} y2={height - M.bottom} className="spark-crosshair" />

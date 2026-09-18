@@ -11,7 +11,7 @@ import BasePanel from "./BasePanel";
 import Sparkline from "./Sparkline";
 import StateTimeline from "./StateTimeline";
 import type { PanelProps } from "@/types/panel.types";
-import type { HistoryPoint, StateHistoryPoint } from "@/types/ha.types";
+import type { HistorySeries, StateHistoryPoint } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
@@ -28,7 +28,7 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
 
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
-  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [history, setHistory] = useState<HistorySeries>({ points: [], gaps: [] });
   const [stateHistory, setStateHistory] = useState<StateHistoryPoint[]>([]);
   // Distinguishes "still fetching" from "HA genuinely has no history yet" —
   // see useStateHistory's docstring for why this matters (same gap, this
@@ -165,7 +165,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
                 bucketMinutes={range.bucketMinutes}
               />
             ) : (
-              <Sparkline data={history} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
+              <Sparkline data={history.points} gaps={history.gaps} color={LEVEL_COLOR[level]} unit={unit} loading={historyLoading} />
             )}
           </div>
         </>
