@@ -1,3 +1,28 @@
+## 2.980.0
+
+### Fixed — VESTA said the villa has no weather sensor. It has one.
+Asked for the outdoor pressure and wind direction, VESTA answered that no such
+sensor is installed. Twenty-two minutes earlier it had answered the same
+question correctly, with real figures.
+
+The villa has a weather entity in Home Assistant carrying temperature,
+humidity, pressure, wind speed and direction, and it can produce a forecast.
+VESTA had no way to reach it: no tool, nothing in its picture of the property.
+The one time it answered, it had stumbled on the entity by searching Home
+Assistant blind — which is why the same question got two different answers.
+
+It can now read outdoor conditions directly, and ask for the next few hours of
+forecast when you want one. It is also told never to say the property has no
+weather sensor without looking first.
+
+A saying-so worth noting: VESTA has shipped a procedure for storm and heavy-rain
+risk since August, which tells it to state what is forecast and with how much
+notice — with nothing able to fetch a forecast. That gap is now closed.
+
+Nothing about this villa is written into the add-on. The weather entity is found
+by kind, so a property with none is told it has none, and a property with
+several gets all of them.
+
 ## 2.979.0
 
 ### Changed — the language guesser is gone; VESTA is simply asked to match you
