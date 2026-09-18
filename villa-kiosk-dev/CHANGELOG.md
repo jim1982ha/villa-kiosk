@@ -1,3 +1,29 @@
+## 2.990.0
+
+### Fixed — VESTA reported a meter fault that does not exist
+It told you the main meter had shown no consumption since 1pm and that its
+wiring should be checked. The meter is fine; the property had used about
+9.8 kWh.
+
+The note underneath that reply explained itself: *286,578 characters not read*.
+One of its lookups returned roughly 294,000 characters, far more than it can
+take in, and the text was cut short to fit. Half a paragraph is still half true
+— half a data structure is not. VESTA read a zero out of the broken remainder
+and reported it as a fact.
+
+A result too large to read is now **refused** rather than trimmed, with its size
+and a note to ask for less. A wrong figure delivered confidently is worse than
+no figure, and worst of all when it sends somebody to look at a breaker.
+
+### Changed — VESTA now uses Home Assistant's own history tool
+There is a ready-made Home Assistant tool that answers "how much since 1pm" in a
+single request, and returns a sensible amount of data because it accepts a limit
+and a grouping. VESTA was not being given it — an earlier note of mine claimed
+something else already covered it, which was wrong.
+
+It now has it, and is told to prefer it. That is both fewer steps and the route
+that cannot produce the oversized answer above.
+
 ## 2.989.0
 
 ### Fixed — VESTA was sent down a dead end by its own tool description
