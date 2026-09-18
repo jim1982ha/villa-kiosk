@@ -1,3 +1,21 @@
+## 2.995.0
+
+### Fixed — VESTA spent twelve steps on a two-step question
+Asked how much electricity the villa had used since 5pm, it answered correctly
+— 5,28 kWh, which is right to within a few minutes of meter readings. But it
+took every step it is allowed before getting there: eight searches and six
+configuration reads to establish which meter to use.
+
+It then ran out of room and added a caveat saying it had not been able to
+confirm whether that meter covers the whole property.
+
+It did not need to check. Your Energy dashboard names the meter Home Assistant
+totals the property on, and that is the answer by definition. VESTA now asks
+that one question first and trusts the reply, instead of searching for a better
+meter that does not exist. It is also told that a question like this takes
+three or four steps, and that if it is on its sixth it should answer with what
+it has and say what it did not check.
+
 ## 2.994.0
 
 ### Changed — the security suite is part of the repository now

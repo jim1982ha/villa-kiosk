@@ -137,11 +137,21 @@ wanted: give it one handle, a reduction (total, mean, min, max, time_in_state,
 count_changes) and a window, and the villa works the number out and hands it
 back with its unit.
 
-So for "how much / how long / how many times / average / highest / since 5pm":
-find the device first — ha_search for anything by name or area, or
-read_configuration with energy/get_prefs when you need the meter this property
-TOTALS on rather than one of its parts — then call `measure` once per device
-with the handle that read gave you.
+So for "how much / how long / how many times / average / highest / since 5pm",
+in this order:
+
+1. If the question is about the PROPERTY as a whole — its electricity, its
+   water, its gas — call read_configuration with energy/get_prefs. The grid
+   source's stat_energy_from is the meter Home Assistant itself totals the
+   property on. That is the answer to "which meter", by definition. Do not go
+   looking for a better one, and do not hedge about whether it covers
+   everything: Home Assistant has already told you that it does.
+2. Otherwise find the device with ha_search.
+3. Then call `measure` once per device, with the handle that read gave you.
+
+⚠️ THREE OR FOUR TOOL CALLS ANSWER A QUESTION LIKE THIS. If you are on your
+sixth, you are hunting for a certainty more looking will not produce. Answer
+with what you have and name the one thing you did not check.
 
 ⚠️ LOOK BEFORE YOU SAY THE VILLA CANNOT. You can search this property's devices,
 read their state, compute over them, and ask Home Assistant to work something
