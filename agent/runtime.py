@@ -216,14 +216,13 @@ class Layer:
         only one of them is a reason to raise an alarm.
         """
         try:
-            rows = await self.world.hass.entities()
+            total = await self.world.hass.entity_count()
         except Exception as exc:
             self.entities_seen = None
-            log.warning(f"  could not enumerate the property through the gateway: "
-                        f"{exc}")
+            log.warning(f"  could not read the property through the gateway: {exc}")
             return None
-        self.entities_seen = len(rows)
-        log.info(f"  the gateway answered with {len(rows)} entities")
+        self.entities_seen = total
+        log.info(f"  the gateway reports {total} entities on this property")
         return self.entities_seen
 
     def reload_settings(self) -> None:

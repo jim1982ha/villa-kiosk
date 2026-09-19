@@ -23,14 +23,20 @@ from typing import Any, Awaitable, Callable
 
 from agent.health import Link, LinkState
 
-#: What we are willing to call to enumerate the villa, best first.
+#: The tool that answers "what is on this property, in summary".
 #:
-#: ⚠️ CHOSEN FROM WHAT THE SERVER ADVERTISES, NEVER ASSUMED. A tool named here
-#: that the connected ha-mcp does not offer is skipped; if NONE of them is
-#: offered the gateway REFUSES rather than returning an empty villa, because an
-#: empty list and "I could not ask" are different answers and only one of them
-#: is a reason to raise an alarm.
-ENTITY_TOOLS: tuple[str, ...] = ("ha_get_overview", "ha_search")
+#: ⚠️ MEASURED AGAINST A REAL GATEWAY, NOT GUESSED. The first cut listed two
+#: candidate tools and then tried to recognise "entities" in whatever came
+#: back — it had never seen a reply. `ha_get_overview` is a SUMMARY tool: it
+#: returns `system_summary.total_entities`, per-domain counts, and a sample of
+#: ten entities per domain carrying friendly names and NO ids. Nothing in that
+#: is an enumeration, so no amount of shape-sniffing could have found one.
+#:
+#: ⚠️ CHOSEN FROM WHAT THE SERVER ADVERTISES. A tool named here that the
+#: connected ha-mcp does not offer is not called, and the gateway REFUSES
+#: rather than reporting an empty property — an empty list and "I could not
+#: ask" are different answers and only one is a reason to raise an alarm.
+OVERVIEW_TOOL = "ha_get_overview"
 
 #: The JSON-RPC handshake an MCP server expects before any tool call.
 PROTOCOL_VERSION = "2025-06-18"
@@ -209,15 +215,37 @@ class Gateway:
             raise GatewayError(f"{name}: {_text_of(result)}")
         return result
 
-    async def entities(self) -> list[dict[str, Any]]:
-        """Every entity the villa has, read read-only through the gateway."""
-        for name in ENTITY_TOOLS:
-            if name in self._tools:
-                return _entities_from(await self.call_tool(name, {}))
-        raise GatewayError(
-            "the connected ha-mcp offers none of "
-            f"{', '.join(ENTITY_TOOLS)} — this layer cannot enumerate the villa "
-            "through it. Refusing rather than reporting an empty property.")
+    async def overview(self) -> dict[str, Any]:
+        """What the gateway says is on this property, in summary."""
+        if OVERVIEW_TOOL not in self._tools:
+            raise GatewayError(
+                f"the connected ha-mcp does not offer `{OVERVIEW_TOOL}` — this "
+                f"layer cannot see the property through it. Refusing rather "
+                f"than reporting an empty one.")
+        return _payload_of(await self.call_tool(OVERVIEW_TOOL, {}))
+
+    async def entity_count(self) -> int:
+        """How many entities Home Assistant knows about.
+
+        ⚠️ THE FIGURE THE GATEWAY ITSELF REPORTS, not a length this layer
+        counted. `system_summary.total_entities` is the whole property; the
+        per-domain `entities` lists beside it are TRUNCATED SAMPLES of ten and
+        carry no ids, so counting those would silently under-report a property
+        by an order of magnitude and look entirely plausible doing it.
+        """
+        summary = (await self.overview()).get("system_summary")
+        if not isinstance(summary, dict) or "total_entities" not in summary:
+            raise GatewayError(
+                f"`{OVERVIEW_TOOL}` answered without a system summary — this "
+                f"gateway's replies are not the shape this layer knows. Its "
+                f"tool set moves in minor releases; pin `auto_update: false` "
+                f"on that add-on.")
+        try:
+            return int(summary["total_entities"])
+        except (TypeError, ValueError):
+            raise GatewayError(
+                f"`{OVERVIEW_TOOL}` reported a total this layer cannot read: "
+                f"{summary['total_entities']!r}") from None
 
 
 def _text_of(result: dict[str, Any]) -> str:
@@ -226,35 +254,35 @@ def _text_of(result: dict[str, Any]) -> str:
     return " ".join(p for p in parts if p) or "no detail"
 
 
-def _entities_from(result: Any) -> list[dict[str, Any]]:
-    """Pull entity rows out of whatever shape the tool answered with.
+def _payload_of(result: Any) -> dict[str, Any]:
+    """Unwrap a tool result to the object the tool actually returned.
 
-    ⚠️ SHAPE-TOLERANT ON PURPOSE, BUT NOT SILENTLY. MCP wraps a tool result in
-    `content` blocks and may also carry `structuredContent`; which one a given
-    ha-mcp release uses is not a contract we control. What this must never do is
-    return [] for a shape it did not recognise — that reads as "the villa has no
-    entities", which is a sentence this layer would act on.
+    ⚠️ THIS UNWRAPS THE MCP ENVELOPE AND NOTHING ELSE. The first version tried
+    to RECOGNISE an entity list inside whatever came back — `entities`,
+    `results`, `items`, `states` — which was guessing at a contract nobody had
+    read. MCP's envelope is the only part that genuinely varies: a result may
+    carry `structuredContent`, or JSON inside a text `content` block. What the
+    tool put in there is the tool's business, and the caller checks it.
     """
     if isinstance(result, dict):
-        for key in ("structuredContent", "result"):
-            if isinstance(result.get(key), (dict, list)):
-                return _entities_from(result[key])
-        for key in ("entities", "results", "items", "states"):
-            if isinstance(result.get(key), list):
-                return [e for e in result[key] if isinstance(e, dict)]
-        if "content" in result:
+        inner = result.get("structuredContent")
+        if isinstance(inner, dict):
+            return _payload_of(inner)
+        blocks = result.get("content")
+        if isinstance(blocks, list):
             import json
-            for block in result.get("content", []):
+            for block in blocks:
                 if not isinstance(block, dict) or "text" not in block:
                     continue
                 try:
-                    return _entities_from(json.loads(block["text"]))
+                    parsed = json.loads(block["text"])
                 except ValueError:
                     continue
-        raise GatewayError(
-            f"the gateway answered a shape this layer does not recognise "
-            f"(keys: {sorted(result)[:6]}) — refusing rather than reporting an "
-            f"empty villa")
-    if isinstance(result, list):
-        return [e for e in result if isinstance(e, dict)]
-    raise GatewayError(f"the gateway answered {type(result).__name__}, not entities")
+                if isinstance(parsed, dict):
+                    return parsed
+        # Already unwrapped — a server that answers the object directly.
+        if result:
+            return result
+    raise GatewayError(
+        f"the gateway answered {type(result).__name__} with nothing this layer "
+        f"can read — refusing rather than reporting an empty property")

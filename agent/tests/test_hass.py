@@ -54,13 +54,13 @@ async def test_before_anything_connects_nothing_is_claimed():
 
 @pytest.mark.asyncio
 async def test_reading_the_villa_goes_over_the_gateway_and_only_the_gateway():
-    asked = []
-    rows = [{"entity_id": "a.b"}]
+    import json
     ws = FakeWs(list(HANDSHAKE))
     ha, _, _ = build({"initialize": OK, "tools/list": TOOLS,
-                      "tools/call": {"result": {"entities": rows}}}, ws=ws)
+                      "tools/call": {"result": {"content": [{"type": "text", "text": json.dumps(
+                          {"system_summary": {"total_entities": 12}})}]}}}, ws=ws)
     await ha.connect_gateway()
-    assert await ha.entities() == rows
+    assert await ha.entity_count() == 12
     # Not one question went out over the listening socket.
     assert ws.sent == []
 
@@ -79,4 +79,4 @@ async def test_a_gateway_refusal_reaches_the_caller_rather_than_an_empty_villa()
                       "tools/call": {"result": {"surprise": 1}}})
     await ha.connect_gateway()
     with pytest.raises(GatewayError):
-        await ha.entities()
+        await ha.entity_count()

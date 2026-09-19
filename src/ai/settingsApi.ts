@@ -63,7 +63,8 @@ export interface GatewayTest {
    *  because "which URL did it try" is the first question when it fails. */
   endpoint?: string;
   tools?: number;
-  /** How many entities it could read. Present only when the read succeeded. */
+  /** How many entities Home Assistant knows about. Present only on success —
+   *  and it is the gateway's own total, not a length anything here counted. */
   entities?: number;
   error?: string;
 }

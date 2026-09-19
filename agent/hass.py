@@ -26,8 +26,8 @@ class HomeAssistant:
         self._gateway = gateway
         self._listener = listener
 
-    async def entities(self) -> list[dict[str, Any]]:
-        return await self._gateway.entities()
+    async def entity_count(self) -> int:
+        return await self._gateway.entity_count()
 
     async def publish(self, object_id: str, state: str,
                       attributes: dict[str, Any]) -> None:

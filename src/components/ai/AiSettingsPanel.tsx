@@ -267,7 +267,7 @@ export default function AiSettingsPanel({ onState }: {
         {test && (
           <div className={`ai-test-result ${test.ok ? "ok" : "fail"}`} role="status">
             {test.ok
-              ? `Connected — ${test.tools} tools, ${test.entities} entities on the property.`
+              ? `Connected — ${test.tools} tools, and it can see ${test.entities} entities on this property.`
               : `Not connected — ${test.detail}`}
             {test.endpoint && <div className="ai-test-endpoint">tried {test.endpoint}</div>}
           </div>

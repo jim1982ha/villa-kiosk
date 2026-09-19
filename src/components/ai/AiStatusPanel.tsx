@@ -99,7 +99,11 @@ export default function AiStatusPanel({ status }: { status: AiStatus | null }) {
       <div className="settings-section-title">What it has seen</div>
       <div className="ai-figures">
         <Figure
-          label="Devices on the property"
+          // ⚠️ ENTITIES, NOT DEVICES, BECAUSE THAT IS WHAT IS COUNTED. Home
+          // Assistant's total is entities — one device commonly has several —
+          // and a tile reading "devices: 1327" would be wrong by roughly the
+          // number of sensors per device, in the confident direction.
+          label="Entities it can see"
           // null means it could not ask — which is not zero devices.
           value={status.entitiesSeen === null ? "—" : String(status.entitiesSeen)}
         />

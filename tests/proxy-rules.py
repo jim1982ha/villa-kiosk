@@ -423,7 +423,7 @@ test = _body_of("ai_test_gateway_handler")
 ck("  the connection test imports the layer's Gateway",
    "_load_gateway()" in test)
 ck("  ...and reads the property, not only the handshake",
-   "gateway.entities()" in test)
+   "gateway.entity_count()" in test)
 ck("  ...and falls back to the STORED secret the browser never sees",
    '_read_ai_settings()' in test and 'stored["ha_mcp_secret"]' in test)
 

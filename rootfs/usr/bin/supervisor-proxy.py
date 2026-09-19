@@ -2344,11 +2344,12 @@ async def ai_test_gateway_handler(request: web.Request) -> web.Response:
            "tools": len(gateway.tools)}
     if ok:
         # ⚠️ AND IT READS THE PROPERTY, because a handshake proves the address
-        # and the secret and nothing else. "It connected but cannot enumerate"
-        # is a real state — the tool set moves in minor releases — and it is the
-        # state that matters to this layer.
+        # and the secret and nothing else. "It connected but cannot read" is a
+        # real state — the tool set moves in minor releases — and it is the one
+        # that matters to this layer. It is also the state this very button
+        # found on its first real run.
         try:
-            out["entities"] = len(await gateway.entities())
+            out["entities"] = await gateway.entity_count()
         except Exception as exc:
             out["ok"] = False
             out["detail"] = f"connected, but could not read the property: {exc}"

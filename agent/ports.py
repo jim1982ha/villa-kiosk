@@ -24,8 +24,14 @@ class Hass(Protocol):
     gateway serves.
     """
 
-    async def entities(self) -> list[dict[str, Any]]:
-        """Every entity the villa has, read through the gateway."""
+    async def entity_count(self) -> int:
+        """How many entities Home Assistant knows about, via the gateway.
+
+        ⚠️ A COUNT, BECAUSE THAT IS WHAT THE GATEWAY ACTUALLY OFFERS. The
+        summary tool reports a total and truncated per-domain samples; it does
+        not enumerate. A port promising a list would be a promise nothing
+        behind it can keep.
+        """
 
     async def publish(self, object_id: str, state: str,
                       attributes: dict[str, Any]) -> None:

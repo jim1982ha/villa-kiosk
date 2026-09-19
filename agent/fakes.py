@@ -33,9 +33,9 @@ class FakeHass:
         self.asked: list[str] = []
         self.addresses: list[tuple[str, str]] = []
 
-    async def entities(self) -> list[dict[str, Any]]:
-        self.asked.append("entities")
-        return list(self._entities)
+    async def entity_count(self) -> int:
+        self.asked.append("entity_count")
+        return len(self._entities)
 
     async def publish(self, object_id: str, state: str,
                       attributes: dict[str, Any]) -> None:

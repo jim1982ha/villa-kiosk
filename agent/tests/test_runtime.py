@@ -302,10 +302,10 @@ class VillaHass(StartableHass):
         super().__init__(entities=rows or [], **kw)
         self.raises = raises
 
-    async def entities(self):
+    async def entity_count(self):
         if self.raises:
             raise self.raises
-        return await super().entities()
+        return await super().entity_count()
 
 
 def test_starting_ENUMERATES_the_property_and_says_how_many(tmp_path, capsys):
@@ -319,7 +319,7 @@ def test_starting_ENUMERATES_the_property_and_says_how_many(tmp_path, capsys):
     world = World.for_testing(tmp_path, hass=hass, clock=FakeClock())
     l = Layer(world, version="0.1.0")
     asyncio.run(l.start())
-    assert "entities" in hass.asked
+    assert "entity_count" in hass.asked
     assert l.entities_seen == 3
     assert "3 entities" in capsys.readouterr().out
     assert hass.published[-1][2]["entities_seen"] == 3

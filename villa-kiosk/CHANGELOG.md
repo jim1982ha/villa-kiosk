@@ -1,3 +1,28 @@
+## 2.503.0
+
+**The gateway connects AND can read the property now.** The Test button did
+exactly what it was built to do and reported the distinction that matters:
+connected, forty tools, and then a refusal to report what it could not read.
+That refusal was right — the fault was on this side.
+
+The code that read the property was guessing. It named two candidate tools and
+tried to RECOGNISE an entity list in whatever came back, looking for `entities`,
+`results`, `items` or `states` — a contract nobody had ever read a reply from.
+The real tool is a SUMMARY tool: it returns a total, per-domain counts, and a
+sample of ten entities per domain carrying friendly names and no ids at all.
+Nothing in that is an entity list, so no amount of shape-sniffing was ever going
+to find one.
+
+It now reads the gateway's own total. ⚠️ **Not a length counted here** — the
+per-domain lists are truncated samples, and counting those would have reported a
+1,327-entity property as a handful and looked entirely plausible doing it. The
+envelope-unwrapping that remains does one job, the MCP envelope, and leaves what
+a tool put inside it to the caller to check.
+
+**The Status tile says "entities" rather than "devices"**, because that is what
+is counted. One device commonly has several entities, so the old label was wrong
+by roughly the number of sensors per device — in the confident direction.
+
 ## 2.502.0
 
 **The gateway client was not speaking the whole protocol.** The Test connection

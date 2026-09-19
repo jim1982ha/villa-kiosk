@@ -1,4 +1,6 @@
 """The gateway, pinned by what it ASKED — never by a live property's answer."""
+import json
+
 import pytest
 
 from agent.gateway import Gateway, GatewayError, endpoint
@@ -131,57 +133,73 @@ async def test_a_jsonrpc_error_becomes_a_GatewayError():
     assert link.state is LinkState.DOWN and "Method not found" in link.detail
 
 
-# ── enumerating the villa: the S0 acceptance test ──────────────────────────
+# ── reading the property: the S0 acceptance test ───────────────────────────
+
+#: What a real ha-mcp answers `ha_get_overview` with — MEASURED, not imagined:
+#: a total, per-domain counts, and TRUNCATED ten-entity samples carrying
+#: friendly names and no ids.
+OVERVIEW = {"result": {"content": [{"type": "text", "text": json.dumps({
+    "system_summary": {"total_entities": 1327, "total_domains": 37},
+    "domain_stats": {"sensor": {"count": 581, "truncated": True,
+                                "entities": [{"friendly_name": "A"}]}},
+})}]}}
+
 
 @pytest.mark.asyncio
-async def test_entities_come_back_from_the_first_tool_the_server_offers():
-    rows = [{"entity_id": "a.b"}, {"entity_id": "c.d"}]
-    replies = {"initialize": OK, "tools/list": TOOLS,
-               "tools/call": {"result": {"entities": rows}}}
-    g = Gateway("http://h", "s", transport_for(replies))
+async def test_the_entity_count_is_the_gateways_own_total():
+    """⚠️ NOT A LENGTH THIS LAYER COUNTED. The per-domain `entities` lists are
+    truncated samples of ten; counting those would under-report a 1,327-entity
+    property as a handful and look entirely plausible doing it."""
+    g = Gateway("http://h", "s", transport_for(
+        {"initialize": OK, "tools/list": TOOLS, "tools/call": OVERVIEW}))
     await g.connect()
-    assert await g.entities() == rows
+    assert await g.entity_count() == 1327
 
 
 @pytest.mark.asyncio
-async def test_entities_are_also_found_inside_an_mcp_content_block():
+async def test_a_reply_without_a_summary_REFUSES():
+    """⚠️ THE STATE THE TEST BUTTON FOUND ON ITS FIRST REAL RUN. A gateway can
+    connect, advertise forty tools, and answer a shape this layer does not
+    know — and "I could not read it" must never be rendered as an empty
+    property."""
     replies = {"initialize": OK, "tools/list": TOOLS,
                "tools/call": {"result": {"content": [
-                   {"type": "text", "text": '{"entities": [{"entity_id": "a.b"}]}'}]}}}
+                   {"type": "text", "text": json.dumps({"ai_insights": {}})}]}}}
     g = Gateway("http://h", "s", transport_for(replies))
     await g.connect()
-    assert await g.entities() == [{"entity_id": "a.b"}]
+    with pytest.raises(GatewayError, match="without a system summary"):
+        await g.entity_count()
 
 
 @pytest.mark.asyncio
-async def test_a_villa_with_no_entities_is_an_EMPTY_LIST_not_a_refusal():
+async def test_a_structuredContent_envelope_is_unwrapped_too():
     replies = {"initialize": OK, "tools/list": TOOLS,
-               "tools/call": {"result": {"entities": []}}}
+               "tools/call": {"result": {"structuredContent": {
+                   "system_summary": {"total_entities": 7}}}}}
     g = Gateway("http://h", "s", transport_for(replies))
     await g.connect()
-    assert await g.entities() == []
+    assert await g.entity_count() == 7
 
 
 @pytest.mark.asyncio
-async def test_an_UNRECOGNISED_shape_REFUSES_it_does_not_report_an_empty_villa():
-    """⚠️ THE DIFFERENCE THAT MATTERS. 'The villa has no entities' is a sentence
-    this layer would act on. 'I could not read the answer' is not."""
+async def test_a_property_with_nothing_on_it_is_ZERO_not_a_refusal():
     replies = {"initialize": OK, "tools/list": TOOLS,
-               "tools/call": {"result": {"surprise": 1}}}
+               "tools/call": {"result": {"content": [{"type": "text", "text": json.dumps(
+                   {"system_summary": {"total_entities": 0}})}]}}}
     g = Gateway("http://h", "s", transport_for(replies))
     await g.connect()
-    with pytest.raises(GatewayError, match="does not recognise"):
-        await g.entities()
+    assert await g.entity_count() == 0
 
 
 @pytest.mark.asyncio
-async def test_a_server_offering_no_enumeration_tool_REFUSES_too():
+async def test_a_gateway_without_the_summary_tool_REFUSES():
     replies = {"initialize": OK,
                "tools/list": {"result": {"tools": [{"name": "ha_restart"}]}}}
     g = Gateway("http://h", "s", transport_for(replies))
     await g.connect()
-    with pytest.raises(GatewayError, match="cannot enumerate"):
-        await g.entities()
+    with pytest.raises(GatewayError, match="does not offer"):
+        await g.entity_count()
+
 
 
 # ── a saved address must actually arrive ───────────────────────────────────
