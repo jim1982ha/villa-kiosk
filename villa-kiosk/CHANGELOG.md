@@ -1,3 +1,23 @@
+## 2.497.0
+
+**This branch publishes a kiosk again, as VESTA (ai).** Until now branch `ai`
+carried a complete copy of the kiosk and shipped none of it: the plan had it
+inheriting the kiosk from `dev2` and publishing only the headless AI engine. The
+owner installed that engine expecting "a full VESTA addon completed with the new
+code" and found something with no screen at all, which is a fair thing to expect
+and not what the plan built. ADR-0015 records the change of direction.
+
+Nothing about this release differs from 2.496.50 except that it exists as its
+own channel. It is the same kiosk, built from this branch, published as
+`VESTA (ai)` with its own image so it can never overwrite the stable one or the
+dev2 one. The AI screens — what the layer found, and creating, editing and
+activating Skills — come next; this is the channel they will arrive in.
+
+⚠️ **A 2.497.x line, deliberately, while `dev2` stays on 2.496.x.** The images
+are separate, so identical numbers could not actually collide — but two channels
+sharing a number is a thing a person has to hold in their head, and this one
+does not make them.
+
 ## 2.496.50
 
 ### Fixed — trend charts drew ramps where the value had not moved

@@ -12,7 +12,18 @@ on:
     # job hardcoded the STABLE image name and pushed `:latest` unconditionally,
     # because it only ever ran on main. A second branch without the suffix and
     # the `:latest` guard below would overwrite the released VESTA image.
-    branches: [main, dev2]
+    # ⚠️ `ai` PUBLISHES A KIOSK TOO, FROM 2026-09-19 (ADR-0015). Ticket 06 had
+    # this branch publishing the AI layer only and inheriting the kiosk from
+    # dev2 — so it carried a complete kiosk source tree and shipped none of it,
+    # and the owner installed the AI layer expecting "a full VESTA addon
+    # completed with the new code" and found a headless one.
+    #
+    # Adding it here is safe by construction rather than by care: the `meta`
+    # step below derives the channel suffix from the branch name and gates
+    # `:latest` on `main`, so `ai` gets `villa-kiosk-ai-<arch>` and can never
+    # write a released tag. Those two guards are why a branch can be added to
+    # this list at all — do not simplify them.
+    branches: [main, dev2, ai]
     paths:
       - "src/**"
       - "public/**"
@@ -224,3 +235,94 @@ jobs:
             git fetch origin main && git rebase origin/main
           done
           echo "could not publish the dev2 manifest after 3 attempts"; exit 1
+
+
+  # ── Publish the ai channel's KIOSK to Home Assistant ──────────────────────
+  # ⚠️ THE SECOND MANIFEST THIS BRANCH PUBLISHES, AND THEY ARE DIFFERENT THINGS.
+  # `build-ai.yaml` publishes `vesta-ai/` — the headless engine. This publishes
+  # `villa-kiosk-ai/` — the 3D kiosk built from this branch, which is what shows
+  # and manages the layer (ADR-0015). Neither touches the other's manifest, and
+  # neither touches `villa-kiosk/`.
+  sync-ai-kiosk-manifest:
+    if: github.ref_name == 'ai'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Serialised: two ai pushes landing together would both try to push main.
+    # Not `cancel-in-progress` — a cancelled sync leaves the channel a version
+    # behind with nothing to retry it.
+    concurrency:
+      group: sync-ai-kiosk-manifest
+      cancel-in-progress: false
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Materialise villa-kiosk-ai/ from ai
+        run: |
+          set -euo pipefail
+          git fetch origin ai
+          rm -rf villa-kiosk-ai && mkdir -p villa-kiosk-ai
+          git archive origin/ai villa-kiosk | tar -x --strip-components=1 -C villa-kiosk-ai
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          OWNER="$owner" python3 - <<'PATCH'
+          import os, re, pathlib
+          p = pathlib.Path("villa-kiosk-ai/config.yaml")
+          out, skip = [], False
+          for line in p.read_text().splitlines(keepends=True):
+              # Drop `ports:` / `ports_description:` and their indented children.
+              # Ingress-only by design: two add-ons cannot bind the same host
+              # port, and a test channel does not need direct access.
+              if re.match(r"^(ports|ports_description):", line):
+                  skip = True
+                  continue
+              if skip:
+                  if line.startswith((" ", "\t")) or not line.strip():
+                      continue
+                  skip = False
+              line = re.sub(r"^name:.*$", "name: VESTA (ai)", line)
+              line = re.sub(r"^slug:.*$", "slug: villa_kiosk_ai", line)
+              line = re.sub(r"^panel_title:.*$", "panel_title: VESTA ai", line)
+              line = re.sub(r"^panel_icon:.*$", "panel_icon: mdi:home-lightning-bolt-outline", line)
+              line = re.sub(r"^image:.*$",
+                            f"image: ghcr.io/{os.environ['OWNER']}/villa-kiosk-ai-{{arch}}", line)
+              out.append(line)
+          p.write_text("".join(out))
+          PATCH
+          python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
+          python3 -c "import yaml;d=yaml.safe_load(open('villa-kiosk-ai/config.yaml'));assert d['slug']=='villa_kiosk_ai' and 'ports' not in d, d; print('ai kiosk manifest ok:', d['version'])"
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          # ⚠️ STAGE FIRST, THEN ASK THE INDEX. `git diff` does NOT see untracked
+          # files, so on the run that CREATES villa-kiosk-ai/ it reports "no
+          # change", exits 0 and commits nothing — a green tick on the one run
+          # that had to work. `--all` (scoped to this path) also catches files
+          # DELETED from villa-kiosk/, which a bare `git add <dir>` would leave
+          # staged as present.
+          git add --all villa-kiosk-ai
+          if git diff --cached --quiet -- villa-kiosk-ai; then
+            echo "ai kiosk manifest already current — nothing to publish"; exit 0
+          fi
+          echo "publishing $(git diff --cached --name-only -- villa-kiosk-ai | wc -l) file(s):"
+          git diff --cached --stat -- villa-kiosk-ai
+          version=$(grep -E '^version:' villa-kiosk-ai/config.yaml | head -1 \
+                    | sed -E 's/.*version:[[:space:]]*"?([^"]+)"?.*/\1/')
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(ai-channel): publish VESTA (ai) ${version}"
+          # main may have moved (a real release, or the dev channel's own sync)
+          # between checkout and push. Rebase rather than force: this job's
+          # commit is additive and touches only villa-kiosk-ai/, so it can
+          # never conflict with a release or with the dev channel's manifest.
+          for attempt in 1 2 3; do
+            if git push origin main; then exit 0; fi
+            echo "push rejected (attempt ${attempt}) — rebasing onto main"
+            git fetch origin main && git rebase origin/main
+          done
+          echo "could not publish the ai kiosk manifest after 3 attempts"; exit 1
