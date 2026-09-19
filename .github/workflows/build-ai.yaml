@@ -17,6 +17,11 @@ on:
       - "Dockerfile.ai"
       - "rootfs-ai/**"
       - ".github/workflows/build-ai.yaml"
+      # ⚠️ THE GATE WORKFLOW IS AN INPUT TO THIS BUILD. `checks` calls ci.yaml,
+      # so a commit that changes only the gates must re-run the thing they gate
+      # — otherwise a fix to a failing gate cannot produce the image the failing
+      # gate blocked, and the only way forward is a manual dispatch.
+      - ".github/workflows/ci.yaml"
   workflow_dispatch:
 
 permissions:

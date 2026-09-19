@@ -163,14 +163,24 @@ jobs:
           fi
 
       - name: Install the test runner
-        if: steps.present.outputs.present == 'true' 
-        # ⚠️ pytest AND NOTHING ELSE. The layer's own test surface is entirely
-        # async and deliberately takes no pytest-asyncio dependency — a four-line
-        # hook in `agent/tests/conftest.py` runs the coroutines — and nothing
-        # under test imports aiohttp at module scope, so a bare runner is enough.
-        # Every dependency this job does not have is one that cannot be missing
-        # the day it matters.
+        if: steps.present.outputs.present == 'true'
+        # ⚠️ pytest AND NOTHING ELSE, FOR THE TESTS. The layer's test surface is
+        # entirely async and deliberately takes no pytest-asyncio dependency — a
+        # four-line hook in `agent/tests/conftest.py` runs the coroutines — and
+        # nothing under test imports aiohttp, so the suite proves the seam holds
+        # by running without the only library that touches a socket.
         run: python3 -m pip install --quiet pytest
+
+      - name: The layer's runtime dependency
+        if: steps.present.outputs.present == 'true'
+        # ⚠️ AND THE SMOKE STEP BELOW NEEDS THE REAL ONE. This job failed on its
+        # very first CI run for exactly this: the tests pass without aiohttp, so
+        # the step that runs the actual entrypoint died on `import aiohttp`
+        # before printing a single line — and it had passed locally only because
+        # the developer's venv happened to have it. The image installs the same
+        # dependency as an apk (py3-aiohttp); this is CI's half of that fact, and
+        # it is the same clause the kiosk job already carries for the proxy.
+        run: python3 -m pip install --quiet aiohttp
 
       - name: The layer's tests
         if: steps.present.outputs.present == 'true'
