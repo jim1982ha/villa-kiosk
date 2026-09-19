@@ -19,6 +19,7 @@ import PanelRouter from "@/components/panels/PanelRouter";
 import { PanelActionsProvider } from "@/components/panels/PanelActionsContext";
 import SettingsModal from "@/components/settings/SettingsModal";
 import ConfigEditorModal from "@/components/settings/ConfigEditorModal";
+import AiModal from "@/components/ai/AiModal";
 import { useConfig } from "@/config/ConfigContext";
 import { roomKey } from "@/config/roomKey";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
@@ -80,6 +81,7 @@ export default function Dashboard() {
   const [teleportOpen, setTeleportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [configEditorOpen, setConfigEditorOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [facilityOpen, setFacilityOpen] = useState(false);
   /** Device the Facility modal should open a blank fault for — set by a
    *  panel's "report a fault" shortcut, cleared as soon as the modal has
@@ -236,8 +238,8 @@ export default function Dashboard() {
   // whatever's most recently rendered.
   const modalOpenRef = useRef(false);
   useEffect(() => {
-    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen;
-  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen]);
+    modalOpenRef.current = !!activePanel || teleportOpen || settingsOpen || configEditorOpen || facilityOpen || aiOpen;
+  }, [activePanel, teleportOpen, settingsOpen, configEditorOpen, facilityOpen, aiOpen]);
   const lastInteractionRef = useRef(Date.now());
   useEffect(() => {
     const mark = () => { lastInteractionRef.current = Date.now(); };
@@ -1061,7 +1063,16 @@ export default function Dashboard() {
           // existed. Nesting is what the stack was built for, so the hazard is
           // deleted rather than worked around.
           onOpenConfigEditor={() => { setConfigEditorFocus(null); setConfigEditorOpen(true); }}
+          onOpenAi={() => setAiOpen(true)}
         />
+      )}
+
+      {/* VESTA AI, nested over Settings for the same reason the Config Editor
+          is: a surface leaving while another arrives makes "what is on top"
+          ambiguous for as long as React takes to settle, and every Back press
+          in that window was answered by a component that no longer existed. */}
+      {aiOpen && canOpenSettings && (
+        <AiModal onBack={() => setAiOpen(false)} />
       )}
 
       {/* Config Editor as a modal OVER the live villa (not a route) — leaving

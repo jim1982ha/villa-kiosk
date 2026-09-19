@@ -307,6 +307,71 @@ with tempfile.TemporaryDirectory() as tmp:
     ck("  ...while a real delete against a READ baseline still collects it",
        not os.path.exists(photo))
 
+# ── the Skills path, which is the only user-supplied path that WRITES ───────
+# ⚠️ EVERY OTHER WRITE IN THIS PROXY GOES TO A FIXED FILENAME. The Skills editor
+# takes `<department>/<name>.md` from the browser and writes it, so traversal is
+# not a theoretical worry here — it is the whole attack surface of the feature,
+# and it reaches a folder the owner also edits from a file-editor add-on.
+print("\n  the Skills path (the one user-supplied path that writes):")
+with tempfile.TemporaryDirectory() as tmp:
+    os.makedirs(os.path.join(tmp, "electrical"))
+    proxy.AI_SKILL_ROOTS = (tmp,)
+
+    ck("a plain Skill resolves inside the folder",
+       (proxy._ai_skill_path("electrical/standby.md") or "").startswith(tmp + os.sep))
+
+    refused = {
+        "traversal out of the root": "electrical/../../etc/passwd",
+        "a leading slash": "/etc/passwd",
+        "a dotfile": "electrical/.bashrc",
+        "a second level": "electrical/nested/deep.md",
+        "a department nobody declared": "invented/thing.md",
+        "no extension": "electrical/standby",
+        "another extension": "electrical/standby.sh",
+        "an absolute path in the name": "electrical//etc/passwd.md",
+        "a bare traversal": "../../../../etc/passwd.md",
+        "an empty name": "",
+        "a backslash": "electrical\\..\\escape.md",
+    }
+    for why, attempt in refused.items():
+        ck(f"  refused: {why}", proxy._ai_skill_path(attempt) is None)
+
+    # ⚠️ AND WITH NO FOLDER MAPPED, NOTHING RESOLVES AT ALL — so a build whose
+    # manifest lost its `addon_config` mapping cannot be tricked into writing
+    # somewhere else instead.
+    proxy.AI_SKILL_ROOTS = ("/nonexistent-root-for-this-test",)
+    ck("  no folder mapped means no path resolves",
+       proxy._ai_skill_path("electrical/standby.md") is None)
+
+def _body_of(name: str) -> str:
+    """The source of one top-level function.
+
+    ⚠️ NOT `_enclosing`, WHICH ANSWERS A DIFFERENT QUESTION. That returns the
+    NAME of the function containing a call and deliberately refuses `def` lines;
+    passing it a definition finds nothing and the check silently compares
+    against an empty string — which is how four assertions failed here against
+    handlers that were correct.
+    """
+    start = _code.find(f"async def {name}(")
+    if start < 0:
+        return ""
+    nxt = _code.find("\nasync def ", start + 1)
+    other = _code.find("\ndef ", start + 1)
+    ends = [e for e in (nxt, other) if e > 0]
+    return _code[start:min(ends)] if ends else _code[start:]
+
+
+# Every Skills handler is owner/ops — a guest session must not read, write or
+# delete what the property watches by. These are the newest endpoints in the
+# proxy and the only ones that write a caller-named path.
+for handler in ("ai_skills_list_handler", "ai_skill_get_handler",
+                "ai_skill_put_handler", "ai_skill_delete_handler"):
+    body = _body_of(handler)
+    ck(f"  {handler} exists at all", bool(body))
+    ck(f"  {handler} gates on owner/ops",
+       '_role_for(request) not in ("owner", "ops")' in body
+       and "_authorized(request)" in body)
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

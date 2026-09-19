@@ -1,3 +1,34 @@
+## 2.498.0
+
+**The AI layer has a screen.** Settings → VESTA AI, for the Owner and the
+Facility manager. It was missing entirely and that was the plan's fault rather
+than an oversight: thirty tickets built an engine whose whole surface was Home
+Assistant entities, notifications, and Markdown files you were expected to edit
+in a separate file-editor add-on. That is an answer for somebody who
+administers Home Assistant, not for whoever is standing at the wall.
+
+**Status** answers "is it working". It draws the layer's two connections to
+Home Assistant separately — the gateway it asks through, and the socket it
+listens on — because they fail independently and a single green dot would throw
+that away at the last step. It says in words what is missing if the layer is not
+configured, and it shows what it has spent today, measured call by call by the
+layer itself rather than estimated. A model it cannot price is counted as
+unpriced, never as free.
+
+**Skills** answers "what is it watching". You can create one from a template,
+edit it, enable or disable it without deleting it, and delete it. They are
+Markdown files in this add-on's own folder, so the file editor still works on
+exactly the same files if you prefer it. ⚠️ **The layer does not read Skills
+yet** — that is a later release — and the screen says so rather than implying
+something is watching.
+
+⚠️ **The one thing here that writes a path the browser chose.** Every other
+write in this add-on goes to a fixed filename; a Skill is named by whoever is
+editing. The name must be `<department>/<name>.md` with a department the layer
+knows, it is resolved and re-checked against the folder root, and eleven ways of
+trying to escape are pinned as refused. Reading, writing and deleting are all
+Owner/Facility-manager only. A guest cannot see what the property watches by.
+
 ## 2.497.1
 
 **One add-on now, not two.** The AI layer shipped this morning as a separate

@@ -2194,6 +2194,160 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     })
 
 
+# ── The AI layer's Skills, edited from the kiosk ───────────────────────────
+# ⚠️ THE SAME CONTAINER, WHICH IS WHY THIS IS A FILE READ AND NOT AN API CALL.
+# The AI layer shipped first as a separate add-on, and reaching its Skills from
+# here would have needed an HTTP surface on it (a ticket that argued for
+# narrowing "no HTTP surface of any kind"). One add-on means one filesystem:
+# these are plain files, and the ticket was cancelled.
+#
+# ⚠️ WHERE THE FOLDER IS, CHECKED RATHER THAN ASSUMED. Supervisor mounts an
+# add-on's own `addon_config` at /config INSIDE the container, while the File
+# editor shows it to a person as /addon_configs/<slug>/. Those are the same
+# folder by two names, and hardcoding the one a person sees would look right in
+# every document and find nothing at runtime.
+AI_SKILL_ROOTS = ("/config", "/addon_configs/villa_kiosk_ai")
+AI_SKILL_MAX_BYTES = 256 * 1024
+#: A Skill is `<department>/<name>.md`. One level, no traversal, no dotfiles.
+AI_SKILL_PATH_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}/[a-z0-9][a-z0-9_-]{0,63}\.md$")
+#: Departments the AI layer knows. A Skill outside one of these is not loadable,
+#: so refusing it here is kinder than writing a file nothing will ever read.
+AI_DEPARTMENTS = ("electrical", "equipment", "water", "climate", "security",
+                  "network", "upkeep", "house")
+
+
+def _ai_skills_root() -> str | None:
+    """The owner's Skills folder, or None when no `addon_config` is mapped."""
+    for root in AI_SKILL_ROOTS:
+        if os.path.isdir(root):
+            return root
+    return None
+
+
+def _ai_skill_path(rel: str) -> str | None:
+    """Absolute path for a Skill, or None when the name is not one."""
+    root = _ai_skills_root()
+    if root is None or not AI_SKILL_PATH_RE.fullmatch(rel):
+        return None
+    if rel.split("/", 1)[0] not in AI_DEPARTMENTS:
+        return None
+    dest = os.path.normpath(os.path.join(root, rel))
+    # Belt and braces over the regex: the resolved path must still be inside.
+    if dest != root and not dest.startswith(root + os.sep):
+        return None
+    return dest
+
+
+def _ai_skill_meta(path: str, rel: str) -> dict:
+    """What the kiosk lists for one Skill, without reading all of it."""
+    try:
+        head = open(path, encoding="utf-8", errors="replace").read(2048)
+        stat = os.stat(path)
+    except OSError:
+        return {"path": rel, "unreadable": True}
+    title = ""
+    for line in head.splitlines():
+        if line.startswith("# "):
+            title = line[2:].strip()
+            break
+    # `enabled: false` switches a Skill off without deleting it (ticket 27).
+    enabled = not re.search(r"^enabled:\s*false\s*$", head, re.M | re.I)
+    return {
+        "path": rel,
+        "department": rel.split("/", 1)[0],
+        "name": rel.split("/", 1)[1][:-3],
+        "title": title,
+        "enabled": enabled,
+        "bytes": stat.st_size,
+        "modified": int(stat.st_mtime),
+    }
+
+
+async def ai_skills_list_handler(request: web.Request) -> web.Response:
+    """Every Skill the owner has written, plus where they live.
+
+    ⚠️ IT REPORTS AN ABSENT FOLDER AS ABSENT, NOT AS AN EMPTY LIST. "You have no
+    Skills" and "this add-on has no Skills folder mapped" are different
+    sentences, and only one of them is the owner's fault to fix.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
+    root = _ai_skills_root()
+    if root is None:
+        return web.json_response({
+            "root": None, "skills": [], "departments": list(AI_DEPARTMENTS),
+            "error": "no Skills folder is mapped into this add-on",
+        })
+    skills = []
+    for dept in AI_DEPARTMENTS:
+        folder = os.path.join(root, dept)
+        if not os.path.isdir(folder):
+            continue
+        for name in sorted(os.listdir(folder)):
+            if not name.endswith(".md") or name.startswith("."):
+                continue
+            rel = f"{dept}/{name}"
+            if _ai_skill_path(rel):
+                skills.append(_ai_skill_meta(os.path.join(folder, name), rel))
+    return web.json_response({"root": root, "skills": skills,
+                              "departments": list(AI_DEPARTMENTS)})
+
+
+async def ai_skill_get_handler(request: web.Request) -> web.Response:
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
+    path = _ai_skill_path(request.match_info.get("path", ""))
+    if path is None:
+        return web.json_response({"error": "not a Skill name"}, status=400)
+    try:
+        return web.json_response({"content": open(path, encoding="utf-8").read()})
+    except FileNotFoundError:
+        return web.json_response({"error": "not found"}, status=404)
+    except OSError as exc:
+        return web.json_response({"error": f"unreadable: {exc}"}, status=500)
+
+
+async def ai_skill_put_handler(request: web.Request) -> web.Response:
+    """Write one Skill. Atomic, so a save cannot leave half a file behind."""
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
+    rel = request.match_info.get("path", "")
+    path = _ai_skill_path(rel)
+    if path is None:
+        return web.json_response(
+            {"error": "a Skill is <department>/<name>.md, and the department "
+                      f"must be one of: {', '.join(AI_DEPARTMENTS)}"}, status=400)
+    body = await request.text()
+    if len(body.encode()) > AI_SKILL_MAX_BYTES:
+        return web.json_response({"error": "too large"}, status=413)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    atomic_write(path, lambda out: out.write(body.encode()))
+    return web.json_response({"ok": True, **_ai_skill_meta(path, rel)})
+
+
+async def ai_skill_delete_handler(request: web.Request) -> web.Response:
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
+    path = _ai_skill_path(request.match_info.get("path", ""))
+    if path is None:
+        return web.json_response({"error": "not a Skill name"}, status=400)
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        return web.json_response({"error": "not found"}, status=404)
+    except OSError as exc:
+        return web.json_response({"error": str(exc)}, status=500)
+    return web.json_response({"ok": True})
+
+
 device_config_get_handler, device_config_put_handler = _json_store_handlers(
     DEVICE_CONFIG_FILE, "config", {}, DEVICE_CONFIG_MAX_BYTES, "device configuration")
 # Facility Manager working set — same factory as the device config, so it gets
@@ -2233,6 +2387,10 @@ def main() -> None:
     app.router.add_post("/telemetry", telemetry_post_handler)
     app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)
+    app.router.add_get("/ai-skills", ai_skills_list_handler)
+    app.router.add_get("/ai-skills/{path:.*}", ai_skill_get_handler)
+    app.router.add_put("/ai-skills/{path:.*}", ai_skill_put_handler)
+    app.router.add_delete("/ai-skills/{path:.*}", ai_skill_delete_handler)
     app.router.add_get("/auth/roles", auth_roles_handler)
     app.router.add_get("/auth/session", auth_session_handler)
     app.router.add_post("/auth/verify", auth_verify_handler)

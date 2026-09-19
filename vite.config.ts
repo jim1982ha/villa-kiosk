@@ -175,7 +175,8 @@ export default defineConfig(({ command }) => {
               // nginx's own locations; `tests/routes.py` fails the build if
               // this list and the proxy's routes disagree.
               ["/core", "/auth", "/addon-config", "/model", "/model-upload",
-               "/device-config", "/fm-data", "/fm-evidence", "/telemetry"].map((p) => [
+               "/device-config", "/fm-data", "/fm-evidence", "/telemetry",
+               "/ai-skills"].map((p) => [
                 p,
                 {
                   target: process.env.VITE_DEV_PROXY,

@@ -12,7 +12,7 @@ import ModalFooter from "@/components/common/ModalFooter";
 import UnsavedChanges from "@/components/common/UnsavedChanges";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import {
-  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom,
+  Sliders, Sun, Sunrise, Moon, Monitor, SunMoon, MousePointerClick, Move, Circle, CreditCard, PanelBottom, Sparkles,
 } from "lucide-react";
 import { useConfig } from "@/config/ConfigContext";
 import { useProfile } from "@/auth/ProfileContext";
@@ -27,9 +27,13 @@ interface Props {
   onClose: () => void;
   /** Open the full Config Editor (a modal over the live villa). */
   onOpenConfigEditor: () => void;
+  /** Open the VESTA AI screen. Absent on a build that ships no AI layer — the
+   *  stable channel — so the button is simply not there rather than opening
+   *  something that reports nothing. */
+  onOpenAi?: () => void;
 }
 
-export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: Props) {
+export default function SettingsModal({ manager, onClose, onOpenConfigEditor, onOpenAi }: Props) {
   const { config, update } = useConfig();
   const { role } = useProfile();
   const { haConfig } = useHA();
@@ -531,9 +535,17 @@ export default function SettingsModal({ manager, onClose, onOpenConfigEditor }: 
             drift apart between the two gestures. */}
         <ModalFooter
           leading={can("editConfig") ? (
-            <button className="btn ghost" onClick={onOpenConfigEditor}>
-              <Sliders size={18} /> Advanced Settings
-            </button>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn ghost" onClick={onOpenConfigEditor}>
+                <Sliders size={18} /> Advanced Settings
+              </button>
+              {/* Only on a build that carries the layer — see onOpenAi. */}
+              {onOpenAi && (
+                <button className="btn ghost" onClick={onOpenAi}>
+                  <Sparkles size={18} /> VESTA AI
+                </button>
+              )}
+            </div>
           ) : undefined}
           commit={commit}
           onClose={() => { flushPending(); onClose(); }}
