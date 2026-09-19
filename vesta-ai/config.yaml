@@ -1,0 +1,99 @@
+# VESTA AI Layer — Home Assistant add-on manifest (image-pull variant).
+#
+# `image` makes the Supervisor PULL a prebuilt image from GHCR instead of
+# building on the device, so installing from the repository URL is one click
+# and no compile. The {arch} placeholder + version resolve to e.g.
+# ghcr.io/jim1982ha/vesta-ai-amd64:0.1.0 — published by
+# .github/workflows/build-ai.yaml from branch `ai`.
+name: VESTA AI Layer
+version: "0.1.0"
+slug: vesta_ai
+description: Watches a property through Home Assistant and says what needs attention — suggest-only
+url: https://github.com/jim1982ha/villa-kiosk
+image: ghcr.io/jim1982ha/vesta-ai-{arch}
+arch:
+  - amd64
+  - aarch64
+# The HA base image ships s6-overlay v3 as its own init — disable Docker's.
+init: false
+# ⚠️ NO UI, SO NO INGRESS AND NO PORTS. This layer has no HTTP surface of any
+# kind: it publishes what it knows as Home Assistant entities and sends what it
+# has to say through Home Assistant's own notify services. The wall tablet reads
+# it through Home Assistant like any other integration (ADR-0011), which is also
+# why the kiosk needs no change to show it (ADR-0007).
+#
+# ⚠️ `homeassistant_api` ONLY — NO `hassio_api`, NO `hassio_role`. It grants the
+# Supervisor's Core API proxy and SUPERVISOR_TOKEN, which is everything the one
+# direct connection needs: subscribe to state changes, and publish this add-on's
+# own status entity. Reaching the ha-mcp add-on is an ORDINARY outbound HTTP
+# call to an address the owner pastes below — discovering it automatically would
+# need a Supervisor role that can also start, stop and install add-ons, which a
+# suggest-only layer cannot justify.
+homeassistant_api: true
+boot: auto
+startup: application
+# ⚠️ The help text an operator actually SEES on the Configuration page lives in
+# translations/en.yaml — Supervisor renders that file, never these comments. Add
+# a field there whenever you add one here (tests/addon-manifest.py fails if you
+# forget — it also checks the reverse, and that options and schema agree).
+#
+# ⚠️ AND IT MUST MATCH `agent/options.py`. The dataclass there is what the code
+# reads; this is what the operator fills in. `agent/tests/test_manifest_matches_options.py`
+# pins them to each other, because an option declared in one and not the other is
+# either a field nobody can set or a field nothing reads — this repository has
+# produced that defect, in both directions, thirteen times.
+#
+# ── Every default is empty or safe ──────────────────────────────────────────
+# anthropic_api_key — the model's credential. Empty means the layer starts,
+#   connects, and reports its own health, and reasons about nothing. That is the
+#   correct state for a fresh install, and it is the state this first release
+#   ships in regardless: nothing here calls a model yet.
+#
+# ha_mcp_url / ha_mcp_secret — the address of the ha-mcp add-on, and its shared
+#   secret. ⚠️ PASTED, NOT DISCOVERED, for the permission reason above. The
+#   secret is a PATH PREFIX, so the two are joined into one URL; pasting a URL
+#   that already ends with the secret is handled and not doubled.
+#   ⚠️ Set `auto_update: false` on the ha-mcp add-on. It ships roughly biweekly
+#   with no deprecation policy and moves its tool set in MINOR releases; an
+#   unattended update can change the contract underneath this layer.
+#
+# owner_target / fm_target — Home Assistant notify targets. Empty by default:
+#   naming one here would be one property's configuration shipped to every other
+#   install, which is the hard rule this repository is built around.
+#
+# timezone — empty means ASK HOME ASSISTANT, which is always right and never
+#   goes stale. Set it only to override.
+#
+# daily_usd_limit — what the layer may spend on the model in a day, in USD.
+#   ⚠️ 0 means NO limit, matching every other clamp in this project; it does not
+#   mean "never spend". The figure the layer reports comes from its own token
+#   meter and from nowhere else — this project has been wrong about its own cost
+#   by ~115x by doing arithmetic in a document instead.
+#
+# model_fast / model_writing — the cheap model for routine judgement and the
+#   capable one for prose. Named rather than hardcoded so a new release of
+#   either can be adopted without a new add-on version.
+#
+# log_level — how much the add-on prints into its own log.
+options:
+  anthropic_api_key: ""
+  ha_mcp_url: ""
+  ha_mcp_secret: ""
+  owner_target: ""
+  fm_target: ""
+  timezone: ""
+  daily_usd_limit: 1.0
+  model_fast: claude-haiku-4-5
+  model_writing: claude-opus-5
+  log_level: info
+schema:
+  anthropic_api_key: password?
+  ha_mcp_url: str?
+  ha_mcp_secret: password?
+  owner_target: str?
+  fm_target: str?
+  timezone: str?
+  daily_usd_limit: float(0,1000)?
+  model_fast: str?
+  model_writing: str?
+  log_level: list(trace|debug|info|notice|warning|error|fatal)?

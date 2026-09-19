@@ -58,6 +58,11 @@ class Addon(NamedTuple):
 # rules below would be checking a copy rather than an original.
 MANIFESTS: list[Addon] = [
     Addon("villa-kiosk", package_json=True),
+    # ⚠️ UNPAIRED, AND THAT IS THE WHOLE REASON THIS FILE READS A LIST. The AI
+    # layer is Python, has no package.json of its own, and versions
+    # independently of the kiosk: a commit touching only `agent/` bumps only
+    # this manifest. It is held to semver and to its own changelog instead.
+    Addon("vesta-ai", package_json=False),
 ]
 
 # A parser that silently found nothing would pass everything below it, so a
@@ -223,7 +228,13 @@ def check_manifest(addon: Addon) -> str:
 
     # 7. the manifest must not cite a guard that does not exist — the defect that
     #    produced this file. Its own comment named tests/security_test.py.
-    for m in re.finditer(r"tests/[A-Za-z0-9_/.-]+\.(?:py|mjs|sh|ts)", CFG):
+    # ⚠️ THE WHOLE PATH, NOT FROM `tests/` ONWARDS. This read `tests/...` and so
+    # matched the tail of `agent/tests/foo.py`, looked up a `tests/foo.py` that
+    # never existed, and reported a guard that IS tracked as missing — a gate
+    # failing a correct manifest, which is the fastest way to get a gate
+    # switched off.
+    cited = r"(?:[A-Za-z0-9_.-]+/)*tests/[A-Za-z0-9_/.-]+\.(?:py|mjs|sh|ts)"
+    for m in re.finditer(cited, CFG):
         if not tracked(m.group(0)):
             problems.append(f"{d}: config.yaml cites `{m.group(0)}`, which is not tracked — "
                             f"a comment promising a guard that does not exist is worse "

@@ -1,0 +1,10 @@
+#!/command/with-contenv sh
+# The layer itself. `with-contenv` exposes SUPERVISOR_TOKEN, which is the whole
+# of the direct connection's credential; s6 supervises and restarts it.
+#
+# ⚠️ IT MUST STOP ON SIGTERM, NOT BE KILLED. The last thing the layer does is
+# mark its own status entity `unavailable`; without that the entity reads `ok`
+# forever after the add-on is stopped. `exec` makes python the service process
+# itself, so s6's SIGTERM reaches it rather than a shell.
+cd /usr/lib/vesta || exit 1
+exec python3 -m agent

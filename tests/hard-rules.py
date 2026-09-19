@@ -45,6 +45,23 @@ LAN_OR_INERT = re.compile(
     re.I)
 REPO_LINK_OK = re.compile(r"(repository\.yaml|config\.yaml)$")
 
+#: The AI layer's fixtures. Their fake addresses are not dependencies: nothing
+#: fetches them, and `Dockerfile.ai` deletes this tree at build time.
+#:
+#: ⚠️ EXACTLY THIS PREFIX, AND THE FIRST CUT WAS `(^|/)tests?/`. That read as
+#: "test files", and exempted 53 tracked files — every oracle, `routes.py`, and
+#: these gates themselves — from both fetch rules, all of which were covered
+#: before. Nothing was hidden by it today; it was coverage given away for the
+#: future, inside the one guard whose own banner is about a rule scoped to
+#: where the last defect was found rather than to everything it applies to.
+#:
+#: Exempt from the two FETCH rules ONLY: these files are still hashed against
+#: the villa-token list, because a property's name leaking through a fixture is
+#: exactly as public as one leaking through source. (The entity-id rule skips
+#: the root `tests/` tree separately, below, and reaches `agent/tests/`.) A
+#: per-rule exemption for that reason, never an entry in SKIP_FILES.
+NOT_FETCHED = re.compile(r"^agent/tests/")
+
 HOSTS = re.compile(r"https?://[A-Za-z0-9.-]+")
 PROVIDERS = re.compile(
     r"https?://[A-Za-z0-9.-]*"
@@ -90,15 +107,50 @@ def strip_comments(src: str) -> str:
     return "".join(out)
 
 
+def strip_python_comments(src: str) -> str:
+    """The same job as `strip_comments`, for `#` — and by tokenising, not regex.
+
+    ⚠️ A REGEX CANNOT DO THIS. `"sensor.a_thing  # not a comment"` and
+    `# sensor.a_thing` differ only in which side of the quote the `#` is on, and
+    this repository writes example ids into its comments constantly — a guard
+    whose failures are all prose gets switched off. `tokenize` already knows
+    where a string ends.
+    """
+    import io
+    import tokenize
+
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(src).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        # Unparseable is not a reason to skip: fall back to scanning everything,
+        # which over-reports rather than under-reports.
+        return src
+    lines = src.split("\n")
+    for tok in tokens:
+        if tok.type != tokenize.COMMENT:
+            continue
+        row = tok.start[0] - 1
+        start, end = tok.start[1], tok.end[1]
+        lines[row] = lines[row][:start] + " " * (end - start) + lines[row][end:]
+    return "\n".join(lines)
+
+
 def main() -> int:
     files = tracked()
     fail = 0
-    print(f"  scanning {len(files)} tracked, shipped files\n")
+    exempt = sum(1 for f in files if NOT_FETCHED.search(f))
+    # ⚠️ AN INSTRUMENT MUST NOT OVERSTATE ITS OWN COVERAGE. This printed a
+    # single total while silently skipping files, which is how a check comes to
+    # be trusted for ground it never walked.
+    print(f"  scanning {len(files)} tracked, shipped files"
+          + (f" ({exempt} exempt from the fetch rules)" if exempt else "") + "\n")
 
     # ── 1 & 2: what may be fetched ────────────────────────────────────────
     providers: list[str] = []
     third_party: list[str] = []
     for rel in files:
+        if NOT_FETCHED.search(rel):
+            continue
         try:
             text = (ROOT / rel).read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -118,11 +170,19 @@ def main() -> int:
     # ⚠️ THE SHAPE ONLY, AND IN CODE ONLY. A generic example inside a comment is
     # how this repo documents itself; the same string in an expression is one
     # property baked into an add-on meant for any of them.
+    # ⚠️ AND IT NOW READS THE PYTHON TOO. This scanned `src/**.ts` only, which
+    # was the whole of the shipped code when it was written. A second add-on
+    # arrived as a Python tree under `agent/` and the rule could not see one
+    # line of it — the exact "audit the applicable set" failure this file's own
+    # banner complains about, happening inside the guard written to prevent it.
     ids: list[str] = []
     for rel in files:
-        if not rel.startswith("src/") or not rel.endswith((".ts", ".tsx")):
+        if rel.startswith("src/") and rel.endswith((".ts", ".tsx")):
+            code = strip_comments((ROOT / rel).read_text(encoding="utf-8"))
+        elif rel.endswith(".py") and not rel.startswith("tests/"):
+            code = strip_python_comments((ROOT / rel).read_text(encoding="utf-8"))
+        else:
             continue
-        code = strip_comments((ROOT / rel).read_text(encoding="utf-8"))
         for num, line in enumerate(code.split("\n"), 1):
             if ENTITY_ID.search(line):
                 ids.append(f"{rel}:{num}")

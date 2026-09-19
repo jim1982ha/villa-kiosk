@@ -98,6 +98,17 @@ def mutate(name: str, edits, expect: str) -> None:
             shutil.rmtree(FAKE)
 
 
+def clear_manifests() -> None:
+    """Empty the gate's MANIFESTS list, however many entries it has."""
+    text = GATE.read_text()
+    new_text, count = re.subn(r"(?<=MANIFESTS: list\[Addon\] = \[\n).*?(?=\n\])",
+                              "", text, count=1, flags=re.S)
+    if count != 1:
+        raise SystemExit("FATAL: could not find the MANIFESTS list to empty — "
+                         "this sweep is stale against the gate it mutates")
+    GATE.write_text(new_text)
+
+
 def write_fake(version: str, changelog_version: str) -> None:
     """A second, unpaired manifest, and the gate entry that reaches it."""
     (FAKE / "translations").mkdir(parents=True, exist_ok=True)
@@ -195,7 +206,12 @@ mutate("an unpaired manifest is held to every other rule too",
 
 # ── 7. and the gate's own sanity floors ─────────────────────────────────────
 mutate("the list of manifests is empty",
-       lambda: sub(GATE, '    Addon("villa-kiosk", package_json=True),\n', ""),
+       # ⚠️ THE WHOLE LIST, DERIVED — NOT ONE TYPED ENTRY. This deleted the line
+       # for `villa-kiosk` and called that empty. The day a second manifest was
+       # added the list still had one entry left, the gate correctly passed, and
+       # this mutation reported itself as not going red. It caught its own
+       # staleness, which is the only reason the sweep is worth running.
+       clear_manifests,
        "MANIFESTS is empty")
 
 mutate("the options parser finds nothing",

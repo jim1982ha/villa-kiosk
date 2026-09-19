@@ -51,7 +51,13 @@ if (files.length < 50) { console.log(`    FAIL  the scan reached the promise-bea
 // a full stop that is prose, not filename.
 const cited = new Map();
 for (const f of files) {
-  for (const m of readFileSync(ROOT + f, "utf8").matchAll(/tests\/[A-Za-z0-9_/.-]+/g)) {
+  // ⚠️ THE WHOLE PATH, NOT FROM `tests/` ONWARDS. This matched the tail of
+  // `agent/tests/conftest.py`, looked up a `tests/conftest.py` that never
+  // existed, and reported a file that IS tracked as a dangling citation — a
+  // guard failing correct source. The manifest gate carried the identical
+  // defect in its own citation check; both were written before this repository
+  // had a second tests/ directory.
+  for (const m of readFileSync(ROOT + f, "utf8").matchAll(/(?:[A-Za-z0-9_.-]+\/)*tests\/[A-Za-z0-9_/.-]+/g)) {
     const path = m[0].replace(/[.,;:]+$/, "");
     if (!/\.[a-z]+$/.test(path)) continue;      // a directory, not a file
     if (!cited.has(path)) cited.set(path, []);

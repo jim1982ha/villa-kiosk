@@ -15,7 +15,12 @@ name: CI
 
 on:
   push:
-    branches: [dev2, main]
+    # ⚠️ `ai` IS HERE BECAUSE IT SHIPS AN ARTIFACT NOW. It carried commits with
+    # no CI run at all until the AI layer landed on it — the gates below fired
+    # only on a pull request or a manual dispatch, which is to say on nothing
+    # that actually happened. A branch that publishes an installable image and
+    # is not in this list is a branch whose gates are decorative.
+    branches: [dev2, main, ai]
   pull_request:
   workflow_dispatch:
   # ⚠️ CALLABLE, SO THE IMAGE BUILD CAN DEPEND ON IT. Until this was added,
@@ -121,3 +126,95 @@ jobs:
         # ⚠️ THE CHEAPEST CHECK HERE AND THE ONE WITH THE WORST FAILURE MODE.
         # Nothing else in this pipeline loads the proxy at all.
         run: npm run test:proxy-parse
+
+  # ── The AI layer ──────────────────────────────────────────────────────────
+  # ⚠️ A SECOND JOB, NOT A STEP IN THE FIRST. The two add-ons are different
+  # artifacts with different languages, different images and independent
+  # versions; a Python failure must be readable as a Python failure rather than
+  # as "the kiosk job is red". The `kiosk` job above is untouched by this.
+  ai-layer:
+    name: ai-layer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Is the AI layer on this branch at all?
+        id: present
+        # ⚠️ WITHOUT THIS, THIS JOB BREAKS THE KIOSK'S RELEASE. `build.yaml`
+        # calls this workflow to gate the kiosk image, and `dev2`/`main` carry
+        # no `agent/` tree — so the moment this file is merged there, `pytest
+        # agent/tests` exits 4 (nothing collected), the `checks` job fails, and
+        # the KIOSK stops publishing. The hunk below claimed the kiosk job was
+        # untouched by this; that was true of the job and not of the workflow.
+        #
+        # Not a silent skip: it prints which branch has what, and the steps
+        # below are conditioned on it rather than on nothing.
+        run: |
+          if [ -d agent ] && [ -d agent/tests ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "the AI layer is on ${GITHUB_REF_NAME}; its gates run below"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "no agent/ on ${GITHUB_REF_NAME} — this branch does not ship the AI layer, so there is nothing here to gate"
+          fi
+
+      - name: Install the test runner
+        if: steps.present.outputs.present == 'true' 
+        # ⚠️ pytest AND NOTHING ELSE. The layer's own test surface is entirely
+        # async and deliberately takes no pytest-asyncio dependency — a four-line
+        # hook in `agent/tests/conftest.py` runs the coroutines — and nothing
+        # under test imports aiohttp at module scope, so a bare runner is enough.
+        # Every dependency this job does not have is one that cannot be missing
+        # the day it matters.
+        run: python3 -m pip install --quiet pytest
+
+      - name: The layer's tests
+        if: steps.present.outputs.present == 'true'
+        # Through the npm script, like every gate in the kiosk job — one command
+        # a developer can run locally and CI runs identically.
+        run: npm run test:agent
+
+      - name: Those tests are capable of failing
+        if: steps.present.outputs.present == 'true'
+        # ⚠️ A GREEN SUITE IS NOT A WORKING ONE, AND THIS BRANCH HAS SHIPPED
+        # SEVERAL THAT WERE GREEN FOR THEIR WHOLE LIVES. Every load-bearing
+        # claim in `agent/` is broken in turn here — an unknown model priced at
+        # zero, a half-failed connection rounding up to healthy, a dropped
+        # socket ending the add-on — and the suite must go red for each.
+        run: npm run test:agent:mutations
+
+      - name: The layer starts, reports, and stops cleanly
+        if: steps.present.outputs.present == 'true'
+        # ⚠️ RUNNING THE ARTEFACT, NOT ONLY ITS UNITS. Every start test passed
+        # against a fake whose `publish` could not fail, while the real add-on
+        # raised out of start() and crash-looped before printing anything an
+        # operator could read. This runs `python3 -m agent` with no Supervisor
+        # to talk to — the state a fresh install is in — and requires it to come
+        # up, say what it is missing, print the meter reading zero, and stop on
+        # SIGTERM.
+        run: |
+          set -euo pipefail
+          out=$(VESTA_AI_OPTIONS=/nonexistent/options.json \
+                VESTA_AI_DATA="$RUNNER_TEMP/aidata" \
+                VESTA_AI_VERSION=ci \
+                timeout --signal=TERM 10 python3 -m agent 2>&1 || true)
+          echo "$out"
+          for expected in "vesta-ai ci starting" "not configured yet" \
+                          "usd=0.0000" "vesta-ai stopped"; do
+            echo "$out" | grep -qF "$expected" \
+              || { echo "::error::the layer never printed: $expected"; exit 1; }
+          done
+          # ⚠️ `if`, NOT `grep ... && { exit 1; }`. Under `set -e` that compound
+          # returns non-zero exactly when the grep finds NOTHING — so the step
+          # failed on the good run and passed on the bad one. This repository
+          # already has the lesson written down twice: never judge a run by a
+          # grep's shape, judge it by an exit status you control.
+          if echo "$out" | grep -q "Traceback"; then
+            echo "::error::the layer raised on a path it must survive"
+            exit 1
+          fi
+          echo "the layer came up, reported and stopped cleanly"

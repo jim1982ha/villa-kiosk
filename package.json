@@ -20,6 +20,8 @@
     "test:routes": "python3 tests/routes.py",
     "test:manifest": "python3 tests/addon-manifest.py",
     "test:manifest:mutations": "python3 tests/addon-manifest-mutations.py",
+    "test:agent": "python3 -m pytest agent/tests -q",
+    "test:agent:mutations": "python3 tests/agent-mutations.py",
     "test:hard-rules:ci": "VK_HASH_ONLY=1 python3 tests/hard-rules.py",
     "preflight": "bash tests/preflight.sh",
     "test:proxy-parse": "python3 -c \"import ast, pathlib; ast.parse(pathlib.Path('rootfs/usr/bin/supervisor-proxy.py').read_text())\""

@@ -1,0 +1,68 @@
+# Field labels and help text for the add-on's Configuration page.
+#
+# Supervisor renders `name` as each field's label and `description` as the help
+# text underneath it. Without this file the UI shows the raw option key
+# ("daily_usd_limit") and nothing else — so a field missing here is a setting an
+# operator is asked to fill in with no explanation of what it does.
+#
+# Keep these short and decision-oriented: the question a reader has here is
+# "what do I put in this box", not "how is it implemented". The long-form
+# reasoning stays in config.yaml's comments and DOCS.md.
+configuration:
+  anthropic_api_key:
+    name: Anthropic API key
+    description: >-
+      The credential the layer reasons with. Leave EMPTY and the add-on still
+      starts, connects and reports its own health — it simply does not think.
+      This release never calls a model at all, so an empty key changes nothing
+      yet.
+  ha_mcp_url:
+    name: ha-mcp address
+    description: >-
+      The address of the ha-mcp add-on on your own network, e.g.
+      http://<its-slug>:9583 — everything this layer ASKS about the property
+      goes through it. Paste it rather than expecting discovery: finding it
+      automatically would need a permission that can also start, stop and
+      install add-ons. Set auto_update to false on that add-on.
+  ha_mcp_secret:
+    name: ha-mcp secret
+    description: >-
+      The shared secret from the ha-mcp add-on's own configuration. It is used
+      as a path on the address above, so if the address you pasted already ends
+      with it you can leave this empty.
+  owner_target:
+    name: Owner notify target
+    description: >-
+      Which Home Assistant notify service reaches the owner, e.g.
+      notify.mobile_app_<device>. Leave empty and nothing is sent to an owner.
+  fm_target:
+    name: Facility manager notify target
+    description: >-
+      Which Home Assistant notify service reaches whoever looks after the
+      property day to day. Leave empty and nothing is sent to them.
+  timezone:
+    name: Time zone
+    description: >-
+      Leave EMPTY to use whatever Home Assistant is set to, which is almost
+      always what you want. Set one only to override it.
+  daily_usd_limit:
+    name: Daily spend limit (USD)
+    description: >-
+      The most the layer may spend on the model in one day. 0 means NO limit,
+      not "never spend". The figure it reports is measured from its own token
+      meter, never estimated.
+  model_fast:
+    name: Model for routine work
+    description: >-
+      The cheaper, quicker model used for routine judgement. Leave the default
+      unless you have a reason.
+  model_writing:
+    name: Model for writing
+    description: >-
+      The more capable model used when something has to be explained to a
+      person. Leave the default unless you have a reason.
+  log_level:
+    name: Log level
+    description: >-
+      How much the add-on writes into its own log. Raise it to debug while
+      chasing a problem; info is right the rest of the time.
