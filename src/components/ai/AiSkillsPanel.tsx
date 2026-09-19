@@ -159,8 +159,10 @@ export default function AiSkillsPanel() {
   return (
     <div className="ai-skills">
       <div className="ai-notice">
-        The AI layer does not read Skills yet — that arrives in a later release.
-        What you write here is kept, and will be picked up the day it can be.
+        A starter set is installed. Edit them, delete what does not apply, add
+        your own. ⚠️ The layer does not <em>read</em> Skills yet — that arrives
+        in a later release; what is here is kept, and anything you delete stays
+        deleted.
       </div>
 
       <div className="ai-skills-head">

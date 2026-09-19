@@ -2235,6 +2235,49 @@ def _read_ai_settings() -> dict:
     return {k: stored.get(k, d) for k, d in AI_SETTINGS_FIELDS.items()}
 
 
+async def ai_notify_targets_handler(request: web.Request) -> web.Response:
+    """The notify services this Home Assistant actually has.
+
+    ⚠️ SERVED FROM HERE RATHER THAN FETCHED BY THE BROWSER, for two reasons.
+    Core's /api/services is the whole service catalogue — hundreds of entries
+    across every integration — and the screen needs one domain's names; and this
+    process already holds the Supervisor token, so asking here adds no client
+    permission at all.
+
+    A typed notify target is a setting that fails SILENTLY: the layer has
+    nothing to send yet, so a typo would not surface until the first thing worth
+    telling somebody about, which is the worst possible moment to discover it.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
+    try:
+        session: ClientSession = request.app["session"]
+        async with session.get(
+            f"http://{SUPERVISOR}/core/api/services",
+            headers={"Authorization": f"Bearer {TOKEN}"},
+        ) as resp:
+            if resp.status >= 400:
+                return web.json_response(
+                    {"targets": [], "error": f"Home Assistant answered {resp.status}"})
+            catalogue = await resp.json()
+    except Exception as exc:
+        # ⚠️ AN EMPTY LIST PLUS A REASON, NOT A 500. The screen must still let
+        # an operator type a target when this lookup is unavailable.
+        return web.json_response({"targets": [], "error": f"{type(exc).__name__}: {exc}"})
+    targets = []
+    for entry in catalogue if isinstance(catalogue, list) else []:
+        if not isinstance(entry, dict) or entry.get("domain") != "notify":
+            continue
+        for name in sorted(entry.get("services", {})):
+            # `notify.notify` and `notify.persistent_notification` are real and
+            # useful; nothing is filtered out, because which one reaches a given
+            # person is the operator's knowledge, not ours.
+            targets.append(f"notify.{name}")
+    return web.json_response({"targets": targets})
+
+
 async def ai_settings_get_handler(request: web.Request) -> web.Response:
     """What the layer is configured with — minus the secrets themselves."""
     if not _authorized(request):
@@ -2489,6 +2532,7 @@ def main() -> None:
     app.router.add_post("/telemetry", telemetry_post_handler)
     app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)
+    app.router.add_get("/ai-notify-targets", ai_notify_targets_handler)
     app.router.add_get("/ai-settings", ai_settings_get_handler)
     app.router.add_put("/ai-settings", ai_settings_put_handler)
     app.router.add_get("/ai-skills", ai_skills_list_handler)

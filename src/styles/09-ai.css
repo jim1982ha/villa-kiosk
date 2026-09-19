@@ -129,3 +129,9 @@
   margin: 6px 0 0;
   line-height: 1.45;
 }
+
+/* A picker that can fall back to free text — the input and its way back to
+   the list sit on one row. */
+.ai-picker-custom { display: flex; gap: 8px; align-items: center; }
+.ai-picker-custom input { flex: 1 1 auto; min-width: 0; }
+.ai-picker-custom .btn { flex: 0 0 auto; white-space: nowrap; }

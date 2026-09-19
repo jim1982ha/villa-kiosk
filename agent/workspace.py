@@ -13,12 +13,23 @@ OWNER'S, and the layer only ever reads from it.
 """
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from agent import log
 
 #: Where Supervisor mounts this add-on's own config folder (`addon_config:rw`).
-WORKSPACE = Path("/addon_configs")
+#:
+#: ⚠️ TWO NAMES FOR ONE FOLDER, AND THE CONTAINER'S IS NOT THE ONE A PERSON
+#: SEES. Supervisor mounts an add-on's own `addon_config` at /config INSIDE the
+#: container, while the File editor shows it as /addon_configs/<slug>/.
+#: Hardcoding the one a person sees would read correctly in every document and
+#: find nothing at runtime.
+WORKSPACE_CANDIDATES = (Path("/config"), Path("/addon_configs"))
+WORKSPACE = WORKSPACE_CANDIDATES[0]
+
+#: The starter Skills that ship inside the image.
+SHIPPED_SKILLS = Path(__file__).resolve().parent / "skills"
 
 README = """# VESTA AI Layer — your folder
 
@@ -29,10 +40,13 @@ under `addon_configs/`.
 ## What goes here
 
 **Skills** — one Markdown file each, describing something worth watching and
-what to say about it. They are not built yet: they arrive in a later release,
-and this file is here so you know where they will go.
+what to say about it. A starter set has been copied in for you; edit them,
+delete the ones that do not apply, and add your own.
 
-When they do:
+⚠️ The layer does not READ them yet — that arrives in a later release. What is
+here is kept, and anything you delete stays deleted.
+
+When it does read them:
 
 * a skill is one Markdown file in a department folder (`electrical/`,
   `equipment/`, `water/`, `climate/`, `security/`, `network/`, `upkeep/`);
@@ -56,12 +70,54 @@ Home Assistant includes it in the add-on's backup.
 """
 
 
-def prepare(root: Path = WORKSPACE) -> Path | None:
-    """Make sure the owner's folder exists and explains itself.
+def find_workspace() -> Path | None:
+    """Whichever of the two mount points actually exists."""
+    for candidate in WORKSPACE_CANDIDATES:
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def seed_skills(root: Path, shipped: Path = SHIPPED_SKILLS) -> int:
+    """Copy the starter Skills in, ONCE, and never over an owner's file.
+
+    ⚠️ ONLY WHAT IS ABSENT, AND NEVER AN OVERWRITE. An add-on that restores its
+    own idea of a Skill on every restart is an add-on that eats an owner's
+    edits — and "I deleted that and it came back" is the exact complaint the
+    hard rule's "prefer an empty default" note exists to prevent. A starter
+    Skill the owner deletes stays deleted, because the marker below records that
+    seeding already happened.
+    """
+    marker = root / ".starter-skills-installed"
+    if marker.exists() or not shipped.is_dir():
+        return 0
+    copied = 0
+    for source in sorted(shipped.glob("*/*.md")):
+        dest = root / source.parent.name / source.name
+        if dest.exists():
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, dest)
+        copied += 1
+    try:
+        marker.write_text(
+            "The starter Skills were copied into this folder once. Delete this "
+            "file to have them copied again on the next restart; leave it and "
+            "anything you remove here stays removed.\n")
+    except OSError:
+        pass
+    if copied:
+        log.info(f"  {copied} starter Skills copied into {root}")
+    return copied
+
+
+def prepare(root: Path | None = None) -> Path | None:
+    """Make sure the owner's folder exists, explains itself, and has a start.
 
     Returns the folder, or None when the add-on has no `addon_config` mapping —
     which is a manifest fault worth naming rather than a reason to fail.
     """
+    root = root if root is not None else (find_workspace() or WORKSPACE)
     if not root.exists():
         log.warning(f"  no owner config folder at {root} — this add-on's manifest "
                     f"is missing its `addon_config` mapping, so there is nowhere "
@@ -79,6 +135,7 @@ def prepare(root: Path = WORKSPACE) -> Path | None:
     except OSError as exc:
         log.warning(f"  could not write {readme}: {exc}")
         return root
+    seed_skills(root)
     log.info(f"  your folder is {root} — it appears as `addon_configs/` in the "
              f"File editor and Studio Code Server")
     return root

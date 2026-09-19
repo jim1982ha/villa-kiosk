@@ -80,6 +80,10 @@ COPY agent /usr/lib/vesta/agent
 # third party" rule on the stated grounds that a fixture's fake address never
 # reaches an image.
 RUN rm -rf /usr/lib/vesta/agent/tests
+# ⚠️ `agent/skills/` STAYS. It is the starter set the layer copies into the
+# owner's folder on first start — deleting it with the tests would leave every
+# fresh install with an empty Skills screen and no way to discover what one
+# looks like.
 
 # ⚠️ BAKED IN, BECAUSE SUPERVISOR DOES NOT TELL AN ADD-ON ITS OWN VERSION. The
 # layer read this from the environment and nothing set it, so its first real

@@ -68,7 +68,14 @@ export default function AiModal({ onBack }: { onBack: () => void }) {
     <div className="modal-backdrop" onClick={onBack}>
       <div
         ref={dialogRef}
-        className="modal settings-modal config-editor-modal"
+        // ⚠️ `modal-fixed-height`, WHICH ALREADY EXISTED FOR EXACTLY THIS. Its
+        // own comment says "reusable by any future tabbed modal", and this
+        // modal shipped without it — so the dialog resized around the operator
+        // on every tab switch, from a two-line Skills view to a tall Status
+        // one. `.modal` alone only CAPS the height; giving the card a real one
+        // is what makes the body, rather than the dialog, be the thing that
+        // scrolls. Facility and Cockpit both use it; this is the third.
+        className="modal settings-modal config-editor-modal modal-fixed-height"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

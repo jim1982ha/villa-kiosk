@@ -13,6 +13,8 @@ import {
   EMPTY_AI_SETTINGS, fetchAiSettings, saveAiSettings,
   type AiSettings, type AiSettingsDraft,
 } from "@/ai/settingsApi";
+import { MODEL_CHOICES } from "@/ai/models";
+import { fetchNotifyTargets } from "@/ai/notifyTargets";
 
 const LOG_LEVELS = ["trace", "debug", "info", "notice", "warning", "error", "fatal"];
 
@@ -30,6 +32,63 @@ function SecretField({ id, label, hint, isSet, value, onChange }: {
         placeholder={isSet ? "•••••••• (stored — leave blank to keep)" : "not set"}
       />
       <p className="ai-field-hint">{hint}</p>
+    </div>
+  );
+}
+
+/** A list of known-good values that does not become a cage.
+ *
+ *  ⚠️ EVERY DROPDOWN HERE KEEPS AN ESCAPE HATCH. A closed list of notify
+ *  targets is wrong the moment a phone is added, and a closed list of models is
+ *  wrong the moment Anthropic ships one — in both cases this add-on would be
+ *  the thing standing between the operator and a value that already works. The
+ *  list is for the common case; "Something else…" is for the rest. */
+function Picker({ id, label, hint, value, onChange, options, empty, placeholder }: {
+  id: string; label: string; hint: string; value: string;
+  onChange: (v: string) => void;
+  options: readonly { id: string; label: string; note?: string }[];
+  /** Shown when the list came back empty — with the reason, if there was one. */
+  empty?: string;
+  placeholder?: string;
+}) {
+  const known = value === "" || options.some((o) => o.id === value);
+  const [custom, setCustom] = useState(!known);
+  const showCustom = custom || !known;
+
+  return (
+    <div className="ai-field">
+      <label htmlFor={id}>{label}</label>
+      {showCustom ? (
+        <div className="ai-picker-custom">
+          <input
+            id={id} value={value} spellCheck={false} placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {options.length > 0 && (
+            <button type="button" className="btn ghost btn-small"
+              onClick={() => { setCustom(false); onChange(options[0].id); }}>
+              Choose from the list
+            </button>
+          )}
+        </div>
+      ) : (
+        <select
+          id={id} value={value}
+          onChange={(e) => {
+            if (e.target.value === "__custom__") { setCustom(true); onChange(""); return; }
+            onChange(e.target.value);
+          }}
+        >
+          <option value="">— none —</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.note ? `${o.label} — ${o.note}` : o.label}
+            </option>
+          ))}
+          <option value="__custom__">Something else…</option>
+        </select>
+      )}
+      <p className="ai-field-hint">{empty && options.length === 0 ? `${empty} ${hint}` : hint}</p>
     </div>
   );
 }
@@ -71,6 +130,19 @@ export default function AiSettingsPanel({ onState }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [targets, setTargets] = useState<string[]>([]);
+  const [targetsError, setTargetsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const t = await fetchNotifyTargets();
+      if (!live) return;
+      setTargets(t.targets);
+      setTargetsError(t.error ?? null);
+    })();
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -185,30 +257,37 @@ export default function AiSettingsPanel({ onState }: {
         hint="The most it may spend in a day. 0 means no limit, not 'never
               spend'. What it reports is measured call by call, never estimated."
       />
-      <Field
+      <Picker
         id="ai-model-fast" label="Model for routine work" value={draft.model_fast}
-        onChange={(v) => set("model_fast", v)}
+        onChange={(v) => set("model_fast", v)} options={MODEL_CHOICES}
+        placeholder="a model id"
         hint="The cheaper, quicker model for routine judgement."
       />
-      <Field
+      <Picker
         id="ai-model-writing" label="Model for writing" value={draft.model_writing}
-        onChange={(v) => set("model_writing", v)}
+        onChange={(v) => set("model_writing", v)} options={MODEL_CHOICES}
+        placeholder="a model id"
         hint="The more capable model, used when something has to be explained to
-              a person."
+              a person. A model this list has not heard of still works — the
+              token meter reports it as unpriced rather than as free."
       />
 
       <div className="settings-section-title">Who it tells</div>
-      <Field
+      <Picker
         id="ai-owner-target" label="Owner notify target" value={draft.owner_target}
-        placeholder="notify.mobile_app_…"
         onChange={(v) => set("owner_target", v)}
+        options={targets.map((id) => ({ id, label: id }))}
+        empty={targetsError ? `Could not read the list (${targetsError}).` : undefined}
+        placeholder="a notify service"
         hint="Which Home Assistant notify service reaches the owner. Empty means
               nothing is sent to them."
       />
-      <Field
+      <Picker
         id="ai-fm-target" label="Facility manager notify target" value={draft.fm_target}
-        placeholder="notify.mobile_app_…"
         onChange={(v) => set("fm_target", v)}
+        options={targets.map((id) => ({ id, label: id }))}
+        empty={targetsError ? `Could not read the list (${targetsError}).` : undefined}
+        placeholder="a notify service"
         hint="Whoever looks after the property day to day. Empty means nothing is
               sent to them."
       />
