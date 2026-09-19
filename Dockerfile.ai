@@ -11,6 +11,15 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
 FROM ${BUILD_FROM}
 
+# ⚠️ BAKED IN, BECAUSE SUPERVISOR DOES NOT TELL AN ADD-ON ITS OWN VERSION.
+# `__main__.read_version()` read `VESTA_AI_VERSION` from the environment and
+# nothing ever set it — so the first real install published `version: "0"` in
+# its own status entity and its own log. There is no Supervisor-provided
+# variable for this; the build is the only place that knows the number, and CI
+# already reads it out of vesta-ai/config.yaml to tag the image.
+ARG VESTA_AI_VERSION=0
+ENV VESTA_AI_VERSION=${VESTA_AI_VERSION}
+
 # python3 + aiohttp as APKs rather than pip: they are the same packages the
 # kiosk's proxy runs on, they carry the base image's own security updates, and
 # the layer needs no wheel that alpine does not already package.

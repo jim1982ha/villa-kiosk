@@ -160,7 +160,11 @@ class Layer:
         """
         n = 0
         while attempts is None or n < attempts:
-            await self.world.hass.listen(self.on_event)
+            # `on_ready` fires the instant the subscription is live, which is
+            # the only chance to publish a working listener before this call
+            # blocks for as long as the socket stays up.
+            await self.world.hass.listen(self.on_event,
+                                         on_ready=self.publish_status)
             await self.publish_status()
             await self.world.clock.sleep(RECONNECT_SECONDS)
             await self.world.hass.connect_gateway()

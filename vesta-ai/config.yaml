@@ -6,7 +6,7 @@
 # ghcr.io/jim1982ha/vesta-ai-amd64:0.1.0 — published by
 # .github/workflows/build-ai.yaml from branch `ai`.
 name: VESTA AI Layer
-version: "0.1.0"
+version: "0.1.1"
 slug: vesta_ai
 description: Watches a property through Home Assistant and says what needs attention — suggest-only
 url: https://github.com/jim1982ha/villa-kiosk
@@ -30,6 +30,22 @@ init: false
 # need a Supervisor role that can also start, stop and install add-ons, which a
 # suggest-only layer cannot justify.
 homeassistant_api: true
+# ⚠️ THE OWNER'S OWN FOLDER, AND WITHOUT IT THIS ADD-ON IS NOT EDITABLE.
+# `addon_config:rw` gives this add-on `/addon_configs/<slug>/`, which appears in
+# the File editor and Studio Code Server add-ons. That folder is where Skills
+# live (ticket 27): Markdown files the owner writes and edits, hot-reloaded on
+# save, with a local file replacing a shipped one of the same name so an update
+# never wipes an edit.
+#
+# It is mapped from THIS release even though nothing reads Skills yet, because a
+# folder that appears the day the feature lands is a folder nobody can find. The
+# add-on writes a README into it at startup explaining what goes there.
+#
+# ⚠️ This is NOT `/data`. `/data` is the layer's private state (its own journal,
+# its baselines) and the owner never opens it; `/addon_configs/` is the owner's,
+# and the layer only reads it.
+map:
+  - addon_config:rw
 boot: auto
 startup: application
 # ⚠️ The help text an operator actually SEES on the Configuration page lives in

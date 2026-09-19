@@ -23,6 +23,7 @@ from agent.options import OPTIONS_PATH, load_options
 from agent.runtime import Layer
 from agent.store import DATA_ROOT, Store
 from agent.wire import Wire, open_session
+from agent.workspace import WORKSPACE, prepare
 from agent.world import World
 
 
@@ -64,6 +65,7 @@ async def run() -> int:
         loop.add_signal_handler(sig, stopping.set)
 
     log.info(f"vesta-ai {layer.version} starting; options: {options!r}")
+    prepare(Path(os.environ.get("VESTA_AI_WORKSPACE", WORKSPACE)))
     log.debug(f"  clock: {clock.zone_name()}; log level: {log.current_level()}")
     if options.missing():
         log.info(f"  not configured yet: {', '.join(options.missing())} — the "

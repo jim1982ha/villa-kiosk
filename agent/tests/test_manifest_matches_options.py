@@ -82,3 +82,28 @@ def test_loading_the_manifests_own_defaults_yields_the_code_defaults(tmp_path):
     p = tmp_path / "options.json"
     p.write_text(json.dumps(declared))
     assert load_options(p) == Options()
+
+
+def test_the_manifest_gives_the_owner_a_folder_they_can_edit():
+    """⚠️ TICKET 27 TELLS OWNERS TO PUT SKILLS IN 'the add-on's own config
+    folder, which appears in the file editor the owner already has' — and the
+    first manifest mapped no folder at all, so that folder did not exist. The
+    owner found it before any test did."""
+    text = CONFIG.read_text()
+    assert re.search(r"^map:\s*$", text, re.M), "no `map:` block — the owner gets no folder"
+    assert re.search(r"^\s+- addon_config:rw\s*$", text, re.M), \
+        "the folder must be addon_config, and writable, or it does not appear in the file editor"
+
+
+def test_the_manifest_still_grants_NO_supervisor_privilege():
+    """The folder is the owner's, and it must not have cost an escalation.
+
+    ⚠️ TOP-LEVEL KEYS, NOT A SUBSTRING SEARCH. The first cut grepped the raw
+    text and failed on the word `INGRESS` inside the comment that explains why
+    there is no ingress — a guard tripped by its own subject's documentation.
+    """
+    keys = set(re.findall(r"^([a-z_]+):", CONFIG.read_text(), re.M))
+    for forbidden in ("hassio_api", "hassio_role", "ingress", "ingress_port",
+                      "ports", "ports_description"):
+        assert forbidden not in keys, f"`{forbidden}` must not be in this manifest"
+    assert "homeassistant_api" in keys

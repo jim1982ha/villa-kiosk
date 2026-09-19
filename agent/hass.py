@@ -41,5 +41,7 @@ class HomeAssistant:
         return await self._gateway.connect()
 
     async def listen(self, on_event: Callable[[dict[str, Any]], Any],
-                     stop_after: int | None = None) -> Link:
-        return await self._listener.listen(on_event, stop_after=stop_after)
+                     stop_after: int | None = None,
+                     on_ready: Callable[[], Any] | None = None) -> Link:
+        return await self._listener.listen(on_event, stop_after=stop_after,
+                                           on_ready=on_ready)

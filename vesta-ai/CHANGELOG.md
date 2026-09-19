@@ -1,3 +1,31 @@
+## 0.1.1
+
+**You now have a folder.** `/addon_configs/vesta_ai/` appears in the File editor
+and Studio Code Server add-ons, with a README explaining what goes in it. The
+first release mapped no folder at all — so the place the plan tells you to put
+Skills did not exist. Nothing reads it yet; it ships ahead of the feature
+because a folder that appears on the day a feature lands is a folder nobody
+finds. It is yours: the add-on only ever reads from it, and never overwrites
+what you put there.
+
+Two more things the first real install showed that no test and no local container
+could. Both are about the add-on describing itself wrongly while working
+correctly, which is the failure this layer exists to avoid in the other
+direction.
+
+It reported its own version as `0`, in its log and in its status entity. The
+version was read from an environment variable that nothing ever set: Home
+Assistant does not tell an add-on its own version, and the build is the only
+place that knows the number. It is baked into the image now, from the same value
+CI already reads out of the manifest to tag it.
+
+And a listener that was subscribed and working read `unknown — not connected
+yet` for five minutes. The call that listens does not return while the socket is
+healthy, so the only thing that ever published a live listener was the
+heartbeat, and the heartbeat sleeps first. The subscription now announces itself
+the instant it goes live. A layer that is working must not look broken, for the
+same reason a half-broken one must not look healthy.
+
 ## 0.1.0
 
 The first release of the VESTA AI Layer: it installs, starts, connects, and

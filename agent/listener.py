@@ -68,7 +68,8 @@ class Listener:
         return self._next_id - 1
 
     async def listen(self, on_event: Callable[[dict[str, Any]], Any],
-                     stop_after: int | None = None) -> Link:
+                     stop_after: int | None = None,
+                     on_ready: Callable[[], Any] | None = None) -> Link:
         """Authenticate, subscribe, and pump events until the socket closes.
 
         `stop_after` bounds the pump for tests; None means "until it closes",
@@ -99,6 +100,15 @@ class Listener:
                                       f"subscribe_events refused: {result.get('error')}")
                     return self._link
                 self._link = Link(LinkState.UP, "subscribed to state_changed")
+                # ⚠️ SAY SO THE MOMENT IT IS TRUE. `listen` does not return
+                # while the socket is healthy, so the only thing that published
+                # a connected listener was the 5-minute heartbeat — and the
+                # first real install sat reading `listener: unknown, not
+                # connected yet` for five minutes while it was, in fact,
+                # subscribed. A layer that works must not look broken, for the
+                # same reason a half-broken one must not look healthy.
+                if on_ready is not None:
+                    await _maybe_await(on_ready())
                 seen = 0
                 closed = False
                 while stop_after is None or seen < stop_after:

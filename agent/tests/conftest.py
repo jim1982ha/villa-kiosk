@@ -24,3 +24,20 @@ def pytest_pyfunc_call(pyfuncitem):
               for name in pyfuncitem._fixtureinfo.argnames}
     asyncio.run(func(**kwargs))
     return True
+
+
+@pytest.fixture(autouse=True)
+def _isolate_log_level():
+    """Put the log threshold back after every test.
+
+    ⚠️ IT IS MODULE-GLOBAL, SO ONE TEST SILENCED ANOTHER. A test that sets the
+    level to `error` and restores it in its own `finally` is still leaking if
+    anything between raises — and the whole suite went red on two unrelated
+    tests the first time the order changed. A fixture here holds for every test
+    in the tree, not for the ones somebody remembered.
+    """
+    from agent import log
+
+    before = log.current_level()
+    yield
+    log.configure(before)

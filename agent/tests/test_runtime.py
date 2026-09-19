@@ -14,7 +14,9 @@ class StartableHass(FakeHass):
     async def connect_gateway(self):
         return self._health.gateway
 
-    async def listen(self, on_event, stop_after=None):
+    async def listen(self, on_event, stop_after=None, on_ready=None):
+        if on_ready is not None:
+            await on_ready()
         return self._health.listener
 
 
@@ -191,8 +193,10 @@ class FlakyHass(StartableHass):
         self.connects += 1
         return self._health.gateway
 
-    async def listen(self, on_event, stop_after=None):
+    async def listen(self, on_event, stop_after=None, on_ready=None):
         self.listens += 1
+        if on_ready is not None:
+            await on_ready()
         return self._health.listener
 
 
@@ -218,11 +222,13 @@ def test_reconnecting_RE_READS_the_gateway_too(tmp_path):
 
 
 def test_each_retry_publishes_what_is_now_true(tmp_path):
+    """Twice per attempt, on purpose: once the moment the subscription goes
+    live, and once when it drops. Both are changes an operator should see."""
     import asyncio
     hass = FlakyHass()
     world = World.for_testing(tmp_path, hass=hass, clock=FakeClock())
     asyncio.run(Layer(world).stay_connected(attempts=2))
-    assert len(hass.published) == 2
+    assert len(hass.published) == 4
 
 
 def test_it_waits_between_attempts_rather_than_spinning(tmp_path):
@@ -349,3 +355,14 @@ def test_the_boot_journal_records_what_the_gateway_answered(tmp_path):
     l = Layer(world, version="0.1.0")
     asyncio.run(l.start())
     assert l.world.store.get("starts")[0]["entities_seen"] == 1
+
+
+def test_the_status_entity_is_published_as_soon_as_the_listener_is_live(tmp_path):
+    """The runtime's half of it: `stay_connected` must hand `publish_status` in
+    as the readiness callback, or the fix above reaches nothing."""
+    import asyncio
+    hass = FlakyHass()
+    world = World.for_testing(tmp_path, hass=hass, clock=FakeClock())
+    asyncio.run(Layer(world).stay_connected(attempts=1))
+    # once on becoming ready, once after the connection dropped
+    assert len(hass.published) == 2

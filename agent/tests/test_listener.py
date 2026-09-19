@@ -124,3 +124,30 @@ async def test_a_refused_publish_RAISES_rather_than_being_assumed_to_have_worked
     listener = Listener("TOKEN", connector(FakeWs([])), poster(403))
     with pytest.raises(RuntimeError, match="403"):
         await listener.publish("vesta_ai_status", "ok", {})
+
+
+@pytest.mark.asyncio
+async def test_a_live_subscription_is_announced_IMMEDIATELY_not_five_minutes_later():
+    """⚠️ THE FIRST REAL INSTALL READ `listener: unknown` WHILE SUBSCRIBED.
+    `listen` does not return while the socket is healthy, so the only thing
+    publishing a connected listener was the heartbeat — 300s away. A layer that
+    works must not look broken, for the same reason a half-broken one must not
+    look healthy."""
+    states = []
+    ws = FakeWs(HANDSHAKE + [{"type": "event", "event": {}}])
+    listener = Listener("TOKEN", connector(ws), poster())
+
+    async def on_ready():
+        states.append(listener.link.state)
+
+    await listener.listen(lambda e: None, stop_after=1, on_ready=on_ready)
+    assert states == [LinkState.UP], "nothing was told the subscription was live"
+
+
+@pytest.mark.asyncio
+async def test_a_connection_that_FAILS_never_announces_itself_ready():
+    called = []
+    ws = FakeWs([{"type": "auth_required"}, {"type": "auth_invalid", "message": "no"}])
+    listener = Listener("WRONG", connector(ws), poster())
+    await listener.listen(lambda e: None, on_ready=lambda: called.append(1))
+    assert called == []

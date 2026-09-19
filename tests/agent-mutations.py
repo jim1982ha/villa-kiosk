@@ -17,7 +17,9 @@ Each mutation edits a real file, runs the suite, and restores the exact original
 bytes in a `finally`. Do not interrupt it mid-mutation and then commit without
 checking `git status`.
 """
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
 
@@ -78,8 +80,8 @@ MUTATIONS = [
      "agent/runtime.py", "        except Exception as exc:\n            self.last_publish_error =",
      "        except ValueError as exc:\n            self.last_publish_error ="),
     ("runtime: a dropped connection ends the add-on",
-     "agent/runtime.py", "        while attempts is None or n < attempts:\n            await self.world.hass.listen(self.on_event)",
-     "        while n < 1:\n            await self.world.hass.listen(self.on_event)"),
+     "agent/runtime.py", "        while attempts is None or n < attempts:\n            # `on_ready` fires",
+     "        while n < 1:\n            # `on_ready` fires"),
     ("runtime: reconnect stops re-reading the gateway",
      "agent/runtime.py", "            await self.world.hass.connect_gateway()\n            n += 1",
      "            n += 1"),
@@ -93,6 +95,12 @@ MUTATIONS = [
      "vesta-ai/config.yaml", "  daily_usd_limit: 1.0", "  daily_usd_limit: 2.0"),
     ("manifest: a secret is declared as a plain text field",
      "vesta-ai/config.yaml", "  anthropic_api_key: password?", "  anthropic_api_key: str?"),
+    ("listener: a live subscription is not announced until the heartbeat",
+     "agent/listener.py", "                if on_ready is not None:\n                    await _maybe_await(on_ready())",
+     "                pass"),
+    ("runtime: nothing is told when the listener goes live",
+     "agent/runtime.py", "            await self.world.hass.listen(self.on_event,\n                                         on_ready=self.publish_status)",
+     "            await self.world.hass.listen(self.on_event)"),
     ("log: raising the level no longer silences anything",
      "agent/log.py", "    if LEVELS.index(level) >= _threshold:", "    if True:"),
     ("log: lowering the level no longer reveals anything",
@@ -120,6 +128,14 @@ MUTATIONS = [
     ("fakes: the stubs stop matching the ports they define",
      "agent/fakes.py", "    async def send(self, target: str, title: str, body: str) -> None:",
      "    def send(self, target: str, title: str, body: str) -> None:"),
+    ("workspace: the owner's own files get overwritten",
+     "agent/workspace.py", "        current = readme.read_text() if readme.exists() else None\n        if current != README:",
+     "        for f in root.glob('**/*.md'):\n            f.write_text(README)\n        if True:"),
+    ("workspace: a missing mapping is silently skipped",
+     "agent/workspace.py", '        log.warning(f"  no owner config folder at {root} — this add-on\'s manifest "',
+     '        _ = (f"  no owner config folder at {root} — this add-on\'s manifest "'),
+    ("manifest: the owner has no editable folder at all",
+     "vesta-ai/config.yaml", "map:\n  - addon_config:rw\n", ""),
     ("manifest: a target ships seeded",
      "vesta-ai/config.yaml", '  owner_target: ""', '  owner_target: "notify.somebody"'),
 ]
@@ -135,13 +151,30 @@ for name, rel, old, new in MUTATIONS:
             continue
         path.write_text(saved.replace(old, new, 1))
         r = subprocess.run([PY, "-m", "pytest", "agent/tests", "-q", "-x"],
-                           cwd=ROOT, capture_output=True, text=True)
+                           cwd=ROOT, capture_output=True, text=True,
+                           # ⚠️ NO .pyc FROM MUTATED SOURCE, AND THIS COST AN
+                           # HOUR. Python validates a cached .pyc by the source
+                           # file's mtime AND SIZE — and a good mutation is
+                           # often the same length as what it replaced
+                           # (`log.error` → `log.debug` is byte-for-byte equal
+                           # in size). Restore the file within the same second
+                           # and the interpreter happily keeps running the
+                           # MUTATED bytecode afterwards. The suite then failed
+                           # on two unrelated tests, with `inspect.getsource`
+                           # showing the correct source the whole time, because
+                           # getsource reads the file and the interpreter was
+                           # running the cache.
+                           env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
         if r.returncode == 0:
             failures.append(f"{name}: SUITE STILL PASSED — nothing tests this")
         else:
             print(f"  RED   {name}")
     finally:
         path.write_text(saved)
+        # Belt and braces: anything cached from a mutated file, from this run or
+        # an earlier one, goes.
+        for cache in ROOT.glob("agent/**/__pycache__"):
+            shutil.rmtree(cache, ignore_errors=True)
 
 print()
 if failures:
