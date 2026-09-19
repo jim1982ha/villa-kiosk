@@ -29,8 +29,18 @@ import json
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
-#: Where Supervisor writes the operator's answers inside the container.
-OPTIONS_PATH = Path("/data/options.json")
+#: Where the kiosk's own UI writes them (Settings → VESTA AI → Settings).
+#:
+#: ⚠️ NOT SUPERVISOR'S options.json ANY MORE. Setting these on the add-on's
+#: Configuration page and setting them in the kiosk are two editable copies of
+#: one fact — whichever the operator changed, the other silently disagreed, and
+#: neither screen could say which the layer was using. The kiosk is the owner of
+#: these now; writing them back to Supervisor instead would need `hassio_api`
+#: and a role that can start, stop and install add-ons.
+SETTINGS_PATH = Path("/data/ai-settings.json")
+#: Read only when the file above does not exist yet: an install configured on
+#: the add-on page before the UI existed still comes up with its own settings.
+LEGACY_OPTIONS_PATH = Path("/data/options.json")
 
 
 class Secret(str):
@@ -117,18 +127,30 @@ def _coerce(name: str, raw: object, default: object) -> object:
     return str(raw)
 
 
-def load_options(path: Path = OPTIONS_PATH) -> Options:
-    """Read Supervisor's options.json, falling back to the safe defaults.
+def load_options(path: Path | None = None,
+                 legacy: Path = LEGACY_OPTIONS_PATH) -> Options:
+    """Read what the kiosk saved, falling back to the safe defaults.
 
     A missing or unreadable file is not an error: the add-on starts before
-    anyone has opened its Configuration page, and it must come up far enough to
-    say so in its own health entity rather than crash-looping where nobody can
-    see why.
+    anyone has opened the settings screen, and it must come up far enough to say
+    so in its own health entity rather than crash-loop where nobody can see why.
+
+    ⚠️ RE-READ, NOT READ ONCE. The settings screen writes this file while the
+    layer is running, so the layer picks a change up on its next heartbeat. An
+    add-on that needs restarting to notice a pasted API key is one whose screen
+    appears not to work.
     """
+    source = Path(path) if path is not None else SETTINGS_PATH
     try:
-        raw = json.loads(Path(path).read_text())
+        raw = json.loads(source.read_text())
     except (OSError, ValueError):
-        return Options()
+        # Only the un-migrated install falls through to the old location.
+        if path is not None:
+            return Options()
+        try:
+            raw = json.loads(Path(legacy).read_text())
+        except (OSError, ValueError):
+            return Options()
     if not isinstance(raw, dict):
         return Options()
     kwargs = {}

@@ -111,3 +111,21 @@
   padding: 12px;
 }
 .ai-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+/* ── the settings tab ────────────────────────────────────────────────────── */
+
+.ai-field { margin-bottom: 18px; }
+.ai-field label {
+  display: block;
+  font-size: var(--field-label-size);
+  color: var(--text-secondary);
+  margin-bottom: var(--field-label-gap);
+  font-weight: 600;
+}
+.ai-field input, .ai-field select { width: 100%; }
+.ai-field-hint {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.45;
+}

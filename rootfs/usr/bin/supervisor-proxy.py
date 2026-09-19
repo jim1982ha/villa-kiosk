@@ -2194,6 +2194,108 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     })
 
 
+# ── The AI layer's settings, set in the kiosk's own UI ─────────────────────
+# ⚠️ NOT SUPERVISOR OPTIONS, AND NOT BECAUSE FILES ARE NICER. Writing an add-on's
+# own options needs `hassio_api` plus a Supervisor role that can also START,
+# STOP and INSTALL add-ons. That is a large escalation for a suggest-only layer,
+# it is refused in the manifest, and a test pins the refusal. So these live in
+# this add-on's own /data, exactly like the shared device configuration and the
+# facility record, and the layer reads them from there.
+#
+# ⚠️ ONE PLACE, WHICH IS WHY THEY ARE NOT ALSO ADD-ON OPTIONS. They were both
+# for one release. Two editable copies of the same setting is the "one owner per
+# predicate" defect: whichever the operator changed, the other would silently
+# disagree, and neither screen could say which one the layer was using. The
+# kiosk's own passcodes stay in the add-on's Configuration page because they are
+# what gets you INTO this UI; everything the layer needs is set once you are in.
+AI_SETTINGS_FILE = "/data/ai-settings.json"
+AI_SETTINGS_MAX_BYTES = 64 * 1024
+#: Everything the layer reads, with the default it falls back to.
+AI_SETTINGS_FIELDS = {
+    "anthropic_api_key": "", "ha_mcp_url": "", "ha_mcp_secret": "",
+    "owner_target": "", "fm_target": "", "timezone": "",
+    "daily_usd_limit": 1.0, "model_fast": "claude-haiku-4-5",
+    "model_writing": "claude-opus-5", "ai_log_level": "info",
+}
+#: ⚠️ WRITE-ONLY. These never travel back to a browser — the GET reports only
+#: WHETHER each is set, the same posture as the profile passcodes, which are
+#: verified in this process and never rendered. A credential that round-trips
+#: through a wall-mounted tablet's DOM is a credential on the wall.
+AI_SECRET_FIELDS = ("anthropic_api_key", "ha_mcp_secret")
+
+
+def _read_ai_settings() -> dict:
+    try:
+        with open(AI_SETTINGS_FILE, encoding="utf-8") as fh:
+            stored = json.load(fh)
+    except (OSError, ValueError):
+        stored = {}
+    if not isinstance(stored, dict):
+        stored = {}
+    return {k: stored.get(k, d) for k, d in AI_SETTINGS_FIELDS.items()}
+
+
+async def ai_settings_get_handler(request: web.Request) -> web.Response:
+    """What the layer is configured with — minus the secrets themselves."""
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
+    current = _read_ai_settings()
+    out = {k: v for k, v in current.items() if k not in AI_SECRET_FIELDS}
+    for k in AI_SECRET_FIELDS:
+        out[f"{k}_set"] = bool(str(current.get(k, "")).strip())
+    return web.json_response(out)
+
+
+async def ai_settings_put_handler(request: web.Request) -> web.Response:
+    """Replace the layer's settings.
+
+    ⚠️ AN OMITTED SECRET KEEPS THE STORED ONE; AN EMPTY STRING CLEARS IT. The
+    browser never receives a key, so it cannot send one back — without this rule
+    every save from a screen that shows "key: set" would wipe the key it could
+    not see.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) != "owner":
+        return web.json_response({"error": "forbidden"}, status=403)
+    raw = await request.text()
+    if len(raw.encode()) > AI_SETTINGS_MAX_BYTES:
+        return web.json_response({"error": "too large"}, status=413)
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        return web.json_response({"error": "not JSON"}, status=400)
+    if not isinstance(body, dict):
+        return web.json_response({"error": "expected an object"}, status=400)
+
+    current = _read_ai_settings()
+    out = {}
+    for key, default in AI_SETTINGS_FIELDS.items():
+        if key in AI_SECRET_FIELDS and key not in body:
+            out[key] = current[key]
+            continue
+        value = body.get(key, default)
+        if isinstance(default, float):
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                return web.json_response(
+                    {"error": f"{key} must be a number"}, status=400)
+            if value < 0:
+                return web.json_response(
+                    {"error": f"{key} cannot be negative"}, status=400)
+        else:
+            value = str(value)
+            if len(value) > 2048:
+                return web.json_response({"error": f"{key} is too long"}, status=400)
+        out[key] = value
+    atomic_write(AI_SETTINGS_FILE,
+                 lambda fh: fh.write(json.dumps(out, indent=2, sort_keys=True).encode()))
+    return await ai_settings_get_handler(request)
+
+
 # ── The AI layer's Skills, edited from the kiosk ───────────────────────────
 # ⚠️ THE SAME CONTAINER, WHICH IS WHY THIS IS A FILE READ AND NOT AN API CALL.
 # The AI layer shipped first as a separate add-on, and reaching its Skills from
@@ -2387,6 +2489,8 @@ def main() -> None:
     app.router.add_post("/telemetry", telemetry_post_handler)
     app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)
+    app.router.add_get("/ai-settings", ai_settings_get_handler)
+    app.router.add_put("/ai-settings", ai_settings_put_handler)
     app.router.add_get("/ai-skills", ai_skills_list_handler)
     app.router.add_get("/ai-skills/{path:.*}", ai_skill_get_handler)
     app.router.add_put("/ai-skills/{path:.*}", ai_skill_put_handler)

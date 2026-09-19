@@ -372,6 +372,32 @@ for handler in ("ai_skills_list_handler", "ai_skill_get_handler",
        '_role_for(request) not in ("owner", "ops")' in body
        and "_authorized(request)" in body)
 
+# ── the AI settings, which hold a credential ────────────────────────────────
+print("\n  the AI layer's settings:")
+ck("  reading is owner/ops",
+   '_role_for(request) not in ("owner", "ops")' in _body_of("ai_settings_get_handler"))
+# ⚠️ WRITING IS OWNER ALONE. The facility manager maintains what the property
+# watches (Skills); the API key and the spend limit are the owner's.
+ck("  ...and WRITING is owner alone",
+   '_role_for(request) != "owner"' in _body_of("ai_settings_put_handler"))
+
+with tempfile.TemporaryDirectory() as tmp:
+    proxy.AI_SETTINGS_FILE = os.path.join(tmp, "ai-settings.json")
+    fresh = proxy._read_ai_settings()
+    ck("  an unset store reads as the declared defaults",
+       set(fresh) == set(proxy.AI_SETTINGS_FIELDS)
+       and fresh["anthropic_api_key"] == "")
+
+    # ⚠️ THE SECRETS MUST NEVER BE IN WHAT THE BROWSER RECEIVES. The GET builds
+    # its response from _read_ai_settings minus the secret fields; this pins the
+    # shape of that response rather than trusting the handler's prose.
+    body = _body_of("ai_settings_get_handler")
+    ck("  the GET strips the secrets from its response",
+       "k not in AI_SECRET_FIELDS" in body and '_set"] = bool' in body)
+    ck("  ...and the PUT keeps a stored secret the browser could not send back",
+       "if key in AI_SECRET_FIELDS and key not in body" in
+       _body_of("ai_settings_put_handler"))
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

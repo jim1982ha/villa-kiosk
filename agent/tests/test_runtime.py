@@ -366,3 +366,46 @@ def test_the_status_entity_is_published_as_soon_as_the_listener_is_live(tmp_path
     asyncio.run(Layer(world).stay_connected(attempts=1))
     # once on becoming ready, once after the connection dropped
     assert len(hass.published) == 2
+
+
+def test_a_setting_saved_in_the_kiosk_reaches_the_layer_without_a_restart(tmp_path):
+    """⚠️ THE SCREEN'S SAVE HAS TO MEAN SOMETHING. The kiosk writes the settings
+    file; nothing tells the layer. Without a re-read the operator pastes an API
+    key, sees "Saved", and the layer goes on reporting that it is missing — which
+    reads as a broken screen, not as a restart-required design."""
+    import asyncio
+    from agent.options import Options
+
+    l, hass = layer(tmp_path, options=Options())
+    saved = [Options(ha_mcp_url="http://gateway:9583", anthropic_api_key="k")]
+    l.reload = lambda: saved[0]
+    asyncio.run(l.start())
+    assert "ha_mcp_url" in hass.published[-1][2]["needs_configuring"]
+
+    asyncio.run(l.heartbeat(beats=1))
+    assert l.world.options.gateway_url == "http://gateway:9583"
+    assert "needs_configuring" not in hass.published[-1][2]
+
+
+def test_the_spend_limit_follows_the_setting_too(tmp_path):
+    """The meter is constructed from the limit; a changed limit that the meter
+    never hears about is a budget the operator cannot actually move."""
+    import asyncio
+    from agent.options import Options
+
+    l, _ = layer(tmp_path, options=Options(daily_usd_limit=1.0))
+    l.reload = lambda: Options(daily_usd_limit=7.5)
+    asyncio.run(l.heartbeat(beats=1))
+    assert l.world.meter.daily_usd_limit == 7.5
+
+
+def test_an_unchanged_settings_file_is_not_announced_every_beat(tmp_path, capsys):
+    """A heartbeat that logs 'settings changed' every five minutes is noise that
+    makes a real change invisible."""
+    import asyncio
+    from agent.options import Options
+
+    l, _ = layer(tmp_path, options=Options())
+    l.reload = lambda: Options()
+    asyncio.run(l.heartbeat(beats=3))
+    assert "settings changed" not in capsys.readouterr().out

@@ -1,3 +1,35 @@
+## 2.499.0
+
+**The AI layer's settings are in the kiosk now, and only there.** Settings →
+VESTA AI → Settings: the gateway address and secret, the API key, the spend
+limit, the two model names, who gets told, time zone and log level. They were
+add-on options as well for one release, and two editable copies of one setting
+is a defect rather than a convenience — whichever you changed, the other
+silently disagreed, and neither screen could tell you which one the layer was
+actually using. The profile passcodes stay on the add-on's Configuration page,
+because those are what get you INTO this screen.
+
+⚠️ **The two secrets are write-only.** The screen is told WHETHER a key is
+stored, never the key. Leave the field blank to keep what is there; type to
+replace it; clear it deliberately to remove it. A credential that round-trips
+through a wall-mounted tablet is a credential on the wall — the same posture the
+profile passcodes have always had.
+
+⚠️ **They are stored in this add-on, not written back to Home Assistant.**
+Setting an add-on's own options needs a Supervisor permission that can also
+start, stop and install add-ons. A suggest-only layer cannot justify that, the
+manifest refuses it, and a test pins the refusal.
+
+**A save takes effect without restarting anything** — the layer re-reads its
+settings on its own heartbeat. An add-on that has to be restarted to notice a
+pasted key is one whose screen appears not to work.
+
+**And the screen looks like the rest of the app now.** Same header, same tab
+strip outside the scrolling body, and the shared modal footer every other
+settings surface uses — so Save, Discard and the unsaved-changes prompt behave
+identically here. A settings screen that looks like a different application is
+one you have to learn twice.
+
 ## 2.498.0
 
 **The AI layer has a screen.** Settings → VESTA AI, for the Owner and the

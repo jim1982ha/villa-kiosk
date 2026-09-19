@@ -1,91 +1,63 @@
-"""The manifest an operator fills in and the dataclass the code reads.
+"""The two halves of the layer's settings, pinned to each other.
 
-⚠️ THE DEFECT THIS REPOSITORY HAS PRODUCED THIRTEEN TIMES, IN BOTH DIRECTIONS.
-Two halves, each correct on its own: an option declared in `config.yaml` that
-nothing reads is a setting that does nothing, and a field in `Options` that the
-manifest never declares is a setting nobody can reach. Neither half fails a
-type-check, neither shows up in a log, and both look right in review. So they
-are pinned to each other here.
+⚠️ THE SEAM MOVED, AND THE DEFECT DID NOT. These settings used to be add-on
+options and this file compared them to `villa-kiosk/config.yaml`. They are
+written by the kiosk's own proxy now and read by the layer, so the two halves
+are `supervisor-proxy.py`'s AI_SETTINGS_FIELDS and `agent/options.py`'s
+`Options` — one writes the file, the other reads it, and nothing type-checks
+across that boundary.
 
-`tests/addon-manifest.py` holds config.yaml, its schema and its help text in
-step; this is the fourth corner of that square — the code.
+⚠️ AND IT IS WORSE THAN BEFORE IF IT DRIFTS. A field the proxy writes that the
+layer does not read is a setting the operator fills in that does nothing; a
+field the layer reads that the proxy never writes silently takes its default
+forever. Both look right in review, neither fails a type-check, and this
+repository has produced that defect in both directions thirteen times.
 """
+import json
 import re
 from pathlib import Path
 
 from agent.options import OPTION_NAMES, Options, load_options
 
 ROOT = Path(__file__).resolve().parents[2]
+PROXY = ROOT / "rootfs" / "usr" / "bin" / "supervisor-proxy.py"
 CONFIG = ROOT / "villa-kiosk" / "config.yaml"
 
-
-def block(key: str) -> dict[str, str]:
-    """The `key:` mapping's immediate children. Same small parser as the gate —
-    the base image's python has no PyYAML and these blocks are flat."""
-    text = CONFIG.read_text()
-    m = re.search(rf"^{key}:\s*$\n((?:(?:[ \t].*)?\n)*)", text, re.M)
-    assert m, f"no `{key}:` block in vesta-ai/config.yaml"
-    out = {}
-    for line in m.group(1).splitlines():
-        child = re.match(r"^  (\w+):(.*)$", line)
-        if child:
-            out[child.group(1)] = child.group(2).strip()
-    return out
-
-
-#: The kiosk's own options, which the AI layer must never disturb.
+#: The kiosk's own options, which the AI work must never disturb.
 KIOSK_OPTIONS = ("guest_pin", "owner_pin", "ops_pin", "superadmin_pin",
                  "public_model_access", "evidence_retention_days",
                  "session_days", "telemetry_max_events", "pin_lockout_minutes")
 
 
-def test_every_option_the_code_reads_is_declared_in_the_manifest():
-    """A SUBSET, not the whole set: the kiosk owns the other half of this page."""
-    missing = set(OPTION_NAMES) - set(block("options"))
-    assert not missing, f"the code reads options nobody can set: {sorted(missing)}"
+def proxy_fields() -> dict[str, str]:
+    """AI_SETTINGS_FIELDS as {name: raw default}, read from the shipped file."""
+    src = PROXY.read_text()
+    m = re.search(r"^AI_SETTINGS_FIELDS = \{(.*?)^\}", src, re.S | re.M)
+    assert m, "no AI_SETTINGS_FIELDS in the proxy — this test is stale"
+    return dict(re.findall(r'"(\w+)":\s*("[^"]*"|[\d.]+)', m.group(1)))
 
 
-def test_the_schema_declares_every_one_of_them_too():
-    missing = set(OPTION_NAMES) - set(block("schema"))
-    assert not missing, f"no schema entry, so Supervisor will not persist: {sorted(missing)}"
-
-
-def test_the_KIOSK_options_are_untouched_by_any_of_this():
-    """⚠️ THE HALF THIS CHANGE COULD HAVE BROKEN. Merging the layer into the
-    kiosk's manifest put ten new fields next to the passcodes; losing one of
-    those would take the profile PINs with it."""
-    declared = set(block("options"))
-    for name in KIOSK_OPTIONS:
-        assert name in declared, f"the kiosk lost `{name}`"
-    assert set(block("schema")) >= set(KIOSK_OPTIONS)
-
-
-def test_nothing_in_the_manifest_is_read_by_NOBODY():
-    """The other direction: an option neither half reads is a setting that does
-    nothing, which is the defect this file exists for."""
-    unread = set(block("options")) - set(OPTION_NAMES) - set(KIOSK_OPTIONS)
-    assert not unread, f"declared but read by nothing: {sorted(unread)}"
+def proxy_secrets() -> tuple[str, ...]:
+    src = PROXY.read_text()
+    m = re.search(r"^AI_SECRET_FIELDS = \((.*?)\)", src, re.S | re.M)
+    assert m, "no AI_SECRET_FIELDS in the proxy"
+    return tuple(re.findall(r'"(\w+)"', m.group(1)))
 
 
 def test_the_parser_found_something_or_this_file_proves_nothing():
-    assert len(block("options")) >= 19
+    assert len(proxy_fields()) >= 10
 
 
-def test_the_two_secrets_are_declared_as_passwords():
-    """A key rendered as a plain text field is one shoulder-surfed off a wall."""
-    schema = block("schema")
-    assert schema["anthropic_api_key"].startswith("password")
-    assert schema["ha_mcp_secret"].startswith("password")
+def test_the_proxy_writes_exactly_what_the_layer_reads():
+    assert sorted(proxy_fields()) == sorted(OPTION_NAMES)
 
 
-def test_every_default_in_the_manifest_matches_the_default_in_the_code():
-    """⚠️ A DIVERGENT DEFAULT IS INVISIBLE. Supervisor writes its own default
-    into options.json, so the code's default is only ever seen on the very first
-    start — which is exactly when nobody is watching."""
-    declared = block("options")
+def test_the_defaults_agree_on_both_sides():
+    """⚠️ A DIVERGENT DEFAULT IS INVISIBLE. The proxy writes its default into
+    the file on the first save, so the layer's own default is only ever seen
+    before anyone opens the screen — which is exactly when nobody is looking."""
     code = Options()
-    # Only the layer's own half — the kiosk's defaults are the kiosk's business.
-    for name, raw in ((k, v) for k, v in declared.items() if k in OPTION_NAMES):
+    for name, raw in proxy_fields().items():
         expected = getattr(code, name)
         if isinstance(expected, float):
             assert float(raw) == expected, name
@@ -93,45 +65,93 @@ def test_every_default_in_the_manifest_matches_the_default_in_the_code():
             assert raw.strip('"') == str(expected), name
 
 
-def test_the_manifest_ships_no_seeded_value_for_a_target_or_an_address():
-    """The hard rule, as a test: nothing here may name one property."""
-    declared = block("options")
-    for name in ("owner_target", "fm_target", "ha_mcp_url", "ha_mcp_secret",
-                 "anthropic_api_key", "timezone"):
-        assert declared[name] in ('""', "''", ""), f"{name} ships a seeded value"
+def test_both_secrets_are_declared_secret_on_the_proxy_side():
+    """The two that must never travel back to a browser."""
+    assert sorted(proxy_secrets()) == ["anthropic_api_key", "ha_mcp_secret"]
 
 
-def test_loading_the_manifests_own_defaults_yields_the_code_defaults(tmp_path):
-    """The round trip an operator who changes nothing actually takes."""
-    import json
-    declared = {k: v.strip('"') for k, v in block("options").items()
-                if k in OPTION_NAMES}
-    declared["daily_usd_limit"] = float(declared["daily_usd_limit"])
-    p = tmp_path / "options.json"
-    p.write_text(json.dumps(declared))
+def test_the_layer_reads_what_the_proxy_would_actually_write(tmp_path):
+    """The round trip, through a real file rather than two declarations."""
+    written = {k: v.strip('"') for k, v in proxy_fields().items()}
+    written["daily_usd_limit"] = float(written["daily_usd_limit"])
+    p = tmp_path / "ai-settings.json"
+    p.write_text(json.dumps(written))
     assert load_options(p) == Options()
 
 
+def test_a_saved_setting_actually_reaches_the_layer(tmp_path):
+    """The whole point of the screen: what an operator types is what it uses."""
+    p = tmp_path / "ai-settings.json"
+    p.write_text(json.dumps({"ha_mcp_url": "http://gateway:9583",
+                             "anthropic_api_key": "sk-ant-typed-in-the-ui",
+                             "daily_usd_limit": 2.5}))
+    o = load_options(p)
+    assert o.gateway_url == "http://gateway:9583"
+    assert o.anthropic_api_key == "sk-ant-typed-in-the-ui"
+    assert o.daily_usd_limit == 2.5
+    assert o.missing() == []
+
+
+def test_an_install_configured_BEFORE_the_screen_existed_still_works(tmp_path):
+    """⚠️ THE MIGRATION, WHICH IS A REAL INSTALL AND NOT A HYPOTHETICAL. The
+    owner set these on the add-on page when that was the only way; a release
+    that quietly reverted them to empty would look like the screen broke."""
+    legacy = tmp_path / "options.json"
+    legacy.write_text(json.dumps({"ha_mcp_url": "http://old:9583"}))
+    # An EXPLICIT path never falls back — a caller that named a file meant it.
+    assert load_options(tmp_path / "does-not-exist.json", legacy=legacy).gateway_url == ""
+    # The default path does, which is the one the running add-on uses.
+    import agent.options as opts
+    before = opts.SETTINGS_PATH
+    try:
+        opts.SETTINGS_PATH = tmp_path / "absent.json"
+        assert load_options(legacy=legacy).gateway_url == "http://old:9583"
+    finally:
+        opts.SETTINGS_PATH = before
+
+
+# ── what the kiosk's own manifest must still be ────────────────────────────
+
+def block(key: str) -> set[str]:
+    """The `key:` mapping's immediate children in the kiosk's manifest.
+
+    ⚠️ PER BLOCK, NOT OVER THE WHOLE FILE. The first cut matched a bare
+    two-space-indented key anywhere, so `options:` and `schema:` were indistinguishable — deleting a
+    passcode from one left its twin in the other and the check still passed.
+    The mutation sweep found that; reading the file did not.
+    """
+    m = re.search(rf"^{key}:\s*$\n((?:(?:[ \t].*)?\n)*)", CONFIG.read_text(), re.M)
+    assert m, f"no `{key}:` block in the kiosk manifest"
+    return set(re.findall(r"^  (\w+):", m.group(1), re.M))
+
+
+def test_the_KIOSK_options_are_untouched_by_any_of_this():
+    """⚠️ THE HALF THIS CHANGE COULD HAVE BROKEN. Removing ten fields from the
+    manifest by pattern could take a passcode with it."""
+    options, schema = block("options"), block("schema")
+    for name in KIOSK_OPTIONS:
+        assert name in options, f"the kiosk lost option `{name}`"
+        assert name in schema, f"the kiosk lost schema entry `{name}`"
+
+
+def test_the_AI_settings_are_NOT_add_on_options_any_more():
+    """One place, not two: whichever an operator changed, the other disagreed."""
+    declared = block("options") | block("schema")
+    for name in OPTION_NAMES:
+        assert name not in declared, (
+            f"`{name}` is editable in two places again — the add-on page and "
+            f"the kiosk UI cannot both own it")
+
+
 def test_the_manifest_gives_the_owner_a_folder_they_can_edit():
-    """⚠️ TICKET 27 TELLS OWNERS TO PUT SKILLS IN 'the add-on's own config
-    folder, which appears in the file editor the owner already has' — and the
-    first manifest mapped no folder at all, so that folder did not exist. The
-    owner found it before any test did."""
     text = CONFIG.read_text()
-    assert re.search(r"^map:\s*$", text, re.M), "no `map:` block — the owner gets no folder"
-    assert re.search(r"^\s+- addon_config:rw\s*$", text, re.M), \
-        "the folder must be addon_config, and writable, or it does not appear in the file editor"
+    assert re.search(r"^map:\s*$", text, re.M), "no `map:` block — no Skills folder"
+    assert re.search(r"^\s+- addon_config:rw\s*$", text, re.M)
 
 
 def test_the_manifest_still_grants_NO_supervisor_privilege():
-    """⚠️ THE ESCALATION THE AI LAYER MUST NEVER COST. The kiosk legitimately
-    has ingress and a port; what it must not gain by carrying the layer is
-    `hassio_api` or a `hassio_role`, which would let a suggest-only component
-    start, stop and install add-ons.
-
-    Top-level keys, not a substring search: the first cut grepped raw text and
-    tripped on the word INGRESS inside a comment explaining it.
-    """
+    """⚠️ THE ESCALATION THE AI WORK MUST NEVER COST — and the reason the
+    settings live in /data rather than in Supervisor's own options."""
     keys = set(re.findall(r"^([a-z_]+):", CONFIG.read_text(), re.M))
     for forbidden in ("hassio_api", "hassio_role"):
         assert forbidden not in keys, f"`{forbidden}` must not be in this manifest"

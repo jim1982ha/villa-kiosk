@@ -19,7 +19,7 @@ from agent.gateway import Gateway
 from agent.hass import HomeAssistant
 from agent.listener import Listener
 from agent.meter import Meter
-from agent.options import OPTIONS_PATH, load_options
+from agent.options import SETTINGS_PATH, load_options
 from agent.runtime import Layer
 from agent.store import DATA_ROOT, Store
 from agent.wire import Wire, open_session
@@ -33,7 +33,8 @@ def read_version() -> str:
 
 
 async def run() -> int:
-    options = load_options(Path(os.environ.get("VESTA_AI_OPTIONS", OPTIONS_PATH)))
+    settings_path = Path(os.environ.get("VESTA_AI_OPTIONS", SETTINGS_PATH))
+    options = load_options(settings_path)
     # ⚠️ BEFORE ANYTHING PRINTS. `log_level` and `timezone` were options the
     # manifest declared, the help text explained and `Options` read, and that
     # nothing then honoured — two settings an operator could change with no
@@ -57,7 +58,10 @@ async def run() -> int:
         options=options,
         meter=Meter(daily_usd_limit=options.daily_usd_limit),
     )
-    layer = Layer(world, version=read_version())
+    layer = Layer(world, version=read_version(),
+                  # Re-read on each heartbeat, so a Save in the kiosk's
+                  # settings screen takes effect without a restart.
+                  reload=lambda: load_options(settings_path))
 
     stopping = asyncio.Event()
     loop = asyncio.get_running_loop()

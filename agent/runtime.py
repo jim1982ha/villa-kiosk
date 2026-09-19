@@ -6,11 +6,12 @@ on a fake villa with a fake clock and nothing sleeps.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Callable
 
 from agent import log
 from agent.hass import STATUS_OBJECT
 from agent.health import LinkState, overall
+from agent.options import Options
 from agent.world import World
 
 #: What Home Assistant shows when the add-on is not running.
@@ -48,8 +49,12 @@ STARTS_KEPT = 50
 class Layer:
     """The running add-on."""
 
-    def __init__(self, world: World, version: str = "0") -> None:
+    def __init__(self, world: World, version: str = "0",
+                 reload: "Callable[[], Options] | None" = None) -> None:
         self.world = world
+        #: How to re-read the settings the kiosk writes. None in tests that do
+        #: not care, which is why this is injected rather than imported.
+        self.reload = reload
         self.version = version
         self.events_seen = 0
         self.last_publish_error = ""
@@ -140,6 +145,7 @@ class Layer:
         n = 0
         while beats is None or n < beats:
             await self.world.clock.sleep(HEARTBEAT_SECONDS)
+            self.reload_settings()
             await self.publish_status()
             log.info(self.world.meter.line())
             n += 1
@@ -212,6 +218,23 @@ class Layer:
         self.entities_seen = len(rows)
         log.info(f"  the gateway answered with {len(rows)} entities")
         return self.entities_seen
+
+    def reload_settings(self) -> None:
+        """Pick up what the settings screen saved, without a restart.
+
+        ⚠️ AN ADD-ON THAT MUST BE RESTARTED TO NOTICE A PASTED API KEY IS ONE
+        WHOSE SCREEN APPEARS NOT TO WORK. The kiosk writes the file this reads;
+        nothing tells the layer, so it looks each beat. Cheap, and it makes the
+        screen's Save mean something within a heartbeat rather than never.
+        """
+        if self.reload is None:
+            return
+        fresh = self.reload()
+        if fresh == self.world.options:
+            return
+        object.__setattr__(self.world, "options", fresh)
+        self.world.meter.daily_usd_limit = fresh.daily_usd_limit
+        log.info(f"  settings changed: {fresh!r}")
 
     def record_start(self) -> None:
         """One row per start, in the add-on's own backed-up volume."""
