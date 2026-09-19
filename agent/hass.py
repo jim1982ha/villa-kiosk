@@ -37,6 +37,10 @@ class HomeAssistant:
         return Health(gateway=self._gateway.link, listener=self._listener.link)
 
     # ── lifecycle ──────────────────────────────────────────────────────────
+    def reconfigure(self, url: str, secret: str) -> bool:
+        """Point the gateway at a newly saved address. Returns whether it moved."""
+        return self._gateway.reconfigure(url, secret)
+
     async def connect_gateway(self) -> Link:
         return await self._gateway.connect()
 

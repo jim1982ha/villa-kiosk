@@ -32,6 +32,16 @@ class Hass(Protocol):
         """Assert one of the layer's OWN status entities, over the direct
         connection. This is the only write the layer makes anywhere."""
 
+    def reconfigure(self, url: str, secret: str) -> bool:
+        """Point the gateway at a newly saved address. True if it moved.
+
+        ⚠️ ON THE PORT, BECAUSE APPLYING A SETTING IS NOT OPTIONAL. The layer
+        re-reads its settings on every heartbeat, and for one release that
+        updated the options object and nothing else — so a saved gateway
+        address never reached the thing that connects, and the screen showed a
+        configured address beside a connection insisting there was none.
+        """
+
     def health(self) -> Health:
         """Both connections' states, separately."""
 

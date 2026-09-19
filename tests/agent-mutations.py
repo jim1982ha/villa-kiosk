@@ -125,8 +125,15 @@ MUTATIONS = [
     ("meter: a model call prints nothing",
      "agent/meter.py", '        log.info(f"  model call: {usage.model} in={usage.input_tokens} "',
      '        _ = (f"  model call: {usage.model} in={usage.input_tokens} "'),
+    # ⚠️ ANCHORED TO `start`, BECAUSE THERE ARE TWO CALLS NOW. This read
+    # `await self.count_entities()` alone; when the heartbeat gained a
+    # reconnect path the FIRST occurrence in the file stopped being the one in
+    # start(), so the mutation broke a different line and the sweep reported
+    # itself as unnoticed rather than reporting a passing suite.
     ("runtime: the property is never enumerated at start",
-     "agent/runtime.py", "        await self.count_entities()", "        pass"),
+     "agent/runtime.py",
+     "        await self.world.hass.connect_gateway()\n        await self.count_entities()",
+     "        await self.world.hass.connect_gateway()"),
     ("runtime: a gateway that cannot be asked reports ZERO entities",
      "agent/runtime.py", "            self.entities_seen = None\n            log.warning(",
      "            self.entities_seen = 0\n            log.warning("),
@@ -139,6 +146,17 @@ MUTATIONS = [
     ("fakes: the stubs stop matching the ports they define",
      "agent/fakes.py", "    async def send(self, target: str, title: str, body: str) -> None:",
      "    def send(self, target: str, title: str, body: str) -> None:"),
+    ("gateway: a saved address is stored but never applied",
+     "agent/runtime.py", "        moved = self.world.hass.reconfigure(fresh.ha_mcp_url, str(fresh.ha_mcp_secret))",
+     "        moved = False"),
+    ("gateway: a re-pointed gateway is never reconnected",
+     "agent/runtime.py", "                await self.world.hass.connect_gateway()\n                await self.count_entities()",
+     "                pass"),
+    ("gateway: a new address inherits the old server's tools",
+     "agent/gateway.py", "        self._tools = {}\n        self._link = Link(LinkState.UNKNOWN,",
+     "        self._link = Link(LinkState.UNKNOWN,"),
+    ("gateway: an unchanged address drops the link every beat",
+     "agent/gateway.py", "        if fresh == self.url:\n            return False", "        if False:\n            return False"),
     ("skills: the starter set is re-copied on every restart",
      "agent/workspace.py", "    if marker.exists() or not shipped.is_dir():",
      "    if not shipped.is_dir():"),

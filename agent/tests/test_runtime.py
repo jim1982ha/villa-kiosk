@@ -409,3 +409,48 @@ def test_an_unchanged_settings_file_is_not_announced_every_beat(tmp_path, capsys
     l.reload = lambda: Options()
     asyncio.run(l.heartbeat(beats=3))
     assert "settings changed" not in capsys.readouterr().out
+
+
+class ReconfigurableHass(StartableHass):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.addresses: list[tuple[str, str]] = []
+        self.connects = 0
+
+    def reconfigure(self, url, secret):
+        self.addresses.append((url, secret))
+        return bool(url)
+
+    async def connect_gateway(self):
+        self.connects += 1
+        return self._health.gateway
+
+
+def test_a_saved_address_is_APPLIED_not_merely_stored(tmp_path):
+    """⚠️ THE OWNER SAW A SAVED ADDRESS BESIDE 'no ha-mcp address is
+    configured'. Re-reading the settings is not the same as applying them: the
+    gateway was built once at startup and nothing ever told it."""
+    import asyncio
+    from agent.options import Options
+
+    hass = ReconfigurableHass()
+    world = World.for_testing(tmp_path, hass=hass, clock=FakeClock(), options=Options())
+    l = Layer(world)
+    l.reload = lambda: Options(ha_mcp_url="http://gateway:9583", ha_mcp_secret="s")
+    asyncio.run(l.heartbeat(beats=1))
+    assert hass.addresses == [("http://gateway:9583", "s")]
+    assert hass.connects == 1, "the gateway was re-pointed but never reconnected"
+
+
+def test_an_unchanged_address_does_not_reconnect_every_beat(tmp_path):
+    import asyncio
+    from agent.options import Options
+
+    hass = ReconfigurableHass()
+    hass.reconfigure = lambda url, secret: False
+    world = World.for_testing(tmp_path, hass=hass, clock=FakeClock(),
+                              options=Options(ha_mcp_url="http://g"))
+    l = Layer(world)
+    l.reload = lambda: Options(ha_mcp_url="http://g")
+    asyncio.run(l.heartbeat(beats=3))
+    assert hass.connects == 0

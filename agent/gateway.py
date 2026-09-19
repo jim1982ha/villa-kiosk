@@ -74,6 +74,26 @@ class Gateway:
         self._tools: dict[str, dict[str, Any]] = {}
         self._link = Link(LinkState.UNKNOWN, "not connected yet")
 
+    def reconfigure(self, url: str, secret: str) -> bool:
+        """Point at a different ha-mcp. Returns whether anything changed.
+
+        ⚠️ WITHOUT THIS, A SAVED ADDRESS NEVER ARRIVED. The settings screen
+        writes the file, the layer re-reads it on its heartbeat — and this
+        object was built once at startup from the values that existed then, so
+        it went on reporting "no ha-mcp address is configured" forever while the
+        operator looked at an address they had definitely saved. Re-reading the
+        settings is not the same as applying them.
+        """
+        fresh = endpoint(url, secret)
+        if fresh == self.url:
+            return False
+        self.url = fresh
+        # A different server is a different tool catalogue, and ADR-0012 is
+        # explicit that it must never be carried across.
+        self._tools = {}
+        self._link = Link(LinkState.UNKNOWN, "address changed — not connected yet")
+        return True
+
     # ── state ──────────────────────────────────────────────────────────────
     @property
     def link(self) -> Link:

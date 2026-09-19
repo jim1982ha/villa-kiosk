@@ -61,6 +61,9 @@ class Layer:
         #: None until the villa has been enumerated once — which is NOT the same
         #: as zero, and must never be published as zero.
         self.entities_seen: int | None = None
+        #: Set when a settings change moved the gateway, so the next beat
+        #: connects to it rather than waiting for the socket to drop.
+        self.gateway_needs_reconnect = False
 
     # ── what an operator sees ──────────────────────────────────────────────
     def status_attributes(self) -> dict[str, Any]:
@@ -146,6 +149,10 @@ class Layer:
         while beats is None or n < beats:
             await self.world.clock.sleep(HEARTBEAT_SECONDS)
             self.reload_settings()
+            if self.gateway_needs_reconnect:
+                self.gateway_needs_reconnect = False
+                await self.world.hass.connect_gateway()
+                await self.count_entities()
             await self.publish_status()
             log.info(self.world.meter.line())
             n += 1
@@ -234,7 +241,15 @@ class Layer:
             return
         object.__setattr__(self.world, "options", fresh)
         self.world.meter.daily_usd_limit = fresh.daily_usd_limit
+        # ⚠️ APPLY, NOT JUST STORE. Holding the new options while the gateway
+        # keeps the address it was built with is how a saved address never
+        # arrives — and the screen shows the operator a setting they can see
+        # alongside a connection insisting it is unset.
+        moved = self.world.hass.reconfigure(fresh.ha_mcp_url, str(fresh.ha_mcp_secret))
         log.info(f"  settings changed: {fresh!r}")
+        if moved:
+            self.gateway_needs_reconnect = True
+            log.info("  the gateway address changed — reconnecting")
 
     def record_start(self) -> None:
         """One row per start, in the add-on's own backed-up volume."""

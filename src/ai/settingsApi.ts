@@ -54,3 +54,39 @@ export const saveAiSettings = async (draft: AiSettingsDraft): Promise<AiSettings
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(draft),
   }));
+
+
+export interface GatewayTest {
+  ok: boolean;
+  detail: string;
+  /** The URL actually called — the address and the secret, composed. Shown
+   *  because "which URL did it try" is the first question when it fails. */
+  endpoint?: string;
+  tools?: number;
+  /** How many entities it could read. Present only when the read succeeded. */
+  entities?: number;
+  error?: string;
+}
+
+/** Try the ha-mcp handshake now.
+ *
+ *  ⚠️ IT TESTS THE DRAFT, NOT ONLY WHAT IS SAVED. Checking an address before
+ *  committing it is the whole point of a test button; anything omitted here
+ *  falls back to the stored value, which is how a secret this screen never
+ *  receives can still be part of the test. */
+export async function testGateway(draft: { ha_mcp_url?: string; ha_mcp_secret?: string }):
+  Promise<GatewayTest> {
+  try {
+    const r = await fetch(ingressPath("ai-test-gateway"), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+    const body = (await r.json()) as GatewayTest;
+    if (!r.ok) return { ok: false, detail: body.error ?? `HTTP ${r.status}` };
+    return body;
+  } catch (e) {
+    return { ok: false, detail: e instanceof Error ? e.message : String(e) };
+  }
+}

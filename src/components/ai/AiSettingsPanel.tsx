@@ -9,12 +9,13 @@
 // stay on the add-on page because they are what gets you INTO this screen.
 
 import { useEffect, useState } from "react";
+import { Plug } from "lucide-react";
 import {
-  EMPTY_AI_SETTINGS, fetchAiSettings, saveAiSettings,
-  type AiSettings, type AiSettingsDraft,
+  EMPTY_AI_SETTINGS, fetchAiSettings, saveAiSettings, testGateway,
+  type AiSettings, type AiSettingsDraft, type GatewayTest,
 } from "@/ai/settingsApi";
 import { MODEL_CHOICES } from "@/ai/models";
-import { fetchNotifyTargets } from "@/ai/notifyTargets";
+import { fetchNotifyTargets, type NotifyTarget } from "@/ai/notifyTargets";
 
 const LOG_LEVELS = ["trace", "debug", "info", "notice", "warning", "error", "fatal"];
 
@@ -130,7 +131,9 @@ export default function AiSettingsPanel({ onState }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [targets, setTargets] = useState<string[]>([]);
+  const [targets, setTargets] = useState<NotifyTarget[]>([]);
+  const [test, setTest] = useState<GatewayTest | null>(null);
+  const [testing, setTesting] = useState(false);
   const [targetsError, setTargetsError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -242,6 +245,35 @@ export default function AiSettingsPanel({ onState }: {
               this empty."
       />
 
+      {/* ⚠️ A TEST, NOT A GUESS. Until this existed the only way to know whether
+          an address worked was to save it, wait for the layer's next heartbeat,
+          and read a colour on another tab. It runs the LAYER'S OWN client, so a
+          pass here cannot mean something different from what the layer does. */}
+      <div className="ai-test-row">
+        <button
+          type="button" className="btn" disabled={testing || !draft.ha_mcp_url}
+          onClick={async () => {
+            setTesting(true);
+            setTest(null);
+            setTest(await testGateway({
+              ha_mcp_url: draft.ha_mcp_url,
+              ...(secret ? { ha_mcp_secret: secret } : {}),
+            }));
+            setTesting(false);
+          }}
+        >
+          <Plug size={16} /> {testing ? "Testing…" : "Test connection"}
+        </button>
+        {test && (
+          <div className={`ai-test-result ${test.ok ? "ok" : "fail"}`} role="status">
+            {test.ok
+              ? `Connected — ${test.tools} tools, ${test.entities} entities on the property.`
+              : `Not connected — ${test.detail}`}
+            {test.endpoint && <div className="ai-test-endpoint">tried {test.endpoint}</div>}
+          </div>
+        )}
+      </div>
+
       <div className="settings-section-title">The model</div>
       <SecretField
         id="ai-key" label="Anthropic API key" isSet={stored.anthropic_api_key_set}
@@ -276,18 +308,20 @@ export default function AiSettingsPanel({ onState }: {
       <Picker
         id="ai-owner-target" label="Owner notify target" value={draft.owner_target}
         onChange={(v) => set("owner_target", v)}
-        options={targets.map((id) => ({ id, label: id }))}
+        options={targets}
         empty={targetsError ? `Could not read the list (${targetsError}).` : undefined}
-        placeholder="a notify service"
-        hint="Which Home Assistant notify service reaches the owner. Empty means
-              nothing is sent to them."
+        placeholder="a notify service or entity"
+        hint="Who the layer tells when something is the owner's to decide. This
+              list is read from your own Home Assistant — a Telegram chat or a
+              phone appears here under its own name. Empty means nothing is sent
+              to them."
       />
       <Picker
         id="ai-fm-target" label="Facility manager notify target" value={draft.fm_target}
         onChange={(v) => set("fm_target", v)}
-        options={targets.map((id) => ({ id, label: id }))}
+        options={targets}
         empty={targetsError ? `Could not read the list (${targetsError}).` : undefined}
-        placeholder="a notify service"
+        placeholder="a notify service or entity"
         hint="Whoever looks after the property day to day. Empty means nothing is
               sent to them."
       />

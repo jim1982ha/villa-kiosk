@@ -31,6 +31,7 @@ class FakeHass:
         self._health = health or Health(Link(LinkState.UP), Link(LinkState.UP))
         self.published: list[tuple[str, str, dict[str, Any]]] = []
         self.asked: list[str] = []
+        self.addresses: list[tuple[str, str]] = []
 
     async def entities(self) -> list[dict[str, Any]]:
         self.asked.append("entities")
@@ -39,6 +40,10 @@ class FakeHass:
     async def publish(self, object_id: str, state: str,
                       attributes: dict[str, Any]) -> None:
         self.published.append((object_id, state, dict(attributes)))
+
+    def reconfigure(self, url: str, secret: str) -> bool:
+        self.addresses.append((url, secret))
+        return bool(url)
 
     def health(self) -> Health:
         return self._health

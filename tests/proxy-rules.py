@@ -398,6 +398,35 @@ with tempfile.TemporaryDirectory() as tmp:
        "if key in AI_SECRET_FIELDS and key not in body" in
        _body_of("ai_settings_put_handler"))
 
+# ── the two lookups the settings screen leans on ───────────────────────────
+print("\n  the settings screen's lookups:")
+for handler in ("ai_notify_targets_handler", "ai_test_gateway_handler"):
+    body = _body_of(handler)
+    ck(f"  {handler} gates on owner/ops",
+       '_role_for(request) not in ("owner", "ops")' in body
+       and "_authorized(request)" in body)
+
+# ⚠️ BOTH NOTIFY MECHANISMS, AND THE FIRST CUT HAD ONE. Home Assistant exposes
+# legacy notify SERVICES and modern notify ENTITIES; a Telegram chat is the
+# entity kind, so a list built from services alone offered the owner everything
+# except the two targets they wanted — which is worse than no list, because it
+# looks complete.
+targets = _body_of("ai_notify_targets_handler")
+ck("  the target list reads SERVICES", "/core/api/services" in targets)
+ck("  ...and ENTITIES too", "/core/api/states" in targets)
+ck("  ...and says which kind each is", '"kind": "entity"' in targets
+   and '"kind": "service"' in targets)
+
+# ⚠️ THE TEST BUTTON USES THE LAYER'S OWN CLIENT. A second implementation of the
+# handshake could pass while the layer fails, which is worse than no button.
+test = _body_of("ai_test_gateway_handler")
+ck("  the connection test imports the layer's Gateway",
+   "_load_gateway()" in test)
+ck("  ...and reads the property, not only the handshake",
+   "gateway.entities()" in test)
+ck("  ...and falls back to the STORED secret the browser never sees",
+   '_read_ai_settings()' in test and 'stored["ha_mcp_secret"]' in test)
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

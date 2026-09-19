@@ -169,3 +169,39 @@ async def test_a_server_offering_no_enumeration_tool_REFUSES_too():
     await g.connect()
     with pytest.raises(GatewayError, match="cannot enumerate"):
         await g.entities()
+
+
+# ── a saved address must actually arrive ───────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_a_new_address_replaces_the_old_one():
+    """⚠️ THE DEFECT THE OWNER FOUND. The settings screen wrote the address, the
+    layer re-read it, and this object went on holding the one it was built with
+    — so the screen showed a saved address beside a connection insisting none
+    was configured."""
+    g = Gateway("", "", transport_for({"initialize": OK, "tools/list": TOOLS}))
+    assert (await g.connect()).state is LinkState.DOWN
+    assert g.reconfigure("http://h", "s") is True
+    assert g.url == "http://h/s"
+    assert (await g.connect()).state is LinkState.UP
+
+
+@pytest.mark.asyncio
+async def test_reconfiguring_to_the_same_address_changes_nothing():
+    """A heartbeat that reconnects every five minutes for no reason is churn."""
+    g = Gateway("http://h", "s", transport_for({"initialize": OK, "tools/list": TOOLS}))
+    await g.connect()
+    assert g.reconfigure("http://h", "s") is False
+    assert g.link.state is LinkState.UP, "an unchanged address dropped the link"
+
+
+@pytest.mark.asyncio
+async def test_a_NEW_server_does_not_inherit_the_old_ones_tools():
+    """ADR-0012 forbids carrying a tool catalogue across a reconnect; pointing
+    at a different server is the strongest case of that."""
+    g = Gateway("http://a", "s", transport_for({"initialize": OK, "tools/list": TOOLS}))
+    await g.connect()
+    assert g.tools
+    g.reconfigure("http://b", "s")
+    assert g.tools == (), "the new server inherited the old one's tools"
+    assert g.link.state is LinkState.UNKNOWN

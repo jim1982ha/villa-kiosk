@@ -176,7 +176,8 @@ export default defineConfig(({ command }) => {
               // this list and the proxy's routes disagree.
               ["/core", "/auth", "/addon-config", "/model", "/model-upload",
                "/device-config", "/fm-data", "/fm-evidence", "/telemetry",
-               "/ai-skills", "/ai-settings", "/ai-notify-targets"].map((p) => [
+               "/ai-skills", "/ai-settings", "/ai-notify-targets",
+               "/ai-test-gateway"].map((p) => [
                 p,
                 {
                   target: process.env.VITE_DEV_PROXY,

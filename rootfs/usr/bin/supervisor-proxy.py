@@ -101,6 +101,7 @@ import json
 import os
 import re
 import secrets
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -2235,6 +2236,98 @@ def _read_ai_settings() -> dict:
     return {k: stored.get(k, d) for k, d in AI_SETTINGS_FIELDS.items()}
 
 
+#: Where the AI layer's own modules live in the image. Importing them is how
+#: the connection test speaks EXACTLY the dialect the layer speaks.
+AI_LAYER_PATH = "/usr/lib/vesta"
+
+
+def _load_gateway():
+    """The layer's own ha-mcp client, or None when it is not in this image.
+
+    ⚠️ THE REAL CLIENT, NOT A SECOND IMPLEMENTATION OF THE HANDSHAKE. A test
+    button that passes while the layer fails is worse than no button: it tells
+    the operator the problem is elsewhere. Both halves live in this image, so
+    the test uses the layer's `Gateway` verbatim — if the handshake changes,
+    the test changes with it because it IS the handshake.
+
+    Returns None on a build without the layer (the stable channel) rather than
+    failing to import, so this file stays loadable everywhere it is tested.
+    """
+    try:
+        if AI_LAYER_PATH not in sys.path:
+            sys.path.insert(0, AI_LAYER_PATH)
+        from agent.gateway import Gateway  # noqa: PLC0415
+        return Gateway
+    except Exception:
+        return None
+
+
+async def ai_test_gateway_handler(request: web.Request) -> web.Response:
+    """Try the ha-mcp handshake now, and say exactly what happened.
+
+    ⚠️ IT TESTS WHAT THE OPERATOR IS LOOKING AT, not only what is stored. An
+    address typed but not yet saved is precisely the thing somebody wants to
+    check, so the body may carry a draft; anything it omits falls back to the
+    stored value, which is the only way a secret the screen never receives can
+    be part of the test.
+    """
+    if not _authorized(request):
+        return _unauthorized()
+    if _role_for(request) not in ("owner", "ops"):
+        return web.json_response({"error": "forbidden"}, status=403)
+    try:
+        draft = json.loads(await request.text() or "{}")
+    except ValueError:
+        draft = {}
+    if not isinstance(draft, dict):
+        draft = {}
+    stored = _read_ai_settings()
+    url = str(draft.get("ha_mcp_url") or stored["ha_mcp_url"]).strip()
+    secret = str(draft.get("ha_mcp_secret") or stored["ha_mcp_secret"]).strip()
+    if not url:
+        return web.json_response({"ok": False, "detail": "no address to test"})
+
+    Gateway = _load_gateway()
+    if Gateway is None:
+        return web.json_response(
+            {"ok": False, "detail": "this build does not carry the AI layer"})
+
+    session: ClientSession = request.app["session"]
+
+    async def transport(endpoint_url: str, body: dict) -> dict:
+        async with session.post(
+            endpoint_url, json=body,
+            headers={"Content-Type": "application/json",
+                     "Accept": "application/json, text/event-stream"},
+            timeout=ClientTimeout(total=15),
+        ) as resp:
+            text = await resp.text()
+        if resp.status >= 400:
+            raise RuntimeError(f"the gateway answered HTTP {resp.status}")
+        text = text.strip()
+        if text.startswith("data:"):
+            payloads = [ln[5:].strip() for ln in text.splitlines() if ln.startswith("data:")]
+            text = payloads[-1] if payloads else ""
+        return json.loads(text)
+
+    gateway = Gateway(url, secret, transport)
+    link = await gateway.connect()
+    ok = link.state.value == "up"
+    out = {"ok": ok, "detail": link.detail, "endpoint": gateway.url,
+           "tools": len(gateway.tools)}
+    if ok:
+        # ⚠️ AND IT READS THE PROPERTY, because a handshake proves the address
+        # and the secret and nothing else. "It connected but cannot enumerate"
+        # is a real state — the tool set moves in minor releases — and it is the
+        # state that matters to this layer.
+        try:
+            out["entities"] = len(await gateway.entities())
+        except Exception as exc:
+            out["ok"] = False
+            out["detail"] = f"connected, but could not read the property: {exc}"
+    return web.json_response(out)
+
+
 async def ai_notify_targets_handler(request: web.Request) -> web.Response:
     """The notify services this Home Assistant actually has.
 
@@ -2252,29 +2345,64 @@ async def ai_notify_targets_handler(request: web.Request) -> web.Response:
         return _unauthorized()
     if _role_for(request) not in ("owner", "ops"):
         return web.json_response({"error": "forbidden"}, status=403)
+    session: ClientSession = request.app["session"]
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    targets: list[dict] = []
     try:
-        session: ClientSession = request.app["session"]
+        # 1. Legacy notify SERVICES — `notify.<name>`, called with {message}.
         async with session.get(
-            f"http://{SUPERVISOR}/core/api/services",
-            headers={"Authorization": f"Bearer {TOKEN}"},
+            f"http://{SUPERVISOR}/core/api/services", headers=headers,
         ) as resp:
             if resp.status >= 400:
                 return web.json_response(
                     {"targets": [], "error": f"Home Assistant answered {resp.status}"})
             catalogue = await resp.json()
+        for entry in catalogue if isinstance(catalogue, list) else []:
+            if not isinstance(entry, dict) or entry.get("domain") != "notify":
+                continue
+            for name in sorted(entry.get("services", {})):
+                if name in ("send_message",):
+                    # Not a target — it is how an ENTITY target below is called.
+                    continue
+                targets.append({"id": f"notify.{name}", "label": f"notify.{name}",
+                                "kind": "service"})
+
+        # 2. Notify ENTITIES — `notify.<entity>`, called through
+        #    `notify.send_message` with an entity_id.
+        #
+        # ⚠️ BOTH, AND THE FIRST CUT HAD ONLY SERVICES. Home Assistant has two
+        # notify mechanisms and the modern one is an ENTITY platform: a Telegram
+        # chat, for instance, appears as `notify.<something>` in the entity
+        # registry and NOT in the service list at all. The owner's own targets
+        # were the entity kind, so the dropdown offered everything except the
+        # two things they actually wanted — which is worse than no dropdown,
+        # because it looks complete.
+        async with session.get(
+            f"http://{SUPERVISOR}/core/api/states", headers=headers,
+        ) as resp:
+            states = await resp.json() if resp.status < 400 else []
+        for state in states if isinstance(states, list) else []:
+            if not isinstance(state, dict):
+                continue
+            entity_id = str(state.get("entity_id", ""))
+            if not entity_id.startswith("notify."):
+                continue
+            attrs = state.get("attributes") or {}
+            name = str(attrs.get("friendly_name") or "").strip()
+            targets.append({
+                "id": entity_id,
+                # The friendly name is what a person recognises; the id is what
+                # makes two similarly-named chats distinguishable. Both.
+                "label": f"{name} ({entity_id})" if name else entity_id,
+                "kind": "entity",
+            })
     except Exception as exc:
-        # ⚠️ AN EMPTY LIST PLUS A REASON, NOT A 500. The screen must still let
-        # an operator type a target when this lookup is unavailable.
-        return web.json_response({"targets": [], "error": f"{type(exc).__name__}: {exc}"})
-    targets = []
-    for entry in catalogue if isinstance(catalogue, list) else []:
-        if not isinstance(entry, dict) or entry.get("domain") != "notify":
-            continue
-        for name in sorted(entry.get("services", {})):
-            # `notify.notify` and `notify.persistent_notification` are real and
-            # useful; nothing is filtered out, because which one reaches a given
-            # person is the operator's knowledge, not ours.
-            targets.append(f"notify.{name}")
+        # ⚠️ WHAT WAS FOUND SO FAR, PLUS A REASON — not a 500 and not a silent
+        # empty list. The screen must still let an operator type a target when
+        # half of this lookup could not run.
+        return web.json_response({"targets": targets,
+                                  "error": f"{type(exc).__name__}: {exc}"})
+    targets.sort(key=lambda t: (t["kind"] != "entity", t["label"].lower()))
     return web.json_response({"targets": targets})
 
 
@@ -2532,6 +2660,7 @@ def main() -> None:
     app.router.add_post("/telemetry", telemetry_post_handler)
     app.router.add_get("/telemetry", telemetry_get_handler)
     app.router.add_put("/device-config", device_config_put_handler)
+    app.router.add_post("/ai-test-gateway", ai_test_gateway_handler)
     app.router.add_get("/ai-notify-targets", ai_notify_targets_handler)
     app.router.add_get("/ai-settings", ai_settings_get_handler)
     app.router.add_put("/ai-settings", ai_settings_put_handler)
