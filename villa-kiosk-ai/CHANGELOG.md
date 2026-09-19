@@ -1,3 +1,26 @@
+## 2.497.1
+
+**One add-on now, not two.** The AI layer shipped this morning as a separate
+headless add-on beside this one, and the owner's verdict on installing it was
+plain: one add-on, the baseline kiosk plus the layer, with the screens. So the
+layer is a second service inside this image, its ten settings are on this
+add-on's own Configuration page next to the profile passcodes, and the separate
+`VESTA AI Layer` entry is gone from the store.
+
+Nothing about the dashboard changes. This is byte-for-byte the kiosk that
+`main` builds, with a Python service running beside nginx and a folder —
+`/addon_configs/villa_kiosk_ai/` — that appears in the File editor and Studio
+Code Server for the Skills that arrive in a later release.
+
+⚠️ **The stable add-on cannot pick any of this up by accident.** `main` and
+`dev2` carry no `agent/` tree at all, so the line in the Dockerfile that copies
+it in has nothing to copy there. What was a rule somebody had to remember is
+now a fact about the branches.
+
+The AI layer's settings are empty by default and it does nothing until you fill
+in the ha-mcp address. Until then it starts, reports its own health as a sensor,
+and says what it is waiting for.
+
 ## 2.497.0
 
 **This branch publishes a kiosk again, as VESTA (ai).** Until now branch `ai`

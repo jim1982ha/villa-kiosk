@@ -10,6 +10,62 @@
 # "what do I put in this box", not "how is it implemented". The long-form
 # reasoning stays in config.yaml's comments and DOCS.md.
 configuration:
+  anthropic_api_key:
+    name: Anthropic API key
+    description: >-
+      The credential the AI layer reasons with. Leave EMPTY and the add-on still
+      runs the dashboard and still reports the layer's health — it simply does
+      not think.
+  ha_mcp_url:
+    name: ha-mcp address
+    description: >-
+      The address of the ha-mcp add-on on your own network, e.g.
+      http://<its-slug>:9583 — everything the AI layer ASKS about the property
+      goes through it. Paste it rather than expecting discovery: finding it
+      automatically would need a permission that can also start, stop and
+      install add-ons. Set auto_update to false on that add-on.
+  ha_mcp_secret:
+    name: ha-mcp secret
+    description: >-
+      The shared secret from the ha-mcp add-on's own configuration. It is used
+      as a path on the address above, so if the address you pasted already ends
+      with it you can leave this empty.
+  owner_target:
+    name: Owner notify target
+    description: >-
+      Which Home Assistant notify service reaches the owner, e.g.
+      notify.mobile_app_<device>. Leave empty and nothing is sent to an owner.
+  fm_target:
+    name: Facility manager notify target
+    description: >-
+      Which Home Assistant notify service reaches whoever looks after the
+      property day to day. Leave empty and nothing is sent to them.
+  timezone:
+    name: Time zone
+    description: >-
+      Leave EMPTY to use whatever Home Assistant is set to, which is almost
+      always what you want. Set one only to override it.
+  daily_usd_limit:
+    name: Daily AI spend limit (USD)
+    description: >-
+      The most the AI layer may spend on the model in one day. 0 means NO limit,
+      not "never spend". The figure it reports is measured from its own token
+      meter, never estimated.
+  model_fast:
+    name: Model for routine work
+    description: >-
+      The cheaper, quicker model the AI layer uses for routine judgement. Leave
+      the default unless you have a reason.
+  model_writing:
+    name: Model for writing
+    description: >-
+      The more capable model used when something has to be explained to a
+      person. Leave the default unless you have a reason.
+  ai_log_level:
+    name: AI layer log level
+    description: >-
+      How much the AI layer writes into this add-on's log. Raise it to debug
+      while chasing a problem; info is right the rest of the time.
   guest_pin:
     name: Guest passcode (4 digits)
     description: >-
