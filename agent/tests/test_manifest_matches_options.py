@@ -16,7 +16,7 @@ from pathlib import Path
 from agent.options import OPTION_NAMES, Options, load_options
 
 ROOT = Path(__file__).resolve().parents[2]
-CONFIG = ROOT / "vesta-ai" / "config.yaml"
+CONFIG = ROOT / "villa-kiosk" / "config.yaml"
 
 
 def block(key: str) -> dict[str, str]:
@@ -33,16 +33,42 @@ def block(key: str) -> dict[str, str]:
     return out
 
 
-def test_the_manifest_declares_exactly_what_the_code_reads():
-    assert sorted(block("options")) == sorted(OPTION_NAMES)
+#: The kiosk's own options, which the AI layer must never disturb.
+KIOSK_OPTIONS = ("guest_pin", "owner_pin", "ops_pin", "superadmin_pin",
+                 "public_model_access", "evidence_retention_days",
+                 "session_days", "telemetry_max_events", "pin_lockout_minutes")
 
 
-def test_the_schema_declares_exactly_the_same_set():
-    assert sorted(block("schema")) == sorted(OPTION_NAMES)
+def test_every_option_the_code_reads_is_declared_in_the_manifest():
+    """A SUBSET, not the whole set: the kiosk owns the other half of this page."""
+    missing = set(OPTION_NAMES) - set(block("options"))
+    assert not missing, f"the code reads options nobody can set: {sorted(missing)}"
+
+
+def test_the_schema_declares_every_one_of_them_too():
+    missing = set(OPTION_NAMES) - set(block("schema"))
+    assert not missing, f"no schema entry, so Supervisor will not persist: {sorted(missing)}"
+
+
+def test_the_KIOSK_options_are_untouched_by_any_of_this():
+    """⚠️ THE HALF THIS CHANGE COULD HAVE BROKEN. Merging the layer into the
+    kiosk's manifest put ten new fields next to the passcodes; losing one of
+    those would take the profile PINs with it."""
+    declared = set(block("options"))
+    for name in KIOSK_OPTIONS:
+        assert name in declared, f"the kiosk lost `{name}`"
+    assert set(block("schema")) >= set(KIOSK_OPTIONS)
+
+
+def test_nothing_in_the_manifest_is_read_by_NOBODY():
+    """The other direction: an option neither half reads is a setting that does
+    nothing, which is the defect this file exists for."""
+    unread = set(block("options")) - set(OPTION_NAMES) - set(KIOSK_OPTIONS)
+    assert not unread, f"declared but read by nothing: {sorted(unread)}"
 
 
 def test_the_parser_found_something_or_this_file_proves_nothing():
-    assert len(block("options")) >= 10
+    assert len(block("options")) >= 19
 
 
 def test_the_two_secrets_are_declared_as_passwords():
@@ -58,7 +84,8 @@ def test_every_default_in_the_manifest_matches_the_default_in_the_code():
     start — which is exactly when nobody is watching."""
     declared = block("options")
     code = Options()
-    for name, raw in declared.items():
+    # Only the layer's own half — the kiosk's defaults are the kiosk's business.
+    for name, raw in ((k, v) for k, v in declared.items() if k in OPTION_NAMES):
         expected = getattr(code, name)
         if isinstance(expected, float):
             assert float(raw) == expected, name
@@ -77,7 +104,8 @@ def test_the_manifest_ships_no_seeded_value_for_a_target_or_an_address():
 def test_loading_the_manifests_own_defaults_yields_the_code_defaults(tmp_path):
     """The round trip an operator who changes nothing actually takes."""
     import json
-    declared = {k: v.strip('"') for k, v in block("options").items()}
+    declared = {k: v.strip('"') for k, v in block("options").items()
+                if k in OPTION_NAMES}
     declared["daily_usd_limit"] = float(declared["daily_usd_limit"])
     p = tmp_path / "options.json"
     p.write_text(json.dumps(declared))
@@ -96,14 +124,15 @@ def test_the_manifest_gives_the_owner_a_folder_they_can_edit():
 
 
 def test_the_manifest_still_grants_NO_supervisor_privilege():
-    """The folder is the owner's, and it must not have cost an escalation.
+    """⚠️ THE ESCALATION THE AI LAYER MUST NEVER COST. The kiosk legitimately
+    has ingress and a port; what it must not gain by carrying the layer is
+    `hassio_api` or a `hassio_role`, which would let a suggest-only component
+    start, stop and install add-ons.
 
-    ⚠️ TOP-LEVEL KEYS, NOT A SUBSTRING SEARCH. The first cut grepped the raw
-    text and failed on the word `INGRESS` inside the comment that explains why
-    there is no ingress — a guard tripped by its own subject's documentation.
+    Top-level keys, not a substring search: the first cut grepped raw text and
+    tripped on the word INGRESS inside a comment explaining it.
     """
     keys = set(re.findall(r"^([a-z_]+):", CONFIG.read_text(), re.M))
-    for forbidden in ("hassio_api", "hassio_role", "ingress", "ingress_port",
-                      "ports", "ports_description"):
+    for forbidden in ("hassio_api", "hassio_role"):
         assert forbidden not in keys, f"`{forbidden}` must not be in this manifest"
     assert "homeassistant_api" in keys

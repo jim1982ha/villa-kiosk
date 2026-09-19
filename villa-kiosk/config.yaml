@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA
-version: "2.497.0"
+version: "2.497.1"
 slug: villa_kiosk
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -35,6 +35,13 @@ ports_description:
 # talks to Home Assistant token-lessly (no long-lived token needed). See
 # rootfs/usr/bin/supervisor-proxy.py.
 homeassistant_api: true
+# ⚠️ THE OWNER'S OWN FOLDER, FOR SKILLS. `addon_config:rw` gives this add-on
+# `/addon_configs/<slug>/`, which appears in the File editor and Studio Code
+# Server. Skills live there as Markdown the owner writes and the layer reads,
+# hot-reloaded on save. It ships ahead of the feature because a folder that
+# appears on the day a feature lands is a folder nobody finds.
+map:
+  - addon_config:rw
 panel_icon: mdi:home-city
 panel_title: VESTA
 boot: auto
@@ -124,7 +131,54 @@ startup: application
 # pin_lockout_minutes (default 5). How long a device that has entered five
 #   wrong passcodes must wait. The lockout is per source address, so raising
 #   it punishes a guesser rather than locking the household out.
+# ── The AI layer ────────────────────────────────────────────────────────────
+# ⚠️ THESE TEN EXIST ONLY ON THE `ai` CHANNEL. `main` and `dev2` carry their own
+# copy of this file without them, and neither carries the `agent/` tree that
+# reads them, so the stable add-on is unaffected by anything below.
+#
+# anthropic_api_key — the model's credential. Empty means the layer starts,
+#   connects, and reports its own health, and reasons about nothing. That is the
+#   correct state for a fresh install.
+#
+# ha_mcp_url / ha_mcp_secret — the address of the ha-mcp add-on and its shared
+#   secret. ⚠️ PASTED, NOT DISCOVERED: finding it automatically would need a
+#   Supervisor role that can also start, stop and install add-ons, which a
+#   suggest-only layer cannot justify (docs/adr/0012). The secret is a PATH
+#   PREFIX, so the two are joined into one URL; pasting an address that already
+#   ends with the secret is handled and not doubled.
+#   ⚠️ Set `auto_update: false` on the ha-mcp add-on. It ships roughly biweekly
+#   with no deprecation policy and moves its tool set in MINOR releases.
+#
+# owner_target / fm_target — Home Assistant notify targets. Empty by default:
+#   naming one here would be one property's configuration shipped to every other
+#   install, which is the hard rule this repository is built around.
+#
+# timezone — empty means ASK HOME ASSISTANT, which is always right and never
+#   goes stale.
+#
+# daily_usd_limit — what the layer may spend on the model in a day, in USD.
+#   ⚠️ 0 means NO limit, matching every other clamp here; it does not mean
+#   "never spend". The figure the layer reports comes from its own token meter
+#   and from nowhere else — this project has been wrong about its own cost by
+#   ~115x by doing arithmetic in a document instead.
+#
+# model_fast / model_writing — the cheap model for routine judgement and the
+#   capable one for prose, named rather than hardcoded so a new release of
+#   either can be adopted without a new add-on version.
+#
+# ai_log_level — how much the layer prints into the add-on log. Separate from
+#   the kiosk's own logging.
 options:
+  anthropic_api_key: ""
+  ha_mcp_url: ""
+  ha_mcp_secret: ""
+  owner_target: ""
+  fm_target: ""
+  timezone: ""
+  daily_usd_limit: 1.0
+  model_fast: claude-haiku-4-5
+  model_writing: claude-opus-5
+  ai_log_level: info
   guest_pin: ""
   owner_pin: ""
   ops_pin: ""
@@ -135,6 +189,16 @@ options:
   telemetry_max_events: 500
   pin_lockout_minutes: 5
 schema:
+  anthropic_api_key: password?
+  ha_mcp_url: str?
+  ha_mcp_secret: password?
+  owner_target: str?
+  fm_target: str?
+  timezone: str?
+  daily_usd_limit: float(0,1000)?
+  model_fast: str?
+  model_writing: str?
+  ai_log_level: list(trace|debug|info|notice|warning|error|fatal)?
   guest_pin: match(^[0-9]{4}$|^$)?
   owner_pin: match(^[0-9]{4}$|^$)?
   ops_pin: match(^[0-9]{4}$|^$)?

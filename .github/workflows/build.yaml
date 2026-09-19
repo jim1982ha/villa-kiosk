@@ -36,6 +36,9 @@ on:
       - "rootfs/**"
       - "villa-kiosk/config.yaml"
       - ".github/workflows/build.yaml"
+      # ⚠️ The AI layer is inside this image now, on this branch. `main` and
+      # `dev2` have no `agent/` tree, so this path simply never matches there.
+      - "agent/**"
   workflow_dispatch:
 
 permissions:
@@ -126,6 +129,7 @@ jobs:
           # byte-for-byte reproducible builds.
           build-args: |
             BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:latest
+            VESTA_AI_VERSION=${{ steps.meta.outputs.version }}
           # Computed in `meta`: the version tag always, `:latest` only on main.
           tags: ${{ steps.meta.outputs.tags }}
           labels: |

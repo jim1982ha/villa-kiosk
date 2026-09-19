@@ -90,11 +90,11 @@ MUTATIONS = [
     ("runtime: the meter is not published to the entity",
      "agent/runtime.py", '            "usd_today": round(meter.spent_usd, 4),', '            "usd_today": 0,'),
     ("manifest: an option the code reads is dropped from the manifest",
-     "vesta-ai/config.yaml", "  timezone: \"\"\n", ""),
+     "villa-kiosk/config.yaml", "  timezone: \"\"\n", ""),
     ("manifest: a default drifts from the code's default",
-     "vesta-ai/config.yaml", "  daily_usd_limit: 1.0", "  daily_usd_limit: 2.0"),
+     "villa-kiosk/config.yaml", "  daily_usd_limit: 1.0", "  daily_usd_limit: 2.0"),
     ("manifest: a secret is declared as a plain text field",
-     "vesta-ai/config.yaml", "  anthropic_api_key: password?", "  anthropic_api_key: str?"),
+     "villa-kiosk/config.yaml", "  anthropic_api_key: password?", "  anthropic_api_key: str?"),
     ("listener: a live subscription is not announced until the heartbeat",
      "agent/listener.py", "                if on_ready is not None:\n                    await _maybe_await(on_ready())",
      "                pass"),
@@ -135,9 +135,11 @@ MUTATIONS = [
      "agent/workspace.py", '        log.warning(f"  no owner config folder at {root} — this add-on\'s manifest "',
      '        _ = (f"  no owner config folder at {root} — this add-on\'s manifest "'),
     ("manifest: the owner has no editable folder at all",
-     "vesta-ai/config.yaml", "map:\n  - addon_config:rw\n", ""),
+     "villa-kiosk/config.yaml", "map:\n  - addon_config:rw\n", ""),
+    ("manifest: merging the layer in cost the kiosk an option",
+     "villa-kiosk/config.yaml", "  guest_pin: match(^[0-9]{4}$|^$)?\n", ""),
     ("manifest: a target ships seeded",
-     "vesta-ai/config.yaml", '  owner_target: ""', '  owner_target: "notify.somebody"'),
+     "villa-kiosk/config.yaml", '  owner_target: ""', '  owner_target: "notify.somebody"'),
 ]
 
 failures, ran = [], 0

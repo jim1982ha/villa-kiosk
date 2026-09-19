@@ -1,0 +1,13 @@
+#!/command/with-contenv sh
+# The AI layer, in the same image as the kiosk it is the face of.
+#
+# ⚠️ ONE ADD-ON, ON THIS CHANNEL ONLY. It shipped first as a separate headless
+# add-on and the owner's verdict was plain: one add-on, the baseline kiosk plus
+# this, with the screens. `with-contenv` exposes SUPERVISOR_TOKEN, which is the
+# whole of the direct connection's credential; s6 supervises and restarts it.
+#
+# ⚠️ IT MUST STOP ON SIGTERM, NOT BE KILLED. The last thing the layer does is
+# mark its own status entity `unavailable`; `exec` makes python the service
+# process itself so s6's signal reaches it rather than a shell.
+cd /usr/lib/vesta || exit 1
+exec python3 -m agent

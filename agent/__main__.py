@@ -38,7 +38,7 @@ async def run() -> int:
     # manifest declared, the help text explained and `Options` read, and that
     # nothing then honoured — two settings an operator could change with no
     # observable effect. These two lines are what make them real.
-    log.configure(options.log_level)
+    log.configure(options.ai_log_level)
     clock = SystemClock(options.timezone)
     token = os.environ.get("SUPERVISOR_TOKEN", "")
     session = open_session()

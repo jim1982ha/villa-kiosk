@@ -58,12 +58,18 @@ class Addon(NamedTuple):
 # rules below would be checking a copy rather than an original.
 MANIFESTS: list[Addon] = [
     Addon("villa-kiosk", package_json=True),
-    # ⚠️ UNPAIRED, AND THAT IS THE WHOLE REASON THIS FILE READS A LIST. The AI
-    # layer is Python, has no package.json of its own, and versions
-    # independently of the kiosk: a commit touching only `agent/` bumps only
-    # this manifest. It is held to semver and to its own changelog instead.
-    Addon("vesta-ai", package_json=False),
 ]
+
+# ⚠️ ONE ENTRY AGAIN, AND THE LIST STAYS. `vesta-ai` was here: the AI layer
+# shipped as a second, headless add-on with its own manifest, its own image and
+# its own version line. The owner installed it, found it had no screens, and
+# ruled: one add-on, the baseline kiosk plus the layer, with the UI. So the
+# layer is a service inside the kiosk image now and has no manifest of its own.
+#
+# The list and the per-manifest version rule are NOT reverted. They cost
+# nothing, they are what let a second manifest be added and removed without
+# touching seven checks, and the unpaired branch is still exercised — the
+# mutation sweep builds a scratch manifest for exactly that reason.
 
 # A parser that silently found nothing would pass everything below it, so a
 # manifest is required to have parsed at least this many options. It is a floor

@@ -1,4 +1,11 @@
-"""The options an operator sets on Supervisor's Configuration page.
+"""The AI layer's slice of the add-on's Configuration page.
+
+⚠️ IT SHARES THAT PAGE WITH THE KIOSK NOW. The layer shipped first as a separate
+add-on with a manifest of its own; the owner's ruling was one add-on — the
+baseline kiosk plus this — so these fields live alongside the kiosk's passcodes
+in `villa-kiosk/config.yaml`. `OPTION_NAMES` is therefore a SUBSET of what that
+manifest declares, not the whole of it, and `ai_log_level` is named for the
+half it configures.
 
 ⚠️ THE SPEC SAYS "NINE" AND TEN FIELDS SHIP, AND BOTH ARE RIGHT. Its list is
 nine comma-separated items, one of which is the pair "model_fast /
@@ -63,7 +70,7 @@ class Options:
     daily_usd_limit: float = 1.00
     model_fast: str = "claude-haiku-4-5"
     model_writing: str = "claude-opus-5"
-    log_level: str = "info"
+    ai_log_level: str = "info"
 
     def __post_init__(self) -> None:
         """Wrap the secrets however this object was built.
