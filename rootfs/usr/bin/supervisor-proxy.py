@@ -2294,21 +2294,48 @@ async def ai_test_gateway_handler(request: web.Request) -> web.Response:
 
     session: ClientSession = request.app["session"]
 
-    async def transport(endpoint_url: str, body: dict) -> dict:
+    async def transport(endpoint_url: str, body: dict, extra: dict | None = None):
+        """The same contract the layer's own wire implements.
+
+        ⚠️ AND IT MUST STAY THE SAME. The test exists to speak the layer's
+        dialect; a transport here that handled a shape the layer's does not
+        would make a passing test mean nothing.
+        """
+        headers = {"Content-Type": "application/json",
+                   "Accept": "application/json, text/event-stream"}
+        headers.update(extra or {})
         async with session.post(
-            endpoint_url, json=body,
-            headers={"Content-Type": "application/json",
-                     "Accept": "application/json, text/event-stream"},
+            endpoint_url, json=body, headers=headers,
             timeout=ClientTimeout(total=15),
         ) as resp:
             text = await resp.text()
-        if resp.status >= 400:
-            raise RuntimeError(f"the gateway answered HTTP {resp.status}")
+            status = resp.status
+            content_type = resp.headers.get("Content-Type", "")
+            out = {k.lower(): v for k, v in resp.headers.items()}
+            # ⚠️ THE STATUS TRAVELS WITH THE HEADERS, under a name no server
+            # sends. When a body is empty the only useful thing left to say is
+            # what the server answered WITH — "empty body" alone sent the owner
+            # looking at their secret when the answer was in the status line.
+            out["x-vesta-status"] = str(status)
+        if status >= 400:
+            raise RuntimeError(
+                f"the gateway answered HTTP {status}"
+                + (f": {text.strip()[:160]}" if text.strip() else ""))
         text = text.strip()
-        if text.startswith("data:"):
+        if not text:
+            return None, out
+        if text.startswith(("data:", "event:")):
             payloads = [ln[5:].strip() for ln in text.splitlines() if ln.startswith("data:")]
             text = payloads[-1] if payloads else ""
-        return json.loads(text)
+            if not text:
+                return None, out
+        try:
+            return json.loads(text), out
+        except ValueError:
+            raise RuntimeError(
+                f"the gateway answered HTTP {status} as "
+                f"{content_type or 'no content-type'} and the body is not "
+                f"JSON-RPC: {text[:160]!r}") from None
 
     gateway = Gateway(url, secret, transport)
     link = await gateway.connect()

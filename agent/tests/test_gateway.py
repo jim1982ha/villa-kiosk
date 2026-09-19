@@ -5,16 +5,28 @@ from agent.gateway import Gateway, GatewayError, endpoint
 from agent.health import LinkState
 
 
-def transport_for(replies, asked=None):
-    async def transport(url, body):
+def transport_for(replies, asked=None, headers=None):
+    """A stubbed MCP server.
+
+    ⚠️ IT ANSWERS A NOTIFICATION WITH NOTHING, LIKE A REAL ONE. The first
+    version of this stub returned a JSON body for every method including
+    `notifications/initialized`, so the client was never exercised against the
+    empty 202 a real server sends — and the first real gateway it met answered
+    exactly that and was reported as "Expecting value: line 1 column 1".
+    """
+    async def transport(url, body, extra=None):
         if asked is not None:
-            asked.append((url, body))
-        reply = replies.get(body["method"])
+            asked.append((url, body, extra or {}))
+        method = body["method"]
+        if method.startswith("notifications/"):
+            assert "id" not in body, "a notification must carry no id"
+            return None, (headers or {})
+        reply = replies.get(method)
         if callable(reply):
-            return reply(body)
+            reply = reply(body)
         if reply is None:
-            raise AssertionError(f"nothing stubbed for {body['method']}")
-        return reply
+            raise AssertionError(f"nothing stubbed for {method}")
+        return reply, (headers or {})
     return transport
 
 
@@ -46,7 +58,8 @@ async def test_connecting_handshakes_then_reads_the_catalogue():
         {"initialize": OK, "tools/list": TOOLS}, asked))
     link = await g.connect()
     assert link.state is LinkState.UP
-    assert [b["method"] for _, b in asked] == ["initialize", "tools/list"]
+    assert [b["method"] for _, b, _ in asked] == [
+        "initialize", "notifications/initialized", "tools/list"]
     assert g.tools == ("ha_get_overview", "ha_search")
 
 
@@ -73,7 +86,7 @@ async def test_a_gateway_that_advertises_nothing_is_DOWN_not_up():
 
 @pytest.mark.asyncio
 async def test_a_refused_connection_is_DOWN_and_carries_the_reason():
-    async def transport(url, body):
+    async def transport(url, body, extra=None):
         raise ConnectionRefusedError("nobody is listening on 9583")
     g = Gateway("http://h", "s", transport)
     link = await g.connect()
@@ -205,3 +218,73 @@ async def test_a_NEW_server_does_not_inherit_the_old_ones_tools():
     g.reconfigure("http://b", "s")
     assert g.tools == (), "the new server inherited the old one's tools"
     assert g.link.state is LinkState.UNKNOWN
+
+
+
+# ── the MCP session, which a real server requires ──────────────────────────
+
+@pytest.mark.asyncio
+async def test_the_session_id_is_echoed_on_every_later_request():
+    """⚠️ THE STREAMABLE-HTTP TRANSPORT HANDS ONE OUT AND THEN REQUIRES IT. A
+    client that drops it gets one good handshake and nothing after."""
+    asked = []
+    g = Gateway("http://h", "s", transport_for(
+        {"initialize": OK, "tools/list": TOOLS}, asked,
+        headers={"mcp-session-id": "sess-1"}))
+    await g.connect()
+    # The handshake cannot carry an id it has not been given yet; everything
+    # after it must.
+    assert "Mcp-Session-Id" not in asked[0][2]
+    assert all(a[2].get("Mcp-Session-Id") == "sess-1" for a in asked[1:])
+
+
+@pytest.mark.asyncio
+async def test_the_protocol_version_is_declared_on_every_request():
+    asked = []
+    g = Gateway("http://h", "s", transport_for(
+        {"initialize": OK, "tools/list": TOOLS}, asked))
+    await g.connect()
+    assert all(a[2].get("MCP-Protocol-Version") for a in asked)
+
+
+@pytest.mark.asyncio
+async def test_a_reconnect_starts_a_NEW_session():
+    """Carrying an id across a reconnect is how a client ends up talking to a
+    session the server has already forgotten."""
+    g = Gateway("http://h", "s", transport_for(
+        {"initialize": OK, "tools/list": TOOLS}, headers={"mcp-session-id": "sess-1"}))
+    await g.connect()
+    asked = []
+    g._transport = transport_for({"initialize": OK, "tools/list": TOOLS}, asked,
+                                 headers={"mcp-session-id": "sess-2"})
+    await g.connect()
+    assert "Mcp-Session-Id" not in asked[0][2], "a stale session id was replayed"
+
+
+@pytest.mark.asyncio
+async def test_an_EMPTY_body_to_a_real_call_is_named_not_a_parse_error():
+    """⚠️ WHAT THE OWNER ACTUALLY HIT. The gateway answered with nothing and the
+    error read "Expecting value: line 1 column 1 (char 0)" — a true sentence
+    about a JSON parser that tells an operator nothing about their gateway."""
+    async def transport(url, body, extra=None):
+        return None, {"x-vesta-status": "202", "content-type": "text/plain"}
+    g = Gateway("http://h", "s", transport)
+    link = await g.connect()
+    assert link.state is LinkState.DOWN
+    assert "body was empty" in link.detail
+    assert "Expecting value" not in link.detail
+    # ⚠️ AND IT SAYS WHAT THE SERVER ANSWERED WITH. "Empty body" alone sends an
+    # operator looking at their secret when the answer is in the status line.
+    assert "202" in link.detail and "text/plain" in link.detail
+
+
+@pytest.mark.asyncio
+async def test_ids_are_unique_across_a_session():
+    """Reusing id 1 for every call is legal until two are in flight, and then
+    it is a bug nobody can see."""
+    asked = []
+    g = Gateway("http://h", "s", transport_for(
+        {"initialize": OK, "tools/list": TOOLS}, asked))
+    await g.connect()
+    ids = [b["id"] for _, b, _ in asked if "id" in b]
+    assert len(ids) == len(set(ids)), f"duplicate request ids: {ids}"

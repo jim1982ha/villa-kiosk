@@ -1,3 +1,31 @@
+## 2.502.0
+
+**The gateway client was not speaking the whole protocol.** The Test connection
+button reported "Expecting value: line 1 column 1 (char 0)" against an address
+that was demonstrably correct — and that error is a true sentence about a JSON
+parser and tells an operator nothing. The cause was three missing pieces of the
+MCP streamable-HTTP handshake: the client never confirmed the handshake with the
+`initialized` notification, never echoed back the session id the server hands
+out, and treated the empty body that a notification is answered with as a parse
+failure rather than as the correct answer it is. It also reused the same request
+id for every call.
+
+All four are fixed and proven against a stand-in server that behaves like a real
+one — empty 202 to the notification, a session id required on everything after
+the handshake, and replies as Server-Sent Events rather than plain JSON.
+
+⚠️ **And the failure message now carries what arrived**: the status, the content
+type, and the first bytes of anything unparseable. "Empty body" on its own sent
+the owner looking at their secret when the answer was in the status line.
+
+**Skills open properly now.** Clicking one appended an editor BELOW the list
+inside a fixed-height scrolling body — off the bottom of the screen, with
+nothing to say it had happened, so the detail view was unreachable in practice
+even though it existed. Opening a Skill now replaces the list with that Skill:
+its title, its department, whether it is on, the text, and Save, Enable/Disable
+and Delete together. The rows carry a chevron, so it is visible that they open
+something, and leaving with unsaved changes asks first.
+
 ## 2.501.0
 
 **A saved gateway address now actually reaches the layer.** It was written, and

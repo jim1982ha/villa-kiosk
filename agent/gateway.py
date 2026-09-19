@@ -43,7 +43,17 @@ class GatewayError(RuntimeError):
     """The gateway could not answer. Never a silently empty result."""
 
 
-Transport = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+#: ⚠️ THE TRANSPORT CARRIES HEADERS BOTH WAYS NOW, AND MCP REQUIRES IT. The
+#: streamable-HTTP transport returns an `Mcp-Session-Id` on `initialize` that
+#: every later request must echo, and it expects a protocol-version header. A
+#: transport that could only send a body and return JSON could not speak the
+#: protocol at all — it worked against a stub and not against a server.
+#:
+#: Returns (parsed JSON or None for an empty body, response headers).
+Transport = Callable[
+    [str, dict[str, Any], dict[str, str]],
+    Awaitable[tuple[dict[str, Any] | None, dict[str, str]]],
+]
 
 
 def endpoint(url: str, secret: str) -> str:
@@ -73,6 +83,9 @@ class Gateway:
         self._transport = transport
         self._tools: dict[str, dict[str, Any]] = {}
         self._link = Link(LinkState.UNKNOWN, "not connected yet")
+        #: Handed out by `initialize` and required on every later request.
+        self._session_id: str | None = None
+        self._next_id = 1
 
     def reconfigure(self, url: str, secret: str) -> bool:
         """Point at a different ha-mcp. Returns whether anything changed.
@@ -88,9 +101,11 @@ class Gateway:
         if fresh == self.url:
             return False
         self.url = fresh
-        # A different server is a different tool catalogue, and ADR-0012 is
-        # explicit that it must never be carried across.
+        # A different server is a different tool catalogue AND a different
+        # session; ADR-0012 is explicit that the catalogue must never be
+        # carried across, and a session id from another server is worse.
         self._tools = {}
+        self._session_id = None
         self._link = Link(LinkState.UNKNOWN, "address changed — not connected yet")
         return True
 
@@ -104,13 +119,44 @@ class Gateway:
         return tuple(sorted(self._tools))
 
     # ── wire ───────────────────────────────────────────────────────────────
-    async def _rpc(self, method: str, params: dict[str, Any]) -> Any:
+    def _headers(self) -> dict[str, str]:
+        headers = {"MCP-Protocol-Version": PROTOCOL_VERSION}
+        if self._session_id:
+            # ⚠️ REQUIRED ON EVERY REQUEST AFTER `initialize`. The streamable
+            # HTTP transport hands out a session id and refuses later calls
+            # without it; a client that drops it gets one good handshake and
+            # nothing else.
+            headers["Mcp-Session-Id"] = self._session_id
+        return headers
+
+    async def _rpc(self, method: str, params: dict[str, Any],
+                   notify: bool = False) -> Any:
+        """One JSON-RPC call. `notify` sends no id and expects no result."""
         if not self.url:
             raise GatewayError("no ha-mcp address is configured — paste it on "
                                "the add-on's Configuration page")
-        body = await self._transport(self.url, {
-            "jsonrpc": "2.0", "id": 1, "method": method, "params": params,
-        })
+        request: dict[str, Any] = {"jsonrpc": "2.0", "method": method,
+                                   "params": params}
+        if not notify:
+            request["id"] = self._next_id
+            self._next_id += 1
+        body, headers = await self._transport(self.url, request, self._headers())
+        session = headers.get("mcp-session-id") or headers.get("Mcp-Session-Id")
+        if session:
+            self._session_id = session
+        if notify:
+            # ⚠️ AN EMPTY BODY IS CORRECT HERE AND ONLY HERE. A notification is
+            # answered with 202 and nothing, which is exactly what tripped the
+            # first cut into reporting "Expecting value: line 1 column 1".
+            return None
+        if body is None:
+            raise GatewayError(
+                f"{method}: reached the gateway (HTTP "
+                f"{headers.get('x-vesta-status', '?')}, "
+                f"{headers.get('content-type', 'no content-type')}) but the body "
+                f"was empty. That is what a notification is answered with, not a "
+                f"call — the address is right and something about the request is "
+                f"not what this server expects.")
         if "error" in body:
             err = body["error"]
             raise GatewayError(f"{method}: {err.get('message', err)}")
@@ -121,11 +167,19 @@ class Gateway:
     async def connect(self) -> Link:
         """Handshake and re-read the tool catalogue. Safe to call repeatedly."""
         try:
+            # A fresh handshake is a fresh session; carrying the old id across a
+            # reconnect is how a client ends up talking to a session the server
+            # has already forgotten.
+            self._session_id = None
             await self._rpc("initialize", {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {},
                 "clientInfo": {"name": "vesta-ai", "version": "0"},
             })
+            # ⚠️ REQUIRED BY THE PROTOCOL, AND EASY TO SKIP BECAUSE NOTHING
+            # ANSWERS IT. The server is entitled to refuse everything until the
+            # client confirms the handshake is complete.
+            await self._rpc("notifications/initialized", {}, notify=True)
             listed = await self._rpc("tools/list", {})
             tools = listed.get("tools", []) if isinstance(listed, dict) else []
             # Re-read, not merge: a tool REMOVED upstream must disappear here

@@ -11,7 +11,7 @@
 // can, and this screen says so rather than implying something is watching.
 
 import { useCallback, useEffect, useState } from "react";
-import { FilePlus2, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, FilePlus2, Save, Trash2 } from "lucide-react";
 import {
   TEMPLATE, deleteSkill, listSkills, readSkill, setEnabled, writeSkill,
   type SkillListing, type SkillMeta,
@@ -93,7 +93,7 @@ export default function AiSkillsPanel() {
     setError(null);
     try {
       await deleteSkill(path);
-      if (open === path) setOpen(null);
+      if (open === path) { setOpen(null); setDraft(""); setOriginal(""); }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -156,13 +156,81 @@ export default function AiSkillsPanel() {
 
   const dirty = draft !== original;
 
+  // ⚠️ MASTER AND DETAIL, NOT A LIST WITH AN EDITOR UNDER IT. The first cut
+  // rendered the editor after the list inside a fixed-height scrolling body, so
+  // opening a Skill appended a textarea below the fold with nothing to say it
+  // had happened — the owner reasonably concluded there was no way to see or
+  // edit one. Swapping the whole panel makes where you are unambiguous.
+  if (open) {
+    const meta = listing.skills.find((s) => s.path === open);
+    return (
+      <div className="ai-skills">
+        <div className="ai-detail-head">
+          <button
+            type="button" className="btn ghost btn-small"
+            onClick={() => {
+              if (dirty && !window.confirm("Discard your changes to this Skill?")) return;
+              setOpen(null);
+              setError(null);
+            }}
+          >
+            <ChevronLeft size={16} /> All skills
+          </button>
+          {meta && (
+            <span className={`ai-pill ${meta.enabled ? "on" : "off"}`}>
+              {meta.enabled ? "On" : "Off"}
+            </span>
+          )}
+        </div>
+
+        <div className="settings-section-title" style={{ marginTop: 0 }}>
+          {meta?.title || open}
+        </div>
+        <p className="ai-note" style={{ marginTop: 0 }}>
+          {open}{meta ? ` · ${meta.department}` : ""}
+        </p>
+
+        {error && <div className="ai-error" role="alert">{error}</div>}
+
+        <textarea
+          className="ai-editor-text"
+          value={draft}
+          spellCheck={false}
+          onChange={(e) => setDraft(e.target.value)}
+          aria-label={`Contents of ${open}`}
+        />
+
+        <div className="ai-detail-actions">
+          {meta && (
+            <button type="button" className="btn ghost" disabled={busy}
+              onClick={() => void toggle(meta)}>
+              {meta.enabled ? "Disable" : "Enable"}
+            </button>
+          )}
+          <button
+            type="button" className="btn ghost btn-danger" disabled={busy}
+            onClick={() => { if (window.confirm(`Delete ${open}?`)) void remove(open); }}
+          >
+            <Trash2 size={16} /> Delete
+          </button>
+          <span style={{ flex: "1 1 auto" }} />
+          <button
+            type="button" className="btn primary"
+            onClick={() => void save()} disabled={!dirty || busy}
+          >
+            <Save size={16} /> {dirty ? "Save" : "Saved"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ai-skills">
       <div className="ai-notice">
-        A starter set is installed. Edit them, delete what does not apply, add
-        your own. ⚠️ The layer does not <em>read</em> Skills yet — that arrives
-        in a later release; what is here is kept, and anything you delete stays
-        deleted.
+        A starter set is installed. Open one to read or edit it. ⚠️ The layer
+        does not <em>read</em> Skills yet — that arrives in a later release; what
+        is here is kept, and anything you delete stays deleted.
       </div>
 
       <div className="ai-skills-head">
@@ -185,50 +253,22 @@ export default function AiSkillsPanel() {
 
       <ul className="ai-skill-list">
         {listing.skills.map((s) => (
-          <li key={s.path} className={open === s.path ? "is-open" : undefined}>
+          <li key={s.path}>
+            {/* The WHOLE row opens it, and a chevron says so. The first cut
+                made the name a bare button with no affordance at all. */}
             <button type="button" className="ai-skill-row" onClick={() => void openSkill(s.path)}>
               <span className={`ai-pill ${s.enabled ? "on" : "off"}`}>
                 {s.enabled ? "On" : "Off"}
               </span>
-              <span className="ai-skill-name">{s.title || s.name}</span>
-              <span className="ai-skill-dept">{s.department}</span>
+              <span className="ai-skill-text">
+                <span className="ai-skill-name">{s.title || s.name}</span>
+                <span className="ai-skill-dept">{s.department}</span>
+              </span>
+              <ChevronRight size={18} className="ai-skill-chevron" aria-hidden />
             </button>
-            <div className="ai-skill-actions">
-              <button type="button" className="btn btn-small" onClick={() => void toggle(s)} disabled={busy}>
-                {s.enabled ? "Disable" : "Enable"}
-              </button>
-              <button
-                type="button" className="btn btn-small btn-danger" disabled={busy}
-                onClick={() => { if (window.confirm(`Delete ${s.path}?`)) void remove(s.path); }}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
           </li>
         ))}
       </ul>
-
-      {open && (
-        <div className="ai-editor">
-          <div className="settings-section-title">{open}</div>
-          <textarea
-            className="ai-editor-text"
-            value={draft}
-            spellCheck={false}
-            onChange={(e) => setDraft(e.target.value)}
-            aria-label={`Contents of ${open}`}
-          />
-          <div className="ai-editor-actions">
-            <button type="button" className="btn" onClick={() => setOpen(null)}>Close</button>
-            <button
-              type="button" className="btn btn-primary"
-              onClick={() => void save()} disabled={!dirty || busy}
-            >
-              <Save size={16} /> {dirty ? "Save" : "Saved"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
