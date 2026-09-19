@@ -1,3 +1,34 @@
+## 2.501.0
+
+**A saved gateway address now actually reaches the layer.** It was written, and
+re-read, and never applied: the client that connects was built once at startup
+from the values that existed then, so the screen showed a configured address
+beside a connection insisting there was none. Re-reading a setting is not the
+same as applying it. A changed address now re-points that client and reconnects
+on the next heartbeat, and an unchanged one does nothing — a reconnect every
+five minutes for no reason is churn.
+
+**There is a Test connection button.** Until now the only way to find out
+whether an address worked was to save it, wait for a heartbeat, and read a
+colour on another tab. It tries the handshake immediately and says what
+happened: how many tools the gateway offers, how many devices it can see, and
+the exact URL it tried — which is the first question when it fails, since the
+address and the secret are composed into one.
+
+⚠️ **It runs the layer's own client, not a second copy of the handshake.** A
+test that passes while the layer fails is worse than no test: it says the
+problem is somewhere else. And it does not stop at the handshake — it reads the
+property too, because "connected but cannot enumerate" is a real state that a
+handshake alone would report as fine.
+
+**Telegram chats appear in the notify dropdowns.** Home Assistant has two notify
+mechanisms — legacy services, and the modern entity platform — and the list was
+built from services alone. A Telegram chat is the entity kind, so the dropdown
+offered everything except the targets the owner actually wanted, which is worse
+than no dropdown because it looks complete. Both kinds are listed now, entities
+first and under their own friendly names, with the id alongside so two similar
+chats stay distinguishable.
+
 ## 2.500.0
 
 **The VESTA AI modal stops resizing around you.** Switching from the short
