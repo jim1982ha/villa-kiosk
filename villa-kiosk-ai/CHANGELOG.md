@@ -1,3 +1,40 @@
+## 2.500.0
+
+**The VESTA AI modal stops resizing around you.** Switching from the short
+Skills view to the tall Status one visibly grew the dialog, which is both
+jarring and inconsistent with Facility and Cockpit. A `.modal-fixed-height`
+class already existed for exactly this — its own comment says "reusable by any
+future tabbed modal" — and this modal simply did not use it. It does now, so the
+body scrolls and the dialog does not move.
+
+**The notify targets are a list, not a text box.** The settings screen asks the
+add-on which notify services this Home Assistant actually has and offers them.
+A typed notify target is a setting that fails SILENTLY — nothing would surface a
+typo until the first thing worth telling somebody about, which is the worst
+possible moment to find out.
+
+**So are the models**, with what each costs per million tokens next to it, so
+the choice is an informed one rather than a string nobody can check.
+
+⚠️ **Both keep an escape hatch.** A closed list of notify targets is wrong the
+moment a phone is added, and a closed list of models is wrong the moment a new
+one ships — in both cases this add-on would be the thing standing between you
+and a value that already works. "Something else…" is always there. An unknown
+model is safe in the way that matters: the token meter reports it as unpriced
+rather than as free.
+
+**And there are Skills to look at.** A starter set of seven ships with the
+add-on and is copied into your folder on first start: standby draw, short
+cycling, unexpected water flow, battery health, devices gone quiet, doors left
+open, and reachability. ⚠️ They are copied ONCE and never over anything you
+wrote — a Skill you delete stays deleted, because an add-on that restores its
+own files on every restart is one that eats your edits.
+
+Not one of them names a device, an entity or a number tuned to one property,
+and every one states what it does NOT cover — which is the only reason coverage
+can ever be reported honestly. The layer still does not read them; that is a
+later release, and the screen says so.
+
 ## 2.499.0
 
 **The AI layer's settings are in the kiosk now, and only there.** Settings →
