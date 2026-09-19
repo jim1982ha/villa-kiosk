@@ -106,6 +106,17 @@ jobs:
         # help text, and that is the page where the PINs are set.
         run: npm run test:manifest
 
+      - name: That gate is capable of failing
+        # ⚠️ A GREEN GATE IS NOT A WORKING ONE. Two checks on this branch were
+        # green for their whole lives — one printed SKIP and exited 0 on every
+        # runner, one collapsed nine labels into a single set element. The step
+        # above now covers a LIST of add-on manifests, so this breaks each of
+        # its rules in turn and requires it to go red, with the right message,
+        # for each. The sweep edits tracked files and restores them in a
+        # `finally`; the checkout is ephemeral, so a hard kill mid-mutation
+        # costs nothing.
+        run: npm run test:manifest:mutations
+
       - name: The proxy parses
         # ⚠️ THE CHEAPEST CHECK HERE AND THE ONE WITH THE WORST FAILURE MODE.
         # Nothing else in this pipeline loads the proxy at all.
