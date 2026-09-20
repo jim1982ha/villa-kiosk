@@ -1,3 +1,29 @@
+## 2.520.0
+
+**A measurement, for the devices that look offline on one screen and fine on
+another.**
+
+Your phone shows several cameras as unreachable; your laptop, on the same Home
+Assistant at the same moment, shows them working — and so does Home Assistant
+itself. Everything I could compare between the two came back identical: the same
+1,313 device readings, the same 1,945 registry entries, the same profile, the
+same version. So every attempt to explain it has come down to me reading small
+icons off a photograph, which is not evidence.
+
+**This release makes the app report the number instead.** Each device now says
+how many badges it drew from a real reading, how many it had no reading for, and
+how much device state it holds in total. Two screens on one property should
+report the same figures; if they do not, the difference is the answer.
+
+⚠️ **THIS CHANGES NOTHING ABOUT WHAT YOU SEE.** It only counts. The next time
+you open VESTA on the phone and on the laptop, the two reports can be compared
+and the cause stops being a matter of opinion.
+
+**What is already confirmed and separate:** six things mapped in VESTA no longer
+exist in Home Assistant at all — five air conditioners and one contact sensor.
+Those are correctly drawn as unreachable on BOTH screens, and they come back on
+their own when the entities do.
+
 ## 2.519.2
 
 **Pushing a change now takes about six minutes instead of seventeen, and
