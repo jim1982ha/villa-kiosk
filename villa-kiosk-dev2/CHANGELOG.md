@@ -1,3 +1,13 @@
+## 2.496.51
+
+**Nothing you can see changed.** A housekeeping release.
+
+A copy of the *dev* channel's add-on description was sitting on this branch,
+frozen at an old version. It is generated automatically and belongs on the main
+branch only, where it is kept current — this stale copy did nothing except wait
+to overwrite the real one and quietly offer your dev channel an older build than
+it already has.
+
 ## 2.496.50
 
 ### Fixed — trend charts drew ramps where the value had not moved
