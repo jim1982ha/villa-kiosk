@@ -1,3 +1,29 @@
+## 2.535.0
+
+**A guest profile is refused a camera by one rule, and one of the three ways
+into a device panel was not asking it.**
+
+Tapping a device in the 3D villa asks whether your profile is allowed it.
+Holding it asks the same. Opening the same device from a Cockpit row, a
+Facility tab or a bottom-bar tile asked nothing — on the stated grounds that
+the tile had already checked the device's *category*.
+
+Category is the wrong question. A guest is allowed the "access control"
+category, and a camera lives in it; what actually stops a guest opening a
+camera is a separate rule listing the device types they may never have. That
+rule lives in one function, and that function was the one not being called. It
+is now, from all three, and a check enforces that any future fourth way in
+asks it too.
+
+**Also:** two small rules that had been copied instead of shared. The list of
+sensor types that mean "something moved" existed twice — and the copy's own
+comment said it was mirroring the original. And the room-name merge that runs
+after the villa model loads compared names exactly, in the one file that
+already imports the helper whose entire purpose is comparing room names
+properly. A plan naming a room "Pool House" against one you had typed as "Pool
+house" kept both, and the duplicate spread to every device. Both now have one
+owner, and a check refuses a third copy.
+
 ## 2.534.0
 
 **Refused? Now you are told why — and the check that guards refusals finally
