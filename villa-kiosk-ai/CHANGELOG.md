@@ -1,3 +1,29 @@
+## 2.523.0
+
+**Two screens in VESTA AI, tidied.**
+
+**Skills.** The list used to open with a block naming, per department, the
+Skill files stored in it — directly above the cards for those same files. On a
+phone that cost most of a screen to say the same thing twice, as paths. Each
+card now carries its own line instead: what the Skill applies to, and the
+figure it raises at — "electrical · metered load · P3 > 15W". A Skill with no
+threshold says it raises nothing itself; a department's notes file says it is
+notes; a file the layer could not read says it is in effect for nothing.
+
+The block above keeps only the departments with no card at all, which are the
+ones a list of Skills genuinely cannot speak for — "climate: nothing to watch
+here". Crucially it also keeps a department whose Skills are all present and
+none of them licensed: that one has cards AND is not watched, and its line is
+the only place you are ever told so. The layer now names which departments it
+watches rather than leaving the screen to guess, because the guess would have
+deleted exactly that sentence.
+
+**Status.** The figures under "What it has seen" were the only surface in the
+modal drawn as a filled input rather than a card, and a row of two tiles came
+out half again as wide as the row of three above it. They now carry the same
+edge as every other card in VESTA, and sit on a grid, so every tile is the
+same width and a short row simply ends early.
+
 ## 2.522.0
 
 **Why two screens showed two different villas: there is no model stored in
