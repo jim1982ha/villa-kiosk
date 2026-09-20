@@ -1,3 +1,25 @@
+## 2.522.0
+
+**Why two screens showed two different villas: there is no model stored in
+this add-on, so each device is rendering its own saved copy.**
+
+When the add-on holds a villa model of its own, it is authoritative — every
+device downloads the identical file. When it holds none, the app falls back to
+whatever each browser has saved locally, and two devices can render different
+villas, with differently named objects in them, at the same add-on version.
+That is how one camera read correctly on a laptop and as a dead device on a
+phone.
+
+The screen that proves which file is loaded — the ⓘ beside the upload button
+in Advanced Settings, carrying the size, mesh count and SHA-256 — only
+appeared when a central model existed. It was hidden in the one case it was
+needed for, and everything it said assumed the other case ("served to every
+client", "every client loads the same model"). It now appears whenever a villa
+is loaded, and says plainly which of the two you are looking at, including
+what to do about it.
+
+Compare the SHA-256 between two devices: the same value means the same file.
+
 ## 2.521.0
 
 **The answer: an object in the villa named after a device Home Assistant does
