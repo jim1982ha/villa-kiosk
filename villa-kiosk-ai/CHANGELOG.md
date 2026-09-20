@@ -1,3 +1,36 @@
+## 2.533.0
+
+**The add-on's security boundary had no test on this branch, and the file that
+tells everyone how to work here described a repository that no longer exists.**
+
+The part of this add-on that decides who may do what — sessions, roles, the
+lockout, what a browser is allowed to ask Home Assistant — is three thousand
+lines, and on this branch nothing was testing any of its behaviour. There is a
+182-assertion suite for exactly that, written against real holes that were
+once open. It was deliberately unpublished years ago, on the reasonable
+grounds that a public list of what a security boundary checks for is more
+useful to an attacker than to an installer — and on the understanding that it
+would stay on the maintainer's disk.
+
+It did not. That understanding held on the branch it was decided on and
+silently did not survive a branch created later, so this one went without it
+while the instructions still said to run it. The suite is back, it passes,
+and — this is the part that matters — **a release now refuses to go out
+without it**, saying exactly how to restore it if it is ever missing again. It
+stays unpublished; that decision was not reversed.
+
+It is also now protected from being published by accident: the ignore rules
+had come to un-ignore it, so a single routine commit would have put it on a
+public repository with nobody deciding to.
+
+**And the project's own instruction file has been reconciled with reality.**
+It named three commands that do not exist, omitted all four checks that
+actually run on every release, and carried an entire section — with a table and
+release rules — describing files that were deliberately deleted a while ago.
+Anyone following it literally could not have released at all. Every command it
+names now exists, every check that runs is listed, every file path it mentions
+resolves, and a check enforces all of that from now on.
+
 ## 2.532.0
 
 **The release procedure now exists in the repository, not just on one machine.**
