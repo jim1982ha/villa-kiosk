@@ -1,3 +1,33 @@
+## 2.505.0
+
+**The AI layer can send a message, and you can prove it.** Settings → VESTA AI →
+Settings now has **Send a test message** beside each notify target. Until this
+release the layer's way out was a stub that deliberately refused, so a notify
+target was the setting most able to fail silently — nothing would have exercised
+it until the first thing actually worth telling somebody about.
+
+The test message says plainly what it is: *"This is a test from the VESTA AI
+Layer. Nothing needs your attention."* ⚠️ Testing the path must never be
+indistinguishable from the path being used — nobody reading it on a phone should
+have to work out whether the property needs them.
+
+⚠️ **It sends through the layer's own code, not a second copy of it.** A test
+that passes while the layer fails is worse than no test, because it says the
+problem is somewhere else.
+
+**Both of Home Assistant's notify mechanisms work.** A legacy target is a
+service; a modern one — which is what a Telegram chat is — is an entity reached
+through `notify.send_message`. They are indistinguishable as strings, so the
+layer tries one, falls back to the other, and remembers which worked rather than
+paying a failed call on every send.
+
+**There is no Telegram-specific code anywhere**, and that is deliberate: Home
+Assistant is the adapter. Another messenger arrives by configuring it there, not
+by a release here.
+
+⚠️ **Save before testing** — a test sends to what is stored, not to what is
+typed in the box.
+
 ## 2.504.0
 
 **The AI layer now watches only what you tell it to, and there is a screen for
