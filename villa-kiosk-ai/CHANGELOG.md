@@ -1,3 +1,34 @@
+## 2.534.0
+
+**Refused? Now you are told why — and the check that guards refusals finally
+measures whether they work.**
+
+Twelve of the add-on's endpoints answered a refused request with the single
+word "forbidden". Eight others said what they actually needed — "Only the
+owner profile may upload a model." Same situation, same add-on, and whether
+you were told anything useful depended on which screen you happened to be on.
+Every refusal now says what was refused and what it would take.
+
+Underneath that, "may this request do this?" was being decided in twenty-three
+separate places, each one re-typing the same four steps and the same list of
+allowed profiles. Answering "what can the facility manager reach?" meant
+reading eleven copies of a string and hoping they agreed. There is one place
+now, and the trap it has to avoid — a browser opening the kiosk from inside
+Home Assistant's own sidebar counts as the owner — is stated once instead of
+being defended by a comment in twenty-three.
+
+**The check on all this was measuring the wrong thing, and the numbers are
+worth stating.** It compared the *text* of each endpoint against an expected
+phrase, because there was no single thing to ask. Before this change:
+re-ordering a list of two profiles — a change that does nothing whatsoever —
+and deleting a permission check outright produced the *identical* failure. It
+could not tell them apart. After: the harmless re-ordering passes cleanly, and
+deleting a check fails three separate assertions, while quietly adding guests
+to the allowed list fails four.
+
+The security suite restored in 2.533.0 passes throughout, unchanged, which is
+what made this safe to do at all.
+
 ## 2.533.0
 
 **The add-on's security boundary had no test on this branch, and the file that
