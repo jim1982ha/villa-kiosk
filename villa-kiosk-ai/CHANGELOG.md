@@ -1,3 +1,38 @@
+## 2.521.0
+
+**The answer: an object in the villa named after a device Home Assistant does
+not have — and no screen would admit it existed.**
+
+The camera your phone drew as unreachable is not a camera that went down. The
+3D object is named after an entity Home Assistant has never carried, so there
+was never a reading to draw. Tapping it confirms it: the panel shows the name,
+and no state at all.
+
+That much the villa reports on purpose — an object the model carries and Home
+Assistant does not is drawn unavailable, deliberately, so it cannot pass for a
+working device. What was missing is everywhere else. Advanced Settings lists
+the devices found in the model, and it only ever listed the ones Home
+Assistant also has, because auto-detection refuses to adopt a name Home
+Assistant does not carry. So the object was on the map and on no screen: no
+row, no entry in the "no longer in Home Assistant" notice, and — worst — the
+device panel's own **Edit** button, which is supposed to jump straight to that
+device's row, landed on an empty table. There was nothing you could have
+pressed.
+
+Now Advanced Settings says so, in its own notice, with a row for each one.
+Open the row and use **Change entity ID** to point the object at the real
+device. That is stored centrally with the rest of your villa's configuration,
+so doing it once fixes every screen in the house — phone, tablet and laptop.
+The object itself stays where the model put it until the model is rebuilt; the
+device behind it is correct from that moment on.
+
+**It also answers why two screens disagreed.** Two things can differ between
+two browsers on the same add-on at the same version: the 3D model each one has
+cached, and whether it has picked up the shared configuration. Each device now
+reports the count in that notice — a screen showing none and a screen showing
+one is the difference, stated plainly, instead of something to read off a
+photograph.
+
 ## 2.520.0
 
 **A measurement, for the devices that look offline on one screen and fine on
