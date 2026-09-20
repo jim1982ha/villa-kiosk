@@ -1,3 +1,71 @@
+## 2.536.2
+
+**The checks that prove the tests can fail were pointing at code that had been
+deleted.**
+
+There is a suite here whose job is to break the AI layer on purpose, one rule
+at a time, and require the tests to notice. Each break is anchored to a
+specific line. When 2.536.0 removed the duplicated settings list, four of
+those anchors were left pointing at lines that no longer existed — so those
+four could not run, and the suite reported them as holes in the tests. They
+were not holes; they were instructions to break something that was already
+gone.
+
+Two of the four were testing a fault that can no longer happen at all: with
+one list instead of two, the two cannot disagree. Those are removed, with the
+reason written down, rather than left to fail forever. The others now break
+the thing that *can* still go wrong — someone pasting the duplicate back.
+
+**And there is now a one-and-a-half-second check for this**, run before the
+twenty-minute one and before every release. This is the second time stale
+anchors have reached the pipeline, and the first time the failure said which
+anchor rather than just going red.
+
+## 2.536.1
+
+**2.536.0 was built, failed its checks, and was correctly never published.**
+
+Two of the checks that run on every release execute the same test suite, and
+they had been installing different things to run it with. That made no
+difference for as long as the suite happened not to need the missing piece —
+and 2.536.0 was the release where it started to. Every shard of one check
+failed while the other passed on identical code.
+
+The two now install the same set, and a new check refuses to let them differ
+again: two jobs running one suite must agree on what that suite needs, because
+a difference between them is a difference in what the suite *means*, and it
+surfaces at the worst possible moment — when someone widens coverage.
+
+Worth saying plainly: the release command caught this and refused to report
+success. That is what it is for.
+
+## 2.536.0
+
+**The settings screen and the AI layer each kept their own idea of what the
+settings are.**
+
+One file on disk holds the layer's configuration. The screen writes it; the
+layer reads it. Each had its own list of the eleven settings, its own copy of
+their defaults, and its own note of which two are secret — and neither looked
+at the other's. Nothing kept them in step except that nobody had edited one
+yet. The failure that arrangement eventually produces is a setting you fill in
+that quietly does nothing, or a default the two disagree about, with every
+check passing.
+
+The same was true of the departments a Skill can be filed under. The screen
+used its own copy to *refuse* saves, so adding a department to the layer would
+have made the editor reject a file the layer itself would load happily.
+
+The screen now asks the layer for all three. Adding a setting is one edit.
+
+**And one of those reads was silently doing nothing.** The code that reaches
+into the layer looked only where the layer lives *inside the built add-on* — a
+path that does not exist on a developer's machine — and a catch-all around it
+turned that into "the layer isn't installed", which is a legitimate answer on a
+kiosk-only build. So it looked fine while checking nothing. Both halves are
+fixed: it now finds the layer either way, and only a genuinely missing layer is
+treated as missing.
+
 ## 2.535.0
 
 **A guest profile is refused a camera by one rule, and one of the three ways
