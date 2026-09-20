@@ -1,3 +1,37 @@
+## 2.506.0
+
+**The arithmetic the whole product stands on.** Nine ways the AI layer can
+measure anything — a total, a baseline, how far something is from it, a trend, a
+duration, transitions, silence, a comparison and a correlation. Nothing user
+visible changes yet; this is the chassis every later check is built from, and
+the set is deliberately closed: a Skill combines these and cannot invent a
+tenth, which is the one place adding intelligence still needs a release.
+
+⚠️ **None of them knows what a pump is.** A test asserts that — the module may
+not name a kind of hardware, a threshold or a unit, because the whole Skills
+design rests on the chassis staying empty of knowledge.
+
+⚠️ **"Cannot measure" is a real answer and never zero.** About one battery asset
+in six here has no long-term history at all, and a zero there reads as a real
+reading of nothing. Every refusal carries the recorder's own words for why.
+
+Two of them refuse where a wrong answer would look convincing. A total refuses a
+reading that records a level rather than an amount — summing those gives a
+number with the right size and the wrong meaning. A correlation aligns on time
+rather than position, because two histories of equal length are not the same
+week, and zipping them would compare Monday with Thursday.
+
+Transitions, duration and silence come from what the layer itself watched, not
+from the recorder: hourly averages cannot show something short-cycling, and
+short-cycling is the thing worth seeing.
+
+Four details were measured against this property rather than assumed, and each
+one changed the code — history timestamps are milliseconds, an entity with no
+statistics answers with an empty list and an explicit warning, the unit can come
+back empty even for a real sensor, and a typical day is the median rather than
+the average, because six real days read 51, 49, 66, 7, 3.1 and 2.9 and the
+average describes none of them.
+
 ## 2.505.0
 
 **The AI layer can send a message, and you can prove it.** Settings → VESTA AI →
