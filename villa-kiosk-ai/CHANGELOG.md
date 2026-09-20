@@ -1,3 +1,16 @@
+## 2.532.0
+
+**The release procedure now exists in the repository, not just on one machine.**
+
+2.531.0 introduced a single command that will not report success until it has
+confirmed the add-on manifest on the branch Home Assistant reads actually names
+the new version. It worked — and the script itself was silently left out of the
+commit, because that folder is excluded by default. A procedure that exists on
+one machine is not a procedure; a fresh clone would have had nothing.
+
+It is committed now, which also means every rule it enforces is checked against
+it like any other shipped file.
+
 ## 2.531.0
 
 **Releasing now means "Home Assistant can see it", not "the build passed".**
