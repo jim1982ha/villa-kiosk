@@ -1,3 +1,219 @@
+## 2.530.0
+
+**Six releases built cleanly and Home Assistant was never told about any of
+them. That was my doing, and this is the fix.**
+
+2.524.0 changed the build pipeline so that pushing twice in quick succession
+would stop the older, now-pointless build. It did that — and it also stopped
+the release from ever being published, because of how the change interacts with
+building for two processor architectures at once.
+
+The two architecture builds were put in the same "only one of these at a time"
+group, so whichever started second cancelled the first. The step that tells
+Home Assistant a new version exists waits for BOTH to finish, so it never ran.
+Every test passed, both images were fine, the add-on store simply never heard
+about it. The add-on stayed on 2.523.0 while the code was six versions ahead.
+
+The grouping is removed. The thing it was guarding against — two releases
+writing to the store at the same moment — was already handled elsewhere, and
+has been all along. Wasting a superseded build costs a few runner-minutes; not
+publishing costs the release.
+
+**And there is now a check for this, which there was not.** Nothing in this
+repository watched the one outcome the whole pipeline exists to prevent: an
+image built, and nothing telling Home Assistant it is there. That check runs on
+every commit, refuses the exact shape that caused this, and refuses three of
+its near neighbours as well.
+
+## 2.529.0
+
+**Tapping a room decides how far the camera stands back. That decision has
+never been tested, and three releases got it wrong.**
+
+The search that answers "how far back must the camera go to show every one of
+this room's devices" is the single most-corrected piece of the villa view. Its
+own notes record the history: three attempts derived it in closed form, each
+was exact arithmetic on a wrong input, every one was invisible in review, and
+every one shipped — "because the only test available was a person tapping a
+room chip on a phone."
+
+It is about a hundred and ninety lines, and exactly ONE of them touched the 3D
+engine — to borrow a scratch buffer. That single line was enough to keep the
+whole thing untestable, because the file it lived in cannot be loaded outside
+a browser. It now lives on its own, and the parts that genuinely need the
+renderer — reading the badges and measuring them — stayed behind.
+
+Its first test covers what the corrections were about: the shot frames the
+room rather than diving onto whichever two devices happen to be in it; a badge
+is framed by its drawn box and not by its anchor point, on BOTH screen axes;
+and because a badge hangs above its anchor, the same distance from centre runs
+out of room on one side and not the other.
+
+Writing that test immediately caught a fault in the test itself. The first
+version built its camera the wrong way and got a view whose vertical
+coordinate was undefined. Every comparison against it was quietly false, and
+the test happily reported that a shot from 380 metres away separated its
+badges cleanly. It now refuses to run at all unless its own fixture produces
+real numbers — a check that degrades silently is worse than none.
+
+## 2.528.0
+
+**Accepting a device was implemented twice, and the two had already drifted.**
+
+When you accept something the layer proposes watching, that decision is written
+to the add-on's own storage: the device is added, any earlier copy of it
+removed, the name you typed recorded, and an earlier "ignore" undone. The layer
+has a module that does exactly this. The screen you actually press the button
+on did not use it — it rebuilt the whole operation by hand against the same
+files, in a different process.
+
+Two implementations of one rule, with no shared test, and they had already
+parted company: the screen's copy capped the name you type at 120 characters
+and the layer's had no limit at all. So the limit applied to one writer and to
+nothing else.
+
+The screen delegates now. The limit belongs to the thing that stores the name,
+which means it applies however the name arrives. This is the same argument this
+add-on already makes about Skills, in a comment a few hundred lines away: a
+second reader drifts from the first, and the way that failure shows up is the
+worst available — a screen saying something is watched while the layer is not
+watching it.
+
+**Also:** the "did this configuration actually change?" check that runs every
+time you switch back to the kiosk tab was written out in two places. It exists
+because a background sync hands back freshly parsed objects that are never
+identical to the ones already held — so without a three-way answer, a sync that
+changed nothing bought a full multi-second rebuild of the villa. One owner now,
+with the shortcut it turns on measured rather than described.
+
+## 2.527.0
+
+**How big a badge is drawn, and how many fit on a card, can now be checked.**
+
+Two more pieces of the villa's layout arithmetic moved out from behind the 3D
+engine, which is the only thing that was keeping them untestable. Nothing looks
+different; what changed is that these can now be verified without a person
+holding two phones.
+
+**A badge's own box.** The rule the whole layout rests on — a placement
+decision may never use different geometry from the renderer — turns on one
+function, and that function sat inside a ten-thousand-line file where nothing
+could reach it. It reads three things about a drawn badge: whether a value is
+showing, how long that value is, and what kind of device it is. It is those
+three numbers now, and it carries its own hard-won detail with it: a badge that
+can EVER grow a value reserves the room for one even while it has none.
+Without that, a ceiling fan dropping its reading shrank its own box while the
+sensor beside it did not, and the two ended up nearly touching — which was
+reported as "the badge got smaller" when it was really "got less clearance
+from its neighbour".
+
+**How many cells fit a card.** The search that decides this walks down from six
+until the arrangement fits the screen, and it only stops at the right answer if
+a card never gets NARROWER as cells are added. The test knew that — it said so
+in a comment — and could only check the half it could import, never the search
+itself. Both halves are together now. Checking it turned up nothing wrong with
+the code and one wrong assumption in the test, which is the point of being able
+to run it: a 2×2 grid is exactly as wide as a pair, so a budget cut to three
+cells still admits four.
+
+## 2.526.0
+
+**Room chips could settle closer together than a finger can separate them.**
+
+Two things on the map count as colliding when their drawn boxes, inflated by
+the gap and held at least a finger's width apart, overlap. That floor is an
+accessibility rule: two controls stop being independently tappable once their
+touch targets merge, however small they are drawn. Badges, cards and piles all
+honour it. Room chips were tested by a copy of the comparison written out by
+hand — twice, a hundred lines apart, identical to each other — and neither copy
+applied the floor. They do now, through the same one rule the other three use,
+and it is the first time any test could reach that tier at all.
+
+**And the rest of this release is about making the villa's own arithmetic
+testable, which it almost entirely was not.**
+
+The file that decides where every badge goes is ten thousand lines, and under
+one line in eight actually touches the 3D engine. The rest is arithmetic — how
+big a badge is, how far apart two of them must be, how far the camera must pull
+back to fit a room. None of it could be tested, because the seams were drawn at
+the engine's own objects rather than at the numbers the arithmetic uses. Three
+of those are redrawn here, and each has its first test:
+
+* what solid angle the camera shows, which four separate places had
+  independently assumed was the vertical one;
+* the correction applied to badges further from the camera, where the test
+  had been keeping its own copy of the formula — so editing the shipped one
+  left the test passing;
+* the relationship between a badge's scale and the depth it is exact at,
+  whose own note described an inversion nobody had ever checked.
+
+**Smaller:** the wrapper around the villa's key light is gone — thirty-one
+lines that assigned three fields, with one caller and nothing reading what it
+held. And "which room is this device in, for display" had three owners that
+each spelled out the same fallback and the same ordering; it has one now, with
+a check that refuses a fourth.
+
+## 2.525.0
+
+**When a Skill you edit is refused, you are told. That has never worked.**
+
+The layer watches by Skills, and a Skill it cannot read is a Skill watching
+nothing — so it sends you a message saying which file and which line. The code
+that sends it passed two arguments to something that takes three. It raised on
+every single run, and the error handler around it filed that as "the channel
+is down", so the only mechanism that tells you a Skill is broken has been off
+for its whole life, silently, while 765 tests stayed green.
+
+Two things changed, not one. The message sends. And a fault in the layer is no
+longer reported as an unreachable phone: those are different situations with
+different fixes, and telling them apart is the same care this add-on takes
+everywhere else. A new check reads every place in the layer that sends a
+message and requires it to match — so this cannot come back by hand.
+
+**An Asset watched through a second kind of reading now gets explained.**
+
+What a Skill applies to is what an Asset's devices can report — a power
+reading, a battery level, a contact that opens. An Asset can have more than
+one. That rule was written out in four separate places, and two of them had
+quietly dropped the second half: a pump filed as electrical that also reports
+a battery was checked every night, counted in your coverage, and then had
+nothing said about it when something was found. One rule now, in one place.
+
+**Also:** the layer's memory of ended Incidents was never trimmed, on a device
+that runs for months — it is bounded now, oldest first, so what the wall shows
+is untouched. And the wiring between the layer and Home Assistant now declares
+the two connection steps it always used, which means the test villa can start
+the layer the same way the real one does.
+
+## 2.524.0
+
+**The pipeline that publishes this add-on, so a bad day costs one round trip
+instead of three.**
+
+Nothing in the app changes here. Releases 2.518.3 through 2.523.0 all reached
+Home Assistant, so the blackout that swallowed twelve of them is over — this
+is about the two ways the pipeline could still stall.
+
+**One run now names every broken gate.** The kiosk's checks ran one after
+another and stopped at the first failure, so a commit that broke three gates
+reported one, the next release reported the second, and the third release
+found the third. That is verbatim how three releases were spent getting back
+to green. Each gate now runs even after one has gone red — a failure still
+fails the release, it just says everything it knows first.
+
+**And a hang is now a failure.** No job had a time limit, which means the
+Actions default of six hours applied: a wedged step would have held the
+release all day while the run sat there looking busy. Every job has a limit
+matched to what it actually takes, the two that commit to Home Assistant's
+default branch most of all, because those hold a lock and a hang there stops
+the channel rather than one run.
+
+Two pushes close together no longer race: the older image build is cancelled
+as soon as a newer one exists. Deliberately scoped to the image build alone —
+cancelling the whole run could kill the job that tells Home Assistant the
+image exists, which leaves a published build nobody is ever offered, and that
+is the exact failure the whole pipeline is built to prevent.
+
 ## 2.523.0
 
 **Two screens in VESTA AI, tidied.**
