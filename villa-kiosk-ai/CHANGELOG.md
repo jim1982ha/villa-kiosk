@@ -1,3 +1,58 @@
+## 2.519.2
+
+**Pushing a change now takes about six minutes instead of seventeen, and
+nothing was given up to get there.**
+
+The slowest thing in the release process is a check that deliberately breaks the
+code 304 times over and requires a test to notice each one — the thing that
+proves the tests are actually watching, rather than just passing. It was running
+those 304 one after another, taking fourteen minutes, and growing with every
+one added.
+
+**It now runs six at a time.** Same 304 checks, same verdicts, about two and a
+half minutes. ⚠️ A run that covers no checks at all now FAILS rather than
+reporting success, because six green jobs covering nothing between them is the
+quietest possible way for a safeguard to stop existing.
+
+**And the identical checks were running twice on every push.** Two workflows
+were triggered by the same commit and one already called the other, so every
+gate ran in duplicate for no extra information. Removed.
+
+⚠️ **This is the release process only — it has never affected the add-on you
+run.** These checks run when code is published, never on your property.
+
+## 2.519.1
+
+**Nothing you can see changed** — a test in the last release depended on how the
+code was checked out rather than on the code, and blocked its own publication.
+
+## 2.519.0
+
+**The seven Skills your folder said it could not read are fixed.**
+
+⚠️ **THIS WAS AN UPGRADE FAULT IN THE ADD-ON, NOT ANYTHING YOU DID.** The
+starter Skills were copied into your folder before Skills had the short
+declaration block at the top. A file in your folder replaces the one that
+ships, so after that change every one of those seven was refused — on a
+property that had done nothing wrong.
+
+**They are now replaced with the current versions, and your text is kept.** If
+you had edited any of them, the old file is saved beside it as
+`<name>.md.superseded` so you can copy your own wording back across. Nothing is
+thrown away.
+
+**And the newer starter content finally arrives.** Four Skills added since, plus
+the notes that describe each department and the three `house/` files that decide
+how the system writes to you — none of which could ever reach an existing
+folder, because the marker recording "the starter Skills were copied" said only
+*that* it had happened, never *what* had been copied.
+
+⚠️ **WHAT YOU DELETED STILL STAYS DELETED.** The marker is now a list of every
+file this add-on has ever put in your folder, so it can hand you something new
+without quietly restoring something you threw away. Files you deleted before
+this release are remembered from what the add-on used to ship, not guessed from
+what happens to be there now.
+
 ## 2.518.3
 
 **Nothing you can see changed. This is the release that unblocks the last
