@@ -1,3 +1,554 @@
+## 2.518.3
+
+**Nothing you can see changed. This is the release that unblocks the last
+thirteen.**
+
+The automated quality check that has been holding everything back was right to
+be red, and for more reasons than the two fixed last time. Every one is now
+dealt with — twenty-three in total.
+
+**Twelve were tests that passed for the wrong reason.** A test that checks a
+door rule by using a *battery* rule never reaches the code it claims to check;
+it returns the right answer by accident and would go on passing if that code
+were deleted outright. A dozen of those, each now rewritten to actually reach
+what it is testing — including one that measured its own deadline against the
+setting it was testing, so shrinking the setting moved the test with it and it
+could never fail.
+
+**Five were faults in the checker itself.** Some of its sabotage attempts
+changed nothing at all — removing a guard that a second guard already covered —
+so they could never detect anything. Those now genuinely break the thing they
+are aimed at: one really does open the permission gate, one really does throw
+away two of the three files that decide how the system writes to you.
+
+**And one could not have worked for a structural reason.** The instruction it
+sabotaged was written out four times in the same file, so the sabotage landed on
+an arbitrary copy while the test watched a different one. The four copies are
+now one, which fixes the check and removes the duplication that caused it.
+
+**752 tests, and all 297 sabotage attempts are now caught.**
+
+## 2.518.2
+
+**Nothing you can see changed — but this is the release that lets the last
+twelve reach you.**
+
+⚠️ **EVERY VERSION FROM 2.507.0 ONWARD WAS BUILT, TESTED AND PUSHED, AND NONE OF
+THEM EVER REACHED YOUR HOME ASSISTANT.** An automated check had been failing
+since 2.507.0, and the step that publishes an update only runs after that check
+passes — so the add-on store went on offering 2.506.0 while twelve releases
+piled up behind a red light nobody was looking at.
+
+Two separate faults, both now fixed.
+
+**One of the safety rules had no test protecting it.** The layer decides
+something has "gone quiet" by comparing it against *its own* rhythm — something
+that reports every four hours is not late after seven, and something that
+reports every minute is very late indeed after one. That rule was correct in the
+code and completely unguarded: it could have been replaced with a crude fixed
+timeout and nothing would have objected. It now has twenty tests of its own.
+
+**And the automated checks were testing a slightly different program than the
+one that ships.** One library the add-on installs was missing from the test
+machine, so thirty-one checks — including every one that verifies the AI cannot
+act, cannot write to disk, and cannot phone home — were quietly skipped, with no
+line anywhere saying so. They now run where it matters.
+
+**A check that cannot run now says so and stops**, instead of reporting "nothing
+tests this" — which reads as missing work when the truth is a missing library.
+That difference is what kept the real cause hidden for twelve releases.
+
+## 2.518.1
+
+**Nothing you can see changed.** A housekeeping release.
+
+A copy of the *dev* channel's add-on description was sitting on this branch,
+frozen at an old version. It is generated automatically and belongs on the main
+branch only, where it is kept current — this stale copy did nothing except wait
+to overwrite the real one and quietly offer your dev channel an older build than
+it already has.
+
+## 2.518.0
+
+**The wall tablet shows what the AI layer found, and lets you answer it there.**
+Two new tabs under **AI**:
+
+**Found** — what is open right now, how urgent, how long it has been going on,
+and what the layer said about it in its own words. Tap one to open it. ⚠️ **And
+what recently *ended*** — "it was wrong and now it is not" is an answer, and a
+list that only ever shows what is currently wrong cannot give it.
+
+**Acknowledge from the tablet**, without reaching for your phone. ⚠️ **The
+screen tells you plainly what that does: it stops the reminders, and the problem
+stays open until the condition itself ends.** That is the one thing people
+assume wrongly, and a button that looked like it closed something would let you
+mark finished a thing that is still happening.
+
+**Report** — your weekly account, on the wall instead of only in a notification.
+Underneath it, the honest list of what is and is not watched here, department by
+department.
+
+⚠️ **AND IF THE AI LAYER IS NOT INSTALLED, THESE SCREENS SAY SO.** Not a
+permanent, reassuring "0 problems" on a property where nothing is watching —
+"nothing is wrong" and "nothing has ever told us" are different sentences. The
+rest of VESTA is completely unaffected.
+
+**On the Skills tab:**
+
+- **Original** restores the version that shipped, for a Skill you have edited.
+  ⚠️ It loads it into the editor as an unsaved change so you can look at it and
+  change your mind — it does not overwrite your file behind your back, and it
+  does not delete everything else you changed in it.
+- **What these cover** — the same honest answer, including a department that
+  ships empty on purpose.
+- ⚠️ **A Skill that tries to give the layer a power it does not have is now
+  refused when you press Save**, not saved and then reported. Everything else
+  that does not parse is still saved — you should never lose an edit to a
+  missing colon, and the screen shows you the line — but a file asking for a
+  tool, an action or the permission gate is not a typo on the way to something
+  valid.
+
+**None of this gives the tablet any new power over your property.** It reads two
+Home Assistant sensors and, when you press a button, sends a message through
+Home Assistant that the layer happens to be listening for. The screen holds no
+key and contains none of the AI code.
+
+## 2.517.0
+
+**On the first of each month it tells you what could be better here — ranked,
+with a reason for each, and none of it done.**
+
+It draws on everything it has already established over the month: which of your
+rules contradict themselves, which parts of the property nothing is watching,
+which accepted things keep no history at all, what used the most, and how many
+things hang off one box. **Each suggestion says what it came out of.** A ranked
+list whose ranking you cannot interrogate is a list you stop trusting.
+
+**Four kinds**, and which you see depends on who you are. Your facility manager
+gets the technical ones — a rule to fix, a gap to fill, a dependency to break up.
+⚠️ **The cost ones are yours alone.** Asking the person who looks after your
+property to have an opinion about your bill is not their job.
+
+⚠️ **AND IT NEVER INVENTS A MONEY FIGURE.** It does not know what you pay for
+electricity, so it does not guess. "About 63% of what was measured is in one
+place" is a thing it can stand behind; "£340 a year" is not.
+
+**It stays quiet when it has nothing to say.** One rule firing a lot is a rule to
+look at; several is a pattern worth naming. A property where everything uses
+about the same amount has no single place to look, and it says nothing rather
+than picking one. A department covering something you do not have is never
+offered to you.
+
+**Answer with the number on the list.** "3 accept", "1 ignore", "2 later" — the
+number you can see, not an id. ⚠️ **Something you ignore is never offered
+again**, and rewording it does not sneak it back next month.
+
+**And what you accept gets followed up.** Next month it asks whether it helped.
+
+⚠️ **NOTHING IN THE LIST HAS BEEN DONE, AND NOTHING IN IT CAN BE.** There is no
+way for this add-on to change a rule, a setting or a device — not a policy it
+follows, but something the code has no path to do.
+
+## 2.516.0
+
+**Once a week it reads your own automations and asks whether they still do what
+their names say.** Nothing has ever asked that question. Home Assistant will
+happily tell you a rule is switched on and running while it watches for the
+exact opposite of what it is called.
+
+⚠️ **THE CASE THAT PROMPTED THIS IS REAL AND IT IS ON THIS PROPERTY.** Two rules
+whose names and alert text say "unlocked" fire on **locked** — so they have
+never once told anybody what they were written to tell them, and one of them has
+been silently blind for months. Nothing flagged either, because both are
+switched on, and "switched on" is the only question anything was asking.
+
+**Four things it looks for, and it is careful about the difference:**
+
+- **A rule that contradicts its own name.** Says unlocked, fires on locked. It
+  says which way round, and that either the name is wrong or the rule is.
+- **A rule watching something that no longer exists.** Rename an entity and the
+  rule that used it keeps running, keeps reporting healthy, and can never fire
+  again. This happened here before, to five entities at once, for weeks.
+- ⚠️ **A rule that has never fired — as a QUESTION, not a verdict.** A rule
+  guarding against something that has not happened is a rule doing its job. Four
+  of the five never-fired critical rules here are perfectly healthy. It says
+  "worth one look", not "this is broken", because a report that cries wolf about
+  healthy rules is a report nobody opens twice.
+- **A rule that fires constantly and nobody ever answers.** Measured as a rate,
+  so six a day for a week and six a day for a year read the same.
+
+⚠️ **AND IT DOES NOT TOUCH ANYTHING.** Not a rule, not a setting, not an on/off
+switch. It reads and it tells you. There is no way for it to change one of your
+automations — not a rule it follows, but a thing the code cannot do.
+
+**It is careful not to become noise.** A rule called "log the door opening or
+closing" names both states and is left alone. A rule that watches both is left
+alone. And when it cannot see your entity list at all it says nothing, rather
+than declaring every rule on the property broken.
+
+**Once a week, not on every save** — somebody editing a rule is somebody looking
+at it, and checking mid-edit reports the half-finished thing they are typing.
+
+## 2.515.0
+
+**You can now ask what it is *not* watching.** Type "what am I blind to?" into
+the chat and it answers department by department — electrical, equipment, water,
+climate, security, network, upkeep — saying for each one whether it is watched,
+switched off, or simply not something your property has.
+
+⚠️ **AND "YOU HAVE NOTHING OF THIS KIND" IS ITS OWN ANSWER, CHECKED FIRST.** A
+property with no water sensors is not missing anything; being told it is, every
+time, is how you learn to ignore everything it says. It only mentions a gap when
+there is actually something there that nothing is looking at.
+
+**Ask why it said nothing about something.** "Why did you not say anything about
+the pool pump?" names what was watching it, or says plainly that nothing was.
+"Nothing was watching it" is a complete answer and a useful one.
+
+**And you can try a new rule against your own history before it can wake you.**
+Type `try electrical/standby-draw` and it replays the last thirty days and tells
+you exactly how many times it would have gone off, on which days, about what.
+That is what makes setting a threshold safe — otherwise every new rule is a
+guess you find out about at three in the morning.
+
+⚠️ **A TRIAL RUN CHANGES NOTHING AND COSTS NOTHING.** No alert, no task, no
+message, nothing written down — and no AI involved. You can try a rule that has
+never been switched on.
+
+**Asking about itself is free too.** What it is watching is a question about
+settings, and paying to have your settings read back to you would be absurd.
+
+**Under the hood, which rules are active is now a plain list of names.** The
+add-on knows which ones it may run and nothing at all about how that was
+decided. Two things follow that matter to you: switching something off never
+deletes your file, your edits or its history — turning it back on restores
+everything — and if whatever supplies that list cannot be reached, your property
+keeps running exactly as it was. Going dark because a server hiccuped is the
+worst thing a system like this can do.
+
+## 2.514.0
+
+**It remembers things about your property now, and you can tell it things.**
+Not what happened last Tuesday — what *stands*: that a machine normally draws
+about so much, that one of them runs on a timer between six and nine, that the
+breaker in the plant room trips after a storm. Whatever it knows about something
+travels with every message it writes about that thing.
+
+**Most of what it remembers costs nothing**, because most of it is arithmetic.
+The nightly check already works out what is typical for each thing; writing that
+down as a sentence is free.
+
+⚠️ **AND WHAT YOU TELL IT ALWAYS WINS.** Type `note Pool pump: it runs on a
+timer, 6am to 9am` into the same chat, and that stands — over anything it worked
+out itself, and over anything it works out later. A correction that gets
+overwritten by tonight's pass is not a correction; it is a machine correcting
+you back every night.
+
+**It only learns when you tell it to.** Start with *note*, *remember*, *fyi*,
+*correction* or *actually*. Anything else you type is a question or an answer,
+and teaches it nothing — because something it remembers is repeated forever, and
+a system that decided for itself which of your messages were lessons would learn
+things you never meant to say.
+
+**If it cannot tell which thing you meant, it says so** rather than quietly
+dropping it. Include the name you gave the thing and it will get it.
+
+**There is no score and no expiry date on any of this.** Nothing has a
+confidence percentage you cannot argue with, and nothing you said quietly stops
+applying after a while. What it worked out itself gets recalculated; what you
+said stands until you change it.
+
+**And there is one way to teach it, not two.** If it raises something that was
+not worth raising, you tell it why, in your own words, about that thing. That is
+the whole mechanism.
+
+## 2.513.0
+
+**Every night it checks whether anything has started to drift.** Not whether
+something is broken — that you already hear about — but whether something is
+running longer, cycling more, or drawing more than it used to. A machine taking
+half as long again to do the same job is failing, quietly, weeks before it
+stops.
+
+⚠️ **AND WHAT IT CHECKS IS WRITTEN IN THE SKILL FILES, NOT IN THE ADD-ON.** The
+nightly engine knows how to measure something and compare it against a number;
+it does not know what a pump is, or a battery, or a door. That is the whole
+point: adding a new check is editing a file in your own folder, not waiting for
+a release. The previous version of this feature had its rules in code, and two
+of them ended up cancelling out their own replacements.
+
+**Everything is compared against its own past.** "Draws more than 500 watts" is
+a number that is right for one machine on one property. "Draws a fifth more than
+it used to" is right everywhere — and it is the same rule whether the thing
+draws one watt or ten kilowatts.
+
+⚠️ **SOMETHING THAT CANNOT BE MEASURED IS SAID, NOT PASSED.** If a device keeps
+no long-term history there is nothing to compare, and the night reports it by
+name rather than quietly counting it as fine. A pass that skips a sixth of your
+property in silence tells you the property is healthy when part of it was never
+looked at.
+
+**When something drifts, a job appears on your own to-do list.** In Home
+Assistant, in the app your facility manager already uses — not on another screen
+with another queue nobody opens. Tell it your list in **AI → Settings**; with
+none set the alert still arrives, there is just nothing to tick off.
+
+**Whoever goes to look answers with one of three words.** *Done*, *Not found*,
+or *Help*. ⚠️ Only **Help** reaches you — somebody saying they are stuck should
+reach a person, and somebody saying they are finished should not. All three are
+kept for the monthly account.
+
+**A quiet night costs nothing at all.** No AI is involved in deciding whether
+something drifted; that is arithmetic. And four things drifting the same way
+tonight is one explanation, not four.
+
+## 2.512.0
+
+**You can just ask it now.** Type "electricity last week?" into the same chat
+the alerts come from and you get an answer back — over exactly the same figures
+your Monday report is built from, so the two can never tell you different
+things about the same week.
+
+**Asking the same thing twice costs nothing.** The answer is kept per period, so
+"electricity last week" asked again on Thursday is the answer it already had. A
+new week changes the question, and only then does it work it out again.
+
+**It understands the question by reading it, not by paying for it.** The period
+and the topic come out of the words you typed. You can ask about power, energy,
+batteries, doors, the network or leaks, and about any one thing by the name
+**you** gave it when you accepted it — "how is the pool pump" finds the pool
+pump because that is what you called it.
+
+**A follow-up keeps its place.** Ask about batteries this week, then "and last
+week?" — still batteries. Ask about last week, then "and the doors?" — still
+last week. It only carries forward what you left out, never over something you
+actually said. You and your facility manager have separate conversations.
+
+⚠️ **AND WHEN IT CANNOT ANSWER, IT SAYS WHICH PART IT CANNOT ANSWER.** Not "I
+don't know" — that is indistinguishable from something broken — but "there are
+no figures for the pool pump over last week; it may keep no long-term history,
+or it may not have been watched that long yet". It costs nothing to say that,
+and it never guesses instead.
+
+**If the internet is down you still get the numbers**, just without the sentence
+that would have introduced them.
+
+## 2.511.0
+
+**Every Monday morning you get an account of your week.** What each thing you
+watch used, against the week before, and against its own last thirty days — then
+a short note saying what is worth noticing. It goes to you and to your facility
+manager, and the two are **different documents**, not the same one written twice:
+you are told what the property did, they are told what needs doing.
+
+⚠️ **IT SAYS WHAT IT DID NOT LOOK AT.** The report is built out of the Skills you
+have active, one section each. An area no Skill covers gets no section — and the
+last lines name it, every week. A report with a silent gap looks complete and is
+not; one that says "Not covered: water, climate" tells you exactly where you are
+blind, which is the only thing that makes turning a Skill off safe.
+
+⚠️ **AND SOMETHING IT CANNOT MEASURE IS SAID, NOT SHOWN AS ZERO.** Some devices
+keep no long-term history — Home Assistant simply has no figures for them. Those
+are listed as "Could not be measured", by name. A zero there would look like a
+perfect week for something nobody was watching at all.
+
+**Every number can be traced.** Each figure carries its unit, the period it
+covers and how it was worked out — "sum of 7 per-day change rows from long-term
+statistics". Nothing in the report is a number an AI produced; it is handed the
+figures and writes about them, once, at the end.
+
+**Too little history says so, instead of showing a collapse.** A property
+watched for four days has no previous week to compare against, and the report
+says how many days it has rather than reporting a 100% drop.
+
+**The minor things that never woke you up arrive here**, as a section of this
+report rather than a second message — and they are cleared once sent, so the
+same three lines do not follow you around for a month.
+
+**One report a week, even if the add-on restarts.** It is keyed to the week
+itself, not to a timer, so a restart on a Monday morning does not send a second
+one — and if nothing could be sent at all, the week stays owed rather than being
+quietly marked done.
+
+## 2.510.0
+
+**The layer can explain itself now, and it does it once.** The first time
+something of a given kind goes wrong on your property, the message you get says
+what that kind of thing means here — what was measured, what it is being
+compared against, what happened the last time. Every later one of the same kind
+uses the sentence the system already wrote, and costs nothing at all.
+
+⚠️ **THAT "ONCE" IS THE WHOLE COST OF RUNNING THIS.** A property produces
+hundreds of thousands of state changes a day. Paying to have the same sentence
+rewritten every time is the difference between something you can leave running
+and a demo. Whether something is wrong, how urgent it is, whether it has
+settled, who to tell — all of that is still ordinary arithmetic, as it has been
+for five releases.
+
+**What it is told is a short, computed summary, and nothing else.** Not your
+property's state, not its history, and never an internal device id — it gets the
+name you gave the thing, which is why the message reads like somebody talking
+about your house. Every figure it is handed carries its unit, the period it
+covers, and how it was worked out, and it is told not to invent a cause it
+wasn't given, not to guess at people, and not to argue about urgency.
+
+⚠️ **IT CAN READ AND IT CANNOT ACT, AND THAT IS ENFORCED RATHER THAN INTENDED.**
+It starts with *no* abilities at all and is granted exactly one: reading. Every
+attempt at anything else is blocked before it runs and recorded with what was
+attempted — and the check works by refusing everything not explicitly declared,
+so an ability added by a future update is refused on the day it appears rather
+than the day somebody notices.
+
+⚠️ **NOTHING IT SEES IS EVER WRITTEN BACK ANYWHERE.** The automatic memory that
+this kind of software keeps by default — which writes to disk, outlives
+everything else, and is loaded again next time — is switched off, and stays off.
+
+**An unreachable model never silences an alert.** No key, no internet, a refused
+request: the message still goes out, in the system's own words. Your property
+keeps being watched and you keep being told.
+
+**And the daily spending limit is a limit.** When it is reached the explanations
+stop and the alerts do not.
+
+⚠️ **THIS IS THE FIRST RELEASE THAT USES THE INTERNET AT ALL, AND ONLY FOR
+THIS.** The screen, the 3D villa, the controls and the watching all still work
+with no internet whatsoever. Nothing else was allowed to reach outside — every
+setting that would have sent usage statistics, error reports or update checks is
+switched off.
+
+## 2.509.0
+
+**The layer reads Skills now.** Everything it knows arrives as Markdown you can
+open, read and change — eleven of them ship, in eight departments, and saving
+one takes effect within a minute with no restart. Adding what the layer watches
+is editing a file, not waiting for a release.
+
+**Each file has two halves.** A short block at the top says what it applies to,
+what to measure, and at what figure to raise — that half is for the engine. The
+rest is prose: how to write about it when there is something to say. You see
+both in **AI → Skills**, with the block summarised in a line above the editor so
+you can tell at a glance what a Skill does without reading it.
+
+⚠️ **A SKILL THAT DOES NOT LOAD IS SAID OUT LOUD, WITH THE LINE NUMBER.** It
+appears on the Skills screen against the file, and once over Telegram. The
+failure this guards against is the quiet one: a layer that stopped watching
+something and said nothing — and the worst version of it, an editor telling you
+a file is fine while the layer refuses it, cannot happen here because the screen
+asks the layer's own reader rather than having one of its own.
+
+⚠️ **A SKILL CAN NEVER GIVE THE LAYER A POWER IT DOES NOT HAVE.** It says what
+to measure and when to raise. It cannot name a tool, request an action, or touch
+the permission gate — thirteen words that would mean any of those are refused by
+name, and the loaded Skill has nowhere to put such a value even if one got
+through. These files come from a folder anyone with the file editor can write
+to, which is exactly why.
+
+**Your edits win, and an update cannot wipe them.** A file in your own folder
+replaces the one that ships under the same name. ⚠️ **But a broken edit does not
+quietly fall back to the shipped version** — that would leave everything looking
+healthy with none of your change in effect. It is refused, and it says so.
+
+**The previous version of every Skill is kept**, recorded before the new one is
+read, so the version that worked is still there on the day the new one does not.
+
+⚠️ **`climate` SHIPS EMPTY, ON PURPOSE.** Everything useful about heating and
+cooling depends on a setpoint somebody chose and a building — a shipped rule
+there would be right for one property and wrong for every other. It stays empty
+and says so, rather than looking like it is watching something.
+
+⚠️ **AND A REAL FAULT WAS FOUND AND FIXED IN WHAT IS PROPOSED TO WATCH: EVERY
+CURTAIN WAS BEING FILED AS A DOOR.** Anything in the covers family — curtains,
+blinds, shades, awnings — counted as a door or a lock, and a villa has many more
+of those than it has doors. "Something has been left open" would have arrived
+every evening when the shades closed, and an alert that comes nightly is one
+nobody reads by the week it matters. Something now counts as a door, a gate or a
+window only when it says so itself.
+
+**Still no model anywhere in this.** The meter reads zero, asserted by a test,
+as it has for four releases.
+
+## 2.508.0
+
+**An Incident now becomes a message you actually receive, and you can answer
+it.** Something urgent reaches you the moment it is raised; something minor is
+kept for the digest and wakes nobody. When the condition ends, a second message
+says how long it lasted, in plain words — "about two hours", not a timestamp
+you have to subtract.
+
+**You Acknowledge by replying.** Every message that needs one carries a short
+code, and the layer takes it back however it arrives — typed as text, tapped as
+a button under the message, or chosen from the notification on your phone. It
+does not care which: it looks through whatever came back for its own code.
+⚠️ **This is why adding a second messenger later is one line rather than a new
+parser** — the layer never learns the shape of any particular app's replies.
+
+⚠️ **There is exactly ONE chase, and then silence.** If nobody acknowledges
+within half an hour, the layer says it once more and adds the other person —
+your Facility Manager if it went to you, you if it went to them. Then it stops
+for good. No ladder, no rising tone, no repeating alarm: a system that keeps
+shouting is one people learn to ignore, and a phone that buzzes all night
+about a door is a phone that gets silenced before the night something matters.
+
+**Acknowledging stops the chasing. It does not close the Incident** — only the
+condition actually ending does that, and you will be told when it does. The two
+are separate on purpose: saying "I have seen this" is not the same as saying
+"this is fixed", and a system that treats them as the same quietly loses the
+problems nobody got round to.
+
+⚠️ **A Guest is never messaged, and this is not a setting that could be turned
+on by mistake.** There is no guest destination in the code at all.
+
+⚠️ **An alert with nowhere to go is loud rather than silent.** If no recipient
+is configured, that is recorded and logged as an error — the one failure mode
+worth more than any other is an alerting system that looks like it is working
+because nothing has ever come out of it.
+
+**Still no model, and the meter still reads zero.** Every message is a
+template. Asserted by a test, as the last three releases have been.
+
+## 2.507.0
+
+**The AI layer raises Incidents now.** It watches the Assets you accepted and
+opens an Incident when something is wrong — visible on the wall as a new
+sensor, `VESTA AI open incidents`, whose value is the count and whose history
+Home Assistant keeps.
+
+⚠️ **No model is involved anywhere in this.** Severity is ordinary code. That is
+the single constraint the whole cost of running this rests on: a model call per
+state change, on a property producing half a million of them a day, is not a
+product. A test asserts the meter reads zero after fifty events.
+
+**Only two things can raise an Incident by themselves**, and both are facts
+about the CONNECTION rather than about your hardware: Home Assistant saying it
+cannot reach something, and something having gone quiet for far longer than its
+own habit. Everything else — what "too much" means for a pump, or a pool, or a
+door — arrives later as a Skill. The engine deliberately knows nothing.
+
+⚠️ **Zero is not missing.** Whether something is reachable is decided only on
+Home Assistant's own two words for it, never on a value. `0`, `off` and an empty
+reading are all things a working device reports — this property's owner was once
+sent a false "stopped reporting" alert about a sensor that had changed 1,056
+times that day.
+
+⚠️ **Silence is judged against each thing's own rhythm, never a clock.**
+Something that reports every four hours is not late after seven. And something
+never heard from raises nothing at all: everything you accepted a minute ago has
+been silent since the beginning of time.
+
+**Nothing fires on a flap.** A condition has to hold for five minutes before it
+becomes an Incident, and be clear for five before it ends — so a wireless device
+dropping and returning produces one Incident rather than a stream, and one good
+reading in the middle of an outage does not close and reopen it.
+
+**Several things failing behind one hub become one Incident naming the hub.**
+They do not fail in the same instant — they settle seconds apart — so this looks
+across everything currently open rather than only at whatever settled together.
+Two devices behind one hub failing a week apart remain two problems.
+
+⚠️ **There is no dismiss and no close, anywhere.** An Incident ends when its
+condition ends. An alert that can be dismissed while still true leaves nobody
+watching a thing everybody believes was handled.
+
 ## 2.506.0
 
 **The arithmetic the whole product stands on.** Nine ways the AI layer can
