@@ -1,3 +1,35 @@
+## 2.538.0
+
+**Opening the kiosk asked Home Assistant for every entity in the house twice.**
+
+On a cold start the app loaded the full state of your entire Home Assistant —
+not just the devices on the villa map, everything — and then immediately did it
+again. Two code paths both correctly believed it was their job, and both were
+right to ask; nobody owned the question "has this connection already been
+loaded?". It does now, so two asks become one request, and a genuine
+reconnect still reloads.
+
+This lands on the profile screen, which is the one screen whose only job is to
+respond to a tap. A later change had made the second load's *effects* nearly
+free, which hid the symptom without removing the round trip.
+
+**Also, two rules that were written down but never written in code.**
+
+Four places retry a failed request, each with a different budget — the live
+connection backs off for as long as it takes, a model download gives up after
+two minutes, a settings read tries three times. Those differences are correct.
+But the decision underneath them — *is this worth trying again at all?* — was
+spelled out in comments in three separate files, in almost the same words, and
+in code in none. It is one function now, which also settles a case none of the
+four had agreed on: our own timeout is worth retrying, and a request abandoned
+because you navigated away is not.
+
+And the limits on how large a request may be are set twice, once in the web
+server and once in the add-on behind it — deliberately different numbers, with
+an ordering between them that nothing checked. Invert one pair and a clear
+error message is silently replaced by a generic server page. All eight pairs
+are now verified on every release.
+
 ## 2.537.0
 
 **Two endpoints accepted a request body of any size at all.**
