@@ -1,3 +1,27 @@
+## 2.531.0
+
+**Releasing now means "Home Assistant can see it", not "the build passed".**
+
+Every release failure here has had the same shape. The tests were green, the
+push worked, and it was reported as shipped — while nothing had actually
+reached your add-on store. Twelve releases were lost that way to a failing job
+nobody read. Six more were lost to a build cancelling itself, with every single
+test passing. Each time, the thing being reported was a stand-in for the thing
+that matters, and the stand-in was true while the real answer was false.
+
+There is now one command that does the whole release, and it does not report
+success until it has read the add-on manifest on the branch Home Assistant
+actually clones and confirmed it names the new version. If the build fails it
+says which job. If the build passes but nothing gets published — the exact
+failure of the last six releases — it says that too, and fails.
+
+It also refuses to start when there is uncommitted work (so what ships is what
+was tested), when the two version numbers disagree, and when the version is one
+already published (which Home Assistant would never offer as an update).
+
+The old `preflight` command is removed. It pointed at a file that has never
+existed in this branch.
+
 ## 2.530.0
 
 **Six releases built cleanly and Home Assistant was never told about any of
