@@ -1,3 +1,29 @@
+## 2.537.0
+
+**Two endpoints accepted a request body of any size at all.**
+
+Before reading anything a browser sends, the add-on caps how large it may be.
+That eight-line preamble was written out five separate times, once per
+endpoint. Two of those copies — the two "test the connection" buttons on the
+AI settings screen — were meant to differ in one way: their body is optional,
+so a missing or malformed one means "no options given" rather than an error.
+They differed in a second way nobody intended. They had no size limit.
+
+That is what copying a shape and editing the part you care about produces. All
+five now go through one reader: soft about the *shape* of an optional body,
+never about its *size*.
+
+**And the one endpoint with a different permission rule had slipped past the
+last release's tidy-up.** Setting the API key and the spend limit is the
+owner's alone — the facility manager maintains what the property watches, not
+what it costs — and that endpoint spelled its check slightly differently from
+the other eleven, so it kept the old bare "forbidden" with no explanation in
+it. It now goes through the same one place as the rest, while keeping its
+stricter rule, and there is a test that a facility manager is refused it and
+an owner is not.
+
+There are no unexplained refusals left anywhere in the add-on.
+
 ## 2.536.2
 
 **The checks that prove the tests can fail were pointing at code that had been
