@@ -1,3 +1,49 @@
+## 2.504.0
+
+**The AI layer now watches only what you tell it to, and there is a screen for
+saying so.** Settings → VESTA AI → **Watching**.
+
+Until this release it counted every state change on the property — measured at
+about 500,000 a day — against a design whose whole funnel assumes roughly 300 a
+MONTH. That gap was the missing allowlist, and it is the single most
+load-bearing mechanism in the plan: every later figure, including what this
+costs to run, is sized against the filtered stream.
+
+**It proposes; you decide.** Nothing about your property is built in — it
+cannot be, because an allowlist of your device ids is exactly what must never
+ship. Instead the layer reads Home Assistant's own registry and applies generic
+rules, and an empty install PROPOSES rather than sitting silent. Nothing is
+watched until you accept it.
+
+**An Asset is a device, not an entity.** With 581 sensors out of 1,327
+entities, a domain-level list cuts nothing; grouping by device and filtering by
+device class is what produces the reduction.
+
+Four things the rules get right that a first attempt would not, each measured
+against a real registry rather than reasoned about:
+
+* **The registry is filtered twice** — service entries (add-ons, integrations,
+  notify services) and devices with no model (the wireless clients a network
+  integration invents: phones, laptops, a television). Without both, two thirds
+  of what is proposed is software.
+* ⚠️ **Voltage and current never make something electrical.** Anchoring on them
+  would file every battery-powered door and motion sensor as an electrical
+  asset AND a battery asset at once, under contradictory categories.
+* ⚠️ **"Pump" is not discoverable and the rules do not pretend otherwise.**
+  There is no device class for one, and every pump here is a meter identical to
+  the one on the grid connection. What the rules can see is the enclosing
+  class — something switchable that is also metered — and **you name the role
+  when you accept it**. That is not a nicety: it is the only place a word like
+  "pump" can legitimately enter the system.
+* ⚠️ **Something you refuse is never proposed again.** Re-offering it is the
+  "stale entities I cannot delete" defect in another costume, and this project
+  has shipped that once already.
+
+**The Status tab now shows the funnel, not just the firehose** — changes
+observed and, of those, how many were watched. The design claims roughly a
+tenfold cut at this filter; reporting only the raw number would leave that
+unmeasurable.
+
 ## 2.503.0
 
 **The gateway connects AND can read the property now.** The Test button did
