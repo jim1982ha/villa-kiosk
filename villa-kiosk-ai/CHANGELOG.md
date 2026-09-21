@@ -1,3 +1,37 @@
+## 2.554.0
+
+**You pressed Acknowledge and nothing happened. It had worked — and finding
+out why uncovered something far worse.**
+
+The press was understood, the alert acknowledged and the reminder cancelled;
+the log says so. What never reached you was the confirmation that stops
+Telegram's button spinning. It was queued and sent on the add-on's five-minute
+heartbeat, and Telegram stops accepting an answer after about fifteen seconds —
+so it could not once have arrived in time. A press is now confirmed the moment
+it lands.
+
+**Some alerts were never sent at all.** Every few seconds the layer works out
+what is currently wrong, and every five minutes it sends whatever that produced.
+The list of things to send was being REPLACED rather than added to, so anything
+concluded between two of those five-minute marks was overwritten seconds later
+and simply never travelled.
+
+Nothing looked broken. The incident was open, counted, shown on the wall and
+included in the weekly report — it just reached nobody, and because no delivery
+was ever recorded it could not be acknowledged or chased either. Alerts arrived
+at all only because the settling time and the heartbeat are both five minutes,
+so most things happen to be concluded exactly on the mark. This is the most
+likely explanation for a night that ended with 76 open incidents and about 50
+messages. The same fault silently dropped "Resolved" messages when something
+came back.
+
+Both are now held by tests that fail against the old behaviour, so neither can
+come back unnoticed.
+
+**And a button press that cannot be confirmed now says so in the log** instead
+of looking exactly like one that was — which is the shape of failure that hid
+the first of these.
+
 ## 2.553.0
 
 **The weekly report was measuring the wrong thing, and now reads like a
