@@ -1,3 +1,74 @@
+## 2.539.0
+
+**The Facility readiness page never once reported a schedule.**
+
+Its "Pool serviced" row looked for a task carrying a particular internal label,
+and nothing in the app has written that label since the built-in task templates
+were removed — they were one property's contract clauses and had no business
+shipping to anyone else. So the row could not appear: not on a villa with a
+pool, not on a property with a filter change and a garden visit. The readiness
+page simply said nothing about any recurring obligation you had set.
+
+It now reports the schedules you actually configured, whatever they are. One
+row, naming what has lapsed and what has never been performed — the two need
+different words, and now get them.
+
+**The AI layer could stop working for the day without saying so.**
+
+Every model call is charged against a daily limit. Once that limit is reached
+the layer keeps watching the property and keeps raising incidents, but stops
+asking the model — no weekly observations, no written wording. Nothing
+published that fact, so the status screen showed a healthy layer beside a small
+dollar figure and you had no way to tell it apart from a quiet week.
+
+The figure could not tell you either. A single call the layer cannot price
+closes the budget on its own, because it cannot honestly claim to know what is
+left — so two pence spent of a pound and "stopped until tomorrow" looked
+identical. The status screen now says which it is, and names the setting that
+lifts it.
+
+**The weekly report told the model that last week's small events were
+permanent facts about your property.**
+
+Low-severity incidents are deliberately held back from waking anybody and
+collected into the weekly report. On the way to the model they were handed over
+in the slot reserved for standing facts — the ones re-asserted every week, the
+ones a person can correct. A door left open on Tuesday was being presented as
+something that is generally true here. Those are now two separate things, under
+two headings, and what a person has corrected is shown as well.
+
+**Sizes disagreed with each other.**
+
+The same model file read 190.7 MB on the upload screen and 200.0 MB in the
+message confirming it uploaded, with no screen saying which unit it meant.
+Every size in the app is now shown the same way, the way your iPad reports it.
+
+**Walking upstairs in a model with only one stair trigger stranded you there.**
+
+If a 3D model marks the way up but not the way down, the app used to disable
+the fallback that reads your height — because a trigger existed — and there was
+no way back to the ground floor. Each direction is now decided on its own. The
+villa's own model marks neither, so this has never happened here; a model built
+elsewhere would have hit it immediately.
+
+**Smaller things.** A Skill file that will not load now says so the same way on
+its card and on its own page; before, a note file with a syntax error read as a
+perfectly good note in one place and an error in the other. The "which
+department?" prompt asks for a folder, which is what it was listing. And the
+list of device kinds you can bind a mesh to was written out in three places,
+where the two that decide what you may pick and the one that decides what
+survives a reload could quietly drift apart.
+
+**Under the floor.** The check that proves the AI layer's tests can actually
+fail had a hole in it: a mutation that broke a file's syntax stopped the test
+run before a single test executed, and that was counted as "the tests caught
+it". Five of the three hundred were in that state, proving nothing for as long
+as they had existed; with no test runner installed at all, the whole thing
+reported success. It now tells the three outcomes apart and refuses to run at
+all unless the tests are green to begin with. The release command grew a
+matching fix: the guard that refuses to ship without the security suite was
+attached to the wrong branch and did nothing.
+
 ## 2.538.0
 
 **Opening the kiosk asked Home Assistant for every entity in the house twice.**
