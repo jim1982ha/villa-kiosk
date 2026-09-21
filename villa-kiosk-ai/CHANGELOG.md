@@ -1,3 +1,22 @@
+## 2.552.0
+
+**Acknowledging an alert is a button now, not a code to type back.**
+
+Every alert ended "Reply ACK-7B2B to acknowledge", which on a phone means
+reading a code, switching to the input box and typing it correctly. The alert
+now carries an **Acknowledge** button instead, and so does the reminder that
+follows when nobody has answered.
+
+Nothing about acknowledging changed otherwise: the same code travels inside the
+button, a typed reply carrying it still works, and the wall tablet's own
+Acknowledge button is untouched. A notify target that cannot draw buttons — an
+e-mail address, a companion-app notification — is not left without a way to
+answer: it receives the same choice written out in words.
+
+Pressing the button also stops it spinning. Telegram leaves a pressed button
+showing a progress indicator until it is told the press was received, so the
+one visible consequence of acknowledging used to look like a failure.
+
 ## 2.551.0
 
 **Watching the whole house was making the add-on lose its connection.**
