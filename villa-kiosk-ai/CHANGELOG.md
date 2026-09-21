@@ -1,3 +1,30 @@
+## 2.542.0
+
+**Every alert after a restart named the entity, not the thing.**
+
+The first incident ever raised on this property read *"Home Assistant cannot
+reach lock.test_lock (unavailable)"*. It should have said the name you gave the
+device — that is the whole reason you are asked what a thing is when you accept
+it, and the product's own rule is that what you are told about is never an
+internal identifier.
+
+The list of what to watch was loaded one way and everything derived from it
+another. When you accept a device, the layer rebuilds four things together:
+the watch list, what to CALL each device, what sits upstream of it, and which
+device an incident belongs to. Only the first was also loaded at startup — so
+the moment the add-on restarted, it watched the right things and knew nothing
+about any of them. Three consequences, all silent:
+
+* alerts named the entity instead of the device;
+* several devices failing behind one hub could no longer be recognised as one
+  problem, so you would get one alert each;
+* no Skill's wording could reach an alert, because the incident could not be
+  matched back to the device it was about.
+
+It survived because ACCEPTING a device does rebuild all four — so the session
+where you set things up behaves perfectly, and only the next restart is wrong.
+All four are now loaded through the same path at startup.
+
 ## 2.541.0
 
 **The AI screens asked their questions with the browser's own dialog.**
