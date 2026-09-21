@@ -1,3 +1,28 @@
+## 2.548.0
+
+**"Leave empty to follow Home Assistant" now actually does.**
+
+The Time zone setting says, on the Configuration page, that leaving it empty
+follows Home Assistant. It did not. Empty meant UTC — and every schedule in
+this layer is an hour, so on a property eight hours ahead the weekly report
+fired at 16:00 instead of 08:00 and the nightly sweep at 10:00 instead of
+02:00. Nothing said so; the times were simply wrong, in a direction nobody
+would think to check.
+
+It was a known shortcut rather than an oversight — the source said so: "asking
+Home Assistant needs a gateway read that this release has no reason to make
+yet". The reason arrived. The layer now asks Home Assistant once it has
+connected, and follows the answer.
+
+A zone you typed yourself still wins, because somebody who typed one meant it
+— a Home Assistant in the wrong zone is exactly when they would. A name this
+system has no database entry for changes nothing, and neither does a gateway
+that cannot answer: the clock stays where it was and says so, rather than
+silently landing on UTC and reporting a zone it is not in.
+
+If you have been leaving it empty, your schedules move to the hours they were
+always supposed to run at on the next restart.
+
 ## 2.547.0
 
 **The report and the Status tab gave different answers to the same question.**
