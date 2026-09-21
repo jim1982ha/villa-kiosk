@@ -1,3 +1,33 @@
+## 2.546.0
+
+**"Send one now" on the Report tab.**
+
+The weekly report goes out on Monday morning. Until it does, the Report tab is
+empty and there is no way to find out whether any of it works — which is a poor
+deal after setting the layer up on a Thursday. The button asks for one, and it
+arrives within five minutes.
+
+It is the same report, through the same code, to the same people. Not a
+preview, not a sample: if it is wrong, it is wrong on Monday too.
+
+Two things it deliberately does NOT do. It does not consume the week — the
+weekly report is keyed by week so that a Monday cannot send sixty of them, and
+if asking on a Thursday marked that week as done, Monday's would silently never
+arrive and you would conclude the schedule was broken having just been shown it
+was not. And the button says **asked for**, never "sent": the screen writes a
+row, the layer picks it up on its own beat, and this add-on cannot see whether
+the message actually left. Saying "Sent" at the moment of pressing would be
+the same lie as a build reported as shipped because it compiled.
+
+**And a check that had been looking in three directions out of four.** The test
+that keeps the app, the web server and the add-on agreeing about which paths
+exist walked nginx → add-on, app → add-on and app → dev server, but never asked
+whether nginx forwards what the app requests. That is the one that fails in
+your house rather than on a developer's laptop: an endpoint the add-on answers
+and nginx does not publish is a 404 through Home Assistant and a success under
+`npm run dev`. It was this release's own new endpoint that exposed it — the dev
+server's omission was reported, nginx's was not, and they were one edit apart.
+
 ## 2.545.0
 
 **The Status tab said your house was being watched when it was not.**
