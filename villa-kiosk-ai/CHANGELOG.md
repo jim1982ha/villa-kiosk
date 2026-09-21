@@ -1,3 +1,40 @@
+## 2.545.0
+
+**The Status tab said your house was being watched when it was not.**
+
+With one device accepted, it read:
+
+    electrical: watched — electrical/consumption, electrical/standby-draw
+    equipment: watched — ...
+    water:     watched — ...
+
+…while no electrical device, no piece of equipment and no water sensor was
+being watched at all. Five of the six departments claimed coverage of nothing.
+A department was called "watched" whenever its Skill was installed and
+licensed, regardless of whether anything on the property had been accepted for
+that Skill to work on.
+
+A Skill is a capability. Watching is a capability with something to apply it
+to. That distinction is the entire point of this screen — it exists so you can
+tell "you have not bought this" from "you have it and it is switched off" from
+"there is nothing here of that kind" — and the state that says so was already
+there. The same property now reads:
+
+    electrical: nothing to watch here — nothing you have accepted is of this kind
+    security:   watched — security/left-open
+    upkeep:     watched — upkeep/availability, upkeep/battery-health, upkeep/gone-quiet
+
+which is true, and tells you what to do about it.
+
+**The tab bar across the top of these dialogs no longer looks broken.** It
+scrolls itself when you open a dialog on a tab that is off screen, so the row
+does not sit there highlighting the first tab. But it scrolled the minimum
+distance, which parked the selected tab hard against the edge and sliced the
+neighbouring icon in half — and with the scrollbar hidden, a half-cut icon was
+the only thing left saying the row scrolls. It keeps its own margin now, and
+the ends fade so a scrolled row looks scrolled rather than clipped. All the
+tabbed dialogs share one strip, so this is fixed everywhere at once.
+
 ## 2.544.0
 
 **The "what is it?" dropdown is the app's own again, and alphabetical.**
