@@ -1,3 +1,22 @@
+## 2.551.0
+
+**Watching the whole house was making the add-on lose its connection.**
+
+Every state change re-checked every watched device. With a handful accepted
+that was free; with 1,077 entities and thousands of changes a minute it was
+not, and Home Assistant was closing the add-on's listening socket about once a
+minute because the layer was too busy to answer a ping. A watcher that cannot
+stay connected is not watching.
+
+The check is now spaced to once every five seconds. Nothing is missed — every
+change is still recorded the instant it arrives; only the sweep over them is
+spaced out. And it costs nothing: an alert cannot be raised until a problem has
+lasted five minutes, so checking twenty thousand times inside that window
+cannot tell you anything sooner than checking a hundred times.
+
+This is the other half of "watch everything unless you say otherwise". Enrolling
+the whole property was the owner's ruling; making the layer survive it is this.
+
 ## 2.550.0
 
 **Fifty alerts in one minute, about devices that were working.**
