@@ -1,3 +1,40 @@
+## 2.550.0
+
+**Fifty alerts in one minute, about devices that were working.**
+
+Turning on "watch everything" produced an alert storm on the reference villa —
+69 open incidents, a doorbell sending seven identical messages, a phone
+sending fifteen. Four separate faults, each of which had been harmless while
+only a handful of devices were watched.
+
+**"No value" was being read as "cannot be reached".** In Home Assistant,
+`unavailable` means the device cannot be reached; `unknown` means there is no
+value — and for a whole class of entities that is the normal, permanent state.
+A button is `unknown` until somebody presses it. Your doorbell has seven
+buttons, so it sent seven alerts about a doorbell that was fine. Only
+`unavailable` counts now. Nothing is lost: a device that stops reporting is
+still caught by the rule written for exactly that.
+
+**One alert per entity, where it should have been one per device.** The alert
+said "cannot reach Parking Doorbell" and the thing underneath it was a single
+entity, so a device with sixteen entities could raise sixteen alerts that each
+read identically. One device, one alert — and it now says how much of the
+device is affected, because "3 of its 16 things" and "all of it" are different
+problems.
+
+**A group of failures was named by a registry id.** When several devices behind
+one hub fail together they are reported as one — but the message read "93
+watched things behind `e038a944b8dd70ca4d4953f78578315d` went unreachable
+together", and listed "Bedroom1 Light" five times. It now uses the hub's own
+name where the property has one, a plain phrase where it does not, and names
+each affected thing once.
+
+**Your phones were being watched.** The discovery rules claimed to drop phones,
+and dropped only the ones a router had merely seen — not the ones running the
+Home Assistant companion app, which register themselves properly. A phone
+leaving the house then reads as a device that cannot be reached. It is supposed
+to leave the house.
+
 ## 2.549.0
 
 **Everything is watched now, unless you say otherwise.**
