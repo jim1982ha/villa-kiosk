@@ -1,3 +1,40 @@
+## 2.543.0
+
+**"Stop" made a device disappear, with no warning and no way back.**
+
+On the Watching list, Stop was a single tap with no confirmation. It removed
+the device from what VESTA watches — and because the proposed list is only
+rebuilt when the add-on starts, the device then appeared in NEITHER list. It
+was not deleted and nothing was broken, but there was no way to see it or get
+it back short of restarting the add-on. Reported as "I don't see the test lock
+device now", and that is exactly what had happened.
+
+Stop now asks first, says what stops happening, and puts the device straight
+back among the proposals — so the decision is reversible on the screen where
+it was made. The name you had given it is not carried into the new offer,
+because that was your answer to a question you have just taken back.
+
+**A search box, once there is enough to search.** Fifty-five proposals is more
+than a list. It reads the name, the name you gave it, and the category shown on
+the row — so "lock" finds a device whose row reads "Doors and locks" — and
+every word narrows rather than widens. It appears once there are more than
+eight devices between the two lists, and an empty result says so rather than
+looking like a property with nothing on it.
+
+**The "what is it?" question now offers common answers.** Twenty-two of them —
+pool pump, irrigation valve, water heater and so on — as a dropdown you can
+still type past. It is deliberately not a closed list: the name is yours to
+choose, nothing in the layer matches it against a vocabulary, and a property
+with a koi filter has a koi filter.
+
+**And anything already broken when the add-on starts is now reported.** The
+layer learns about your devices from changes as they happen, and a change that
+happened before it started never arrives. So a device that went offline and
+stayed offline was invisible — including across every update. It now reads the
+current state of everything it watches at start-up, which is precisely the case
+that matters: the restart most likely to happen during an outage is the one you
+perform because of the outage.
+
 ## 2.542.0
 
 **Every alert after a restart named the entity, not the thing.**
