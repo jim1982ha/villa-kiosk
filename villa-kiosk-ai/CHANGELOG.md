@@ -1,3 +1,29 @@
+## 2.544.0
+
+**The "what is it?" dropdown is the app's own again, and alphabetical.**
+
+It was drawn by the browser rather than by VESTA — on the villa's screen that
+came out as a full-height black column beside a light dialog, which is the one
+thing the app's dialog exists to stop happening. It now uses the same control
+as every other dropdown here: the Settings screen's picker, with the same
+"Something else…" escape hatch, because the name is yours to choose and a
+closed list would be this add-on deciding what every property owns. The
+twenty-two suggestions are in alphabetical order, which is how a list you scan
+for a word you already have in mind should be ordered.
+
+That control was written for one screen and lived inside it, which is why the
+second screen that needed it reached for a browser one instead. It is now
+somewhere a third caller can find it.
+
+**And accepting a device that is already broken now works.** The layer learns
+about devices from changes as they happen. The previous release made it read
+the current state of everything it watches at start-up — but accepting a device
+is the *other* way something enters that list, and it had exactly the same
+problem: accept a device that is already offline and nothing arrives, so it
+stays invisible until it comes back. That is the likeliest reason to start
+watching something in the first place. It now reads the state of whatever was
+just accepted, and only then — not on every heartbeat.
+
 ## 2.543.0
 
 **"Stop" made a device disappear, with no warning and no way back.**
