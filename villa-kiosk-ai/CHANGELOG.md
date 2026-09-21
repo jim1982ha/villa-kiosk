@@ -1,3 +1,61 @@
+## 2.553.0
+
+**The weekly report was measuring the wrong thing, and now reads like a
+report.**
+
+A device is not a reading: a smart light publishes its power, its energy, its
+voltage, its working temperature and four button sensors. The report read
+whichever of them Home Assistant happened to list first and stopped there — on
+a real property that was the **lamp's own temperature, in degrees, printed
+under a heading that said Consumption**. The lamp's energy meter, which is what
+that section is about, sat unread in the same device. It is why every line
+said "this reading cannot be summed": a temperature cannot be, and nothing had
+looked for the meter.
+
+Each figure is now about the entity that answers the question being asked, and
+each figure says what it is. Where a report gave three bare numbers under a
+repeated device name, it now reads:
+
+> Bedroom1 Light — used 14.0 kWh, vs last week +2.0 kWh, trend +0.5 W/day
+
+Units are back — Home Assistant does not put them on the figures it aggregates,
+so they are read from the device itself. Differences carry a sign, because "vs
+typical 1.8 W" does not say whether something is drawing more than usual or
+less. A trend is per day and says so. And a measure that cannot run on a sensor
+is stated once for everything it is true of, instead of once per device per
+section — which on this property was the same sentence sixteen times.
+
+**On the wall it is a document now, not a wall of text.** The Report tab used
+to show the phone's message inside a fixed-width block. The layer now hands the
+tablet the report's structure, so figures are grouped under the thing they are
+about, and what could not be measured is stated quietly rather than looking
+like a fault.
+
+**A device that is wholly unreachable now says so.** An alert read "8 of its 17
+things (unavailable)", which says nine are fine. They were not fine — they do
+not exist: Home Assistant's registry holds rows for diagnostics it never
+creates, and a row with no reading was being counted as a healthy one. A
+fraction still appears when part of a device is down, which is a different and
+real thing, but only when the rest of it has actually reported.
+
+**One person in two roles is told once.** The reminder that follows an
+unacknowledged alert widens from one recipient to everyone; where the owner and
+the facility manager are the same phone, it arrived twice, word for word.
+
+**And VESTA can now be taught a kind of device it has never seen, without a new
+version.** Watching something new needed a release: the layer's idea of what a
+device is for lived in its code, so a water meter was not mis-measured, it was
+invisible — it never appeared under Found at all. A Skill can now say what it
+reads, in Home Assistant's own words:
+
+> capability: water
+> reads: water
+
+That one line is enough for such a device to be found, watched, measured and
+reported. Only Skills you have switched on widen what is looked for, and a
+Skill naming something VESTA cannot place is now refused out loud, with the
+line to add — instead of loading, appearing in the list and watching nothing.
+
 ## 2.552.0
 
 **Acknowledging an alert is a button now, not a code to type back.**
