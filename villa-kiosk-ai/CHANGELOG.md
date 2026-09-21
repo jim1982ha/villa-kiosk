@@ -1,3 +1,27 @@
+## 2.547.0
+
+**The report and the Status tab gave different answers to the same question.**
+
+The report that just went out was headed "What this report covers: electrical,
+water, security" — while the Status tab, correctly, said electrical and water
+had nothing accepted of that kind. Both were computed from real data; only one
+answered the question printed above it. The report listed every department
+whose Skills speak to you, regardless of whether anything on the property had
+been accepted for them to work on. It now says what is actually watched, which
+is the same sentence the Status tab uses, from the same place.
+
+**The tab bar was being squeezed on long tabs.** The dialog is a vertical
+stack — header, tabs, content, footer — and every part except the tab row said
+whether it may shrink. The tab row did not, so on a tab with a lot of content
+(Settings) the stack ran out of room and compressed it, while the same strip on
+a short tab (Found) kept its full height. One control, two heights, decided by
+whatever happened to be underneath it.
+
+**"Send a test message" now sits on the same line as the field it tests**,
+beside "Choose from the list", instead of below the paragraph explaining the
+setting. The answer it gets still appears underneath, where it has room to say
+what happened and which target it reached.
+
 ## 2.546.0
 
 **"Send one now" on the Report tab.**
