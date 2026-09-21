@@ -1,3 +1,50 @@
+## 2.555.1
+
+The same release as 2.555.0, which never reached anybody: its build stopped at
+the checks that deliberately break the code to prove the tests notice. Two of
+those proofs had gone stale against this very change — one described a hazard
+the new code no longer has, and the other covered a case no test pressed a
+button on. Nothing about the add-on differs; the proofs do.
+
+## 2.555.0
+
+**An alert you have answered now looks answered, and a bad night is one
+message instead of fifty.**
+
+Pressing Acknowledge worked, and left the button sitting there to press again
+— which reads as "nothing happened", because nothing visible did. The message
+is now rewritten the moment you answer it: the button goes, and the time it
+was acknowledged takes its place, under the words the alert originally said.
+
+> Home Assistant cannot reach A pump (unavailable).
+>
+> ✅ Acknowledged at 21:34.
+
+The line promising to repeat is removed with it, because it no longer will.
+The button itself is a tick rather than a wide word.
+
+**Many things failing at once is one message.** On the evening the layer was
+first asked to watch the whole property it sent about fifty messages in one
+minute. Each named a different real device, so nothing about them was wrong
+except that nobody could read them. From three upward they now travel
+together, naming how many — with the names themselves when there are only a
+handful, because then the names ARE the summary.
+
+Everything about what VESTA concluded is unchanged: every incident still opens
+on its own, stands on its own on the wall, and ends when its own condition
+ends. Only the message is folded, so a ceiling set wrongly costs messages and
+never records.
+
+The same applies on the way out — a storm ending is one message when the last
+of them is back, not forty — and to the reminder, which now names only what is
+still wrong: "2 of the 8 are still unreachable" rather than repeating all
+eight. One button answers the whole group.
+
+**Also fixed:** things behind one hub already collapsed into a single incident
+before any of this, so a shared upstream never reaches the ceiling at all —
+which means a batch that does reach it is, by construction, things that failed
+for unrelated reasons.
+
 ## 2.554.0
 
 **You pressed Acknowledge and nothing happened. It had worked — and finding
