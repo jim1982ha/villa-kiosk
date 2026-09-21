@@ -1,3 +1,40 @@
+## 2.549.0
+
+**Everything is watched now, unless you say otherwise.**
+
+The layer used to propose and wait: nothing was watched until you accepted it,
+one device at a time. The reasoning was that an allowlist the layer writes for
+itself is one you cannot argue with — which is fair, and produced 56 decisions
+standing between a fresh install and anything working at all. This property
+watched a single test lock for a morning because of it.
+
+That is reversed. Every device found is watched as soon as it is found, and
+**Stop** is how you argue. Three consequences, all deliberate:
+
+* **A device you add later is enrolled on its own.** Discovery used to run only
+  at start-up, so a socket plugged in on Tuesday was invisible until somebody
+  restarted the add-on. It now looks again every hour — which is also why it
+  does not look every five minutes: it is a few dozen questions to Home
+  Assistant, for a device list that changes a handful of times a year.
+
+* **Stop is permanent, and reversible.** With the layer enrolling by itself, a
+  Stop that merely un-watched would be undone within the hour — so Stop refuses
+  the device outright. Refused devices are now LISTED, by name, under "Not
+  watched", with a button to change your mind. They used to be a count and
+  nothing else, which was fine when refusing meant deliberately pressing Never
+  and is not when a mis-tap can do it.
+
+* **Nothing you have already refused comes back.** Every re-run honours it.
+
+You can have the old behaviour: **Settings → What it watches** turns it off,
+and everything waits for you again.
+
+⚠️ One thing to expect on a large property: this moves the layer from watching
+a handful of entities to watching most of them — here, 1,077 of 1,313 — and
+every unreachable device raises an alert five minutes after it goes quiet. If
+the first evening is noisy, Stop the devices you do not care about; that is
+what the button is for.
+
 ## 2.548.0
 
 **"Leave empty to follow Home Assistant" now actually does.**
