@@ -1,3 +1,38 @@
+## 2.540.0
+
+**The AI layer could see your devices and read nothing about them, and it
+reported itself healthy the whole time.**
+
+It watches nothing on this property. Not "watches a few things" — nothing at
+all. The add-on log says it plainly once you look: *207 registry rows, 122 are
+hardware, asking about 1419 entities* … *0 assets proposed* … *nothing on this
+property matched the discovery rules, and nothing is being watched.* With
+nothing watched, no incident can ever be raised, no alert can ever be sent, and
+the weekly report has no figures to report. The status screen showed `ok`.
+
+The cause is one level of nesting. The layer reads Home Assistant through the
+`ha-mcp` add-on, and that add-on answers some of its tools in a plain envelope
+and others wrapped in a `data` field. Measured against the live gateway: the
+device list and the template evaluator are plain; the entity reader and the
+history reader are wrapped. The layer read the plain shape for all four. The
+two it got wrong are exactly the two that carry measurements — what kind of
+device this is, and what it has been doing — so it could list your hardware and
+learn nothing about any of it.
+
+It failed silently because reading nothing and finding nothing look identical.
+The device reader has always refused a reply it could not understand; the other
+two returned an empty answer instead, which every later stage reads as "this
+property has no measurable devices" and "this property has no history". Both
+now refuse the same way, so an unreadable gateway says so rather than
+describing your villa as empty.
+
+**And the check that proves the tests can fail was itself mutating the wrong
+lines.** Two of its three hundred entries were anchored to a snippet of code
+that appears twice in its file — it edits the first match, which was not the
+one the entry was named for. One of those was the history-reader rule above, so
+that rule was reported as untested when in truth it was never tried. The
+anchors are now required to be unique, which is how the second one was found.
+
 ## 2.539.0
 
 **The Facility readiness page never once reported a schedule.**
