@@ -1,3 +1,35 @@
+## 2.541.0
+
+**The AI screens asked their questions with the browser's own dialog.**
+
+Pressing "Watch" on a proposed device opened a grey box titled with your Home
+Assistant address, asking "What is this? e.g. pool pump, irrigation valve — or
+leave blank." That is the browser breaking through the app, which on a
+wall-mounted iPad is exactly what it looks like. The app has had its own dialog
+for a long time — the file's own note says a native one gets its next call site
+by somebody following the existing pattern, which is precisely what happened:
+five more appeared in the AI screens.
+
+All five now use the app's dialog, in the app's styling, honouring Escape and
+the phone's Back button like every other dialog here.
+
+**And "Cancel" on that box did not cancel.** It added the device to what the
+layer watches anyway, with no name. The browser does tell you which button was
+pressed; the code threw that away. Cancelling now cancels.
+
+**The question also explains itself.** It used to give the format and not the
+consequence, so the honest answer to it was "I do not know what this does". It
+now says what the name is for: it is what VESTA calls the device in everything
+it tells you about it, and what you can ask about by name. Leaving it blank
+keeps the name Home Assistant already has.
+
+**Creating a Skill no longer loses what you typed.** It asked two questions in
+a row, and neither could refuse an answer: a folder that was not a folder was
+accepted and rejected by the server afterwards, and a badly-formed name put an
+error on a page whose box had already closed, taking the name with it. Both now
+say what is wrong with the box still open and the text still in it. Leaving an
+edited Skill offers to save it, which the old two-button box had no room for.
+
 ## 2.540.0
 
 **The AI layer could see your devices and read nothing about them, and it
