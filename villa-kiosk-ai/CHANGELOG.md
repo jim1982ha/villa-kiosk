@@ -1,3 +1,29 @@
+## 2.564.0
+
+Internal only — nothing on screen changes, and one thing that could have gone
+wrong on the wall no longer can.
+
+**The web server now reads its own config before the image is published.**
+2.563.0 fixed a duplicate nginx location by hand and added a check for that one
+mistake. This runs `nginx -t` during the image build, so anything nginx would
+refuse fails the build instead of the add-on. A written check only catches the
+mistake somebody thought of in advance; this catches whatever the next one
+turns out to be. Verified both ways — clean on the current config, and it stops
+the exact config that broke 2.562.0.
+
+**Eight screens could serve stale data when the kiosk is opened directly.**
+The add-on publishes port 8099 for access that bypasses the Home Assistant
+sidebar. On that address — not through the sidebar, where it was always fine —
+the service worker was allowed to cache the AI settings, Skills, report and
+asset requests, so an edit could appear not to have saved. All eight are now
+excluded, and the path check refuses to let a ninth be forgotten: it walks five
+files now rather than the three it walked while claiming four.
+
+**A stale mutation-test anchor now shows what replaced it.** Re-pointing one was
+hand transcription, and getting it slightly wrong makes the mutation silently
+unrunnable — which the sweep then reports as a hole in the tests. It now prints
+the closest matching code as a diff.
+
 ## 2.563.0
 
 **The add-on would not start on 2.562.0, and that is fixed first.**
