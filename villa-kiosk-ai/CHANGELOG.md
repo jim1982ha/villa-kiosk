@@ -1,3 +1,23 @@
+## 2.571.0
+
+**The Status screen now says how many Skills are loaded — and names any that
+were refused.**
+
+After editing a Skill there was nowhere in the app to see whether it had been
+accepted. The layer has always known: it counts what loaded, what a licence
+held back, and what it could not read. The Status page showed none of it, so a
+Skill broken by a typo was invisible there — the only symptom was a department
+quietly no longer being watched.
+
+Status has a **What it knows** section: Skills loaded, refused, held back. A
+refusal is now named, in the colour the app uses everywhere for "needs
+attention", because a count tells you something is broken and not which file.
+Held back is shown plainly with no warning colour — it is a licence answer, not
+a mistake, and the two must not look alike.
+
+One typo in a Skill produces several complaints about the same file; it is
+counted and named once.
+
 ## 2.570.0
 
 Nothing new on screen — this is 2.569.0, which a test gate stopped before
