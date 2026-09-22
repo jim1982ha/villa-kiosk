@@ -1,3 +1,90 @@
+## 2.567.0
+
+⚠️ **2.565.0 and 2.566.0 were built but never published.** Both were stopped by
+a test gate before publishing, which is what it is for. Everything listed under
+those versions below arrives with this one.
+
+**Every path to the model now goes through the same guard.**
+
+There are five places this layer can ask the model something — explaining an
+alert, answering a question, the weekly report's observations, the monthly
+review's covering note, and learning a standing fact. Each had its own copy of
+the same checks, and they had drifted: two checked things in a different order,
+and one had no check at all for whether it was about to send something specific
+to this property. There is now one piece of code that makes the call, and a
+test that fails if anyone writes a sixth.
+
+Nothing about this is visible on screen. It matters because that check is what
+keeps the property's own details from leaving it.
+
+**Internal: the check that kept stopping releases now runs itself.**
+
+Three builds in a row were stopped by a test that should have been run before
+pushing. The step that kept being missed was a manual one — choosing, by hand,
+which tests covered the change just made. That choice is gone: the release
+script now reads what the commit added and runs exactly that, in about two
+minutes, before anything is pushed.
+
+## 2.566.0
+
+⚠️ **Neither 2.565.0 nor 2.566.0 was published** — a test gate caught a gap and the
+pipeline stopped before publishing, which is what it is for. Everything listed
+under 2.565.0 below arrives with this version.
+
+**"Not a problem" on the wall asked you nothing.**
+
+Pressing it acknowledged the alert and then went quiet, because the question it
+should ask travels attached to the message being rewritten — and the wall has
+no message to rewrite. The question is now queued and sent on its own, so the
+tablet asks exactly what the phone asks.
+
+**Savings suggestions stopped reading the report's printed text.**
+
+To decide which device is worth looking at, the layer used to take the report's
+already-formatted line — "1,240.0 kWh" — and turn the words back into a number.
+Any figure that printed as a sentence instead ("only three days of history")
+failed to convert and was dropped silently. It now uses the number the report
+was built from. A figure that could not be measured is now distinguishable from
+one that measured zero, which it was not before.
+
+## 2.565.0
+
+**Pressing a button on an older alert did nothing, and now it works.**
+
+Reported today: "I clicked on the ✅ and ❌ button in telegram notification,
+but nothing happened" — moments after the add-on updated. The open alerts were
+held in memory only, so restarting the add-on left every button already on your
+phone pointing at a code the new process did not have. It updates often, so
+this was not a rare case: it was every pending alert, every update.
+
+Open alerts are now written down and read back on start, so a button keeps
+working across an update. And if a code really is unknown — an alert from
+months ago, a thread scrolled back to — the press is answered with "That alert
+is no longer open here" rather than silence. A button that does nothing is the
+one failure nobody reports; they just press it again.
+
+**❌ now asks what it should learn, instead of filing a verdict.**
+
+2.563.0 recorded "not a problem" against the alert. That is the one thing this
+layer is not supposed to have: a private score for whether an alert was worth
+sending, which nobody can read back or argue with. Pressing ❌ now replies:
+
+> What should I know about the pool pump? Reply:
+> note pool pump: <what stands about it>
+
+Your answer is kept as something the layer is told on every later pass, and it
+outranks anything it worked out for itself. It is the same thing that happens
+when you type a correction — one way of teaching it, not two. On the wall, "Not
+a problem" opens the same question as a text box.
+
+Acknowledging still only stops the reminders. Neither button ends anything: an
+alert ends when the condition ends.
+
+**Internal.** Every request the AI screens make went through six hand-written
+pieces of code in two accidental styles; there are now three, each named for
+what it is for. The path check learned about them on the commit that created
+them, which is what it is for.
+
 ## 2.564.0
 
 Internal only — nothing on screen changes, and one thing that could have gone
