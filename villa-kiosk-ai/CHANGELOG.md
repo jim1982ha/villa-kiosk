@@ -1,3 +1,16 @@
+## 2.562.0
+
+**The to-do list setting is a dropdown now.**
+
+It was a free text box expecting an entity id typed correctly from memory, and
+a wrong one fails silently — nothing is written to a to-do list until the
+nightly check finds something drifting, so a typo would not show itself until
+the first job actually worth doing. It now offers the to-do lists this Home
+Assistant has, the same way the notify targets above it do. An id can still be
+typed, so a list added a minute from now needs no update.
+
+If no to-do list exists yet, it says so rather than showing an empty menu.
+
 ## 2.561.0
 
 Internal only. The last five releases moved work out of one very large file
