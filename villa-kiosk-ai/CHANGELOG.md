@@ -1,3 +1,10 @@
+## 2.561.0
+
+Internal only. The last five releases moved work out of one very large file
+into modules that can be tested on their own, but left behind a short method in
+the old place for each one that did nothing except pass the call along. Those
+are gone, so callers now go straight to the thing that does the work.
+
 ## 2.560.0
 
 Answering a question you type stands on its own now, rather than being spread
