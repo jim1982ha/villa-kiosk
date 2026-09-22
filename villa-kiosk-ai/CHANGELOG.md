@@ -1,3 +1,11 @@
+## 2.559.0
+
+More internal tidying, no change to what VESTA does. The two ways it comes to
+write something down about a device — you telling it, and the nightly pass
+concluding it from figures — were spread through the same 2,200-line file as
+everything else. They now stand together, with twelve checks on them where
+there were none of their own.
+
 ## 2.558.0
 
 Internal tidying with no change to what VESTA does. The two questions it asks
