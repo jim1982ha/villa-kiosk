@@ -1,3 +1,19 @@
+## 2.557.0
+
+**The five things VESTA does on a schedule now each know when they last ran.**
+
+Looking for new devices every hour, the nightly pass, the weekly report, the
+monthly review and the rule review were each written as two separate pieces:
+one that asked "is it time?" and another, elsewhere in the file, that wrote
+down that it had happened. Nothing tied the two together, which is how a week
+could be marked as reported by a report that failed to send.
+
+Each schedule now owns both halves. Nothing about when things happen changes —
+the nightly pass still runs at two, the report still goes out on Monday
+morning and still catches up if the add-on was asleep at eight, and the rule
+review still counts days rather than weeks so a fortnight offline does not
+skip it.
+
 ## 2.556.1
 
 The same release as 2.556.0, whose build stopped at the checks that
