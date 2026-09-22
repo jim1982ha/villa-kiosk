@@ -1,3 +1,36 @@
+## 2.563.0
+
+**The add-on would not start on 2.562.0, and that is fixed first.**
+
+2.562.0 shipped the same nginx location twice. nginx refuses to load a config
+with a duplicate location, so the web server never came up and the kiosk was
+unreachable — `duplicate location "/ai-settings"` in the add-on log. The
+duplicate is gone. The check that compares nginx's paths against the handlers
+behind them read them into a set, which folded the two copies into one and
+passed; it now refuses a location declared twice, and that refusal has been
+shown to fail on the exact config that shipped.
+
+**An alert offers ✅ and ❌, and either one rewrites the message.**
+
+There was one wide "✅ Acknowledge" button. There are now two, side by side and
+without words:
+
+* **✅** — somebody is dealing with it.
+* **❌** — this is not a problem. It is a judgement about the alert, not a way
+  to close anything.
+
+Whichever is pressed, the message rewrites itself to say which answer it was
+and the time it arrived, and both buttons go. Neither ends the Incident —
+that still happens when the condition itself ends, and the message says so.
+
+A messenger that cannot draw buttons is told the choice in words rather than
+being sent a bare glyph it cannot explain.
+
+The same two answers are on the wall, where they keep their words: the
+Incidents panel offers **Acknowledge** and **Not a problem**, and afterwards
+shows which was recorded. The screen is handed both codes by the layer rather
+than spelling the second one itself.
+
 ## 2.562.0
 
 **The to-do list setting is a dropdown now.**
