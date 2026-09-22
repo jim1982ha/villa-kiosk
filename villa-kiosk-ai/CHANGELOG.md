@@ -1,3 +1,16 @@
+## 2.560.0
+
+Answering a question you type stands on its own now, rather than being spread
+through the same file as everything else. No change to what it answers or what
+it costs.
+
+Two guards turned out never to have been tested, and now are. One skips the
+polishing step when the day's budget is gone — the figures are still the
+answer, they just arrive plainer. The other refuses to send anything to the
+model if it would carry a device's internal identifier: the weekly report has
+always been checked for that, and the question path has the same guard, but
+nobody had ever verified it worked.
+
 ## 2.559.0
 
 More internal tidying, no change to what VESTA does. The two ways it comes to
