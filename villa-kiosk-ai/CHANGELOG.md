@@ -1,3 +1,12 @@
+## 2.558.0
+
+Internal tidying with no change to what VESTA does. The two questions it asks
+Home Assistant in bulk — the history behind every figure in the report, and
+what kind of thing each watched device reports — were part of a 2,200-line
+file and could only be exercised by building the whole layer around them. They
+now stand on their own, which is why there are nine new checks on them where
+there were none.
+
 ## 2.557.0
 
 **The five things VESTA does on a schedule now each know when they last ran.**
