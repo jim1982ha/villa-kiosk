@@ -1,3 +1,49 @@
+## 2.570.0
+
+Nothing new on screen — this is 2.569.0, which a test gate stopped before
+publishing. Everything listed under it below arrives here, including the fix
+for ✅ being reported as ❌.
+
+What stopped it was a test describing a fault that can no longer happen. It
+checked that the add-on could not start up with a half-filled picture of what
+it watches — a real failure, once, which made every alert say an internal id
+instead of your device's name. The rewrite in 2.569.0 removed the possibility
+rather than guarding against it, so the test had nothing left to catch. It is
+gone, with the reason recorded next to the one that replaced it.
+
+## 2.569.0
+
+⚠️ **Stopped by a test gate before publishing; it arrives with 2.570.0.**
+
+**Pressing ✅ said you had pressed ❌.**
+
+Reported today, with a screenshot: tapping the tick produced "❌ Not a problem"
+and then asked what the layer should learn about the device — a question nobody
+had asked for.
+
+The cause: Telegram sends the whole message back with a button press, and the
+message includes its own buttons. So the ❌ code was in the payload of a ✅
+press as well, and the layer read it there. It now reads only the button that
+was actually pressed. Both directions are tested against a realistic press,
+which the earlier tests were not — they sent a bare code with no message
+attached, so they could not have caught this.
+
+**The device-category words come from the layer that owns them.**
+
+The seven category names ("Metered load", "Doors and locks"…) were written out
+twice, once in the add-on and once in the screen, with nothing keeping them in
+step. Categories are worked out from what a device can actually report, so the
+list grows — and the copy that did not grow showed a raw internal key on
+exactly the device that was new. The screen is now told the words.
+
+**Internal.** What is watched — which entities, what each belongs to, what
+sits upstream of it — was six separate tables rebuilt together and readable
+apart; a restart once left three of them empty, and every alert that session
+was titled with an internal id instead of the name you gave the device. It is
+one thing now, which cannot be half-filled. Two devices you name alike no
+longer merge. The add-on's "is the layer installed" check was written seven
+times and is written once.
+
 ## 2.568.0
 
 **The facility manager can answer an alert on the wall, not just on their
