@@ -1,3 +1,31 @@
+## 2.568.0
+
+**The facility manager can answer an alert on the wall, not just on their
+phone.**
+
+The layer sends every urgent alert to both of you, and chases by adding
+whichever of you has not answered — that is the point of the reminder. The
+kiosk did not agree: opening the VESTA AI screens needed the same permission as
+editing the villa's configuration, which only the owner has. So a facility
+manager could acknowledge on Telegram and not on the tablet in front of them.
+
+Answering an alert is now its own permission, held by the owner and the
+facility manager, and not by a guest — a guest is never told about an alert, so
+there is nothing for them to answer. The Settings tab inside those screens (the
+API key and the spend limit) stays with the owner alone.
+
+**Internal: the order the add-on does things in is now something a test can
+read.**
+
+Each five-minute pass runs seventeen steps, and start-up runs a different
+twelve. Four of the rules about which must come before which were written only
+as comments — including the one that decides whether a brand-new installation's
+first scan can see anything at all. A comment cannot fail a test. Both passes
+are now lists of named steps, and the rules between them are checked.
+
+No behaviour changed. The value is that the next change to either order cannot
+quietly break one of those four rules.
+
 ## 2.567.0
 
 ⚠️ **2.565.0 and 2.566.0 were built but never published.** Both were stopped by
