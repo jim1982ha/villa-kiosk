@@ -1,3 +1,36 @@
+## 2.556.1
+
+The same release as 2.556.0, whose build stopped at the checks that
+deliberately break the code to prove the tests notice. One of those breakages
+had itself become impossible to run: deleting a counter left a guard whose body
+was a comment and a `return`, and the check removed the `return` — leaving
+nothing at all inside the `if`, which Python refuses to read. Nothing about the
+add-on differs.
+
+## 2.556.0
+
+**Three small things the layer was telling you that were not quite true.**
+
+The Skills tab reported how many Skills the licence was holding back, and the
+number came from an earlier pass than the coverage printed beside it — two
+answers to one question in the same panel. The licence is now consulted once
+when the status is published rather than three times, so the figure and the
+coverage always describe the same moment.
+
+"What is watched here" was worked out twice, in two places, from the same data
+— exactly what the code beside it warns leads to two screens disagreeing. It is
+asked for once now.
+
+And three counters the layer kept about itself were never shown anywhere: how
+many button presses it could not confirm, how many questions it answered, and
+how many of those cost nothing because the answer was already known. The first
+is how you would notice a messenger that has quietly changed shape, and the
+other two are half of the cost story. All three now appear on the status entity.
+Three more counters that nothing read, and that could always be worked out from
+numbers already shown, are gone.
+
+Nothing about watching, alerting or reporting changes.
+
 ## 2.555.1
 
 The same release as 2.555.0, which never reached anybody: its build stopped at
