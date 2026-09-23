@@ -1,3 +1,32 @@
+## 2.572.0
+
+**The nightly check was measuring the wrong part of each device, so it found
+nothing — every night.**
+
+Last night's pass reported *"0 checks over 9 assets, 0 crossed a threshold, 9
+could not be measured"* — while the same day's weekly report printed a battery
+trend for eight of those nine devices. The statistics were there; the nightly
+was reading the wrong entity.
+
+A device is several entities. The nightly took whichever one happened to have
+history first — a signal strength, a temperature, anything — with no regard for
+what the Skill was actually about. A battery is rarely first, so a Skill about
+battery health measured something else, or nothing, and said "could not be
+measured" in a line that reads like a quiet property.
+
+This is the same fault the weekly report had and that was fixed in 2.553.0
+("the report measured a lamp's temperature and called it consumption"). The
+nightly never got that fix. Both now share one piece of code rather than a
+copy, so they cannot drift apart again.
+
+If an Asset has nothing that measures what a Skill is about, it now says so
+plainly instead of measuring the nearest thing to hand.
+
+**Also worth knowing:** a threshold written as `trend < -10%` means *lost more
+than 10% of its charge across the window*, not 10% per day. Nothing needs
+changing — that setting was always sensible; it simply never got a chance to
+run.
+
 ## 2.571.0
 
 **The Status screen now says how many Skills are loaded — and names any that
