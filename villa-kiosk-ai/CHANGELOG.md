@@ -1,3 +1,24 @@
+## 2.573.0
+
+**A to-do item now says what was measured.**
+
+The nightly wrote *"Motion0: trend is -50.4%, past the -2% this Skill watches
+for"* — a correct number in a sentence that never said what had moved. That
+device also reports a temperature, a light level and a voltage; read cold off a
+to-do list, there was no way to tell which. It now reads:
+
+> Motion0: **battery** trend is -50.4%, past the -2% this Skill watches for.
+
+**Every Skill gets this, not just battery health.** One line of code words
+every nightly finding, and the word comes from the Skill's own declaration —
+so a Skill about water, a door or something invented next year reads the same
+way without being edited, and the engine still knows nothing about kinds of
+hardware.
+
+**Numbers and units are spaced the way a person writes them.** "past the
+30minutes" was appearing next to "45.0 minutes" in the same sentence. Percent
+and degree signs sit tight against the number; everything else takes a space.
+
 ## 2.572.0
 
 **The nightly check was measuring the wrong part of each device, so it found
