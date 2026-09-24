@@ -5,7 +5,7 @@
 # no-compile operation. The {arch} placeholder + version resolve to e.g.
 # ghcr.io/jim1982ha/villa-kiosk-amd64:2.0.0 — published by .github/workflows/build.yaml.
 name: VESTA (ai)
-version: "2.576.0"
+version: "2.592.0"
 slug: villa_kiosk_ai
 description: 3D Home Assistant villa dashboard — HA sidebar (Ingress) + its own hostname
 url: https://github.com/jim1982ha/villa-kiosk
@@ -31,13 +31,17 @@ ingress_port: 8099
 # talks to Home Assistant token-lessly (no long-lived token needed). See
 # rootfs/usr/bin/supervisor-proxy.py.
 homeassistant_api: true
-# ⚠️ THE OWNER'S OWN FOLDER, FOR SKILLS. `addon_config:rw` gives this add-on
-# `/addon_configs/<slug>/`, which appears in the File editor and Studio Code
-# Server. Skills live there as Markdown the owner writes and the layer reads,
+# ⚠️ THE OWNER'S OWN FOLDER, FOR SKILLS. `app_config:rw` gives this add-on
+# its own folder under `/addon_configs/<slug>/` on the host (mounted at /config
+# inside the container), which appears in the File editor and Studio Code
+# Server. ⚠️ `app_config`, NOT `addon_config`: Supervisor 2026.07 renamed it and
+# logs a warning for the old name; the same folder is mounted either way. A
+# Supervisor older than 2026.07.1 REJECTS the new name — the CHANGELOG says so,
+# because no manifest key can declare a minimum Supervisor. Skills live there as Markdown the owner writes and the layer reads,
 # hot-reloaded on save. It ships ahead of the feature because a folder that
 # appears on the day a feature lands is a folder nobody finds.
 map:
-  - addon_config:rw
+  - app_config:rw
 panel_icon: mdi:home-lightning-bolt-outline
 panel_title: VESTA ai
 boot: auto

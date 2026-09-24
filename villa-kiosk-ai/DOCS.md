@@ -197,9 +197,90 @@ The **Guest** profile has no access to any of this.
 
 ---
 
+## VESTA AI
+
+This add-on also carries **VESTA AI**: an assistant that looks after the
+property with you. It answers questions in your messenger or on the kiosk,
+looks into your own alerts when they fire, keeps a list of open Incidents,
+writes weekly and monthly Reports, reminds the facility manager about
+servicing, and learns what you tell it. Open it from **Settings → VESTA AI**
+(owner and facility manager only).
+
+### ⚠️ It needs the internet, and it is not an alarm
+
+- VESTA AI thinks with an **Anthropic** model, over the internet. With no
+  internet, no API key, or the day's spending limit reached, it **does
+  nothing** — it does not fall back to anything of its own. The rest of the
+  kiosk keeps working offline as always.
+- **Your own `critical_*` automations in Home Assistant are the safety net.**
+  They send their alerts whether VESTA AI is running or not. VESTA AI adds to
+  them — it never replaces them. Keep them; never rely on VESTA AI as an alarm.
+
+### Setting it up
+
+Everything is on **VESTA AI → Settings** in the kiosk:
+
+1. **Anthropic API key** — without it VESTA AI stays switched off.
+2. **ha-mcp address** (and its secret) — VESTA AI reads Home Assistant through
+   the **ha-mcp** add-on, with
+   read-only mode on. It cannot change anything in Home Assistant except
+   adding jobs to the to-do list you choose.
+3. **Who it tells** — the owner's and the facility manager's notify targets.
+   Alerts from your `critical_*` automations to these targets are what wake
+   VESTA AI to look into them.
+4. **Who may ask** — the owner's and the facility manager's messenger user ids.
+   Anybody else who messages the bot is ignored, silently.
+5. **To-do list** for maintenance jobs, the **model** (Haiku 4.5 unless you
+   choose another) and the **spending limits**: a daily limit, and the most one
+   run may spend. When the daily limit is reached VESTA AI tells the owner once
+   and stops until midnight.
+
+The **Status** tab shows whether it can reach Home Assistant, hear your
+alerts and messages, and think, plus what it has spent today.
+
+### Teaching it, in your own words
+
+Write to it in the chat, as you would to a person:
+
+- **"Stop watching the garden lights."** — it never raises them again, until
+  you say "watch the garden lights again".
+- **"The pool pump normally draws about 40 W at idle."** — a fact it keeps and
+  judges that pump by. Correct it the same way; what you say always outranks
+  what it worked out itself.
+- **"Clean the pool filter every 500 pump-hours."** — a service interval. It
+  counts the run time and, when it is due, tells the facility manager and puts
+  a job on the to-do list. Answer the job with **DONE**, **NOT FOUND** or
+  **HELP**.
+- Press **✅** on one of its alerts (or **Acknowledge** on the kiosk) to say you
+  have it. An urgent alert nobody takes is sent once more, to both of you.
+
+### Reports
+
+- **Maintenance Report** (weekly) — what is wearing out, failing or due.
+- **Audit Report** (weekly) — whether the monitoring itself can be trusted:
+  rules that cannot fire, devices nobody can see, alerts not delivered.
+- **ROI Report** (monthly) — wasted energy, and money wherever Home
+  Assistant's Energy settings hold your electricity price; it says plainly when
+  it covers kWh only.
+
+The latest of each is on the kiosk's **Report** tab, which can also ask for one
+now. A Report is never sent twice for the same period.
+
+### Skills
+
+Everything VESTA AI does — what counts as a problem, what goes in a Report,
+who is told and in which words — is written in **Skills**: short Markdown
+files you can read and change on the **Skills** tab, or in this add-on's folder
+(`addon_configs/…/skills/<name>/SKILL.md`). Your edited copy of a Skill
+replaces the one that ships, and survives updates. A Skill can never give VESTA
+AI new powers; one that tries is refused and named on the Status tab.
+
+---
+
 ## Notes
 
-- Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor).
+- Requires **Home Assistant OS** or **Supervised** (add-ons need the Supervisor),
+  with **Supervisor 2026.07.1 or later**.
 - Ingress fronts the *UI*; Core access uses the Supervisor proxy (`homeassistant_api`).
 - The 3D model lives in the add-on's private `/data` volume — the add-on no
   longer needs write access to your HA config folder.

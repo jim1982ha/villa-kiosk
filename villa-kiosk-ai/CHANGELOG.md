@@ -1,3 +1,247 @@
+## 2.592.0
+
+No change you can see: two of the add-on's own self-checks were repaired so
+the release can be published (2.590.0 and 2.591.0 were built but not
+published because of them).
+
+## 2.591.0
+
+- **VESTA AI keeps running if one of its routine jobs fails.** A full or
+  read-only storage could stop its heartbeat for good — no scheduled Report,
+  reminder or follow-up would run again until a restart. Now the failing step
+  is logged and the rest carry on.
+- **"Not a problem" on the kiosk's Incidents screen works again**: say why in a
+  few words, and VESTA AI remembers it as yours.
+- Button presses in the Home Assistant companion app are no longer counted as
+  messages from strangers (they cannot say who pressed them, so VESTA AI does
+  not listen to them; use Telegram or the kiosk).
+- Status: the "events" figure now counts only your alerts and people's
+  messages, not every light switched.
+
+## 2.590.0
+
+**VESTA AI is now one assistant, driven entirely by Skills you can read and
+change.** The older built-in engine — its own device list, nightly checks,
+weekly report, proposals and wording — is gone. Everything VESTA AI does now
+comes from the Skills on the Skills tab.
+
+- ⚠️ **It needs an Anthropic API key and the internet.** Without them VESTA AI
+  does nothing at all — it no longer sends the old weekly report or its own
+  alerts. **Your `critical_*` automations in Home Assistant are the safety
+  net** and keep working exactly as before. The add-on's documentation now says
+  so, and explains how to set VESTA AI up and teach it.
+- **The Watching tab is gone.** VESTA AI finds your equipment itself; to stop
+  it watching something, tell it in the chat ("stop watching the garden
+  lights"). Everything you had refused on the old tab has been carried over as
+  exactly that instruction, and what you had taught it is kept.
+- **A key saved in Settings takes effect straight away**, without restarting
+  the add-on.
+- **It no longer listens to every change in Home Assistant** — only to your
+  alerts and to the people you listed, and it reads the rest when it needs it.
+- The Status and Report tabs show only what the new VESTA AI does. Every run
+  now sees the open Incidents and who has them, so a chase never repeats an
+  alert somebody already took.
+- Fixed: a reminder could be sent twice if its run failed after sending; the
+  upgrade could close an Incident still open; "the garden lights" and "Garden
+  lights" were not recognised as the same thing.
+
+## 2.589.0
+
+**Upgrading keeps what you already told VESTA AI.** The first time this version
+starts:
+
+- every device you had **refused** on the old Assets screen becomes a "stop
+  watching" instruction from you, so none of them comes back as a new alert;
+- everything VESTA AI had learned from you (facts, corrections) is kept;
+- alerts the old engine was still chasing are closed with a note — the new
+  VESTA AI re-checks what is still true instead of carrying them over.
+
+It runs once, writes a line in the log saying what it did, and deletes
+nothing: the old data stays exactly as it was.
+
+## 2.588.0
+
+**VESTA AI now finds your equipment itself, and checks it every night.**
+
+- **Every day it looks for the things worth watching** — pumps, heating and
+  cooling, water heaters, locks, leak sensors, network equipment — and
+  remembers each one with the Home Assistant entities that make it up.
+- **Every night it sweeps them**: anything offline, silent, stuck, behaving
+  differently or low on battery becomes an Incident, and an Incident whose
+  problem has gone is ended. Urgent ones are told at once; the rest go in the
+  next Report.
+- **"Stop watching" is final**: once you have told VESTA AI to stop watching
+  something, it cannot raise an Incident about it — whatever an alert or a
+  device name says — until you tell it to watch again.
+
+## 2.587.0
+
+**With VESTA AI switched on, one voice speaks.** The older built-in engine no
+longer sends its own weekly Report, monthly review or nightly jobs once VESTA
+AI has a key — VESTA AI's Maintenance, ROI and Audit Reports, its proposals
+and its service reminders replace them, so nothing arrives twice and no
+message asks for a reply that nobody is listening for. **Send one now** on the
+Report screen now asks VESTA AI.
+
+- VESTA AI can be woken by your alerts at most 30 times an hour, and ignores
+  its own words if an automation repeats them, so a loop between the two can
+  never run away.
+- The Incidents screen always keeps the most recently ended Incidents.
+
+## 2.586.0
+
+**✅ means "I have it", from the phone or the wall — and an urgent alert
+nobody takes is chased once.**
+
+- Press ✅ on VESTA AI's alert in Telegram, or **Acknowledge** on the kiosk's
+  Incidents screen: both record who has it, and the other person is told. The
+  Incident stays open until the problem itself ends.
+- If nobody acknowledges an urgent Incident — 15 minutes for P1, an hour for
+  P2 — VESTA AI sends it once more, to both the owner and the facility
+  manager. Once, not on repeat.
+- VESTA AI can book itself a time to look again, and keeps it across restarts.
+- A pressed Telegram button no longer keeps spinning.
+
+## 2.585.0
+
+**When one of your critical alerts goes off, VESTA AI now looks into it.** Your
+own `critical_*` automations still send their alerts exactly as before. When
+one lands in the chat, VESTA AI reads what it is about in Home Assistant, adds
+what the alert does not say — the evidence, whether it is still true, what
+else went wrong at the same time — and records an Incident.
+
+- Only alerts sent to the owner's or facility manager's notify targets wake
+  it, and only when Home Assistant itself sent them — never its own messages,
+  and never because of what a message says.
+- Urgent Incidents (P1, P2) are told at once; minor ones (P3, P4) wait for the
+  next Report. Related problems arrive as one message.
+- Buttons show an emoji only (✅).
+- An Incident ends when the problem ends, never because somebody pressed a
+  button. The Incidents screen lists VESTA AI's open Incidents.
+
+## 2.584.0
+
+**Service reminders are back — and you set them in the chat.** Tell VESTA AI
+"clean the pool filter every 500 pump-hours" or "descale the coffee machine
+every 3 months". Every day it counts the run time or use since the last
+service, and when one is due it tells the facility manager and puts the job on
+your Home Assistant to-do list (the one chosen in Settings).
+
+- Answer a job with **DONE**, **NOT FOUND** or **HELP**. DONE starts the count
+  again; HELP tells the owner at once.
+- A job already open on the list is not added again, and the same job is never
+  written twice in one day.
+- With VESTA AI switched on, everything a listed person writes now reaches it —
+  including DONE and corrections, which the old engine used to take first.
+
+## 2.583.0
+
+**The daily spending limit now lifts at midnight.** Once VESTA AI had reached
+its daily limit it stayed stopped until the add-on was restarted — and a
+restart forgot what had been spent that day. It now starts each day afresh by
+itself, and remembers the day's spend across a restart.
+
+- **The two model settings now mean what they say**: the first is used for
+  answers, alerts and follow-ups, the second for scheduled work (the Reports
+  and sweeps).
+- A run that hangs is ended after 15 minutes, so it cannot hold up the next.
+- The ROI Report tells "no price is set in Home Assistant" apart from "the
+  price could not be read".
+
+## 2.582.0
+
+**A weekly Audit Report: can the monitoring itself be trusted?** VESTA AI
+checks your own automations — the `critical_*` ones first — and tells you:
+
+- which rules **cannot fire** (switched off, or waiting on a device that no
+  longer exists or is unavailable), and which fired and **failed**;
+- which devices **nobody can see** any more, and since when;
+- whether alerts are being **delivered** — including whether your weekly test
+  message (if you have one) went out;
+- what you have asked it to stop watching, so an old refusal stays visible.
+
+It opens with one line — trusted, trusted with gaps, or not trusted — and says
+what it does not cover.
+
+## 2.581.0
+
+**A monthly ROI Report: what the property wastes, and what it costs.**
+
+- VESTA AI reads the electricity price from **Home Assistant's own Energy
+  settings** — the Report is in money wherever a price is set there, and says
+  plainly that it **covers kWh only** when none is.
+- It looks at standby draw, things running with nobody there, things running
+  longer than usual, and drift — and ends with up to five **Proposals**, each
+  answered with ✅ accept, ⏰ later or 🚫 ignore. It remembers your answer.
+- It can read the Energy settings and **cannot change them**: every other part
+  of that Home Assistant tool is refused.
+- The ROI Report appears on the Report screen beside the Maintenance Report.
+
+## 2.580.0
+
+**No more "legacy map type" warning in the Supervisor log.** The add-on now
+asks for its own folder (where your Skills live) under the current name,
+`app_config`, instead of the old `addon_config`. It is the same folder —
+nothing moves and nothing is lost.
+
+⚠️ **Needs Supervisor 2026.07.1 or later.** An older Supervisor does not know
+the new name and will refuse to install or update the add-on. Supervisor
+updates itself automatically, so this only affects an install whose
+Supervisor updates have been held back.
+
+## 2.579.0
+
+**You choose the model, and VESTA AI keeps to its budget.**
+
+- **Haiku 4.5 is the default** for everything VESTA AI does; choose another
+  model in Settings.
+- **New in Settings: the most one run may spend, and the most steps it may
+  take.** A run is one answer, one alert or one Report.
+- **When the daily limit is reached, VESTA AI tells the owner once** and does
+  not run again until tomorrow. Your own critical alerts in Home Assistant keep
+  working regardless.
+- The cost counted against the limit is now the figure Anthropic reports for
+  each run.
+- **The Status screen shows a third connection, the model**: whether VESTA AI
+  could think on its last run, and why not if it could not (for example, no
+  API key).
+
+## 2.578.0
+
+**Teach VESTA AI in your own words, and it stays taught.** Tell it a fact
+("the pool pump idles at about 40 W"), correct it ("that is normal at
+night"), tell it to stop watching something ("stop watching the garden
+lights"), or give it a service interval ("clean the filter every 500 pump
+hours"). It confirms what it recorded, and every later answer, alert and
+Report starts from it — after restarts too.
+
+- What a person said always outranks what VESTA AI worked out itself, and is
+  never overwritten by it.
+- Only the people listed under **Who may ask** can teach it; nothing it reads
+  in Home Assistant can pose as them.
+- "Watch the garden lights again" takes a refusal back.
+
+## 2.577.0
+
+**VESTA AI now runs Skills on a schedule, and writes the weekly Maintenance
+Report itself.**
+
+- **A Skill can say when it runs.** Add `cadence: hourly`, `nightly`,
+  `weekly` or `monthly` to its front matter and VESTA AI runs it once in each
+  period — at most once, even if the add-on restarts. Weekly and monthly
+  Skills run from 8 in the morning; nightly ones from 2. A word it does not
+  know is shown as a problem on the Skills screen instead of silently never
+  running.
+- **A new Maintenance Report Skill** writes the facility manager a weekly
+  account of what is wearing out, drifting, cycling, stuck, silent or due for
+  service — and says what it does not cover and what it could not check.
+- **A Report is never sent twice** for the same kind and period, restarts
+  included.
+- **The Report screen shows the latest Report of each kind** VESTA AI has sent.
+- VESTA AI calculates every figure with a fixed calculator of nine measures
+  (totals, baselines, deviations, trends, durations, changes, silence,
+  comparisons, correlations), never in its head.
+
 ## 2.576.0
 
 **Not released — part of the VESTA AI revamp, held back until it is complete.**
