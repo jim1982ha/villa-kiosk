@@ -1,3 +1,68 @@
+## 2.576.0
+
+**Not released — part of the VESTA AI revamp, held back until it is complete.**
+
+**The Skills screen now manages what VESTA AI does.** Every Skill — the ones
+that ship with VESTA and your own — is listed with where it came from, whether
+it is on, and when it runs by itself.
+
+- **Edit a shipped Skill and your copy is kept.** It replaces the shipped one
+  and survives every update; **Original** brings the shipped text back into
+  the editor.
+- **Switch any Skill off or on** without deleting anything — shipped ones
+  included.
+- **Create your own** with **New**; it starts from a template that works.
+- **Delete** removes only your copy. A shipped Skill cannot be deleted, only
+  switched off, and deleting your copy of one brings the shipped version back.
+- **A Skill that cannot be used is shown with the line and the reason**, here
+  and on the Status screen, and VESTA AI does not follow it. A Skill that tries
+  to give VESTA AI extra powers (for example by naming tools or permissions) is
+  refused outright and never saved.
+
+Your Skills live in your add-on folder under `skills/<name>/SKILL.md`, in the
+standard Agent Skills format. Changes apply from the next message or scheduled
+run, with no restart.
+
+## 2.575.0
+
+**Not released — part of the VESTA AI revamp, held back until it is complete.**
+
+**Only the people you list can ask VESTA AI anything.** Until now anybody who
+found the bot could message it and get answers about the property. Settings
+now has a **Who may ask** section: the owner's and the facility manager's
+messenger ids (for Telegram, a bot such as @userinfobot tells you yours).
+Anybody else is ignored — no reply, nothing spent — and the Status screen
+counts how many messages were ignored. The kiosk always counts as the owner.
+
+**With nobody listed, nobody can ask**, and the Status screen says so in
+words rather than looking healthy.
+
+**Answers go to whoever asked.** A question from the facility manager is now
+answered to the facility manager, not to the owner.
+
+## 2.574.0
+
+**Not released — the first step of the VESTA AI revamp, built but held back.**
+Nothing reaches the villa until the whole revamp is done.
+
+**A question typed to VESTA AI is now answered by the agent itself.** Until
+now a question went through fixed code that recognised a few shapes of
+question and filled in figures. From this version, anything a person writes in
+Telegram or on the kiosk (other than pressing ✅ on an alert, answering a Task
+or correcting a fact) wakes the agent. It reads the "answer a question" Skill,
+looks things up in Home Assistant through ha-mcp, and replies in the chat.
+
+**What it can touch is a short, fixed list.** Home Assistant *reads* only, and
+one way to speak: a message to the owner or the facility manager. It has no
+commands, no files, no web access, and it cannot change anything in Home
+Assistant. Anything else it tries is refused before it runs, and the refusal is
+recorded.
+
+**Without an API key, nothing changes yet.** Questions keep going to the
+existing question engine until the revamp removes it. With a key but no
+internet, or with today's budget spent, the attempt is counted and nothing is
+invented in its place.
+
 ## 2.573.0
 
 **A to-do item now says what was measured.**
