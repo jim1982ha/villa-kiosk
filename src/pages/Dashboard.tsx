@@ -66,7 +66,7 @@ export default function Dashboard() {
   const canReportFault = role != null && hasCapability(role, "reportFault");
   const canOpenSettings = role != null && hasCapability(role, "openSettings");
   const canEditConfig = role != null && hasCapability(role, "editConfig");
-  // Read inside the onCalibrated/onReady effect below (which intentionally
+  // Read inside the onScene effect below (which intentionally
   // only depends on [manager], so its closure would otherwise see a stale
   // config.teleportPoints from whenever that effect last ran).
   const configRef = useRef(config);
@@ -435,25 +435,14 @@ export default function Dashboard() {
     ? (config.entityMap[activePanel.entityId] ?? activePanel.mapping).motionEntityId
     : undefined;
 
-  // Open the app in the bird's-eye overview by default — seeing the whole villa
-  // at a glance is the natural landing view. One-shot: fires the first time the
-  // scene becomes ready (model loaded + fitted) and never overrides the user's
-  // later manual camera toggles.
-  const defaultedToOverview = useRef(false);
+  // The app lands in the bird's-eye overview: the SCENE decides that (its
+  // constructor starts there), and this only reads it. A new SceneManager — a
+  // cold start, or a model (re)load remounting the canvas — starts in overview
+  // again, so React's copy is re-read rather than told. This used to call
+  // manager.setViewMode("overview") on ready, which returned at once because
+  // the scene was already there; only its React half ever did anything.
   useEffect(() => {
-    if (!manager) return;
-    // A new SceneManager means a cold start OR a fresh model (re)load (the canvas
-    // remounts on upload, bumping modelKey). Re-arm the one-shot so the newly
-    // loaded villa lands in the bird's-eye overview just like opening the add-on.
-    defaultedToOverview.current = false;
-    const goOverview = () => {
-      if (defaultedToOverview.current) return;
-      defaultedToOverview.current = true;
-      manager.setViewMode("overview");
-      setViewMode("overview");
-    };
-    if (manager.isReady()) goOverview();
-    return manager.onReady(goOverview);
+    if (manager) setViewMode(manager.getViewMode());
   }, [manager]);
 
   // Read this device's saved-default-view flag whenever the manager changes
@@ -560,15 +549,10 @@ export default function Dashboard() {
         }
       }
     };
-    const offReady = manager.onReady(adopt);
-    // Also re-adopt whenever the scene re-fits rooms (e.g. a mirror toggle in
-    // Settings), so the teleport grid + room labels reflect the change live.
-    const offCal = manager.onCalibrated(adopt);
-    if (manager.isReady()) adopt();
-    return () => {
-      offReady();
-      offCal();
-    };
+    // Once shown (at once if it already is), and again whenever the scene
+    // re-fits rooms (e.g. a mirror toggle in Settings), so the teleport grid +
+    // room labels reflect the change live.
+    return manager.onScene(adopt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manager]);
 
@@ -580,7 +564,7 @@ export default function Dashboard() {
   // whenever HA's registry data changes (entityAreaNames — live, no reload,
   // see HAStateStore's *_registry_updated subscriptions), whenever the
   // entity list itself changes (a device newly mapped), or whenever the
-  // scene's plan-to-world fit changes (same onReady/onCalibrated signals the
+  // scene's plan-to-world fit changes (the same onScene phases the
   // teleport-point adopt effect above uses — the geometric fallback needs a
   // fresh fit exactly like that effect does). Pushed to BOTH React (every
   // panel reads useConfig().resolvedRooms) and Babylon (SceneManager.
@@ -614,13 +598,10 @@ export default function Dashboard() {
       manager.setResolvedRooms(resolved);
       setResolvedRooms(resolved);
     };
+    // Now (HA's Areas alone may already answer), and on every phase after —
+    // no replay, since it has just run.
     recompute();
-    const offReady = manager.onReady(recompute);
-    const offCal = manager.onCalibrated(recompute);
-    return () => {
-      offReady();
-      offCal();
-    };
+    return manager.onScene(recompute, false);
   }, [manager, entityAreaNames, config.entityMap, setResolvedRooms]);
 
   const handleTeleport = useCallback(

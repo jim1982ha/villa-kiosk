@@ -34,6 +34,7 @@ import { EntityVisuals } from "./EntityVisuals";
 import { resolveHit, type HitPickers } from "./hitResolution";
 import { FrameScheduler, type ResolutionPort } from "./frameScheduler";
 import { SceneLook } from "./sceneLook";
+import { ScenePhases, type ScenePhase } from "./scenePhases";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
@@ -427,8 +428,8 @@ export class SceneManager {
    *  is the signal rather than config.theme. */
   private themeObserver: MutationObserver | null = null;
   private ready = false;
-  private readyCallbacks = new Set<() => void>();
-  private calibrateCallbacks = new Set<() => void>();
+  /** The scene's phases — see scenePhases.ts and onScene. */
+  private readonly phases = new ScenePhases();
   /** "Draw a frame now?" — see frameScheduler.ts. Every module that asks for
    *  frames holds this object (as FrameRequests); the render loop asks it. */
   private readonly frames = new FrameScheduler({
@@ -3166,7 +3167,7 @@ export class SceneManager {
 
     // Notify listeners (Dashboard) so the teleport grid + room labels re-adopt
     // these freshly-fitted points — e.g. right after a manual mirror toggle.
-    this.calibrateCallbacks.forEach((cb) => cb());
+    this.phases.calibrated();
 
     // Everything COSMETIC, off the block. Not awaited: the villa is already
     // correct and interactive without any of it.
@@ -3278,12 +3279,6 @@ export class SceneManager {
     return this.calibratedPoints;
   }
 
-  /** The model's meshes, for read-only inspection. A readonly view so a caller
-   *  cannot reorder the array the floor index and highlight passes walk. */
-  getLoadedMeshes(): readonly AbstractMesh[] {
-    return this.loadedMeshes;
-  }
-
   /**
    * What this device was actually rendering, for a measurement to be read
    * against.
@@ -3380,10 +3375,16 @@ export class SceneManager {
     return this.visuals.mappedEntityIds();
   }
 
-  /** Subscribe to re-calibration (load + every mirror-toggle re-fit). */
-  onCalibrated(cb: () => void): () => void {
-    this.calibrateCallbacks.add(cb);
-    return () => this.calibrateCallbacks.delete(cb);
+  /**
+   * The scene's phases, as ONE subscription: "shown" once the model is on
+   * screen, "calibrated" after every plan→world fit (the load's, and each
+   * mirror-toggle re-fit). A subscriber that arrives after the model is shown
+   * is told so at once (`replay`, on by default) — every caller used to
+   * restate that as `if (isReady()) cb(); onReady(cb); onCalibrated(cb)`, three
+   * calls and two unsubscribes, and Dashboard did it three times over.
+   */
+  onScene(cb: (phase: ScenePhase) => void, replay = true): () => void {
+    return this.phases.subscribe(cb, replay);
   }
 
   /**
@@ -3399,15 +3400,6 @@ export class SceneManager {
       seen.add(m.name);
     }
     return [...seen].sort();
-  }
-
-  /** Re-apply entityMap + meshBindings live (after the user edits a binding). */
-  reindex(config: AppConfig): void {
-    this.config = config;
-    this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
-    this.visuals.updateConfig(config);
-    this.visuals.indexMeshes(this.loadedMeshes);
-    this.requestRender();
   }
 
   /**
@@ -4116,18 +4108,13 @@ export class SceneManager {
 
   private markReady() {
     this.ready = true;
-    this.readyCallbacks.forEach((cb) => cb());
-    this.readyCallbacks.clear();
+    this.phases.shown();
   }
 
   isReady(): boolean {
     return this.ready;
   }
 
-  onReady(cb: () => void): () => void {
-    this.readyCallbacks.add(cb);
-    return () => this.readyCallbacks.delete(cb);
-  }
 
   /**
    * Live-apply render-quality settings while the Settings sliders are dragged.
@@ -4461,8 +4448,7 @@ export class SceneManager {
     // Callbacks registered by React components — a ready/calibrate handler
     // closes over the component that registered it, so an uncleared set keeps
     // that component's whole closure scope alive too.
-    this.readyCallbacks.clear();
-    this.calibrateCallbacks.clear();
+    this.phases.clear();
 
     // ── AND THE SUBSYSTEMS, THE SCENE AND THE ENGINE ────────────────────
     // 2.231.0 stopped at the arrays above and claimed the result was "a few

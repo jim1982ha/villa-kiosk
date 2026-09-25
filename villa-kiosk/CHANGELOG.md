@@ -1,3 +1,15 @@
+## 2.496.66
+
+**Nothing you should see changed.** VESTA starts, loads the villa and lands in
+the bird's-eye view exactly as before.
+
+Behind that: the screen code listened for "the villa is loaded" and "the rooms
+have been fitted" in three different places, each written its own way, and a
+fourth told the 3D view to switch to the bird's-eye view it had already started
+in. The order these things happen at startup has caused two faults before. They
+now come from one place, and the screen asks it once. Two unused parts of the 3D
+view were also removed.
+
 ## 2.496.65
 
 ### Fixed — walking view: badges behind walls could be wrong after a floor switch
