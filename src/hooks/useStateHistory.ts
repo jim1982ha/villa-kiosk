@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { UNKNOWN_STATES } from "@/utils/stateColors";
+import { windowEndingAt } from "@/utils/lineChart";
 
 export interface StateHistoryResult {
   data: StateHistoryPoint[];
@@ -61,9 +62,12 @@ export function useStateHistory(entityId: string, hours = 24): StateHistoryResul
           if (!UNKNOWN_STATES.has(pt.state) && pt.t > seen) seen = pt.t;
         }
         if (seen === 0) { setHistory(h); setLoading(false); return; }
-        // Keep the window's own length; only move where it ends.
-        const from = seen - hours * 3600 * 1000;
-        setHistory(deep.filter((pt) => pt.t >= from && pt.t <= seen + hours * 3600 * 1000));
+        // Keep the window's own length; only move where it ENDS — at the
+        // sighting. It used to keep points up to `seen + hours`, twice the
+        // window, and to drop the row BEFORE `from` that says what state the
+        // window opened in (StateTimeline reads data[0] as holding from the
+        // window's start). The bar then draws exactly this span: see its `end`.
+        setHistory(windowEndingAt(deep, seen, hours));
         setLastSeen(seen);
         setLoading(false);
       })

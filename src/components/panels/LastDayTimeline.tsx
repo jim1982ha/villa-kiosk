@@ -41,6 +41,7 @@ export default function LastDayTimeline({
         colorFor={paint}
         loading={loading}
         hours={range.hours}
+        end={lastSeen}
         bucketMinutes={range.bucketMinutes}
       />
     </div>

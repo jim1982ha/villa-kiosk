@@ -35,6 +35,12 @@ interface Props {
    *  it appeared as a sliver at the right-hand edge with 23 hours of empty
    *  track beside it. The data and the axis have to come from the same range. */
   hours: number;
+  /** Where the window ENDS (epoch ms), when that is not now — a device that
+   *  has been down longer than the window is shown ending at its last
+   *  sighting (useStateHistory.lastSeen). The bar used to draw
+   *  [now − hours, now] regardless, so the data it had been handed lay off
+   *  its left edge while the header said "… before <date>". */
+  end?: number;
   colorFor: (state: string) => string;
   height?: number;
   /** Optional legend row below the bar — pass this for states whose colour
@@ -130,7 +136,7 @@ function cellBackground(states: string[], colorFor: (s: string) => string): stri
 
 
 export default function StateTimeline({
-  data, hours, colorFor, height, legend, loading, vertical, bucketMinutes,
+  data, hours, end, colorFor, height, legend, loading, vertical, bucketMinutes,
   baselineStates,
 }: Props) {
   const [hover, setHover] = useState<{ x: number; cell: Cell } | null>(null);
@@ -150,7 +156,7 @@ export default function StateTimeline({
 
   const cells = useMemo<Cell[]>(() => {
     if (data.length === 0) return [];
-    const now = timeKey * (bucketMs || 1000) + (bucketMs || 1000);
+    const now = end ?? timeKey * (bucketMs || 1000) + (bucketMs || 1000);
     const start = now - hours * 3600 * 1000;
     const span = now - start;
 
@@ -223,7 +229,7 @@ export default function StateTimeline({
       });
     }
     return out;
-  }, [data, hours, bucketMs, timeKey, baselineKey]);
+  }, [data, hours, end, bucketMs, timeKey, baselineKey]);
 
   if (data.length === 0) {
     return loading

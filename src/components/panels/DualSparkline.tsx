@@ -8,18 +8,11 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
-import { splitAtGaps, gapBand } from "@/utils/historyGaps";
-import { stepped } from "@/utils/stepSeries";
+import { chartWindow, timeScale, lineRuns, outageBands, type TimeWindow } from "@/utils/lineChart";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
 
-/** Hours the plotted data actually covers — this chart scales its x-axis to
- *  what it was given, so the span is the data's own, not a fixed window. */
-function spanHoursOf(...series: HistoryPoint[][]): number {
-  const ts = series.flat().map((d) => d.t);
-  return ts.length > 1 ? (Math.max(...ts) - Math.min(...ts)) / 3_600_000 : 0;
-}
 
 interface Series {
   data: HistoryPoint[];
@@ -33,23 +26,26 @@ interface Series {
 interface Props {
   a: Series;
   b: Series;
+  /** The span that was asked for — the shared x-axis. See lineChart.ts. */
+  window?: TimeWindow;
   height?: number;
 }
 
 const M = { top: 8, right: 40, bottom: 18, left: 40 };
 
-export default function DualSparkline({ a, b, height = 120 }: Props) {
+export default function DualSparkline({ a, b, window, height = 120 }: Props) {
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
   const [hover, setHover] = useState<number | null>(null);
 
   const geom = useMemo(() => {
     if (a.data.length < 2 && b.data.length < 2) return null;
-    const allT = [...a.data, ...b.data].map((d) => d.t);
-    const minX = Math.min(...allT), maxX = Math.max(...allT);
-    const spanX = maxX - minX || 1;
+    const w = chartWindow(window, a.data, b.data);
+    if (!w) return null;
+    const minX = w.from, maxX = w.to;
     const plotW = Math.max(1, W - M.left - M.right);
     const plotH = Math.max(1, height - M.top - M.bottom);
-    const sx = (t: number) => M.left + ((t - minX) / spanX) * plotW;
+    const right = M.left + plotW;
+    const sx = timeScale(w, M.left, right);
 
     const scaleOf = (data: HistoryPoint[]) => {
       const ys = data.map((d) => d.v);
@@ -65,11 +61,12 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
     const sb = scaleOf(b.data);
     const ptsA = a.data.map((d) => ({ x: sx(d.t), y: sa.sy(d.v), t: d.t, v: d.v }));
     const ptsB = b.data.map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t, v: d.v }));
-    // The crosshair rides the denser series' x positions.
-    // ⚠️ STEPPED, THEN SPLIT — see the note in Sparkline. Both series, because
-    // half a rollout is the defect this repository keeps paying for.
-    const lineA = stepped(a.data).map((d) => ({ x: sx(d.t), y: sa.sy(d.v), t: d.t }));
-    const lineB = stepped(b.data).map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t }));
+    // The crosshair rides the denser series' x positions. Both LINES come from
+    // the one lineRuns (stepped, held, split) — the rule used to be written
+    // out here and in Sparkline, and half a rollout is this repository's
+    // most repeated defect.
+    const runsOf = (data: HistoryPoint[], gaps: readonly HistoryGap[] | undefined, sy: (v: number) => number) =>
+      lineRuns(data, gaps ?? [], w).map((r) => r.map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t })));
     const railPts = ptsA.length >= ptsB.length ? ptsA : ptsB;
 
     // ⚠️ A BAND PER SERIES, IN ITS OWN HALF — NOT ONE FULL-HEIGHT BAND. Two
@@ -78,18 +75,13 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
     // reported nothing. Half-height bands inherit the same left/right reading
     // the axes already establish; both out at once fills the height, which is
     // the unambiguous case anyway.
-    const right = M.left + plotW;
-    const bandsOf = (gaps: readonly HistoryGap[] | undefined) =>
-      (gaps ?? [])
-        .map((g) => gapBand(g, sx, M.left, right))
-        .filter((bb): bb is { x: number; w: number } => bb !== null);
-
     return {
       minX, maxX, sx, sa, sb, ptsA, ptsB, railPts, plotH,
-      bandsA: bandsOf(a.gaps), bandsB: bandsOf(b.gaps),
-      runsA: splitAtGaps(lineA, a.gaps ?? []), runsB: splitAtGaps(lineB, b.gaps ?? []),
+      bandsA: outageBands(a.gaps ?? [], sx, M.left, right), bandsB: outageBands(b.gaps ?? [], sx, M.left, right),
+      runsA: runsOf(a.data, a.gaps, sa.sy), runsB: runsOf(b.data, b.gaps, sb.sy),
+      spanHours: (maxX - minX) / 3_600_000,
     };
-  }, [a.data, a.gaps, b.data, b.gaps, W, height]);
+  }, [a.data, a.gaps, b.data, b.gaps, window, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!geom || !geom.railPts.length) return;
@@ -159,7 +151,7 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
         <div className="spark-tip" style={{ left: railX, top: M.top, transform: `translateX(${railX > W / 2 ? "-100%" : "0"})` }}>
           {hpA && <span><span style={{ color: a.color }}>●</span> {fmtChartValue(hpA.v)}{a.unit ? ` ${a.unit}` : ""}</span>}
           {hpB && <span><span style={{ color: b.color }}>┄</span> {fmtChartValue(hpB.v)}{b.unit ? ` ${b.unit}` : ""}</span>}
-          <span className="spark-tip-time">{fmtChartStamp((hpA ?? hpB)!.t, spanHoursOf(a.data, b.data))}</span>
+          <span className="spark-tip-time">{fmtChartStamp((hpA ?? hpB)!.t, geom.spanHours)}</span>
         </div>
       )}
     </div>

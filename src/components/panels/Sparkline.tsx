@@ -6,8 +6,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
-import { splitAtGaps, gapBand } from "@/utils/historyGaps";
-import { stepped } from "@/utils/stepSeries";
+import { chartWindow, timeScale, lineRuns, outageBands, type TimeWindow } from "@/utils/lineChart";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
@@ -17,6 +16,10 @@ interface Props {
   /** Stretches in which the entity reported nothing usable. Shaded, and the
    *  line is broken across them — see utils/historyGaps for why both. */
   gaps?: HistoryGap[];
+  /** The span that was asked for (HistorySeries.window). Drawn as the x-axis,
+   *  so an outage running to now reaches the right edge — see lineChart.ts.
+   *  Omitted, the chart spans its own readings, as it always did. */
+  window?: TimeWindow;
   color?: string;
   height?: number;
   unit?: string;
@@ -27,42 +30,30 @@ interface Props {
 
 const M = { top: 8, right: 10, bottom: 18, left: 38 };
 
-export default function Sparkline({ data, gaps = [], color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
-  // Span of the data itself: this chart scales its x-axis to what it was given.
-  const spanHours = data.length > 1
-    ? (data[data.length - 1].t - data[0].t) / 3_600_000 : 0;
+export default function Sparkline({ data, gaps = [], window, color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
   const [hover, setHover] = useState<number | null>(null);
 
   const geom = useMemo(() => {
     if (data.length < 2) return null;
-    const xs = data.map((d) => d.t);
+    const w = chartWindow(window, data);
+    if (!w) return null;
     const ys = data.map((d) => d.v);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minX = w.from, maxX = w.to;
     const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const spanX = maxX - minX || 1;
     const spanY = maxY - minY || 1;
     const plotW = Math.max(1, W - M.left - M.right);
     const plotH = Math.max(1, height - M.top - M.bottom);
-    const sx = (t: number) => M.left + ((t - minX) / spanX) * plotW;
-    const sy = (v: number) => M.top + (1 - (v - minY) / spanY) * plotH;
-    const pts = data.map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t, v: d.v }));
     const right = M.left + plotW;
-    // One band per outage, already clamped to the plot — a gap that runs to
-    // `now` routinely extends past the last plotted reading.
-    const bands = gaps
-      .map((g) => gapBand(g, sx, M.left, right))
-      .filter((b): b is { x: number; w: number } => b !== null);
-    // ⚠️ THE LINE IS STEPPED AND THEN SPLIT, IN THAT ORDER. A reading holds
-    // until it changes (utils/stepSeries), and the runs are what survives the
-    // outages (utils/historyGaps) — two different truths about the same
-    // series, and the second must be applied to the first. `pts` stays the
-    // real readings: it is what hover reports, and a hover on a flat stretch
-    // must not name a measurement nobody took.
-    const linePts = stepped(data).map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t }));
-    return { pts, minX, maxX, minY, maxY, sx, sy, bands,
-             runs: splitAtGaps(linePts, gaps) };
-  }, [data, gaps, W, height]);
+    const sx = timeScale(w, M.left, right);
+    const sy = (v: number) => M.top + (1 - (v - minY) / spanY) * plotH;
+    // `pts` are the real readings — what hover reports. The LINE is lineRuns:
+    // stepped, held to the window's end, split at outages (lineChart.ts).
+    const pts = data.map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t, v: d.v }));
+    const runs = lineRuns(data, gaps, w).map((r) => r.map((d) => ({ x: sx(d.t), y: sy(d.v), t: d.t })));
+    return { pts, minX, maxX, minY, maxY, sx, sy, bands: outageBands(gaps, sx, M.left, right), runs,
+             spanHours: (maxX - minX) / 3_600_000 };
+  }, [data, gaps, window, W, height]);
 
   const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!geom) return;
@@ -137,7 +128,7 @@ export default function Sparkline({ data, gaps = [], color = "var(--accent-teal)
           <strong>{fmtChartValue(hp.v)}{unit ? ` ${unit}` : ""}</strong>
           {/* The tooltip earns the day when the window spans more than one;
               the axis ticks below stay bare, where the day would not fit. */}
-          <span>{fmtChartStamp(hp.t, spanHours)}</span>
+          <span>{fmtChartStamp(hp.t, geom.spanHours)}</span>
         </div>
       )}
     </div>

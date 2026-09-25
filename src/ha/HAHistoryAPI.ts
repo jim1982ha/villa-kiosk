@@ -11,7 +11,9 @@ interface RawHistoryState {
   last_updated?: string;
 }
 
-async function fetchRaw(entityId: string, hours: number): Promise<RawHistoryState[]> {
+async function fetchRaw(
+  entityId: string, hours: number,
+): Promise<{ rows: RawHistoryState[]; window: { from: number; to: number } }> {
   // The add-on's Supervisor proxy injects the token server-side, so we hit it
   // token-less (session cookie carries the browser's authorization).
   const apiBase = ingressApiBase();
@@ -31,7 +33,7 @@ async function fetchRaw(entityId: string, hours: number): Promise<RawHistoryStat
   const res = await fetch(url);
   if (!res.ok) throw new Error(`History request failed: ${res.status}`);
   const data = (await res.json()) as RawHistoryState[][];
-  return data[0] ?? [];
+  return { rows: data[0] ?? [], window: { from: now - hours * 3600 * 1000, to: now } };
 }
 
 /** A history row's numeric value, or NaN when there was no reading at all.
@@ -57,7 +59,7 @@ export function numericState(raw: unknown): number {
  * overload that hands back points alone.
  */
 export async function fetchHistory(entityId: string, hours = 24): Promise<HistorySeries> {
-  const series = await fetchRaw(entityId, hours);
+  const { rows: series, window } = await fetchRaw(entityId, hours);
   const rows = series
     // ⚠️ A MISSING READING MUST BECOME NaN, NEVER 0. `Number(null)` is 0 and so
     // is `Number("")`, and both are `Number.isFinite`, so the filter below —
@@ -69,10 +71,12 @@ export async function fetchHistory(entityId: string, hours = 24): Promise<Histor
     .map((s) => ({ t: new Date(s.last_changed).getTime(), v: numericState(s.state) }));
   return {
     points: rows.filter((p) => Number.isFinite(p.v)),
-    // `Date.now()` rather than the last row's stamp: an entity that is
-    // unavailable NOW has an outage that has not ended. The chart clamps the
-    // band to its own plot, so an end beyond the last point is safe here.
-    gaps: gapsFrom(rows, Date.now()),
+    // The window's end rather than the last row's stamp: an entity that is
+    // unavailable NOW has an outage that has not ended. That was "safe" only in
+    // a comment until 2.496.62 — the charts scaled to their last finite point,
+    // so the band fell off the plot. They draw `window` now (lineChart.ts).
+    gaps: gapsFrom(rows, window.to),
+    window,
   };
 }
 
@@ -113,7 +117,7 @@ export async function fetchStateHistory(
   // opt-out or were broken by not passing it. Colour is not this module's
   // business — `stateColors.historyStateColor` already maps these to the amber
   // the Map colours legend documents.
-  const series = await fetchRaw(entityId, hours);
+  const { rows: series } = await fetchRaw(entityId, hours);
   const points = series
     // ⚠️ COERCED AT THE DOOR, alongside the guard in `statusKeyFor`. Home
     // Assistant sends a null `state` on a freshly added entity's early rows

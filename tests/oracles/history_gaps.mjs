@@ -106,7 +106,10 @@ const FILES = walk(SRC);
 const lineCharts = FILES.filter((f) => /<polyline/.test(readFileSync(f, "utf8")));
 const blind = lineCharts.filter((f) => {
   const src = readFileSync(f, "utf8");
-  return !/splitAtGaps/.test(src) || !/gapBand/.test(src) || !/STATUS_COLOR\.unavailable/.test(src);
+  // Either the primitives, or lineChart.ts's wrappers around them (2.496.62:
+  // lineRuns splits, outageBands bands — both against the requested window).
+  return !/splitAtGaps|lineRuns/.test(src) || !/gapBand|outageBands/.test(src)
+    || !/STATUS_COLOR\.unavailable/.test(src);
 }).map((f) => f.slice(SRC.length + 1));
 console.log(`\n  scanned ${FILES.length} source files · ${lineCharts.length} draw a numeric line`);
 for (const f of lineCharts) console.log(`     ${f.slice(SRC.length + 1)}`);

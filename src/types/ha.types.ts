@@ -204,6 +204,9 @@ export interface HistoryGap {
 export interface HistorySeries {
   points: HistoryPoint[];
   gaps: HistoryGap[];
+  /** The span that was ASKED for (epoch ms). A chart draws this, not the span
+   *  of whatever readings came back — see utils/lineChart.ts. */
+  window: { from: number; to: number };
 }
 
 /** A single state-change point (for StateTimeline) — the RAW state string, no

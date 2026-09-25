@@ -43,8 +43,10 @@ import type { HistoryGap } from "@/types/ha.types";
  * ⚠️ A TRAILING GAP CLOSES AT `now`, NOT AT THE LAST ROW. If the entity is
  * unavailable right now, the outage has not ended, and closing it at the last
  * row would draw a band that stops short of the present and imply the device
- * came back. The chart clamps the band to its own plot area, so passing a `now`
- * beyond the last plotted point is safe and is the honest input.
+ * came back. Passing a `now` beyond the last plotted point is the honest input
+ * — and is SAFE only because the charts draw the requested window
+ * (utils/lineChart.ts). Until 2.496.62 they drew their own readings' span, and
+ * this band was clamped off the plot: a sensor offline right now had none.
  */
 export function gapsFrom(rows: readonly { t: number; v: number }[], now: number): HistoryGap[] {
   const gaps: HistoryGap[] = [];
