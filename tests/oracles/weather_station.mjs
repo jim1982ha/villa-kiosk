@@ -143,5 +143,18 @@ console.log("\n  the bar");
   ck("  ...and so is the rule only it used", !/poolFacts|POOL_WORD/.test(vs));
 }
 
+console.log("\n  the charts do not re-fetch on every state push (2.496.86)");
+{
+  const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
+  ck("the bar's station keeps its identity while the station is the same",
+     /const station = useMemo\(\(\) => found, \[stationKey\]\);/.test(bar));
+  ck("the Trends fetch is keyed by the sensors' ids, not the station object",
+     /\}, \[ids, range\.hours\]\);/.test(panel) && /\[idsKey\]\)/.test(panel) && !/\], \[station\]\);/.test(panel));
+  const spark = readFileSync(new URL("../../src/components/panels/Sparkline.tsx", import.meta.url), "utf8");
+  ck("one reading over a known window is a line (0 mm all day), not 'not enough history'",
+     /data\.length === 0 \|\| \(data\.length < 2 && !\(window && window\.to > window\.from\)\)/.test(spark));
+}
+
 if (fail) { console.log(`  ${fail} FAILED`); process.exit(1); }
 console.log("  all passed");

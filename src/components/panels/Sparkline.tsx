@@ -35,7 +35,11 @@ export default function Sparkline({ data, gaps = [], window, color = "var(--acce
   const [hover, setHover] = useState<number | null>(null);
 
   const geom = useMemo(() => {
-    if (data.length < 2) return null;
+    // ONE reading is a line when the window is known: a sensor that held one
+    // value all day (no rain: 0 mm since midnight) comes back from the recorder
+    // as a single row, and it HOLDS to the window's end (lineRuns). It read
+    // "Not enough history" — about a gauge that had reported all day.
+    if (data.length === 0 || (data.length < 2 && !(window && window.to > window.from))) return null;
     const w = chartWindow(window, data);
     if (!w) return null;
     const ys = data.map((d) => d.v);

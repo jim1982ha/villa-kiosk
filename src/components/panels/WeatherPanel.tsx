@@ -215,8 +215,11 @@ function Row({ label, a, b }: { label: string; a: string; b: string }) {
 function Trends({ station }: { station: WeatherStation }) {
   const { entities } = useHA();
   const { range, picker } = useHistoryRange();
-  const ids = useMemo(() => (["temperature", "indoorTemperature", "pressure", "windSpeed", "windGust", "rainToday"] as const)
-    .map((r) => [r, station.roles[r]] as const).filter((p): p is readonly [typeof p[0], string] => !!p[1]), [station]);
+  // Keyed by the sensors' ids, never by the station object's identity: an
+  // effect on an object re-runs whenever anyone rebuilds it (see SummaryBar).
+  const idsKey = (["temperature", "indoorTemperature", "pressure", "windSpeed", "windGust", "rainToday"] as const)
+    .map((r) => `${r}=${station.roles[r] ?? ""}`).join("|");
+  const ids = useMemo(() => idsKey.split("|").map((kv) => kv.split("=") as [WeatherRole, string]).filter(([, id]) => !!id), [idsKey]);
   const [series, setSeries] = useState<Partial<Record<WeatherRole, HistorySeries>>>({});
   const [loading, setLoading] = useState(true);
   useEffect(() => {

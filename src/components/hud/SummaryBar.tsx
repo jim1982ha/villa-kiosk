@@ -429,7 +429,16 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
   );
 
   // The station the Weather tile opens — the same derivation the tile used.
-  const station = useMemo(() => findWeatherStation(visibleEntities, entityDeviceIds), [visibleEntities, entityDeviceIds]);
+  // ⚠️ STABLE WHILE THE STATION IS THE SAME. `visibleEntities` changes on every
+  // state push anywhere in the villa, so a station memoised on it was a NEW
+  // object several times a second — and the Weather modal's charts re-fetched
+  // their history on each one, cancelling the last: a 7-day request never
+  // finished (the owner's "the range stops changing", the add-on log full of
+  // the same six history requests). Keyed by what the station IS instead.
+  const found = findWeatherStation(visibleEntities, entityDeviceIds);
+  const stationKey = found ? JSON.stringify(found) : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const station = useMemo(() => found, [stationKey]);
 
   const deviceTiles = useMemo(
     () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, entityDeviceIds, villaDeviceSet),
