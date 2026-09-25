@@ -15,8 +15,9 @@
 // Width: the same as every other window the bottom bar opens
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
-import { useEffect, useState, type ReactNode } from "react";
-import { ChevronLeft, CloudSun } from "lucide-react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
+import { fmtChartValue, fmtChartStamp } from "./chartUtils";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
@@ -83,6 +84,10 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 10_000); return () => clearInterval(t); }, []);
   const r = useReadings(station);
   const [range, setRange] = useState<RangeKey>("24h");
+  // Each screen opens at its TOP: the body is one scroll area shared by both,
+  // so History used to open wherever Now had been scrolled to.
+  const topRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { topRef.current?.closest(".panel-body")?.scrollTo({ top: 0 }); }, [view]);
 
   const back = (
     <button type="button" className="weather-back" onClick={() => setView("now")} aria-label="Back to Weather">
@@ -99,9 +104,17 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
       headerActions={view === "now"
         ? (r.updated && <span className="weather-live">live · {ago(r.updated, now)}</span>)
         : <RangePicker value={range} onChange={setRange} />}
+      // In the footer, so it is visible however far the body scrolls — and in
+      // Settings' "Advanced Settings" style: the same button, the same place.
+      footerLeading={view === "now" && (
+        <button type="button" className="btn ghost" onClick={() => setView("history")}>
+          <LineChart size={18} /> History and trends
+        </button>
+      )}
     >
+      <div ref={topRef} />
       {view === "now"
-        ? <NowView station={station} r={r} onHistory={() => setView("history")} />
+        ? <NowView station={station} r={r} />
         : <HistoryView station={station} range={range} />}
     </BasePanel>
   );
@@ -109,7 +122,7 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
 
 // ── Now ──────────────────────────────────────────────────────────────────
 
-function NowView({ station, r, onHistory }: { station: WeatherStation; r: Readings; onHistory: () => void }) {
+function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
   // The 3-hour pressure tendency and today's temperature range need the
   // recorder; both arrive a beat after the live readings rather than block them.
   const [tendency, setTendency] = useState<string | null>(null);
@@ -200,7 +213,6 @@ function NowView({ station, r, onHistory }: { station: WeatherStation; r: Readin
         {(r.uv !== undefined || r.solar !== undefined) && <Tile title="Sun & UV"><SunUv r={r} /></Tile>}
       </div>
 
-      <button type="button" className="weather-link" onClick={onHistory}>History and trends →</button>
     </div>
   );
 }
@@ -428,16 +440,16 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Range
       </div>
       <div className="weather-charts">
         <ChartTile periodMs={periodMs} title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} loading={loading}
-          lines={[{ pts: series("temperature"), cls: "out" }, { pts: series("indoorTemperature"), cls: "in dashed" }]} />
+          lines={[{ pts: series("temperature"), cls: "out", label: "Outside", unit: "°" }, { pts: series("indoorTemperature"), cls: "in dashed", label: "Inside", unit: "°" }]} />
         <ChartTile periodMs={periodMs} title="Humidity" legend={[["Outside", "water"], ["Inside", "in"]]} win={win} loading={loading}
-          lines={[{ pts: series("humidity"), cls: "water" }, { pts: series("indoorHumidity"), cls: "in dashed" }]} />
+          lines={[{ pts: series("humidity"), cls: "water", label: "Outside", unit: "%" }, { pts: series("indoorHumidity"), cls: "in dashed", label: "Inside", unit: "%" }]} />
         <ChartTile periodMs={periodMs} title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} loading={loading}
-          lines={[{ pts: series("windSpeed"), cls: "out", area: true }, { pts: series("windGust", "max"), cls: "ink thin" }]} />
+          lines={[{ pts: series("windSpeed"), cls: "out", area: true, label: "Speed", unit: ` ${unitOf("windSpeed")}` }, { pts: series("windGust", "max"), cls: "ink thin", label: "Gust", unit: ` ${unitOf("windGust")}` }]} />
         <RainTile rows={rain} win={win} loading={loading} perDay={cfg.rainPeriod === "day"} unit={unitOf("rainToday") || "mm"} />
         <ChartTile periodMs={periodMs} title="Pressure" note={pMin !== undefined && pMax !== undefined ? `${Math.round(pMin)} – ${Math.round(pMax)} ${unitOf("pressure")}` : undefined}
-          win={win} loading={loading} lines={[{ pts: series("pressure"), cls: "out" }]} />
+          win={win} loading={loading} lines={[{ pts: series("pressure"), cls: "out", label: "Pressure", unit: ` ${unitOf("pressure")}` }]} />
         <ChartTile periodMs={periodMs} title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "warm"]]} win={win} loading={loading}
-          lines={[{ pts: series("solar"), cls: "warm", area: true, ownScale: true }, { pts: series("uv", "max"), cls: "warm", ownScale: true }]} />
+          lines={[{ pts: series("solar"), cls: "warm", area: true, ownScale: true, label: "Sunlight", unit: " W/m²" }, { pts: series("uv", "max"), cls: "warm", ownScale: true, label: "UV", unit: "" }]} />
       </div>
     </div>
   );
@@ -461,7 +473,7 @@ function Axis({ win }: { win: { from: number; to: number } }) {
   );
 }
 
-interface Line { pts: Pt[]; cls: string; area?: boolean; ownScale?: boolean }
+interface Line { pts: Pt[]; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
 const W = 320, H = 150, TOP = 12, BOT = 138;
 
 function ChartTile({ title, legend, note, lines, win, loading, periodMs }: {
@@ -488,6 +500,11 @@ function ChartTile({ title, legend, note, lines, win, loading, periodMs }: {
       });
   };
   const bands = drawn.length ? outageBands(bucketGaps(drawn[0].pts, periodMs, win), sx, 0, W) : [];
+  const [hoverT, setHoverT] = useState<number | null>(null);
+  const onMove = (e: PointerEvent<SVGSVGElement>) => setHoverT(timeAt(e, win));
+  // The nearest bucket of each line to the pointer — what the tip reports.
+  const hit = hoverT === null ? [] : drawn.map((l) => ({ l, p: nearest(l.pts, hoverT) })).filter((h) => h.p);
+  const hx = hit.length ? sx(hit[0].p!.t) : 0;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
@@ -498,7 +515,9 @@ function ChartTile({ title, legend, note, lines, win, loading, periodMs }: {
       {drawn.length === 0
         ? (loading ? <div className="state-timeline-skeleton weather-chart" /> : <div className="muted body-text weather-chart-empty">Not enough history yet.</div>)
         : (
-          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}>
+          <div className="spark-wrap weather-chart-wrap">
+          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}
+            style={{ touchAction: "none" }} onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHoverT(null)}>
             <g className="chart-grid"><line x1="0" y1={TOP} x2={W} y2={TOP} /><line x1="0" y1={(TOP + BOT) / 2} x2={W} y2={(TOP + BOT) / 2} /><line x1="0" y1={BOT} x2={W} y2={BOT} /></g>
             {bands.map((b, i) => <rect key={`gap${i}`} x={b.x} y={TOP} width={b.w} height={BOT - TOP} fill={STATUS_COLOR.unavailable} opacity={0.18} />)}
             {drawn.map((l, i) => (
@@ -511,9 +530,39 @@ function ChartTile({ title, legend, note, lines, win, loading, periodMs }: {
                 ))}
               </g>
             ))}
+            {hit.length > 0 && <line x1={hx} y1={TOP} x2={hx} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
+          {hit.length > 0 && (
+            <Tip x={hx / W} lines={hit.map(({ l, p }) => ({ key: l.label, cls: l.cls, text: `${l.label} ${fmtChartValue(p!.v)}${l.unit}` }))}
+              stamp={fmtChartStamp(hit[0].p!.t, (win.to - win.from) / 3_600_000)} />
+          )}
+          </div>
         )}
       <Axis win={win} />
+    </div>
+  );
+}
+
+/** The time under the pointer, in the chart's window. */
+function timeAt(e: PointerEvent<SVGSVGElement>, win: { from: number; to: number }): number {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
+  return win.from + frac * (win.to - win.from);
+}
+
+/** The reading nearest a time (the points are in time order). */
+function nearest<T extends { t: number }>(pts: readonly T[], t: number): T | undefined {
+  let best: T | undefined, d = Infinity;
+  for (const p of pts) { const e = Math.abs(p.t - t); if (e < d) { d = e; best = p; } }
+  return best;
+}
+
+/** The app's chart tooltip (spark-tip, as Sparkline draws it), one row a line. */
+function Tip({ x, lines, stamp }: { x: number; lines: { key: string; cls: string; text: string }[]; stamp: string }) {
+  return (
+    <div className="spark-tip weather-tip" style={{ left: `${x * 100}%`, top: TOP, transform: `translateX(${x > 0.5 ? "-100%" : "0"})` }}>
+      {lines.map((l) => <strong key={l.key}><i className={`key ${l.cls.split(" ")[0]}`} />{l.text}</strong>)}
+      <span>{stamp}</span>
     </div>
   );
 }
@@ -526,6 +575,9 @@ function RainTile({ rows, win, loading, perDay, unit }: {
   const slot = perDay ? 86_400_000 : 3_600_000;
   const bw = Math.max(1.5, (slot / Math.max(1, win.to - win.from)) * W * 0.72);
   const spanH = (win.to - win.from) / 3600_000;
+  const [hoverT, setHoverT] = useState<number | null>(null);
+  const hitBar = hoverT === null ? undefined : nearest(bars.map((b) => ({ ...b, t: b.t + slot / 2 })), hoverT);
+  const hx = hitBar ? ((hitBar.t - win.from) / Math.max(1, win.to - win.from)) * W : 0;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
@@ -535,7 +587,9 @@ function RainTile({ rows, win, loading, perDay, unit }: {
       {bars.length === 0 && loading
         ? <div className="state-timeline-skeleton weather-chart" />
         : (
-          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Rain history">
+          <div className="spark-wrap weather-chart-wrap">
+          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Rain history"
+            style={{ touchAction: "none" }} onPointerMove={(e) => setHoverT(timeAt(e, win))} onPointerDown={(e) => setHoverT(timeAt(e, win))} onPointerLeave={() => setHoverT(null)}>
             <g className="chart-grid"><line x1="0" y1={TOP} x2={W} y2={TOP} /><line x1="0" y1={(TOP + BOT) / 2} x2={W} y2={(TOP + BOT) / 2} /><line x1="0" y1={BOT} x2={W} y2={BOT} /></g>
             {bars.map((b) => {
               const h = max > 0 ? Math.max(2, (b.v / max) * (BOT - TOP)) : 2;
@@ -543,7 +597,13 @@ function RainTile({ rows, win, loading, perDay, unit }: {
               return <rect key={b.t} x={x.toFixed(1)} y={(BOT - h).toFixed(1)} width={bw.toFixed(1)} height={h.toFixed(1)} rx="1" className="chart-bar" />;
             })}
             {max === 0 && <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain in the last ${spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)} h`}`}</text>}
+            {hitBar && <line x1={hx} y1={TOP} x2={hx} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
+          {hitBar && (
+            <Tip x={hx / W} lines={[{ key: "rain", cls: "water", text: `${fmtChartValue(hitBar.v)} ${unit}` }]}
+              stamp={`${perDay ? "day of " : "hour from "}${fmtChartStamp(hitBar.t - slot / 2, spanH)}`} />
+          )}
+          </div>
         )}
       <Axis win={win} />
     </div>

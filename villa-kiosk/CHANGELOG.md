@@ -1,3 +1,15 @@
+## 2.496.88
+
+### Improved — the Weather window
+- **Tooltips on the history charts.** Moving the mouse over a chart — or
+  touching it — now shows a line at that moment and the value of each line
+  there, with its time. On the rain chart it shows that hour's or that day's
+  rain.
+- **History and trends opens at the top**, instead of wherever the first screen
+  had been scrolled to.
+- **The "History and trends" button is in the window's footer**, next to Close,
+  so it is always visible — the same button style as "Advanced Settings" in
+  Settings.
 ## 2.496.87
 
 ### Changed — a new Weather window

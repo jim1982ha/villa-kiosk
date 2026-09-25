@@ -612,7 +612,6 @@ input[type="range"]::-moz-range-thumb {
 .sun-dot.day { fill: var(--accent-warm); }
 .sun-value { font: 500 30px var(--font-display); fill: var(--text-primary); text-anchor: middle; }
 
-.weather-link { align-self: flex-start; border: 0; background: none; padding: 8px 0; min-height: var(--touch-min); font: 600 var(--text-base) var(--font-ui); color: var(--accent); cursor: pointer; }
 
 .weather-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .weather-figure { background: var(--bg-input); border-radius: 16px; padding: 12px 14px; }
@@ -630,6 +629,10 @@ input[type="range"]::-moz-range-thumb {
 .key.warm { background: var(--accent-warm); }
 .key.ink { background: var(--text-primary); }
 .weather-chart { width: 100%; height: 150px; flex: 1 1 auto; }
+.weather-chart-wrap { flex: 1 1 auto; display: flex; }
+/* The shared chart tip (spark-tip), one row a line, each with its colour. */
+.weather-tip strong { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.weather-tip .key { display: inline-block; width: 8px; height: 8px; border-radius: 4px; }
 .weather-chart-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
 .chart-grid line { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .chart-line { fill: none; stroke-width: 2.4; stroke-linejoin: round; }

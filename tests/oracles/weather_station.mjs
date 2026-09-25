@@ -169,6 +169,14 @@ console.log("\n  the window: the approved boards 6 and 7");
   ck("history reads the recorder's STATISTICS (5-minute / hourly), not raw history",
      /getStatisticsDuringPeriod\(ids, [\s\S]{0,80}\["mean", "min", "max"\]\)/.test(panel) && /"30d": \{[^}]*period: "hour"/.test(panel));
   ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label="Back to Weather"/.test(panel) && !/Back to now/.test(panel));
+  ck("'History and trends' is in the FOOTER, Settings' 'Advanced Settings' style (btn ghost, in the leading slot)",
+     /footerLeading=\{view === "now" && \([\s\S]{0,120}className="btn ghost"[\s\S]{0,120}History and trends/.test(panel) && !/weather-link/.test(panel));
+  const base = readFileSync(new URL("../../src/components/panels/BasePanel.tsx", import.meta.url), "utf8");
+  ck("  ...and BasePanel's footer renders that slot", /<div className="panel-footer-left">\s*\{footerLeading\}/.test(base));
+  ck("each screen opens at its top (the body scrolls back on every switch)",
+     /useEffect\(\(\) => \{ topRef\.current\?\.closest\("\.panel-body"\)\?\.scrollTo\(\{ top: 0 \}\); \}, \[view\]\);/.test(panel));
+  ck("every history chart has the app's hover tooltip — the lines and the rain bars",
+     (panel.match(/<Tip x=/g) ?? []).length === 2 && (panel.match(/onPointerMove=/g) ?? []).length === 2 && /className=\{?"spark-tip/.test(panel));
   ck("the three advice cards are the rules above, fed the live readings",
      /windowAdvice\(\{/.test(panel) && /laundryAdvice\(\{/.test(panel) && /outdoorsAdvice\(\{/.test(panel));
 }
