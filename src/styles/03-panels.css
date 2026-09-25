@@ -494,14 +494,11 @@ input[type="range"]::-moz-range-thumb {
    bars. An outline rather than a border because it takes no layout space (a
    border would shrink the picture inside it), it paints above the element's own
    content, and the negative offset keeps it inside the box so .camera-zoom's
-   overflow:hidden cannot clip it. Excludes .camera-preview — the stand-in
-   snapshot shown while HLS starts DOES fill the region, and ringing it would
-   reproduce the very bug this replaces. Identical on a phone: the geometry
-   comes from the feed, not from a breakpoint. */
-.camera-detecting :is(video, img):not(.camera-preview) {
+   overflow:hidden cannot clip it. Identical on a phone: the geometry comes
+   from the feed, not from a breakpoint. */
+.camera-detecting :is(video, img) {
   outline: 6px solid var(--detect-color);
   outline-offset: -6px;
 }
 
 .camera-hls-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.camera-hls-wrap .camera-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }

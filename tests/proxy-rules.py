@@ -307,6 +307,29 @@ with tempfile.TemporaryDirectory() as tmp:
     ck("  ...while a real delete against a READ baseline still collects it",
        not os.path.exists(photo))
 
+# ── the websocket gate: default deny, and no camera for guest ─────────────
+# The guest refusal named `camera/stream` alone, which was every way into a
+# camera's picture only while HLS was the only way. WebRTC added four more.
+print("\n  the websocket gate:")
+refuse = proxy._ws_type_refusal
+cams = sorted(proxy.CAMERA_WS_TYPES)
+ck("every camera command is on the allowlist",
+   proxy.CAMERA_WS_TYPES <= proxy.ALLOWED_WS_TYPES)
+ck("the WebRTC offer is a camera command, so it is covered",
+   "camera/webrtc/offer" in proxy.CAMERA_WS_TYPES)
+ck("guest is refused EVERY camera command",
+   all(refuse("guest", t) for t in cams))
+ck("ops may open every camera command",
+   not any(refuse("ops", t) for t in cams))
+ck("owner is exempt, even from the allowlist",
+   refuse("owner", "config/entity_registry/update") is None)
+ck("an unlisted command is refused for ops",
+   refuse("ops", "config/entity_registry/update") is not None)
+ck("  ...and for guest",
+   refuse("guest", "render_template") is not None)
+ck("guest keeps what is not a camera",
+   refuse("guest", "get_states") is None)
+
 print()
 print("✅ the proxy's pure rules hold" if FAIL == 0
       else "❌ A PROXY RULE IS BROKEN")

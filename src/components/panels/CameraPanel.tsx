@@ -1,7 +1,10 @@
 // src/components/panels/CameraPanel.tsx
 // Full-screen camera takeover (not a bottom sheet).
 //
-// Three tiers, tried in order, each falling through to the next on failure:
+// Four tiers, tried in order, each falling through to the next on failure:
+//  0. WebRTC — what Home Assistant's own camera view plays whenever the camera
+//     offers it (HA's built-in go2rtc, see HACameraWebRTC). Starts in about a
+//     second, at the main stream's own resolution and shape.
 //  1. HLS — the same "stream" pipeline Home Assistant's own frontend prefers
 //     for any camera that supports it (see HACameraProxy.cameraHlsUrl). Played
 //     via hls.js whenever it's supported (which fetches the playlist/segments
@@ -25,6 +28,7 @@ import { useRailLayout } from "@/utils/railLayout";
 import { usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import { cameraStreamUrl, cameraSnapshotUrl, cameraHlsUrl } from "@/ha/HACameraProxy";
+import { cameraSupportsWebRtc, startCameraWebRtc } from "@/ha/HACameraWebRTC";
 import { useEntityLabel } from "@/hooks/useEntityLabel";
 import { useLongPress, HOLD_MS_HUD } from "@/hooks/useLongPress";
 import { useMediaZoom } from "@/hooks/useMediaZoom";
@@ -46,7 +50,7 @@ interface Props extends PanelProps {
   onOpenEntity?: (entityId: string) => void;
 }
 
-type Mode = "hls" | "stream" | "snapshot" | "failed";
+type Mode = "webrtc" | "hls" | "stream" | "snapshot" | "failed";
 
 // How long the title + status/controls chrome stays up after the last bit of
 // pointer/touch/key activity before fading back out. Long enough to read the
@@ -81,6 +85,13 @@ const STREAM_WATCHDOG_MS = 6000;
 // latency on top. If this still isn't enough, the fallback chain means
 // nothing breaks either way — it just takes longer to drop to MJPEG/snapshot.
 const HLS_WATCHDOG_MS = 15000;
+// WebRTC is judged in two steps, because its two ways of failing look nothing
+// alike. The media path either comes up (ICE "connected") within a few seconds
+// or it never will — a browser with no route to go2rtc — and waiting longer
+// only delays the HLS fallback. Once it IS up, the first frame still has to
+// wait for the camera's next keyframe, which on a long-GOP camera is seconds.
+const WEBRTC_CONNECT_MS = 5000;
+const WEBRTC_FRAME_MS = 8000;
 
 export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEntity }: Props) {
   const { connected, ws, entities } = useHA();
@@ -90,13 +101,16 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // fullscreen feed, not a modal card), so it reads the identical context and
   // renders the control in its own bottom bar instead of re-deriving anything.
   const { linked } = usePanelActions();
-  const [mode, setMode] = useState<Mode>("hls");
+  const [mode, setMode] = useState<Mode>("webrtc");
   const [tick, setTick] = useState(0);
   const snapErrors = useRef(0);
   // Set once the MJPEG <img> paints a frame — tells the watchdog the stream is live.
   const streamLoaded = useRef(false);
   // Same, for the HLS <video> — set on its first real playing frame.
   const hlsLoaded = useRef(false);
+  // Same, for the WebRTC <video>.
+  const rtcLoaded = useRef(false);
+  const rtcVideoRef = useRef<HTMLVideoElement>(null);
   const hlsVideoRef = useRef<HTMLVideoElement>(null);
   const hlsInstanceRef = useRef<Hls | null>(null);
   // Whether hls.js (not native HLS) drives this <video> element. Deliberately
@@ -404,21 +418,25 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // Whether the current tier has painted a real frame yet — drives the loading
   // spinner so an empty <video>/<img> mid-setup reads as "loading", not "broken".
   const [frameReady, setFrameReady] = useState(false);
-  // Whether the instant snapshot preview (see below) has a frame to show.
-  // HLS setup can take several seconds on a camera's first open (HA has to
-  // spin up its own FFmpeg stream worker) — showing a spinner for all of that
-  // reads as "slow"/"broken" even though it's working as intended. Overlaying
-  // an immediately-available snapshot, refreshed every SNAPSHOT_INTERVAL_MS
-  // until HLS actually starts playing, gives the user something live-ish to
-  // look at with no visible transition once the real video takes over (it's
-  // already decoding underneath by the time the overlay disappears).
-  const [previewReady, setPreviewReady] = useState(false);
+  // ⚠️ THERE IS NO SNAPSHOT STAND-IN ANY MORE. While HLS started, this panel
+  // showed the camera's still image, refreshed every SNAPSHOT_INTERVAL_MS, on
+  // the theory that the swap to video would be invisible. It was the opposite:
+  // the still comes from a different stream (4:3, and the camera only renews
+  // it every ~2s) so the owner watched a slideshow in the wrong shape for 7s
+  // and then saw it jump to 16:9. WebRTC starts in about a second; a spinner
+  // for that second is honest, and a wrong picture is not.
 
   // ⚠️ tapDebug, not devLog. These two fire only when a stream has ALREADY
   // failed, which is the moment someone is reading a capture — and "the camera
   // shows nothing" is reported from the wall iPad, the one device whose Safari
   // is fussiest about HLS and the one with no console to strip these into.
   // A silent fallback chain leaves three indistinguishable failures.
+  const fallBackToHls = (reason: string) => {
+    tapDebug(`camera: WebRTC unavailable, falling back to HLS — ${reason}`);
+    hlsLoaded.current = false;
+    setFrameReady(false);
+    setMode("hls");
+  };
   const fallBackToStream = (reason: string) => {
     tapDebug(`camera: HLS unavailable, falling back to MJPEG — ${reason}`);
     streamLoaded.current = false;
@@ -571,16 +589,75 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     }
   };
 
-  // Start over (try HLS again, from the top) whenever the target camera changes.
+  // Start over (WebRTC again, from the top) whenever the target camera changes.
   useEffect(() => {
-    setMode("hls");
+    setMode("webrtc");
     setFrameReady(false);
-    setPreviewReady(false);
     snapErrors.current = 0;
     streamLoaded.current = false;
     hlsLoaded.current = false;
+    rtcLoaded.current = false;
     zoom.reset(); // a different camera starts un-zoomed
   }, [mapping.entityId, zoom.reset]);
+
+  // WebRTC setup: ask HA whether this camera offers it, then negotiate through
+  // the websocket (HACameraWebRTC). Anything short of a painted frame within
+  // the two watchdog windows — no WebRTC for this camera, an offer HA refuses,
+  // a peer connection that fails or never connects — drops to HLS, which is
+  // exactly what this panel did before WebRTC existed.
+  useEffect(() => {
+    if (mode !== "webrtc") return;
+    const video = rtcVideoRef.current;
+    if (!video) return;
+    let cancelled = false;
+    let teardown: (() => void) | null = null;
+    rtcLoaded.current = false;
+    const fail = (reason: string) => { if (!cancelled) fallBackToHls(reason); };
+
+    let watchdog = setTimeout(() => fail("not connected within watchdog window"),
+      WEBRTC_CONNECT_MS);
+    const onPlaying = () => {
+      rtcLoaded.current = true;
+      clearTimeout(watchdog);
+      setFrameReady(true);
+    };
+    video.addEventListener("playing", onPlaying);
+
+    (async () => {
+      if (typeof RTCPeerConnection === "undefined") {
+        fail("WebRTC unsupported in this browser");
+        return;
+      }
+      if (!(await cameraSupportsWebRtc(ws, mapping.entityId))) {
+        fail("camera offers no WebRTC");
+        return;
+      }
+      if (cancelled) return;
+      try {
+        const stop = await startCameraWebRtc(ws, mapping.entityId, video, {
+          onConnected: () => {
+            clearTimeout(watchdog);
+            if (rtcLoaded.current) return;
+            watchdog = setTimeout(() => {
+              if (!rtcLoaded.current) fail("connected, but no frame within watchdog window");
+            }, WEBRTC_FRAME_MS);
+          },
+          onFail: fail,
+        });
+        if (cancelled) stop(); else teardown = stop;
+      } catch (err) {
+        fail(`offer failed: ${(err as Error).message}`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(watchdog);
+      video.removeEventListener("playing", onPlaying);
+      teardown?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, mapping.entityId]);
 
   // HLS setup: ask HA for a stream URL (camera/stream over the websocket), then
   // play it with hls.js (preferred whenever supported) or the native <video>
@@ -704,15 +781,13 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, mapping.entityId]);
 
-  // Refresh the cache-busted snapshot URL on an interval for liveness — either
-  // because we've fallen back to snapshot polling as the real tier, or because
-  // it's standing in as the instant preview while HLS is still setting up (see
-  // previewReady). Stops the moment HLS actually starts playing.
+  // Refresh the cache-busted snapshot URL on an interval for liveness, once
+  // snapshot polling is the tier actually in use.
   useEffect(() => {
-    if (mode !== "snapshot" && !(mode === "hls" && !frameReady)) return;
+    if (mode !== "snapshot") return;
     const id = setInterval(() => setTick((t) => t + 1), SNAPSHOT_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [mode, frameReady]);
+  }, [mode]);
 
   // Camera frames route through the add-on's Supervisor proxy, which injects
   // real auth server-side — so the URLs carry no token at all (see HACameraProxy).
@@ -732,12 +807,23 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     if (!connected) return <Unavailable label="Not connected to Home Assistant." />;
     if (mode === "failed") return <Unavailable label="Camera stream unavailable." />;
 
+    if (mode === "webrtc") {
+      // The WebRTC setup effect attaches the remote stream as srcObject. Keyed
+      // apart from the HLS wrap so a fallback gets a FRESH <video>, not this
+      // one with a torn-down stream still hanging off it.
+      return (
+        <div className="camera-hls-wrap" key="webrtc">
+          <video ref={rtcVideoRef} autoPlay muted playsInline />
+        </div>
+      );
+    }
+
     if (mode === "hls") {
       // No src set here — the HLS setup effect drives this element directly
       // (hls.js attachMedia, or a native .src on iOS Safari); auth rides the
       // websocket / same-origin proxy.
       return (
-        <div className="camera-hls-wrap">
+        <div className="camera-hls-wrap" key="hls">
           <video
             ref={hlsVideoRef}
             autoPlay
@@ -753,21 +839,6 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
               if (!usingHlsJsRef.current) fallBackToStream("native video element error");
             }}
           />
-          {/* Instant stand-in while HLS is still setting up (HA has to spin up
-              its own FFmpeg worker on first open, which can take several
-              seconds) — snapshot polling is already near-instant, so this
-              covers the gap. Disappears the moment the video paints its own
-              first frame (frameReady), by which point it's already decoding
-              underneath, so the swap is invisible. */}
-          {!frameReady && (
-            <img
-              className="camera-preview"
-              src={snapshotUrl}
-              alt=""
-              onLoad={() => setPreviewReady(true)}
-              onError={() => setPreviewReady(false)}
-            />
-          )}
         </div>
       );
     }
@@ -869,13 +940,10 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
         </div>
 
         {/* An empty <video>/<img> mid-setup reads as "broken" rather than
-            "loading" — cover it with a spinner until a real frame arrives.
-            Skipped on the hls tier once the instant snapshot preview is up:
-            that already reads as "live", not "loading". */}
+            "loading" — cover it with a spinner until a real frame arrives. */}
         {connected &&
           mode !== "failed" &&
-          !frameReady &&
-          !(mode === "hls" && previewReady) && (
+          !frameReady && (
             <div className="camera-loading">
               <div className="spinner" />
             </div>
