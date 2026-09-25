@@ -1,3 +1,21 @@
+## 2.496.90
+
+### Fixed — history charts
+- **A sensor that was offline is shaded on every chart, not just the first
+  line's.** On a Weather chart with two lines (outside and inside), an outage
+  of the second sensor broke its line with no grey band. Each line's outages
+  now have their own band, in its half of the chart, the way the device panels
+  already showed two sensors.
+- **The tooltip never shows a reading from outside the moment you point at.**
+  Inside one sensor's outage it used to show that sensor's last value from
+  before the outage, under the other sensor's time. Now that sensor's row is
+  left out, and every row holds at the time shown.
+- **A 7-day or 30-day chart's axis shows dates**, not times of day, on the
+  device panels as well as in the Weather window.
+
+### Changed
+- **One chart module draws every history chart** (device panels and the
+  Weather window): the same scales, bands, tooltip and axis labels.
 ## 2.496.89
 
 ### Fixed — the Weather window
