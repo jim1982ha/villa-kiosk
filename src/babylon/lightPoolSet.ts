@@ -159,6 +159,17 @@ export class LightPoolSet {
     );
   }
 
+  /** The floor a fixture's pools lie on — the lowest, for a strip's three —
+   *  or null when it has none. The lamp glow starts above it (lampGlow.ts). */
+  floorYOf(meshId: number): number | null {
+    let y: number | null = null;
+    for (const pool of this.pools.get(meshId) ?? []) {
+      const f = pool.mesh.position.y - POOL_FLOOR_LIFT;
+      if (y === null || f < y) y = f;
+    }
+    return y;
+  }
+
   /** One fixture's light changed. */
   setLight(meshId: number, r: LightReading): void {
     for (const pool of this.pools.get(meshId) ?? []) this.show(pool, r);
@@ -247,7 +258,9 @@ export class LightPoolSet {
       // clear of a 2.2 m fixture.
       //
       // A pool is a glow ON THE FLOOR; what stands under a lamp — the table,
-      // the counter — is lit by the fixture's real PointLight. So an answer
+      // the counter — is lit by the lamp glow (lampGlow.ts: fused furniture
+      // is lightmapped structure, where a PointLight is multiplied away) or,
+      // for a separate furniture mesh, by the fixture's PointLight. So an answer
       // well above the room's own floor is replaced BY that floor. No ray: the
       // room's floor height is already known (fitted once from the plan), and
       // re-asking the probe was measured at ~20 ms a pool, a hitch on every
