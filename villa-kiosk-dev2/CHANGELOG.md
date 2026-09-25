@@ -1,3 +1,11 @@
+## 2.496.76
+
+### Reverted — 2.496.73, 2.496.74 and 2.496.75
+The three previous lighting changes are undone: the extra lamp light on
+furniture, the smaller glow for the stair step lights, and the change to where
+an LED strip's light comes from. None of them fixed what was reported, so the
+lighting is back exactly as it was in 2.496.72, while the actual cause is worked
+out first.
 ## 2.496.75
 
 ### Fixed — a lamp's light shone from chair height instead of from the lamp
