@@ -446,28 +446,14 @@ async def ws_handler(request: web.Request):
                         if obj.get("type") == "auth":
                             obj["access_token"] = TOKEN
                             data = json.dumps(obj)
-                        elif role != "owner" and str(obj.get("type", "")) not in ALLOWED_WS_TYPES:
-                            # Default deny — see ALLOWED_WS_TYPES.
+                        elif (refusal := _ws_type_refusal(role, str(obj.get("type", "")))):
+                            # Default deny, and no camera for guest — see
+                            # _ws_type_refusal. Answered HERE, never relayed.
                             await client.send_json({
                                 "id": obj.get("id"),
                                 "type": "result",
                                 "success": False,
-                                "error": {
-                                    "code": "unauthorized",
-                                    "message": "This profile may not send this command.",
-                                },
-                            })
-                            continue
-                        elif (role == "guest" and str(obj.get("type", "")) == "camera/stream"):
-                            # Mirrors the camera_proxy denial for guest on REST.
-                            await client.send_json({
-                                "id": obj.get("id"),
-                                "type": "result",
-                                "success": False,
-                                "error": {
-                                    "code": "unauthorized",
-                                    "message": "This profile may not view cameras.",
-                                },
+                                "error": {"code": "unauthorized", "message": refusal},
                             })
                             continue
                         elif obj.get("type") == "call_service" and not _service_call_allowed(
@@ -590,16 +576,46 @@ _NON_OWNER_REST_PREFIXES = ("history/period/", "camera_proxy/", "camera_proxy_st
 # floor-plan's own static per-room data.
 #
 # All of the above are read-only, same as the registry list calls above.
+# Every websocket command that opens a camera's picture. ONE set, because the
+# guest refusal below has to cover all of them: it used to name `camera/stream`
+# alone, which was the whole set only while HLS was the only way in. WebRTC is
+# four more commands (capabilities, client config, offer, candidate), and a
+# guest who could send `camera/webrtc/offer` would watch the same feed the
+# HLS refusal exists to withhold.
+CAMERA_WS_TYPES = frozenset({
+    "camera/stream",
+    "camera/capabilities",
+    "camera/webrtc/get_client_config",
+    "camera/webrtc/offer",
+    "camera/webrtc/candidate",
+})
+
 ALLOWED_WS_TYPES = frozenset({
     "auth", "ping", "pong",
     "subscribe_events", "unsubscribe_events",
-    "get_states", "call_service", "camera/stream",
+    "get_states", "call_service", *CAMERA_WS_TYPES,
     "get_config",
     "config/entity_registry/list", "config/device_registry/list", "config/area_registry/list",
     "config/floor_registry/list",
     "energy/get_prefs", "recorder/list_statistic_ids", "recorder/statistics_during_period",
     "logbook/get_events",
 })
+
+
+def _ws_type_refusal(role: str, msg_type: str) -> str | None:
+    """Why a websocket frame of this type is refused for this role, or None.
+
+    Owner is exempt. Everyone else is DEFAULT DENY against ALLOWED_WS_TYPES,
+    and guest is further refused every CAMERA_WS_TYPES command — the websocket
+    twin of the camera_proxy denial in _rest_call_allowed. `call_service` is
+    allowed here and judged per domain/service by _service_call_allowed."""
+    if role == "owner":
+        return None
+    if msg_type not in ALLOWED_WS_TYPES:
+        return "This profile may not send this command."
+    if role == "guest" and msg_type in CAMERA_WS_TYPES:
+        return "This profile may not view cameras."
+    return None
 
 
 def _rest_call_allowed(role: str, tail: str) -> bool:

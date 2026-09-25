@@ -27,6 +27,10 @@ export class HAWebSocket {
   private url = "";
   private pending = new Map<number, { resolve: Resolver; reject: Rejecter; timer?: ReturnType<typeof setTimeout> }>();
   private subscriptions = new Map<number, PendingSubscription>();
+  // One-shot command subscriptions (camera/webrtc/offer). Kept apart from
+  // `subscriptions` on purpose: those are re-issued after a reconnect, and a
+  // WebRTC session cannot be — it dies with the socket that negotiated it.
+  private sessions = new Map<number, EventCallback>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private manuallyClosed = false;
@@ -246,7 +250,7 @@ export class HAWebSocket {
             this.handleResult(msg);
             break;
           case "event":
-            this.subscriptions.get(msg.id)?.callback(msg.event);
+            (this.subscriptions.get(msg.id)?.callback ?? this.sessions.get(msg.id))?.(msg.event);
             break;
           case "pong":
             if (this.pongTimer) {
@@ -387,6 +391,46 @@ export class HAWebSocket {
       }, 10000);
       this.pending.set(id, { resolve: resolve as Resolver, reject, timer });
       this.ws.send(JSON.stringify({ id, type, ...payload }));
+    });
+  }
+
+  /** Send a command that answers with a STREAM of events rather than one
+   *  result (HA's `camera/webrtc/offer` is the case). Resolves once HA accepts
+   *  it, with a function that ends the subscription. Never re-issued after a
+   *  reconnect — see `sessions`. Events delivered before the promise resolves
+   *  still reach `callback`: it is registered before the frame is sent. */
+  subscribeCommand(
+    type: string, payload: Record<string, unknown>, callback: EventCallback,
+  ): Promise<() => void> {
+    return new Promise((resolve, reject) => {
+      if (this.state !== "connected" || !this.ws) {
+        reject(new Error("Not connected to Home Assistant"));
+        return;
+      }
+      const id = this.nextId();
+      const socket = this.ws;
+      this.sessions.set(id, callback);
+      const end = () => {
+        if (!this.sessions.delete(id)) return;
+        // Best effort: if the socket is gone, so is the subscription.
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            id: this.nextId(), type: "unsubscribe_events", subscription: id,
+          }));
+        }
+      };
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) {
+          this.sessions.delete(id);
+          reject(new Error("Home Assistant did not respond"));
+        }
+      }, 10000);
+      this.pending.set(id, {
+        resolve: () => resolve(end),
+        reject: (err) => { this.sessions.delete(id); reject(err); },
+        timer,
+      });
+      socket.send(JSON.stringify({ id, type, ...payload }));
     });
   }
 
