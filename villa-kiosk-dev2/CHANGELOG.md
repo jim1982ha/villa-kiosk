@@ -1,3 +1,23 @@
+## 2.496.53
+
+### Fixed — lights disappeared from a floor that was red for presence
+With four lights on over the 2F patio, all four pools of light showed on the
+floor while the patio was empty. As soon as someone was detected there and the
+floor turned red, the pools came and went with the camera: one from straight
+above, two from one angle, all four from another. The lights never changed —
+only the way you were looking at them.
+
+The red presence overlay and the light pools are both see-through layers lying
+on the floor at exactly the same height, and nothing said which to draw first.
+The 3D engine then decides by distance to the camera — and it measures the red
+overlay from the middle of the room, each light pool from its own lamp. Tilting
+the view reshuffled that order lamp by lamp, and whenever the red was drawn
+first it blocked the pool underneath it completely.
+
+The red overlay is now always drawn first and the light on top of it, from any
+angle, and neither layer can block anything any more. Where two lamps' pools
+overlap, the light now adds up, as real light does.
+
 ## 2.496.52
 
 ### Fixed — a camera opened as a slideshow in the wrong shape
