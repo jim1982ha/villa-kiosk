@@ -1,3 +1,15 @@
+## 2.496.80
+
+### Fixed — furniture dark again after 2.496.79
+2.496.79 stopped each light at the floor of the storey above, so it could not
+shine through a ceiling. But it took the staircase for "the storey above": a
+room's floor height is measured at the centre of the room, and the centre of
+the staircase is a step, about 0.85 m up. So every ground-floor light stopped
+at about that height, and the table and everything taller went dark again.
+
+A storey above must now be at least 2 m higher, and its floor is the height
+most of its rooms share, so a staircase or a raised terrace no longer counts.
+Lights still stay in their own storey, and furniture is lit again.
 ## 2.496.79
 
 ### Fixed — light glowing on the outside of the walls
