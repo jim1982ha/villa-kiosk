@@ -4,6 +4,7 @@
 //
 //   1. `@/foo` → `<repo>/src/foo`         (the tsconfig path alias)
 //   2. extensionless → `.ts` / `.tsx`     (bundler-style module resolution)
+//   3. `@babylonjs/core/X` → `X.js`       (the app's deep imports, same reason)
 //
 // ⚠️ THIS EXISTS SO THE HARNESS CAN RUN THE KIOSK'S REAL CODE. Its whole value
 // is that both runtimes derive their answers from the SHIPPED rule; a copy
@@ -36,6 +37,11 @@ function withExtension(url) {
 export function resolve(specifier, context, next) {
   if (specifier.startsWith("@/")) {
     return next(withExtension(SRC + specifier.slice(2)), context);
+  }
+  // Babylon ships ESM with explicit `.js` files; Vite adds the extension to
+  // `@babylonjs/core/Meshes/mesh`, Node does not.
+  if (specifier.startsWith("@babylonjs/") && !/\.[cm]?js$/.test(specifier)) {
+    return next(specifier + ".js", context);
   }
   if (specifier.startsWith(".") && context.parentURL?.startsWith("file:")) {
     const resolved = new URL(specifier, context.parentURL).href;

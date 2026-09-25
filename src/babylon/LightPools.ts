@@ -24,6 +24,7 @@ import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { earClipTriangulate, regularPolygon, type Pt2 } from "@/utils/geometry";
+import { LIGHT_POOL_ALPHA_INDEX } from "./floorOverlayOrder";
 
 const POOL_TEXTURE_SIZE = 128;
 /** Sides of the pool's own footprint when it is not clipped to a room. Eight
@@ -163,6 +164,8 @@ export class LightPool {
     // Excluded from shadow casters / IBL surfaces exactly as the room glow's
     // meshes are — it is a marker, not villa geometry.
     this.mesh.metadata = { isMarker: true };
+    // After the presence glow, whatever the camera does — floorOverlayOrder.ts.
+    this.mesh.alphaIndex = LIGHT_POOL_ALPHA_INDEX;
 
     this.material = new StandardMaterial(`lightPoolMat_${name}`, scene);
     this.material.diffuseTexture = poolTexture(scene);
@@ -176,6 +179,9 @@ export class LightPool {
     // whole point, since a normal alpha-blend decal would just paint a flat
     // circle over the (unlit) floor rather than reading as "lit".
     this.material.alphaMode = Constants.ALPHA_ADD;
+    // Light adds to a floor; it never hides anything. Two overlapping pools
+    // now both add, where a depth write let the first reject the second.
+    this.material.disableDepthWrite = true;
     this.mesh.material = this.material;
     this.mesh.setEnabled(false);
   }

@@ -29,6 +29,7 @@ import type { FloorProbe } from "./floorProbe";
 import { roomKey } from "@/config/roomKey";
 import { nearestFloorRoom } from "./roomStorey";
 import { ALERT_RED } from "./colors";
+import { ROOM_GLOW_ALPHA_INDEX } from "./floorOverlayOrder";
 
 // Same red as a running climate device's mesh outline / the badge alert ring
 // — see colors.ts. Was its own slightly-off Color3 before.
@@ -92,13 +93,16 @@ export class RoomHighlight {
    *  of truth: it is overwritten wholesale on every re-fit, from the same
    *  argument the meshes are built from. */
   private roomShapes: { pts: Pt2[]; floorY: number }[] = [];
+  /** Shared with EntityVisuals and SceneManager — see floorProbe.ts. Was
+   *  three private raycasts with three predicates before 2.300.0. A plain
+   *  field, not a parameter property: Node's type stripping cannot run the
+   *  shorthand, and tests/oracles/floor_overlay_order.mjs loads this class. */
+  private probe: FloorProbe;
 
   constructor(
     scene: Scene,
     requestRender: () => void,
-    /** Shared with EntityVisuals and SceneManager — see floorProbe.ts. Was
-     *  three private raycasts with three predicates before 2.300.0. */
-    private probe: FloorProbe,
+    probe: FloorProbe,
     /** Rate-capped re-arm for the glow PULSE specifically — a highlight can
      *  stay up indefinitely (a room flagged for overdue maintenance is the
      *  normal case), so its pulse is a permanent animation, not a transition.
@@ -106,6 +110,7 @@ export class RoomHighlight {
     requestAnimationRender?: () => void,
   ) {
     this.scene = scene;
+    this.probe = probe;
     this.requestRender = requestRender;
     this.requestAnimationRender = requestAnimationRender ?? requestRender;
     scene.registerBeforeRender(() => this.animate());
@@ -130,8 +135,22 @@ export class RoomHighlight {
     material.emissiveColor = GLOW_COLOR;
     material.alpha = 0;
     material.backFaceCulling = false;
+    // A film on the floor, never an occluder — see floorOverlayOrder.ts. It
+    // wrote depth at the light pools' own height, which is what hid them.
+    material.disableDepthWrite = true;
     if (isDecal) material.zOffset = -2;
     return material;
+  }
+
+  /** What every glow mesh is, whichever of the three builders made it. */
+  private adopt(key: string, mesh: Mesh, isDecal: boolean): RoomEntry {
+    const material = this.makeGlowMaterial(key, isDecal);
+    mesh.material = material;
+    mesh.isPickable = false;
+    mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
+    // Drawn before the light pools whatever the camera does — floorOverlayOrder.ts.
+    mesh.alphaIndex = ROOM_GLOW_ALPHA_INDEX;
+    return { mesh, material };
   }
 
   private buildMesh(key: string, pts: Pt2[], y: number): RoomEntry | null {
@@ -156,13 +175,7 @@ export class RoomHighlight {
     vd.indices = indices;
     vd.normals = normals;
     vd.applyToMesh(mesh);
-
-    const material = this.makeGlowMaterial(key, false);
-    mesh.material = material;
-    mesh.isPickable = false;
-    mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
-
-    return { mesh, material };
+    return this.adopt(key, mesh, false);
   }
 
   /**
@@ -190,11 +203,7 @@ export class RoomHighlight {
         mesh.dispose();
         return null;
       }
-      const material = this.makeGlowMaterial(key, true);
-      mesh.material = material;
-      mesh.isPickable = false;
-      mesh.metadata = { isMarker: true };
-      return { mesh, material };
+      return this.adopt(key, mesh, true);
     } catch {
       // Decals have real limitations (e.g. no morph-target meshes) — fall
       // back to the flat circle rather than let a rare bad case crash setup.
@@ -244,11 +253,7 @@ export class RoomHighlight {
     vd.indices = indices;
     vd.normals = normals;
     vd.applyToMesh(mesh);
-    const material = this.makeGlowMaterial(key, false);
-    mesh.material = material;
-    mesh.isPickable = false;
-    mesh.metadata = { isMarker: true };
-    return { mesh, material };
+    return this.adopt(key, mesh, false);
   }
 
   /** (Re)build a synthetic glow for each named TeleportMenu point that ISN'T
