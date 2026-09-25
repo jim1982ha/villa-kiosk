@@ -1,3 +1,12 @@
+## 2.496.93
+
+### Changed
+- **The way the villa chooses its drawing resolution is now a separate,
+  tested part.** Nothing changes on screen. The rules are the same: give back
+  sharpness on a device that measured slow, take one step up to full
+  sharpness on one that can afford it, and draw the still picture at full
+  sharpness. They are now checked against the frame times measured on the
+  iPad, iPhone, Android phone and MacBook.
 ## 2.496.92
 
 ### Fixed — lights
