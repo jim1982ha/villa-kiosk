@@ -101,13 +101,6 @@ console.log("\n  calibration:");
   r.set.setRooms([room("Stairs", 0, -5, 5, -5, 5)]);
   ck("  ...but a light really mounted low keeps its answer",
      near(r.pools(step)[0].position.y, 0.48), r.pools(step)[0].position.y);
-  // Villa GLB + its real .sh3d rooms: each step light's pool spread 2-4 m along
-  // the staircase outline at its own tread's height, floating over the treads
-  // below it (2.496.74).
-  const rch = reach(r.pools(step)[0]);
-  ck("  ...and washes its tread, not the whole flight (2.496.74)", rch * Math.cos(Math.PI / 8) <= 0.4 + 1e-3, rch);
-  ck("  ...while the lamp glow is held back only below the ROOM's floor, not the tread",
-     r.set.floorYOf(step.uniqueId) === 0, r.set.floorYOf(step.uniqueId));
 }
 {
   // Out on a terrace, in no room: bounded by the nearest SAME-storey wall.
@@ -145,23 +138,6 @@ console.log("\n  calibration:");
   r.set.addFixture(lamp, box(0, 0.2, 0, 0.2, 2.4), false);
   r.set.setRooms([room("Hall", 0, -5, 5, -5, 5)]);
   ck("  ...while a surface a few centimetres up keeps its answer", near(r.pools(lamp)[0].position.y, 0.22), r.pools(lamp)[0].position.y);
-}
-
-{
-  // The lamp glow shines from the FIXTURE: a strip's three spots at its own
-  // height, sharing its light 1 : ½ : ½ — never from the PointLight, which a
-  // strip drops toward what is below (over a sofa, ~1.2 m: the glow lit the
-  // seat from there, "the light is at the level of the chair", 2.496.75).
-  const r = rig(probe({ below: () => 0 }));
-  const cove = fixture("cove");
-  r.set.addFixture(cove, box(-1.25, 1.25, 0, 0.03, 2.2), true);
-  r.set.setRooms([room("Living", 0, -5, 5, -5, 5)]);
-  const spots = r.set.glowSpots(cove.uniqueId);
-  ck("a strip lights from three spots", spots.length === 3, spots.length);
-  ck("  ...at the strip's own height, not dropped toward the floor", spots.every((q) => near(q.y, 2.2)), spots.map((q) => q.y));
-  ck("  ...from its centre and both ends", JSON.stringify(spots.map((q) => q.x).sort((a, b) => a - b)) === "[-1.25,0,1.25]", spots.map((q) => q.x));
-  ck("  ...sharing its light 1 : ½ : ½", JSON.stringify(spots.map((q) => q.scale).sort()) === "[0.5,0.5,1]", spots.map((q) => q.scale));
-  ck("  ...with its room's floor", spots.every((q) => q.floorY === 0), spots.map((q) => q.floorY));
 }
 
 console.log("\n  state:");
