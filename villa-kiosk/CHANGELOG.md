@@ -1,3 +1,18 @@
+## 2.496.59
+
+**Nothing you should see changed.** The villa redraws exactly as before —
+sharp when still, full speed while you move, and a gentler pace for things like
+a spinning fan.
+
+Behind that: deciding when to draw the next picture of the villa, and how
+sharply, is the most regression-prone rule in VESTA — earlier releases had
+state updates blurring a settled picture, and a single fan left on keeping the
+whole villa soft. That rule lived inside the drawing loop, reached in three
+different ways by the parts of the app that ask for a redraw, one of which could
+quietly lose the speed limit on animations. It now lives in one place that every
+part asks the same way, with automatic checks that replay those past
+regressions before each release.
+
 ## 2.496.58
 
 **Nothing you should see changed.** Light pools on the floor look exactly as

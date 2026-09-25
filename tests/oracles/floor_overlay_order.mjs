@@ -42,7 +42,7 @@ const ck = (n, ok) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}`); if (!o
 
 const scene = new Scene(new NullEngine());
 const noop = () => {};
-const glow = new RoomHighlight(scene, noop, { surfaceUnder: () => null });
+const glow = new RoomHighlight(scene, { repaint: noop, animate: noop }, { surfaceUnder: () => null });
 // A long patio, 20m x 6m, with four fixtures along it — the reported shape.
 glow.setRooms([{ name: "Patio", floorY: 0,
   pts: [{ x: -10, z: -3 }, { x: 10, z: -3 }, { x: 10, z: 3 }, { x: -10, z: 3 }] }]);

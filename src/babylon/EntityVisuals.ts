@@ -121,6 +121,7 @@ import { onStorey, storeyFloorYAt } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPoolSet, type LightReading } from "./lightPoolSet";
+import type { FrameRequests } from "./frameScheduler";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
@@ -1514,23 +1515,23 @@ export class EntityVisuals {
   constructor(
     scene: Scene,
     config: AppConfig,
-    requestRender: () => void,
-    /** Re-arm the loop for a CONTINUOUS animation (fan spin, alert pulse).
-     *  Rate-capped by the caller so a fan left on doesn't hold the GPU at the
-     *  display's full rate for weeks — see SceneManager.requestAnimationRender.
-     *  Falls back to requestRender when not supplied. */
-    requestAnimationRender?: () => void,
+    /** What this module may ask of the render loop: a repaint after a change,
+     *  or a rate-capped frame for a CONTINUOUS animation (fan spin, alert
+     *  pulse) — see frameScheduler.ts. One object, so the capped half can no
+     *  longer be dropped: it was an optional second callback that fell back
+     *  to the uncapped one. */
+    frames: FrameRequests,
   ) {
     this.scene = scene;
     this.config = config;
-    this.requestRender = requestRender;
-    this.requestAnimationRender = requestAnimationRender ?? requestRender;
+    this.requestRender = () => frames.repaint();
+    this.requestAnimationRender = () => frames.animate();
     this.probe = new FloorProbe(scene);
     // The probe can only key by ROOM once calibration has produced the world
     // polygons; until then roomContaining returns null and it falls back to the
     // grid, exactly as every load did before 2.300.0 (see floorProbe.ts).
     this.probe.setRoomResolver((x, y, z) => this.roomContaining(x, y, z));
-    this.roomHighlight = new RoomHighlight(scene, requestRender, this.probe, this.requestAnimationRender);
+    this.roomHighlight = new RoomHighlight(scene, frames, this.probe);
     // Every baked-mode floor pool — see lightPoolSet.ts. The probe is its floor
     // port; the readings callback lets it repaint a pool it creates late.
     this.pools = new LightPoolSet(scene, this.probe, () => this.poolReadings(), tapDebug);

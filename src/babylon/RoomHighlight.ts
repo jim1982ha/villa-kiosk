@@ -26,6 +26,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import type { Scene } from "@babylonjs/core/scene";
 import { clipPolygonToConvex, earClipTriangulate, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
 import type { FloorProbe } from "./floorProbe";
+import type { FrameRequests } from "./frameScheduler";
 import { roomKey } from "@/config/roomKey";
 import { nearestFloorRoom } from "./roomStorey";
 import { ALERT_RED } from "./colors";
@@ -101,18 +102,18 @@ export class RoomHighlight {
 
   constructor(
     scene: Scene,
-    requestRender: () => void,
+    /** Repaint after a toggle, and a rate-capped frame for the glow PULSE — a
+     *  highlight can stay up indefinitely (a room flagged for overdue
+     *  maintenance is the normal case), so its pulse is a permanent animation,
+     *  not a transition. One object: the capped half used to be an optional
+     *  argument that fell back to the uncapped one. See frameScheduler.ts. */
+    frames: FrameRequests,
     probe: FloorProbe,
-    /** Rate-capped re-arm for the glow PULSE specifically — a highlight can
-     *  stay up indefinitely (a room flagged for overdue maintenance is the
-     *  normal case), so its pulse is a permanent animation, not a transition.
-     *  Falls back to requestRender when not supplied. */
-    requestAnimationRender?: () => void,
   ) {
     this.scene = scene;
     this.probe = probe;
-    this.requestRender = requestRender;
-    this.requestAnimationRender = requestAnimationRender ?? requestRender;
+    this.requestRender = () => frames.repaint();
+    this.requestAnimationRender = () => frames.animate();
     scene.registerBeforeRender(() => this.animate());
   }
 

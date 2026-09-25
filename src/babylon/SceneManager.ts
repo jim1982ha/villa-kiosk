@@ -32,6 +32,7 @@ import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
 import { resolveHit, type HitPickers } from "./hitResolution";
+import { FrameScheduler, type ResolutionPort } from "./frameScheduler";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
@@ -425,12 +426,19 @@ export class SceneManager {
   private ready = false;
   private readyCallbacks = new Set<() => void>();
   private calibrateCallbacks = new Set<() => void>();
-  private keepRenderingUntil = 0;
-  private forceContinuous = 0; // ref count for animations/streams
-  /** Budget for frames driven ONLY by a continuous animation — see
-   *  requestAnimationRender / ANIMATION_FRAME_MS. */
-  private animateUntil = 0;
-  private lastAnimFrameAt = 0;
+  /** "Draw a frame now?" — see frameScheduler.ts. Every module that asks for
+   *  frames holds this object (as FrameRequests); the render loop asks it. */
+  private readonly frames = new FrameScheduler({
+    stillMs: SHARPEN_STILL_MS,
+    animationFrameMs: ANIMATION_FRAME_MS,
+    onDemand: () => this.config.renderOnDemand,
+  });
+  /** The resolution valve as the scheduler's port. */
+  private readonly resolution: ResolutionPort = {
+    sharpen: () => this.sharpen(),
+    unsharpen: () => this.unsharpen(),
+    isSharp: () => this.sharpened,
+  };
   /** Frame-time samples for the `frames` telemetry record — see sampleFrame. */
   private frameSamples: number[] = [];
   /** Cost of the scene.render() call itself, paired with frameSamples. */
@@ -594,7 +602,7 @@ export class SceneManager {
     this.lighting = new LightingSystem(this.scene);
     // Procedural sky shown through the windows; driven by the same sun below.
     this.sky = new SkyDome(this.scene);
-    this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky);
+    this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky, this.frames);
     // Moon + stars. Entirely optional to the rest of the scene, and computed
     // from date/lat/lng — an install without HA's opt-in Moon integration gets
     // exactly the same night sky, which is the requirement.
@@ -605,12 +613,7 @@ export class SceneManager {
     // leave the moon a frame behind the sun in a sky they are meant to share.
     this.sky.setFramingHook(() => this.nightSky?.reframe());
 
-    this.sun.setRenderHook(() => this.requestRender());
-    this.visuals = new EntityVisuals(
-      this.scene, opts.config,
-      () => this.requestRender(),
-      () => this.requestAnimationRender(),
-    );
+    this.visuals = new EntityVisuals(this.scene, opts.config, this.frames);
 
     // A tap/long-press asks the GUI tiers FIRST (group card, badge, room chip —
     // resolveHit, which owns that order for all four gestures), falling through
@@ -683,8 +686,14 @@ export class SceneManager {
 
     this.camera = new CameraController(this.scene, canvas, opts.config, {
       onRoomChange: opts.onRoomChange,
-      // MOTION — both camera controllers route every pose change here.
-      onActivity: () => { this.motionPending = true; this.requestRender(); },
+      // MOTION — every first-person pose change routes here. ⚠️ The OVERVIEW
+      // controller's does NOT: its onActivity (below) only asks for a repaint,
+      // and its drags and wheel reach motion through the scene's pointer
+      // observable instead — so a PROGRAMMATIC overview move (fit, fly-to, the
+      // double-tap zoom glide) renders sharp rather than at motion resolution.
+      // That asymmetry is long-standing and unmeasured; this line used to claim
+      // both controllers came here, which is how it went unnoticed.
+      onActivity: () => this.frames.motion(),
       // Tap-to-pick is detected in the camera (sole owner of the pointer
       // pipeline) and dispatched to the picker — reliable on touch & mouse.
       onTap: handleTap,
@@ -821,7 +830,7 @@ export class SceneManager {
     // on-demand render loop so the view stays smooth.
     // The second (and last) motion entry point — a finger on the glass is
     // motion whether or not the camera has decided to move yet.
-    this.scene.onPointerObservable.add(() => { this.motionPending = true; this.requestRender(); });
+    this.scene.onPointerObservable.add(() => this.frames.motion());
 
     // Land on the bird's-eye OVERVIEW camera from the very first rendered frame.
     // Before the model finishes loading the active camera used to be the
@@ -1013,106 +1022,25 @@ export class SceneManager {
       if (document.hidden) return;
       const now = performance.now();
 
-      // ── ONE RULE DECIDES RESOLUTION: HOW LONG SINCE THE CAMERA MOVED ──────
-      // Not "which branch of the loop are we in", which is what it was until
-      // 2.329.0 and is why the glyphs could sit blurred indefinitely: sharpening
-      // only ever happened in the IDLE branch, and there are two ordinary states
-      // in which the loop never reaches it. A single animation anywhere — one
-      // fan left on, which requestAnimationRender's own docstring calls "the
-      // single most common state a kiosk is in" — parks it in the animation
-      // branch forever, and `renderOnDemand: false` parks it in the interactive
-      // one. Both were permanently soft on the iPad, and the picture came back
-      // only when the fan happened to stop, which is the "few dozen seconds"
-      // that was reported. Sharpness is a property of the CAMERA, so it is
-      // computed once here and every branch obeys it.
-      //
-      // ⚠️ MOTION IS SPENT HERE, INSIDE rAF — NEVER IN A POINTER HANDLER.
-      // 2.322.0 called unsharpen() straight from the pointer observable, and it
-      // changes the hardware scaling level, i.e. it resizes the drawing buffer
-      // synchronously during input dispatch on the very element that has just
-      // taken setPointerCapture. Reported on iPad as a badge tap doing nothing
-      // followed by a one-finger drag tilting the camera — both faces of one
-      // lost pointerup (see OverviewController's dropLostPointers).
-      if (this.motionPending) {
-        this.motionPending = false;
-        this.lastMotionAt = now;
-        this.unsharpen();
+      // Whether to draw, at which resolution, and whether to time it is ONE
+      // rule — FrameScheduler.tick, which carries its history (2.322.0 and
+      // 2.329.0 among it). This loop only carries the decision out.
+      const d = this.frames.tick(now, this.resolution);
+      if (d.flush) this.flushFrameSamples();
+      if (!d.render) return;
+      if (!d.sample) { this.scene.render(); return; }
+      this.sampleFrame(now);
+      // Timed, because the split between "the frame cost is inside this call"
+      // and "the frame cost is somewhere else entirely" is the open question.
+      const t0 = performance.now();
+      this.scene.render();
+      // Bounded here rather than in flushFrameSamples: sampleFrame drops the
+      // first frame of a burst and any gap over FRAME_GAP_MAX_MS, so this
+      // array runs slightly ahead of frameSamples and cannot rely on that
+      // cap firing. Both are percentiles over the same burst either way.
+      if (this.renderSamples.length < FRAME_SAMPLE_MAX) {
+        this.renderSamples.push(performance.now() - t0);
       }
-      // The same tail requestRender() uses by default, so a plain orbit
-      // sharpens at exactly the moment it always has.
-      const still = now - this.lastMotionAt >= SHARPEN_STILL_MS;
-
-      // Interaction, transitions and real state changes always render at the
-      // display's own rate — responsiveness is never throttled.
-      if (
-        this.forceContinuous > 0 ||
-        now < this.keepRenderingUntil ||
-        !this.config.renderOnDemand
-      ) {
-        if (still) this.sharpen();
-        // ── A frame drawn while the image is SHARP is a repaint ─────────────
-        // The camera is still, so this frame is an HA state push, a sun tick, a
-        // floor swap, a return from background. Those need the picture
-        // REDRAWN, not down-rezzed — until 2.322.0 they got the full
-        // interactive treatment, so every state change on a live villa dropped
-        // the settled image back to motion resolution for 350ms and let it
-        // re-sharpen afterwards, reported as the glyphs "updating again" a
-        // second or two after the camera had already settled.
-        //
-        // Never sampled: the sharp frame is deliberately the expensive one and
-        // feeding it to the valve would have the device ease itself down for
-        // having drawn a better picture. Rate-capped for that same expense,
-        // exactly as the animation branch is.
-        if (this.sharpened) {
-          if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
-            this.lastAnimFrameAt = now;
-            this.scene.render();
-          }
-          return;
-        }
-        this.sampleFrame(now);
-        this.lastAnimFrameAt = now;
-        // Timed, because the split between "the frame cost is inside this call"
-        // and "the frame cost is somewhere else entirely" is the open question.
-        const t0 = performance.now();
-        this.scene.render();
-        // Bounded here rather than in flushFrameSamples: sampleFrame drops the
-        // first frame of a burst and any gap over FRAME_GAP_MAX_MS, so this
-        // array runs slightly ahead of frameSamples and cannot rely on that
-        // cap firing. Both are percentiles over the same burst either way.
-        if (this.renderSamples.length < FRAME_SAMPLE_MAX) {
-          this.renderSamples.push(performance.now() - t0);
-        }
-        return;
-      }
-      // The interaction burst just ended — that's the natural boundary to
-      // summarise it on, and the only one an always-continuous kiosk never
-      // reaches (sampleFrame flushes on its own sample cap for that case).
-      this.flushFrameSamples();
-      // Everything else is a frame asked for purely by a continuous animation
-      // (see requestAnimationRender), and is rate-capped.
-      if (now < this.animateUntil) {
-        // A continuous animation is running (a fan, a pulsing alert). It obeys
-        // the SAME rule: a turning fan is not a moving camera, and a villa with
-        // one fan on is not a villa whose badges may be unreadable. The frame
-        // costs more at native resolution — on the slowest device the capped
-        // 30fps becomes nearer 10 — and that is the honest trade, because a
-        // decorative animation being choppier while nobody is touching the
-        // screen is worth less than every glyph on the screen being legible.
-        // The instant a finger lands, motionPending un-sharpens and the
-        // animation is back at full rate.
-        if (still) this.sharpen();
-        if (now - this.lastAnimFrameAt >= ANIMATION_FRAME_MS) {
-          this.lastAnimFrameAt = now;
-          this.scene.render();
-        }
-        return;
-      }
-      // Nothing is moving and nothing has asked for a frame. `sharpen` reports
-      // whether it actually changed anything, so the one extra frame is drawn
-      // exactly when there is a sharper picture to draw and never on the idle
-      // ticks that follow.
-      if (this.sharpen()) this.scene.render();
     });
   }
 
@@ -1509,10 +1437,6 @@ export class SceneManager {
    */
   private sharpMotionHw = 0;
   private sharpened = false;
-  /** Set by the motion entry points, spent by the render loop — see unsharpen. */
-  private motionPending = false;
-  /** When the camera last moved. THE input to the sharpness rule. */
-  private lastMotionAt = 0;
   /**
    * Raise to the panel's own resolution. Draws NOTHING — every caller is about
    * to render anyway, and the idle branch renders on the `true` return.
@@ -1546,7 +1470,8 @@ export class SceneManager {
    *
    * ⚠️ ONE CALLER, AT THE TOP OF THE RENDER LOOP, AND THAT IS THE DESIGN.
    * Since 2.329.0 the only thing that un-sharpens is the camera moving, so
-   * this is called in exactly one place — where `motionPending` is spent —
+   * this is called in exactly one place — where FrameScheduler spends a
+   * recorded motion —
    * and never again. Two independent reasons it must stay there:
    *
    *   * `sharpened` means "the scaling is currently overridden", and the
@@ -1556,7 +1481,7 @@ export class SceneManager {
    *   * this RESIZES THE DRAWING BUFFER, so calling it from an event handler
    *     mutates the canvas during input dispatch (2.322.0's regression).
    *
-   * Motion signals intent by setting `motionPending`; the loop spends it.
+   * Motion signals intent through FrameScheduler.motion(); the tick spends it.
    */
   private unsharpen(): void {
     if (!this.sharpened) return;
@@ -1572,7 +1497,7 @@ export class SceneManager {
 
   /** Keep rendering for a short window (covers input latency + transitions). */
   requestRender(durationMs = 350): void {
-    this.keepRenderingUntil = Math.max(this.keepRenderingUntil, performance.now() + durationMs);
+    this.frames.repaint(durationMs);
   }
 
   /**
@@ -1600,16 +1525,12 @@ export class SceneManager {
    * registerBeforeRender and RoomHighlight.animate.
    */
   requestAnimationRender(durationMs = 350): void {
-    this.animateUntil = Math.max(this.animateUntil, performance.now() + durationMs);
+    this.frames.animate(durationMs);
   }
 
   /** Pin continuous rendering (e.g. while a camera stream panel is open). */
   pinContinuous(): () => void {
-    this.forceContinuous++;
-    this.requestRender();
-    return () => {
-      this.forceContinuous = Math.max(0, this.forceContinuous - 1);
-    };
+    return this.frames.pin();
   }
 
   private handleResize = () => {

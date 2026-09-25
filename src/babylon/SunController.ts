@@ -13,6 +13,7 @@ import { tapDebug } from "@/utils/tapDebug";
 import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
 import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
 import type { NightSky } from "./NightSky";
+import type { FrameRequests } from "./frameScheduler";
 
 export class SunController {
   private scene: Scene;
@@ -22,7 +23,10 @@ export class SunController {
   /** Only set when `?skySpeed` is running the sky fast — see startSkySim. */
   private simTimer: ReturnType<typeof setInterval> | null = null;
   private config: AppConfig;
-  private requestRender: () => void = () => {};
+  /** Repaints after a sun/sky change. A constructor argument rather than a
+   *  setter with a no-op default: a sky that changed and silently drew
+   *  nothing was that default's failure mode. */
+  private frames: FrameRequests;
   // When set (overview mode), this fixed backdrop wins over the day/night sky
   // colour so the bird's-eye view always reads on a calm, eye-friendly dark
   // ground instead of the bright daytime sky blue. Cleared (null) in
@@ -47,8 +51,10 @@ export class SunController {
     lighting: LightingSystem,
     hemi: HemisphericLight,
     config: AppConfig,
-    sky: SkyDome | null = null,
+    sky: SkyDome | null,
+    frames: FrameRequests,
   ) {
+    this.frames = frames;
     this.scene = scene;
     this.lighting = lighting;
     this.hemi = hemi;
@@ -79,7 +85,7 @@ export class SunController {
     if (every <= 0) return;
     this.simTimer = setInterval(() => {
       this.applyRealSun();
-      this.requestRender?.();
+      this.frames.repaint();
     }, every);
   }
 
@@ -88,10 +94,6 @@ export class SunController {
    *  scene would keep re-lighting a disposed one. */
   dispose(): void {
     if (this.simTimer !== null) { clearInterval(this.simTimer); this.simTimer = null; }
-  }
-
-  setRenderHook(fn: () => void): void {
-    this.requestRender = fn;
   }
 
   /**
@@ -125,7 +127,7 @@ export class SunController {
     this.bgOverride = color;
     if (color) {
       this.scene.clearColor = color;
-      this.requestRender();
+      this.frames.repaint();
     } else {
       this.applyRealSun(); // recompute the day/night sky colour for right now
     }
@@ -404,7 +406,7 @@ export class SunController {
     this.scene.clearColor = this.bgOverride ?? (isDay
       ? new Color4(0.53, 0.67, 0.84, 1)
       : new Color4(0.03, 0.03, 0.05, 1));
-    this.requestRender();
+    this.frames.repaint();
   }
 
 }
