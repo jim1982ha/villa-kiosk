@@ -1,3 +1,31 @@
+## 2.496.52
+
+### Fixed — a camera opened as a slideshow in the wrong shape
+Opening a camera showed a squarer, jerkier picture for the first several
+seconds — the clock in its corner ticking every two seconds — and then jumped
+to the proper widescreen live feed.
+
+The add-on's own log gave the timing. Opening the Living Room camera, the first
+seven seconds were nothing but still images, and only then did the video
+arrive. The panel only ever asked Home Assistant for the video as HLS, and HLS
+cannot start quickly: Home Assistant has to connect to the camera, wait for a
+full frame and package the first few seconds before anything can play. To fill
+that wait, the panel showed the camera's snapshot, on the theory that the
+switch to video would go unnoticed. But the snapshot comes from a different
+stream — smaller, 4:3, and renewed by the camera only every couple of seconds —
+so the switch was the most noticeable thing on screen.
+
+The panel now asks for the same kind of video Home Assistant's own camera view
+plays: **WebRTC**, through the go2rtc service built into Home Assistant. It
+starts in about a second, in the camera's own full resolution and shape, and
+the snapshot stand-in is gone — a short spinner until the first real frame
+instead. Nothing needs setting up: if a camera cannot be played this way, or
+the connection does not come up within a few seconds, the panel falls back to
+HLS exactly as before.
+
+Viewing a camera is still refused for the Guest profile, on this new path as
+on the old one.
+
 ## 2.496.51
 
 **Nothing you can see changed.** A housekeeping release.
