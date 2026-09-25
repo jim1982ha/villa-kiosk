@@ -1,3 +1,20 @@
+## 2.496.54
+
+**Nothing you can see changed.** A safeguard on how the add-on recognises you.
+
+When you open VESTA from Home Assistant's own sidebar, the add-on knows it is
+you — the owner — from a marker that its web server attaches to every request
+it passes on. That marker can only be trusted because the web server always
+replaces whatever the browser sent with its own. It did so correctly, but the
+instruction was written out by hand in nine separate places, one per kind of
+request. A tenth place added one day without that line would have passed the
+browser's own marker through, and anyone who knew to send it would have been
+treated as the owner.
+
+The instruction now lives in one shared file that all nine places use, and the
+automatic checks that run before every release now refuse any place that
+forwards requests without it.
+
 ## 2.496.53
 
 ### Fixed — lights disappeared from a floor that was red for presence
