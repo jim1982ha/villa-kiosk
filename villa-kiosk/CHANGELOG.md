@@ -1,3 +1,14 @@
+## 2.496.71
+
+### Fixed — the history bar said "Off" under a pill saying "No leak"
+Hovering a sensor's "Last 24 hours" bar showed the raw state — "Off", "On" —
+while the pill right above it used the sensor's own wording, such as "No leak".
+The bar now uses the same wording as the pill: a leak sensor reads "No leak" or
+"Leak detected", a motion sensor "Motion detected", a door "Open", and so on for
+every kind of sensor. Other devices keep their readable state ("Unlocked",
+"Open"). A sensor that has stopped reporting always reads "Unavailable", never
+"No leak".
+
 ## 2.496.70
 
 **Nothing you should see changed.** Room labels appear, merge and colour

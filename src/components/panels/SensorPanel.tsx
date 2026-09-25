@@ -16,7 +16,7 @@ import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
-import { binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
+import { stateLabelFor, binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
 import { binarySensorColor, paletteColorFor, isUnavailable } from "@/utils/stateColors";
 
@@ -69,7 +69,10 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
     isBinary
       ? alertState !== undefined && entity?.state === alertState ? "danger" : "normal"
       : Number.isFinite(numeric) ? levelForValue(numeric, threshold) : "normal";
-  const binaryStateText = entity?.state === "on" ? classInfo.onLabel : classInfo.offLabel;
+  // The pill and the history tooltip word a state the same way — stateLabelFor.
+  // (An unavailable sensor never reaches this: the pill shows "Unavailable" first.)
+  const labelFor = stateLabelFor(mapping.entityId, entity?.attributes.device_class as string | undefined);
+  const binaryStateText = labelFor(entity?.state === "on" ? "on" : "off");
   const binaryPillTone = level === "danger" ? "danger" : entity?.state === "on" ? "on" : "off";
 
   useEffect(() => {
@@ -130,6 +133,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
             <StateTimeline
               data={stateHistory}
               colorFor={(s) => binarySensorColor(s, alertState)}
+              labelFor={labelFor}
               hours={range.hours}
               loading={historyLoading}
             />
@@ -159,6 +163,7 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
               <StateTimeline
                 data={stateHistory}
                 colorFor={enumPalette!}
+                labelFor={labelFor}
                 legend={enumDistinctStates.map((s) => ({ state: s, color: enumPalette!(s) }))}
                 loading={historyLoading}
                 hours={range.hours}

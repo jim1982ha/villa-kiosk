@@ -42,6 +42,10 @@ interface Props {
    *  its left edge while the header said "… before <date>". */
   end?: number;
   colorFor: (state: string) => string;
+  /** How a state is worded in the tooltip — config/BinarySensorClasses'
+   *  stateLabelFor, so it reads what the pill above it reads ("No leak", not
+   *  "Off"). Defaults to the readable raw state. */
+  labelFor?: (state: string) => string;
   height?: number;
   /** Optional legend row below the bar — pass this for states whose colour
    *  isn't already self-evident (e.g. a generic text sensor); skip it for a
@@ -136,7 +140,7 @@ function cellBackground(states: string[], colorFor: (s: string) => string): stri
 
 
 export default function StateTimeline({
-  data, hours, end, colorFor, height, legend, loading, vertical, bucketMinutes,
+  data, hours, end, colorFor, labelFor = prettyState, height, legend, loading, vertical, bucketMinutes,
   baselineStates,
 }: Props) {
   const [hover, setHover] = useState<{ x: number; cell: Cell } | null>(null);
@@ -337,7 +341,7 @@ export default function StateTimeline({
                   // listed beneath it.
                   <span className="spark-tip-event">
                     <span style={{ color: colorFor(hover.cell.baseline ?? "") }}>●</span>
-                    {" "}{prettyState(hover.cell.baseline ?? "")}
+                    {" "}{labelFor(hover.cell.baseline ?? "")}
                   </span>
                 ) : hover.cell.events.length === 0 ? (
                   // No transition landed here, so nothing "happened" — the bar
@@ -348,13 +352,13 @@ export default function StateTimeline({
                   // restated the layout rather than adding to it.
                   hover.cell.states.map((st) => (
                     <span className="spark-tip-event" key={st}>
-                      <span style={{ color: colorFor(st) }}>●</span> {prettyState(st)}
+                      <span style={{ color: colorFor(st) }}>●</span> {labelFor(st)}
                     </span>
                   ))
                 ) : (
                   hover.cell.events.map((ev, k) => (
                     <span className="spark-tip-event" key={k}>
-                      <span style={{ color: colorFor(ev.state) }}>●</span> {prettyState(ev.state)}
+                      <span style={{ color: colorFor(ev.state) }}>●</span> {labelFor(ev.state)}
                       {" · "}{fmtChartStamp(ev.t, hours)}
                     </span>
                   ))
@@ -363,7 +367,7 @@ export default function StateTimeline({
             ) : (
               <>
                 <strong>
-                  <span style={{ color: colorFor(hover.cell.states[0]) }}>●</span> {prettyState(hover.cell.states[0])}
+                  <span style={{ color: colorFor(hover.cell.states[0]) }}>●</span> {labelFor(hover.cell.states[0])}
                 </strong>
                 <span>{fmtChartStamp(hover.cell.from, hours)}</span>
               </>

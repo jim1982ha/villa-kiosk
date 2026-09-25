@@ -6,6 +6,8 @@
 // It owns the fetch rather than receiving `data`, which is what lets the range
 // live here instead of being duplicated as state in every panel.
 
+import { useHA } from "@/ha/HAStateStore";
+import { stateLabelFor } from "@/config/BinarySensorClasses";
 import StateTimeline from "./StateTimeline";
 import { useStateHistory } from "@/hooks/useStateHistory";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
@@ -26,6 +28,7 @@ export default function LastDayTimeline({
   const { range, picker } = useHistoryRange();
   const paint = colorFor ?? historyStateColor(entityId);
   const { data, loading, lastSeen } = useStateHistory(entityId, range.hours);
+  const { entities } = useHA();
   return (
     <div className="field">
       {/* When the window had to be moved to find data, say so — an unlabelled
@@ -42,6 +45,7 @@ export default function LastDayTimeline({
         loading={loading}
         hours={range.hours}
         end={lastSeen}
+        labelFor={stateLabelFor(entityId, entities[entityId]?.attributes.device_class as string | undefined)}
         bucketMinutes={range.bucketMinutes}
       />
     </div>

@@ -1,6 +1,7 @@
 // src/components/panels/GenericPanel.tsx
 // Fallback for entity types without a dedicated panel (e.g. assist_satellite).
 
+import { stateLabelFor } from "@/config/BinarySensorClasses";
 import { Info } from "lucide-react";
 import BasePanel from "./BasePanel";
 import StateTimeline from "./StateTimeline";
@@ -30,6 +31,7 @@ export default function GenericPanel({ entity, mapping, onClose }: PanelProps) {
         <StateTimeline
           data={history}
           colorFor={colorFor}
+          labelFor={stateLabelFor(mapping.entityId, entity?.attributes.device_class as string | undefined)}
           legend={distinctStates.map((s) => ({ state: s, color: colorFor(s) }))}
           loading={historyLoading}
           hours={range.hours}

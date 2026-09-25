@@ -16,6 +16,7 @@
 // `alarmState` default here (see SensorPanel.tsx) — this table only supplies
 // the sensible starting point for a class the user hasn't customised.
 
+import { prettyState } from "@/utils/entityValue";
 import {
   Activity, AlertTriangle, BatteryCharging, BatteryWarning, DoorOpen, Droplets,
   Eye, Flame, Home, Lightbulb, Plug, RefreshCw, ShieldAlert, Snowflake,
@@ -74,6 +75,23 @@ const BINARY_SENSOR_CLASSES: Record<string, BinarySensorClassInfo> = {
 export function binarySensorClassInfo(deviceClass?: string): BinarySensorClassInfo {
   if (!deviceClass) return DEFAULT_INFO;
   return BINARY_SENSOR_CLASSES[deviceClass] ?? DEFAULT_INFO;
+}
+
+/**
+ * How a state of this entity is WORDED for a person — the ONE answer the
+ * status pill and every history bar give. A moisture sensor's "off" is "No
+ * leak", a motion sensor's "on" is "Motion detected", a door's is "Open"; the
+ * raw state is shown readable ("Unlocked", "Unavailable") for everything else.
+ *
+ * ⚠️ The history bar's tooltip used the generic `prettyState`, so hovering a
+ * leak sensor's bar said "Off" right under a pill saying "No leak" — the pill
+ * had its own inline copy of this rule. Only "on" and "off" take the class
+ * wording: an unavailable sensor is "Unavailable", never "No leak".
+ */
+export function stateLabelFor(entityId: string, deviceClass?: string): (state: string) => string {
+  if (!entityId.startsWith("binary_sensor.")) return prettyState;
+  const info = binarySensorClassInfo(deviceClass);
+  return (state) => state === "on" ? info.onLabel : state === "off" ? info.offLabel : prettyState(state);
 }
 
 /**
