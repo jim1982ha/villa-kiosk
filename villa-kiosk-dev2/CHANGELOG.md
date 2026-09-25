@@ -1,3 +1,14 @@
+## 2.496.91
+
+### Changed — the villa's rooms and storeys
+- **One room plan, shared by everything.** Which room and which storey a point
+  is in is now answered by one object for the walking camera's room banner,
+  the room highlights, the device badges and the light pools, instead of five
+  separate copies of the rooms.
+- **The foot of the staircase is found on the ground STOREY**, as the floor
+  plan defines it, rather than "within 30 cm of the lowest floor". A ground
+  floor room a step or two up now counts as ground floor when first-person
+  mode looks for somewhere to put you at the bottom of the stairs.
 ## 2.496.90
 
 ### Fixed — history charts
