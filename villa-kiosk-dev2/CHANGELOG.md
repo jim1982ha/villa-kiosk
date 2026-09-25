@@ -1,3 +1,17 @@
+## 2.496.56
+
+### Improved — the pointer shows the hand over everything you can click
+With a mouse, the pointer turned into a hand over a device's badge but stayed an
+arrow over a group card or a room label — even though clicking either one does
+something. It now shows the hand over anything a click would open.
+
+Behind that: deciding what your finger or pointer is on — a card, a badge, a
+room label, or the villa itself — was written out separately for a tap, a
+press-and-hold, a double-tap, the hover label and the pointer shape. Two of
+those copies had already drifted apart in earlier releases, and the pointer's
+copy was the one that had fallen behind. There is now one answer that all five
+use, so they can no longer disagree about what is under your finger.
+
 ## 2.496.55
 
 **Nothing you can see changed.** The rules for what each profile may do now
