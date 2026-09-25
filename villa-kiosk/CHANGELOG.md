@@ -1,3 +1,20 @@
+## 2.496.74
+
+### Fixed — floating light discs around the staircase in the walking view
+In the walking view, discs of light hung in the air near the living room stairs,
+and the walls around them showed a hard line: lit above, dark below.
+
+The stair's step lights each cast their glow on their own step — correctly — but
+that glow was as wide as a ceiling lamp's (1.8 m across the room), limited only
+by the staircase's outline, which runs the whole flight. So each step's glow
+spread flat over the steps below it: six discs at 0.1 m, 0.5 m, 0.8 m, 1.1 m,
+1.4 m and 1.8 m over one staircase, visible through its open shelving. Measured
+on the villa's own 3D model with its real room plan.
+
+A light mounted right at the surface it lights (a step light) now lights a
+patch about the size of a step. And the lamp light added in 2.496.73 now starts
+from the room's floor rather than the step's height, which removes the hard line
+on the walls. Nothing else changes, and this costs nothing.
 ## 2.496.73
 
 ### Fixed — furniture under a lamp stayed dark at night

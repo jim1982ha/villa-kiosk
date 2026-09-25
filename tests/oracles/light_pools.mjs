@@ -101,6 +101,13 @@ console.log("\n  calibration:");
   r.set.setRooms([room("Stairs", 0, -5, 5, -5, 5)]);
   ck("  ...but a light really mounted low keeps its answer",
      near(r.pools(step)[0].position.y, 0.48), r.pools(step)[0].position.y);
+  // Villa GLB + its real .sh3d rooms: each step light's pool spread 2-4 m along
+  // the staircase outline at its own tread's height, floating over the treads
+  // below it (2.496.74).
+  const rch = reach(r.pools(step)[0]);
+  ck("  ...and washes its tread, not the whole flight (2.496.74)", rch * Math.cos(Math.PI / 8) <= 0.4 + 1e-3, rch);
+  ck("  ...while the lamp glow is held back only below the ROOM's floor, not the tread",
+     r.set.floorYOf(step.uniqueId) === 0, r.set.floorYOf(step.uniqueId));
 }
 {
   // Out on a terrace, in no room: bounded by the nearest SAME-storey wall.

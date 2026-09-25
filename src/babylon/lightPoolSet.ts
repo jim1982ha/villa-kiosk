@@ -45,6 +45,9 @@ export const POOL_FLOOR_LIFT = 0.02;
 /** A pool whose floor answer stands this far above its room's own floor is put
  *  ON the room's floor. Above a stair tread's rise; below any table or counter. */
 const POOL_RAISED_M = 0.3;
+/** The radius of a pool whose lamp is mounted right at what it lights — a
+ *  step light over its tread. See reshapeOne's near-fixture branch. */
+const POOL_NEAR_RADIUS = 0.4;
 
 /** What the pools need from the floor below them. FloorProbe is the adapter. */
 export interface PoolFloorProbe {
@@ -80,6 +83,9 @@ export class LightPoolSet {
   /** Spots whose load-path probe missed, kept so calibration can ask again. */
   private pending = new Map<number, PendingSpot[]>();
   private rooms: readonly PoolRoom[] = [];
+  /** Each pool's ROOM floor — which, for a step light, is not the tread its
+   *  pool lies on. What the lamp glow is held back below (floorYOf). */
+  private roomFloors = new Map<LightPool, number>();
   private strength = 1;
   // Plain fields rather than parameter properties: Node's type stripping
   // cannot run the shorthand, and the oracle loads this class directly.
@@ -159,12 +165,15 @@ export class LightPoolSet {
     );
   }
 
-  /** The floor a fixture's pools lie on — the lowest, for a strip's three —
-   *  or null when it has none. The lamp glow starts above it (lampGlow.ts). */
+  /** The floor of the room a fixture's pools are in — the lowest, for a
+   *  strip's three — or null when it has none. The lamp glow starts above it
+   *  (lampGlow.ts). ⚠️ The ROOM's floor, not the pool's surface: a step
+   *  light's pool lies on its tread, and holding the glow back below the
+   *  tread drew a hard lit/unlit line across the walls round the stairs. */
   floorYOf(meshId: number): number | null {
     let y: number | null = null;
     for (const pool of this.pools.get(meshId) ?? []) {
-      const f = pool.mesh.position.y - POOL_FLOOR_LIFT;
+      const f = this.roomFloors.get(pool) ?? pool.mesh.position.y - POOL_FLOOR_LIFT;
       if (y === null || f < y) y = f;
     }
     return y;
@@ -194,6 +203,7 @@ export class LightPoolSet {
   clear(): void {
     this.pools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.pools.clear();
+    this.roomFloors.clear();
     // Holds mesh references from the outgoing model — a reload's calibration
     // must not retry spots belonging to a scene that no longer exists.
     this.pending.clear();
@@ -276,7 +286,19 @@ export class LightPoolSet {
     // the pool stands on names the storey below, so every upper-storey pool
     // found no room and washed through its walls.
     const room = surfaceY !== null ? this.roomOnFloor(x, surfaceY, z) : this.roomAtFixture(x, pool.probeFromY, z);
-    let radius = LIGHT_POOL_RADIUS;
+    // ⚠️ A STEP LIGHT WASHES ITS TREAD, NOT THE STAIRCASE (2.496.74). Kept
+    // on its tread above, a step light's pool was still a 1.8 m disc, clipped
+    // only to the staircase's outline — which runs the whole flight — so each
+    // hung flat over the treads below it: discs at 0.1, 0.5, 0.8, 1.1, 1.4 and
+    // 1.8 m over one stair (the villa GLB with its real .sh3d rooms), seen
+    // through the stair's open shelving as "the light is above the floor".
+    // A lamp mounted right at its surface lights a patch that size.
+    // Judged on the FINAL answer: a re-asked step light can be corrected from
+    // a neighbour's tread to its own and still be one.
+    const near = surfaceY !== null && pool.probeFromY - surfaceY < POOL_AIRBORNE_M;
+    let radius = near ? POOL_NEAR_RADIUS : LIGHT_POOL_RADIUS;
+    const roomFloor = surfaceY !== null ? this.floorUnder(x, surfaceY, z) : null;
+    if (roomFloor !== null) this.roomFloors.set(pool, roomFloor); else this.roomFloors.delete(pool);
     let shape: Pt2[] | undefined;
     if (room) {
       // Room = SUBJECT (may be L-shaped), footprint = CLIP (convex).
