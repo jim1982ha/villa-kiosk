@@ -167,7 +167,7 @@ console.log("\n  the window: the approved boards 6 and 7");
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
   ck("the same width as every other bottom-bar window", /className="summary-group-modal weather-modal"/.test(panel));
   ck("history reads the recorder's STATISTICS (5-minute / hourly), not raw history",
-     /getStatisticsDuringPeriod\(ids, [\s\S]{0,80}\["mean", "min", "max"\]\)/.test(panel) && /"30d": \{[^}]*period: "hour"/.test(panel));
+     /fetchStatistics\(ws, ids, range\.hours, range\.period, \["mean", "min", "max"\]/.test(panel));
   ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label="Back to Weather"/.test(panel) && !/Back to now/.test(panel));
   ck("'History and trends' is in the FOOTER, Settings' 'Advanced Settings' style (btn ghost, in the leading slot)",
      /footerLeading=\{view === "now" && \([\s\S]{0,120}className="btn ghost"[\s\S]{0,120}History and trends/.test(panel) && !/weather-link/.test(panel));
@@ -197,8 +197,8 @@ console.log("\n  the charts do not re-fetch on every state push (2.496.86)");
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
   ck("the bar's station keeps its identity while the station is the same",
      /const station = useMemo\(\(\) => found, \[stationKey\]\);/.test(bar));
-  ck("the history fetch is keyed by the sensors' ids, not the station object",
-     /\}, \[ws, idsKey, range\]\);/.test(panel) && !/\], \[station\]\);/.test(panel));
+  ck("the history fetch is keyed by the sensors' ids and the range, not the station object",
+     /useHistory<WeatherHistory>\(\s*`\$\{ids\.join\("\|"\)\}#\$\{rainId \?\? ""\}\|\$\{range\.hours\}`/.test(panel) && !/\], \[station\]\);/.test(panel));
   const spark = readFileSync(new URL("../../src/components/panels/Sparkline.tsx", import.meta.url), "utf8");
   ck("one reading over a known window is a line (0 mm all day), not 'not enough history'",
      /data\.length === 0 \|\| \(data\.length < 2 && !\(window && window\.to > window\.from\)\)/.test(spark));

@@ -1,8 +1,17 @@
 // src/ha/HAHistoryAPI.ts
-// Fetch recent entity history via the REST API for panel sparklines/timelines.
+// Every history a panel draws, from either of Home Assistant's two recorder
+// paths, returned in ONE shape (HistorySeries: points, gaps, window):
+//   * STATES over REST — each change the entity reported (fetchHistory,
+//     fetchStateHistory): the device panels' sparklines and timelines;
+//   * STATISTICS over the websocket — the recorder's 5-minute / hourly / daily
+//     buckets (fetchStatistics): the Weather window, whose station reports
+//     every 16 s — 30 days of raw wind would be ~160,000 rows.
+// Which one a chart reads is the adapter's business; the gaps travel with the
+// points on both (utils/statisticsSeries.ts for why that was not always so).
 
 import { gapsFrom } from "@/utils/historyGaps";
-import type { StateHistoryPoint, HistorySeries } from "@/types/ha.types";
+import { statisticsSeries, type StatisticField, type StatisticsPeriod } from "@/utils/statisticsSeries";
+import type { StateHistoryPoint, HistorySeries, StatisticPeriod } from "@/types/ha.types";
 import { ingressApiBase } from "./ingress";
 
 interface RawHistoryState {
@@ -134,6 +143,37 @@ export async function fetchStateHistory(
   const out: StateHistoryPoint[] = [];
   for (const p of points) {
     if (out.length === 0 || out[out.length - 1].state !== p.state) out.push(p);
+  }
+  return out;
+}
+
+/** What the statistics adapter needs from the socket — the one call. */
+export interface StatisticsPort {
+  getStatisticsDuringPeriod(
+    ids: string[], start: string, period: StatisticsPeriod, end?: string,
+    types?: ReadonlyArray<StatisticField>,
+  ): Promise<Record<string, StatisticPeriod[]>>;
+}
+
+/**
+ * The last `hours` of the recorder's statistics for `ids`, one HistorySeries
+ * per id per field asked for — gaps included, and an id the recorder has
+ * nothing for is an outage the width of the window, never an empty "zero".
+ * A failed request REJECTS; the caller's status says "failed", not "no data".
+ */
+export async function fetchStatistics<F extends StatisticField>(
+  port: StatisticsPort, ids: readonly string[], hours: number, period: StatisticsPeriod, fields: readonly F[],
+  since?: number,
+): Promise<Record<string, Record<F, HistorySeries>>> {
+  const to = Date.now();
+  const window = { from: since ?? to - hours * 3600 * 1000, to };
+  if (ids.length === 0) return {};
+  const res = await port.getStatisticsDuringPeriod(
+    [...ids], new Date(window.from).toISOString(), period, undefined, fields);
+  const out: Record<string, Record<F, HistorySeries>> = {};
+  for (const id of ids) {
+    const rows = res[id];
+    out[id] = Object.fromEntries(fields.map((f) => [f, statisticsSeries(rows, f, period, window)])) as Record<F, HistorySeries>;
   }
   return out;
 }

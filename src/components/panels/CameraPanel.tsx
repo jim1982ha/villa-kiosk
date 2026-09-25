@@ -24,6 +24,7 @@ import { WHEEL_IDLE_MS, swipeStep, wheelOwner, wheelStep } from "./cameraGesture
 import { STATUS_COLOR, UNKNOWN_STATES } from "@/utils/stateColors";
 import { TAP_MOVE_TOL_PX, LONG_PRESS_MS } from "@/utils/tapThresholds";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
+import { useHistory } from "@/hooks/useHistory";
 import { mergeStateHistories } from "./chartUtils";
 import StateTimeline from "./StateTimeline";
 import type { StateHistoryPoint } from "@/types/ha.types";
@@ -343,12 +344,9 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
   // motion sensor, NOT linkedEntityId: this band answers "did it detect
   // anything", which is the sensor's job — linkedEntityId only says whether
   // detection was armed (and drives the badge ring, see EntityVisuals).
-  const [statusHistory, setStatusHistory] = useState<StateHistoryPoint[]>([]);
-  const [statusLoading, setStatusLoading] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    setStatusLoading(true);
-    const motionId = mapping.motionEntityId;
+  const motionId = mapping.motionEntityId;
+  const { data: statusHistory, loading: statusLoading } = useHistory<StateHistoryPoint[]>(
+    `${mapping.entityId}|${motionId ?? ""}`, async () => {
     // ⚠️ THIS BAR'S SUBJECT IS REACHABILITY, so a gap is the signal, not
     // noise. Both series used to pass a `keepUnavailable` opt-out to get that;
     // the flag is gone because keeping them is now the only behaviour — every
@@ -360,25 +358,21 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
     //     sensor that went offline while reading `on` would paint red for the
     //     whole outage. Kept, it stops being `on` and the bar stops claiming
     //     motion nobody detected.
-    Promise.all([
+    const [camHist, motionHist] = await Promise.all([
       fetchStateHistory(mapping.entityId, 24),
       motionId
         ? fetchStateHistory(motionId, 24)
         : Promise.resolve<StateHistoryPoint[]>([]),
-    ]).then(([camHist, motionHist]) => {
-      if (cancelled) return;
-      setStatusHistory(mergeStateHistories(
-        { camera: camHist, motion: motionHist },
-        (cur) => {
-          if (!cur.camera || UNKNOWN_STATES.has(cur.camera)) return "offline";
-          if (motionId && cur.motion === "on") return "motion";
-          return "online";
-        },
-      ));
-      setStatusLoading(false);
-    }).catch(() => { if (!cancelled) setStatusLoading(false); });
-    return () => { cancelled = true; };
-  }, [mapping.entityId, mapping.motionEntityId]);
+    ]);
+    return mergeStateHistories(
+      { camera: camHist, motion: motionHist },
+      (cur) => {
+        if (!cur.camera || UNKNOWN_STATES.has(cur.camera)) return "offline";
+        if (motionId && cur.motion === "on") return "motion";
+        return "online";
+      },
+    );
+  }, []);
 
   // ⚠️ THERE IS NO SNAPSHOT STAND-IN ANY MORE (2.496.52). While HLS started,
   // this panel showed the camera's still image on the theory that the swap to

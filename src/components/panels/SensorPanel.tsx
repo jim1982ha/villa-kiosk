@@ -4,7 +4,6 @@
 // number (e.g. an access point reporting "connected"/"disconnected") — see
 // isEnum below.
 
-import { useEffect, useState } from "react";
 import { formatSensorParts } from "@/utils/entityValue";
 import { Activity, AlertTriangle } from "lucide-react";
 import BasePanel from "./BasePanel";
@@ -15,6 +14,7 @@ import type { HistorySeries, StateHistoryPoint } from "@/types/ha.types";
 import { useConfig } from "@/config/ConfigContext";
 import { fetchHistory, fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
+import { useHistory } from "@/hooks/useHistory";
 import { levelForValue, type AlertLevel } from "@/config/ThresholdConfig";
 import { stateLabelFor, binarySensorClassInfo, alertStateFor } from "@/config/BinarySensorClasses";
 import { effectiveSensorClass, SENSOR_CLASS_ICON } from "@/config/SensorClasses";
@@ -26,15 +26,11 @@ const LEVEL_COLOR: Record<AlertLevel, string> = {
   danger: "var(--status-danger)",
 };
 
+const EMPTY_SERIES: HistorySeries = { points: [], gaps: [], window: { from: 0, to: 0 } };
+const NO_STATES: StateHistoryPoint[] = [];
+
 export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const { config } = useConfig();
-  const [history, setHistory] = useState<HistorySeries>({ points: [], gaps: [], window: { from: 0, to: 0 } });
-  const [stateHistory, setStateHistory] = useState<StateHistoryPoint[]>([]);
-  // Distinguishes "still fetching" from "HA genuinely has no history yet" —
-  // see useStateHistory's docstring for why this matters (same gap, this
-  // panel just doesn't go through that shared hook, since it fetches ONE of
-  // two different history shapes depending on isBinary/isEnum).
-  const [historyLoading, setHistoryLoading] = useState(true);
   // Shared range control — the enum timeline and the numeric sparkline below
   // both read it, so a sensor that shows either always offers the same window.
   const { range, picker } = useHistoryRange();
@@ -75,23 +71,20 @@ export default function SensorPanel({ entity, mapping, onClose }: PanelProps) {
   const binaryStateText = labelFor(entity?.state === "on" ? "on" : "off");
   const binaryPillTone = level === "danger" ? "danger" : entity?.state === "on" ? "on" : "off";
 
-  useEffect(() => {
-    // History is fetched token-less through the add-on's Supervisor proxy.
-    let cancelled = false;
-    setHistoryLoading(true);
-    if (isBinary || isEnum) {
-      fetchStateHistory(mapping.entityId, range.hours)
-        .then((h) => { if (!cancelled) { setStateHistory(h); setHistoryLoading(false); } })
-        .catch(() => { if (!cancelled) setHistoryLoading(false); });
-    } else {
-      fetchHistory(mapping.entityId, range.hours)
-        .then((h) => { if (!cancelled) { setHistory(h); setHistoryLoading(false); } })
-        .catch(() => { if (!cancelled) setHistoryLoading(false); });
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [mapping.entityId, isBinary, isEnum, range.hours]);
+  // ONE of two history shapes, by what the sensor reports: raw states for a
+  // binary or text sensor (a numeric parse would drop every row), numbers
+  // with their gaps for the rest. `loading` tells "still fetching" from "HA
+  // has no history yet" — see useHistory.
+  const asStates = isBinary || isEnum;
+  const { data: fetched, loading: historyLoading } = useHistory<{ series?: HistorySeries; states?: StateHistoryPoint[] }>(
+    `${mapping.entityId}|${asStates ? "states" : "numeric"}|${range.hours}`,
+    async () => asStates
+      ? { states: await fetchStateHistory(mapping.entityId, range.hours) }
+      : { series: await fetchHistory(mapping.entityId, range.hours) },
+    {},
+  );
+  const history = fetched.series ?? EMPTY_SERIES;
+  const stateHistory = fetched.states ?? NO_STATES;
 
   const BinaryIcon = classInfo.icon;
   // Same resolution the 3D badge uses (babylon/badgeIconKeys.ts) — device_class,

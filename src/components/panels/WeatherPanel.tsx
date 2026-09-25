@@ -20,10 +20,13 @@ import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
 import { fmtChartValue, fmtChartStamp } from "./chartUtils";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
-import { fetchHistory } from "@/ha/HAHistoryAPI";
+import { fetchHistory, fetchStatistics } from "@/ha/HAHistoryAPI";
+import { useHistory } from "@/hooks/useHistory";
+import { useHistoryRange, WEATHER_RANGES, type HistoryRange } from "./historyRange";
+import { seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
 import { isUnavailable, STATUS_COLOR } from "@/utils/stateColors";
-import { bucketGaps, lineRuns, outageBands } from "@/utils/lineChart";
-import type { HassEntity, StatisticPeriod } from "@/types/ha.types";
+import { lineRuns, outageBands } from "@/utils/lineChart";
+import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
   beaufort, compass, pressureTendency, toCelsius, toKmh, toHpa, uvBand,
   comfortHeadline, comfortPosition, COMFORT_BANDS, windowAdvice, laundryAdvice, outdoorsAdvice,
@@ -83,7 +86,7 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 10_000); return () => clearInterval(t); }, []);
   const r = useReadings(station);
-  const [range, setRange] = useState<RangeKey>("24h");
+  const { range, picker } = useHistoryRange(WEATHER_RANGES, "weather-ranges");
   // Each screen opens at its TOP: the body is one scroll area shared by both,
   // so History used to open wherever Now had been scrolled to.
   const topRef = useRef<HTMLDivElement>(null);
@@ -103,7 +106,7 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
       onClose={onClose}
       headerActions={view === "now"
         ? (r.updated && <span className="weather-live">live · {ago(r.updated, now)}</span>)
-        : <RangePicker value={range} onChange={setRange} />}
+        : picker}
       // In the footer, so it is visible however far the body scrolls — and in
       // Settings' "Advanced Settings" style: the same button, the same place.
       footerLeading={view === "now" && (
@@ -125,17 +128,11 @@ export default function WeatherPanel({ station, onClose }: { station: WeatherSta
 function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
   // The 3-hour pressure tendency and today's temperature range need the
   // recorder; both arrive a beat after the live readings rather than block them.
-  const [tendency, setTendency] = useState<string | null>(null);
   const pressureId = station.roles.pressure;
-  useEffect(() => {
-    if (!pressureId) return;
-    let cancelled = false;
-    fetchHistory(pressureId, 3).then((h) => {
-      if (cancelled || h.points.length < 2) return;
-      setTendency(pressureTendency(h.points[h.points.length - 1].v - h.points[0].v));
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [pressureId]);
+  const { data: pressure3h } = useHistory<HistorySeries | null>(
+    pressureId ? `${pressureId}|3` : null, () => fetchHistory(pressureId!, 3), null);
+  const pts = pressure3h?.points ?? [];
+  const tendency = pts.length >= 2 ? pressureTendency(pts[pts.length - 1].v - pts[0].v) : null;
   const today = useTodayRange(station.roles.temperature);
 
   const advice = [
@@ -229,21 +226,16 @@ function Tile({ title, center, children }: { title: string; center?: boolean; ch
 /** Today's low and high, from the recorder's 5-minute statistics since midnight. */
 function useTodayRange(entityId: string | undefined): { min: number; max: number } | null {
   const { ws } = useHA();
-  const [range, setRange] = useState<{ min: number; max: number } | null>(null);
-  useEffect(() => {
-    if (!entityId) return;
-    let cancelled = false;
-    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-    ws.getStatisticsDuringPeriod([entityId], midnight.toISOString(), "5minute", undefined, ["min", "max"])
-      .then((res) => {
-        const rows = res[entityId] ?? [];
-        const mins = rows.map((p) => p.min).filter((v): v is number => typeof v === "number");
-        const maxs = rows.map((p) => p.max).filter((v): v is number => typeof v === "number");
-        if (!cancelled && mins.length && maxs.length) setRange({ min: Math.min(...mins), max: Math.max(...maxs) });
-      }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [ws, entityId]);
-  return range;
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const since = midnight.getTime();
+  const { data } = useHistory(
+    entityId ? `${entityId}|${since}` : null,
+    () => fetchStatistics(ws, [entityId!], 0, "5minute", ["min", "max"] as const, since),
+    {},
+  );
+  const lo = seriesExtent(entityId ? data[entityId]?.min : undefined);
+  const hi = seriesExtent(entityId ? data[entityId]?.max : undefined);
+  return lo && hi ? { min: lo.min, max: hi.max } : null;
 }
 
 function WindCompass({ r }: { r: Readings }) {
@@ -358,98 +350,72 @@ function SunUv({ r }: { r: Readings }) {
 
 // ── History and trends ─────────────────────────────────────────────────
 
-type RangeKey = "12h" | "24h" | "7d" | "30d";
-const RANGES: Record<RangeKey, { label: string; hours: number; period: "5minute" | "hour"; rainPeriod: "hour" | "day" }> = {
-  "12h": { label: "12 h", hours: 12, period: "5minute", rainPeriod: "hour" },
-  "24h": { label: "24 h", hours: 24, period: "5minute", rainPeriod: "hour" },
-  "7d": { label: "7 days", hours: 168, period: "hour", rainPeriod: "day" },
-  "30d": { label: "30 days", hours: 720, period: "hour", rainPeriod: "day" },
-};
-
-function RangePicker({ value, onChange }: { value: RangeKey; onChange: (k: RangeKey) => void }) {
-  return (
-    <div className="segmented weather-ranges" role="group" aria-label="History range">
-      {(Object.keys(RANGES) as RangeKey[]).map((k) => (
-        <button key={k} type="button" className={k === value ? "active" : ""} aria-pressed={k === value} onClick={() => onChange(k)}>
-          {RANGES[k].label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 interface Pt { t: number; v: number }
 const MEASURED: WeatherRole[] = ["temperature", "indoorTemperature", "humidity", "indoorHumidity", "windSpeed", "windGust", "pressure", "solar", "uv"];
+type MeasuredField = "mean" | "min" | "max";
 
-function HistoryView({ station, range }: { station: WeatherStation; range: RangeKey }) {
+interface WeatherHistory {
+  measured: Record<string, Record<MeasuredField, HistorySeries>>;
+  rain?: HistorySeries;
+  window: { from: number; to: number };
+}
+
+function HistoryView({ station, range }: { station: WeatherStation; range: HistoryRange }) {
   const { ws, entities } = useHA();
-  const cfg = RANGES[range];
-  const periodMs = cfg.period === "5minute" ? 300_000 : 3_600_000;
-  // Keyed by the sensors' ids, never by the station object (see SummaryBar).
-  const idsKey = MEASURED.map((r) => station.roles[r] ?? "").join("|") + "#" + (station.roles.rainToday ?? "");
-  const [stats, setStats] = useState<Record<string, StatisticPeriod[]>>({});
-  const [rain, setRain] = useState<StatisticPeriod[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [win, setWin] = useState({ from: 0, to: 0 });
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    const to = Date.now(), from = to - cfg.hours * 3600_000;
-    setWin({ from, to });
-    const ids = MEASURED.map((r) => station.roles[r]).filter((x): x is string => !!x);
-    const rainId = station.roles.rainToday;
-    Promise.all([
-      ids.length ? ws.getStatisticsDuringPeriod(ids, new Date(from).toISOString(), cfg.period, undefined, ["mean", "min", "max"]) : Promise.resolve({}),
-      rainId ? ws.getStatisticsDuringPeriod([rainId], new Date(from).toISOString(), cfg.rainPeriod, undefined, ["change"]) : Promise.resolve({}),
-    ]).then(([m, rr]) => {
-      if (cancelled) return;
-      setStats(m as Record<string, StatisticPeriod[]>);
-      setRain(rainId ? ((rr as Record<string, StatisticPeriod[]>)[rainId] ?? []) : []);
-      setLoading(false);
-    }).catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws, idsKey, range]);
+  const ids = MEASURED.map((r) => station.roles[r]).filter((x): x is string => !!x);
+  const rainId = station.roles.rainToday;
+  // The recorder's statistics (see the header), gaps included — a bucket it
+  // did not write is an outage, and a failed request is "failed", not zero.
+  const { data, status } = useHistory<WeatherHistory>(
+    `${ids.join("|")}#${rainId ?? ""}|${range.hours}`,
+    async () => {
+      const since = Date.now() - range.hours * 3600_000;
+      const [measured, rain] = await Promise.all([
+        fetchStatistics(ws, ids, range.hours, range.period, ["mean", "min", "max"] as const, since),
+        rainId ? fetchStatistics(ws, [rainId], range.hours, range.totalPeriod, ["change"] as const, since) : Promise.resolve(null),
+      ]);
+      return { measured, rain: rain && rainId ? rain[rainId].change : undefined, window: { from: since, to: Date.now() } };
+    },
+    { measured: {}, window: { from: 0, to: 0 } },
+  );
+  const win = data.window;
 
-  const series = (role: WeatherRole, key: "mean" | "min" | "max" = "mean"): Pt[] => {
+  const series = (role: WeatherRole, key: MeasuredField = "mean"): HistorySeries | undefined => {
     const id = station.roles[role];
-    return (id ? stats[id] ?? [] : [])
-      .map((p) => ({ t: p.start, v: p[key] as number }))
-      .filter((p) => typeof p.v === "number" && Number.isFinite(p.v));
+    return id ? data.measured[id]?.[key] : undefined;
   };
-  const extent = (pts: Pt[], f: (a: number[]) => number) => (pts.length ? f(pts.map((p) => p.v)) : undefined);
-  const tMin = extent(series("temperature", "min"), (a) => Math.min(...a));
-  const tMax = extent(series("temperature", "max"), (a) => Math.max(...a));
-  const gustMax = extent(series(station.roles.windGust ? "windGust" : "windSpeed", "max"), (a) => Math.max(...a));
-  const uvMax = extent(series("uv", "max"), (a) => Math.max(...a));
-  const rainTotal = rain.reduce((s, p) => s + (typeof p.change === "number" && p.change > 0 ? p.change : 0), 0);
-  const pMin = extent(series("pressure", "min"), (a) => Math.min(...a));
-  const pMax = extent(series("pressure", "max"), (a) => Math.max(...a));
+  const t = seriesExtent(series("temperature", "min")), T = seriesExtent(series("temperature", "max"));
+  const gustRole: WeatherRole = station.roles.windGust ? "windGust" : "windSpeed";
+  const gustMax = seriesExtent(series(gustRole, "max"))?.max;
+  const uvMax = seriesExtent(series("uv", "max"))?.max;
+  const rainTotal = seriesTotal(data.rain);
+  const p = seriesExtent(series("pressure", "min")), P = seriesExtent(series("pressure", "max"));
   const unitOf = (role: WeatherRole) => {
     const id = station.roles[role];
     return String((id && entities[id]?.attributes.unit_of_measurement) ?? "");
   };
+  const line = (role: WeatherRole, rest: Omit<Line, "s">, key: MeasuredField = "mean"): Line => ({ s: series(role, key), ...rest });
 
   return (
     <div className="weather-history">
       <div className="weather-figures">
-        <Figure label="Temperature range" value={tMin !== undefined && tMax !== undefined ? `${f1(tMin)}° – ${f1(tMax)}°` : "—"} />
-        <Figure label="Strongest gust" value={gustMax !== undefined ? `${f1(gustMax)} ${unitOf(station.roles.windGust ? "windGust" : "windSpeed")}` : "—"} />
-        <Figure label="Rain" value={station.roles.rainToday ? `${f1(rainTotal)} ${unitOf("rainToday") || "mm"}` : "—"} />
+        <Figure label="Temperature range" value={t && T ? `${f1(t.min)}° – ${f1(T.max)}°` : "—"} />
+        <Figure label="Strongest gust" value={gustMax !== undefined ? `${f1(gustMax)} ${unitOf(gustRole)}` : "—"} />
+        <Figure label="Rain" value={rainTotal !== undefined ? `${f1(rainTotal)} ${unitOf("rainToday") || "mm"}` : "—"} />
         <Figure label="Highest UV" value={uvMax !== undefined ? `${Math.round(uvMax)} · ${uvBand(uvMax).band.toLowerCase()}` : "—"} />
       </div>
       <div className="weather-charts">
-        <ChartTile periodMs={periodMs} title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} loading={loading}
-          lines={[{ pts: series("temperature"), cls: "out", label: "Outside", unit: "°" }, { pts: series("indoorTemperature"), cls: "in dashed", label: "Inside", unit: "°" }]} />
-        <ChartTile periodMs={periodMs} title="Humidity" legend={[["Outside", "water"], ["Inside", "in"]]} win={win} loading={loading}
-          lines={[{ pts: series("humidity"), cls: "water", label: "Outside", unit: "%" }, { pts: series("indoorHumidity"), cls: "in dashed", label: "Inside", unit: "%" }]} />
-        <ChartTile periodMs={periodMs} title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} loading={loading}
-          lines={[{ pts: series("windSpeed"), cls: "out", area: true, label: "Speed", unit: ` ${unitOf("windSpeed")}` }, { pts: series("windGust", "max"), cls: "ink thin", label: "Gust", unit: ` ${unitOf("windGust")}` }]} />
-        <RainTile rows={rain} win={win} loading={loading} perDay={cfg.rainPeriod === "day"} unit={unitOf("rainToday") || "mm"} />
-        <ChartTile periodMs={periodMs} title="Pressure" note={pMin !== undefined && pMax !== undefined ? `${Math.round(pMin)} – ${Math.round(pMax)} ${unitOf("pressure")}` : undefined}
-          win={win} loading={loading} lines={[{ pts: series("pressure"), cls: "out", label: "Pressure", unit: ` ${unitOf("pressure")}` }]} />
-        <ChartTile periodMs={periodMs} title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "warm"]]} win={win} loading={loading}
-          lines={[{ pts: series("solar"), cls: "warm", area: true, ownScale: true, label: "Sunlight", unit: " W/m²" }, { pts: series("uv", "max"), cls: "warm", ownScale: true, label: "UV", unit: "" }]} />
+        <ChartTile title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} status={status}
+          lines={[line("temperature", { cls: "out", label: "Outside", unit: "°" }), line("indoorTemperature", { cls: "in dashed", label: "Inside", unit: "°" })]} />
+        <ChartTile title="Humidity" legend={[["Outside", "water"], ["Inside", "in"]]} win={win} status={status}
+          lines={[line("humidity", { cls: "water", label: "Outside", unit: "%" }), line("indoorHumidity", { cls: "in dashed", label: "Inside", unit: "%" })]} />
+        <ChartTile title="Wind" legend={[["Speed", "out area"], ["Gust", "ink"]]} win={win} status={status}
+          lines={[line("windSpeed", { cls: "out", area: true, label: "Speed", unit: ` ${unitOf("windSpeed")}` }), line("windGust", { cls: "ink thin", label: "Gust", unit: ` ${unitOf("windGust")}` }, "max")]} />
+        {rainId && <RainTile s={data.rain} win={win} status={status} perDay={range.totalPeriod === "day"} unit={unitOf("rainToday") || "mm"} />}
+        <ChartTile title="Pressure" note={p && P ? `${Math.round(p.min)} – ${Math.round(P.max)} ${unitOf("pressure")}` : undefined}
+          win={win} status={status} lines={[line("pressure", { cls: "out", label: "Pressure", unit: ` ${unitOf("pressure")}` })]} />
+        <ChartTile title="Sun & UV" legend={[["Sunlight", "warm area"], ["UV", "warm"]]} win={win} status={status}
+          lines={[line("solar", { cls: "warm", area: true, ownScale: true, label: "Sunlight", unit: " W/m²" }), line("uv", { cls: "warm", ownScale: true, label: "UV", unit: "" }, "max")]} />
       </div>
     </div>
   );
@@ -473,33 +439,39 @@ function Axis({ win }: { win: { from: number; to: number } }) {
   );
 }
 
-interface Line { pts: Pt[]; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
+interface Line { s: HistorySeries | undefined; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
 const W = 320, H = 150, TOP = 12, BOT = 138;
 
-function ChartTile({ title, legend, note, lines, win, loading, periodMs }: {
-  title: string; legend?: [string, string][]; note?: string; lines: Line[]; win: { from: number; to: number }; loading: boolean;
-  /** The statistics bucket: a missing one is an outage, never a line. */
-  periodMs: number;
+/** What a chart says when it has nothing to draw — three different facts. */
+function ChartEmpty({ status }: { status: HistoryStatus }) {
+  if (status === "loading") return <div className="state-timeline-skeleton weather-chart" />;
+  return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load this history." : "Not enough history yet."}</div>;
+}
+
+function ChartTile({ title, legend, note, lines, win, status }: {
+  title: string; legend?: [string, string][]; note?: string; lines: Line[]; win: { from: number; to: number }; status: HistoryStatus;
 }) {
-  const drawn = lines.filter((l) => l.pts.length > 0);
+  const drawn = lines
+    .filter((l): l is Line & { s: HistorySeries } => !!l.s && l.s.points.length > 0)
+    .map((l) => ({ ...l, pts: l.s.points as Pt[] }));
   const shared = drawn.filter((l) => !l.ownScale).flatMap((l) => l.pts.map((p) => p.v));
   const lo = shared.length ? Math.min(...shared) : 0, hi = shared.length ? Math.max(...shared) : 1;
   const sx = (t: number) => ((t - win.from) / Math.max(1, win.to - win.from)) * W;
   // Each line is split where ITS buckets are missing (lineRuns: stepped, held,
   // split at outages); the bands shade the first line's outages.
-  const path = (l: Line) => {
+  const path = (l: (typeof drawn)[number]) => {
     const vs = l.pts.map((p) => p.v);
     const a = l.ownScale ? 0 : lo, b = l.ownScale ? Math.max(...vs, 1e-9) : hi;
     const pad = l.ownScale ? 0 : (b - a) * 0.08 || 1;
     const sy = (v: number) => BOT - ((v - (a - pad)) / ((b + pad) - (a - pad) || 1)) * (BOT - TOP);
-    return lineRuns(l.pts, bucketGaps(l.pts, periodMs, win), win)
+    return lineRuns(l.pts, l.s.gaps, win)
       .filter((run) => run.length >= 2)
       .map((run) => {
         const pts = run.map((p) => `${sx(p.t).toFixed(1)},${sy(p.v).toFixed(1)}`);
         return { line: pts.join(" "), area: `M${sx(run[0].t).toFixed(1)},${BOT} L${pts.join(" L")} L${sx(run[run.length - 1].t).toFixed(1)},${BOT} Z` };
       });
   };
-  const bands = drawn.length ? outageBands(bucketGaps(drawn[0].pts, periodMs, win), sx, 0, W) : [];
+  const bands = drawn.length ? outageBands(drawn[0].s.gaps, sx, 0, W) : [];
   const [hoverT, setHoverT] = useState<number | null>(null);
   const onMove = (e: PointerEvent<SVGSVGElement>) => setHoverT(timeAt(e, win));
   // The nearest bucket of each line to the pointer — what the tip reports.
@@ -513,7 +485,7 @@ function ChartTile({ title, legend, note, lines, win, loading, periodMs }: {
         {note && <div className="weather-legend">{note}</div>}
       </div>
       {drawn.length === 0
-        ? (loading ? <div className="state-timeline-skeleton weather-chart" /> : <div className="muted body-text weather-chart-empty">Not enough history yet.</div>)
+        ? <ChartEmpty status={status} />
         : (
           <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}
@@ -567,36 +539,44 @@ function Tip({ x, lines, stamp }: { x: number; lines: { key: string; cls: string
   );
 }
 
-function RainTile({ rows, win, loading, perDay, unit }: {
-  rows: StatisticPeriod[]; win: { from: number; to: number }; loading: boolean; perDay: boolean; unit: string;
+function RainTile({ s, win, status, perDay, unit }: {
+  s: HistorySeries | undefined; win: { from: number; to: number }; status: HistoryStatus; perDay: boolean; unit: string;
 }) {
-  const bars = rows.map((p) => ({ t: p.start, v: typeof p.change === "number" && p.change > 0 ? p.change : 0 }));
+  const bars = s?.points ?? [];
   const max = Math.max(...bars.map((b) => b.v), 0);
   const slot = perDay ? 86_400_000 : 3_600_000;
+  const sx = (t: number) => ((t - win.from) / Math.max(1, win.to - win.from)) * W;
   const bw = Math.max(1.5, (slot / Math.max(1, win.to - win.from)) * W * 0.72);
   const spanH = (win.to - win.from) / 3600_000;
+  const span = spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)} h`;
+  // A missing bucket is an outage, drawn as one — never as a dry hour.
+  const bands = s ? outageBands(s.gaps, sx, 0, W) : [];
   const [hoverT, setHoverT] = useState<number | null>(null);
   const hitBar = hoverT === null ? undefined : nearest(bars.map((b) => ({ ...b, t: b.t + slot / 2 })), hoverT);
-  const hx = hitBar ? ((hitBar.t - win.from) / Math.max(1, win.to - win.from)) * W : 0;
+  const hx = hitBar ? sx(hitBar.t) : 0;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
         <div className="weather-eyebrow">Rain</div>
         <div className="weather-legend">per {perDay ? "day" : "hour"} · {unit}</div>
       </div>
-      {bars.length === 0 && loading
-        ? <div className="state-timeline-skeleton weather-chart" />
+      {bars.length === 0 && status !== "ready"
+        ? <ChartEmpty status={status} />
         : (
           <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Rain history"
             style={{ touchAction: "none" }} onPointerMove={(e) => setHoverT(timeAt(e, win))} onPointerDown={(e) => setHoverT(timeAt(e, win))} onPointerLeave={() => setHoverT(null)}>
             <g className="chart-grid"><line x1="0" y1={TOP} x2={W} y2={TOP} /><line x1="0" y1={(TOP + BOT) / 2} x2={W} y2={(TOP + BOT) / 2} /><line x1="0" y1={BOT} x2={W} y2={BOT} /></g>
+            {bands.map((b, i) => <rect key={`gap${i}`} x={b.x} y={TOP} width={b.w} height={BOT - TOP} fill={STATUS_COLOR.unavailable} opacity={0.18} />)}
             {bars.map((b) => {
               const h = max > 0 ? Math.max(2, (b.v / max) * (BOT - TOP)) : 2;
-              const x = ((b.t - win.from) / Math.max(1, win.to - win.from)) * W;
-              return <rect key={b.t} x={x.toFixed(1)} y={(BOT - h).toFixed(1)} width={bw.toFixed(1)} height={h.toFixed(1)} rx="1" className="chart-bar" />;
+              return <rect key={b.t} x={sx(b.t).toFixed(1)} y={(BOT - h).toFixed(1)} width={bw.toFixed(1)} height={h.toFixed(1)} rx="1" className="chart-bar" />;
             })}
-            {max === 0 && <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain in the last ${spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)} h`}`}</text>}
+            {/* "No rain" only when the gauge REPORTED zero; an empty record is
+                not a dry day — it is no record (the band says so). */}
+            {bars.length === 0
+              ? <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain readings in the last ${span}`}</text>
+              : max === 0 && <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain in the last ${span}`}</text>}
             {hitBar && <line x1={hx} y1={TOP} x2={hx} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
           {hitBar && (

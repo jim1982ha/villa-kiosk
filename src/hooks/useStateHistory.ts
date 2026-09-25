@@ -2,19 +2,15 @@
 // Shared "fetch this entity's last N hours of state history" pattern used by
 // every simple device panel (Light/Switch/Fan/Cover/Lock/Generic) to feed
 // their "Last 24 hours" StateTimeline — six panels each hand-rolled the same
-// useState + useEffect(fetch, cancelled-guard) block. Panels with a genuinely
-// different history need (SensorPanel fetches numeric AND state history in
-// parallel; DeviceGroupPanel fetches one series per group member) keep their
-// own fetch effect rather than being forced through this.
+// useState + useEffect(fetch, cancelled-guard) block. The fetch itself now
+// runs through useHistory, like every other panel's; what this adds is the
+// last-sighting lookback for a device that is down for the whole window.
 //
-// Also reports `loading` — the fetch and "HA genuinely has no history for
-// this entity yet" used to be indistinguishable (both just an empty array),
-// so a slow network read identically to "this device has never reported".
-// StateTimeline/LastDayTimeline use it to show a neutral "loading" state
-// instead of the more alarming "not enough history" one while a fetch is
-// still in flight.
+// Also reports `loading` (useHistory's) — StateTimeline/LastDayTimeline show
+// a neutral "loading" state instead of the more alarming "not enough history"
+// one while a fetch is still in flight.
 
-import { useEffect, useState } from "react";
+import { useHistory } from "./useHistory";
 import type { StateHistoryPoint } from "@/types/ha.types";
 import { fetchStateHistory } from "@/ha/HAHistoryAPI";
 import { UNKNOWN_STATES } from "@/utils/stateColors";
@@ -36,43 +32,32 @@ export interface StateHistoryResult {
 const LAST_SEEN_LOOKBACK_HOURS = 24 * 60;
 
 export function useStateHistory(entityId: string, hours = 24): StateHistoryResult {
-  const [history, setHistory] = useState<StateHistoryPoint[]>([]);
-  const [lastSeen, setLastSeen] = useState<number | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setLastSeen(undefined);
-    // A device that has been down for longer than the chosen window has NOTHING
-    // in it — every point is "unavailable", or there are no points at all — and
-    // the panel then showed an empty strip, which reads as "no data" when the
-    // useful fact is "it went down at 14:20 last Tuesday". When that happens,
-    // look further back for the last moment it reported and show the SAME
-    // window ending there, so the chart always answers "when did this stop".
-    const alive = (h: StateHistoryPoint[]) =>
-      h.some((pt) => !UNKNOWN_STATES.has(pt.state));
-    fetchStateHistory(entityId, hours)
-      .then(async (h) => {
-        if (cancelled) return;
-        if (alive(h)) { setHistory(h); setLoading(false); return; }
-        const deep = await fetchStateHistory(entityId, LAST_SEEN_LOOKBACK_HOURS);
-        if (cancelled) return;
-        let seen = 0;
-        for (const pt of deep) {
-          if (!UNKNOWN_STATES.has(pt.state) && pt.t > seen) seen = pt.t;
-        }
-        if (seen === 0) { setHistory(h); setLoading(false); return; }
-        // Keep the window's own length; only move where it ENDS — at the
-        // sighting. It used to keep points up to `seen + hours`, twice the
-        // window, and to drop the row BEFORE `from` that says what state the
-        // window opened in (StateTimeline reads data[0] as holding from the
-        // window's start). The bar then draws exactly this span: see its `end`.
-        setHistory(windowEndingAt(deep, seen, hours));
-        setLastSeen(seen);
-        setLoading(false);
-      })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [entityId, hours]);
-  return { data: history, loading, lastSeen };
+  // A device that has been down for longer than the chosen window has NOTHING
+  // in it — every point is "unavailable", or there are no points at all — and
+  // the panel then showed an empty strip, which reads as "no data" when the
+  // useful fact is "it went down at 14:20 last Tuesday". When that happens,
+  // look further back for the last moment it reported and show the SAME
+  // window ending there, so the chart always answers "when did this stop".
+  const { data, loading } = useHistory<{ data: StateHistoryPoint[]; lastSeen?: number }>(
+    `${entityId}|${hours}`,
+    async () => {
+      const alive = (h: StateHistoryPoint[]) => h.some((pt) => !UNKNOWN_STATES.has(pt.state));
+      const h = await fetchStateHistory(entityId, hours);
+      if (alive(h)) return { data: h };
+      const deep = await fetchStateHistory(entityId, LAST_SEEN_LOOKBACK_HOURS);
+      let seen = 0;
+      for (const pt of deep) {
+        if (!UNKNOWN_STATES.has(pt.state) && pt.t > seen) seen = pt.t;
+      }
+      if (seen === 0) return { data: h };
+      // Keep the window's own length; only move where it ENDS — at the
+      // sighting. It used to keep points up to `seen + hours`, twice the
+      // window, and to drop the row BEFORE `from` that says what state the
+      // window opened in (StateTimeline reads data[0] as holding from the
+      // window's start). The bar then draws exactly this span: see its `end`.
+      return { data: windowEndingAt(deep, seen, hours), lastSeen: seen };
+    },
+    { data: [] },
+  );
+  return { data: data.data, loading, lastSeen: data.lastSeen };
 }

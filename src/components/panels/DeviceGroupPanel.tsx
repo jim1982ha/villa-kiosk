@@ -6,7 +6,6 @@
 // plus one dual-axis 24h graph when there are exactly two numeric series
 // (the common case) or a stacked sparkline per series otherwise.
 
-import { useEffect, useState } from "react";
 import { formatSensorParts } from "@/utils/entityValue";
 import { Layers } from "lucide-react";
 import BasePanel from "./BasePanel";
@@ -16,6 +15,7 @@ import UnavailableNotice from "./UnavailableNotice";
 import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory } from "@/ha/HAHistoryAPI";
 import { useHistoryRange, HistoryHeader } from "./historyRange";
+import { useHistory } from "@/hooks/useHistory";
 import type { DeviceGroup } from "@/config/AppConfig";
 import type { EntityMapping } from "@/types/scene.types";
 import type { HistorySeries } from "@/types/ha.types";
@@ -50,7 +50,6 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   const { entities } = useHA();
   const entityLabel = useEntityLabel();
   const ids = [group.primaryEntityId, ...group.memberEntityIds];
-  const [history, setHistory] = useState<Record<string, HistorySeries>>({});
 
   const rows = ids.map((id) => {
     const entity = entities[id];
@@ -76,19 +75,12 @@ export default function DeviceGroupPanel({ group, primaryMapping, onClose }: Pro
   // different windows would invite exactly the wrong comparison.
   const { range, picker } = useHistoryRange();
 
-  useEffect(() => {
-    // History is fetched token-less through the add-on's Supervisor proxy.
-    if (!numericIds) return;
-    let cancelled = false;
-    Promise.all(
-      numericIds.split(",").map((id) =>
-        fetchHistory(id, range.hours).then((h) => [id, h] as const),
-      ),
-    )
-      .then((entries) => { if (!cancelled) setHistory(Object.fromEntries(entries)); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [numericIds, range.hours]);
+  const { data: history } = useHistory<Record<string, HistorySeries>>(
+    numericIds ? `${numericIds}|${range.hours}` : null,
+    async () => Object.fromEntries(await Promise.all(
+      numericIds.split(",").map((id) => fetchHistory(id, range.hours).then((h) => [id, h] as const)))),
+    {},
+  );
 
   return (
     <BasePanel
