@@ -26,7 +26,7 @@ import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPool, poolFootprint, poolStrength } from "./LightPools";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
+import { onStorey, storeyFloorYAt, nearestFloorRoom, STOREY_MATCH_M } from "./roomStorey";
 
 /** A pool's radius on open floor. A separate knob from EntityVisuals'
  *  LIGHT_RANGE, which only matters for a non-baked villa's real PointLight. */
@@ -185,9 +185,9 @@ export class LightPoolSet {
    * merged and dropped toward what is below, which is not where it shines from.
    */
   glowLamps(): { x: number; y: number; z: number; r: number; g: number; b: number;
-                 amount: number; radius: number; floorY: number }[] {
+                 amount: number; radius: number; floorY: number; ceilingY: number }[] {
     const out: { x: number; y: number; z: number; r: number; g: number; b: number;
-                 amount: number; radius: number; floorY: number }[] = [];
+                 amount: number; radius: number; floorY: number; ceilingY: number }[] = [];
     for (const [meshId, r] of this.readings()) {
       if (!r.on) continue;
       for (const pool of this.pools.get(meshId) ?? []) {
@@ -198,6 +198,7 @@ export class LightPoolSet {
           amount: poolStrength(r.frac * this.strength, pool.intensityScale),
           radius: pool.radius,
           floorY: this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT,
+          ceilingY: this.storeyAbove(this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT),
         });
       }
     }
@@ -332,6 +333,16 @@ export class LightPoolSet {
       if (radius <= POOL_MIN_RADIUS + 1e-3) n.crushed++;
     }
     pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
+  }
+
+  /** The floor of the next storey up from a floor at `floorY` — where a
+   *  bulb's light must stop, because nothing in the glow knows a ceiling is
+   *  there (a 1F bulb lit the walls of the room above it through the slab,
+   *  seen on the villa render). No storey above: no limit. */
+  private storeyAbove(floorY: number): number {
+    let above = Infinity;
+    for (const r of this.rooms) if (r.floorY > floorY + STOREY_MATCH_M && r.floorY < above) above = r.floorY;
+    return above;
   }
 
   /** The floor of the room this point stands in or above: of the rooms whose

@@ -49,8 +49,11 @@ console.log("  the second hook, for everything that is not lightmapped");
   ck("the plain snippet adds to finalDiffuse", /finalDiffuse \+= lgAdd;/.test(LAMP_GLOW_PLAIN_GLSL));
   ck("  ...and never runs on a lightmapped material (which has the anchor instead)",
     LAMP_GLOW_PLAIN_GLSL.includes("!defined(USELIGHTMAPASSHADOWMAP)"));
-  ck("the light WRAPS round a surface: no hard edge where it turns side-on",
-    /lgNdl = clamp\(\(dot\(lgN, [^)]*\)\) \+ 0\.\d+\) \/ 1\.\d+, 0\.0, 1\.0\)/.test(LAMP_GLOW_GLSL));
+  ck("nothing at or above the storey above is lit — no ceiling stops this light",
+    /step\(vPositionW\.y, lgC\.w - 0\.02\)/.test(LAMP_GLOW_GLSL));
+  // 2.496.78 wrapped it, and the outside faces of the room's walls lit up.
+  ck("a surface facing AWAY from a bulb gets nothing — the far side of a wall (2.496.79)",
+    /lgNdl = max\(dot\(lgN, lgL \* inversesqrt\(lgD2\)\), 0\.0\);/.test(LAMP_GLOW_GLSL) && !/GLOW_WRAP|\+ 0\.6\)/.test(LAMP_GLOW_GLSL));
 }
 
 console.log("  the plugin attaches to a material");
@@ -74,12 +77,15 @@ console.log("  the plugin attaches to a material");
 
 console.log("  which lamps are written");
 {
-  const lamp = (x, over = {}) => ({ x, y: 2.3, z: 0, r: 1, g: 0.8, b: 0.5, amount: 1, radius: 1.8, floorY: 0, ...over });
+  const lamp = (x, over = {}) => ({ x, y: 2.3, z: 0, r: 1, g: 0.8, b: 0.5, amount: 1, radius: 1.8, floorY: 0, ceilingY: 2.56, ...over });
   const eye = { x: 0, y: 2, z: 0 };
   const s = new LampGlowState();
   ck("a pool that is on is written", s.set([lamp(1)], eye) && s.count === 1);
   ck("its bulb and room floor", near4(s.pos.slice(0, 4), [1, 2.3, 0, 0]), [...s.pos.slice(0, 4)]);
   ck("colour x the pool's strength", near4(s.col.slice(0, 3), [1, 0.8, 0.5]), [...s.col.slice(0, 3)]);
+  ck("  ...and the floor of the storey above, where its light stops", Math.abs(s.col[3] - 2.56) < 1e-6, s.col[3]);
+  s.set([lamp(1, { ceilingY: Infinity })], eye);
+  ck("  ...no storey above: a finite stand-in, never NaN or Infinity in a uniform", s.col[3] === 1e6, s.col[3]);
   s.set([lamp(1, { amount: 0.5 })], eye);
   ck("  ...a dimmer pool, a dimmer glow", near4(s.col.slice(0, 3), [0.5, 0.4, 0.25]), [...s.col.slice(0, 3)]);
   ck("the same lamps again change nothing", s.set([lamp(1, { amount: 0.5 })], eye) === false);

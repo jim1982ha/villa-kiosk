@@ -1,3 +1,15 @@
+## 2.496.79
+
+### Fixed — light glowing on the outside of the walls
+2.496.78 made the lights wrap round rounded surfaces such as the pouf. That
+also lit surfaces facing away from a bulb, and the outside of a wall is exactly
+that, so the outside of the living room's walls glowed when seen from above.
+The wrap is removed: a surface facing away from a bulb gets none of its light.
+
+### Fixed — a ground-floor light could light the room above it
+Checked from above with the upper floor showing, a ground-floor light also lit
+the walls of the room above it, through the ceiling. A light now stops at the
+floor of the storey above its own.
 ## 2.496.78
 
 ### Fixed — a flat "disc" of light across the pouf and the sofa

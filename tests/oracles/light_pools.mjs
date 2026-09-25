@@ -155,6 +155,7 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   ck("  ...each at its POOL's full strength, not split among the entity's bulbs",
      lamps.every((l) => near(l.amount, 1)), lamps.map((l) => l.amount));
   ck("  ...from its fixture, at the fixture's height", lamps.every((l) => near(l.y, 2.3)), lamps.map((l) => l.y));
+  ck("  ...stopping at the storey above: none here", lamps.every((l) => l.ceilingY === Infinity), lamps[0].ceilingY);
   ck("  ...with its room's floor and its pool's radius",
      lamps.every((l) => l.floorY === 0 && near(l.radius, LIGHT_POOL_RADIUS)), lamps.map((l) => [l.floorY, l.radius]));
   const v = r.set.version;
@@ -174,6 +175,16 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   r.set.setRooms([room("Stairs", 0, -5, 5, -5, 5)]);
   const l = r.set.glowLamps()[0];
   ck("a step light's glow keeps its room's floor, not its tread", l?.floorY === 0, l?.floorY);
+}
+{
+  // A 1F bulb lit the walls of the room above it through the slab (villa
+  // render, 2.496.79): its light stops at the next storey's floor.
+  const lamp = fixture("under");
+  const r = rig(probe({ below: () => 0 }), () => [[lamp.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
+  r.set.addFixture(lamp, box(0, 0.1, 0, 0.1, 2.3), false);
+  r.set.setRooms([room("Living", 0, -5, 5, -5, 5), room("Gym", 2.56, -5, 5, -5, 5), room("Roof", 5.2, -5, 5, -5, 5)]);
+  const g = r.set.glowLamps()[0];
+  ck("a 1F bulb's light stops at the NEXT storey's floor, not a higher one", g?.ceilingY === 2.56, g?.ceilingY);
 }
 
 console.log("\n  state:");

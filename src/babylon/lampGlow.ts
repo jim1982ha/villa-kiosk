@@ -33,14 +33,15 @@
 //
 // The rules, once:
 //  * brightness = the pool's strength and colour × the surface's colour ×
-//    how squarely it faces the bulb, WRAPPED (GLOW_WRAP) so a curved or
-//    side-on surface is never cut off at a hard edge × an inverse-square
-//    falloff, normalised
+//    how squarely it faces the bulb (plain N·L, never wrapped — see below)
+//    × an inverse-square falloff, normalised
 //    so a surface GLOW_AT_M below a bulb gets what its pool gives the floor
 //    right under it, faded to nothing at GLOW_REACH_M, and capped near the
 //    bulb (GLOW_CAP_ONE, GLOW_CAP_ALL);
 //  * below a little above the lamp's ROOM floor, nothing — the floor is the
 //    pool's, and a step light's tread is not its room's floor;
+//  * at or above the floor of the storey ABOVE, nothing — no ceiling stops
+//    this light, so without it a 1F bulb lit the walls upstairs (render);
 //  * the side of a surface that faces the viewer is the side that is lit, so
 //    a thin slab exported with a downward normal lights from above, and the
 //    far face of a wall stays dark from the next room;
@@ -77,16 +78,14 @@ const GLOW_REACH_M = 4;
  *  a metre of each ceiling spot blown to white (~20x the floor under it). */
 const GLOW_CAP_ONE = 1.4;
 const GLOW_CAP_ALL = 1.8;
-/**
- * How far round a surface the light WRAPS — the stand-in for the light a real
- * room bounces back. With a plain N·L the light stopped dead where a surface
- * turned side-on to the bulbs: across the middle of the pouf and along the
- * front of the sofa, a hard horizontal edge that read as a flat disc of light
- * at seat height (the owner's photo after 2.496.77, and the villa render).
- * Wrapped, a surface facing up is lit fully, a side-on one at 0.6/1.6 of that,
- * and only one facing well away — the far face of a wall — gets nothing.
+/*
+ * ⚠️ NO WRAP, and none may be added (2.496.79). 2.496.78 wrapped the facing
+ * term — (N·L + 0.6) / 1.6 — to soften where the light turns off across the
+ * pouf. It also lit every surface angled up to ~127° AWAY from a bulb, and
+ * nothing here knows where a wall is: the OUTSIDE faces of the living room's
+ * walls lit up, seen from the overview (the owner's photo). A surface facing
+ * away from a bulb is exactly what the far side of a wall is. Plain N·L.
  */
-const GLOW_WRAP = 0.6;
 /** The pool's brightness at its centre (POOL_ALPHA_STOPS[0]). */
 const POOL_CENTRE = POOL_ALPHA_STOPS[0][1];
 /**
@@ -107,6 +106,9 @@ export interface GlowLamp {
   /** The pool's radius — a pool of none shows no light. */
   radius: number;
   floorY: number;
+  /** The floor of the storey above — nothing at or above it is lit.
+   *  Infinity: no storey above. */
+  ceilingY: number;
 }
 
 /** What every glowing material binds this frame. One per scene. */
@@ -125,14 +127,14 @@ export class LampGlowState {
       chosen = chosen.slice().sort((a, b) => d(a) - d(b)).slice(0, LAMP_GLOW_MAX);
     }
     let key = "";
-    for (const l of chosen) key += `${l.x},${l.y},${l.z},${l.r},${l.g},${l.b},${l.amount},${l.radius},${l.floorY};`;
+    for (const l of chosen) key += `${l.x},${l.y},${l.z},${l.r},${l.g},${l.b},${l.amount},${l.radius},${l.floorY},${l.ceilingY};`;
     if (key === this.key) return false;
     this.key = key;
     this.pos.fill(0);
     this.col.fill(0);
     chosen.forEach((l, i) => {
       this.pos.set([l.x, l.y, l.z, l.floorY], i * 4);
-      this.col.set([l.r * l.amount, l.g * l.amount, l.b * l.amount, 0], i * 4);
+      this.col.set([l.r * l.amount, l.g * l.amount, l.b * l.amount, Math.min(l.ceilingY, 1e6)], i * 4);
     });
     this.count = chosen.length;
     return true;
@@ -170,8 +172,9 @@ const ACCUMULATE = `
     float lgD2 = max(dot(lgL, lgL), 0.25);
     float lgWin = clamp(1.0 - lgD2 * ${f(1 / (GLOW_REACH_M * GLOW_REACH_M))}, 0.0, 1.0);
     float lgFall = min(${f(POOL_CENTRE * GLOW_AT_M * GLOW_AT_M)} / lgD2, ${f(POOL_CENTRE * GLOW_CAP_ONE)}) * lgWin * lgWin;
-    float lgNdl = clamp((dot(lgN, lgL * inversesqrt(lgD2)) + ${f(GLOW_WRAP)}) / ${f(1 + GLOW_WRAP)}, 0.0, 1.0);
-    float lgAbove = smoothstep(lgP.w + ${f(ABOVE_FLOOR_FROM)}, lgP.w + ${f(ABOVE_FLOOR_TO)}, vPositionW.y);
+    float lgNdl = max(dot(lgN, lgL * inversesqrt(lgD2)), 0.0);
+    float lgAbove = smoothstep(lgP.w + ${f(ABOVE_FLOOR_FROM)}, lgP.w + ${f(ABOVE_FLOOR_TO)}, vPositionW.y)
+                  * step(vPositionW.y, lgC.w - 0.02);
     lgSum += lgC.rgb * (lgFall * lgNdl * lgAbove);
   }
   vec3 lgAdd = surfaceAlbedo * ${f(LAMP_GLOW_GAIN)} * min(lgSum, vec3(${f(POOL_CENTRE * GLOW_CAP_ALL)}));
