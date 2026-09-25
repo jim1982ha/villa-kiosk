@@ -1,3 +1,21 @@
+## 2.496.55
+
+**Nothing you can see changed.** The rules for what each profile may do now
+live in one place.
+
+The add-on checks every request against the profile it came from — Owner,
+Facility Manager or Guest — before passing it to Home Assistant. Those rules
+were written out wherever they were needed: "a guest may not view cameras" once
+for ordinary requests and again for the live connection, the owner's
+exemptions in three places, and five other screens with their own lists of who
+may use them. Adding a profile, or changing what one may do, meant finding
+about a dozen places and hoping none was missed.
+
+They are now one table. Every check asks it, and the automatic checks before
+each release now confirm that both ways into Home Assistant give every profile
+the same answers, and that the table agrees with what the kiosk shows each
+profile. What each profile may do is exactly as before.
+
 ## 2.496.54
 
 **Nothing you can see changed.** A safeguard on how the add-on recognises you.

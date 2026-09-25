@@ -298,6 +298,36 @@ def _role_for(request: web.Request) -> str:
     return _session_role(request.cookies.get(SESSION_COOKIE)) or "guest"
 
 
+# ── WHAT EACH ROLE MAY DO — the proxy's ONE statement of it ──────────────
+# Every authorization decision below asks `_may(role, capability)`; none names
+# a role. It used to: "guest may not view cameras" was `role == "guest"` once
+# per door (REST and websocket), the owner's exemption from the allowlists was
+# `role == "owner"` in three functions, and five handlers carried their own
+# role tuples — so adding a profile meant finding about a dozen places.
+#
+# The names are src/auth/permissions.ts's wherever the kiosk has the same idea
+# (editConfig, manageModel, manageFacility, reportFault), and
+# tests/proxy-rules.py fails if the two tables disagree on any of them. Two
+# are the proxy's own:
+#   viewCameras — the client expresses it as `deniedTypes: ["camera"]`; the
+#                 test holds the two equivalent.
+#   administer  — exempt from the websocket/REST allowlists and the service
+#                 confinement, may revoke every session and read telemetry.
+ROLE_CAPABILITIES = {
+    "owner": frozenset({"administer", "editConfig", "manageModel", "manageFacility",
+                        "reportFault", "viewCameras"}),
+    "ops": frozenset({"manageFacility", "reportFault", "viewCameras"}),
+    # A guest reports faults and attaches photos of them; the write guard then
+    # confines what that write may contain (see _fm_guest_write_ok).
+    "guest": frozenset({"reportFault"}),
+}
+
+
+def _may(role: str, capability: str) -> bool:
+    """Whether this role holds this capability. An unknown role holds none."""
+    return capability in ROLE_CAPABILITIES.get(role, frozenset())
+
+
 # The exact (domain, service) surface the kiosk's own UI ever calls — see
 # src/ha/HAServiceCalls.ts and the one generic callService() use in
 # SwitchPanel.tsx (homeassistant.toggle). Anything outside this reaching
@@ -318,7 +348,7 @@ def _service_call_allowed(role: str, domain: str, service: str) -> bool:
     (matches its "manageModel"/full capability set in permissions.ts); every
     other role is confined to the domains above regardless of what
     permissions.ts's category/type matrix would otherwise show them."""
-    if role == "owner":
+    if _may(role, "administer"):
         return True
     if domain == "homeassistant":
         return service in ALLOWED_HOMEASSISTANT_SERVICES
@@ -446,32 +476,16 @@ async def ws_handler(request: web.Request):
                         if obj.get("type") == "auth":
                             obj["access_token"] = TOKEN
                             data = json.dumps(obj)
-                        elif (refusal := _ws_type_refusal(role, str(obj.get("type", "")))):
-                            # Default deny, and no camera for guest — see
-                            # _ws_type_refusal. Answered HERE, never relayed.
+                        elif (refusal := _ws_frame_refusal(role, obj)):
+                            # Answered HERE, never relayed — see
+                            # _ws_frame_refusal. Mirrors HA's own websocket
+                            # error shape (id + success:false) so the kiosk's
+                            # pending promise rejects instead of hanging.
                             await client.send_json({
                                 "id": obj.get("id"),
                                 "type": "result",
                                 "success": False,
                                 "error": {"code": "unauthorized", "message": refusal},
-                            })
-                            continue
-                        elif obj.get("type") == "call_service" and not _service_call_allowed(
-                            role, str(obj.get("domain", "")), str(obj.get("service", "")),
-                        ):
-                            # Reply to the BROWSER, not Core — mirrors HA's own
-                            # websocket error shape (id + success:false) so the
-                            # kiosk's pending call_service promise resolves
-                            # (rejects) instead of hanging forever, and never
-                            # forward the frame upstream.
-                            await client.send_json({
-                                "id": obj.get("id"),
-                                "type": "result",
-                                "success": False,
-                                "error": {
-                                    "code": "unauthorized",
-                                    "message": "This profile may not call this service.",
-                                },
                             })
                             continue
                     except (ValueError, TypeError):
@@ -602,19 +616,26 @@ ALLOWED_WS_TYPES = frozenset({
 })
 
 
-def _ws_type_refusal(role: str, msg_type: str) -> str | None:
-    """Why a websocket frame of this type is refused for this role, or None.
+def _ws_frame_refusal(role: str, obj: dict) -> str | None:
+    """Why this websocket frame is refused for this role, or None to relay it.
 
-    Owner is exempt. Everyone else is DEFAULT DENY against ALLOWED_WS_TYPES,
-    and guest is further refused every CAMERA_WS_TYPES command — the websocket
-    twin of the camera_proxy denial in _rest_call_allowed. `call_service` is
-    allowed here and judged per domain/service by _service_call_allowed."""
-    if role == "owner":
+    The websocket twin of _rest_call_allowed, and the WHOLE decision: the
+    relay loop only forwards or answers with this text. `administer` is exempt.
+    Everyone else is DEFAULT DENY against ALLOWED_WS_TYPES; a camera command
+    needs `viewCameras`; a call_service is judged per domain/service by
+    _service_call_allowed — which used to be decided inline in the relay loop,
+    where nothing but a search of the source text could reach it."""
+    if _may(role, "administer"):
         return None
+    msg_type = str(obj.get("type", ""))
     if msg_type not in ALLOWED_WS_TYPES:
         return "This profile may not send this command."
-    if role == "guest" and msg_type in CAMERA_WS_TYPES:
+    if msg_type in CAMERA_WS_TYPES and not _may(role, "viewCameras"):
         return "This profile may not view cameras."
+    if msg_type == "call_service" and not _service_call_allowed(
+        role, str(obj.get("domain", "")), str(obj.get("service", "")),
+    ):
+        return "This profile may not call this service."
     return None
 
 
@@ -637,7 +658,7 @@ def _rest_call_allowed(role: str, tail: str) -> bool:
     Jinja2 evaluation against the entire HA instance. An allowlist that fails
     open is not an allowlist. Now: refuse anything ambiguous, then permit only
     what the kiosk actually asks for."""
-    if role == "owner":
+    if _may(role, "administer"):
         return True
     if not tail or not _SAFE_TAIL_RE.fullmatch(tail):
         return False
@@ -650,10 +671,10 @@ def _rest_call_allowed(role: str, tail: str) -> bool:
         # HA's REST API accepts POST /api/services/<domain>/<service> as an
         # exact equivalent of the websocket's call_service — same allowlist.
         return _service_call_allowed(role, m.group(1), m.group(2))
-    if role == "guest" and t.startswith(("camera_proxy/", "camera_proxy_stream/")):
-        # permissions.ts denies the "camera" type to guest, but that's a
-        # client-side render filter — mirror the intent here since a camera
-        # image request needs no entity-metadata lookup to recognise.
+    if t.startswith(("camera_proxy/", "camera_proxy_stream/")) and not _may(role, "viewCameras"):
+        # The same capability the websocket's camera commands ask for — see
+        # _ws_frame_refusal. permissions.ts hides cameras from such a role,
+        # but that is a render filter; this is the refusal.
         return False
     return t.startswith(_NON_OWNER_REST_PREFIXES)
 
@@ -851,9 +872,9 @@ PIN_RE = re.compile(r"^[0-9]{4}$")
 # authorise a single DESTRUCTIVE write that the caller's normal role is not
 # allowed to make — today, permanently deleting a Facility Manager record.
 #
-# It is ADDITIVE, never a bypass: the store's own writer_roles check still
-# applies, so deleting FM records requires (owner or ops) AND a valid
-# elevation. Knowing the code does not turn a guest into an administrator.
+# It is ADDITIVE, never a bypass: the store's own capability check still
+# applies, so deleting FM records requires manageFacility (owner or ops) AND a
+# valid elevation. Knowing the code does not turn a guest into an administrator.
 #
 # Six digits rather than four: this authorises irreversible destruction of the
 # maintenance record, so it should not share the guessing surface of the
@@ -1195,9 +1216,6 @@ FM_RECORD_COLLECTIONS = ("schedules", "completions", "costs", "tickets", "savedD
 # code in front of those would be friction bought with nothing.
 FM_PROTECTED_COLLECTIONS = ("completions", "costs", "tickets")
 
-# Roles that may edit the maintenance record itself. A guest is a writer of
-# the store (see _fm_guest_write_ok) but not one of these.
-FM_FULL_WRITER_ROLES = ("owner", "ops")
 
 # A guest may append at most this many reports in one write. One is the normal
 # case; the cap only exists so a scripted session cannot bulk-fill the store.
@@ -1288,7 +1306,9 @@ def _fm_write_guard(request: web.Request, body, old, new):
     # Guests get a deliberately narrow write: appending a fault report, and
     # nothing else. Checked FIRST because it is the tighter rule — a guest
     # write that isn't a plain report is refused whatever else it contains.
-    if _role_for(request) not in FM_FULL_WRITER_ROLES:
+    # Editing the maintenance record itself needs manageFacility; a role that
+    # may only reportFault is a writer of the store, but not of this.
+    if not _may(_role_for(request), "manageFacility"):
         if not _fm_guest_write_ok(old, new):
             return _forbidden("A guest may only add a fault report.")
         return None
@@ -1505,7 +1525,7 @@ async def auth_logout_all_handler(request: web.Request) -> web.Response:
     Bumps the session epoch, which is mixed into every signature, so all
     previously issued cookies stop verifying — including the caller's own.
     This is the answer to "a device was lost / a PIN was seen"."""
-    if not _authorized(request) or _role_for(request) != "owner":
+    if not _authorized(request) or not _may(_role_for(request), "administer"):
         return _unauthorized() if not _authorized(request) else web.json_response(
             {"error": "forbidden"}, status=403)
     epoch = _bump_session_epoch()
@@ -1678,7 +1698,7 @@ async def model_upload_handler(request: web.Request) -> web.Response:
     """
     if not _authorized(request):
         return _unauthorized()
-    if _role_for(request) != "owner":
+    if not _may(_role_for(request), "manageModel"):
         # manageModel is an owner-only capability in permissions.ts — a
         # guest/ops session could otherwise overwrite the villa model every
         # kiosk loads. (Ingress requests resolve to "owner" — see _role_for.)
@@ -1885,15 +1905,16 @@ def _store_revision(path: str) -> str:
 
 
 def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
-                         writer_roles: tuple = ("owner",),
+                         writer_capability: str = "editConfig",
                          write_guard=None, after_write=None):
     """Build the (GET, PUT) handler pair for one shared store.
 
     GET is open to any authorized session — a guest still has to read the
-    device config to see the right badges/rooms at all. PUT is restricted to
-    `writer_roles`, which defaults to owner-only (shared state is exactly what
-    a non-owner profile must not rewrite for everyone else); the FM store also
-    admits "ops", because maintaining it IS the facility manager's job.
+    device config to see the right badges/rooms at all. PUT needs
+    `writer_capability`, which defaults to editConfig — owner-only, because
+    shared state is exactly what a non-owner profile must not rewrite for
+    everyone else. The FM store asks for reportFault instead, which every
+    profile holds, and its write guard then confines what a write may contain.
 
     `write_guard(request, body, old, new)` may veto a write by returning a
     response (used to require a superadmin elevation before any record is
@@ -1968,9 +1989,10 @@ def _json_store_handlers(path: str, key: str, empty, max_bytes: int, what: str,
     async def put_handler(request: web.Request) -> web.Response:
         if not _authorized(request):
             return _unauthorized()
-        if _role_for(request) not in writer_roles:
+        if not _may(_role_for(request), writer_capability):
+            owner_only = [r for r in AUTH_ROLES if _may(r, writer_capability)] == ["owner"]
             return _forbidden(f"Only the owner profile may edit {what}."
-                              if writer_roles == ("owner",)
+                              if owner_only
                               else f"You do not have permission to edit {what}.")
         try:
             body = await request.json()
@@ -2076,7 +2098,7 @@ async def telemetry_get_handler(request: web.Request) -> web.Response:
     and error text). `?clear=1` empties it after reading."""
     if not _authorized(request):
         return _unauthorized()
-    if _role_for(request) != "owner":
+    if not _may(_role_for(request), "administer"):
         return _forbidden("Only the owner profile may read telemetry.")
     events = _read_json_store(TELEMETRY_FILE, [])
     if request.query.get("clear") == "1":
@@ -2148,7 +2170,7 @@ async def fm_evidence_post_handler(request: web.Request) -> web.Response:
     # Guests too: a photo of the cracked panel is the most useful thing a
     # guest can contribute, and is worthless if they cannot attach it. What a
     # guest may then DO with it stays narrow — see _fm_guest_write_ok.
-    if _role_for(request) not in ("owner", "ops", "guest"):
+    if not _may(_role_for(request), "reportFault"):
         return _forbidden("You do not have permission to add evidence.")
     photo_id = request.query.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
@@ -2194,7 +2216,7 @@ async def fm_evidence_get_handler(request: web.Request) -> web.StreamResponse:
     and facility-manager profiles, both of which still pass."""
     if not _authorized(request):
         return _unauthorized()
-    if _role_for(request) not in ("owner", "ops"):
+    if not _may(_role_for(request), "manageFacility"):
         return web.json_response({"error": "forbidden"}, status=403)
     photo_id = request.match_info.get("id", "")
     if not FM_EVIDENCE_ID_RE.fullmatch(photo_id):
@@ -2221,7 +2243,7 @@ fm_data_get_handler, fm_data_put_handler = _json_store_handlers(
     # to appending a fault report (see _fm_guest_write_ok) — the role check
     # alone would be far too broad. Everything else about the maintenance
     # record stays owner/ops.
-    writer_roles=("owner", "ops", "guest"),
+    writer_capability="reportFault",
     write_guard=_fm_write_guard, after_write=_fm_after_write)
 
 
