@@ -31,6 +31,7 @@ import { NightSky } from "./NightSky";
 import { FloorManager } from "./FloorManager";
 import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
+import { resolveHit, type HitPickers } from "./hitResolution";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
@@ -611,108 +612,46 @@ export class SceneManager {
       () => this.requestAnimationRender(),
     );
 
-    // A tap/long-press checks state-badge hit-testing FIRST, falling through
-    // to PickHandler's 3D raycast only when no badge was hit. Badges resolve
-    // through this same gesture pipeline that already reliably handles 3D
-    // meshes, rather than Babylon GUI's own per-control pointer observables —
+    // A tap/long-press asks the GUI tiers FIRST (group card, badge, room chip —
+    // resolveHit, which owns that order for all four gestures), falling through
+    // to PickHandler's 3D raycast only when none of them answered. Badges
+    // resolve through this same gesture pipeline that already reliably handles
+    // 3D meshes, rather than Babylon GUI's own per-control pointer observables —
     // see EntityVisuals.pickBadgeAt()'s docstring for why that was dropped.
     const handleTap = (x: number, y: number) => {
       tapDebug(`TAP client(${x.toFixed(0)},${y.toFixed(0)})`);
-      // Entity groups (tier 4) first, and before badges:
-      // a group's members are hidden exactly while it is drawn, so it cannot
-      // steal a tap from a badge anyone can see. Unlike a room chip, a TAP
-      // opens the device list rather than navigating — you are already looking
-      // at the room, so "which of these did you mean" is the only question
-      // left, and it is the same list the room chip's long-press opens.
-      const eGroup = this.visuals.pickEntityGroupAt(x, y);
-      if (eGroup) {
-        // A CARD's cell opens that device directly — the same panel its own
-        // badge would have opened, one tap, no list in between.
-        if (eGroup.entityId) { opts.onEntityPicked(eGroup.entityId, x, y); return; }
-        // ── NO CELL: LOOK FOR A BADGE BEFORE FALLING BACK TO THE LIST ─────
-        // A group's own members are hidden while it draws, which used to make
-        // "the group cannot steal a tap from a badge anyone can see" true by
-        // construction. It stopped being true when a card grew past one badge
-        // box: a card is anchored bottom-edge-on-anchor, so a 2x2 one reaches
-        // two badge-heights straight up, while `placeEntityGroups` still tests
-        // it against badges as a disc of half a box — deliberately, because
-        // measuring at the full card would send groups to their room's chip
-        // that a count would have seated. A card can therefore cover a badge
-        // belonging to another pile entirely.
-        //
-        // So a tap that landed on the card but in no cell — a count badge, or
-        // the empty bottom-right of a three-member grid — asks the badges
-        // first. A tap that lands on something visible belongs to that thing.
-        const under = this.visuals.pickBadgeAt(x, y, true);
-        if (under) { opts.onEntityPicked(under, x, y); return; }
-        if (opts.onClusterPicked) {
-          opts.onClusterPicked(eGroup.room, eGroup.entityIds, []);
-          return;
-        }
+      const hit = resolveHit(this.hitPickers(true), x, y);
+      // A device — a card's cell or a badge — opens as that device.
+      if (hit.kind === "device") { opts.onEntityPicked(hit.entityId, x, y); return; }
+      // A group card at a point naming no device opens its device list: you
+      // are already looking at the room, so "which of these did you mean" is
+      // the only question left — the same list a room chip's long-press opens.
+      if (hit.kind === "group" && opts.onClusterPicked) {
+        opts.onClusterPicked(hit.room, hit.entityIds, []);
+        return;
       }
-      const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
-      if (badgeEntity) { opts.onEntityPicked(badgeEntity, x, y); return; }
-      // ── ROOM CHIPS LAST AMONG THE GUI TIERS (2.430.0) ─────────────────────
-      // This ran FIRST, on the premise that "a chip only exists while its room
-      // is too crowded to show individual badges, so this can never take a tap
-      // away from a badge the user can actually see". That premise is false
-      // whenever a room is FOCUSED: the chip belongs to room A while room B's
-      // exempt badges and pair-cards draw on top of it, so the chip was taking
-      // taps from devices the user could see — and painting over them too.
-      //
-      // Asking it last is the same rule this function already states two tiers
-      // up: a tap that lands on something visible belongs to that thing. Safe
-      // because pickBadgeAt tests the DRAWN controls (Control.contains) with no
-      // slop ring of its own, so it can only pre-empt the chip where a badge is
-      // genuinely painted. Paired with `container.zIndex = -1` on the chip in
-      // EntityVisuals.ensureCluster — paint order and hit order must agree.
-      const cluster = this.visuals.pickClusterAt(x, y);
-      if (cluster && opts.onClusterTapped) {
-        opts.onClusterTapped(cluster.room, cluster.entityIds, cluster.roomNames);
+      // A room chip's TAP navigates to the room.
+      if (hit.kind === "room" && opts.onClusterTapped) {
+        opts.onClusterTapped(hit.room, hit.entityIds, hit.roomNames);
         return;
       }
       this.pick.pickAtScreen(x, y);
     };
     const handleLongPress = (x: number, y: number) => {
       tapDebug(`LONGPRESS client(${x.toFixed(0)},${y.toFixed(0)})`);
-      // Entity groups first, and the CELL ANSWERS FIRST — exactly as it does in
-      // handleTap, because a cell IS that device's badge. A summary of 2-6
-      // draws one badge box per member and hides the badges themselves, so a
-      // cell is not a shorthand for the group: it is the only representation
-      // that device has on screen while the card is drawn. Both gestures must
-      // therefore mean on a cell what they mean on a lone badge — tap toggles,
-      // press-and-hold opens the details — or press-and-hold silently loses
-      // the one thing it exists for at exactly the moment two identical icons
-      // (two lights, say) make telling them apart matter most. It used to open
-      // the group list here on the argument that a long press is the "show me
-      // all of them" gesture; that argument holds for a ROOM CHIP, which
-      // represents a room and never a device, and for a COUNT badge, which
-      // names no device either. Both still open the list, below and above.
-      const eGroup = this.visuals.pickEntityGroupAt(x, y);
-      if (eGroup) {
-        if (eGroup.entityId) { opts.onEntityLongPressed(eGroup.entityId, x, y); return; }
-        // NO CELL — a count badge, or the empty bottom-right of a three-member
-        // grid, or the gap between two cards. Same exception as the tap path:
-        // a card can cover a badge belonging to another pile entirely (see
-        // handleTap), so ask the badges before answering for something the
-        // card merely happens to be drawn over.
-        const under = this.visuals.pickBadgeAt(x, y, true);
-        if (under) { opts.onEntityLongPressed(under, x, y); return; }
-        if (opts.onClusterPicked) {
-          opts.onClusterPicked(eGroup.room, eGroup.entityIds, []);
-          return;
-        }
+      const hit = resolveHit(this.hitPickers(true), x, y);
+      // A device means on a cell what it means on a lone badge — press-and-
+      // hold opens its details. A cell IS that device's badge while the card
+      // draws, and two identical icons (two lights, say) are exactly when
+      // telling them apart matters most. It used to open the group list here.
+      if (hit.kind === "device") { opts.onEntityLongPressed(hit.entityId, x, y); return; }
+      // A group card or a room chip names no device, so both open the list.
+      if (hit.kind === "group" && opts.onClusterPicked) {
+        opts.onClusterPicked(hit.room, hit.entityIds, []);
+        return;
       }
-      const badgeEntity = this.visuals.pickBadgeAt(x, y, true);
-      if (badgeEntity) { opts.onEntityLongPressed(badgeEntity, x, y); return; }
-      // Room chips LAST, for the reason handleTap spells out: a chip paints
-      // BEHIND badges and cards (zIndex -1), so it must not answer for a pixel
-      // one of them is drawn on. Both gestures moved together — a tap and a
-      // press-and-hold resolving to different objects at one point is worse
-      // than either order.
-      const cluster = this.visuals.pickClusterAt(x, y);
-      if (cluster && opts.onClusterPicked) {
-        opts.onClusterPicked(cluster.room, cluster.entityIds, cluster.roomNames);
+      if (hit.kind === "room" && opts.onClusterPicked) {
+        opts.onClusterPicked(hit.room, hit.entityIds, hit.roomNames);
         return;
       }
       this.pick.pickAtScreen(x, y, true);
@@ -724,11 +663,9 @@ export class SceneManager {
      * "Empty" is the whole of the condition. This fires on the second press's
      * DOWN, by which time the first tap has already released and done its own
      * job — so a double tap on a light has already toggled it once, and zooming
-     * as well would make a mis-tap move the camera. The test is the same
-     * cascade `handleTap` resolves through, in the same order (chip, summary,
-     * badge, 3D mesh), asked as a question instead of as an action: if any of
-     * them would have answered, this was not empty map and there is nothing to
-     * do here.
+     * as well would make a mis-tap move the camera. "Empty" is the same answer
+     * `handleTap` resolves through — no GUI tier and no 3D device — asked as a
+     * question instead of as an action.
      *
      * Overview only. The first-person camera has had double-tap-to-walk since
      * long before this, and it means something else there; the shared piece is
@@ -736,9 +673,7 @@ export class SceneManager {
      */
     const handleDoubleTap = (x: number, y: number) => {
       if (this.viewMode !== "overview") return;
-      if (this.visuals.pickClusterAt(x, y)) return;
-      if (this.visuals.pickEntityGroupAt(x, y)) return;
-      if (this.visuals.pickBadgeAt(x, y)) return;
+      if (resolveHit(this.hitPickers(false), x, y).kind !== "none") return;
       if (this.pick.entityAtScreen(x, y)) return;
       tapDebug(`DOUBLETAP zoom at (${x.toFixed(0)},${y.toFixed(0)})`);
       // Pull toward the ground point under the finger, when there is one — the
@@ -775,7 +710,10 @@ export class SceneManager {
     this.pick = new PickHandler(
       this.scene, opts.onEntityPicked, opts.config.entityMap, opts.config.meshBindings,
       opts.onEntityLongPressed,
-      (x, y) => !!this.visuals.pickBadgeAt(x, y),
+      // The hand cursor: over ANY tier a tap would answer, not just a badge —
+      // it asked pickBadgeAt alone, so a group card or a room chip (both
+      // tappable) showed the plain arrow. The fifth copy of the order.
+      (x, y) => resolveHit(this.hitPickers(false), x, y).kind !== "none",
       // The picker must read the SAME category the badge is drawn under —
       // only EntityVisuals holds the live device_class that decides it.
       (id, type) => this.visuals.categoryOf(id, type),
@@ -1890,34 +1828,26 @@ export class SceneManager {
   /**
    * The entity under this screen point, or null — for the hover tooltip.
    *
-   * Reuses the SAME hit-tests a TAP goes through, in the same order, because
-   * the promise this method makes is that what a pointer names and what a tap
-   * opens can never be two different devices.
-   *
-   * ── WHY THE GROUP CARD IS ASKED FIRST (2.293.0) ─────────────────────────
-   * It used to ask `pickBadgeAt` alone, which knows individual badges and
-   * nothing about a summary's cells — so hovering a card named nothing at all.
-   * That was survivable while a summary drew a count, and stopped being so the
-   * moment it started drawing its members' pictograms: a card of two lights is
-   * two identical icons, and identical icons with no name are not two devices,
-   * they are one device drawn twice. The tap path has resolved a cell to its
-   * own device since the card gained cells; only the pointer was left guessing.
-   *
-   * Order mirrors `handleTap` exactly — the card's cell first, then the
-   * badges — including the fallback: a point on the card but in NO cell (a
-   * count, the empty corner of a three-member grid, the gap between two cards
-   * of a split) asks the badges, because a card can be drawn over a badge from
-   * another pile entirely and a pointer over something visible belongs to that
-   * thing.
-   *
-   * Room chips are deliberately NOT asked. A chip already prints its own room
-   * name and stands for a whole room rather than a device, so there is no
-   * label a tooltip could add that the chip is not already showing.
+   * The SAME resolveHit a tap goes through, because the promise this method
+   * makes is that what a pointer names and what a tap opens can never be two
+   * different devices (2.293.0: hovering a card used to name nothing). Only a
+   * DEVICE is named: a group card with no cell and a room chip already print
+   * what they stand for, so there is no label a tooltip could add.
    */
   hoverBadgeAt(clientX: number, clientY: number): string | null {
-    const eGroup = this.visuals.pickEntityGroupAt(clientX, clientY);
-    if (eGroup?.entityId) return eGroup.entityId;
-    return this.visuals.pickBadgeAt(clientX, clientY);
+    const hit = resolveHit(this.hitPickers(false), clientX, clientY);
+    return hit.kind === "device" ? hit.entityId : null;
+  }
+
+  /** EntityVisuals as the adapter at resolveHit's seam. `verbose` logs the
+   *  badge lookup — for a genuine tap or long-press only; hover runs on every
+   *  pointermove (see pickBadgeAt). */
+  private hitPickers(verbose: boolean): HitPickers {
+    return {
+      entityGroupAt: (x, y) => this.visuals.pickEntityGroupAt(x, y),
+      badgeAt: (x, y) => this.visuals.pickBadgeAt(x, y, verbose),
+      clusterAt: (x, y) => this.visuals.pickClusterAt(x, y),
+    };
   }
 
   getViewMode(): "first-person" | "overview" {
