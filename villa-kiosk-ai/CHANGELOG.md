@@ -1,3 +1,33 @@
+## 2.597.0
+
+No change you can see: the last of a series of internal clean-ups
+(2.593.0–2.597.0) that make VESTA AI easier to change safely. Saving a new API
+key in Settings is now covered by its own test.
+
+## 2.596.0
+
+No change you can see: what VESTA AI publishes for the kiosk is now pinned by
+one shared contract, so the Status, Report and Incidents screens can no longer
+drift from what VESTA AI actually says.
+
+## 2.595.0
+
+No change you can see: VESTA AI's heart was split into three clear parts —
+what wakes it, what it may spend, and what it does on a schedule.
+
+## 2.594.0
+
+No change you can see: what VESTA AI is shown at the start of every run — the
+time, open Incidents, what it knows about the property and what you taught it —
+is now assembled in one place, so its size and wording are easy to keep in
+check.
+
+## 2.593.0
+
+No change you can see. VESTA AI's inner workings were reorganised so that each
+run carries its own context — who is speaking and what it may do — instead of
+leaving it on shared state; its tools now sit beside the data they change.
+
 ## 2.592.0
 
 No change you can see: two of the add-on's own self-checks were repaired so
