@@ -146,6 +146,7 @@ import {
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
+import { lampGlowFor, hasLampGlow, LAMP_GLOW_MAX } from "./lampGlow";
 import "./babylonSideEffects";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
@@ -1139,6 +1140,14 @@ export class EntityVisuals {
   private pools!: LightPoolSet;
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
+  /** The meshes whose bulb light comes from the glow (lampGlow.ts) — kept off
+   *  every entity PointLight. Found once per model; null until asked. */
+  private glowMeshes: AbstractMesh[] | null = null;
+  /** The LightPoolSet version the glow was last written from. */
+  private glowVersion = -1;
+  /** More pools are on than the glow holds, so WHICH ones follows the eye and
+   *  is re-chosen every frame. */
+  private glowOverflow = false;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
    *  attached to that entity's representative light. Created lazily while the
    *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
@@ -1488,6 +1497,7 @@ export class EntityVisuals {
       this.animatePulse(dtMs);
       this.animateFans(dtMs);
       this.cullLabels();
+      this.syncLampGlow();
     };
     scene.registerBeforeRender(this.onBeforeRender);
     // AFTER render, not before: Babylon reprojects every linkWithMesh control
@@ -2038,10 +2048,12 @@ export class EntityVisuals {
         if (mat) mat.forceDepthWrite = true;
         // A real (diffuse-only, shadowless) PointLight at the fixture — created
         // in BOTH modes now. In non-baked mode it lights the whole room. In
-        // BAKED mode the structure renders unlit (ModelLoader sets mat.unlit =
-        // true), so this light does NOT touch the already-baked walls/floor —
-        // it falls only on the separate furniture/entity meshes below the
-        // fixture, which the bake never covered. That's the fix for baked night
+        // BAKED mode it is kept off the lightmapped structure (keepOffGlow:
+        // the lightmap multiplies it to nothing there, and the lamp glow in
+        // lampGlow.ts carries the bulb's light instead — including furniture
+        // FUSED into the structure) and falls only on the separate
+        // furniture/entity meshes below the fixture, which the bake never
+        // covered. That's the fix for baked night
         // scenes where furniture under an ON light stayed pitch-black while the
         // floor around it was lit (the floor gets the pool below; the 3D assets
         // get this light). Shadow maps stay OFF in baked mode (ensureLightShadow
@@ -2079,6 +2091,7 @@ export class EntityVisuals {
         // entity turns on. With most lights off at load, this slashes the active
         // light count the first frame has to compile shaders for.
         light.setEnabled(false);
+        this.keepOffGlow(light);
         this.meshLights.set(m.uniqueId, light);
 
         // Baked mode ALSO gets the floor glow pool: the unlit baked floor can't
@@ -2274,6 +2287,7 @@ export class EntityVisuals {
       shared.diffuse = WARM_GLOW.clone();
       shared.specular = Color3.Black();
       shared.setEnabled(false);
+      this.keepOffGlow(shared);
       for (const m of meshes) this.meshLights.set(m.uniqueId, shared);
     }
   }
@@ -2460,6 +2474,28 @@ export class EntityVisuals {
     this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
     this.meshLights.clear();
     this.pools.clear();
+    // The next model has its own structure; its glow meshes are found afresh.
+    this.glowMeshes = null;
+  }
+
+  /** A bulb's PointLight never shades a glowing mesh: there the lightmap
+   *  multiplied its whole contribution away, and the glow carries it. */
+  private keepOffGlow(light: PointLight): void {
+    this.glowMeshes ??= this.scene.meshes.filter((m) => hasLampGlow(m.material));
+    if (this.glowMeshes.length) light.excludedMeshes.push(...this.glowMeshes);
+  }
+
+  /** Write the pools that are on to the glow — the same bulbs, strengths and
+   *  falloff (LightPoolSet.glowLamps). Only when a pool changed, or every
+   *  frame while more are on than it holds (then the nearest to the eye). */
+  private syncLampGlow(): void {
+    if (this.pools.version === this.glowVersion && !this.glowOverflow) return;
+    if (!this.glowMeshes?.length) return;
+    this.glowVersion = this.pools.version;
+    const lamps = this.pools.glowLamps();
+    this.glowOverflow = lamps.length > LAMP_GLOW_MAX;
+    const eye = this.scene.activeCamera?.globalPosition ?? Vector3.ZeroReadOnly;
+    lampGlowFor(this.scene).set(lamps, eye);
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.

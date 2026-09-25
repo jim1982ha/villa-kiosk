@@ -24,7 +24,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
-import { LightPool, poolFootprint } from "./LightPools";
+import { LightPool, poolFootprint, poolStrength } from "./LightPools";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
 import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
 
@@ -80,6 +80,11 @@ export class LightPoolSet {
   /** Spots whose load-path probe missed, kept so calibration can ask again. */
   private pending = new Map<number, PendingSpot[]>();
   private rooms: readonly PoolRoom[] = [];
+  /** Each pool's ROOM floor, which for a step light is not the tread its
+   *  pool lies on — the height the lamp glow is held back below. */
+  private roomFloors = new Map<LightPool, number>();
+  /** Bumped by anything that changes what `glowLamps` would answer. */
+  version = 0;
   private strength = 1;
   // Plain fields rather than parameter properties: Node's type stripping
   // cannot run the shorthand, and the oracle loads this class directly.
@@ -146,6 +151,7 @@ export class LightPoolSet {
     const n = { clipped: 0, whole: 0, bounded: 0, nofloor: 0, corrected: 0, nearFixture: 0, lowered: 0, crushed: 0 };
     for (const pools of this.pools.values()) for (const pool of pools) this.reshapeOne(pool, n);
     this.probe.save();
+    this.version++;
     // A pool created just now has never been shown a state — the state pass
     // ran long before calibration — so an already-ON light would keep a dark
     // pool until its next change.
@@ -162,6 +168,40 @@ export class LightPoolSet {
   /** One fixture's light changed. */
   setLight(meshId: number, r: LightReading): void {
     for (const pool of this.pools.get(meshId) ?? []) this.show(pool, r);
+    this.version++;
+  }
+
+  /**
+   * The same lights, for the furniture under them (lampGlow.ts): one per
+   * pool that is on, at its FIXTURE (the spot above the pool, at the height
+   * it was probed from), with the pool's own colour, strength and radius, and
+   * its room's floor. Same bulb, same amount — the rule lives here, once.
+   *
+   * ⚠️ NOT from the fixture's PointLight. A PointLight's intensity is divided
+   * among every bulb of its entity (EntityVisuals' lightShare): the villa's
+   * nine living-room ceiling spots are one light, so each lit the table with a
+   * NINTH while its pool lit the floor with the whole — the table under them
+   * stayed dark (the owner's photo, 2026-09-25). A strip's PointLight is also
+   * merged and dropped toward what is below, which is not where it shines from.
+   */
+  glowLamps(): { x: number; y: number; z: number; r: number; g: number; b: number;
+                 amount: number; radius: number; floorY: number }[] {
+    const out: { x: number; y: number; z: number; r: number; g: number; b: number;
+                 amount: number; radius: number; floorY: number }[] = [];
+    for (const [meshId, r] of this.readings()) {
+      if (!r.on) continue;
+      for (const pool of this.pools.get(meshId) ?? []) {
+        const p = pool.mesh.position;
+        out.push({
+          x: p.x, y: pool.probeFromY, z: p.z,
+          r: r.colour.r, g: r.colour.g, b: r.colour.b,
+          amount: poolStrength(r.frac * this.strength, pool.intensityScale),
+          radius: pool.radius,
+          floorY: this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT,
+        });
+      }
+    }
+    return out;
   }
 
   /** The global "Light effect strength". Returns whether it changed. */
@@ -176,6 +216,7 @@ export class LightPoolSet {
    *  pool is not indexed by FloorManager, so it would stay lit over a hidden
    *  storey) or anything else that changes an input without a state event. */
   resync(): void {
+    this.version++;
     if (this.pools.size === 0) return;
     for (const [meshId, r] of this.readings()) this.setLight(meshId, r);
   }
@@ -183,6 +224,8 @@ export class LightPoolSet {
   clear(): void {
     this.pools.forEach((arr) => arr.forEach((p) => p.dispose()));
     this.pools.clear();
+    this.roomFloors.clear();
+    this.version++;
     // Holds mesh references from the outgoing model — a reload's calibration
     // must not retry spots belonging to a scene that no longer exists.
     this.pending.clear();
@@ -263,6 +306,8 @@ export class LightPoolSet {
     // the pool stands on names the storey below, so every upper-storey pool
     // found no room and washed through its walls.
     const room = surfaceY !== null ? this.roomOnFloor(x, surfaceY, z) : this.roomAtFixture(x, pool.probeFromY, z);
+    const roomFloor = surfaceY !== null ? this.floorUnder(x, surfaceY, z) : null;
+    if (roomFloor !== null) this.roomFloors.set(pool, roomFloor); else this.roomFloors.delete(pool);
     let radius = LIGHT_POOL_RADIUS;
     let shape: Pt2[] | undefined;
     if (room) {

@@ -140,6 +140,42 @@ console.log("\n  calibration:");
   ck("  ...while a surface a few centimetres up keeps its answer", near(r.pools(lamp)[0].position.y, 0.22), r.pools(lamp)[0].position.y);
 }
 
+console.log("\n  the same light, for what stands under it (lampGlow.ts):");
+{
+  // The villa's nine living-room ceiling spots are ONE entity. A PointLight
+  // gets a ninth of its intensity each; the glow must get what the POOL gets
+  // (the table under them stayed dark, 2026-09-25).
+  const spots = Array.from({ length: 9 }, () => fixture("spot"));
+  const reading = { on: true, colour: { r: 1, g: 0.8, b: 0.6 }, frac: 1 };
+  const r = rig(probe({ below: () => 0 }), () => spots.map((f) => [f.uniqueId, reading]));
+  spots.forEach((f, i) => r.set.addFixture(f, box(i, i + 0.1, 0, 0.1, 2.3), false));
+  r.set.setRooms([room("Living", 0, -5, 15, -5, 5)]);
+  const lamps = r.set.glowLamps();
+  ck("one glow lamp per pool that is on", lamps.length === 9, lamps.length);
+  ck("  ...each at its POOL's full strength, not split among the entity's bulbs",
+     lamps.every((l) => near(l.amount, 1)), lamps.map((l) => l.amount));
+  ck("  ...from its fixture, at the fixture's height", lamps.every((l) => near(l.y, 2.3)), lamps.map((l) => l.y));
+  ck("  ...with its room's floor and its pool's radius",
+     lamps.every((l) => l.floorY === 0 && near(l.radius, LIGHT_POOL_RADIUS)), lamps.map((l) => [l.floorY, l.radius]));
+  const v = r.set.version;
+  r.set.setStrength(0.5);
+  ck("  ...the strength slider dims it with the pool, and says so",
+     r.set.version > v && r.set.glowLamps().every((l) => near(l.amount, 0.5)), r.set.glowLamps()[0].amount);
+  reading.on = false;
+  ck("  ...and a light that is off gives none", r.set.glowLamps().length === 0);
+}
+{
+  // A step light's pool lies on its tread; the glow is held back only below
+  // the ROOM's floor, so the walls round the stairs get no hard line.
+  const step = fixture("tread");
+  const r = rig(probe({ below: () => 0.46, fresh: () => ({ y: 0.46 }) }),
+    () => [[step.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
+  r.set.addFixture(step, box(0, 0.1, 0, 0.1, 0.6), false);
+  r.set.setRooms([room("Stairs", 0, -5, 5, -5, 5)]);
+  const l = r.set.glowLamps()[0];
+  ck("a step light's glow keeps its room's floor, not its tread", l?.floorY === 0, l?.floorY);
+}
+
 console.log("\n  state:");
 {
   const lamp = fixture("state");

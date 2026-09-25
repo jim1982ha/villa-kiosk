@@ -35,6 +35,7 @@ import { devLog } from "@/utils/devLog";
 import { tapDebug } from "@/utils/tapDebug";
 import { isCeilingMesh, isStructureMesh, structureRole } from "./meshRoles";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
+import { attachLampGlow } from "./lampGlow";
 import "./babylonSideEffects";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
@@ -912,14 +913,18 @@ export async function loadModelInto(
         // with downward normals; culling their backs opens holes to the
         // hidden floor below. Uniform hemi light = no back-face artefact.
         sm.backFaceCulling = false;
+        // A bulb's light is added AFTER the multiply above, which would
+        // otherwise darken it to nothing against the night bake — lampGlow.ts.
+        attachLampGlow(sm as unknown as Material);
       }
       // The structure's ONLY runtime light: a uniform white hemispheric
       // (diffuse = ground = white ⇒ every normal receives exactly 1.0), so
       // the material evaluates to its plain albedo before the lightmap
       // multiply. The scene's real sun/fill must not add on top — the bake
       // already contains them — so the structure is excluded from every
-      // other light. (Lights created later — per-entity point lights — are
-      // never created in baked mode, which `baked = true` guarantees.)
+      // other light. Lights created later — the per-entity point lights —
+      // are kept off these meshes by EntityVisuals, and reach them through
+      // the lamp glow instead (lampGlow.ts).
       const fill = new HemisphericLight("lightmapFill", new Vector3(0, 1, 0), scene);
       fill.diffuse = new Color3(1, 1, 1);
       fill.groundColor = new Color3(1, 1, 1);

@@ -1,3 +1,27 @@
+## 2.496.77
+
+### Fixed — the table, chairs and sofa stayed dark under a light that was on
+With the living room's ceiling spots on, the floor around the dining table and
+the sofa lit up, but the table, the chairs, the sofa and the pouf stayed dark.
+
+Two causes, found on the villa's own 3D model:
+
+- In this model the furniture is part of the building, whose lighting is
+  pre-painted — by night, the dark version. VESTA was multiplying a bulb's
+  light on it by that dark paint, so almost nothing showed. Until 2.496.72 the
+  table only looked lit because the floor glow wrongly floated at table height
+  (the disc you saw at the pouf's height).
+- The nine ceiling spots are one light. VESTA split that light nine ways for
+  the furniture, but gave each floor glow the whole of it.
+
+Now each bulb lights what stands near it — table tops, seats, the sofa, and
+the walls facing it — with the same strength as its glow on the floor, from
+where the bulb actually is. The floor glow itself is unchanged, and the
+"Light effect strength" slider scales both together.
+
+The earlier attempts (2.496.73–2.496.75, reverted in 2.496.76) are not
+reinstated as they were: this one was checked by rendering the villa's own
+model from four viewpoints before release.
 ## 2.496.76
 
 ### Reverted — 2.496.73, 2.496.74 and 2.496.75

@@ -68,10 +68,22 @@ let sharedTexture: DynamicTexture | null = null;
  *  identical on every engine, so there's nothing left for any browser to add
  *  noise to.
  */
-const POOL_ALPHA_STOPS: ReadonlyArray<readonly [number, number]> = [
+export const POOL_ALPHA_STOPS: ReadonlyArray<readonly [number, number]> = [
   [0, 0.9], [0.45, 0.35], [1, 0],
 ];
-function poolAlphaAt(normalisedDist: number): number {
+/** How strongly a pool shows a light — its material alpha, which in ADDITIVE
+ *  blending is its brightness. The one copy: the lamp glow (lampGlow.ts)
+ *  lights furniture by the same amount, so a bulb can no longer light the
+ *  floor under it and the table under it by different rules.
+ *
+ *  ⚠️ Not a clamp, though it reads as one: the floor applies to
+ *  intensityFrac BEFORE the scale, and the ceiling to the product. Flooring
+ *  the result instead would let a zeroed intensityScale still paint a pool. */
+export function poolStrength(intensityFrac: number, intensityScale: number): number {
+  return Math.min(2, Math.max(0.15, intensityFrac) * intensityScale);
+}
+
+export function poolAlphaAt(normalisedDist: number): number {
   for (let i = 0; i < POOL_ALPHA_STOPS.length - 1; i++) {
     const [t0, a0] = POOL_ALPHA_STOPS[i];
     const [t1, a1] = POOL_ALPHA_STOPS[i + 1];
@@ -145,6 +157,9 @@ export class LightPool {
    *  where its fixture was — see LightPoolSet.setRooms, which re-asks
    *  once calibration lets the probe answer per room instead of per 4m cell. */
   probeFromY = 0;
+  /** The world radius its falloff is drawn across — the lamp glow projects
+   *  the same falloff onto what stands under it. */
+  radius = 0;
   private material: StandardMaterial;
 
   /** `floorPosition` — where the pool sits (the caller has already found the
@@ -157,6 +172,7 @@ export class LightPool {
    *  the plain footprint, which is what every pool looked like before 2.300.0. */
   constructor(scene: Scene, name: string, floorPosition: Vector3, radius: number, shape?: Pt2[]) {
     this.mesh = new Mesh(`lightPool_${name}`, scene);
+    this.radius = radius;
     this.mesh.position.copyFrom(floorPosition);
     this.applyShape(shape, radius);
     this.mesh.isPickable = false;
@@ -198,6 +214,7 @@ export class LightPool {
    * shape and wrong in height.
    */
   reshape(shape: Pt2[] | undefined, radius: number, floorY?: number): void {
+    this.radius = radius;
     if (floorY !== undefined) this.mesh.position.y = floorY;
     this.applyShape(shape, radius);
   }
@@ -258,10 +275,7 @@ export class LightPool {
     this.mesh.setEnabled(on);
     if (!on) return;
     this.material.emissiveColor = colour;
-    // ⚠️ Not a clamp, though it reads as one: the floor applies to
-    // intensityFrac BEFORE the scale, and the ceiling to the product. Flooring
-    // the result instead would let a zeroed intensityScale still paint a pool.
-    this.material.alpha = Math.min(2, Math.max(0.15, intensityFrac) * this.intensityScale);
+    this.material.alpha = poolStrength(intensityFrac, this.intensityScale);
   }
 
   dispose(): void {
