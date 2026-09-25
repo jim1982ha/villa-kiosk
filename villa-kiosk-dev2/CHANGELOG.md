@@ -1,3 +1,20 @@
+## 2.496.58
+
+**Nothing you should see changed.** Light pools on the floor look exactly as
+they did in 2.496.53.
+
+Behind that: the soft pools of light under each lamp were looked after in eight
+different places in the part of VESTA that draws the villa — one to create them,
+another to try again for a lamp whose floor wasn't found at first, another to fit
+each pool to its room once the floor plan is known, several more to switch them
+on and off. Every light-pool fault of recent releases (a lamp that never got a
+pool, pools on the wrong floor of the house, a pool stuck to the ceiling) came
+from how those places fitted together.
+
+They now live in one place with automatic checks of their own, which replay each
+of those past faults against an imaginary villa before every release — so none
+of them can quietly come back.
+
 ## 2.496.57
 
 **Nothing you should see changed** — the camera opens exactly as in 2.496.52.
