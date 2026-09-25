@@ -1,3 +1,10 @@
+## 2.496.95
+
+### Changed
+- **How long a tapped room stays "opened" is decided by a separate, tested
+  part.** Nothing changes on screen. The two rules, each fixed after a report,
+  are now checked: zooming in never closes the room you asked for, and the
+  other rooms go back to normal as soon as you zoom in past where you started.
 ## 2.496.94
 
 ### Changed

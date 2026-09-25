@@ -120,6 +120,7 @@ import { OcclusionSweep } from "./occlusionSweep";
 import { bucketRoomChips, combineChips, chipSuffixOf, type RoomChip } from "./roomChips";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { solveRoomZoom } from "./roomZoomSolver";
+import { RoomFocus } from "./roomFocus";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
@@ -1242,38 +1243,9 @@ export class EntityVisuals {
   /** Room-cluster chips, keyed by roomKey(). Built lazily the first time a
    *  room clusters; disposed with everything else in rebuildLabels. */
   private clusters = new Map<string, ClusterControls>();
-  /**
-   * The room the user asked to SEE (tapped its chip), as a roomKey — or null.
-   *
-   * ── Why an exemption exists at all ────────────────────────────────────────
-   * "Tap a room, see its devices" was implemented four times as a search for a
-   * zoom at which that room's badges happen not to collide, and it kept coming
-   * back as "I still see the chip". The last of those attempts is why: two
-   * devices mounted at ONE 3D point (a ceiling fan and its own light kit) are
-   * separated by no zoom level that exists, so for those rooms the promise is
-   * unkeepable by construction — no amount of solving finds a distance that
-   * is not there.
-   *
-   * The requirement is not "try hard to declutter". It is: tapping a room ALWAYS
-   * shows that room's badges, never a summary of them. So the focused room is
-   * simply exempt from grouping: its badges take no part in the pile-building
-   * at all (see groupBadges), which makes them individually drawn as a matter
-   * of fact rather than as an outcome the camera has to earn. The zoom solve
-   * still runs and still picks the tightest shot that separates them where one
-   * exists — it just no longer decides WHETHER the user gets what they asked
-   * for.
-   *
-   * The trade-off is explicit: for a room whose devices genuinely cannot be
-   * separated, its two badges will overlap at the chosen zoom. That is the
-   * honest presentation of "these two things are in the same place", and it is
-   * what was asked for over a chip that hides both.
-   */
-  private focusedRooms = new Set<string>();
-  /** The quantised zoom the focus was granted at. The focus lasts exactly as
-   *  long as that zoom does — see cullLabels — so panning around a focused
-   *  room keeps it open, and zooming away lets the map behave normally again
-   *  without needing any camera-event plumbing to tell us the user did it. */
-  private focusedAtZoom = 0;
+  /** The rooms the user asked to SEE (tapped a chip, picked from the radial
+   *  menu) — exempt from grouping — and how long that lasts: roomFocus.ts. */
+  private readonly focus = new RoomFocus();
 
   /** Entity groups drawn this frame, keyed by PendingEntityGroup.key. Same
    *  lazy-build / dispose-with-rebuildLabels lifecycle as `clusters`. */
@@ -2432,20 +2404,14 @@ export class EntityVisuals {
    * changes what the very next pass will draw.
    */
   setFocusedRooms(rooms: readonly string[] | null): void {
-    const keys = (rooms ?? []).map(roomKey).filter(Boolean);
-    if (keys.length === this.focusedRooms.size && keys.every((k) => this.focusedRooms.has(k))) return;
-    this.focusedRooms = new Set(keys);
-    // Stamped on the NEXT pass, once the camera has actually been moved to the
-    // solved pose — reading the zoom here would capture the pre-flight one and
-    // clear the focus on arrival.
-    this.focusedAtZoom = 0;
+    if (!this.focus.grant((rooms ?? []).map(roomKey).filter(Boolean))) return;
     this.markLayoutDirty();
     this.requestRender();
   }
 
   /** The rooms currently exempt from grouping (roomKey form). */
   focusedRoomKeys(): string[] {
-    return [...this.focusedRooms];
+    return [...this.focus.rooms];
   }
 
   /**
@@ -4023,58 +3989,12 @@ export class EntityVisuals {
     // world positions are collected and BEFORE anything reads `occluded`.
     this.refreshWallOcclusion(shown, cam);
 
-    // ── The focus lasts as long as you stay at least as close ──────────────
+    // ── The focus, and how long each half of it lasts: roomFocus.ts ────────
     // Resolved BEFORE any grouping runs, so a single pass cannot group with a
-    // focus it is about to drop. No camera-event plumbing, and nothing that has
-    // to tell "the user zoomed" from "we flew there": the exemption is stamped
-    // with the quantised zoom of the first pass after it was granted, and
-    // dropped once the view gets FARTHER than that. Panning keeps it (the zoom
-    // is unchanged, and looking around a room you asked to see should not
-    // collapse it); zooming out ends it, which is exactly when a summary
-    // becomes the right answer again.
-    //
-    // ⚠️ `z < focusedAtZoom`, NOT `z !== focusedAtZoom`, and the difference is
-    // a reported bug. Tapping the Swimming Pool chip expanded the room; zooming
-    // IN by one rung changed z, dropped the exemption, and the room collapsed
-    // straight back to the very chip that had just been tapped — then expanded
-    // again a rung later, once the badges genuinely separated. Zooming in
-    // strictly increases the distance between anchors: it is the one direction
-    // that can never make a room less legible, so it must never be the thing
-    // that takes it away. The original stamp stays the floor rather than
-    // re-stamping on the way in, which is what makes "at least as close as when
-    // you asked" the literal rule.
-    //
-    // ⚠️ CSS PIXELS, and that is the second half of the same rule. This is the
-    // only place the measure is compared BETWEEN frames, so it is the only
-    // place the resolution valve can forge a zoom change — see
-    // quantisedPixelsPerWorldUnit for the full symptom. Grouping keeps render
-    // pixels because it compares within one frame against boxes in the same
-    // units; this must not.
-    // ── The focus has TWO consequences and they expire differently ─────────
-    // The EXEMPTION — the focused room's own badges drawn individually — keeps
-    // the rule above: it survives zooming in, because coming closer can never
-    // make a room less legible.
-    //
-    // The SUPPRESSION added in 2.368.0 — every OTHER room held at its chip —
-    // must not. It exists to stop the neighbours competing for the frame at the
-    // moment you ask for a room, and that is all it is for. Left to share the
-    // exemption's lifetime it became sticky: focus a room, pan across to
-    // another, and that one stayed a chip at every zoom, because the pass was
-    // still forcing it clustered. Reported as "the other room badge never
-    // declutters into entity icons".
-    //
-    // So it holds only while the camera is AT OR WIDER THAN the zoom the focus
-    // was granted at. Zoom in from there and every room is back under the
-    // ordinary rules, decluttering by zoom exactly as it did before — which is
-    // the property being asked for, expressed as the one condition that already
-    // means "you have not yet earned the space to draw these".
-    let suppressOthers = false;
-    if (this.focusedRooms.size > 0) {
-      const z = this.quantisedPixelsPerWorldUnit(shown, true);
-      if (this.focusedAtZoom === 0) this.focusedAtZoom = z;
-      else if (z < this.focusedAtZoom) { this.focusedRooms.clear(); this.focusedAtZoom = 0; }
-      suppressOthers = this.focusedRooms.size > 0 && z <= this.focusedAtZoom;
-    }
+    // focus it is about to drop. The zoom is in CSS px (see
+    // quantisedPixelsPerWorldUnit) — the one comparison made BETWEEN frames.
+    const suppressOthers = this.focus.size > 0
+      && this.focus.step(this.quantisedPixelsPerWorldUnit(shown, true));
 
     // ── Layout ───────────────────────────────────────────────────────────
     // Grouping is decided in world space against the current zoom alone, so
@@ -4286,7 +4206,7 @@ export class EntityVisuals {
     // `suppressOthers`. Past that the neighbours are on their own merits again.
     if (suppressOthers) {
       for (const k of this.roomDisplay.keys()) {
-        if (!this.focusedRooms.has(k)) {
+        if (!this.focus.rooms.has(k)) {
           this.chipRoom(k, "focus");
         }
       }
@@ -4972,7 +4892,7 @@ export class EntityVisuals {
     clearance: { pxPerWorld: number; allow: number; basis: ViewBasis; refDepth: number },
   ): PlacementItem[] {
     const pool = this.placeItems;
-    const focus = this.focusedRooms;
+    const focus = this.focus.rooms;
     const p = this.projPlane;
     for (let i = 0; i < shown.length; i++) {
       const s = shown[i];
@@ -5232,7 +5152,7 @@ export class EntityVisuals {
       Math.abs(a.cx - b.cx) < a.hw + b.hw && Math.abs(a.cy - b.cy) < a.hh + b.hh;
 
     const scale = this.effectiveScale();
-    const focus = this.focusedRooms;
+    const focus = this.focus.rooms;
     const p = new Vector3();
 
     // `container.isVisible` rather than a reconstruction of the same decision
@@ -5347,7 +5267,7 @@ export class EntityVisuals {
     // a focused badge, which made this test blind in exactly the state every
     // reported overlap has come from. The exemption is NOT the same condition as
     // "all other rooms are chipped": cullLabels computes `suppressOthers`
-    // separately (`focusedRooms.size > 0 && z <= focusedAtZoom`), so a focus can
+    // separately (RoomFocus.step: only at or wider than the granted zoom), so a focus can
     // be live while other rooms still draw their own badges and cards — a
     // capture caught precisely that, `exempt=12` beside `chips=1`.
     //
@@ -5995,7 +5915,7 @@ export class EntityVisuals {
      * `others` is passed rather than closed over because this runs in two
      * passes and they need different sets — see below.
      */
-    const focus = this.focusedRooms;
+    const focus = this.focus.rooms;
     // ── WHY a seat was refused, in pixels (the `seat` debug channel) ───────
     // `fits` is a boolean, and a boolean cannot answer "they are not even
     // touching". This records the blocker and the per-axis SHORTFALL — how
@@ -6521,7 +6441,7 @@ export class EntityVisuals {
     clearance: { gap: number; minSep: number; pxPerWorld: number; basis: ViewBasis },
     pending: PendingEntityGroup[],
   ): void {
-    const focus = this.focusedRooms;
+    const focus = this.focus.rooms;
     if (focus.size === 0) return;
     // Indices into `shown`, so a strip's members map straight back.
     const idx = this.focusIdx;
@@ -7370,7 +7290,7 @@ export class EntityVisuals {
     }
     const scale = this.effectiveScale();
     const gapPx = this.metrics.minGapPx * scale;
-    const focus = this.focusedRooms;
+    const focus = this.focus.rooms;
     const half = (this.summaryMetrics().size / 2) * scale;
     // One round per room is the worst case: each has to be able to escalate,
     // and nothing can un-escalate. The `<=` is the belt to that braces.
