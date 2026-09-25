@@ -44,7 +44,9 @@ import type { MaterialDefines } from "@babylonjs/core/Materials/materialDefines"
 import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { Scene } from "@babylonjs/core/scene";
 
-export const LAMP_GLOW_MAX = 16;
+/** A strip lights from three spots (centre and both ends), so one LED cove
+ *  of four strips is twelve — 16 filled with one room's lights. */
+export const LAMP_GLOW_MAX = 32;
 /** The line the glow is appended to (pbrBlockFinalColorComposition). */
 export const LAMP_GLOW_ANCHOR = "finalColor\\.rgb\\*=lightmapColor\\.rgb;";
 /** Where the glow begins above its lamp's floor, and where it is whole. */

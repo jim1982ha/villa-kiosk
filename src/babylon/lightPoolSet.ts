@@ -179,6 +179,28 @@ export class LightPoolSet {
     return y;
   }
 
+  /** Where a fixture's light COMES FROM, for the lamp glow: each spot its
+   *  pools were made for — a strip's centre and both ends, at the FIXTURE's
+   *  height — with its share (1, ½, ½) and its room's floor. A spot still
+   *  waiting for a floor is included with none known.
+   *
+   *  ⚠️ NOT the fixture's PointLight position. A strip's PointLight is merged
+   *  to the middle of the strips and dropped 45% of the way to what is below
+   *  (EntityVisuals: so it prints no hotspot on its ceiling) — over a sofa,
+   *  about 1.2 m up, and the glow lit the seat from there: a band of light at
+   *  chair height, reported with the only light on being the sofa cove. */
+  glowSpots(meshId: number): { x: number; y: number; z: number; scale: number; floorY: number | null }[] {
+    const out: { x: number; y: number; z: number; scale: number; floorY: number | null }[] = [];
+    for (const pool of this.pools.get(meshId) ?? []) {
+      out.push({
+        x: pool.mesh.position.x, y: pool.probeFromY, z: pool.mesh.position.z, scale: pool.intensityScale,
+        floorY: this.roomFloors.get(pool) ?? pool.mesh.position.y - POOL_FLOOR_LIFT,
+      });
+    }
+    for (const s of this.pending.get(meshId) ?? []) out.push({ x: s.x, y: s.y, z: s.z, scale: s.scale, floorY: null });
+    return out;
+  }
+
   /** One fixture's light changed. */
   setLight(meshId: number, r: LightReading): void {
     for (const pool of this.pools.get(meshId) ?? []) this.show(pool, r);

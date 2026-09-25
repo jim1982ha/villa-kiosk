@@ -1,3 +1,22 @@
+## 2.496.75
+
+### Fixed — a lamp's light shone from chair height instead of from the lamp
+With only the sofa's ceiling LED on, the walking view showed a band of light at
+the height of the sofa seat and the pouf, rather than light falling from above
+onto the sofa and the floor.
+
+The lamp light added in 2.496.73 was coming from the wrong place. VESTA treats
+an LED strip's light as a single point, moved down from the ceiling so it does
+not print a bright spot on the ceiling above it. Over the sofa that point ended
+up about 1.2 m up, just above the seat, and the sofa was lit from there.
+
+The lamp light now comes from where the lamp actually is: an LED strip shines
+from its centre and both ends at its real height (2.2 m for the sofa's), sharing
+its brightness between them, so one strip is still one lamp's worth of light.
+Checked on the villa's own 3D model: the sofa's light now comes from twelve
+points around the sofa at 2.2 m, instead of one point 1.2 m above the seat.
+The floor glow is unchanged. If the sofa now looks too dim, the "Light effect
+strength" slider raises it.
 ## 2.496.74
 
 ### Fixed — floating light discs around the staircase in the walking view

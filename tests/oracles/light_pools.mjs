@@ -147,6 +147,23 @@ console.log("\n  calibration:");
   ck("  ...while a surface a few centimetres up keeps its answer", near(r.pools(lamp)[0].position.y, 0.22), r.pools(lamp)[0].position.y);
 }
 
+{
+  // The lamp glow shines from the FIXTURE: a strip's three spots at its own
+  // height, sharing its light 1 : ½ : ½ — never from the PointLight, which a
+  // strip drops toward what is below (over a sofa, ~1.2 m: the glow lit the
+  // seat from there, "the light is at the level of the chair", 2.496.75).
+  const r = rig(probe({ below: () => 0 }));
+  const cove = fixture("cove");
+  r.set.addFixture(cove, box(-1.25, 1.25, 0, 0.03, 2.2), true);
+  r.set.setRooms([room("Living", 0, -5, 5, -5, 5)]);
+  const spots = r.set.glowSpots(cove.uniqueId);
+  ck("a strip lights from three spots", spots.length === 3, spots.length);
+  ck("  ...at the strip's own height, not dropped toward the floor", spots.every((q) => near(q.y, 2.2)), spots.map((q) => q.y));
+  ck("  ...from its centre and both ends", JSON.stringify(spots.map((q) => q.x).sort((a, b) => a - b)) === "[-1.25,0,1.25]", spots.map((q) => q.x));
+  ck("  ...sharing its light 1 : ½ : ½", JSON.stringify(spots.map((q) => q.scale).sort()) === "[0.5,0.5,1]", spots.map((q) => q.scale));
+  ck("  ...with its room's floor", spots.every((q) => q.floorY === 0), spots.map((q) => q.floorY));
+}
+
 console.log("\n  state:");
 {
   const lamp = fixture("state");

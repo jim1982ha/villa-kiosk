@@ -2494,19 +2494,28 @@ export class EntityVisuals {
     if (!this.glowDirty && !this.glowOverflow) return;
     if (!this.glowMeshes?.length) { this.glowDirty = false; return; }
     this.glowDirty = false;
-    const lamps: GlowLamp[] = [];
-    const seen = new Set<PointLight>();
+    // Per LIGHT, the fixture meshes it stands for — a merged strip is one
+    // light for several meshes, and they share its intensity.
+    const byLight = new Map<PointLight, AbstractMesh[]>();
     for (const meshes of this.byEntity.values()) {
       for (const mesh of meshes) {
         const l = this.meshLights.get(mesh.uniqueId);
-        if (!l || seen.has(l) || !l.isEnabled() || !(l.intensity > 0) || !mesh.isEnabled()) continue;
-        seen.add(l);
-        lamps.push({
-          x: l.position.x, y: l.position.y, z: l.position.z,
-          r: l.diffuse.r, g: l.diffuse.g, b: l.diffuse.b,
-          intensity: l.intensity, range: l.range,
-          floorY: this.pools.floorYOf(mesh.uniqueId),
-        });
+        if (!l || !l.isEnabled() || !(l.intensity > 0) || !mesh.isEnabled()) continue;
+        const list = byLight.get(l);
+        if (list) list.push(mesh); else byLight.set(l, [mesh]);
+      }
+    }
+    const lamps: GlowLamp[] = [];
+    for (const [l, meshes] of byLight) {
+      const base = { r: l.diffuse.r, g: l.diffuse.g, b: l.diffuse.b, range: l.range };
+      // From where the fixture IS, never the PointLight's dropped position
+      // (see LightPoolSet.glowSpots); the light's intensity split by share.
+      const spots = meshes.flatMap((m) => this.pools.glowSpots(m.uniqueId));
+      const total = spots.reduce((t, s) => t + s.scale, 0);
+      if (total > 0) {
+        for (const s of spots) lamps.push({ ...base, x: s.x, y: s.y, z: s.z, floorY: s.floorY, intensity: (l.intensity * s.scale) / total });
+      } else {
+        lamps.push({ ...base, x: l.position.x, y: l.position.y, z: l.position.z, floorY: this.pools.floorYOf(meshes[0].uniqueId), intensity: l.intensity });
       }
     }
     this.glowOverflow = lamps.length > LAMP_GLOW_MAX;

@@ -89,6 +89,11 @@ console.log("  the callers");
   const made = (ev.match(/new PointLight\(/g) ?? []).length;
   const kept = (ev.match(/this\.keepOffGlow\(/g) ?? []).length;
   ck("every entity PointLight is kept off the glowing meshes", made > 0 && kept === made, { made, kept });
+  const sync = ev.match(/private syncLampGlow\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  ck("the glow shines from the fixture's spots, sharing the light's intensity",
+    /this\.pools\.glowSpots\(/.test(sync) && /\(l\.intensity \* s\.scale\) \/ total/.test(sync));
+  ck("  ...and from the PointLight only for a fixture with no spot at all",
+    (sync.match(/l\.position\.x/g) ?? []).length === 1 && /\} else \{\s*lamps\.push\(\{ \.\.\.base, x: l\.position\.x/.test(sync));
   ck("the glow is written before each frame", /onBeforeRender = \(\) => \{[\s\S]*?this\.syncLampGlow\(\);[\s\S]*?\};/.test(ev));
   const ml = readFileSync(new URL("../../src/babylon/ModelLoader.ts", import.meta.url), "utf8");
   ck("ModelLoader attaches it to every lightmapped material",
