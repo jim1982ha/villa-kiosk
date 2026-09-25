@@ -1,3 +1,21 @@
+## 2.496.63
+
+### Fixed — the summary bar and the readiness report disagreed about a lock
+A door lock that had stopped reporting read **"1 Unknown"** on the summary bar,
+and **"1 not locked"** in the Facility readiness report — the report was saying
+a door was open when nothing had said so. Both now read their counts from one
+place. The report still warns about such a lock (a door nobody can confirm
+isn't a secured door), but now says what it knows: for example
+"1 unlocked, 1 not reporting".
+
+### Changed — the AC tile counts only this villa's air-conditioning units
+The AC tile used to count every climate device Home Assistant knew about,
+including ones you had removed from VESTA's device list; the readiness report
+already counted only the villa's own. They now agree. The Energy and Pool tiles
+deliberately still count every power sensor and pool switch, because a pump's
+or a plug's power reading usually belongs to that device rather than being a
+device of its own, and leaving it out would under-report the villa's draw.
+
 ## 2.496.62
 
 ### Fixed — a sensor that is offline right now showed no outage on its chart
