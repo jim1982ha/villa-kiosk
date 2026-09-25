@@ -168,7 +168,10 @@ export class FloorProbe {
    *  rounded fixture height, share one cached floor. */
   private roomAt: ((x: number, y: number, z: number) => string | null) | null = null;
 
-  constructor(private scene: Scene) {}
+  // A plain field, not a parameter property: Node's type stripping cannot run
+  // the shorthand, and tests load this class against a real GLB.
+  private scene: Scene;
+  constructor(scene: Scene) { this.scene = scene; }
 
   setRoomResolver(fn: ((x: number, y: number, z: number) => string | null) | null): void {
     this.roomAt = fn;

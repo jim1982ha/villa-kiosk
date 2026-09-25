@@ -1,3 +1,22 @@
+## 2.496.72
+
+### Fixed — light pools floating at table height in the walking view
+In the walking view, the soft glow a lamp casts on the floor sometimes hung in
+the air instead — at about table height (0.75 m) in the living and dining area,
+reading as a bright haze over the table and chairs.
+
+To avoid slowing things down, VESTA works out the floor height once per room and
+reuses it for every lamp in that room. In an open-plan room, the first lamp it
+measured was the kitchen light, which really does sit over a counter at 0.75 m —
+and every other lamp in the room was then given the counter's height instead of
+the floor's. Measured against the villa's own 3D model: 60 of 112 light pools
+were affected before this fix, and 2 remain (two corridor lights over the
+upstairs stairwell, a separate case).
+
+A light pool now always lies on its room's own floor. The table, counter or bed
+under a lamp is still lit by the lamp itself, as before. This costs nothing —
+no extra checks run, and nothing runs while you walk.
+
 ## 2.496.71
 
 ### Fixed — the history bar said "Off" under a pill saying "No leak"

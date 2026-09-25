@@ -120,6 +120,26 @@ console.log("\n  calibration:");
   ck("calibration drops the grid-keyed memo itself", pr.cleared === 1);
 }
 
+{
+  // An open-plan room: the probe's memo hands a 2.2 m ceiling lamp the answer
+  // it gave the kitchen light over a 0.75 m counter (reproduced on the villa
+  // GLB, 2026-09-25 — the "glowing disc above the floor").
+  const r = rig(probe({ below: () => 0.75, fresh: () => ({ y: 0.75 }) }));
+  const lamp = fixture("dining");
+  r.set.addFixture(lamp, box(0, 0.2, 0, 0.2, 2.2), false);
+  r.set.setRooms([room("Living", 0, -5, 5, -5, 5)]);
+  ck("a pool is not drawn floating at table height — it lies on its room's floor (2.496.72)",
+     near(r.pools(lamp)[0].position.y, 0.02), r.pools(lamp)[0].position.y);
+}
+{
+  // A floor that is genuinely a little raised (a threshold, a tiled step) stays.
+  const r = rig(probe({ below: () => 0.2 }));
+  const lamp = fixture("threshold");
+  r.set.addFixture(lamp, box(0, 0.2, 0, 0.2, 2.4), false);
+  r.set.setRooms([room("Hall", 0, -5, 5, -5, 5)]);
+  ck("  ...while a surface a few centimetres up keeps its answer", near(r.pools(lamp)[0].position.y, 0.22), r.pools(lamp)[0].position.y);
+}
+
 console.log("\n  state:");
 {
   const lamp = fixture("state");

@@ -42,6 +42,9 @@ const POOL_AIRBORNE_M = 0.5;
 /** How far a pool sits above the floor it was probed onto — clear of
  *  z-fighting, and still reading as lying ON it. */
 export const POOL_FLOOR_LIFT = 0.02;
+/** A pool whose floor answer stands this far above its room's own floor is put
+ *  ON the room's floor. Above a stair tread's rise; below any table or counter. */
+const POOL_RAISED_M = 0.3;
 
 /** What the pools need from the floor below them. FloorProbe is the adapter. */
 export interface PoolFloorProbe {
@@ -140,7 +143,7 @@ export class LightPoolSet {
     // Owned HERE: a reshape against a stale memo is the whole defect.
     this.probe.clearMemo();
     const recovered = this.retryPending();
-    const n = { clipped: 0, whole: 0, bounded: 0, nofloor: 0, corrected: 0, nearFixture: 0, crushed: 0 };
+    const n = { clipped: 0, whole: 0, bounded: 0, nofloor: 0, corrected: 0, nearFixture: 0, lowered: 0, crushed: 0 };
     for (const pools of this.pools.values()) for (const pool of pools) this.reshapeOne(pool, n);
     this.probe.save();
     // A pool created just now has never been shown a state — the state pass
@@ -149,7 +152,7 @@ export class LightPoolSet {
     if (recovered) this.resync();
     this.log(
       `light pools: clipped=${n.clipped} whole=${n.whole} bounded=${n.bounded} nofloor=${n.nofloor}`
-      + ` corrected=${n.corrected} nearFixture=${n.nearFixture} crushed=${n.crushed}`
+      + ` corrected=${n.corrected} nearFixture=${n.nearFixture} lowered=${n.lowered} crushed=${n.crushed}`
       + ` bucketAbove=${this.probe.stats.probeAbove}`
       + ` recovered=${recovered} stillNoFloor=${[...this.pending.values()].reduce((k, s) => k + s.length, 0)}`
       + ` rooms=${rooms.length} storeys=${new Set(rooms.map((r) => Math.round(r.floorY))).size}`,
@@ -234,6 +237,25 @@ export class LightPoolSet {
       const fresh = this.probe.describeBelow(x, pool.probeFromY, z);
       if (fresh && Math.abs(fresh.y - surfaceY) > 2 * POOL_FLOOR_LIFT) { surfaceY = fresh.y; n.corrected++; }
       else n.nearFixture++;
+    } else {
+      // ⚠️ A DISC FLOATING AT TABLE HEIGHT (reproduced 2026-09-25 on the villa
+      // GLB: 60 of 112 pools through this module, nine of them the living and
+      // dining lamps at 0.75 m over a floor at 0). The probe's memo is keyed
+      // `room | round(height)`, so every lamp mounted at ~2 m in an open-plan
+      // room shared the FIRST answer — the kitchen light's, correctly over a
+      // 0.75 m counter. The airborne rule above cannot see it: 0.75 m is well
+      // clear of a 2.2 m fixture.
+      //
+      // A pool is a glow ON THE FLOOR; what stands under a lamp — the table,
+      // the counter — is lit by the fixture's real PointLight. So an answer
+      // well above the room's own floor is replaced BY that floor. No ray: the
+      // room's floor height is already known (fitted once from the plan), and
+      // re-asking the probe was measured at ~20 ms a pool, a hitch on every
+      // load. Deterministic too — it cannot depend on what the memo held.
+      // Step and stair lights never reach here: the airborne branch above
+      // keeps a pool mounted close to what it lights.
+      const roomFloor = this.floorUnder(x, surfaceY, z);
+      if (roomFloor !== null && surfaceY - roomFloor > POOL_RAISED_M) { surfaceY = roomFloor; n.lowered++; }
     }
     // ⚠️ TWO RULES, AND WHAT WE KNOW PICKS ONE (2.477.0). A probed surface is
     // a floor being stood ON — nearest-floor. A fixture height is an unknown
@@ -265,6 +287,18 @@ export class LightPoolSet {
       if (radius <= POOL_MIN_RADIUS + 1e-3) n.crushed++;
     }
     pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
+  }
+
+  /** The floor of the room this point stands in or above: of the rooms whose
+   *  outline contains it, the highest floor not above `y` (a small tolerance
+   *  for a slab's own thickness). Null outside every room. */
+  private floorUnder(x: number, y: number, z: number): number | null {
+    let best: number | null = null;
+    for (const r of this.rooms) {
+      if (r.floorY > y + 0.05 || !pointInPolygon(x, z, r.pts)) continue;
+      if (best === null || r.floorY > best) best = r.floorY;
+    }
+    return best;
   }
 
   /** Nearest-floor rule: the room a point STANDING on floorY is in. */
