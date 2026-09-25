@@ -1,3 +1,18 @@
+## 2.496.95
+
+### Changed
+- **How long a tapped room stays "opened" is decided by a separate, tested
+  part.** Nothing changes on screen. The two rules, each fixed after a report,
+  are now checked: zooming in never closes the room you asked for, and the
+  other rooms go back to normal as soon as you zoom in past where you started.
+## 2.496.94
+
+### Changed
+- **The camera shot for a tapped room is worked out by a separate, tested
+  part.** Nothing changes on screen. The rules that were each fixed after a
+  wrong release are now checked: frame the room, not just its devices; keep
+  every device on screen, measured along both the width and the height of the
+  screen; and devices stacked at one spot are still framed.
 ## 2.496.93
 
 ### Changed
