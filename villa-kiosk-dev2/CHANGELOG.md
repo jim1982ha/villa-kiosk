@@ -1,3 +1,16 @@
+## 2.496.86
+
+### Fixed — the Weather charts stopped following the time range
+In the Weather window, switching the time range worked until 7 days was chosen,
+then the charts stopped changing, and the rain chart never finished loading.
+The window was re-requesting all its history several times a second — every
+time anything in the villa changed — and each request cancelled the one before,
+so the longer 7-day request never completed. It now requests history only when
+the range or the station's sensors change.
+
+### Fixed — a chart of a value that did not change showed nothing
+A reading that stayed the same all day, such as 0 mm of rain, showed "Not
+enough history yet" or an empty box. It now shows a flat line at that value.
 ## 2.496.85
 
 ### New — a Weather card replaces the Pool card
