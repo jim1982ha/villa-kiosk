@@ -59,6 +59,8 @@ import type { UniformBuffer } from "@babylonjs/core/Materials/uniformBuffer";
 import type { Scene } from "@babylonjs/core/scene";
 import { POOL_ALPHA_STOPS } from "./LightPools";
 
+const f = (v: number) => v.toFixed(4);
+
 /** One strip is three pools, a room of ceiling spots nine or more. */
 export const LAMP_GLOW_MAX = 32;
 /** The line the glow is appended to (pbrBlockFinalColorComposition). */
@@ -69,9 +71,10 @@ const ABOVE_FLOOR_TO = 0.15;
 /** The distance at which the falloff equals the pool's own brightness right
  *  under its bulb — a ceiling light over a floor. */
 const GLOW_AT_M = 2.3;
-/** How far a bulb's light reaches before it has faded out — the same reach
- *  as a fixture's PointLight (EntityVisuals' LIGHT_RANGE). */
-const GLOW_REACH_M = 4;
+/** How far a bulb's light reaches before it has faded out — this light's and
+ *  the bulb's PointLight's (bulbSet.ts), one number. An early 8 m lit straight
+ *  through walls into the next rooms. */
+export const BULB_REACH_M = 4;
 /** The most one bulb may give a surface, and all of them together, as
  *  multiples of its pool's centre. Without a cap the inverse square runs away
  *  next to the bulb: the villa render showed the wall and ceiling within half
@@ -87,7 +90,9 @@ const GLOW_CAP_ALL = 1.8;
  * away from a bulb is exactly what the far side of a wall is. Plain N·L.
  */
 /** The pool's brightness at its centre (POOL_ALPHA_STOPS[0]). */
-const POOL_CENTRE = POOL_ALPHA_STOPS[0][1];
+export const POOL_CENTRE = POOL_ALPHA_STOPS[0][1];
+/** A surface this close below its storey-above's floor is already that floor. */
+const CEILING_SLACK_M = 0.02;
 /**
  * The pool is ADDED in display (gamma) space and ignores the colour of the
  * floor; this is added in the shader's linear space and scaled by the
@@ -157,27 +162,52 @@ export function lampGlowFor(scene: Scene): LampGlowState {
   return s;
 }
 
-const f = (v: number) => v.toFixed(4);
 
-/** The bulbs' light on this fragment, into `lgSum` — shared by both hooks. */
+/**
+ * ONE BULB'S CONTRIBUTION, as plain scalar steps — THE formula, written once.
+ * Each step is `[name, expression]`, and every expression is valid GLSL and,
+ * given max/min/clamp/smoothstep/step/inversesqrt, valid JavaScript: the
+ * shader is generated from these steps, and tests/oracles/lamp_glow.mjs
+ * EVALUATES the same steps to check the numbers (a table top under a spot is
+ * lit; the far face of a wall, the storey above and the floor are not). The
+ * formula used to exist only as shader text that an oracle could grep but
+ * never run.
+ *
+ * Inputs: the fragment `pX,pY,pZ`, its viewer-facing normal `nX,nY,nZ`, and
+ * the bulb `lgPx,lgPy,lgPz`, its room floor `lgFloor`, the storey above's
+ * floor `lgCeil`. Output: `lgW`, the weight its colour × strength is scaled by.
+ */
+export const GLOW_TERM: ReadonlyArray<readonly [string, string]> = [
+  ["lgLx", "lgPx - pX"],
+  ["lgLy", "lgPy - pY"],
+  ["lgLz", "lgPz - pZ"],
+  ["lgD2", "max(lgLx * lgLx + lgLy * lgLy + lgLz * lgLz, 0.2500)"],
+  ["lgWin", `clamp(1.0 - lgD2 * ${f(1 / (BULB_REACH_M * BULB_REACH_M))}, 0.0, 1.0)`],
+  ["lgFall", `min(${f(POOL_CENTRE * GLOW_AT_M * GLOW_AT_M)} / lgD2, ${f(POOL_CENTRE * GLOW_CAP_ONE)}) * lgWin * lgWin`],
+  ["lgNdl", "max((nX * lgLx + nY * lgLy + nZ * lgLz) * inversesqrt(lgD2), 0.0)"],
+  ["lgAbove", `smoothstep(lgFloor + ${f(ABOVE_FLOOR_FROM)}, lgFloor + ${f(ABOVE_FLOOR_TO)}, pY) * step(pY, lgCeil - ${f(CEILING_SLACK_M)})`],
+  ["lgW", "lgFall * lgNdl * lgAbove"],
+];
+/** The cap on every bulb together, as a multiple of a pool's centre. */
+export const GLOW_CAP_TOTAL = POOL_CENTRE * GLOW_CAP_ALL;
+
+/** The bulbs' light on this fragment, into `lgAdd` — shared by both hooks. */
 const ACCUMULATE = `
   vec3 lgN = normalize(normalW);
   if (dot(lgN, vEyePosition.xyz - vPositionW) < 0.0) lgN = -lgN;
+  float pX = vPositionW.x; float pY = vPositionW.y; float pZ = vPositionW.z;
+  float nX = lgN.x; float nY = lgN.y; float nZ = lgN.z;
   vec3 lgSum = vec3(0.0);
   for (int lgI = 0; lgI < ${LAMP_GLOW_MAX}; lgI++) {
     if (float(lgI) >= lampGlowCount) break;
     vec4 lgP = lampGlowPos[lgI];
     vec4 lgC = lampGlowCol[lgI];
-    vec3 lgL = lgP.xyz - vPositionW;
-    float lgD2 = max(dot(lgL, lgL), 0.25);
-    float lgWin = clamp(1.0 - lgD2 * ${f(1 / (GLOW_REACH_M * GLOW_REACH_M))}, 0.0, 1.0);
-    float lgFall = min(${f(POOL_CENTRE * GLOW_AT_M * GLOW_AT_M)} / lgD2, ${f(POOL_CENTRE * GLOW_CAP_ONE)}) * lgWin * lgWin;
-    float lgNdl = max(dot(lgN, lgL * inversesqrt(lgD2)), 0.0);
-    float lgAbove = smoothstep(lgP.w + ${f(ABOVE_FLOOR_FROM)}, lgP.w + ${f(ABOVE_FLOOR_TO)}, vPositionW.y)
-                  * step(vPositionW.y, lgC.w - 0.02);
-    lgSum += lgC.rgb * (lgFall * lgNdl * lgAbove);
+    float lgPx = lgP.x; float lgPy = lgP.y; float lgPz = lgP.z;
+    float lgFloor = lgP.w; float lgCeil = lgC.w;
+${GLOW_TERM.map(([name, expr]) => `    float ${name} = ${expr};`).join("\n")}
+    lgSum += lgC.rgb * lgW;
   }
-  vec3 lgAdd = surfaceAlbedo * ${f(LAMP_GLOW_GAIN)} * min(lgSum, vec3(${f(POOL_CENTRE * GLOW_CAP_ALL)}));
+  vec3 lgAdd = surfaceAlbedo * ${f(LAMP_GLOW_GAIN)} * min(lgSum, vec3(${f(GLOW_CAP_TOTAL)}));
 `;
 
 /** LIGHTMAPPED structure: appended after the lightmap multiply (the anchor),

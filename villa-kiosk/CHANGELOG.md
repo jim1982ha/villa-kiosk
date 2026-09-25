@@ -1,3 +1,12 @@
+## 2.496.84
+
+### Changed — the lamp-light formula is written once and checked by number
+The formula that lights furniture now lives in one place: the shader is
+generated from it, and the tests calculate the same formula to check the
+results that went wrong this week — a table top under a light is lit, while
+the far side of a wall, the room above and the floor (which has its own glow)
+are not. Nothing looks different: a render of the villa is identical, pixel for
+pixel, to the previous version.
 ## 2.496.83
 
 ### Changed — which lights a villa gets is decided in one place

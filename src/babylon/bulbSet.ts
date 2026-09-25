@@ -43,7 +43,7 @@ import { Material } from "@babylonjs/core/Materials/material";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } from "./lightPoolSet";
-import { attachLampGlow, hasLampGlow, lampGlowFor, LAMP_GLOW_MAX } from "./lampGlow";
+import { attachLampGlow, hasLampGlow, lampGlowFor, LAMP_GLOW_MAX, BULB_REACH_M } from "./lampGlow";
 import { isHelperMesh } from "./meshRoles";
 
 /** The bulbs' own warm white — a fixture's baseline glow and a PointLight's
@@ -51,9 +51,6 @@ import { isHelperMesh } from "./meshRoles";
 export const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
 /** One fixture's worth of PointLight, at full brightness and slider 1. */
 const MAX_LIGHT_INTENSITY = 1.3;
-/** Room-scale reach for a PointLight. An early 8 m lit straight through
- *  walls into the next rooms; 4 m keeps a lamp in its own room. */
-const LIGHT_RANGE = 4;
 /** Metres — a fixture mesh with a side this long is a strip. */
 export const STRIP_MIN_LENGTH = 1.5;
 /** A strip's PointLight is lowered this fraction of the way to what is below… */
@@ -261,7 +258,7 @@ export class BulbSet {
   private newLight(name: string, pos: Vector3): PointLight {
     const light = new PointLight(name, pos, this.scene);
     light.intensity = 0;
-    light.range = LIGHT_RANGE;
+    light.range = BULB_REACH_M;
     light.diffuse = WARM_GLOW.clone();
     light.specular = Color3.Black();
     light.setEnabled(false);

@@ -16,7 +16,7 @@ const { Scene } = await import("@babylonjs/core/scene.js");
 const { PBRMaterial } = await import("@babylonjs/core/Materials/PBR/pbrMaterial.js");
 const { pbrBlockFinalColorComposition } = await import("@babylonjs/core/Shaders/ShadersInclude/pbrBlockFinalColorComposition.js");
 const { pbrPixelShader } = await import("@babylonjs/core/Shaders/pbr.fragment.js");
-const { LampGlowState, LAMP_GLOW_MAX, LAMP_GLOW_ANCHOR, LAMP_GLOW_GLSL, LAMP_GLOW_PLAIN_POINT, LAMP_GLOW_PLAIN_GLSL, attachLampGlow, hasLampGlow } =
+const { LampGlowState, LAMP_GLOW_MAX, LAMP_GLOW_ANCHOR, LAMP_GLOW_GLSL, LAMP_GLOW_PLAIN_POINT, LAMP_GLOW_PLAIN_GLSL, GLOW_TERM, POOL_CENTRE, attachLampGlow, hasLampGlow } =
   await import("@/babylon/lampGlow");
 
 let fail = 0;
@@ -49,11 +49,39 @@ console.log("  the second hook, for everything that is not lightmapped");
   ck("the plain snippet adds to finalDiffuse", /finalDiffuse \+= lgAdd;/.test(LAMP_GLOW_PLAIN_GLSL));
   ck("  ...and never runs on a lightmapped material (which has the anchor instead)",
     LAMP_GLOW_PLAIN_GLSL.includes("!defined(USELIGHTMAPASSHADOWMAP)"));
-  ck("nothing at or above the storey above is lit — no ceiling stops this light",
-    /step\(vPositionW\.y, lgC\.w - 0\.02\)/.test(LAMP_GLOW_GLSL));
-  // 2.496.78 wrapped it, and the outside faces of the room's walls lit up.
-  ck("a surface facing AWAY from a bulb gets nothing — the far side of a wall (2.496.79)",
-    /lgNdl = max\(dot\(lgN, lgL \* inversesqrt\(lgD2\)\), 0\.0\);/.test(LAMP_GLOW_GLSL) && !/GLOW_WRAP|\+ 0\.6\)/.test(LAMP_GLOW_GLSL));
+  ck("the shader is generated from GLOW_TERM, every step of it",
+    GLOW_TERM.every(([name, expr]) => LAMP_GLOW_GLSL.includes(`float ${name} = ${expr};`)));
+}
+
+console.log("  the numbers — GLOW_TERM evaluated, the same steps the shader runs");
+{
+  // Every expression is valid JS given these; the shader gets them from GLSL.
+  const helpers = {
+    max: Math.max, min: Math.min, clamp: (x, a, b) => Math.min(b, Math.max(a, x)),
+    smoothstep: (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); },
+    step: (edge, x) => (x >= edge ? 1 : 0), inversesqrt: (x) => 1 / Math.sqrt(x),
+  };
+  const body = GLOW_TERM.map(([n, e]) => `const ${n} = ${e};`).join("\n") + "\nreturn lgW;";
+  const term = new Function(...Object.keys(helpers), "pX", "pY", "pZ", "nX", "nY", "nZ", "lgPx", "lgPy", "lgPz", "lgFloor", "lgCeil", body)
+    .bind(null, ...Object.values(helpers));
+  // A ceiling spot at 2.3 m over a room floor at 0, the storey above at 2.56.
+  const lamp = [0, 2.3, 0, 0, 2.56];
+  const w = (p, n) => term(...p, ...n, ...lamp);
+  const up = [0, 1, 0];
+  const table = w([0.3, 0.75, 0], up);
+  ck("a table top (0.75 m) under the spot is lit", table > 0.3, table);
+  ck("  ...a seat at 0.45 m too", w([0.5, 0.45, 0.4], up) > 0.2, w([0.5, 0.45, 0.4], up));
+  ck("the floor under it is NOT — that is its pool's", w([0.3, 0.0, 0], up) === 0, w([0.3, 0.0, 0], up));
+  ck("a wall facing the spot is lit", w([1, 1.5, 0], [-1, 0, 0]) > 0, w([1, 1.5, 0], [-1, 0, 0]));
+  ck("the FAR face of that wall — facing away — gets nothing (2.496.78's wrap lit it)",
+     w([1.15, 1.5, 0], [1, 0, 0]) === 0, w([1.15, 1.5, 0], [1, 0, 0]));
+  ck("  ...even the outer face of a wall right beside the bulb, where the light arrives almost edge-on",
+     w([0.4, 1.0, 0], [1, 0, 0]) === 0, w([0.4, 1.0, 0], [1, 0, 0]));
+  ck("the storey above gets nothing, even facing the bulb (2.496.79)", w([0.5, 2.7, 0], [0, -1, 0]) === 0, w([0.5, 2.7, 0], [0, -1, 0]));
+  ck("beyond the reach (4 m) nothing", w([4.2, 0.75, 0], up) === 0, w([4.2, 0.75, 0], up));
+  const near = w([0.05, 2.0, 0], up);
+  ck("right under the bulb the inverse square is capped", near <= POOL_CENTRE * 1.4 + 1e-9, near);
+  ck("nearer is brighter, all else equal", w([0.2, 0.75, 0], up) > w([1.5, 0.75, 0], up));
 }
 
 console.log("  the plugin attaches to a material");
