@@ -121,6 +121,7 @@ import { onStorey, storeyFloorYAt } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPoolSet, type LightReading } from "./lightPoolSet";
+import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
@@ -1880,62 +1881,19 @@ export class EntityVisuals {
    *  module owns the ray, the predicate and the cache (see floorProbe.ts). */
   get floorProbe(): FloorProbe { return this.probe; }
 
-  /**
-   * The pixel size a badge's baked squircle is DRAWN at, for the two styles.
-   *
-   * One expression, called by both the control that sets `glyph.width` and the
-   * bake that fills it, because those two numbers agreeing IS the fix in
-   * 2.301.0: the image is composited on a canvas and then drawn by Babylon GUI
-   * with `drawImage`, and WebKit resamples that with a single bilinear tap
-   * where Chrome mip-filters. Baked at 128 and drawn at 34 it staircased on
-   * Safari and looked fine on Chrome. Baked at the drawn size it cannot
-   * resample at all. If these two ever drift apart the blur comes straight
-   * back, so they read the same expression rather than the same constant.
-   */
+  /** The size a badge's glyph is DRAWN at, base CSS px — badgeLayout.glyphDrawPx,
+   *  which carries why the control and the bake must read one expression. */
   private glyphPxFor(card: boolean): number {
-    const m = this.metrics;
-    if (!card) return m.badgeDiameterPx;
-    // The card's WORST-CASE inner box: Babylon insets a Rectangle's children
-    // by its border, heaviest (ringThicknessPx) while the device is active or
-    // alerting. Sizing the icon to anything larger clips it in exactly those
-    // states — see the fuller note at the control's own construction.
-    const cardMaxInnerH = m.cardHeightPx - 2 * m.ringThicknessPx;
-    return Math.min(Math.round(m.cardHeightPx * m.cardIconFraction), cardMaxInnerH);
+    return glyphDrawPx(this.metrics, card);
   }
 
-  /**
-   * The size a glyph is actually PAINTED at, which is what its bitmap must be
-   * baked at — and it is not `glyphPxFor`.
-   *
-   * ⚠️ `this.metrics` is UNSCALED. Every badge control is built in base CSS
-   * pixels and the whole container is then transform-scaled by
-   * `effectiveScale()` (see applyIconScale), so a control whose `width` says 44
-   * covers 44·s render pixels. 2.301.0 made the bake read the same expression
-   * as the control's width and called that "baked at the size it is drawn" —
-   * true of the two NUMBERS, and false of the pixels, because both are on the
-   * unscaled side of a transform. On any retina device cssToGui() alone makes
-   * s≈2 (a fact this file already states, in labelBaseOffsetY), so every badge
-   * has been baking a 44px bitmap and painting it across ~88 render pixels.
-   * That is a 2x upscale of the artwork before the canvas is composited, and
-   * on WebKit — one bilinear tap, no mips — it is the whole reported "the
-   * entity icons are very low resolution", on iPad and iPhone alike.
-   *
-   * ⚠️ It deliberately does NOT include `iconZoomScale`. Re-baking means
-   * rebuildLabels (a data-URL swap on a live Babylon Image does not reliably
-   * re-render the GUI texture — see repaintBadges), and the bird's-eye zoom
-   * factor moves continuously, so including it would hitch the map every time
-   * the ladder crossed a rung mid-pinch. It is capped at 1, so excluding it can
-   * only ever leave the bitmap LARGER than the paint — a mild downscale, which
-   * is the direction BAKE_LADDER's headroom exists to absorb and the direction
-   * WebKit handles acceptably. The two factors that are left change only when
-   * the resolution valve fires or the user moves the size stepper, which re-bakes through
-   *  `repaintGlyphs` — and did NOT until 2.496.29. The claim that used to
-   *  stand here ("both of those already repaint") was false: the stepper
-   *  only re-scaled, so every badge wore an upscaled bitmap until its own
-   *  device next reported.
-   */
+  /** The size a glyph must be BAKED at, render px — badgeLayout.glyphBakePx,
+   *  which carries why it is not the drawn size. The two inputs besides the
+   *  metrics change only when the resolution valve fires or the size stepper
+   *  moves, and both re-bake through `repaintGlyphs` (which the stepper did
+   *  NOT until 2.496.29). */
   private glyphBakePx(card: boolean): number {
-    return this.glyphPxFor(card) * this.iconUserScale * this.bestCssToGui();
+    return glyphBakePx(this.metrics, card, this.iconUserScale, this.bestCssToGui());
   }
 
   /**
@@ -5669,7 +5627,6 @@ export class EntityVisuals {
   ): PlacementItem[] {
     const pool = this.placeItems;
     const focus = this.focusedRooms;
-    const k = clearance.pxPerWorld;
     const p = this.projPlane;
     for (let i = 0; i < shown.length; i++) {
       const s = shown[i];
@@ -5678,38 +5635,13 @@ export class EntityVisuals {
         it = { sx: 0, sy: 0, sz: 0, reach: 0, reachY: 0, rank: 0, sortKey: "", category: "", room: "", exempt: false };
         pool[i] = it;
       }
-      projectToView(clearance.basis, s.wx, s.wy, s.wz, p);
-      s.sx = p.px * k; s.sy = p.py * k + boxes[i].cy; s.sz = p.pz * k;
-      it.sx = s.sx; it.sy = s.sy; it.sz = s.sz;
-      // ── THE DEPTH CORRECTION ──────────────────────────────────────────
-      // Placement measures on an orthographic plane at ONE pixels-per-world
-      // for the whole scene; the renderer divides every drawn thing by its OWN
-      // depth. So two badges further from the camera than the rung's reference
-      // depth DRAW CLOSER TOGETHER than the plane predicted, by the ratio of
-      // those depths — and the solver, believing them clear, lets them overlap.
-      // Reported as badges sitting on top of one another on the far side of
-      // the villa, which is exactly where the ratio is largest.
-      //
-      // Measured before it was changed: a pair the solver judged EXACTLY
-      // touching overlaps by 9% of a badge width 8 m beyond the reference
-      // depth, 14% at 12 m, 22% at 20 m. Zero at the reference depth itself.
-      //
-      // ⚠️ THIS IS NOT THE BLANKET MARGIN, AND MUST NOT BECOME ONE.
-      // GROUP_OVERLAP_ALLOW_WIDTHS bought the same headroom by making
-      // EVERYTHING merge earlier, including badges near the camera where the
-      // residual is zero or negative; it was set to 0 in 2.173.0 with "it
-      // should stay there", and it does. This asks each badge for exactly the
-      // extra room its OWN depth will cost it, so a near badge is untouched.
-      //
-      // Clamped at 1: a badge NEARER than the reference draws further apart
-      // than the plane predicted, and shrinking its claim on that basis would
-      // group it late — an error in the direction this subsystem has spent
-      // several releases removing. One-sided, like the CEIL on the rung.
-      const depthPull = clearance.refDepth > 0
-        ? Math.max(1, (clearance.refDepth + p.pd) / clearance.refDepth)
-        : 1;
-      it.reach = boxes[i].halfW * clearance.allow * depthPull;
-      it.reachY = boxes[i].halfH * clearance.allow * depthPull;
+      // Position on the glass (centred where the box is DRAWN) and the room it
+      // claims there (inflated by its OWN depth) — badgeLayout.onGlass, which
+      // carries both rules and their history. Written back onto the
+      // ShownLabel too: placeEntityGroups needs the same plane coordinates,
+      // and projecting twice is how two spaces drift apart.
+      onGlass(clearance, s.wx, s.wy, s.wz, boxes[i], p, it);
+      s.sx = it.sx; s.sy = it.sy; s.sz = it.sz;
       it.rank = badgeRank(s.lbl.type, s.lbl.category);
       it.sortKey = s.id;
       // Tiebreak only, never a gate — see PlacementItem.category.

@@ -1,3 +1,20 @@
+## 2.496.61
+
+**Nothing you should see changed.** Badges are placed and drawn exactly as
+before.
+
+Behind that: most of the badge layout's own arithmetic already had automatic
+checks, but the faults of recent releases kept landing in the joins between
+those pieces — icons drawn blurry because their picture was prepared at the
+wrong size, badges judged by where their anchor was rather than where they are
+actually drawn, and badges on the far side of the villa overlapping because
+distance shrinks them on screen. That joining code for a single badge now has a
+home of its own, and the checks call it directly — so those three faults are
+tested as the code that runs, not as a copy of it.
+
+This is the first part of this work, not all of it: how badges are grouped into
+cards and room labels is still inside the larger drawing code.
+
 ## 2.496.60
 
 **Nothing you should see changed.** Day, night and the overview backdrop look
