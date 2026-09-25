@@ -1,5 +1,15 @@
-// src/babylon/floorOverlayOrder.ts
-// The draw order of the see-through layers that lie FLAT ON A FLOOR.
+// src/babylon/seeThroughOrder.ts
+// The draw order of the villa's see-through layers — ONE table.
+//
+// Born as floorOverlayOrder.ts (2.496.53) for the two layers lying flat on a
+// floor, and widened (2.496.64) when the camera CONE turned out to have the
+// same defect against window glass: glass is transparent AND writes depth
+// (ModelLoader's forceDepthWrite), both sorted by distance to their bounding
+// sphere's centre, and a fused glass primitive's centre sits wherever the
+// façade's middle is — so from 56 of 108 outside viewpoints the glass drew
+// first and cut the cone off behind its pane (tests/oracles/see_through_order.mjs).
+// A new see-through layer takes its place HERE, never by an alphaIndex literal
+// of its own.
 //
 // ⚠️ THE CAMERA MUST NOT DECIDE THIS. Babylon draws transparent meshes far to
 // near by the distance from the camera to each mesh's bounding-sphere CENTRE,
@@ -29,3 +39,12 @@
 export const ROOM_GLOW_ALPHA_INDEX = 1;
 /** A light pool (LightPools): after the glow, so light shows on a red floor. */
 export const LIGHT_POOL_ALPHA_INDEX = 2;
+/**
+ * A camera's viewing cone (CameraBeams): after the floor layers, BEFORE every
+ * default-ordered transparent mesh — above all window glass, which writes
+ * depth. Drawn first, a cone behind a pane is tinted by the glass drawn over
+ * it, as it should be; drawn after, it was cut off at the pane. The price is
+ * the opposite case, a cone IN FRONT of a window being tinted by the glass
+ * behind it — a faint tint, where the old failure removed the cone.
+ */
+export const CAMERA_BEAM_ALPHA_INDEX = 3;

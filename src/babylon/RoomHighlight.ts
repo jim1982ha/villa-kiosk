@@ -30,7 +30,7 @@ import type { FrameRequests } from "./frameScheduler";
 import { roomKey } from "@/config/roomKey";
 import { nearestFloorRoom } from "./roomStorey";
 import { ALERT_RED } from "./colors";
-import { ROOM_GLOW_ALPHA_INDEX } from "./floorOverlayOrder";
+import { ROOM_GLOW_ALPHA_INDEX } from "./seeThroughOrder";
 
 // Same red as a running climate device's mesh outline / the badge alert ring
 // — see colors.ts. Was its own slightly-off Color3 before.
@@ -136,7 +136,7 @@ export class RoomHighlight {
     material.emissiveColor = GLOW_COLOR;
     material.alpha = 0;
     material.backFaceCulling = false;
-    // A film on the floor, never an occluder — see floorOverlayOrder.ts. It
+    // A film on the floor, never an occluder — see seeThroughOrder.ts. It
     // wrote depth at the light pools' own height, which is what hid them.
     material.disableDepthWrite = true;
     if (isDecal) material.zOffset = -2;
@@ -149,7 +149,7 @@ export class RoomHighlight {
     mesh.material = material;
     mesh.isPickable = false;
     mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL surfaces, same as markers
-    // Drawn before the light pools whatever the camera does — floorOverlayOrder.ts.
+    // Drawn before the light pools whatever the camera does — seeThroughOrder.ts.
     mesh.alphaIndex = ROOM_GLOW_ALPHA_INDEX;
     return { mesh, material };
   }

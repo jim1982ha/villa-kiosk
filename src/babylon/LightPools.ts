@@ -24,7 +24,7 @@ import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { earClipTriangulate, regularPolygon, type Pt2 } from "@/utils/geometry";
-import { LIGHT_POOL_ALPHA_INDEX } from "./floorOverlayOrder";
+import { LIGHT_POOL_ALPHA_INDEX } from "./seeThroughOrder";
 
 const POOL_TEXTURE_SIZE = 128;
 /** Sides of the pool's own footprint when it is not clipped to a room. Eight
@@ -164,7 +164,7 @@ export class LightPool {
     // Excluded from shadow casters / IBL surfaces exactly as the room glow's
     // meshes are — it is a marker, not villa geometry.
     this.mesh.metadata = { isMarker: true };
-    // After the presence glow, whatever the camera does — floorOverlayOrder.ts.
+    // After the presence glow, whatever the camera does — seeThroughOrder.ts.
     this.mesh.alphaIndex = LIGHT_POOL_ALPHA_INDEX;
 
     this.material = new StandardMaterial(`lightPoolMat_${name}`, scene);

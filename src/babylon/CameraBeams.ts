@@ -19,6 +19,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { ModelKeyedStore } from "./modelStore";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
+import { CAMERA_BEAM_ALPHA_INDEX } from "./seeThroughOrder";
 
 const BEAM_COLOR = new Color3(0.95, 0.15, 0.12);
 // A wide "spotlight" cone at ROOM scale. Two rounds of feedback shaped this:
@@ -249,7 +250,12 @@ export class CameraBeams {
       material.emissiveColor = BEAM_COLOR;
       material.alpha = 0;
       material.backFaceCulling = false;
+      // Never an occluder, and drawn before glass — see seeThroughOrder.ts.
+      // Alpha blending already skips the depth write; this pins it, because
+      // a cone that wrote depth would cut off what is behind IT instead.
+      material.disableDepthWrite = true;
       mesh.material = material;
+      mesh.alphaIndex = CAMERA_BEAM_ALPHA_INDEX;
       mesh.isPickable = false;
       mesh.metadata = { isMarker: true }; // exclude from shadow casters/IBL, like markers
 

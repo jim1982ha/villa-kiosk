@@ -34,14 +34,16 @@ function withExtension(url) {
   return url;
 }
 
-export function resolve(specifier, context, next) {
+export async function resolve(specifier, context, next) {
   if (specifier.startsWith("@/")) {
     return next(withExtension(SRC + specifier.slice(2)), context);
   }
   // Babylon ships ESM with explicit `.js` files; Vite adds the extension to
   // `@babylonjs/core/Meshes/mesh`, Node does not.
   if (specifier.startsWith("@babylonjs/") && !/\.[cm]?js$/.test(specifier)) {
-    return next(specifier + ".js", context);
+    // A file (`Meshes/mesh`) or a directory with an index (`loaders/glTF`).
+    try { return await next(specifier + ".js", context); }
+    catch { return next(specifier + "/index.js", context); }
   }
   if (specifier.startsWith(".") && context.parentURL?.startsWith("file:")) {
     const resolved = new URL(specifier, context.parentURL).href;
