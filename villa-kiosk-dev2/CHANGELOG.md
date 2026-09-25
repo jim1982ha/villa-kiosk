@@ -1,3 +1,25 @@
+## 2.496.73
+
+### Fixed — furniture under a lamp stayed dark at night
+After 2.496.72 put the lamps' floor glow back on the floor, the dining table,
+chairs and counters under a lamp went dark at night. 2.496.72's note said they
+were "still lit by the lamp itself" — that was wrong, and this is the fix.
+
+On this kind of 3D model the table and chairs are part of the building itself,
+which carries its lighting pre-painted — by night, the dark version. VESTA was
+lighting them with each lamp and then multiplying the result by that dark
+paint, so almost nothing reached the screen. They only looked lit before
+because the floating glow happened to sit at table height.
+
+A lamp that is on now adds its light on top of the painted lighting instead:
+table tops, seats, counters and the walls facing the lamp brighten around it,
+fading with distance, and the floor keeps its own glow as before. The
+"Light effect strength" slider scales it like the rest.
+
+Performance: the lamps' full lighting is no longer computed for the building,
+where it was thrown away; the much lighter glow replaces it. To check on the
+iPad, run Settings → Advanced → Device telemetry → Probe with some lights on
+— it now reports a "no lamp glow" row, the glow's own cost per frame.
 ## 2.496.72
 
 ### Fixed — light pools floating at table height in the walking view
