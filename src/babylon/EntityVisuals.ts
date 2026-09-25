@@ -1309,20 +1309,13 @@ export class EntityVisuals {
   /** Entity ids currently standing behind an entity group, so cullLabels'
    *  visibility pass hides them exactly like a room-clustered badge. */
   private entityGrouped = new Set<string>();
-  /** Each room's real drawn polygon (world-space X/Z, original casing) — the
-   *  geometric signal roomForEntity uses to auto-fill a freshly detected
-   *  entity's room on first sight (see getDetectedMappings). Stored as the
-   *  actual point list because containment testing needs it.
-   *
-   *  ⚠️ `floorY` is carried, not dropped, and it is what makes every lookup here
-   *  STOREY-AWARE. These polygons are a floor PLAN — flat outlines with no
-   *  height — and on a two-storey villa the upper storey's outlines cover the
-   *  lower one's in XZ. A containment test alone therefore answers with
-   *  whichever polygon the array lists first, which is the load order of
-   *  `.rooms.json` and nothing else. See `roomPolyAt`. */
-  private roomPolys: { name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number }[] = [];
-  /** Every storey question about `roomPolys` — see storeys.ts. */
-  private storeys = new Storeys(this.roomPolys);
+  /** THE VILLA PLAN (storeys.ts) — the calibrated room outlines with their
+   *  floors and storeys, the one object SceneManager built and every reader
+   *  shares. Room auto-fill (roomForEntity) and the floor probe's room
+   *  resolver ask it which room a point is in, ON ITS STOREY: the outlines
+   *  are a flat floor plan, and upstairs lies over downstairs in XZ, so a bare
+   *  containment test answers with `.rooms.json`'s load order. */
+  private plan = new Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number }>([]);
   /** True while the walking camera is the active one — see setFirstPerson. */
   private firstPerson = false;
   /** Which badges are behind a wall from the walker's eye — see
@@ -1428,9 +1421,9 @@ export class EntityVisuals {
     this.requestAnimationRender = () => frames.animate();
     this.probe = new FloorProbe(scene);
     // The probe can only key by ROOM once calibration has produced the world
-    // polygons; until then roomContaining returns null and it falls back to the
+    // polygons; until then the plan is empty, answers null, and it falls back to the
     // grid, exactly as every load did before 2.300.0 (see floorProbe.ts).
-    this.probe.setRoomResolver((x, y, z) => this.roomContaining(x, y, z));
+    this.probe.setRoomResolver((x, y, z) => this.plan.roomAt(x, y, z)?.name ?? null);
     this.roomHighlight = new RoomHighlight(scene, frames, this.probe);
     // Every baked-mode floor pool — see lightPoolSet.ts. The probe is its floor
     // port; the readings callback lets it repaint a pool it creates late.
@@ -2354,21 +2347,19 @@ export class EntityVisuals {
     this.labelLayer = null;
   }
 
-  /** Replace the calibrated room polygons (world space) — forwarded straight
-   *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
-   *  (load + mirror-flip toggles), same trigger as the teleport grid. */
-  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number; storey?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
-    this.roomHighlight.setRooms(polys);
+  /** The calibrated villa plan (world space, storeys.ts) — the one object
+   *  SceneManager builds per plan→world re-fit (load + mirror-flip toggles),
+   *  handed on as-is to the room highlight and the bulbs' pools. */
+  setPlan(plan: Storeys<{ name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number; conform?: { positions: number[]; indices: number[] } }>): void {
+    this.roomHighlight.setRooms(plan);
     // Each room's ground WIDTH used to be cached here too, as the "is there
     // space here?" denominator for laying a pile of badges out across a room.
     // Nothing lays badges out any more (2.159.0 — badges sit on their anchors
     // or their room summarises), so the room's own size no longer takes part
     // in any grouping decision and the cache is gone with the fan.
-    this.roomPolys = polys.filter((p) => p.pts.length >= 3)
-      .map((p) => ({ name: p.name, pts: p.pts, floorY: p.floorY ?? 0, storey: p.storey }));
-    this.storeys = new Storeys(this.roomPolys);
+    this.plan = plan;
     // The earliest moment the pools can take their rooms' shapes and floors.
-    this.bulbs.setRooms(this.roomPolys);
+    this.bulbs.setRooms(plan);
     this.requestRender();
   }
 
@@ -2394,55 +2385,6 @@ export class EntityVisuals {
     this.markLayoutDirty();
   }
 
-  /** Which drawn room polygon (if any) contains this world-space ground
-   *  point — the geometric half of roomForEntity's room auto-fill. Straight
-   *  linear scan: called only once per freshly detected entity right after a
-   *  model load, never per-frame, so the room count (a couple dozen at most)
-   *  costs nothing worth caching further. */
-  private roomContaining(x: number, y: number, z: number): string | null {
-    return this.roomPolyAt(x, y, z)?.name ?? null;
-  }
-
-  /**
-   * The room polygon a world point is IN — containment in XZ **and** on the
-   * storey the point stands on.
-   *
-   * ⚠️ The storey half is the whole point, and its absence was a real defect
-   * (see `roomPolys`). A room polygon is a flat outline with no height, and on
-   * a two-storey villa the upper storey's outlines sit directly over the lower
-   * one's, so `find(pointInPolygon)` returns whichever polygon `.rooms.json`
-   * happened to list first. Two consequences, both visible on the glass:
-   *
-   *   - a ground-floor light's pool clipped to the outline of the room ABOVE
-   *     it — cut off along edges that do not exist on this storey, or spilling
-   *     through this storey's walls where the upper room is wider. Which of
-   *     the two you got depended on array order, so identical fixtures in one
-   *     room could look different from each other. That is the "why are the
-   *     light effects shown differently" report.
-   *   - the floor probe's cache key (`floorProbe.bucket`) is `room|round(y)`,
-   *     so two rooms on one storey lying under a single room of the storey
-   *     above collapsed to ONE key and shared a probed floor height. The 4-metre
-   *     grid key 2.300.0 removed for merging THROUGH A WALL had been
-   *     reintroduced along the vertical axis, where a wall is a whole slab.
-   *
-   * The storey is chosen from the point's own height: the highest room floor at
-   * or (marginally) below it. `STOREY_PICK_EPS` is deliberately centimetres and
-   * not a generous margin — a 1F ceiling fixture hangs within centimetres of the
-   * 2F slab, so any tolerance wide enough to "be safe" hands it to the storey
-   * above, which is the bug this exists to prevent. A point below every floor
-   * (a fixture under the ground slab, or a villa whose probe found nothing)
-   * falls back to the LOWEST storey rather than to none.
-   *
-   * Degrades to the previous behaviour exactly on a single-storey villa, and on
-   * any model whose per-storey floor heights all came back equal: every room is
-   * then on the point's storey and the first containing one wins, as before.
-   */
-  private roomPolyAt(
-    x: number, y: number, z: number,
-  ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
-    return this.storeys.roomAt(x, y, z);
-  }
-
   /** Geometric room fallback: which real drawn room polygon this entity's
    *  own mesh anchor sits inside, or null if it sits outside every polygon
    *  (open ground between rooms, a fixture whose anchor sits just past a
@@ -2457,9 +2399,10 @@ export class EntityVisuals {
     if (!anchor) return null;
     const p = anchor.getAbsolutePosition();
     // The anchor's OWN height decides the storey — a 2F device is not in the
-    // 1F room its outline happens to sit over (see roomPolyAt).
-    const onMyStorey = this.roomContaining(p.x, p.y, p.z);
-    if (onMyStorey) return onMyStorey;
+    // 1F room its outline happens to sit over (Storeys.roomAt: containment,
+    // on the storey a point at an unknown height above its floor is on).
+    const onMyStorey = this.plan.roomAt(p.x, p.y, p.z);
+    if (onMyStorey) return onMyStorey.name;
     // ⚠️ THE STOREY FILTER MAY REFINE AN ANSWER, NEVER DELETE ONE (2.440.0).
     //
     // A device inside a drawn room got a room name before 2.434.0 and must
@@ -2470,12 +2413,12 @@ export class EntityVisuals {
     // the clearance test to name a storey none of whose rooms contain a given
     // anchor, which used to turn a perfectly good room into "Other".
     //
-    // Deliberately NOT pushed down into roomPolyAt: the light pool wants the
+    // Deliberately NOT pushed down into Storeys.roomAt: the light pool wants the
     // opposite when its storey has no room here — it falls through to bounding
     // the pool by the nearest boundary, which is a better answer than a room
     // one floor up. Same lookup, two right answers, so the fallback belongs to
     // the caller that wants it.
-    for (const room of this.roomPolys) {
+    for (const room of this.plan.rooms) {
       if (pointInPolygon(p.x, p.z, room.pts)) return room.name;
     }
     return null;

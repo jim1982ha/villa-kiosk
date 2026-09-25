@@ -30,17 +30,10 @@ import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { isCeilingMesh, structureRole, isHelperMesh } from "./meshRoles";
 import { pointInPolygon } from "@/utils/geometry";
 
-/**
- * How far above the lowest room floor a room may sit and still count as
- * "ground level" when locating the foot of a staircase (see stairFoot).
- *
- * A real floor varies by a few centimetres across a villa — probes differ, and
- * plans carry thresholds and split levels — while a stair TREAD is at least one
- * riser up, and a riser is ~0.17 m. 0.30 m sits between the two, and is the same
- * clearance `roomStorey.ts` uses for the same shape of question (STOREY_MIN_MOUNT,
- * where the SIGN of the comparison cost a release).
- */
-export const STAIR_FOOT_TOLERANCE = 0.30;
+// ⚠️ THE STAIR-FOOT TOLERANCE ("the lowest room floor + 0.30 m is the ground")
+// WAS HERE, and was the height rule storeys.ts retired everywhere else: the
+// ground rooms are the plan's lowest storey, stairwells excluded
+// (Storeys.groundRooms, 2.496.91).
 
 /**
  * The area a mesh's triangles actually COVER, projected onto the ground plane,
@@ -778,17 +771,14 @@ export class StructureSet {
    * because a room with a ceiling over half of it is a different finding from
    * one with none, and a centroid cannot tell them apart.
    */
-  reportCoverage(worldRoomPolys: readonly { name: string; pts: { x: number; z: number }[]; floorY: number }[]): void {
-    if (!this.ceilingMeshes.length || !worldRoomPolys.length) return;
+  reportCoverage(plan: { groundRooms(): readonly { name: string; pts: { x: number; z: number }[]; floorY: number }[] }): void {
+    if (!this.ceilingMeshes.length) return;
     // ⚠️ THE MOST EXPENSIVE DIAGNOSTIC IN THE APP, AND IT WAS UNGATED
     // (2.480.0, /dry-audit). Up to 14 ground rooms x 25 grid samples x 16
     // ceiling meshes is ~5,600 ray/mesh intersections, run on EVERY boot to
     // print a line only a debugging session reads.
     if (!debugFlagEnabled()) return;
-    let groundY = Infinity;
-    for (const r of worldRoomPolys) groundY = Math.min(groundY, r.floorY);
-    const rooms = worldRoomPolys.filter(
-      (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE);
+    const rooms = plan.groundRooms();
     if (!rooms.length) return;
 
     const ray = new Ray(Vector3.Zero(), new Vector3(0, 1, 0), 12);

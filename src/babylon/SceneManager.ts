@@ -31,7 +31,8 @@ import { EntityVisuals } from "./EntityVisuals";
 import { resolveHit, type HitPickers } from "./hitResolution";
 import { FrameScheduler, type ResolutionPort } from "./frameScheduler";
 import { SceneLook } from "./sceneLook";
-import { StructureSet, STAIR_FOOT_TOLERANCE } from "./structureSet";
+import { StructureSet } from "./structureSet";
+import { Storeys, isStairwell } from "./storeys";
 import { ScenePhases, type ScenePhase } from "./scenePhases";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
@@ -84,14 +85,6 @@ const SHARPEN_STILL_MS = 350;
 const mm = (v: number): number => Math.round(v * 1000) / 1000;
 
 
-/**
- * A room the PLAN calls a staircase. Hoisted because it had been written out
- * three times and a fourth was about to be added — and the fourth is the one
- * that matters, so the copies would have drifted exactly where correctness
- * depends on them agreeing. Multilingual for the same reason every other room
- * matcher here is: the plan is authored in the owner's language.
- */
-const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i;
 
 /**
  * The tallest structure rise that counts as SOMETHING TO STAND ON rather than
@@ -256,6 +249,17 @@ function polygonKey(pts: Pt2[], floor: number): string {
   return `f${floor}:${(h >>> 0).toString(36)}:${pts.length}`;
 }
 
+/** A calibrated room in world space — what the plan (storeys.ts) holds. */
+export interface WorldRoom {
+  name: string;
+  pts: Pt2[];
+  floorY: number;
+  /** The plan's storey number for it. */
+  storey: number;
+  /** A stepped room's surface-hugging highlight mesh, built after first paint. */
+  conform?: { positions: number[]; indices: number[] };
+}
+
 export class SceneManager {
   readonly engine: Engine;
   readonly scene: Scene;
@@ -357,10 +361,11 @@ export class SceneManager {
    *  used to exclude them when deriving RoomHighlight's point-only "rooms"
    *  from config.teleportPoints (a real room polygon always wins). */
   private lastRoomPolyNames = new Set<string>();
-  /** World-space room outlines with their own floor heights, kept so the spawn
-   *  logic can ask "is this spot on a GROUND-LEVEL room floor" — see stairFoot.
-   *  Everything else consumes them through camera/visuals. */
-  private worldRoomPolys: Array<{ name: string; pts: Pt2[]; floorY: number }> = [];
+  /** THE VILLA PLAN (storeys.ts): the world-space room outlines with their
+   *  floors and storeys, built ONCE per calibration and handed, as this same
+   *  object, to the camera and the visuals (room highlight, badges, pools).
+   *  The spawn asks it for the ground rooms and the stairwells. */
+  private plan = new Storeys<WorldRoom>([]);
 
   /** Kept so handlePageShow can ask "is this canvas still on screen?" — the
    *  test that distinguishes a real React unmount from an iOS
@@ -1728,7 +1733,7 @@ export class SceneManager {
     //   spawn: REJECTED groundRoom "Bedroom 1" — not standable
     //   spawn: stairFoot "Staircase" ...
     //
-    // This villa has THREE distinct room floor heights (see roomStorey.ts, where
+    // This villa has THREE distinct room floor heights (see storeys.ts, where
     // the same fact blanked the walk-in room banner), so "within 30 cm of the
     // LOWEST floor in the model" is false for most of a split-level ground
     // storey. The test was never about the villa's lowest floor anyway — it was
@@ -1746,8 +1751,7 @@ export class SceneManager {
     // threaded. `onGround` in stairFoot excludes stair rooms from the list of
     // places to LAND; this excludes them as places to STAND, which is not the
     // same thing, because another room's polygon routinely overlaps a stairwell.
-    const inStairwell = this.worldRoomPolys.find(
-      (r) => STAIR_ROOM_RE.test(r.name) && pointInPolygon(x, z, r.pts));
+    const inStairwell = this.plan.stairwellAt(x, z);
     if (inStairwell) { this.lastStandableWhy = `inside stairwell "${inStairwell.name}"`; return false; }
     const need = (this.config.eyeHeight ?? 1.7) + 0.15;
     const R = 0.3;
@@ -1826,23 +1830,19 @@ export class SceneManager {
    * a ceiling overhead. Reported by the owner from a screenshot.
    *
    * Everything here is derived from the plan, so it holds for any villa:
-   * "ground level" is the LOWEST room floor in the model rather than any fixed
-   * elevation (a villa may sit at any height and may be split-level), and the
-   * search is a spiral outward from the stairwell for the first point inside a
-   * room whose own floor sits at that level. Stair-named rooms are excluded for
-   * the same reason they are special-cased at the polygon build above: their
-   * `floorY` is a tread, not a floor.
+   * "ground level" is the plan's lowest STOREY (Storeys.groundRooms) rather
+   * than any fixed elevation — and no longer "within 0.30 m of the lowest room
+   * floor", a height rule that dropped a split-level ground room. The search
+   * is a spiral outward from the stairwell for the first standable point in a
+   * ground room. Stairwells are excluded by the plan: their `floorY` is a
+   * tread, not a floor.
    *
    * Falls through unchanged when there are no polygons yet (calibration has not
    * run), so a pre-calibration spawn behaves exactly as it did.
    */
   private stairFoot(x: number, z: number): { x: number; z: number } {
-    if (!this.worldRoomPolys.length) return { x, z };
-    let groundY = Infinity;
-    for (const r of this.worldRoomPolys) groundY = Math.min(groundY, r.floorY);
-    const onGround = this.worldRoomPolys.filter(
-      (r) => r.floorY <= groundY + STAIR_FOOT_TOLERANCE
-        && !STAIR_ROOM_RE.test(r.name));
+    if (!this.plan.rooms.length) return { x, z };
+    const onGround = this.plan.groundRooms();
     if (!onGround.length) return { x, z };
     // ⚠️ THE TEST IS THE SURFACE HEIGHT, NOT POLYGON CONTAINMENT (2.458.0).
     // The first cut asked "is this point inside a ground-level room outline",
@@ -1892,8 +1892,7 @@ export class SceneManager {
     };
 
     // 1. A room the plan names as a staircase.
-    const namedRoom = this.calibratedPoints?.find((p) =>
-      STAIR_ROOM_RE.test(p.name));
+    const namedRoom = this.calibratedPoints?.find((p) => isStairwell(p.name));
     if (namedRoom) {
       // stairFoot, NOT the centroid — the centroid of a stairwell is mid-flight.
       const foot = this.stairFoot(namedRoom.position.x, namedRoom.position.z);
@@ -2829,7 +2828,7 @@ export class SceneManager {
     tapDebug(`calibration: ${solution.strategy}`);
 
     // Transform each room polygon to model space; centroid → teleport point.
-    const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; storey: number; conform?: { positions: number[]; indices: number[] } }> = [];
+    const worldPolys: WorldRoom[] = [];
     const points: TeleportPoint[] = [];
     /** Stair rooms whose surface-hugging glow is built after the block ends. */
     const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
@@ -2853,7 +2852,7 @@ export class SceneManager {
       // TWO stair rooms — a third of a block that runs after first paint, for a
       // glow that is only ever seen once a stair room is highlighted. The room
       // ships with its flat patch now and is upgraded a few frames later.
-      const isStairRoom = STAIR_ROOM_RE.test(room.name);
+      const isStairRoom = isStairwell(room.name);
       if (isStairRoom) stairJobs.push({ index: worldPolys.length, pts, floor });
       // The plan's storey travels with the room — Storeys (storeys.ts) needs
       // it, and re-deriving it from a centroid height is what went wrong.
@@ -2886,11 +2885,15 @@ export class SceneManager {
 
     this.calibratedPoints = points;
     this.camera.setTeleportPoints(points);
-    this.camera.setRoomPolygons(worldPolys);
+    // ONE plan per calibration, the same object for every reader. A polygon
+    // of fewer than three points contains nothing and has no floor to vote.
+    const plan = new Storeys(worldPolys.filter((p) => p.pts.length >= 3));
+    this.plan = plan;
+    this.camera.setPlan(plan);
     // Synchronously runs roomHighlight.setRooms AND LightPoolSet.setRooms — the
     // top suspect for the residual, since the latter re-probes every light
     // pool's floor. The pools report themselves as `calibPools`.
-    this.visuals.setRoomPolygons(worldPolys);
+    this.visuals.setPlan(plan);
     devLog(`[Villa] ${worldPolys.length} room polygons registered`);
 
     // Point-only "rooms" (named TeleportMenu viewpoints with no real polygon,
@@ -2899,15 +2902,14 @@ export class SceneManager {
     // later once Dashboard's onCalibrated handler adopts the freshly-fitted
     // points (see updateConfig's teleportPoints diff below).
     this.lastRoomPolyNames = new Set(worldPolys.map((r) => roomKey(r.name)));
-    this.worldRoomPolys = worldPolys;
     // ⚠️ HERE, NOT IN applyStructure (2.461.0). The coverage report was called
-    // from the ceiling block at load, and `worldRoomPolys` is not filled until
+    // from the ceiling block at load, and the room plan is not built until
     // calibration — which runs AFTER applyStructure — so it hit its own
     // early-return on every boot and never printed once. Four captures were
     // read waiting for a line that could not exist. The instrument has to live
     // where its inputs do, which is the same mistake in a new place: measuring
     // at the point that was convenient rather than the point that has the data.
-    this.structure.reportCoverage(this.worldRoomPolys);
+    this.structure.reportCoverage(plan);
     this.syncRoomPoints();
 
     // Camera motion-beam directions: each camera's sh3d plan `angle` (yaw)
@@ -2987,7 +2989,7 @@ export class SceneManager {
 
     // Everything COSMETIC, off the block. Not awaited: the villa is already
     // correct and interactive without any of it.
-    void this.finishCalibrationCosmetics(gen, worldPolys, stairJobs, cameraDirections);
+    void this.finishCalibrationCosmetics(gen, worldPolys, plan, stairJobs, cameraDirections);
   }
 
   /**
@@ -3008,7 +3010,10 @@ export class SceneManager {
    */
   private async finishCalibrationCosmetics(
     gen: number,
-    worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }>,
+    worldPolys: WorldRoom[],
+    /** The plan built from `worldPolys` — the same room objects, so a conform
+     *  mesh written onto one below is in the plan the readers hold. */
+    plan: Storeys<WorldRoom>,
     stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }>,
     cameraDirections: Map<string, { x: number; y: number; z: number }>,
   ): Promise<void> {
@@ -3058,8 +3063,8 @@ export class SceneManager {
       if (built) {
         await this.yieldFrame();
         if (stale()) return;
-        this.camera.setRoomPolygons(worldPolys);
-        this.visuals.setRoomPolygons(worldPolys);
+        this.camera.setPlan(plan);
+        this.visuals.setPlan(plan);
       }
     }
 
@@ -3652,7 +3657,7 @@ export class SceneManager {
     // remount leak 2.231.0 priced. leakWatch still reports retained shells, and
     // they are only "empty" if every collection here is cleared.
     this.structure.clear();
-    this.worldRoomPolys = [];
+    this.plan = new Storeys<WorldRoom>([]);
     this.highlightedMeshes = [];
     this.calibratedPoints = null;
     this.lastNavigatedRoom = null;

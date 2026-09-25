@@ -9,7 +9,9 @@
 // and to no room at all). Replayed with and without the plan's storey numbers.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-const { Storeys } = await import("@/babylon/storeys");
+const { Storeys, isStairwell } = await import("@/babylon/storeys");
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join } from "node:path";
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
@@ -48,6 +50,52 @@ for (const numbered of [true, false]) {
   ck("the ground storey's rooms, for bounding a pool, exclude every upstairs room",
      s.roomsOn(g).every((r) => r.floorY < 2) && !s.roomsOn(g).some((r) => ["Gym Room", "Bedroom 3", "Tearrace 2F"].includes(r.name)),
      s.roomsOn(g).map((r) => r.name));
+}
+
+console.log("\n  the plan's other answers (one villa plan, 2.496.91):");
+{
+  // A split-level ground room — a lounge two steps up, on storey 1 in the plan.
+  const rooms = [...villa(true), { name: "Lounge", floorY: 0.4, storey: 1, pts: sq(14, 20, 0, 10) }];
+  const s = new Storeys(rooms);
+  const oldGround = (() => {
+    let gy = Infinity; for (const r of rooms) gy = Math.min(gy, r.floorY);
+    return rooms.filter((r) => r.floorY <= gy + 0.30 && !isStairwell(r.name));
+  })();
+  ck("the OLD ground rule (lowest floor + 0.30 m) drops the split-level lounge", !oldGround.some((r) => r.name === "Lounge"));
+  const ground = s.groundRooms().map((r) => r.name);
+  ck("the ground rooms are the plan's lowest storey — the lounge included", ground.includes("Lounge") && ground.includes("Kitchen"), ground);
+  ck("  ...no stairwell (its floor is a tread), nothing upstairs",
+     !ground.includes("Staircase") && !ground.some((n) => ["Gym Room", "Bedroom 3", "Tearrace 2F"].includes(n)), ground);
+  ck("the stairwell under a point is found; a living room is not one", s.stairwellAt(-3, 8)?.name === "Staircase" && s.stairwellAt(5, 5) === null);
+  ck("a stairwell by any of the plan's languages", ["Staircase", "Escalier", "Treppe", "Front steps"].every(isStairwell) && !isStairwell("Living Room"));
+  ck("standing on 2.56 over the living room: the gym above it; on 0.1: the living room",
+     s.roomStandingOn(5, 2.56, 5)?.name === "Gym Room" && s.roomStandingOn(5, 0.1, 5)?.name === "Living Room");
+  ck("standing outside every room: none", s.roomStandingOn(50, 0, 50) === null);
+  const tie = new Storeys([{ name: "first", floorY: 0, pts: sq(0, 5, 0, 5) }, { name: "second", floorY: 0, pts: sq(0, 5, 0, 5) }]);
+  ck("two rooms on one floor over one point: the FIRST listed (as a single-storey villa always did)", tie.roomStandingOn(1, 0, 1)?.name === "first");
+  ck("no rooms: no ground rooms", new Storeys([]).groundRooms().length === 0);
+}
+
+console.log("\n  one plan, held once:");
+{
+  const SRC = new URL("../../src/", import.meta.url).pathname;
+  const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
+  const files = walk(SRC).map((f) => ({ f: f.slice(SRC.length), src: readFileSync(f, "utf8") }));
+  const builders = files.filter(({ src }) => /new Storeys(?:<[^>]*>)?\((?!\[\]\))/.test(src)).map(({ f }) => f);
+  ck("only SceneManager builds a plan with rooms in it; everyone else is handed it",
+     builders.length === 1 && builders[0] === "babylon/SceneManager.ts", builders);
+  ck("roomStorey.ts is gone (folded into the plan)", !existsSync(new URL("../../src/babylon/roomStorey.ts", import.meta.url)));
+  const heightRule = files.filter(({ src }) => /groundY \+|STAIR_FOOT_TOLERANCE/.test(src)).map(({ f }) => f);
+  ck("no 'lowest floor + tolerance is the ground' rule is left", heightRule.length === 0, heightRule);
+  // (A MESH-name word list for collision — structureSet's stairPat — is a
+  // different question: which catalog piece is a stair, not which plan room.)
+  const stairRe = files.filter(({ f, src }) => f !== "babylon/storeys.ts" && /STAIR_ROOM_RE/.test(src)).map(({ f }) => f);
+  ck("the plan-room stairwell test lives in the plan alone", stairRe.length === 0, stairRe);
+  const sm = files.find(({ f }) => f === "babylon/SceneManager.ts").src;
+  ck("  ...and SceneManager hands the same plan to the camera and the visuals",
+     (sm.match(/this\.camera\.setPlan\(plan\);/g) ?? []).length === 2 && (sm.match(/this\.visuals\.setPlan\(plan\);/g) ?? []).length === 2);
+  ck("the stair foot and the coverage report read the plan's ground rooms",
+     /const onGround = this\.plan\.groundRooms\(\);/.test(sm) && /this\.structure\.reportCoverage\(plan\);/.test(sm));
 }
 
 console.log("\n  the edges:");

@@ -45,6 +45,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } from "./lightPoolSet";
 import { attachLampGlow, hasLampGlow, lampGlowFor, LAMP_GLOW_MAX, BULB_REACH_M } from "./lampGlow";
 import { isHelperMesh } from "./meshRoles";
+import type { Storeys } from "./storeys";
 
 /** The bulbs' own warm white — a fixture's baseline glow and a PointLight's
  *  colour before a state has named one. */
@@ -212,8 +213,8 @@ export class BulbSet {
     for (const { meshes, reading } of this.readings()) this.show(meshes, reading);
   }
 
-  /** The calibrated rooms: the pools take their shapes and floors. */
-  setRooms(rooms: readonly PoolRoom[]): void { this.pools.setRooms(rooms); }
+  /** The calibrated villa plan: the pools take their rooms' shapes and floors. */
+  setRooms(plan: Storeys<PoolRoom>): void { this.pools.setRooms(plan); }
 
   /** Before a frame: write the pools that are on to the furniture light —
    *  when a pool changed, or every frame while more are on than it holds

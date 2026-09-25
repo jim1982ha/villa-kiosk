@@ -1,5 +1,15 @@
 // src/babylon/storeys.ts
-// Which storey a room, a height or a point is on — asked of ONE module.
+// THE VILLA PLAN: which storey a room, a height or a point is on, which room
+// a point is in, which rooms are the ground floor and which are stairwells —
+// asked of ONE object, built once per calibration by SceneManager and handed
+// to every reader (the camera, the room highlight, the badges, the pools).
+//
+// ⚠️ FIVE HOLDERS OF THE SAME POLYGONS ANSWERED THOSE QUESTIONS FIVE WAYS
+// (2.496.88): two built their own Storeys, two ran the nearest-floor rule on
+// their own copy, and two — the stair-foot search and the ceiling coverage
+// report — still used "the lowest floor plus 0.30 m is the ground", the height
+// rule this module exists to retire. The stairwell test was a regex private to
+// SceneManager. All of it is here now.
 //
 // ⚠️ THE PLAN KNOWS, AND WE THREW IT AWAY. Every room in the plan carries its
 // storey as a number; SceneManager dropped it while building the outlines, and
@@ -23,7 +33,44 @@
 // Pure: tests/oracles/storeys.mjs drives it with the villa's measured rooms.
 
 import { pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { nearestFloorRoom, STOREY_MIN_MOUNT } from "./roomStorey";
+
+/**
+ * How far a floor must sit BELOW a world point to be the storey that point
+ * belongs to. A CLEARANCE, not an epsilon — and the sign is the entire fix
+ * (2.435.0).
+ *
+ * ⚠️ v2.434.0 had this as a +0.05 tolerance: a floor at or *just above* the
+ * point still counted. That reads as cautious and is exactly backwards, because
+ * of where light fixtures actually live. A ground-floor ceiling lamp hangs
+ * within centimetres of the slab above it — 2.60 m under a slab at 2.56 — so
+ * the tolerance handed it to the UPPER storey. It then shared the floor probe's
+ * cache bucket (`room|round(y)`, and both round to 3) with a genuine upstairs
+ * fixture, inherited that room's floor height, and its pool was drawn at 2.58 m
+ * — a disc of light hanging at ceiling height instead of lying on the floor
+ * two and a half metres below. Reported as exactly that: "the light disk is
+ * floating in the air".
+ *
+ * Flipping the sign separates the two cases by the thing that really tells them
+ * apart: **a lamp is mounted a usable distance above the floor it lights.** A
+ * ceiling lamp is ~0.04 m below its slab (fails the test, falls through to the
+ * floor it actually lights); a table or floor lamp upstairs is 0.3–1.5 m above
+ * its own (passes). 0.30 m sits an order of magnitude from both.
+ *
+ * ⚠️ THE RESIDUAL, stated because a pin would otherwise imply there is none: a
+ * fixture recessed INTO an upper floor and pointing up (a floor uplight less
+ * than 0.30 m above its own slab) still reads as belonging to the storey below.
+ * That case fails quietly — its pool lands on the floor beneath — and it cannot
+ * be fixed by a number, because height alone genuinely cannot separate it from
+ * a ceiling lamp hanging at the same Y. Only a ray can, and a ray per fixture is
+ * what the memo exists to avoid.
+ */
+export const STOREY_MIN_MOUNT = 0.30;
+
+/** A plan room that is a staircase, by the name the plan gives it. Its
+ *  measured floor is a TREAD (0.85 m and 1.11 m on the villa GLB), so it is
+ *  never a place to stand or land. */
+const STAIR_ROOM_RE = /stair|escalier|escalera|scala|treppe|stufe|trap\b|steps?\b/i;
+export function isStairwell(name: string): boolean { return STAIR_ROOM_RE.test(name); }
 
 /** A room as the storeys need it. `storey` is the plan's number for it —
  *  absent when the room list has none. */
@@ -130,10 +177,54 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
     return null;
   }
 
-  /** The room a point STANDING on `floorY` is in: of the rooms containing
-   *  it, the one whose own floor is nearest. */
+  /**
+   * The room a point STANDING on `floorY` is in: of the rooms containing it, the
+   * one whose own floor is NEAREST — for the callers that already know which
+   * floor they are on (the walker's feet, a landing anchor, a probed floor),
+   * rather than guessing from a fixture's mounting height.
+   *
+   * ⚠️ TWO QUESTIONS, NOT ONE, and collapsing them is what broke the walk-in room
+   * banner in 2.437.0. `storeyAt` answers "here is a point at an UNKNOWN
+   * height above its floor — which storey does it belong to", and it has to work
+   * from a clearance because a ceiling lamp and the floor above it are
+   * centimetres apart. That rule needs the storeys to be metres apart to be safe.
+   * This one answers "I am STANDING on a floor at exactly this height" — the
+   * walker's feet, a landing anchor, a probed floor under a fixture — where the
+   * nearest floor is simply the right answer and no threshold is involved.
+   *
+   * The banner is what happens when the wrong one is used: this villa reports
+   * THREE distinct room floor heights, so a group partway between the storeys
+   * (a terrace, a step-down, a room whose per-storey probe found nothing and
+   * answered 0) sat above the walker's eye-minus-clearance and won the storey
+   * test, excluding the ground floor the walker was actually standing in. Every
+   * room was then filtered out and the banner showed NOTHING. Nearest-floor
+   * cannot do that: it always returns one of the candidates it was given, so a
+   * reader that had an answer before can never lose it to this rule.
+   *
+   * ⚠️ ALLOCATION-FREE — the walking camera asks this every frame. Ties keep the
+   * FIRST room, so a single-storey villa behaves as it always did.
+   */
   roomStandingOn(x: number, floorY: number, z: number): R | null {
-    return nearestFloorRoom(this.rooms, floorY, (r) => pointInPolygon(x, z, r.pts));
+    let best: R | null = null, d = Infinity;
+    for (const r of this.rooms) {
+      if (!pointInPolygon(x, z, r.pts)) continue;
+      const e = Math.abs(r.floorY - floorY);
+      if (e < d) { d = e; best = r; }
+    }
+    return best;
+  }
+
+  /** The stairwell containing a plan point, if any — where nobody stands. */
+  stairwellAt(x: number, z: number): R | null {
+    for (const r of this.rooms) if (isStairwell(r.name) && pointInPolygon(x, z, r.pts)) return r;
+    return null;
+  }
+
+  /** The ground floor's rooms: the lowest storey's, stairwells excluded —
+   *  a stair room is on storey 1 in the plan but its floor is a tread, which
+   *  the old "lowest floor + 0.30 m" rule excluded by height. */
+  groundRooms(): R[] {
+    return this.order.length ? this.roomsOn(this.order[0]).filter((r) => !isStairwell(r.name)) : [];
   }
 
   /** The floor of the room a point stands in or above: of the rooms

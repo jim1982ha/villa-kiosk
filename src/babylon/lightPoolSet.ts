@@ -141,8 +141,11 @@ export class LightPoolSet {
    * then give each pool its room's shape and its real floor height. Runs once
    * per calibration, after first paint — never on a state change.
    */
-  setRooms(rooms: readonly PoolRoom[]): void {
-    this.storeys = new Storeys(rooms);
+  setRooms(plan: Storeys<PoolRoom>): void {
+    // The plan SceneManager built — the same object the badges and the
+    // camera read, never one of its own.
+    this.storeys = plan;
+    const rooms = plan.rooms;
     if (this.pools.size === 0 || rooms.length === 0) return;
     // The memoised answers were keyed by grid on the load path; dropping them
     // lets the same points be re-asked now that the probe can name their room.

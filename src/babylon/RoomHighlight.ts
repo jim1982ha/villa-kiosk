@@ -24,11 +24,11 @@ import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import type { Scene } from "@babylonjs/core/scene";
-import { clipPolygonToConvex, earClipTriangulate, pointInPolygon, regularPolygon, type Pt2 } from "@/utils/geometry";
+import { clipPolygonToConvex, earClipTriangulate, regularPolygon, type Pt2 } from "@/utils/geometry";
 import type { FloorProbe } from "./floorProbe";
 import type { FrameRequests } from "./frameScheduler";
 import { roomKey } from "@/config/roomKey";
-import { nearestFloorRoom } from "./roomStorey";
+import { Storeys } from "./storeys";
 import { ALERT_RED } from "./colors";
 import { ROOM_GLOW_ALPHA_INDEX } from "./seeThroughOrder";
 
@@ -73,6 +73,15 @@ interface RoomEntry {
   material: StandardMaterial;
 }
 
+/** A calibrated room as the highlight draws it: its outline on its floor, or
+ *  a stepped room's surface-hugging mesh. */
+export interface HighlightRoom {
+  name: string;
+  pts: Pt2[];
+  floorY: number;
+  conform?: { positions: number[]; indices: number[] };
+}
+
 export class RoomHighlight {
   private scene: Scene;
   private requestRender: () => void;
@@ -88,12 +97,11 @@ export class RoomHighlight {
   /** performance.now() of the last glow step — see animate(). */
   private readonly clock = new FrameClock();
 
-  /** The room polygons `setRooms` last received, kept ONLY so a point-room's
-   *  synthetic circle can be clipped to whichever room contains it — same fix,
-   *  same reason, as the light pool's (see setPointRooms). Not a second source
-   *  of truth: it is overwritten wholesale on every re-fit, from the same
-   *  argument the meshes are built from. */
-  private roomShapes: { pts: Pt2[]; floorY: number }[] = [];
+  /** The villa plan `setRooms` last received (storeys.ts), kept so a
+   *  point-room's synthetic circle can be clipped to whichever room contains
+   *  it — same fix, same reason, as the light pool's (see setPointRooms). The
+   *  SAME object every other reader holds, not a copy of its rooms. */
+  private plan = new Storeys<HighlightRoom>([]);
   /** Shared with EntityVisuals and SceneManager — see floorProbe.ts. Was
    *  three private raycasts with three predicates before 2.300.0. A plain
    *  field, not a parameter property: Node's type stripping cannot run the
@@ -226,11 +234,10 @@ export class RoomHighlight {
    *  shows on the ground floor": every room used to render at this same
    *  fixed ground-level Y regardless of its real storey.
    */
-  setRooms(polys: { name: string; pts: Pt2[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
+  setRooms(plan: Storeys<HighlightRoom>): void {
     this.disposeMap(this.polyRooms);
-    this.roomShapes = polys.filter((p) => p.pts.length >= 3)
-      .map((p) => ({ pts: p.pts, floorY: p.floorY ?? 0 }));
-    for (const room of polys) {
+    this.plan = plan;
+    for (const room of plan.rooms) {
       const key = RoomHighlight.normalise(room.name);
       // A stepped room (staircase) ships a surface-hugging vertex mesh from
       // SceneManager.buildRoomConform; a flat room just gets its polygon patch.
@@ -302,9 +309,8 @@ export class RoomHighlight {
     // 2F landing's glow to the outline of a ground-floor room — found by
     // rolling this rule out across what it APPLIES to rather than where it was
     // reported. `floorY` here IS a floor (the anchor's own), so this is the
-    // nearest-floor question, not the fixture one — see nearestFloorRoom.
-    const room = nearestFloorRoom(
-      this.roomShapes, floorY, (r) => pointInPolygon(x, z, r.pts));
+    // nearest-floor question, not the fixture one — see Storeys.roomStandingOn.
+    const room = this.plan.roomStandingOn(x, floorY, z);
     if (!room) return circle;
     const clipped = clipPolygonToConvex(room.pts, circle);
     return clipped.length >= 3 ? clipped : circle;

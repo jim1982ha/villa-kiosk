@@ -18,6 +18,7 @@ const { NullEngine } = await import("@babylonjs/core/Engines/nullEngine.js");
 const { Scene } = await import("@babylonjs/core/scene.js");
 const { Color3 } = await import("@babylonjs/core/Maths/math.color.js");
 const { LightPoolSet, LIGHT_POOL_RADIUS } = await import("@/babylon/lightPoolSet");
+const { Storeys } = await import("@/babylon/storeys");
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
@@ -66,7 +67,7 @@ console.log("  creation:");
   r.set.addFixture(lamp, box(1, 1.2, 1, 1.2, 2.6), false);
   ck("a load-path miss creates no pool yet (2.434.0)", r.pools(lamp).length === 0);
   answers = true;
-  r.set.setRooms([room("Hall", 0, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Hall", 0, -5, 5, -5, 5)]));
   const made = r.pools(lamp);
   ck("  ...and calibration asks again and creates it", made.length === 1);
   ck("  ...already showing its light's state", made.length === 1 && made[0].isEnabled());
@@ -79,7 +80,7 @@ console.log("\n  calibration:");
   const r = rig(probe({ below: () => 2.44 }));
   const lamp = fixture("upstairs");
   r.set.addFixture(lamp, box(3.4, 3.6, 0, 0.2, 4.9), false);
-  r.set.setRooms([room("Living", 0, -10, 10, -10, 10), room("Gym", 2.44, 0, 4, -3, 3)]);
+  r.set.setRooms(new Storeys([room("Living", 0, -10, 10, -10, 10), room("Gym", 2.44, 0, 4, -3, 3)]));
   const pts = outline(r.pools(lamp)[0]);
   const maxX = Math.max(...pts.map((q) => q.x));
   ck("an upstairs pool is clipped to the upstairs room (23ac0167)", maxX <= 4 + 1e-6, maxX);
@@ -89,7 +90,7 @@ console.log("\n  calibration:");
   const r = rig(probe({ below: () => 2.2, fresh: () => ({ y: 0 }) }));
   const strip = fixture("soffit");
   r.set.addFixture(strip, box(0, 0.1, 0, 0.1, 2.4), false);
-  r.set.setRooms([room("Bedroom", 0, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Bedroom", 0, -5, 5, -5, 5)]));
   ck("a pool stuck to a ceiling is re-asked and put on the floor (2.476.0)",
      near(r.pools(strip)[0].position.y, 0.02), r.pools(strip)[0].position.y);
 }
@@ -98,7 +99,7 @@ console.log("\n  calibration:");
   const r = rig(probe({ below: () => 0.46, fresh: () => ({ y: 0.46 }) }));
   const step = fixture("step");
   r.set.addFixture(step, box(0, 0.1, 0, 0.1, 0.6), false);
-  r.set.setRooms([room("Stairs", 0, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Stairs", 0, -5, 5, -5, 5)]));
   ck("  ...but a light really mounted low keeps its answer",
      near(r.pools(step)[0].position.y, 0.48), r.pools(step)[0].position.y);
 }
@@ -107,7 +108,7 @@ console.log("\n  calibration:");
   const r = rig(probe({ below: () => 0 }));
   const lamp = fixture("terrace");
   r.set.addFixture(lamp, box(20, 20, 0, 0, 2.5), false);
-  r.set.setRooms([room("House", 0, -10, 19, -5, 5), room("Upstairs", 2.8, -10, 19.5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("House", 0, -10, 19, -5, 5), room("Upstairs", 2.8, -10, 19.5, -5, 5)]));
   const radius = reach(r.pools(lamp)[0]) * Math.cos(Math.PI / 8);
   ck("a pool in no room is bounded by its own storey's nearest wall, not the one above",
      near(radius, 1, 1e-3), radius);
@@ -116,7 +117,7 @@ console.log("\n  calibration:");
   const pr = probe({ below: () => 0 });
   const r = rig(pr);
   r.set.addFixture(fixture("m"), box(0, 0.1, 0, 0.1, 2.5), false);
-  r.set.setRooms([room("A", 0, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("A", 0, -5, 5, -5, 5)]));
   ck("calibration drops the grid-keyed memo itself", pr.cleared === 1);
 }
 
@@ -127,7 +128,7 @@ console.log("\n  calibration:");
   const r = rig(probe({ below: () => 0.75, fresh: () => ({ y: 0.75 }) }));
   const lamp = fixture("dining");
   r.set.addFixture(lamp, box(0, 0.2, 0, 0.2, 2.2), false);
-  r.set.setRooms([room("Living", 0, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Living", 0, -5, 5, -5, 5)]));
   ck("a pool is not drawn floating at table height — it lies on its room's floor (2.496.72)",
      near(r.pools(lamp)[0].position.y, 0.02), r.pools(lamp)[0].position.y);
 }
@@ -136,7 +137,7 @@ console.log("\n  calibration:");
   const r = rig(probe({ below: () => 0.2 }));
   const lamp = fixture("threshold");
   r.set.addFixture(lamp, box(0, 0.2, 0, 0.2, 2.4), false);
-  r.set.setRooms([room("Hall", 0, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Hall", 0, -5, 5, -5, 5)]));
   ck("  ...while a surface a few centimetres up keeps its answer", near(r.pools(lamp)[0].position.y, 0.22), r.pools(lamp)[0].position.y);
 }
 
@@ -149,7 +150,7 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   const reading = { on: true, colour: { r: 1, g: 0.8, b: 0.6 }, frac: 1 };
   const r = rig(probe({ below: () => 0 }), () => spots.map((f) => [f.uniqueId, reading]));
   spots.forEach((f, i) => r.set.addFixture(f, box(i, i + 0.1, 0, 0.1, 2.3), false));
-  r.set.setRooms([room("Living", 0, -5, 15, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Living", 0, -5, 15, -5, 5)]));
   const lamps = r.set.glowLamps();
   ck("one glow lamp per pool that is on", lamps.length === 9, lamps.length);
   ck("  ...each at its POOL's full strength, not split among the entity's bulbs",
@@ -172,7 +173,7 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   const r = rig(probe({ below: () => 0.46, fresh: () => ({ y: 0.46 }) }),
     () => [[step.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
   r.set.addFixture(step, box(0, 0.1, 0, 0.1, 0.6), false);
-  r.set.setRooms([room("Stairs", 0, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Stairs", 0, -5, 5, -5, 5)]));
   const l = r.set.glowLamps()[0];
   ck("a step light's glow keeps its room's floor, not its tread", l?.floorY === 0, l?.floorY);
 }
@@ -182,7 +183,7 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   const lamp = fixture("under");
   const r = rig(probe({ below: () => 0 }), () => [[lamp.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
   r.set.addFixture(lamp, box(0, 0.1, 0, 0.1, 2.3), false);
-  r.set.setRooms([room("Living", 0, -5, 5, -5, 5), room("Gym", 2.56, -5, 5, -5, 5), room("Roof", 5.2, -5, 5, -5, 5)]);
+  r.set.setRooms(new Storeys([room("Living", 0, -5, 5, -5, 5), room("Gym", 2.56, -5, 5, -5, 5), room("Roof", 5.2, -5, 5, -5, 5)]));
   const g = r.set.glowLamps()[0];
   ck("a 1F bulb's light stops at the NEXT storey's floor, not a higher one", g?.ceilingY === 2.56, g?.ceilingY);
 }
@@ -194,14 +195,14 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   const lamp = fixture("living");
   const r = rig(probe({ below: () => 0 }), () => [[lamp.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
   r.set.addFixture(lamp, box(0, 0.1, 0, 0.1, 2.3), false);
-  r.set.setRooms([room("Living", 0, -5, 5, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5), room("Staircase", 1.11, 6, 8, -5, 5),
-    room("Terrace 2F", 2.21, 9, 12, -5, 5), room("Gym", 2.56, -5, 5, -5, 5), room("Bedroom 3", 2.56, 9, 12, 6, 9), room("Bath 3", 2.56, 13, 15, 6, 9)]);
+  r.set.setRooms(new Storeys([room("Living", 0, -5, 5, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5), room("Staircase", 1.11, 6, 8, -5, 5),
+    room("Terrace 2F", 2.21, 9, 12, -5, 5), room("Gym", 2.56, -5, 5, -5, 5), room("Bedroom 3", 2.56, 9, 12, 6, 9), room("Bath 3", 2.56, 13, 15, 6, 9)]));
   const g = r.set.glowLamps()[0];
   ck("a staircase or a raised terrace is not the storey above: the light stops at 2.56 (2.496.80)", g?.ceilingY === 2.56, g?.ceilingY);
   // A villa whose only room "above" is a staircase's tread has no storey above.
   const r2 = rig(probe({ below: () => 0 }), () => [[lamp.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
   r2.set.addFixture(lamp, box(0, 0.1, 0, 0.1, 2.3), false);
-  r2.set.setRooms([room("Living", 0, -5, 5, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5)]);
+  r2.set.setRooms(new Storeys([room("Living", 0, -5, 5, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5)]));
   ck("  ...and a staircase alone is no storey: no limit at all", r2.set.glowLamps()[0]?.ceilingY === Infinity, r2.set.glowLamps()[0]?.ceilingY);
 }
 

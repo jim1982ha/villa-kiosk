@@ -2,7 +2,7 @@
 // which nothing has ever run.
 //
 // ⚠️ SEVEN FILES CLAIMED THIS WAS ALREADY COVERED. `badgeMetrics`, `badgeCard`,
-// `badgeProjection`, `roomStorey` and `EntityVisuals` all cite
+// `badgeProjection`, `roomStorey` (now storeys) and `EntityVisuals` all cite
 // `npm run test:placement` or `test:geometry` as live coverage. Neither script
 // has ever existed on this branch — they pointed at files that were not here
 // and were deleted in 2.496.23. One of them goes further and claims a pin
@@ -17,7 +17,6 @@ register("../consistency/alias-hook.mjs", import.meta.url);
 const { arrange, cardStruts, gridCells, MAX_GRID_CHIPS, MAX_TOTAL_CHIPS } =
   await import("@/babylon/badgeCard");
 const { chipWidthPx, fitChipLabel } = await import("@/babylon/labelLayout");
-const { nearestFloorRoom } = await import("@/babylon/roomStorey");
 const { snapToZoomLattice, badgeMetricsFor } = await import("@/babylon/badgeMetrics");
 const { viewBasis, projectToView } = await import("@/babylon/badgeProjection");
 
@@ -91,10 +90,8 @@ ck("  ...and the merged-rooms marker survives the cut", withSuffix.endsWith("+2"
 ck("a label that already fits is left alone", fitChipLabel("Hall", "", m, 200) === "Hall");
 
 /* ── storey picking ────────────────────────────────────────────────────── */
-// Which storey a room is on is tests/oracles/storeys.mjs's now (2.496.81).
-console.log("\n  the room a point stands in:");
-const rooms = [{ name: "g", floorY: 0 }, { name: "first", floorY: 3 }];
-ck("a point standing at ground picks the ground room", nearestFloorRoom(rooms, 0.1, () => true)?.name === "g");
+// Which storey a room is on, and which room a point stands in, are
+// tests/oracles/storeys.mjs's now (2.496.81; one villa plan, 2.496.91).
 
 /* ── the zoom lattice ──────────────────────────────────────────────────── */
 // Badges resize in discrete steps so they do not shimmer while the camera

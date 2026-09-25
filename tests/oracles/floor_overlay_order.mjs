@@ -35,6 +35,7 @@ const { Scene } = await import("@babylonjs/core/scene.js");
 const { Vector3 } = await import("@babylonjs/core/Maths/math.vector.js");
 const { RenderingGroup } = await import("@babylonjs/core/Rendering/renderingGroup.js");
 const { RoomHighlight } = await import("@/babylon/RoomHighlight");
+const { Storeys } = await import("@/babylon/storeys");
 const { LightPool } = await import("@/babylon/LightPools");
 
 let fail = 0;
@@ -44,8 +45,8 @@ const scene = new Scene(new NullEngine());
 const noop = () => {};
 const glow = new RoomHighlight(scene, { repaint: noop, animate: noop }, { surfaceUnder: () => null });
 // A long patio, 20m x 6m, with four fixtures along it — the reported shape.
-glow.setRooms([{ name: "Patio", floorY: 0,
-  pts: [{ x: -10, z: -3 }, { x: 10, z: -3 }, { x: 10, z: 3 }, { x: -10, z: 3 }] }]);
+glow.setRooms(new Storeys([{ name: "Patio", floorY: 0,
+  pts: [{ x: -10, z: -3 }, { x: 10, z: -3 }, { x: 10, z: 3 }, { x: -10, z: 3 }] }]));
 glow.setActive("Patio", true);
 const glowMesh = scene.meshes.find((m) => m.name.startsWith("roomGlow_"));
 const pools = [-7, -2, 3, 8].map((x, i) =>
