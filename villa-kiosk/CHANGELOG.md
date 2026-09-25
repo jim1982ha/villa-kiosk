@@ -1,3 +1,33 @@
+## 2.496.51
+
+**Nothing you can see changed.** A housekeeping release.
+
+A copy of the *dev* channel's add-on description was sitting on this branch,
+frozen at an old version. It is generated automatically and belongs on the main
+branch only, where it is kept current — this stale copy did nothing except wait
+to overwrite the real one and quietly offer your dev channel an older build than
+it already has.
+
+## 2.496.50
+
+### Fixed — trend charts drew ramps where the value had not moved
+A pump's power trend showed repeating ramps with apparently nothing between the
+peaks. The data was fine: no gaps, nothing unavailable, and the pump reading
+zero almost all day.
+
+Home Assistant records a value when it CHANGES, not at a fixed rhythm — so a
+device sitting at 0 W for forty-two minutes produces one reading, not
+forty-two. The chart joined each recorded point to the next with a straight
+line, turning those forty-two minutes of nothing into a smooth climb up to the
+next blip. Every sawtooth was one stretch of zero drawn as a rise.
+
+A reading now holds until it changes, the way Home Assistant's own charts draw
+it: flat, then a vertical step. This is separate from the outage shading added
+in 2.496.49 — a gap means "not known", this means "known, and unchanged" — and
+the two work together: the line holds flat, and still breaks across an outage.
+
+Both trend charts are fixed, and hovering still reports only real readings.
+
 ## 2.496.49
 
 ### Fixed — a trend chart drew a reading where the device reported nothing

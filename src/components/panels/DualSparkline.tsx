@@ -9,6 +9,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { splitAtGaps, gapBand } from "@/utils/historyGaps";
+import { stepped } from "@/utils/stepSeries";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { fmtChartValue, fmtChartTime, fmtChartStamp, nearestIndexByX } from "./chartUtils";
@@ -65,6 +66,10 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
     const ptsA = a.data.map((d) => ({ x: sx(d.t), y: sa.sy(d.v), t: d.t, v: d.v }));
     const ptsB = b.data.map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t, v: d.v }));
     // The crosshair rides the denser series' x positions.
+    // ⚠️ STEPPED, THEN SPLIT — see the note in Sparkline. Both series, because
+    // half a rollout is the defect this repository keeps paying for.
+    const lineA = stepped(a.data).map((d) => ({ x: sx(d.t), y: sa.sy(d.v), t: d.t }));
+    const lineB = stepped(b.data).map((d) => ({ x: sx(d.t), y: sb.sy(d.v), t: d.t }));
     const railPts = ptsA.length >= ptsB.length ? ptsA : ptsB;
 
     // ⚠️ A BAND PER SERIES, IN ITS OWN HALF — NOT ONE FULL-HEIGHT BAND. Two
@@ -82,7 +87,7 @@ export default function DualSparkline({ a, b, height = 120 }: Props) {
     return {
       minX, maxX, sx, sa, sb, ptsA, ptsB, railPts, plotH,
       bandsA: bandsOf(a.gaps), bandsB: bandsOf(b.gaps),
-      runsA: splitAtGaps(ptsA, a.gaps ?? []), runsB: splitAtGaps(ptsB, b.gaps ?? []),
+      runsA: splitAtGaps(lineA, a.gaps ?? []), runsB: splitAtGaps(lineB, b.gaps ?? []),
     };
   }, [a.data, a.gaps, b.data, b.gaps, W, height]);
 
