@@ -550,13 +550,17 @@ export class HAWebSocket {
     startTime: string,
     period: "5minute" | "hour" | "day" | "week" | "month" = "day",
     endTime?: string,
+    /** "change" for a total (energy, rain); mean/min/max for a measurement
+     *  (temperature, wind) — the Weather window's long ranges, which would be
+     *  tens of thousands of raw readings from a station reporting every 16 s. */
+    types: ReadonlyArray<"change" | "mean" | "min" | "max"> = ["change"],
   ): Promise<Record<string, StatisticPeriod[]>> {
     return this.sendMessage<Record<string, StatisticPeriod[]>>("recorder/statistics_during_period", {
       start_time: startTime,
       ...(endTime ? { end_time: endTime } : {}),
       statistic_ids: statisticIds,
       period,
-      types: ["change"],
+      types,
     });
   }
 

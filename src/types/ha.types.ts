@@ -164,7 +164,11 @@ export interface StatisticIdInfo {
 export interface StatisticPeriod {
   start: number;
   end: number;
-  change: number | null;
+  change?: number | null;
+  /** Present when asked for (types: mean/min/max) — a measurement's bucket. */
+  mean?: number | null;
+  min?: number | null;
+  max?: number | null;
 }
 
 export type EntityDomain =

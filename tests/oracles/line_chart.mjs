@@ -12,7 +12,7 @@
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
 const { gapsFrom } = await import("@/utils/historyGaps");
-const { chartWindow, timeScale, lineRuns, outageBands, windowEndingAt } = await import("@/utils/lineChart");
+const { chartWindow, timeScale, lineRuns, outageBands, windowEndingAt, bucketGaps } = await import("@/utils/lineChart");
 
 let fail = 0;
 const ck = (n, ok, got) => { console.log(`    ${ok ? "PASS" : "FAIL"}  ${n}${ok || got === undefined ? "" : `  →  ${JSON.stringify(got)}`}`); if (!ok) fail++; };
@@ -84,4 +84,24 @@ const missing = sites.filter((x) => !x.ok).map((x) => `${x.f}:${x.tag}`);
 ck("every one passes the series' window", missing.length === 0, missing);
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ every chart draws the span it was asked for");
+console.log("\n  statistics buckets (the Weather window, 2.496.87):");
+{
+  const P = 300_000, t0 = 1_000_000_000_000;
+  const win = { from: t0, to: t0 + 36 * P };
+  const full = Array.from({ length: 35 }, (_, i) => ({ t: t0 + i * P, v: 20 }));
+  ck("every bucket present, the newest a bucket behind now: no outage", bucketGaps(full, P, win).length === 0, bucketGaps(full, P, win));
+  const holed = full.filter((_, i) => i < 10 || i >= 16);
+  const g = bucketGaps(holed, P, win);
+  ck("six missing buckets are ONE outage, from the last bucket's end to the next bucket",
+     g.length === 1 && g[0].from === t0 + 10 * P && g[0].to === t0 + 16 * P, g);
+  ck("  ...so the line is broken there", lineRuns(holed, g, win).length === 2);
+  const stale = full.slice(0, 20);
+  const s2 = bucketGaps(stale, P, win);
+  ck("a station that stopped reporting: the outage runs to now", s2.length === 1 && s2[0].to === win.to, s2);
+  const late = full.slice(5);
+  ck("a window that opens before the first bucket: that stretch is an outage",
+     bucketGaps(late, P, win)[0]?.from === win.from, bucketGaps(late, P, win));
+  ck("no buckets at all: nothing to draw, no bands", bucketGaps([], P, win).length === 0);
+}
+
 process.exit(fail ? 1 : 0);

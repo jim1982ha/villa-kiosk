@@ -80,3 +80,27 @@ export function windowEndingAt(deep: readonly StateHistoryPoint[], end: number, 
   for (let i = 0; i < deep.length && deep[i].t < from; i++) anchor = i;
   return deep.filter((pt, i) => i === anchor || (pt.t >= from && pt.t <= end));
 }
+
+/**
+ * The outages in a series of STATISTICS buckets (5-minute or hourly means):
+ * a bucket the recorder did not write is a stretch with no reading. A line
+ * through it would draw a measurement that was never taken — the rule every
+ * line chart here keeps (tests/oracles/history_gaps.mjs), for a series whose
+ * gaps are not in the rows but between them.
+ *
+ * A gap is more than 1.5 buckets between two bucket starts, a window that
+ * opens more than 1.5 buckets before the first, or more than THREE buckets
+ * after the last one's end: the recorder writes a bucket only once it has
+ * closed, so the newest is legitimately a bucket or two behind now.
+ */
+export function bucketGaps(pts: readonly Reading[], periodMs: number, w: TimeWindow): HistoryGap[] {
+  if (pts.length === 0 || !(periodMs > 0)) return [];
+  const gaps: HistoryGap[] = [];
+  if (pts[0].t - w.from > periodMs * 1.5) gaps.push({ from: w.from, to: pts[0].t });
+  for (let i = 1; i < pts.length; i++) {
+    if (pts[i].t - pts[i - 1].t > periodMs * 1.5) gaps.push({ from: pts[i - 1].t + periodMs, to: pts[i].t });
+  }
+  const lastEnd = pts[pts.length - 1].t + periodMs;
+  if (w.to - lastEnd > periodMs * 3) gaps.push({ from: lastEnd, to: w.to });
+  return gaps;
+}

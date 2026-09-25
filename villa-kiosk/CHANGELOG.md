@@ -1,3 +1,25 @@
+## 2.496.87
+
+### Changed — a new Weather window
+The Weather window has been redesigned, as agreed on the design canvas.
+
+- **Now** — how the air feels in one line ("Warm, very humid and still"), a
+  comfort scale showing outside and inside, and three pieces of advice: whether
+  to open the windows, whether laundry will dry outside, and whether it is a
+  good time to be outdoors. Below them, six instruments: a wind compass, a
+  barometer, temperature bars (outside, feels-like, dew point, inside),
+  humidity outside and inside, a rain gauge, and sun and UV.
+- **History and trends** — opened from the link at the bottom and closed with
+  the arrow in its title: the temperature range, strongest gust, rain and
+  highest UV for the chosen period, and charts of temperature, humidity, wind,
+  rain, pressure, and sun and UV over 12 hours, 24 hours, 7 days or 30 days.
+
+The advice comes from fixed rules applied to the station's own readings — no
+forecast and nothing from the internet — so the same readings always give the
+same advice. The window is now the same width as the other windows the bottom
+bar opens. If the station stops reporting for a while, the charts show a shaded gap there
+rather than drawing a line across it. The longer ranges load quickly, because they use the summaries Home
+Assistant already keeps rather than every single reading.
 ## 2.496.86
 
 ### Fixed — the Weather charts stopped following the time range

@@ -35,7 +35,7 @@ export type WeatherRole =
   | "temperature" | "feelsLike" | "dewPoint" | "humidity"
   | "windSpeed" | "windGust" | "windGustToday" | "windDirection"
   | "rainRate" | "rainToday" | "rainMonth" | "rainYear"
-  | "pressure" | "uv" | "solar"
+  | "pressure" | "vapourDeficit" | "uv" | "solar"
   | "indoorTemperature" | "indoorHumidity" | "indoorDewPoint"
   | "battery";
 
@@ -94,7 +94,9 @@ function roleOf(e: HassEntity): WeatherRole | null {
     return null;
   }
   if (c === "pressure" || c === "atmospheric_pressure") {
-    if (has(w, NOT_AIR_PRESSURE)) return null;
+    // The vapour-pressure deficit shares the class; it is how much more water
+    // the air can take up — what the laundry advice reads.
+    if (has(w, NOT_AIR_PRESSURE)) return "vapourDeficit";
     return "pressure";
   }
   if (c === "irradiance") return "solar";
@@ -237,4 +239,131 @@ export function comfortInsight(r: {
     }
   }
   return parts.length ? parts.join(" ") : null;
+}
+
+
+// ── The Weather window's words: the headline, the comfort scale, advice ──
+//
+// ⚠️ RULES, NOT A FORECAST, AND NOT A MODEL. Each is a fixed reading of the
+// station's own values, so the same readings always give the same advice and
+// every card can say why. The scales (Beaufort, WHO UV, dew-point comfort)
+// are published; the window and laundry thresholds are physical rules of
+// thumb, written once HERE — never tuned to one villa.
+
+/** Gusts from this (Beaufort 6, "strong breeze") make open windows and the
+ *  terrace a poor idea. */
+export const STRONG_GUST_KMH = 39;
+/** Window advice: outside must be at least this much cooler, and at most
+ *  this much more humid (dew point), to open up; this much more humid
+ *  outside and the windows stay shut. */
+const COOLER_OUTSIDE_C = 1;
+const DEW_TOLERANCE_C = 1;
+const DEW_TOO_HUMID_C = 2;
+/** Laundry: the vapour-pressure deficit (hPa) at which drying is slow, and
+ *  good; sun and wind above these improve it one step each. */
+const VPD_SLOW_HPA = 5;
+const VPD_GOOD_HPA = 10;
+const DRYING_SUN_WM2 = 200;
+const DRYING_WIND_KMH = 6;
+
+export type AdviceTone = "good" | "caution" | "bad" | "neutral";
+export interface Advice { tone: AdviceTone; title: string; detail: string }
+
+const f1 = (v: number) => v.toFixed(1);
+
+/** "Warm, very humid and still." — temperature, the air's water, the wind. */
+export function comfortHeadline(tC: number, dewC: number | undefined, windKmh: number | undefined): string {
+  const t = tC < 10 ? "Cold" : tC < 18 ? "Cool" : tC < 24 ? "Mild" : tC < 30 ? "Warm" : "Hot";
+  const band = dewC === undefined ? null : dewComfort(dewC);
+  const h = band === null ? null
+    : band === "oppressive" ? "very humid" : band === "extremely oppressive" ? "oppressively humid" : band;
+  const w = windKmh === undefined ? null
+    : windKmh < 6 ? "still" : windKmh < 20 ? "a light breeze" : windKmh < STRONG_GUST_KMH ? "breezy" : "windy";
+  const parts = [h, w].filter((x): x is string => !!x);
+  if (parts.length === 0) return `${t}.`;
+  if (parts.length === 1) return `${t} and ${parts[0]}.`;
+  return `${t}, ${parts[0]} and ${parts[1]}.`;
+}
+
+/** The comfort scale's five equal bands — Dry, Comfortable, Humid, Muggy,
+ *  Oppressive — and where a dew point sits on it, 0..1. */
+export const COMFORT_BANDS = ["Dry", "Comfortable", "Humid", "Muggy", "Oppressive"] as const;
+export function comfortPosition(dewC: number): number {
+  const edges = [0, 10, 16, 18, 21, 26]; // °C; the last band runs to 26, then holds
+  const d = Math.max(edges[0], Math.min(edges[5], dewC));
+  for (let i = 0; i < 5; i++) {
+    if (d <= edges[i + 1]) return (i + (d - edges[i]) / (edges[i + 1] - edges[i])) / 5;
+  }
+  return 1;
+}
+
+/** Open the windows, or not. Null without an indoor reading to compare. */
+export function windowAdvice(r: {
+  outC?: number; inC?: number; outDewC?: number; inDewC?: number; raining?: boolean; gustKmh?: number;
+}): Advice | null {
+  if (r.outC === undefined || r.inC === undefined) return null;
+  if (r.raining) return { tone: "bad", title: "Keep the windows closed", detail: "It is raining." };
+  if (r.gustKmh !== undefined && r.gustKmh >= STRONG_GUST_KMH) {
+    return { tone: "bad", title: "Keep the windows closed", detail: `Gusts of ${Math.round(r.gustKmh)} km/h outside.` };
+  }
+  const dewDiff = r.outDewC !== undefined && r.inDewC !== undefined ? r.outDewC - r.inDewC : undefined;
+  if (dewDiff !== undefined && dewDiff >= DEW_TOO_HUMID_C) {
+    return { tone: "bad", title: "Keep the windows closed",
+      detail: `Outside is more humid (dew ${f1(r.outDewC!)}° against ${f1(r.inDewC!)}°) — opening up would bring the damp in.` };
+  }
+  const cooler = r.inC - r.outC;
+  if (cooler >= COOLER_OUTSIDE_C && (dewDiff === undefined || dewDiff <= DEW_TOLERANCE_C)) {
+    const drier = dewDiff !== undefined && dewDiff < 0 ? " and a little drier" : "";
+    return { tone: "good", title: "Open the windows",
+      detail: `${f1(cooler)}° cooler outside${drier} — the house cools without getting damper.` };
+  }
+  if (-cooler >= COOLER_OUTSIDE_C) {
+    return { tone: "caution", title: "Keep the windows closed",
+      detail: `It is warmer outside (${f1(r.outC)}°) than in (${f1(r.inC)}°).` };
+  }
+  return { tone: "neutral", title: "Windows: no difference", detail: "Inside and outside are much the same." };
+}
+
+/** Will laundry dry outside. Null without the vapour-pressure deficit. */
+export function laundryAdvice(r: { vpdHpa?: number; solarWm2?: number; windKmh?: number; raining?: boolean }): Advice | null {
+  if (r.raining) return { tone: "bad", title: "Laundry: not outside", detail: "It is raining." };
+  if (r.vpdHpa === undefined) return null;
+  const base = r.vpdHpa >= VPD_GOOD_HPA ? 2 : r.vpdHpa >= VPD_SLOW_HPA ? 1 : 0;
+  const sun = (r.solarWm2 ?? 0) > DRYING_SUN_WM2, wind = (r.windKmh ?? 0) > DRYING_WIND_KMH;
+  const level = Math.min(2, base + (sun ? 1 : 0) + (wind ? 1 : 0));
+  const take = base === 2 ? "a lot of" : base === 1 ? "some" : "little";
+  const help = sun && wind ? ", with sun and wind to help" : sun ? ", with sun to help" : wind ? ", with wind to help" : ", and there is no sun or wind";
+  return {
+    tone: level === 2 ? "good" : level === 1 ? "caution" : "bad",
+    title: level === 2 ? "Laundry: good" : level === 1 ? "Laundry: slow" : "Laundry: poor",
+    detail: `The air can take up ${take} more water (${f1(r.vpdHpa)} hPa)${help}.`,
+  };
+}
+
+/** Is it a good time to be outside. */
+export function outdoorsAdvice(r: { raining?: boolean; gustKmh?: number; windKmh?: number; uv?: number }): Advice | null {
+  if (r.raining === undefined && r.gustKmh === undefined && r.uv === undefined) return null;
+  if (r.raining) return { tone: "bad", title: "Outdoors: wet", detail: "It is raining." };
+  if (r.gustKmh !== undefined && r.gustKmh >= STRONG_GUST_KMH) {
+    return { tone: "caution", title: "Outdoors: windy", detail: `Gusts of ${Math.round(r.gustKmh)} km/h — ${beaufort(r.gustKmh).toLowerCase()}.` };
+  }
+  if (r.uv !== undefined && r.uv >= 3) {
+    const b = uvBand(r.uv);
+    return { tone: "caution", title: "Outdoors: sun protection", detail: `UV ${Math.round(r.uv)}, ${b.band.toLowerCase()} — ${b.advice}.` };
+  }
+  const bits = [r.raining === false ? "Dry" : null,
+    r.windKmh !== undefined ? beaufort(r.windKmh).toLowerCase() : null,
+    r.gustKmh !== undefined ? `gusts under ${Math.max(5, Math.ceil(r.gustKmh / 5) * 5)} km/h` : null]
+    .filter(Boolean).join(", ");
+  const uvText = r.uv !== undefined ? ` UV ${Math.round(r.uv)} — no sun protection.` : "";
+  return { tone: "good", title: "Outdoors: fine", detail: `${bits ? bits.charAt(0).toUpperCase() + bits.slice(1) + "." : ""}${uvText}`.trim() };
+}
+
+/** A vapour-pressure deficit in hPa, from whatever unit the sensor reports. */
+export function toHpa(value: number, unit: string): number {
+  const u = unit.trim().toLowerCase();
+  if (u === "kpa") return value * 10;
+  if (u === "pa") return value / 100;
+  if (u === "inhg") return value * 33.8639;
+  return value;
 }

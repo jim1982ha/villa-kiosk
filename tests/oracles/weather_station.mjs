@@ -73,6 +73,7 @@ console.log("  finding it");
   };
   for (const [role, id] of Object.entries(want)) ck(`${role} is ${id.slice(7)}`, r[role] === id, r[role]);
   ck("the vapour-pressure deficit is NOT the pressure (both are device_class pressure)", r.pressure !== "sensor.garden_vapour_pressure_deficit");
+  ck("  ...it is its own role — the laundry advice reads it", r.vapourDeficit === "sensor.garden_vapour_pressure_deficit", r.vapourDeficit);
   ck("the 10-minute average is not the direction", r.windDirection !== "sensor.garden_wind_direction_10m_avg");
   ck("the indoor pair is found although only the console's device links it", !!r.indoorTemperature && !!r.indoorHumidity);
   ck("a room thermometer on another device is not the station", !s.entityIds.includes(room.entity_id));
@@ -133,6 +134,45 @@ console.log("\n  the insight — derived from the station's own readings");
   ck("nothing to say without the readings", W.comfortInsight({}) === null);
 }
 
+console.log("\n  the window's words — fixed rules on the station's own readings");
+{
+  ck("headline: 25.3°, dew 21.8°, 4 km/h → 'Warm, very humid and still.'", W.comfortHeadline(25.3, 21.8, 4) === "Warm, very humid and still.", W.comfortHeadline(25.3, 21.8, 4));
+  ck("headline without dew or wind still says the temperature", W.comfortHeadline(12, undefined, undefined) === "Cool.");
+  ck("comfort scale: dew 21.8° sits in the fifth band, 22.9° further along", W.comfortPosition(21.8) > 0.8 && W.comfortPosition(22.9) > W.comfortPosition(21.8));
+  ck("comfort scale: band edges — 10° starts band 2, 16° band 3, 18° band 4, 21° band 5",
+     [[10, 0.2], [16, 0.4], [18, 0.6], [21, 0.8]].every(([d, p]) => Math.abs(W.comfortPosition(d) - p) < 1e-9));
+  ck("comfort scale is clamped at both ends", W.comfortPosition(-5) === 0 && W.comfortPosition(40) === 1);
+  const win = (o) => W.windowAdvice({ outC: 25.3, inC: 28.4, outDewC: 21.8, inDewC: 22.9, raining: false, gustKmh: 5, ...o });
+  ck("windows: 3.1° cooler and a little drier outside → open", win({})?.tone === "good" && /3\.1° cooler outside and a little drier/.test(win({}).detail), win({}));
+  ck("windows: raining → closed", win({ raining: true }).tone === "bad");
+  ck("windows: only 0.5° cooler outside → no difference, not 'open'", win({ outC: 27.9 }).tone === "neutral", win({ outC: 27.9 }).tone);
+  ck("windows: gusts at the strong-breeze line (39 km/h) → closed", win({ gustKmh: 39 }).tone === "bad" && win({ gustKmh: 38.9 }).tone === "good");
+  ck("windows: outside 2° more humid (dew) → closed, even when cooler", win({ outDewC: 24.9 }).tone === "bad");
+  ck("windows: warmer outside → closed (caution)", win({ outC: 30 }).tone === "caution");
+  ck("windows: no indoor reading → no card", W.windowAdvice({ outC: 25 }) === null);
+  const lau = (o) => W.laundryAdvice({ vpdHpa: 6.13, solarWm2: 0, windKmh: 4, raining: false, ...o });
+  ck("laundry: 6.1 hPa, no sun or wind → slow", lau({}).title === "Laundry: slow", lau({}).title);
+  ck("laundry: under 5 hPa → poor; from 10 → good", lau({ vpdHpa: 4.9 }).title === "Laundry: poor" && lau({ vpdHpa: 10 }).title === "Laundry: good");
+  ck("laundry: sun over 200 W/m² lifts it one step", lau({ solarWm2: 201 }).title === "Laundry: good" && lau({ solarWm2: 200 }).title === "Laundry: slow");
+  ck("laundry: rain → not outside", lau({ raining: true }).tone === "bad");
+  ck("laundry: kPa is converted (0.61 kPa = 6.1 hPa)", Math.abs(W.toHpa(0.61, "kPa") - 6.1) < 1e-9);
+  const out = (o) => W.outdoorsAdvice({ raining: false, gustKmh: 5, windKmh: 4, uv: 0, ...o });
+  ck("outdoors: dry, light air, UV 0 → fine", out({}).tone === "good" && /UV 0 — no sun protection/.test(out({}).detail), out({}).detail);
+  ck("outdoors: UV 3 → sun protection (WHO)", out({ uv: 3 }).title === "Outdoors: sun protection" && out({ uv: 2.9 }).tone === "good");
+  ck("outdoors: gusts 39 → windy; rain → wet", out({ gustKmh: 39 }).title === "Outdoors: windy" && out({ raining: true }).title === "Outdoors: wet");
+}
+
+console.log("\n  the window: the approved boards 6 and 7");
+{
+  const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
+  ck("the same width as every other bottom-bar window", /className="summary-group-modal weather-modal"/.test(panel));
+  ck("history reads the recorder's STATISTICS (5-minute / hourly), not raw history",
+     /getStatisticsDuringPeriod\(ids, [\s\S]{0,80}\["mean", "min", "max"\]\)/.test(panel) && /"30d": \{[^}]*period: "hour"/.test(panel));
+  ck("the history view goes back from its title's arrow, with no second 'back' link", /aria-label="Back to Weather"/.test(panel) && !/Back to now/.test(panel));
+  ck("the three advice cards are the rules above, fed the live readings",
+     /windowAdvice\(\{/.test(panel) && /laundryAdvice\(\{/.test(panel) && /outdoorsAdvice\(\{/.test(panel));
+}
+
 console.log("\n  the bar");
 {
   const bar = readFileSync(new URL("../../src/components/hud/SummaryBar.tsx", import.meta.url), "utf8");
@@ -149,8 +189,8 @@ console.log("\n  the charts do not re-fetch on every state push (2.496.86)");
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
   ck("the bar's station keeps its identity while the station is the same",
      /const station = useMemo\(\(\) => found, \[stationKey\]\);/.test(bar));
-  ck("the Trends fetch is keyed by the sensors' ids, not the station object",
-     /\}, \[ids, range\.hours\]\);/.test(panel) && /\[idsKey\]\)/.test(panel) && !/\], \[station\]\);/.test(panel));
+  ck("the history fetch is keyed by the sensors' ids, not the station object",
+     /\}, \[ws, idsKey, range\]\);/.test(panel) && !/\], \[station\]\);/.test(panel));
   const spark = readFileSync(new URL("../../src/components/panels/Sparkline.tsx", import.meta.url), "utf8");
   ck("one reading over a known window is a line (0 mm all day), not 'not enough history'",
      /data\.length === 0 \|\| \(data\.length < 2 && !\(window && window\.to > window\.from\)\)/.test(spark));
