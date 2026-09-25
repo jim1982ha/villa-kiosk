@@ -1,11 +1,11 @@
 // src/components/hud/SummaryBar.tsx
 // A bottom dashboard strip of live "summary / scene / quick-action" tiles —
-// the row of Gate / Pool / Lights / AC / Scene / Energy cards. Everything is
+// the row of Locks / Weather / Lights / AC / Energy / Scene cards. Everything is
 // AUTO-DERIVED from whatever HA entities exist (no per-villa config needed to
 // get value out of the box): scene.* become one-tap scene buttons, all
 // light.* collapse into a single "Lights — N on" toggle, climate.* into an
-// "AC" summary, power sensors into an "Energy" reading, and a pool switch /
-// door lock into quick-toggle / open-panel tiles when present.
+// "AC" summary, power sensors into an "Energy" reading, a door lock into an
+// open-panel tile, and the villa's weather station into a Weather tile.
 //
 // RBAC: an ACTION tile (toggle/scene/open) is only interactive when the
 // profile may control that category; otherwise it renders as a read-only
@@ -20,7 +20,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
-import { Snowflake, Zap, Waves, Sparkles } from "lucide-react";
+import { Snowflake, Zap, CloudSun, Sparkles } from "lucide-react";
 import { useHA } from "@/ha/HAStateStore";
 import { useConfig } from "@/config/ConfigContext";
 import type { Threshold } from "@/config/ThresholdConfig";
@@ -31,7 +31,9 @@ import { useResolvedTheme } from "@/hooks/useResolvedTheme";
 import type { HaSceneInfo } from "@/config/haScenes";
 import { locksGroup, lightsGroup } from "@/config/summaryGroups";
 import { villaSummary } from "@/config/villaSummary";
-import { formatUnitValue } from "@/utils/entityValue";
+import { formatUnitValue, formatSensorParts } from "@/utils/entityValue";
+import { findWeatherStation } from "@/config/weatherStation";
+import WeatherPanel from "@/components/panels/WeatherPanel";
 import { villaDevices } from "@/config/deviceGroups";
 import { onOffSummary } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
@@ -66,6 +68,9 @@ function deriveTiles(
   resolvedRooms: Record<string, string>,
   can: (c: Category) => boolean,
   thresholds: Record<string, Threshold>,
+  /** HA's device registry (entity_id → device_id) — how the weather station's
+   *  sensors are grouped into one station. */
+  entityDeviceIds: Record<string, string>,
   /** The villa's own devices. ⚠️ THREADED THROUGH RATHER THAN RECOMPUTED: the
    *  tile counts and the list a tap opens must come from one set, or the tile
    *  says "3 On" and the panel shows four rows. Only `.has` is called. */
@@ -129,25 +134,20 @@ function deriveTiles(
     });
   }
 
-  // ── Pool / jacuzzi switches ──────────────────────────────────────────
-  // Two independent rules, either one qualifies: the entity's own id/name
-  // reads as pool equipment, OR the ROOM it resolves to (resolvedRooms — HA's
-  // own Area, falling back to GLB geometry, not this switch's own name) is
-  // the pool room. The second rule is the more robust one: it catches a
-  // switch named nothing like "pool" (a generic "Filter Pump 2") as long as
-  // it's placed in the Swimming Pool room, without touching the first rule at
-  // all. Anchored against "."/"_"/" "/start/end (room names are human text
-  // with spaces, entity ids use "_") — a bare "spa" would otherwise match
-  // inside e.g. "spartan_gym_relay" (same substring-collision bug class as
-  // EntityCategories' SWITCH_PURPOSE_HINTS).
-  // (The rule itself, and why it is anchored, is villaSummary.poolFacts.)
-  if (facts.pool) {
-    const f = facts.pool;
+  // ── Weather (the villa's own station) ────────────────────────────────
+  // Replaced the Pool tile, which counted pool switches the map already
+  // shows. What the station IS is config/weatherStation.ts's — found by what
+  // only a weather station reports, never by a name — and the tile opens the
+  // Weather modal rather than a group list. Read-only: nothing to control.
+  const station = findWeatherStation(entities, entityDeviceIds);
+  if (station?.roles.temperature) {
+    const t = entities[station.roles.temperature];
+    const p = t ? formatSensorParts(t) : { value: "", unit: "" };
     tiles.push({
-      id: "__pool", icon: Waves, label: "Pool",
-      value: onOffSummary(f.on.length, f.ids.length),
-      tone: f.on.length ? "on" : "off", category: "energy",
-      entityIds: f.ids, title: "Pool", canControl: can("energy"),
+      id: "__weather", icon: CloudSun, label: "Weather",
+      value: p.value ? `${p.value}${p.unit}` : "—",
+      tone: "neutral", category: "comfort",
+      entityIds: station.entityIds, title: "Weather", canControl: false,
     });
   }
 
@@ -428,14 +428,17 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
      mappedEntityIds, visibleEntities, entityDeviceIds],
   );
 
+  // The station the Weather tile opens — the same derivation the tile used.
+  const station = useMemo(() => findWeatherStation(visibleEntities, entityDeviceIds), [visibleEntities, entityDeviceIds]);
+
   const deviceTiles = useMemo(
-    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, villaDeviceSet),
+    () => deriveTiles(visibleEntities, config.entityMap, resolvedRooms, (c) => (role ? isCategoryAllowed(role, c) : false), config.alertThresholds, entityDeviceIds, villaDeviceSet),
     // ⚠️ villaDeviceSet, NOT villaDevices. This read `villaDevices` — the
     // imported FUNCTION, a module constant that never changes — so the two
     // inputs unique to the set above (mappedEntityIds, entityDeviceIds) could
     // not invalidate the tiles. mappedEntityIds arrives late, when the GLB
     // finishes loading, which is exactly the moment the counts must move.
-    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, villaDeviceSet],
+    [visibleEntities, config.entityMap, resolvedRooms, role, config.alertThresholds, entityDeviceIds, villaDeviceSet],
   );
 
   // A scene spans categories — allow running one if the profile may control ANY.
@@ -464,7 +467,10 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
         )}
       </div>
       {sceneDialog}
-      {openGroup && (
+      {openGroup?.id === "__weather" && station && (
+        <WeatherPanel station={station} onClose={() => setOpenGroup(null)} />
+      )}
+      {openGroup && openGroup.id !== "__weather" && (
         <SummaryGroupPanel
           group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
           canControl={openGroup.canControl}

@@ -1,0 +1,240 @@
+// src/config/weatherStation.ts
+// The villa's own weather station — RECOGNISED, never named — and what its
+// readings mean. One owner, so the summary bar's Weather tile and the Weather
+// modal can never disagree about what the station is.
+//
+// ⚠️ NOTHING HERE MAY NAME A STATION. The hard rule forbids an entity id, a
+// device name or a model; the station is found by what only a weather station
+// reports:
+//   1. ANCHOR — sensors whose device_class is wind_speed, wind_direction,
+//      precipitation, precipitation_intensity or irradiance. No room sensor
+//      carries those.
+//   2. GROUP  — the anchors' device, from Home Assistant's own device registry
+//      (entityDeviceIds). The indoor pair of a console lives on the same
+//      device, which a name rule keyed on "outdoor" would miss. Before the
+//      registry has loaded, the anchors alone stand in, and the rest arrives
+//      when it does.
+//   3. ROLES  — each of the device's sensors filed by device_class and, where
+//      one class holds several readings (outdoor, feels-like, dew point and
+//      indoor are all `temperature`), by the words the integration names them
+//      with: "dew", "feels", "indoor", "gust", "daily". Integration
+//      vocabulary, identical on every install — not villa data.
+//   4. NONE   — no anchor, no station, no tile. Absence is an answer.
+//
+// ⚠️ THE SCALES BELOW ARE NOT PER-SITE TUNING. Beaufort, the WHO UV index
+// bands, the dew-point comfort bands and the 3-hour pressure tendency are
+// published scales, the same at every villa on earth — no more site-specific
+// than the freezing point of water. The hard rule forbids a threshold that is
+// right here and wrong next door; these are right everywhere.
+//
+// Pure: tests/oracles/weather_station.mjs.
+
+import type { HassEntity } from "@/types/ha.types";
+
+export type WeatherRole =
+  | "temperature" | "feelsLike" | "dewPoint" | "humidity"
+  | "windSpeed" | "windGust" | "windGustToday" | "windDirection"
+  | "rainRate" | "rainToday" | "rainMonth" | "rainYear"
+  | "pressure" | "uv" | "solar"
+  | "indoorTemperature" | "indoorHumidity" | "indoorDewPoint"
+  | "battery";
+
+export interface WeatherStation {
+  /** The device, or null while only the anchors are known. */
+  deviceId: string | null;
+  /** role → entity_id; a role the station does not report is absent. */
+  roles: Partial<Record<WeatherRole, string>>;
+  /** Every entity on the station, for the Station tab. */
+  entityIds: string[];
+}
+
+const ANCHOR_CLASSES = new Set(["wind_speed", "wind_direction", "precipitation", "precipitation_intensity", "irradiance"]);
+
+const classOf = (e: HassEntity) => String(e.attributes.device_class ?? "");
+const unitOf = (e: HassEntity) => String(e.attributes.unit_of_measurement ?? "");
+/** The words a sensor is known by: its id and its name, lower-case, spaced. */
+const wordsOf = (e: HassEntity) =>
+  `${e.entity_id} ${String(e.attributes.friendly_name ?? "")}`.toLowerCase().replace(/[._]/g, " ");
+const has = (words: string, re: RegExp) => re.test(words);
+
+const INDOOR = /\bindoor|\binside\b/;
+const DEW = /\bdew ?point|\bdewpoint/;
+const FEELS = /\bfeels|\bapparent\b|\bheat index\b/;
+const CHILL = /\bwind ?chill\b/;
+const GUST = /\bgust/;
+const PEAK = /\bmax\b|\bmaximum\b|\bpeak\b|\bdaily\b|\btoday\b/;
+const AVERAGE = /\bavg\b|\baverage\b|\bmean\b/;
+const DAILY = /\bdaily\b|\btoday\b/;
+const MONTHLY = /\bmonthly\b|\bmonth\b/;
+const YEARLY = /\byearly\b|\byear\b|\bannual\b/;
+const RELATIVE = /\brelative\b|\bsea level\b|\bmsl\b/;
+const NOT_AIR_PRESSURE = /\bdeficit\b|\bvpd\b/;
+const BATTERY = /\bbattery\b/;
+const UV = /\buv\b/;
+
+/** File one sensor of the station. First match wins; the order is the rule. */
+function roleOf(e: HassEntity): WeatherRole | null {
+  if (!e.entity_id.startsWith("sensor.")) return null;
+  const c = classOf(e), w = wordsOf(e);
+  if (c === "temperature") {
+    if (has(w, INDOOR)) return has(w, DEW) ? "indoorDewPoint" : "indoorTemperature";
+    if (has(w, DEW)) return "dewPoint";
+    if (has(w, FEELS)) return "feelsLike";
+    if (has(w, CHILL)) return null;
+    return "temperature";
+  }
+  if (c === "humidity") return has(w, INDOOR) ? "indoorHumidity" : "humidity";
+  if (c === "wind_speed") return has(w, GUST) ? (has(w, PEAK) ? "windGustToday" : "windGust") : "windSpeed";
+  if (c === "wind_direction") return has(w, AVERAGE) ? null : "windDirection";
+  if (c === "precipitation_intensity") return "rainRate";
+  if (c === "precipitation") {
+    if (has(w, DAILY)) return "rainToday";
+    if (has(w, MONTHLY)) return "rainMonth";
+    if (has(w, YEARLY)) return "rainYear";
+    return null;
+  }
+  if (c === "pressure" || c === "atmospheric_pressure") {
+    if (has(w, NOT_AIR_PRESSURE)) return null;
+    return "pressure";
+  }
+  if (c === "irradiance") return "solar";
+  if (c === "voltage" && has(w, BATTERY)) return "battery";
+  // HA defines no device_class for UV; its unit and name are what it has.
+  if (!c && (/uv/i.test(unitOf(e)) || has(w, UV))) return "uv";
+  return null;
+}
+
+/** Of two sensors for one role, the one to show. Pressure prefers the
+ *  sea-level (relative) reading; otherwise the lower entity id, so the answer
+ *  does not depend on the order Home Assistant listed them in. */
+function better(role: WeatherRole, a: HassEntity, b: HassEntity): HassEntity {
+  if (role === "pressure") {
+    const ra = has(wordsOf(a), RELATIVE), rb = has(wordsOf(b), RELATIVE);
+    if (ra !== rb) return ra ? a : b;
+  }
+  return a.entity_id <= b.entity_id ? a : b;
+}
+
+function stationFrom(deviceId: string | null, members: readonly HassEntity[]): WeatherStation {
+  const picked = new Map<WeatherRole, HassEntity>();
+  for (const e of members) {
+    const role = roleOf(e);
+    if (!role) continue;
+    const cur = picked.get(role);
+    picked.set(role, cur ? better(role, cur, e) : e);
+  }
+  const roles: Partial<Record<WeatherRole, string>> = {};
+  for (const [role, e] of picked) roles[role] = e.entity_id;
+  return { deviceId, roles, entityIds: members.map((e) => e.entity_id).sort() };
+}
+
+/**
+ * The villa's weather station, or null when it has none. Two stations: the
+ * one reporting the most distinct roles, ties to the lower device id — the
+ * same answer whatever order the entities arrive in.
+ */
+export function findWeatherStation(
+  entities: Record<string, HassEntity>,
+  entityDeviceIds: Record<string, string>,
+): WeatherStation | null {
+  const anchors = Object.values(entities)
+    .filter((e) => e.entity_id.startsWith("sensor.") && ANCHOR_CLASSES.has(classOf(e)));
+  if (anchors.length === 0) return null;
+  const devices = new Set(anchors.map((e) => entityDeviceIds[e.entity_id]).filter((d): d is string => !!d));
+  if (devices.size === 0) return stationFrom(null, anchors);
+  let best: WeatherStation | null = null;
+  for (const deviceId of [...devices].sort()) {
+    const members = Object.values(entities).filter((e) => entityDeviceIds[e.entity_id] === deviceId);
+    const s = stationFrom(deviceId, members);
+    if (!best || Object.keys(s.roles).length > Object.keys(best.roles).length) best = s;
+  }
+  return best;
+}
+
+// ── What the readings mean — published scales, one each ─────────────────
+
+/** Wind speed in km/h, from whatever unit the sensor reports. */
+export function toKmh(value: number, unit: string): number {
+  const u = unit.trim().toLowerCase();
+  if (u === "m/s") return value * 3.6;
+  if (u === "mph") return value * 1.609344;
+  if (u === "kn" || u === "kt" || u === "knots") return value * 1.852;
+  return value; // km/h
+}
+
+/** Beaufort force, in km/h — the upper bound of forces 0..11. */
+const BEAUFORT: ReadonlyArray<readonly [number, string]> = [
+  [1, "Calm"], [6, "Light air"], [12, "Light breeze"], [20, "Gentle breeze"],
+  [29, "Moderate breeze"], [39, "Fresh breeze"], [50, "Strong breeze"], [62, "Near gale"],
+  [75, "Gale"], [89, "Strong gale"], [103, "Storm"], [118, "Violent storm"],
+];
+export function beaufort(kmh: number): string {
+  for (const [upTo, name] of BEAUFORT) if (kmh < upTo) return name;
+  return "Hurricane force";
+}
+
+/** WHO UV index bands, with the advice that goes with each. */
+export function uvBand(uv: number): { band: string; advice: string } {
+  if (uv < 3) return { band: "Low", advice: "no protection needed" };
+  if (uv < 6) return { band: "Moderate", advice: "shade around midday" };
+  if (uv < 8) return { band: "High", advice: "cover up, sunscreen" };
+  if (uv < 11) return { band: "Very high", advice: "avoid midday sun" };
+  return { band: "Extreme", advice: "stay indoors at midday" };
+}
+
+/** How humid it feels, from the dew point in °C (the usual comfort bands). */
+export function dewComfort(dewC: number): string {
+  if (dewC < 10) return "dry";
+  if (dewC < 16) return "comfortable";
+  if (dewC < 18) return "a little humid";
+  if (dewC < 21) return "muggy";
+  if (dewC < 24) return "oppressive";
+  return "extremely oppressive";
+}
+
+/** The 3-hour pressure tendency (hPa over three hours), as a forecaster reads it. */
+export function pressureTendency(delta3h: number): string {
+  const a = Math.abs(delta3h);
+  if (a < 0.1) return "Steady";
+  const dir = delta3h > 0 ? "Rising" : "Falling";
+  if (a <= 1.5) return `${dir} slowly`;
+  if (a <= 3.5) return dir;
+  if (a <= 6) return `${dir} quickly`;
+  return `${dir} very rapidly`;
+}
+
+/** A compass point from degrees (16 points). */
+export function compass(deg: number): string {
+  const pts = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return pts[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+}
+
+/** Degrees Celsius, from a temperature sensor's reading and unit. */
+export function toCelsius(value: number, unit: string): number {
+  return /f/i.test(unit) ? (value - 32) * (5 / 9) : value;
+}
+
+/**
+ * The one sentence a person can act on: how the air feels, and whether
+ * opening up would help. Derived from readings the station already publishes —
+ * no forecast, nothing fetched. Null when the readings it needs are missing.
+ */
+export function comfortInsight(r: {
+  temperatureC?: number; feelsLikeC?: number; dewPointC?: number; indoorDewPointC?: number;
+}): string | null {
+  const parts: string[] = [];
+  if (r.temperatureC !== undefined && r.feelsLikeC !== undefined) {
+    const d = r.feelsLikeC - r.temperatureC;
+    if (Math.abs(d) >= 1) parts.push(`Feels ${Math.abs(d).toFixed(1)}° ${d > 0 ? "warmer" : "cooler"} than it is.`);
+  }
+  if (r.dewPointC !== undefined) {
+    parts.push(`Dew point ${r.dewPointC.toFixed(1)}° — ${dewComfort(r.dewPointC)}.`);
+    if (r.indoorDewPointC !== undefined) {
+      const diff = r.indoorDewPointC - r.dewPointC;
+      parts.push(diff >= 2 ? "Indoors is more humid than outside — airing out would help."
+        : diff <= -2 ? "Outside is more humid than indoors — keep the windows closed."
+          : "Indoors is no drier, so opening up will not help.");
+    }
+  }
+  return parts.length ? parts.join(" ") : null;
+}

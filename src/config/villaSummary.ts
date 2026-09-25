@@ -13,7 +13,7 @@
 // ⚠️ SCOPE IS A PER-DOMAIN RULE, AND "THE VILLA'S DEVICES" IS NOT ALWAYS IT.
 // Locks, lights and AC count only the villa's own devices (villaDevices): a
 // helper, a neighbouring integration or a dismissed entity is not one of this
-// villa's doors. Pool switches and POWER SENSORS count every entity, on
+// villa's doors. POWER SENSORS count every entity, on
 // purpose — the villa device set is FOLDED (a multi-entity device appears once,
 // under its primary), so a plug's or a pump's power sensor is usually a member,
 // not a device, and scoping by it would silently drop real draw from the
@@ -58,7 +58,6 @@ export interface PowerFacts {
 export interface VillaSummary {
   locks: LockFacts | null;
   lights: OnOffFacts | null;
-  pool: OnOffFacts | null;
   climate: ClimateFacts | null;
   power: PowerFacts | null;
 }
@@ -82,18 +81,6 @@ export function lockFacts(entities: Record<string, HassEntity>, allowed?: Allowe
 export function lightFacts(entities: Record<string, HassEntity>, allowed?: Allowed): OnOffFacts | null {
   const lights = ofDomain(entities, "light", allowed);
   return lights.length ? { ids: idsOf(lights), on: idsOf(lights.filter(isOn)) } : null;
-}
-
-/** A switch is pool equipment if its id reads so, OR the room it resolves to
- *  (HA's Area, falling back to the model) is the pool. Anchored so a bare
- *  "spa" cannot match inside "spartan_gym_relay". */
-const POOL_WORD = /(?:^|[._ ])(?:pool|jacuzzi|jaccuzi|spa)(?:[._ ]|$)/i;
-export function poolFacts(
-  entities: Record<string, HassEntity>, resolvedRooms: Record<string, string>,
-): OnOffFacts | null {
-  const pool = ofDomain(entities, "switch").filter(
-    (e) => POOL_WORD.test(e.entity_id) || POOL_WORD.test(resolvedRooms[e.entity_id] ?? ""));
-  return pool.length ? { ids: idsOf(pool), on: idsOf(pool.filter(isOn)) } : null;
 }
 
 export function climateFacts(entities: Record<string, HassEntity>, allowed?: Allowed): ClimateFacts | null {
@@ -141,7 +128,6 @@ export function villaSummary(input: {
   return {
     locks: lockFacts(entities, devices),
     lights: lightFacts(entities, devices),
-    pool: poolFacts(entities, input.resolvedRooms),
     climate: climateFacts(entities, devices),
     power: powerFacts(entities, input.thresholds),
   };
