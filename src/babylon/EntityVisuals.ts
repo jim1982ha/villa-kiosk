@@ -122,6 +122,7 @@ import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPoolSet, type LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
+import { bucketRoomChips, combineChips, chipSuffixOf, type RoomChip } from "./roomChips";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
@@ -738,50 +739,6 @@ const CHIP_COLLISION = true as boolean;
  *  hue (green/orange/purple/gold/blue) so a chip reads as UI chrome — a
  *  navigation affordance, not a device — rather than any category's badge. */
 const CLUSTER_BG_COLOR = "#475569"; // fallback only — see --chip-surface
-/**
- * One room chip as DERIVED — everything needed to decide where it lands and
- * what it swallows, before a single GUI control is touched.
- *
- * Lifted out of `updateClusters` when that method split into `deriveChips`
- * (pure) and `renderChips`: CHIP_COLLISION has to re-derive the chips several
- * times in one pass, and a function that also writes to the GUI cannot be run
- * in a loop.
- */
-interface RoomChip {
-  /** roomKey() — identity, and the key its GUI controls live under. */
-  key: string;
-  /**
-   * EVERY roomKey this chip stands for, its own included, growing as it merges.
-   * `key` alone was enough while nothing outside the merge loop asked what a
-   * chip covered; the collision pass does, and `roomNames` cannot answer it —
-   * those are printable spellings, and roomKey() exists precisely because a
-   * printable spelling is not an identity.
-   */
-  keys: string[];
-  /** The raw name this chip stands for — the identity a person reads and the
-   *  modal title. NOT necessarily what is drawn: see `label`. */
-  room: string;
-  /**
-   * The string actually PRINTED, i.e. `room` (+ any "+N") after truncation to
-   * the viewport budget. Set by `measure` so the width the merge test reserves
-   * and the width `renderChips` paints are the same string through the same
-   * estimator — reserving one width and painting another is this subsystem's
-   * oldest rule broken.
-   */
-  label: string;
-  ids: string[]; centre: Vector3; rooms: number; roomNames: string[];
-  ringRed: boolean; unavailable: boolean;
-  /** True-perspective screen position and half-extents — the merge test only.
-   *  The collision test re-projects `centre` onto the view plane instead; see
-   *  CHIP_COLLISION for why the two spaces are not the same one. */
-  x: number; y: number; halfW: number; halfH: number;
-}
-/** A merged chip says so with "+N", so the count pill's total is never
- *  mistaken for one room's device count. */
-/** The "+N" a chip carries when it has swallowed other rooms, or "" when it
- *  names exactly one. Kept SEPARATE from the room name because fitChipLabel
- *  must never truncate it — see that function. */
-const chipSuffixOf = (c: RoomChip) => (c.rooms > 1 ? `+${c.rooms - 1}` : "");
 /**
  * ── The summaries are ONE family, built from ONE unit ────────────────────
  * A summary is never given a size of its own. Every dimension of the room
@@ -8057,24 +8014,14 @@ export class EntityVisuals {
     // roomClustered).
     // Keyed by roomKey() like roomClustered itself, so two spellings of one
     // HA Area produce one chip rather than two overlapping ones.
-    const groups = new Map<string, { ids: string[]; sum: Vector3; ringRed: boolean; unavailable: boolean }>();
-    for (const s of shown) {
-      const key = roomKey(this.roomOf(s.id));
-      if (!this.roomClustered.get(key)) continue;
-      let g = groups.get(key);
-      if (!g) { g = { ids: [], sum: Vector3.Zero(), ringRed: false, unavailable: false }; groups.set(key, g); }
-      g.ids.push(s.id);
-      g.sum.addInPlace(s.lbl.anchor.getAbsolutePosition());
-      const st = this.lastState.get(s.id);
-      if (st) {
-        const kind = this.badgeKind(s.lbl.type, st);
-        // Same rule as the individual badge ring (BADGE_RING): "on" and
-        // "alert" both ring red, "unavailable" does not — dimming is that
-        // kind's own signal, not a ring (see BADGE_RING's comment).
-        if (kind === "on" || kind === "alert") g.ringRed = true;
-        if (kind === "unavailable") g.unavailable = true;
-      }
-    }
+    // Which badges each chip stands for — roomChips.bucketRoomChips.
+    const members = shown.map((sh) => {
+      const st = this.lastState.get(sh.id);
+      const p = sh.lbl.anchor.getAbsolutePosition();
+      return { id: sh.id, room: roomKey(this.roomOf(sh.id)), pos: { x: p.x, y: p.y, z: p.z },
+               kind: st ? this.badgeKind(sh.lbl.type, st) : undefined };
+    });
+    const seeds = bucketRoomChips(members, (k) => !!this.roomClustered.get(k), (k) => this.roomDisplay.get(k) ?? k);
 
     const scale = this.effectiveScale();
 
@@ -8136,19 +8083,8 @@ export class EntityVisuals {
       c.halfH = (this.summaryMetrics().size / 2) * scale;
     };
 
-    const chips: RoomChip[] = [];
-    for (const [key, g] of groups) {
-      // Back to the raw spelling for anything a person reads or taps: the key
-      // is a Map key only (CLAUDE.md), and roomDisplay holds what to print.
-      const room = this.roomDisplay.get(key) ?? key;
-      const c: RoomChip = {
-        key, keys: [key], room, label: room, ids: g.ids.slice(), centre: g.sum.scale(1 / g.ids.length), rooms: 1, roomNames: [room],
-        ringRed: g.ringRed, unavailable: g.unavailable,
-        x: 0, y: 0, halfW: 0, halfH: 0,
-      };
-      measure(c);
-      chips.push(c);
-    }
+    const chips: RoomChip[] = seeds;
+    for (const c of chips) measure(c);
 
     if (merge && vp && chips.length > 1) {
       // ── THE SAME GAP AS EVERY OTHER TIER (2.419.0) ────────────────────
@@ -8185,21 +8121,8 @@ export class EntityVisuals {
         chips,
         gap,
         (c) => c.ids.length,
-        (keep, drop) => {
-          const a = keep, b = drop;
-          const na = a.ids.length, nb = b.ids.length;
-          keep.centre = a.centre.scale(na / (na + nb))
-            .addInPlace(b.centre.scale(nb / (na + nb)));
-          keep.ids = keep.ids.concat(drop.ids);
-          keep.rooms = a.rooms + b.rooms;
-          // Keep the NAMES, not just the count: a merged chip has to be able to
-          // offer the rooms it swallowed when it is tapped, and "+2" cannot.
-          keep.roomNames = [...a.roomNames, ...b.roomNames];
-          keep.keys = [...a.keys, ...b.keys];
-          keep.ringRed = a.ringRed || b.ringRed;
-          keep.unavailable = a.unavailable || b.unavailable;
-          measure(keep);
-        },
+        // What the merged chip becomes — roomChips.combineChips.
+        (keep, drop) => { combineChips(keep, drop); measure(keep); },
       );
     }
 

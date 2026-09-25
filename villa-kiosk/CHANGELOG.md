@@ -1,3 +1,17 @@
+## 2.496.70
+
+**Nothing you should see changed.** Room labels appear, merge and colour
+exactly as before.
+
+Behind that: the part that decides which devices a room label stands for — and
+what two labels become when they are too close and merge (which rooms, which
+devices, where it sits, whether its ring is red) — now has a home of its own
+with automatic checks. The previous check of the merge used its own copy of that
+rule, so the rule that actually ran was never tested.
+
+This is the first part of a larger piece of work: how rooms decide to collapse
+into a label in the first place is still inside the main drawing code.
+
 ## 2.496.69
 
 ### Fixed — a Facility entry could vanish from the screen right after logging it
