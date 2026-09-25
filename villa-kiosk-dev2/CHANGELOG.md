@@ -1,3 +1,23 @@
+## 2.496.85
+
+### New — a Weather card replaces the Pool card
+The Pool card in the bottom bar is gone: it only counted pool switches that the
+map already shows. In its place, a Weather card shows the outdoor temperature
+from the villa's own weather station, and a tap opens a Weather window:
+
+- **Now** — temperature, feels-like, humidity and dew point, with one plain
+  sentence on how the air feels and whether opening up would help; wind (speed,
+  strength on the Beaufort scale, direction, gusts and today's peak), rain
+  (right now, today, this month and year), UV index with its advice, pressure
+  and whether it is rising or falling over the last three hours, and indoor
+  against outdoor.
+- **Trends** — temperature, pressure, wind and rain over 6 hours to 30 days.
+- **Station** — every sensor on the station and when it last reported.
+
+It uses only the station's own readings and Home Assistant's history — no
+forecast, nothing from the internet. The station is recognised by what it
+measures (wind, rain, sunlight), so the card appears on any villa that has one,
+and not at all on a villa without one.
 ## 2.496.84
 
 ### Changed — the lamp-light formula is written once and checked by number
