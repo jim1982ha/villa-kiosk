@@ -1,3 +1,19 @@
+## 2.496.64
+
+### Fixed — a camera's viewing cone could vanish behind a window
+The coloured cone that shows where a camera is looking could disappear where
+it passed behind a window pane, depending on where you were looking from: orbit
+the villa and it came and went. It was the same kind of fault as the light pools
+fixed in 2.496.53 — the 3D engine decided which see-through thing to draw
+first by distance, and when it drew the window first, the glass hid the cone
+behind it. Reproduced before the fix: from about half of the outside viewpoints
+tested, the cone was cut off.
+
+Every see-through layer in the villa — the red presence overlay, the light
+pools, and now the camera cones — takes its place from one fixed order, so the
+camera angle no longer decides. A cone standing in front of a window may now
+look very slightly tinted by the glass behind it, instead of ever being cut off.
+
 ## 2.496.63
 
 ### Fixed — the summary bar and the readiness report disagreed about a lock
