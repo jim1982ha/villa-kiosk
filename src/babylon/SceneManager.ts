@@ -33,6 +33,7 @@ import { PickHandler } from "./PickHandler";
 import { EntityVisuals } from "./EntityVisuals";
 import { resolveHit, type HitPickers } from "./hitResolution";
 import { FrameScheduler, type ResolutionPort } from "./frameScheduler";
+import { SceneLook } from "./sceneLook";
 import { RenderEnhancements } from "./RenderEnhancements";
 import { loadModelInto } from "./ModelLoader";
 import { resetLightPoolTextureCache } from "./LightPools";
@@ -411,6 +412,8 @@ export class SceneManager {
   readonly pick: PickHandler;
   readonly visuals: EntityVisuals;
   readonly renderFx: RenderEnhancements;
+  /** Exposure, IBL strength and background — see sceneLook.ts. */
+  private readonly look: SceneLook;
   private nightSky: NightSky;
 
   private config: AppConfig;
@@ -582,7 +585,9 @@ export class SceneManager {
     // count would accumulate for the life of the session and mean nothing.
     this.instrumentation = new SceneInstrumentation(this.scene);
     this.instrumentation.captureActiveMeshesEvaluationTime = true;
-    this.scene.clearColor = new Color4(0.7, 0.85, 1.0, 1);
+    // The one writer of exposure, IBL strength and the background — the sun
+    // and the render pass only report their inputs to it (sceneLook.ts).
+    this.look = new SceneLook(this.scene);
     this.scene.collisionsEnabled = true;
     this.scene.gravity = new Vector3(0, -0.6, 0);
 
@@ -602,7 +607,7 @@ export class SceneManager {
     this.lighting = new LightingSystem(this.scene);
     // Procedural sky shown through the windows; driven by the same sun below.
     this.sky = new SkyDome(this.scene);
-    this.sun = new SunController(this.scene, this.lighting, this.hemi, opts.config, this.sky, this.frames);
+    this.sun = new SunController(this.lighting, this.hemi, opts.config, this.sky, this.frames, this.look);
     // Moon + stars. Entirely optional to the rest of the scene, and computed
     // from date/lat/lng — an install without HA's opt-in Moon integration gets
     // exactly the same night sky, which is the requirement.
@@ -819,11 +824,10 @@ export class SceneManager {
     // Render-quality stack (tone mapping, SSAO, shadows, IBL, light balance).
     // Created after both cameras exist so SSAO can attach to all of them; the
     // initial apply() pushes config.render onto the freshly-built scene.
-    this.renderFx = new RenderEnhancements(this.scene);
+    this.renderFx = new RenderEnhancements(this.scene, this.look);
     this.renderFx.apply(this.deviceRenderConfig(opts.config.render));
-    // renderFx.apply() sets the *base* IBL intensity and builds the env texture.
-    // Re-run the sun pass now so SunController gets the final word on the values
-    // it owns (fill light + day/night-scaled IBL) with the texture in place.
+    // The sun pass sets the fill light it owns; exposure and IBL strength are
+    // resolved by the look from both passes' inputs, in whatever order they run.
     this.sun.applyRealSun();
 
     // Any pointer activity on the canvas (look-around drag, wheel, tap) wakes the
@@ -2813,9 +2817,9 @@ export class SceneManager {
     // Baked-lighting GLB (blender_pipeline --bake): the structure carries its
     // full Cycles-rendered lighting in its texture and renders unlit, so every
     // dynamic-light system stands down. Order matters: visuals BEFORE its
-    // indexMeshes below (that's where per-entity PointLights would be created),
-    // and renderFx BEFORE sun (SunController's exposure write must be the
-    // final word — all its call paths run after renderFx.apply()).
+    // indexMeshes below (that's where per-entity PointLights would be created).
+    // renderFx and the sun no longer have an order between them: the night
+    // exposure they used to fight over is resolved by the look (sceneLook.ts).
     if (result.baked) {
       devLog("[SceneManager] baked mode ON — dynamic lighting disabled" +
         (result.lightmapped ? " (LIGHTMAP flavour: original textures × baked light)" : "") +
@@ -2824,6 +2828,11 @@ export class SceneManager {
     this.visuals.setBakedMode(result.baked);
     this.renderFx.setBakedMode(result.baked);
     this.sun.setBakedMode(result.baked, result.nightBlend, result.glassDim);
+    // How many materials an environment change can actually reach on this
+    // model. 2.496.47 built sky reflections, released and reverted them because
+    // the answer was "nearly none" — a question this line now asks every load.
+    { const { reach, total } = this.look.environmentReach();
+      tapDebug(`look: the environment reaches ${reach} of ${total} materials`); }
 
     // --- Critical path: everything needed for a correct, navigable first paint.
     this.normalizeScale(result.meshes); // bring to metres BEFORE recentring
@@ -4229,10 +4238,9 @@ export class SceneManager {
       meshBindingsChanged ||
       sh3dChanged;
 
-    // renderFx first (sets base IBL + builds/clears the env texture), THEN the
-    // sun pass so SunController has the final word on the fill light + day/night
-    // IBL scaling it owns. Same ordering as setRenderConfig() — keeping the two
-    // call sites consistent is what stops the night fill from flickering.
+    // Each pass owns what it writes (renderFx: tone mapping, SSAO, the IBL
+    // texture; the sun: key, ambient and fill lights) and reports its share of
+    // exposure and IBL strength to the look, so neither needs the other first.
     if (renderChanged) {
       this.renderFx.apply(this.deviceRenderConfig(config.render));
       this.sun.updateConfig(config);

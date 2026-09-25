@@ -1,3 +1,22 @@
+## 2.496.60
+
+**Nothing you should see changed.** Day, night and the overview backdrop look
+exactly as before.
+
+Behind that: the villa's overall brightness, how strongly the sky lights it, and
+the background colour behind it were each set by two or three different parts of
+VESTA — one applying your Render settings, another dimming them for night, a
+third for the overview. The result was only right as long as they always ran in
+the same order, and a change that ran them the other way round would have shown
+the villa at daytime brightness all night. That is also why the sky reflections
+tried in 2.496.47 had to be withdrawn.
+
+Those three are now set in exactly one place, which combines the settings, the
+time of day and the view together, so the order no longer matters. It also
+notes, each time the villa loads, how many surfaces a change to the sky's
+lighting would actually reach — the number that would have shown in advance why
+sky reflections couldn't work on this model.
+
 ## 2.496.59
 
 **Nothing you should see changed.** The villa redraws exactly as before —
