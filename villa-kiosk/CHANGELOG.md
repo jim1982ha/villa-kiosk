@@ -1,3 +1,17 @@
+## 2.496.69
+
+### Fixed — a Facility entry could vanish from the screen right after logging it
+If you logged a completion, a cost or a fault report at the very moment the
+Facility workspace was refreshing itself in the background, the entry could
+disappear from your screen a moment later. It had been saved, and it came back
+on the next refresh (up to a few minutes later), but for that time it looked as
+if it hadn't been recorded. The refresh was fetching an older copy, and applied
+it on top of the entry you had just made.
+
+The Facility workspace and the shared device settings now follow the same rule
+before applying anything they fetch: never on top of something this device has
+just changed and the add-on may not have yet.
+
 ## 2.496.68
 
 **Nothing you should see changed.** Badges size and group exactly as before as

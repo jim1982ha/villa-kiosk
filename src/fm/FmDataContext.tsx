@@ -9,6 +9,7 @@
 // — the only thing that can disagree is a second device edited concurrently,
 // and re-opening the panel re-reads the store.
 
+import { decidePull } from "@/utils/pullDecision";
 import {
   createContext, useCallback, useContext, useEffect, useRef, useState,
   type ReactNode,
@@ -106,6 +107,10 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
   const inFlight = useRef(0);
   /** A write that FAILED and is still only on this device. */
   const unsaved = useRef(false);
+  /** Writes STARTED, ever — so a refresh can tell that one began while its
+   *  fetch was in flight, which the in-flight count alone cannot (that write
+   *  may already have finished by the time the stale copy arrives). */
+  const writes = useRef(0);
   /** Retries a failed write. Assigned below, because `mutate` and `reload`
    *  refer to each other: a refresh that finds unsent work re-pushes it. */
   const retryRef = useRef<(() => Promise<void>) | null>(null);
@@ -137,24 +142,44 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
       await retryRef.current?.();
       return;
     }
+    const writesBefore = writes.current;
     const fresh = await fetchFmData();
-    if (!fresh) {
+    // ⚠️ ASKED AGAIN AFTER THE FETCH — see utils/pullDecision. A completion
+    // logged while this request was in flight, whose save finished first, left
+    // `inFlight` back at 0, and the stale copy then overwrote it on screen.
+    const changed = !!fresh && JSON.stringify(fresh.doc) !== JSON.stringify(baseline.current);
+    const action = decidePull({
+      writeInFlight: inFlight.current > 0,
+      reached: !!fresh,
+      serverEmpty: false,                         // an empty FM store is just an empty document
+      localAhead: unsaved.current || writes.current !== writesBefore,
+      wouldChange: changed,
+    });
+    if (action === "wait" || action === "repush") {
+      reportSync({ op: "pull", skipped: action === "wait" ? "write-in-flight" : "write-during-fetch" });
+      // A write that FAILED during the fetch is retried; one that SUCCEEDED
+      // already set this device to the newer merged document.
+      if (unsaved.current) await retryRef.current?.();
+      return;
+    }
+    if (action === "unreachable") {
       reportSync({ op: "pull", aborted: "unreachable" });
       setReady(true);
       return;
     }
-    const changed = JSON.stringify(fresh.doc) !== JSON.stringify(baseline.current);
-    setData(fresh.doc);
-    baseline.current = fresh.doc;
+    if (action === "apply") {
+      setData(fresh!.doc);
+      baseline.current = fresh!.doc;
+    }
     setReady(true);
     reportSync({
       op: "pull",
-      rev: fresh.rev,
+      rev: fresh!.rev,
       changed,
-      tickets: fresh.doc.tickets.length,
-      openTickets: fresh.doc.tickets.filter(isTicketOpen).length,
-      costs: fresh.doc.costs.length,
-      completions: fresh.doc.completions.length,
+      tickets: fresh!.doc.tickets.length,
+      openTickets: fresh!.doc.tickets.filter(isTicketOpen).length,
+      costs: fresh!.doc.costs.length,
+      completions: fresh!.doc.completions.length,
     });
   }, [reportSync]);
 
@@ -183,6 +208,7 @@ export function FmDataProvider({ children }: { children: ReactNode }) {
     setData(next);
     setSaveError(null);
     inFlight.current += 1;
+    writes.current += 1;
     // Send ONLY what this action changed, replayed onto the server's freshest
     // copy under the revision it came at. This used to PUT the whole document
     // with no revision, so two people working the villa at once — which is the
