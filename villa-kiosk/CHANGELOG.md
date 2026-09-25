@@ -1,3 +1,16 @@
+## 2.496.68
+
+**Nothing you should see changed.** Badges size and group exactly as before as
+you zoom.
+
+Behind that: how big the villa is on screen at a given zoom, and how much the
+badges shrink when you zoom far out, was worked out by six small pieces of code
+and copied once more by the part that frames a room when you tap it. Five
+earlier faults came from those copies drifting apart — the same zoom giving two
+different layouts, or a tapped room's devices collapsing as you zoomed in. The
+rules now live in one place that every part asks, with automatic checks for each
+of those faults.
+
 ## 2.496.67
 
 **Nothing you should see changed.** Walls, stairs and ceilings behave exactly as

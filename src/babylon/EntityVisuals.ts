@@ -81,7 +81,7 @@ import { chipProportions } from "@/config/chipProportions";
 import {
   badgeMetricsFor, detectPointerClass, observePointerClass, type BadgeMetrics, type PointerClass,
   CHIP_MAX_VIEWPORT_FRACTION, CARD_MAX_VIEWPORT_FRACTION,
-  PHONE_MAX_CSS_WIDTH, ICON_ZOOM_EXPONENT, ICON_ZOOM_MIN_SCALE,
+  PHONE_MAX_CSS_WIDTH,
   GROUP_ZOOM_STEPS_PER_DOUBLING, snapToZoomLattice,
   SUMMARY_TEXT_OF_HEIGHT, VALUE_CHAR_ADVANCE,
 } from "./badgeMetrics";
@@ -122,6 +122,7 @@ import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPoolSet, type LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
+import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
@@ -3014,9 +3015,9 @@ export class EntityVisuals {
       // `Math.ceil` since 2.407.0, so the rung this loop tested was up to 2.9%
       // below the one that would be drawn (/dry-audit, 2.425.0). One function,
       // every walker of the lattice.
-      const raw = view.vpH / (2 * radius * tanV);
-      if (!(raw > 0)) continue;
-      const pxPerWorld = snapToZoomLattice(raw);
+      // badgeScale.rungAt — the same function the renderer's rung is.
+      const pxPerWorld = rungAt(view.vpH, tanV, radius);
+      if (!(pxPerWorld > 0)) continue;
 
       // Every badge fully inside the frame? Per screen axis, in drawn pixels,
       // against the box the renderer will actually paint — including the `cy`
@@ -6148,13 +6149,6 @@ export class EntityVisuals {
    * to a group of devices SHOULD separate them, the same way zooming does.
    * Median rather than mean so one far-off badge can't skew the whole scale.
    */
-  /** Pixels per world unit at a given distance — ONE expression, two callers:
-   *  the rung (at the camera's own distance) and the icon-zoom reference (at
-   *  the fit radius). They must not be two formulas; the whole point of
-   *  2.417.0 is that the icon scale is the rung measured against this. */
-  private static pxPerWorldAt(vpH: number, fov: number, dist: number): number {
-    return vpH / (2 * dist * Math.tan(fov / 2));
-  }
 
   /**
    * The depth at which a rung's single scene-wide scale is EXACT.
@@ -6176,21 +6170,15 @@ export class EntityVisuals {
    * depth, 14% at 12 m and 22% at 20 m — which is the far side of a villa, and
    * is exactly where the overlapping badges were reported.
    */
+
   /** This pass's reference depth, from the same viewport and field of view the
    *  rung was measured with. 0 when either is unavailable, which reads as "no
    *  correction" everywhere downstream. */
   private rungReferenceDepth(pxPerWorld: number): number {
     const cam = this.scene.activeCamera;
     if (!cam) return 0;
-    const vpH = this.scene.getEngine().getRenderHeight();
-    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
-    return EntityVisuals.referenceDepthAt(vpH, fov, pxPerWorld);
-  }
-
-  private static referenceDepthAt(vpH: number, fov: number, pxPerWorld: number): number {
-    const t = Math.tan(fov / 2);
-    if (!(pxPerWorld > 0) || !(t > 0) || !(vpH > 0)) return 0;
-    return vpH / (2 * pxPerWorld * t);
+    return referenceDepthAt(this.scene.getEngine().getRenderHeight(),
+      Math.tan(cameraFrame(this.scene, cam).vHalf), pxPerWorld);
   }
 
   /**
@@ -6223,17 +6211,15 @@ export class EntityVisuals {
     const cam = this.scene.activeCamera;
     if (!cam) return;
     const vpH = this.scene.getEngine().getRenderHeight();
-    const fov = 2 * cameraFrame(this.scene, cam).vHalf;
     // ⚠️ RENDER pixels on BOTH sides, and deliberately not the `cssPixels`
     // variant. It cancels in the ratio, so this is hw-independent anyway — and
     // asking for CSS px here would quantise against a DIFFERENT rung from the
     // one scaling the positions, which is the offset-lattice bug this method
     // exists to remove, reintroduced through the other door.
-    const atFit = EntityVisuals.pxPerWorldAt(vpH, fov, fit);
-    const rung = this.quantisedPixelsPerWorldUnit(shown);
-    if (!(atFit > 0) || !(rung > 0)) return;
-    const ratio = Math.pow(rung / atFit, ICON_ZOOM_EXPONENT);
-    this.applyIconZoom(Math.min(1, Math.max(ICON_ZOOM_MIN_SCALE, ratio)));
+    // A function of the RUNG — badgeScale.iconZoomAt, which carries why.
+    const z = iconZoomAt(this.quantisedPixelsPerWorldUnit(shown), vpH,
+      Math.tan(cameraFrame(this.scene, cam).vHalf), fit);
+    if (z !== null) this.applyIconZoom(z);
   }
 
   private quantisedPixelsPerWorldUnit(shown: ShownLabel[], cssPixels = false): number {
@@ -6262,9 +6248,7 @@ export class EntityVisuals {
     // they only came back a rung or two later once the badges genuinely fitted
     // — entities, chip, entities, going one direction. Reproduces only where
     // dpr > HW_START_CAP, which is why a dpr-1.6 laptop never showed it.
-    const vpH = cssPixels
-      ? engine.getRenderHeight() * engine.getHardwareScalingLevel()
-      : engine.getRenderHeight();
+    const vpH = viewportPx(engine.getRenderHeight(), engine.getHardwareScalingLevel(), cssPixels);
     // Not `cam.fov` directly: whether that is the vertical or the horizontal
     // angle is cameraFrame.ts's question, and this reader was one of four that
     // each answered it separately. Its `|| 0.8` fallback lived on there too.
@@ -6287,9 +6271,7 @@ export class EntityVisuals {
       view.sort();
       dist = view[shown.length >> 1];
     }
-    if (!(dist > 0) || vpH <= 0) return 0;
-    const raw = EntityVisuals.pxPerWorldAt(vpH, fov, dist);
-    if (!(raw > 0)) return 0;
+    // Ceiled onto the zoom lattice — see badgeScale.rungAt and the note below.
     // ⚠️ CEIL, NOT ROUND — the rung must never sit BELOW the drawn zoom.
     // `k` scales every separation the solver measures (`s.sx = p.px * k`)
     // while the badge boxes it compares them against are real drawn pixels
@@ -6299,7 +6281,7 @@ export class EntityVisuals {
     // error one-sided: measured separations are always ≥ drawn, so grouping
     // can only ever be late, never early. See GROUP_ZOOM_STEPS_PER_DOUBLING
     // for why the step is small enough that "late" is imperceptible.
-    return snapToZoomLattice(raw);
+    return rungAt(vpH, Math.tan(fov / 2), dist);
   }
 
   /** Each label's collision box in screen px, relative to its anchor point —
