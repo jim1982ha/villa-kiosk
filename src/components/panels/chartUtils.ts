@@ -1,7 +1,6 @@
 // src/components/panels/chartUtils.ts
-// Shared formatters + hit-testing for the panel mini charts (Sparkline,
-// DualSparkline). Kept DRY so both charts label axes and resolve the hovered
-// datapoint the same way.
+// Shared formatters for every history chart. What the pointer is over is
+// utils/chartGeometry's hover answer, not a helper here.
 
 import type { StateHistoryPoint } from "@/types/ha.types";
 
@@ -13,6 +12,14 @@ export function fmtChartValue(v: number): string {
 
 export function fmtChartTime(t: number): string {
   return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/** An x-axis tick: the time of day while the window is two days or less,
+ *  the date beyond — a "14:20" under a 7-day chart names no day at all. One
+ *  labeller for every chart; the Weather charts had a second. */
+export function fmtChartTick(t: number, spanHours: number): string {
+  if (spanHours <= 48) return fmtChartTime(t);
+  return new Date(t).toLocaleDateString([], { day: "numeric", month: "short" });
 }
 
 /**
@@ -38,16 +45,6 @@ export function fmtChartStamp(t: number, spanHours: number): string {
   return d.toLocaleString([], {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
-}
-
-/** Index of the point whose x is closest to the given plot-space x. */
-export function nearestIndexByX(pts: { x: number }[], x: number): number {
-  let best = 0, bestD = Infinity;
-  for (let i = 0; i < pts.length; i++) {
-    const d = Math.abs(pts[i].x - x);
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  return best;
 }
 
 /**

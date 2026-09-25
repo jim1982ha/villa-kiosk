@@ -631,8 +631,8 @@ input[type="range"]::-moz-range-thumb {
 .weather-chart { width: 100%; height: 150px; flex: 1 1 auto; }
 .weather-chart-wrap { flex: 1 1 auto; display: flex; }
 /* The shared chart tip (spark-tip), one row a line, each with its colour. */
-.weather-tip strong { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-.weather-tip .key { display: inline-block; width: 8px; height: 8px; border-radius: 4px; }
+.chart-tip strong { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.chart-tip .key { display: inline-block; width: 8px; height: 8px; border-radius: 4px; flex: 0 0 auto; }
 .weather-chart-empty { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
 .chart-grid line { stroke: var(--hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .chart-line { fill: none; stroke-width: 2.4; stroke-linejoin: round; }
