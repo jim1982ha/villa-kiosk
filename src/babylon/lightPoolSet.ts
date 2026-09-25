@@ -28,8 +28,8 @@ import { LightPool, poolFootprint, poolStrength } from "./LightPools";
 import { clipPolygonToConvex, distanceToPolygonBoundary, type Pt2 } from "@/utils/geometry";
 import { Storeys } from "./storeys";
 
-/** A pool's radius on open floor. A separate knob from EntityVisuals'
- *  LIGHT_RANGE, which only matters for a non-baked villa's real PointLight. */
+/** A pool's radius on open floor. A separate knob from the PointLights'
+ *  reach (bulbSet.ts). */
 export const LIGHT_POOL_RADIUS = 1.8;
 /** Floor for the radius of a pool that belongs to NO room polygon and so is
  *  bounded by the nearest room's edge instead. Without a floor, a fixture on a
@@ -292,7 +292,7 @@ export class LightPoolSet {
       // clear of a 2.2 m fixture.
       //
       // A pool is a glow ON THE FLOOR; what stands under a lamp — the table,
-      // the counter — is lit by the fixture's real PointLight. So an answer
+      // the counter — is lit by the furniture light (lampGlow.ts). So an answer
       // well above the room's own floor is replaced BY that floor. No ray: the
       // room's floor height is already known (fitted once from the plan), and
       // re-asking the probe was measured at ~20 ms a pool, a hitch on every

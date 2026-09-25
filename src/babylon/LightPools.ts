@@ -1,10 +1,9 @@
 // src/babylon/LightPools.ts
-// Baked-lighting villas render their structure UNLIT (see ModelLoader's
-// BAKED_MATERIAL_PREFIX) — the walls/floor/ceiling ignore every dynamic
-// light by design (that's what makes the baked look crisp and cheap), so a
-// real PointLight is never even created for them (see EntityVisuals'
-// bakedMode branch) and turning an HA light on never visibly brightens the
-// room around it — only the fixture's own emissive glow shows.
+// A baked villa's structure carries its lighting in the bake — the walls and
+// floor do not answer to a runtime light (albedo-baked: unlit; lightmapped:
+// multiplied by the bake, see lampGlow.ts), so turning an HA light on would
+// never visibly brighten the floor around it; only the fixture's own emissive
+// would show. Which villas get pools is lightingMode.ts.
 //
 // This fakes it: a soft, warm, ADDITIVE-blended radial "pool" laid flat on
 // the floor under each fixture, sized from the light's range and
@@ -145,7 +144,7 @@ export class LightPool {
   readonly mesh: Mesh;
   /** Per-pool brightness multiplier applied on top of the live intensity. 1 for
    *  a normal single-fixture pool; <1 for a strip's END pools (a light "sitting
-   *  in" for the corner where two adjoining strips meet) — see EntityVisuals'
+   *  in" for the corner where two adjoining strips meet) — see
    *  LightPoolSet.addFixture, where an elongated strip gets a full-intensity pool
    *  at its centre plus two half-intensity pools at its ends, so two adjoining
    *  strips' end-pools sum to roughly the centre's brightness at the shared

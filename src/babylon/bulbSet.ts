@@ -168,8 +168,9 @@ export class BulbSet {
    * Runs after the strips are merged, so it sees every light that exists.
    */
   glowEverythingLit(): void {
+    // Only on a lightmapped villa — the caller asks (lightingMode.ts); it is
+    // no longer inferred from whether some material already carries the glow.
     this.glowMeshes = [];
-    if (!this.scene.meshes.some((m) => hasLampGlow(m.material))) return; // not lightmapped
     for (const m of this.scene.meshes) {
       const mat = m.material as (PBRMaterial & { unlit?: boolean }) | null;
       if (!(mat instanceof PBRMaterial) || hasLampGlow(mat) || mat.unlit) continue;

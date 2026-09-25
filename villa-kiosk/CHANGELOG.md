@@ -1,3 +1,12 @@
+## 2.496.83
+
+### Changed — which lights a villa gets is decided in one place
+Whether a villa gets floor glows, the furniture light and per-lamp shadows now
+comes from one table, chosen once from the kind of 3D model it is, instead of
+from two separate settings that were never checked against each other. Nothing
+should look different. The diagnostic line that said "dynamic light simulation
+disabled" — which had not been true for a long time — now says which lights the
+model actually gets.
 ## 2.496.82
 
 ### Changed — one module owns everything about a light bulb

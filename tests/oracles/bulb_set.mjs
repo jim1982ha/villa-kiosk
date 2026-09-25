@@ -122,14 +122,6 @@ console.log("\n  the furniture light: every lit surface, and the PointLights kep
 {
   const r = rig();
   const lamp = r.bulb(0);
-  const curtain = CreateBox("cover.curtain", { size: 1 }, r.scene); curtain.material = new PBRMaterial("fabric", r.scene);
-  r.bulbs.glowEverythingLit();
-  ck("an unbaked villa (nothing lightmapped): no furniture light anywhere, PointLights untouched",
-     !hasLampGlow(curtain.material) && r.bulbs.lightOf(lamp.uniqueId).excludedMeshes.length === 0);
-}
-{
-  const r = rig();
-  const lamp = r.bulb(0);
   r.bulbs.clear();
   ck("clear: every light disposed", r.scene.lights.length === 0 && r.bulbs.size === 0, r.scene.lights.length);
 }
@@ -142,8 +134,9 @@ console.log("\n  the callers (a module nobody calls is green and useless)");
      (ev.match(/this\.bulbs\.show\(/g) ?? []).length === 2, (ev.match(/this\.bulbs\.show\(/g) ?? []).length);
   ck("a floor switch repaints every bulb", /setActiveFloor\(floor: number\): void \{[\s\S]*?this\.bulbs\.resync\(\);/.test(ev));
   ck("the slider goes to BulbSet", /setLightPoolIntensity\(value: number\): void \{\s*if \(this\.bulbs\.setStrength\(value\)\)/.test(ev));
-  ck("the load: every fixture, then the strip merge, then every lit surface",
-     /this\.bulbs\.addFixture\(m, this\.bakedMode\)/.test(ev) && /this\.bulbs\.mergeStrips\([^)]*\)\);\s*this\.bulbs\.glowEverythingLit\(\);/.test(ev));
+  ck("the load: every fixture (pools per the lighting mode), then the strip merge, then every lit surface",
+     /this\.bulbs\.addFixture\(m, this\.lighting\.pools\)/.test(ev)
+       && /this\.bulbs\.mergeStrips\([^)]*\)\);\s*if \(this\.lighting\.furnitureLight\) this\.bulbs\.glowEverythingLit\(\);/.test(ev));
   ck("the furniture light is written before each frame", /onBeforeRender = \(\) => \{[\s\S]*?this\.bulbs\.syncGlow\(\);[\s\S]*?\};/.test(ev));
   ck("and nothing in EntityVisuals computes a bulb's light itself any more",
      !/MAX_LIGHT_INTENSITY|lightShare|new PointLight\(|meshLights/.test(ev));

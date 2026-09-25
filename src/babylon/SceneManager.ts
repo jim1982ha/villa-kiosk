@@ -2630,17 +2630,17 @@ export class SceneManager {
     this.loadedMeshes = result.meshes;
 
     // Baked-lighting GLB (blender_pipeline --bake): the structure carries its
-    // full Cycles-rendered lighting in its texture and renders unlit, so every
-    // dynamic-light system stands down. Order matters: visuals BEFORE its
-    // indexMeshes below (that's where per-entity PointLights would be created).
+    // Cycles-rendered lighting. WHICH lights the villa then gets is one table
+    // (lightingMode.ts). Order matters: visuals BEFORE its indexMeshes below,
+    // which is where the bulbs are built for that mode.
     // renderFx and the sun no longer have an order between them: the night
     // exposure they used to fight over is resolved by the look (sceneLook.ts).
     if (result.baked) {
-      devLog("[SceneManager] baked mode ON — dynamic lighting disabled" +
+      devLog(`[SceneManager] ${result.lighting.describe}` +
         (result.lightmapped ? " (LIGHTMAP flavour: original textures × baked light)" : "") +
         (result.nightBlend ? "; night atlas present (day/night crossfade)" : ""));
     }
-    this.visuals.setBakedMode(result.baked);
+    this.visuals.setLightingMode(result.lighting);
     this.renderFx.setBakedMode(result.baked);
     this.sun.setBakedMode(result.baked, result.nightBlend, result.glassDim);
     // How many materials an environment change can actually reach on this

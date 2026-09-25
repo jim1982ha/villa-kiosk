@@ -147,6 +147,7 @@ import {
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSet";
+import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
@@ -1371,11 +1372,10 @@ export class EntityVisuals {
    *  cullLabels compares each label's stamped floorIndex against this. */
   private activeFloor = 1;
 
-  /** Baked-lighting GLB loaded (see ModelLoader): its bulbs get floor pools
-   *  (bulbSet.ts), and no cube shadow maps — the bake already holds the
-   *  shadows. The fixture's own emissive glow is kept either way: it is the
-   *  on/off signal the user reads, not light transport. */
-  private bakedMode = false;
+  /** Which lights this model gets (lightingMode.ts), from ModelLoader. The
+   *  fixture's own emissive glow is kept in every mode: it is the on/off
+   *  signal the user reads, not light transport. */
+  private lighting: LightingMode = lightingModeFor("unbaked");
 
   /** camera entity_id -> world-space unit facing direction (may include a
    *  vertical tilt component from SweetHome's `pitch`), computed by
@@ -1481,9 +1481,10 @@ export class EntityVisuals {
     });
   }
 
-  /** MUST be called before indexMeshes() — that's where lights are created. */
-  setBakedMode(baked: boolean): void {
-    this.bakedMode = baked;
+  /** MUST be called before indexMeshes() — that's where the bulbs are built
+   *  for the mode. */
+  setLightingMode(mode: LightingMode): void {
+    this.lighting = mode;
   }
 
   /** Repaint every badge from the current config (per-entity colour + glyph).
@@ -1966,7 +1967,7 @@ export class EntityVisuals {
         // happens to touch.
         if (mat) mat.forceDepthWrite = true;
         // Its PointLight and, on a baked villa, its floor pools: bulbSet.ts.
-        this.bulbs.addFixture(m, this.bakedMode);
+        this.bulbs.addFixture(m, this.lighting.pools);
       }
     }
     endScan();
@@ -2018,7 +2019,7 @@ export class EntityVisuals {
       (m) => blocksCameraBeam(m) && !isResolvedCeiling(m));
     this.extendStripJoints();
     this.bulbs.mergeStrips(this.lightEntityMeshes());
-    this.bulbs.glowEverythingLit();
+    if (this.lighting.furnitureLight) this.bulbs.glowEverythingLit();
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
@@ -8579,11 +8580,9 @@ export class EntityVisuals {
    * idle/off light costs nothing. Called once per entity from apply().
    */
   private syncEntityShadow(entityId: string, meshes: AbstractMesh[], on: boolean): void {
-    // Baked mode DOES have entity lights now (they light the furniture — see the
-    // light-creation block), but deliberately NO shadow maps: wall shadows are
-    // already painted into the baked atlas, and per-fixture furniture shadows
-    // aren't worth the cube-shadow-map cost the user asked us to keep low.
-    if (this.bakedMode) return;
+    // Only where the walls' shadows are not already in a bake (lightingMode.ts):
+    // per-fixture cube shadow maps are a cost the owner asked to keep low.
+    if (!this.lighting.lightShadows) return;
     const existing = this.lightShadows.get(entityId);
 
     if (!on) {

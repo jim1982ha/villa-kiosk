@@ -36,6 +36,7 @@ import { tapDebug } from "@/utils/tapDebug";
 import { isCeilingMesh, isStructureMesh, structureRole } from "./meshRoles";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import { attachLampGlow } from "./lampGlow";
+import { flavourOf, lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
 
 // Point Babylon at the bundled decoder. Set once at module load; the decoder is
@@ -135,9 +136,11 @@ export interface LoadResult {
    * structure keeps its original crisp tiled textures (UV0) and the baked
    * light rides a second atlas (UV1) multiplied in at render time — instead
    * of the classic single albedo atlas that caps the whole villa at a few
-   * cm/texel. Implies `baked` (all dynamic-light systems stand down).
+   * cm/texel. Implies `baked`.
    */
   lightmapped?: boolean;
+  /** Which lights this model gets — decided once, here (lightingMode.ts). */
+  lighting: LightingMode;
   /**
    * Present when the GLB also carries a second, sun-free NIGHT atlas
    * (pipeline ≥2.1.0). Call with 0 = full day atlas … 1 = full night atlas;
@@ -663,14 +666,11 @@ export async function loadModelInto(
       "| all materials:",
       [...allMats].sort(),
     );
-    // ⚠️ tapDebug, for the reason spelled out at the `ceiling lighting:` line
-    // below: this says WHY the villa is lit the way it is, and every lighting
+    // The `lighting mode:` line — WHY the villa is lit the way it is — is
+    // written once the flavour is known, at the return below. Every lighting
     // question this project has had was answered from a capture the owner
-    // pasted off a wall iPad, where no console exists. One line per load.
-    if (baked) {
-      tapDebug("lighting mode: BAKED — structure renders unlit; "
-        + "dynamic light simulation disabled scene-wide");
-    }
+    // pasted off a wall iPad, where no console exists. (It said "dynamic light
+    // simulation disabled scene-wide" for years; the PointLights never were.)
 
     // Wire the day↔night crossfade when the GLB carries a night atlas.
     let nightBlend: ((t: number) => void) | undefined;
@@ -1089,7 +1089,9 @@ export async function loadModelInto(
           }
         }
       : undefined;
-    return { meshes: result.meshes, baked, lightmapped, nightBlend, glassDim, importMs, importPhases: gl, importNotes: notes };
+    const lighting = lightingModeFor(flavourOf({ baked, lightmapped }));
+    tapDebug(`lighting mode: ${lighting.describe}`);
+    return { meshes: result.meshes, baked, lightmapped, lighting, nightBlend, glassDim, importMs, importPhases: gl, importNotes: notes };
   } finally {
     URL.revokeObjectURL(url);
   }
