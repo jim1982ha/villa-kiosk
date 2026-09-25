@@ -286,7 +286,7 @@ export class RoomHighlight {
    * it. A horizontal circle passes straight through the base of a vertical
    * wall, so a landing sitting within POINT_ROOM_RADIUS of one painted its glow
    * on BOTH sides — the identical defect the light pool had, in the second
-   * place a flat floor marker is drawn (see EntityVisuals.reshapeLightPools).
+   * place a flat floor marker is drawn (see LightPoolSet.setRooms).
    *
    * Circle = the convex CLIP, room = the possibly-L-shaped SUBJECT; that order
    * is what makes the clip correct (see clipPolygonToConvex). Unclipped when

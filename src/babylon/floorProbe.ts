@@ -50,7 +50,7 @@
 // than the grid did (one ray per room per storey, rather than the grid's
 // measured 5.6x), so this is faster as well as correct. The grid survives only
 // as the fallback for a point inside no polygon at all (open ground, or a load
-// that has not reached calibration yet — see EntityVisuals.reshapeLightPools).
+// that has not reached calibration yet — see LightPoolSet.setRooms).
 
 import { Ray } from "@babylonjs/core/Culling/ray";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
@@ -116,7 +116,7 @@ export class FloorProbe {
    *
    * These were one map until 2.346.0, and that is why the persistence had never
    * once worked. The load path runs before calibration, so `roomAt` is null and
-   * every key it asks for is a GRID key; `reshapeLightPools` then calls
+   * every key it asks for is a GRID key; `LightPoolSet.setRooms` then calls
    * `clearMemo()` and re-probes the same points under ROOM keys. With one map,
    * the clear emptied it and the save that follows serialised only the room
    * keys — so the stored blob contained exclusively `r:` entries, while the
@@ -131,7 +131,7 @@ export class FloorProbe {
    * the persisted ones") true for the first time. Reusing a stored GRID answer
    * on the load path is exactly as correct as computing one there — the load
    * path is grid-keyed today, the bytes are identical (that is what `storeKey`
-   * asserts), and `reshapeLightPools` still re-probes room-keyed afterwards, so
+   * asserts), and `LightPoolSet.setRooms` still re-probes room-keyed afterwards, so
    * the provisional answer is corrected on precisely the same schedule as
    * before. What changes is only whether a ray is cast to re-derive it.
    */
@@ -222,7 +222,7 @@ export class FloorProbe {
    *
    * The RE-SEED is the point, and its absence was the second half of the same
    * bug 2.346.0 fixed. Clearing alone left every lookup missing even for keys
-   * `persisted` already held, so `reshapeLightPools` re-cast its whole set of
+   * `persisted` already held, so `LightPoolSet.setRooms` re-cast its whole set of
    * room-keyed rays on every load — ~21ms each against the unoctree'd structure
    * mesh, inside `calibrateRooms`, after first paint.
    *

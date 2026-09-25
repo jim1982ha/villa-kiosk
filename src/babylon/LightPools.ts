@@ -134,7 +134,7 @@ export class LightPool {
   /** Per-pool brightness multiplier applied on top of the live intensity. 1 for
    *  a normal single-fixture pool; <1 for a strip's END pools (a light "sitting
    *  in" for the corner where two adjoining strips meet) — see EntityVisuals'
-   *  light-creation block, where an elongated strip gets a full-intensity pool
+   *  LightPoolSet.addFixture, where an elongated strip gets a full-intensity pool
    *  at its centre plus two half-intensity pools at its ends, so two adjoining
    *  strips' end-pools sum to roughly the centre's brightness at the shared
    *  corner instead of leaving it dark (or, if both ends were left at 1,
@@ -142,14 +142,14 @@ export class LightPool {
   intensityScale = 1;
   /** The Y the floor probe was cast FROM (the fixture's own height), kept so
    *  the pool can be re-probed later without the caller having to remember
-   *  where its fixture was — see EntityVisuals.reshapeLightPools, which re-asks
+   *  where its fixture was — see LightPoolSet.setRooms, which re-asks
    *  once calibration lets the probe answer per room instead of per 4m cell. */
   probeFromY = 0;
   private material: StandardMaterial;
 
   /** `floorPosition` — where the pool sits (the caller has already found the
    *  floor below the fixture, e.g. by raycast, and offset it clear of
-   *  z-fighting — see EntityVisuals' light-creation block for that logic,
+   *  z-fighting — see LightPoolSet.build for that logic,
    *  shared with the strip-drop placement). `radius` — the pool's
    *  world-space radius. `shape` — the world-space XZ polygon the pool should
    *  cover, normally its room clipped to its own footprint; omitted (the load
@@ -188,7 +188,7 @@ export class LightPool {
 
   /**
    * Rebuild the pool's footprint in place. Called once per pool after the
-   * plan→world calibration lands (EntityVisuals.reshapeLightPools), never on a
+   * plan→world calibration lands (LightPoolSet.setRooms), never on a
    * state change — see `setState`, which is what a tap actually runs.
    *
    * `floorY` moves the pool onto its room's real floor at the same time,

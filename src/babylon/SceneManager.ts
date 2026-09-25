@@ -3140,9 +3140,9 @@ export class SceneManager {
     this.calibratedPoints = points;
     this.camera.setTeleportPoints(points);
     this.camera.setRoomPolygons(worldPolys);
-    // Synchronously runs roomHighlight.setRooms AND reshapeLightPools — the
+    // Synchronously runs roomHighlight.setRooms AND LightPoolSet.setRooms — the
     // top suspect for the residual, since the latter re-probes every light
-    // pool's floor. reshapeLightPools reports itself as `calibPools`.
+    // pool's floor. The pools report themselves as `calibPools`.
     this.visuals.setRoomPolygons(worldPolys);
     devLog(`[Villa] ${worldPolys.length} room polygons registered`);
 

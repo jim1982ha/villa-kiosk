@@ -112,15 +112,15 @@ import { phantomEntity } from "@/utils/phantomEntity";
 import { channelEnabled, tapDebug } from "@/utils/tapDebug";
 import { debugFlagEnabled } from "@/utils/devLog";
 import { beginSpan } from "@/utils/perfSpans";
-import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
+import { pointInPolygon } from "@/utils/geometry";
 import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
-import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
+import { onStorey, storeyFloorYAt } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
-import { LightPool, poolFootprint } from "./LightPools";
+import { LightPoolSet, type LightReading } from "./lightPoolSet";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
 import { badgeText } from "./badgeText";
 import { badgeShadow } from "./badgeShadow";
@@ -162,17 +162,6 @@ const LIGHT_BASELINE_GLOW = 0.5;
 // starts bleeding into a neighbouring room, especially at night, shrink this
 // back down rather than raising it further.
 const LIGHT_RANGE = 4;
-// Floor-pool radius for BAKED-mode lights (see LightPools.ts) — a separate
-// knob from LIGHT_RANGE above, which only matters for the real PointLight
-// non-baked villas get (baked structure is unlit and can't be reached by a
-// PointLight at all, at any range/intensity — that's the whole reason the
-// pool trick exists).
-const LIGHT_POOL_RADIUS = 1.8;
-/** Floor for the radius of a pool that belongs to NO room polygon and so is
- *  bounded by the nearest room's edge instead (see reshapeLightPools). Without
- *  a floor, a fixture standing right on a boundary would shrink to nothing and
- *  read as an unlit lamp; a small pool is a better answer than none. */
-const POOL_MIN_RADIUS = 0.4;
 /**
  * ⚠️ HISTORICAL NOTE, not a live constant. There is NO cell ceiling for a
  * FOCUSED group's card — the one a room chip's tap produces — and this records
@@ -205,21 +194,11 @@ const POOL_MIN_RADIUS = 0.4;
  * membership for a focused group, so the clamp can never be the thing that
  * refuses, and the budget stays the only bound.
  */
-/** Closer than this to its own fixture, a pool is not on a floor — it is on the
- *  ceiling the fixture hangs from. Half a metre is below any real mounting
- *  height (a table lamp clears its floor by more) and far above the few
- *  centimetres a ceiling lamp clears its slab by. See `airborne` in
- *  reshapeLightPools. */
 /** The comparison key of the no-room bucket, normalised ONCE at module level —
  *  `roomOf` hands out the LABEL and every map here is keyed by `roomKey`, so
  *  the two must be related in exactly one place. See chipRoom, which refuses
  *  to chip it. */
 const NO_ROOM_KEY = roomKey(NO_ROOM_LABEL);
-const POOL_AIRBORNE_M = 0.5;
-/** How far a pool sits above the floor it was probed onto. Enough to clear
- *  z-fighting with the floor polygon, small enough that it still reads as
- *  lying ON it rather than hovering. */
-const POOL_FLOOR_LIFT = 0.02;
 /** Clamp a per-light intensity override (Advanced Settings, -100%..+100%,
  *  stored as -1..1) to a safe range — a stale/hand-edited config value
  *  outside that range must not blow the fixture out or invert it. */
@@ -1195,17 +1174,8 @@ export class EntityVisuals {
    *  fixture gets a single pool; an elongated strip gets an ARRAY — one
    *  full-intensity pool at its centre plus two half-intensity pools at its
    *  ends, so two strips meeting at a corner light that corner too instead of
-   *  leaving it dark between their centres (see the light-creation block). */
-  private meshLightPools = new Map<number, LightPool[]>();
-  /** Fixture spots whose LOAD-PATH floor probe came up empty, kept so
-   *  `reshapeLightPools` can ask again once the probe can answer per ROOM
-   *  instead of per 4-metre grid. Keyed by fixture mesh uniqueId, exactly as
-   *  `meshLightPools` is, and emptied into it as each retry succeeds — see the
-   *  deferral site in the light-creation block for why a load-path miss is not
-   *  a final answer. */
-  private pendingPoolSpots = new Map<number, {
-    mesh: AbstractMesh; x: number; z: number; y: number; scale: number; i: number;
-  }[]>();
+   *  leaving it dark between their centres (see LightPoolSet.addFixture). */
+  private pools!: LightPoolSet;
   /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
   private lightPoolStrength = 1;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
@@ -1561,6 +1531,9 @@ export class EntityVisuals {
     // grid, exactly as every load did before 2.300.0 (see floorProbe.ts).
     this.probe.setRoomResolver((x, y, z) => this.roomContaining(x, y, z));
     this.roomHighlight = new RoomHighlight(scene, requestRender, this.probe, this.requestAnimationRender);
+    // Every baked-mode floor pool — see lightPoolSet.ts. The probe is its floor
+    // port; the readings callback lets it repaint a pool it creates late.
+    this.pools = new LightPoolSet(scene, this.probe, () => this.poolReadings(), tapDebug);
     this.beams = new CameraBeams(scene);
     // ⚠️ KEPT SO `dispose()` CAN DETACH THEM. Both observers below used to be
     // registered and never removed, while this class's own dispose() docstring
@@ -1800,25 +1773,14 @@ export class EntityVisuals {
   setLightPoolIntensity(value: number): void {
     if (value === this.lightPoolStrength) return;
     this.lightPoolStrength = value;
-    this.resyncLightIntensities();
-  }
-
-  /** Re-derive EVERY light's brightness from its entity's last known state and
-   *  the current config — pools and dynamic PointLights together, since a
-   *  fixture may drive either. Call after anything that changes an input to
-   *  the brightness formula without an accompanying state_changed event: the
-   *  global "Light effect strength" slider, or a per-light intensity override
-   *  edited in Advanced Settings. */
-  private resyncLightIntensities(): void {
-    this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
-      pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
+    this.pools.setStrength(value);
     this.resyncDynamicLightIntensities();
     this.requestRender();
   }
 
   /** Re-derive every dynamic PointLight's intensity from its entity's last
-   *  known state — the non-baked counterpart of forEachLightPoolState's pool
-   *  resync, for when a GLOBAL factor (lightPoolStrength) changes without
+   *  known state — the non-baked counterpart of LightPoolSet.resync, for
+   *  when a GLOBAL factor (lightPoolStrength) changes without
    *  any entity state change. Mirrors applyToMesh's light branch exactly
    *  (same effectiveFrac/lightShare formula) so a slider drag and the next
    *  real state_changed event land on identical values. */
@@ -1829,9 +1791,7 @@ export class EntityVisuals {
       const state = this.lastState.get(entityId);
       const meshes = this.byEntity.get(entityId);
       if (!state || !meshes) continue;
-      const on = state.state === "on";
-      const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
-      const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
+      const { on, frac: effectiveFrac } = this.lightReading(state, map);
       const lightShare =
         new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1;
       for (const mesh of meshes) {
@@ -1845,28 +1805,32 @@ export class EntityVisuals {
     }
   }
 
-  /** Every light entity's pool, resolved to its floor-and-state-correct on/off
-   *  + colour + brightness right now — shared by anything that needs to
-   *  resync ALL pools at once (a floor change, the "Light effect strength"
-   *  slider) rather than just the one entity apply() is currently handling.
-   *  `on` already folds in the fixture mesh's live enabled state, so a light
-   *  left on behind a now-hidden floor comes back off instead of staying lit. */
-  private forEachLightPoolState(
-    fn: (pool: LightPool, on: boolean, colour: Color3, brightnessFrac: number) => void,
-  ): void {
+  /** One light's state as its fixture shows it: on/off, colour, and the
+   *  brightness fraction with the per-light override (Advanced Settings,
+   *  -100%..+100%) applied ON TOP of HA's own dimmer level. The ONE copy of
+   *  that formula — it was written three times, for the state pass, the
+   *  dynamic-light resync and the pool resync, and they had to agree exactly
+   *  for a slider drag and the next state_changed to land on the same value. */
+  private lightReading(state: HassEntity, map: EntityMapping): LightReading {
+    const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
+    return {
+      on: state.state === "on",
+      colour: this.lightColour(state),
+      frac: brightnessFrac * (1 + clampRatio(map.lightIntensityRatio)),
+    };
+  }
+
+  /** Every light fixture's current reading, for LightPoolSet's bulk repaint.
+   *  `on` folds in the fixture mesh's live enabled state, so a light left on
+   *  behind a now-hidden floor comes back off instead of staying lit. */
+  private *poolReadings(): Iterable<[number, LightReading]> {
     for (const [entityId, map] of this.mapping) {
       if (map.type !== "light") continue;
       const state = this.lastState.get(entityId);
       const meshes = this.byEntity.get(entityId);
       if (!state || !meshes) continue;
-      const on = state.state === "on";
-      const colour = this.lightColour(state);
-      const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
-      const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
-      for (const mesh of meshes) {
-        const pools = this.meshLightPools.get(mesh.uniqueId);
-        if (pools) for (const pool of pools) fn(pool, on && mesh.isEnabled(), colour, effectiveFrac);
-      }
+      const r = this.lightReading(state, map);
+      for (const mesh of meshes) yield [mesh.uniqueId, { ...r, on: r.on && mesh.isEnabled() }];
     }
   }
 
@@ -2238,69 +2202,10 @@ export class EntityVisuals {
         // doubling it into a hotspot. A compact (non-strip) fixture is
         // unaffected: it still gets exactly one full-intensity pool.
         if (this.bakedMode) {
-          const min = bb.minimumWorld, max = bb.maximumWorld;
-          const cx = (min.x + max.x) / 2, cz = (min.z + max.z) / 2;
           const horiz = Math.max(size.x, size.z);
-          const isStrip = longest >= STRIP_MIN_LENGTH && horiz >= STRIP_MIN_LENGTH;
-          const spots: { x: number; z: number; scale: number }[] = isStrip
-            ? (size.x >= size.z
-              ? [{ x: cx, z: cz, scale: 1 }, { x: min.x, z: cz, scale: 0.5 }, { x: max.x, z: cz, scale: 0.5 }]
-              : [{ x: cx, z: cz, scale: 1 }, { x: cx, z: min.z, scale: 0.5 }, { x: cx, z: max.z, scale: 0.5 }])
-            : [{ x: cx, z: cz, scale: 1 }];
-
-          const pools = spots
-            .map(({ x, z, scale }, i) => {
-              const fixturePos = new Vector3(x, bb.centerWorld.y, z);
-              const surfaceY = this.surfaceBelow(fixturePos.x, fixturePos.y, fixturePos.z, m);
-              // No floor found within the probe's reach: the old fallback
-              // placed the pool 1m below the fixture regardless — a glow
-              // patch floating at roughly window/furniture height instead of
-              // on the floor, reported (accurately) as "a disk floating in
-              // the air" and traced to surfaceBelow's predicate accepting
-              // furniture as a floor hit (now fixed via isStructureMesh — see
-              // that method). No pool at all — this one spot just reads as
-              // an unlit fixture — is a far smaller miss than a wrongly-
-              // placed glow, and with structure-only hits plus a 20m ray and
-              // the seam-nudge retry, an actual miss here should now mean
-              // there is genuinely no floor within reach (an outdoor fixture
-              // over water, say). Logged rather than silently swallowed so
-              // that rarer case is still visible on the kiosk itself via
-              // ?debug, without needing devtools.
-              if (surfaceY === null) {
-                // DEFERRED, not abandoned (2.434.0). This probe runs on the
-                // LOAD path, where no room resolver exists yet, so it is keyed
-                // by the 4-metre grid — the very key 2.300.0 removed for
-                // merging THROUGH A WALL. A fixture near a wall can therefore
-                // inherit a cached `null` from a neighbouring cell that really
-                // has no floor (a void, the garden), and until now that verdict
-                // was FINAL: no pool object was created, so `reshapeLightPools`
-                // — which re-probes every pool room-keyed a moment later — had
-                // nothing to correct. The fixture stayed permanently unlit
-                // beside identical fixtures that drew a full pool, which is the
-                // "why are the light effects shown differently" report.
-                //
-                // Recorded as five numbers and a mesh reference, not a mesh: no
-                // GPU allocation happens until the retry actually succeeds, so
-                // a fixture that genuinely has no floor under it (an outdoor
-                // light over water) still costs nothing at all.
-                const spots = this.pendingPoolSpots.get(m.uniqueId) ?? [];
-                spots.push({ mesh: m, x: fixturePos.x, z: fixturePos.z, y: fixturePos.y, scale, i });
-                this.pendingPoolSpots.set(m.uniqueId, spots);
-                return null;
-              }
-              const floorPos = new Vector3(fixturePos.x, surfaceY + POOL_FLOOR_LIFT, fixturePos.z);
-              // Built as its plain footprint here, deliberately. Room polygons
-              // do not exist yet — SceneManager calibrates AFTER indexMeshes,
-              // post-first-frame, because the fit's raycasts are too heavy for
-              // the load path — so clipping happens later, in reshapeLightPools,
-              // which keeps all of the new work off the critical path.
-              const pool = new LightPool(this.scene, `${m.name}_${m.uniqueId}_${i}`, floorPos, LIGHT_POOL_RADIUS);
-              pool.intensityScale = scale;
-              pool.probeFromY = fixturePos.y;
-              return pool;
-            })
-            .filter((p): p is LightPool => p !== null);
-          this.meshLightPools.set(m.uniqueId, pools);
+          this.pools.addFixture(m, {
+            min: bb.minimumWorld, max: bb.maximumWorld, centerY: bb.centerWorld.y,
+          }, longest >= STRIP_MIN_LENGTH && horiz >= STRIP_MIN_LENGTH);
         }
       }
     }
@@ -2658,12 +2563,7 @@ export class EntityVisuals {
     const seen = new Set<PointLight>();
     this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
     this.meshLights.clear();
-    this.meshLightPools.forEach((arr) => arr.forEach((p) => p.dispose()));
-    this.meshLightPools.clear();
-    // Holds mesh references from the outgoing model — clearing it here (rather
-    // than only on the next indexMeshes) is what stops a reload's calibration
-    // retrying spots that belong to a scene that no longer exists.
-    this.pendingPoolSpots.clear();
+    this.pools.clear();
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
@@ -2757,237 +2657,9 @@ export class EntityVisuals {
     // in any grouping decision and the cache is gone with the fan.
     this.roomPolys = polys.filter((p) => p.pts.length >= 3)
       .map((p) => ({ name: p.name, pts: p.pts, floorY: p.floorY ?? 0 }));
-    // Everything below depends on these polygons and nothing above does, so
-    // this is the earliest moment either half of the 2.300.0 fix can run.
-    this.reshapeLightPools();
-  }
-
-  /**
-   * Give every light pool its room's shape and its room's floor height, once
-   * the plan→world calibration has produced the polygons that make both
-   * answerable. Fixes two reported defects at once, and they were reported
-   * together because they share a cause — a fixture near a wall:
-   *
-   *   - the pool drawn THROUGH the wall into the next room. A horizontal disc
-   *     passes straight through the base of a vertical wall, so a fixture
-   *     within LIGHT_POOL_RADIUS of one painted glow on both sides of it.
-   *     Inherent to the primitive; no radius both covers the walkway and stops
-   *     at its edge. The pool is now its ROOM clipped to its own footprint, so
-   *     the wall bounds it by construction.
-   *   - the pool NOT VISIBLE under a lit fixture. Its floor height came from a
-   *     4-metre-bucketed probe that merged across walls, so the fixture
-   *     inherited the neighbouring room's floor and the disc ended up under the
-   *     one it was meant to sit on. Re-probing here gets a ROOM-keyed answer
-   *     (see floorProbe.ts).
-   *
-   * Runs once per calibration, after first paint — never on a state change.
-   * A tap still costs exactly what it always did: LightPool.setState is
-   * setEnabled plus two material writes, and nothing here is on that path.
-   */
-  private reshapeLightPools(): void {
-    if (this.meshLightPools.size === 0 || this.roomPolys.length === 0) return;
-    // The memoised answers were keyed by grid (no resolver was available during
-    // indexMeshes); the persisted ones are keyed by whatever they were computed
-    // under. Dropping the in-memory map lets the same points be re-asked now
-    // that the resolver can name their room — a few dozen rays, post-reveal.
-    this.probe.clearMemo();
-    // Bucketed, never dropped: a pool that ends up looking different from its
-    // neighbours got that way through exactly one of these branches, and until
-    // 2.434.0 none of them was counted. "Some lights show a floor wash and
-    // others do not" is unanswerable from a screenshot; it is one line from
-    // here. (See the same rule in the badge tier — an expected category gets a
-    // labelled number, never a silent `continue`.)
-    let clipped = 0, whole = 0, bounded = 0, nofloor = 0;
-    // ⚠️ THE PER-POOL NAMING IS GONE, AND THESE COUNTERS ARE WHAT IT LEFT
-    // (2.482.0, /dry-audit). It printed a line per suspicious pool for three
-    // releases and earned every one of them — it is what separated an LED strip
-    // parked on a neighbour's floor (cached 2.15 m, real 0.00 m) from a stair
-    // light 14 cm above its tread, after two fixes aimed at a single number had
-    // moved nothing. Both answers are now encoded: the first became the
-    // re-probe, the second became `nearFixture`, and `bounded`/`crushed` went to
-    // zero once the storey rule was fixed. A counter that still separates two
-    // outcomes stays; forty lines of naming a question nobody is asking do not.
-    /** Pools whose bucketed floor was wrong and was re-probed — a real fix. */
-    let poolCorrected = 0;
-    /** Pools legitimately mounted close to what they light — NOT a fault. */
-    let nearFixture = 0;
-    /** Pools bounded all the way down to POOL_MIN_RADIUS — visually absent. */
-    let crushed = 0;
-    const recovered = this.retryPendingPools();
-    for (const pools of this.meshLightPools.values()) {
-      for (const pool of pools) {
-        const x = pool.mesh.position.x, z = pool.mesh.position.z;
-        // PROBE FIRST, then resolve the room — the order is the correctness
-        // argument, not a tidy-up.
-        //
-        // This lookup is storey-aware as of 2.434.0 (see roomPolyAt; the plain
-        // XZ containment it replaced handed a ground-floor pool the outline of
-        // the room ABOVE it whenever that polygon was listed first). But a
-        // storey read off the FIXTURE's height has one genuinely ambiguous
-        // band, and light fixtures live in it: a ceiling lamp hangs within
-        // centimetres of the slab overhead, which is the very height that slab
-        // reports as the next storey's floor. A downward ray does not have that
-        // problem — it answers "which floor is physically under this fixture"
-        // by touching it — and this method is already casting one. So the
-        // pool's room is resolved at the height of the floor it will be drawn
-        // on, and the fixture's own height is only the fallback for a probe
-        // that found nothing at all.
-        let surfaceY = this.surfaceBelow(x, pool.probeFromY, z);
-        if (surfaceY === null) nofloor++;
-        // THE COUNTER THAT NAMES THE 2.435.0 BUG, and the one whose absence let
-        // it ship: a pool that lands within POOL_AIRBORNE_M of its own fixture
-        // is not lying on a floor, it is stuck to the ceiling that fixture hangs
-        // from — "the light disk is floating in the air". A light is mounted a
-        // usable distance above what it lights, so this is 0 on a healthy villa
-        // and the exact number of wrong pools on a sick one.
-        else if (pool.probeFromY - surfaceY < POOL_AIRBORNE_M) {
-          // ⚠️ THE BUCKET IS TOO COARSE FOR FIXTURES MOUNTED HIGH (2.476.0).
-          // The memo keys by `room | round(height)`, so every fixture in one
-          // room at one rounded height shares an answer — which is right for
-          // the ceiling lamps it was designed around and wrong for anything
-          // mounted ON something. An owner capture named both cases at once:
-          //
-          //   bedroom1_light_led_top  fixtureY=2.20 cached=2.15 fresh=0.00
-          //   stairs1f_light_stairs   fixtureY=0.60 cached=0.46 fresh=0.46
-          //
-          // The first is a strip whose pool was parked at 2.15 m because a
-          // neighbour under a soffit answered first. The second is a STEP light
-          // 14 cm above its tread — correct, and only "airborne" because the
-          // threshold was written for lamps. A count could never separate them;
-          // they need opposite responses and one of them needs none.
-          //
-          // So a suspicious answer is re-asked WITHOUT the cache, and the fresh
-          // one wins. Bounded by construction: only pools already inside
-          // POOL_AIRBORNE_M pay for it — 20 of 144 here — and it runs after
-          // first paint, never on the load path.
-          const fresh = this.probe.describeBelow(x, pool.probeFromY, z);
-          const poolCorrectedHere = !!fresh && Math.abs(fresh.y - surfaceY) > 2 * POOL_FLOOR_LIFT;
-          if (poolCorrectedHere) {
-            surfaceY = fresh.y;
-            poolCorrected++;
-          } else {
-            // Cached and fresh agree: the fixture really is mounted close to
-            // what it lights. A stair light, a plinth strip, an under-counter
-            // run. Reported separately because it is NOT a fault, and counting
-            // it as one is what made this number unreadable for a whole session.
-            nearFixture++;
-          }
-          // ⚠️ NAME THEM. Two fixes have been aimed at this counter from causes
-          // I inferred rather than observed, and neither moved it. A count says
-          // "26 pools are wrong"; it cannot say whether they are ceiling lamps
-          // landing on a ceiling, floor-level strips that are CORRECTLY within
-          // half a metre of the floor and merely tripping a threshold written
-          // for lamps, or something else entirely. Those need opposite fixes —
-          // and one of them needs no fix at all. Debug-gated: this re-probes
-          // uncached, ~21 ms a piece.
-        }
-        // Two rules, and which one applies is decided by what we KNOW: a probed
-        // surface is a floor being stood on (nearest), a fixture height is an
-        // unknown distance above one (clearance). See roomPolyOnFloor.
-        const room = surfaceY !== null
-          ? this.roomPolyOnFloor(x, surfaceY, z)
-          : this.roomPolyAt(x, pool.probeFromY, z);
-        let radius = LIGHT_POOL_RADIUS;
-        let shape: Pt2[] | undefined;
-        if (room) {
-          // Room = SUBJECT (may be L-shaped), footprint = CLIP (convex). That
-          // order is the correctness argument — see clipPolygonToConvex.
-          const cut = clipPolygonToConvex(room.pts, poolFootprint(x, z, radius));
-          if (cut.length >= 3) { shape = cut; clipped++; } else whole++;
-        } else {
-          // Outside every polygon ON THIS STOREY — open ground, or a fixture
-          // whose anchor sits just past a wall. There is no room to clip to, so
-          // bound the radius by the nearest room boundary instead: still cannot
-          // cross a wall, and a fixture far from everything keeps its full pool.
-          //
-          // Same-storey rooms ONLY. Measuring against every polygon in the model
-          // let a terrace fixture standing clear of everything on its own storey
-          // be crushed to POOL_MIN_RADIUS by a bedroom wall one floor up —
-          // a 0.4 m pool under a fixture whose neighbours drew 1.8 m ones.
-          // Same distinction for the no-room fallback: bounding a pool against
-          // "same-storey rooms only" is meaningless if the storey was resolved
-          // by the wrong rule.
-          const storeyY = surfaceY !== null
-            ? (this.roomPolyOnFloor(x, surfaceY, z)?.floorY ?? surfaceY)
-            : this.storeyFloorYAt(pool.probeFromY);
-          let nearest = Infinity;
-          for (const r of this.roomPolys) {
-            if (!onStorey(r.floorY, storeyY)) continue;
-            nearest = Math.min(nearest, distanceToPolygonBoundary(x, z, r.pts));
-          }
-          if (Number.isFinite(nearest)) radius = Math.min(radius, Math.max(POOL_MIN_RADIUS, nearest));
-          bounded++;
-          // ⚠️ NAME THE ONES THAT VANISH. A pool crushed to POOL_MIN_RADIUS is
-          // 0.4 m across and reads on screen as "this light does not light the
-          // floor at all" — reported for the entrance light, and once before for
-          // a terrace fixture (the same-storey fix). The bucket counts them;
-          // only a name says WHICH light and how far the wall that crushed it
-          // was, which is the difference between "a real wall is 30 cm away"
-          // and "a polygon from another storey is being measured against".
-          if (radius <= POOL_MIN_RADIUS + 1e-3) crushed += 1;
-        }
-        pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
-      }
-    }
-    this.probe.save();
-    // A pool created just now has never been handed a live HA state — the state
-    // pass ran long before calibration — so an already-ON light would keep a
-    // dark pool until its next state change. This is the same resync a floor
-    // toggle runs, and it is skipped entirely when nothing was recovered.
-    if (recovered) this.resyncLightPoolsToFloor();
-    tapDebug(
-      `light pools: clipped=${clipped} whole=${whole} bounded=${bounded} nofloor=${nofloor}`
-      + ` corrected=${poolCorrected} nearFixture=${nearFixture} crushed=${crushed}`
-      + ` bucketAbove=${this.probe.stats.probeAbove}`
-      + ` recovered=${recovered} stillNoFloor=${
-        [...this.pendingPoolSpots.values()].reduce((n, s) => n + s.length, 0)}`
-      + ` rooms=${this.roomPolys.length} storeys=${new Set(this.roomPolys.map((r) => Math.round(r.floorY))).size}`,
-    );
+    // The earliest moment the pools can take their rooms' shapes and floors.
+    this.pools.setRooms(this.roomPolys);
     this.requestRender();
-  }
-
-  /**
-   * Ask again for every fixture whose LOAD-PATH floor probe missed, now that
-   * the probe can key by ROOM. Returns how many pools this created.
-   *
-   * The load path is grid-keyed by necessity (calibration has not run, so there
-   * is no room resolver), and a 4-metre grid merges straight through a wall —
-   * so a `null` there is not "there is no floor under this fixture", it is "the
-   * cell this fixture shares with something else had none". Every other
-   * consequence of that key is already corrected here (shape, height); this was
-   * the one verdict that used to be final, because nothing was allocated to
-   * correct. A spot that misses AGAIN stays pending and is reported by the
-   * `light pools:` line, so "this fixture genuinely has no floor beneath it"
-   * and "we never asked twice" stop looking identical.
-   *
-   * Costs nothing on a villa with no misses: the map is empty and this returns
-   * immediately.
-   */
-  private retryPendingPools(): number {
-    if (this.pendingPoolSpots.size === 0) return 0;
-    let created = 0;
-    for (const [uniqueId, spots] of [...this.pendingPoolSpots]) {
-      const stillMissing: typeof spots = [];
-      const pools = this.meshLightPools.get(uniqueId) ?? [];
-      for (const spot of spots) {
-        const surfaceY = this.surfaceBelow(spot.x, spot.y, spot.z, spot.mesh);
-        if (surfaceY === null) { stillMissing.push(spot); continue; }
-        const pool = new LightPool(
-          this.scene,
-          `${spot.mesh.name}_${uniqueId}_${spot.i}`,
-          new Vector3(spot.x, surfaceY + POOL_FLOOR_LIFT, spot.z),
-          LIGHT_POOL_RADIUS,
-        );
-        pool.intensityScale = spot.scale;
-        pool.probeFromY = spot.y;
-        pools.push(pool);
-        created++;
-      }
-      if (pools.length) this.meshLightPools.set(uniqueId, pools);
-      if (stillMissing.length) this.pendingPoolSpots.set(uniqueId, stillMissing);
-      else this.pendingPoolSpots.delete(uniqueId);
-    }
-    return created;
   }
 
   /** Replace the resolved entity->room map (see the field's own docstring) —
@@ -3055,36 +2727,6 @@ export class EntityVisuals {
    * any model whose per-storey floor heights all came back equal: every room is
    * then on the point's storey and the first containing one wins, as before.
    */
-  /**
-   * The room a point STANDING ON A FLOOR is in — nearest-floor semantics.
-   *
-   * ⚠️ THE SECOND OF THE TWO RULES (2.477.0), and using the wrong one is why
-   * every upper-storey light pool washed through its own walls. `roomPolyAt`
-   * below asks `storeyFloorYAt`, which answers "a point at an UNKNOWN height
-   * above its floor" by taking the highest floor at least STOREY_MIN_MOUNT
-   * BELOW it. Hand it a floor the pool is standing ON — 2.44 m, the upper
-   * storey's slab — and the highest floor 0.30 m below that is the GROUND floor
-   * at 0.00, so every upper-storey room polygon fails `onStorey`, no room is
-   * found, and the pool stays a full circle bounded only by the nearest other
-   * room's edge. Reported as "the lights are lighting outside the walls", with a
-   * Gym Room that turned out to be on 2F.
-   *
-   * roomStorey.ts states this outright — "`nearestFloorRoom` answers 'I am
-   * STANDING on a floor at exactly this height' (the walker's feet, a landing
-   * anchor, A PROBED FLOOR)" — and a light pool sits on a probed floor. The
-   * rule was written and documented; this call site simply used the other one.
-   *
-   * ⚠️ Exposed, not caused, by 2.474.0: before it the probe could land on a
-   * CEILING, so `surfaceY` was often a height in the middle of a storey where
-   * the clearance rule happened to answer correctly. Fixing the probe made the
-   * floors right and the wrong rule visible.
-   */
-  private roomPolyOnFloor(
-    x: number, floorY: number, z: number,
-  ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
-    return nearestFloorRoom(this.roomPolys, floorY, (r) => pointInPolygon(x, z, r.pts));
-  }
-
   private roomPolyAt(
     x: number, y: number, z: number,
   ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
@@ -3942,7 +3584,10 @@ export class EntityVisuals {
     // Badges are culled per storey, and FloorManager's setEnabled sweep is not
     // otherwise visible to the layout pass.
     this.markLayoutDirty();
-    this.resyncLightPoolsToFloor();
+    // A pool is a freestanding decal FloorManager never toggles, so a 2F light
+    // left on would stay lit over 1F — repaint every pool from its fixture's
+    // now floor-correct enabled state.
+    this.pools.resync();
     // Mesh variants (curtain/lock poses) need NO floor resync: their
     // exclusivity rides `isVisible`, which FloorManager's per-floor
     // `setEnabled` never touches — see applyMeshVariant's docstring.
@@ -3952,19 +3597,6 @@ export class EntityVisuals {
     // once and then hold (see syncEntityShadow).
     this.invalidateShadowMaps();
     this.requestRender();
-  }
-
-  /** A baked-villa light's floor "pool" (see LightPools.ts) is a freestanding
-   *  decal mesh that FloorManager never indexes or toggles — unlike the
-   *  fixture mesh itself, it doesn't automatically vanish when its floor is
-   *  hidden. Without this, a 2F light left on stayed visible (floating,
-   *  unoccluded) while viewing 1F. Re-derive each pool's on/off state from
-   *  its fixture mesh's CURRENT enabled state (already floor-correct by the
-   *  time this runs) whenever the active floor changes. */
-  private resyncLightPoolsToFloor(): void {
-    if (this.meshLightPools.size === 0) return;
-    this.forEachLightPoolState((pool, on, colour, brightnessFrac) =>
-      pool.setState(on, colour, brightnessFrac * this.lightPoolStrength));
   }
 
   /**
@@ -9515,16 +9147,10 @@ export class EntityVisuals {
 
     switch (map.type) {
       case "light": {
-        const on = state.state === "on";
-        const colour = this.lightColour(state);
-        const brightnessFrac = state.attributes.brightness ? state.attributes.brightness / 255 : 1;
-        // Per-light override (Advanced Settings, -100%..+100%): a ratio applied
-        // ON TOP of the entity's live brightness, so one fixture can be tuned
-        // brighter/dimmer than its HA dimmer level alone would produce — e.g. a
-        // light whose SweetHome placement reads darker than the others —
-        // without touching the global "Light effect strength" slider that
-        // affects every light. 0 = no change; -100% = off; +100% = double.
-        const effectiveFrac = brightnessFrac * (1 + clampRatio(map.lightIntensityRatio));
+        // See lightReading — the per-light override lets one fixture be tuned
+        // brighter/dimmer than its HA dimmer level alone would produce without
+        // touching the global "Light effect strength" slider.
+        const { on, colour, frac: effectiveFrac } = this.lightReading(state, map);
 
         // 1) The fixture mesh glows.
         setEmissive?.(on ? colour.scale(effectiveFrac) : Color3.Black());
@@ -9572,14 +9198,9 @@ export class EntityVisuals {
         // Baked mode's counterpart to the light above — see LightPools.ts.
         // `mesh.isEnabled()` folds in FloorManager's floor toggle: a fixture
         // on a currently-hidden floor must not light its pool even if the HA
-        // entity itself is "on" (see resyncLightPoolsToFloor for the other
+        // entity itself is "on" (see LightPoolSet.resync for the other
         // direction — a floor SWITCH with no entity-state change).
-        const pools = this.meshLightPools.get(mesh.uniqueId);
-        if (pools) {
-          for (const pool of pools) {
-            pool.setState(on && mesh.isEnabled(), colour, effectiveFrac * this.lightPoolStrength);
-          }
-        }
+        this.pools.setLight(mesh.uniqueId, { on: on && mesh.isEnabled(), colour, frac: effectiveFrac });
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }
