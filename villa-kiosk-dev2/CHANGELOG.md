@@ -1,3 +1,18 @@
+## 2.496.89
+
+### Fixed — the Weather window
+- **"No rain" is said only when the gauge reported no rain.** If the rain
+  history could not be loaded, or the recorder had nothing for the gauge, the
+  chart said "No rain in the last 24 h" and the figure said 0.0 mm. It now says
+  "Couldn't load this history", or "No rain readings", and the figure shows a
+  dash. A stretch the gauge did not report is shaded, like on every other chart.
+- **A chart whose history failed to load says so**, instead of "Not enough
+  history yet".
+
+### Changed
+- **One history source behind every chart.** The device panels and the Weather
+  window read history the same way, and the Weather window's range buttons
+  are the same buttons as the device panels' (12h · 24h · 7d · 30d).
 ## 2.496.88
 
 ### Improved — the Weather window
