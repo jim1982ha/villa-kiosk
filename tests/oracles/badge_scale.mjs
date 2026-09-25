@@ -54,7 +54,9 @@ console.log("\n  the callers:");
 const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8")
   .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 ck("no inline copy of pixels-per-metre is left", !/vpH\s*\/\s*\(2\s*\*/.test(ev));
-ck("the room-zoom solver walks the lattice with rungAt", /rungAt\(view\.vpH, tanV, radius\)/.test(ev));
+// The ladder moved to roomZoomSolver.ts (2.496.94) — the same rule, there.
+const zs = readFileSync(new URL("../../src/babylon/roomZoomSolver.ts", import.meta.url), "utf8");
+ck("the room-zoom solver walks the lattice with rungAt", /rungAt\(view\.vpH, tanV, radius\)/.test(zs) && !/vpH\s*\/\s*\(2\s*\*/.test(zs));
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ one scale, one rung, one zoom");
 process.exit(fail ? 1 : 0);
