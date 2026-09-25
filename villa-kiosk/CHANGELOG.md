@@ -1,3 +1,17 @@
+## 2.496.92
+
+### Fixed — lights
+- **A light that is already on when the villa loads casts its wall shadow**
+  straight away, on villas without baked lighting. It used to cast none until
+  it was switched off and on again.
+- **Turning a light on no longer fails on a villa without baked lighting.**
+  The shadow a lamp casts there needed a part of the 3D engine that was never
+  loaded, so creating it failed. This villa's lighting is baked and was not
+  affected.
+
+### Changed
+- **Everything a light fixture shows is decided in one place**: its glow, its
+  see-through look while off, its light, its floor pools and its shadow.
 ## 2.496.91
 
 ### Changed — the villa's rooms and storeys

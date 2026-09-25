@@ -9,12 +9,22 @@
 // slider's value was held twice. 2.496.73, .75 and .77 were each that
 // disagreement surfacing somewhere new. Architecture review, round 3.
 //
-// A bulb is one fixture mesh. What it gives, by render mode:
+// A bulb is one fixture mesh. Its OWN look, in every mode: it glows its light's
+// colour while on, and goes window-glass translucent while off (OFF_ALPHA).
+// What it gives, by render mode:
 //   * a PointLight (every mode) — the room's real light on an unbaked villa;
 //     on a lightmapped one it is kept off every glowing mesh (glowEverythingLit)
 //     and lights only what the glow leaves out: glass, the fixtures, non-PBR;
 //   * floor pools (baked villas — LightPoolSet);
-//   * the furniture light (lightmapped villas — lampGlow.ts, fed from the pools).
+//   * the furniture light (lightmapped villas — lampGlow.ts, fed from the pools);
+//   * a cube shadow map, while on, where the walls' shadows are not baked
+//     (setCastShadows) — one per entity, on its first bulb's light.
+//
+// ⚠️ THE LOOK AND THE SHADOW STAYED IN EntityVisuals AFTER ROUND 3, and the two
+// repaint paths there disagreed: a state change set the fixture's glow, the
+// light and the shadow map; the first paint set the glow and the light and
+// forgot the shadow — a light already on at load cast none until it was
+// toggled. A floor switch had to remember two calls. `show` is all of it now.
 //
 // The rules, once:
 //  * a bulb is ON when its entity is on AND its storey is shown (the mesh is
@@ -31,15 +41,29 @@
 //  * the slider scales all of them, and is held here once.
 //
 // Interface: addFixture (load), mergeStrips + glowEverythingLit (end of the
-// load), show (a state change), setStrength (slider), resync (floor switch,
-// or anything else that changes an input without a state event), setRooms
-// (calibration), syncGlow (before a frame), clear (unload).
+// load), show (a state change, and the first paint), setStrength (slider),
+// resync (floor switch, or anything else that changes an input without a state
+// event — it redraws the shadow maps too), invalidateShadows (a pose swap
+// changed what occludes), setRooms (calibration), syncGlow (before a frame),
+// clear (unload).
 
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { Material } from "@babylonjs/core/Materials/material";
+import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+// ⚠️ THE SIDE EFFECT ShadowGenerator NEEDS, AND NOTHING IMPORTED IT: `new
+// ShadowGenerator` throws "ShadowGeneratorSceneComponent needs to be imported"
+// without it, and tsc cannot see that. No file in src had it, so on a villa
+// whose walls' shadows are not baked (lightingMode.lightShadows) the first
+// light turned on threw out of EntityVisuals.apply — latent on this villa,
+// which is baked. Found by driving BulbSet in tests/oracles/bulb_set.mjs.
+import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
+// For its REFRESHRATE_* constants (see castShadow). Adds nothing to the bundle
+// — ShadowGenerator already pulls this module in.
+import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPoolSet, type LightReading, type PoolFloorProbe, type PoolRoom } from "./lightPoolSet";
@@ -60,6 +84,19 @@ const STRIP_DROP_FRACTION = 0.45;
 const STRIP_DROP_MAX = 1.1;
 /** Below this, a strip is already near what it lights and is not lowered. */
 const STRIP_DROP_MIN_GAP = 0.3;
+/**
+ * An OFF bulb's material alpha: slightly clearer than window glass (0.38).
+ * Every light fixture mesh — marker sphere, inflated strip, a modelled bulb
+ * from the catalog — reads "off" the instant HA says so, by TYPE, never by
+ * guessing which meshes look like stand-ins. Material alpha + ALPHABLEND, not
+ * mesh.visibility: the fixture's material forces depth writes (EntityVisuals'
+ * index pass), without which Babylon sorts it against the glass walls per frame
+ * and it flickers. Transparency does not affect picking, so an off strip stays
+ * clickable. On restores alpha 1 + OPAQUE, byte-identical to no treatment.
+ */
+export const OFF_ALPHA = 0.25;
+/** One cube shadow map's face size, per lit entity. */
+const SHADOW_MAP_SIZE = 256;
 
 /** One light entity's current reading and its bulbs. `reading.on` is the
  *  entity's own — the storey is folded in here, per bulb. */
@@ -90,19 +127,26 @@ export class BulbSet {
   private glowMeshes: AbstractMesh[] = [];
   private glowVersion = -1;
   private glowOverflow = false;
+  /** Live cube shadow maps, keyed by the entity's representative light. */
+  private readonly shadows = new Map<PointLight, ShadowGenerator>();
+  private castShadows = false;
   private readonly scene: Scene;
   private readonly probe: BulbFloorProbe;
   private readonly readings: () => Iterable<BulbReading>;
+  private readonly casters: () => readonly AbstractMesh[];
 
   constructor(
     scene: Scene,
     probe: BulbFloorProbe,
     readings: () => Iterable<BulbReading>,
     log: (line: string) => void = () => {},
+    /** What a lamp's shadow map draws: the villa's static occluders. */
+    casters: () => readonly AbstractMesh[] = () => [],
   ) {
     this.scene = scene;
     this.probe = probe;
     this.readings = readings;
+    this.casters = casters;
     this.pools = new LightPoolSet(scene, probe, () => this.poolReadings(), log);
   }
 
@@ -112,8 +156,20 @@ export class BulbSet {
   /** Whether a mesh is a bulb. */
   isBulb(meshId: number): boolean { return this.lights.has(meshId); }
 
-  /** A bulb's PointLight — for the shadow map a lit entity casts. */
+  /** A bulb's PointLight. */
   lightOf(meshId: number): PointLight | undefined { return this.lights.get(meshId); }
+
+  /** Whether a lit entity casts a cube shadow map (lightingMode.lightShadows:
+   *  only where the walls' shadows are not already in a bake — they cost). */
+  setCastShadows(on: boolean): void {
+    if (on === this.castShadows) return;
+    this.castShadows = on;
+    if (!on) this.disposeShadows();
+    else this.resync();
+  }
+
+  /** How many shadow maps are live. */
+  get shadowCount(): number { return this.shadows.size; }
 
   /** A fixture mesh found on the load path: its PointLight (off until a state
    *  turns it on) and, on a baked villa, its floor pools. */
@@ -180,10 +236,12 @@ export class BulbSet {
     for (const l of new Set(this.lights.values())) l.excludedMeshes.push(...this.glowMeshes);
   }
 
-  /** One light entity's state changed: every output of every bulb it has. */
+  /** One light entity's state: every output of every bulb it has — its own
+   *  glow and transparency, its light, its pools and its shadow map. */
   show(meshes: readonly AbstractMesh[], r: LightReading): void {
     const share = new Set(meshes.map((m) => this.lights.get(m.uniqueId)).filter(Boolean)).size || 1;
     for (const mesh of meshes) {
+      this.showFixture(mesh, r);
       const on = r.on && mesh.isEnabled();
       const light = this.lights.get(mesh.uniqueId);
       if (light) {
@@ -195,6 +253,15 @@ export class BulbSet {
       }
       this.pools.setLight(mesh.uniqueId, { on, colour: r.colour, frac: r.frac });
     }
+    this.castShadow(meshes, r.on);
+  }
+
+  /** Re-render every live shadow map ONCE on the next frame — the set of
+   *  VISIBLE occluders changed (a floor switch, a door or curtain pose).
+   *  Never for the camera or a light's brightness: a depth map drawn from the
+   *  light's position cannot change with either. */
+  invalidateShadows(): void {
+    for (const gen of this.shadows.values()) gen.getShadowMap()?.resetRefreshCounter();
   }
 
   /** Settings' "Light effect strength". Returns whether it changed. */
@@ -211,6 +278,9 @@ export class BulbSet {
    *  that changes an input without a state event. */
   resync(): void {
     for (const { meshes, reading } of this.readings()) this.show(meshes, reading);
+    // What occludes a lamp changed with whatever called this (a storey hidden
+    // or shown); the maps render once and then hold.
+    this.invalidateShadows();
   }
 
   /** The calibrated villa plan: the pools take their rooms' shapes and floors. */
@@ -231,6 +301,7 @@ export class BulbSet {
 
   /** Unload: every light and pool of the outgoing model. */
   clear(): void {
+    this.disposeShadows();
     new Set(this.lights.values()).forEach((l) => l.dispose());
     this.lights.clear();
     this.pools.clear();
@@ -243,6 +314,59 @@ export class BulbSet {
     for (const { meshes, reading } of this.readings()) {
       for (const mesh of meshes) yield [mesh.uniqueId, { ...reading, on: reading.on && mesh.isEnabled() }];
     }
+  }
+
+  /** The fixture's own look: its light's colour as glow while on, window-
+   *  glass translucent while off (OFF_ALPHA). The ENTITY's on, not the
+   *  storey's — a hidden storey's meshes are not drawn at all. */
+  private showFixture(mesh: AbstractMesh, r: LightReading): void {
+    const mat = mesh.material;
+    if (!mat) return;
+    const glow = r.on ? r.colour.scale(r.frac) : Color3.Black();
+    if (mat instanceof PBRMaterial || mat instanceof StandardMaterial) mat.emissiveColor = glow;
+    mat.alpha = r.on ? 1 : OFF_ALPHA;
+    mat.transparencyMode = r.on ? Material.MATERIAL_OPAQUE : Material.MATERIAL_ALPHABLEND;
+  }
+
+  /**
+   * Make walls block a lamp's light, where they are not baked: ONE cube shadow
+   * map per light ENTITY, on its first bulb's light — a strip's markers are
+   * clustered and one occluder covers them, so twelve markers cost one map.
+   * Created when the entity turns on, disposed when it turns off: an off light
+   * costs nothing.
+   *
+   * ⚠️ RENDERED ONCE, NOT EVERY FRAME. Babylon's default refresh is every
+   * frame, and a PointLight's map is a CUBE — six full-geometry depth passes a
+   * frame per lit fixture, forever, since lights-on is a house's resting state
+   * (reported as the device heating slowly while the app stayed open). A map
+   * drawn from a fixed light over static casters changes only when the visible
+   * occluders do, which is what invalidateShadows is for.
+   */
+  private castShadow(meshes: readonly AbstractMesh[], on: boolean): void {
+    let light: PointLight | undefined;
+    for (const m of meshes) { light = this.lights.get(m.uniqueId); if (light) break; }
+    if (!light) return;
+    const existing = this.shadows.get(light);
+    if (!on || !this.castShadows) {
+      if (existing) { existing.dispose(); this.shadows.delete(light); }
+      return;
+    }
+    if (existing) return;
+    const gen = new ShadowGenerator(SHADOW_MAP_SIZE, light);
+    gen.usePoissonSampling = true; // cheap soft edge; blur-ESM isn't supported for cube maps
+    const map = gen.getShadowMap();
+    if (map) {
+      const casters = this.casters();
+      map.renderList = casters.slice();
+      for (const c of casters) c.receiveShadows = true;
+      map.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
+    }
+    this.shadows.set(light, gen);
+  }
+
+  private disposeShadows(): void {
+    for (const gen of this.shadows.values()) gen.dispose();
+    this.shadows.clear();
   }
 
   /** A strip mounted flush against a ceiling or wall: a light AT it prints a

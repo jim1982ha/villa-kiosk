@@ -51,11 +51,6 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { sliceChanged } from "./entityMapDiff";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
-import { PointLight } from "@babylonjs/core/Lights/pointLight";
-import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
-// Imported for its REFRESHRATE_* constants only (see syncEntityShadow). Adds
-// nothing to the bundle — ShadowGenerator already pulls this module in.
-import { RenderTargetTexture } from "@babylonjs/core/Materials/Textures/renderTargetTexture";
 import { Vector3, Matrix, Quaternion } from "@babylonjs/core/Maths/math.vector";
 import type { Viewport } from "@babylonjs/core/Maths/math.viewport";
 // Type-only: annotates the viewport cullLabels already computes and passes to
@@ -287,25 +282,8 @@ const MIN_STRIP_THICKNESS = 0.06; // metres (6 cm) — still reads as a slim cov
 // to blend with the ceiling around it for whatever alpha remains.
 const LED_HOUSING_COLOR = new Color3(0.8, 0.79, 0.77);
 // The inflated ~6cm bar is sized for the ON state, where the emissive core
-// needs several on-screen pixels to read as one continuous line. When the
-// light is OFF that same bar is just dead geometry, and no
-// base colour can make a 6cm slab at ceiling height look like the ~1cm
-// recessed channel it really is. So the OFF state turns the strip
-// see-through — the SAME technique as window glass (ModelLoader): material
-// alpha + MATERIAL_ALPHABLEND + forceDepthWrite. Material-level alpha rather
-// than mesh.visibility on purpose: forceDepthWrite is a material flag, and
-// without depth writing Babylon sorts transparent meshes back-to-front per
-// frame, which can flip against the (also transparent) glass walls as the
-// camera moves — the exact appear/disappear glitch ModelLoader documents for
-// glass vs. strips. Transparency does not affect pickability, so an off
-// strip stays clickable exactly where its faint trace shows. Every light
-// fixture mesh gets this treatment now, strip or not (see applyToMesh) — a
-// smart light should read as "off" the instant HA says so, not stay a
-// permanently solid, statically-coloured prop just because it happens to be
-// nicely modelled geometry rather than stand-in placeholder geometry.
-// When the light is ON, applyToMesh restores alpha 1 + MATERIAL_OPAQUE, so
-// the on-state render path is byte-identical to before this existed.
-const STRIP_OFF_ALPHA = 0.25; // slightly clearer than window glass (0.38)
+// needs several on-screen pixels to read as one continuous line. OFF, it goes
+// see-through like window glass — bulbSet's OFF_ALPHA, for every light fixture.
 // A rectangular LED cove (dining-table/sofa perimeter) is built from 4
 // separate straight strip pieces (top/bottom/left/right), one per side. Their
 // authored endpoints don't always reach far enough to overlap at the
@@ -324,10 +302,6 @@ const STRIP_OFF_ALPHA = 0.25; // slightly clearer than window glass (0.38)
 // distance, not a scale, so it can't blow up — same lesson as
 // inflateThinStrip's earlier bug).
 const STRIP_JOINT_EXTENSION = 0.02; // metres (2 cm) past each modelled endpoint
-// Cube shadow maps for point lights are 6 faces each, so keep them small. We cast
-// ONE per light ENTITY (the markers of a strip are clustered, so a single occluder
-// covers them) and only while the light is on, so an idle/off light costs nothing.
-const LIGHT_SHADOW_SIZE = 256;
 // Climate-running outline: same forward-pass outline+overlay technique as the
 // blue "clickable" highlight (see SceneManager.applyHighlight for why — a
 // Mesh.renderOutline/renderOverlay pair, not a screen-space EffectLayer).
@@ -1101,13 +1075,10 @@ export class EntityVisuals {
   /** Scratch for animatePulse — see its comment. */
   private pulseColor = new Color3(0, 0, 0);
 
-  /** Every bulb and every light it gives — PointLights, floor pools, the
-   *  furniture light, the slider and the storey rule: bulbSet.ts. */
+  /** Every bulb and every light it gives — its own glow and off-state
+   *  transparency, PointLights, floor pools, the furniture light, the shadow
+   *  maps, the slider and the storey rule: bulbSet.ts. */
   private bulbs!: BulbSet;
-  /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
-   *  attached to that entity's representative light. Created lazily while the
-   *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
-  private lightShadows = new Map<string, ShadowGenerator>();
   /** Structural meshes (walls/floors/shell) that occlude entity-light shadows. */
   private shadowCasters: AbstractMesh[] = [];
   /** Fullscreen GUI layer for state labels. */
@@ -1427,7 +1398,7 @@ export class EntityVisuals {
     this.roomHighlight = new RoomHighlight(scene, frames, this.probe);
     // Every baked-mode floor pool — see lightPoolSet.ts. The probe is its floor
     // port; the readings callback lets it repaint a pool it creates late.
-    this.bulbs = new BulbSet(scene, this.probe, () => this.bulbReadings(), tapDebug);
+    this.bulbs = new BulbSet(scene, this.probe, () => this.bulbReadings(), tapDebug, () => this.shadowCasters);
     this.beams = new CameraBeams(scene);
     // ⚠️ KEPT SO `dispose()` CAN DETACH THEM. Both observers below used to be
     // registered and never removed, while this class's own dispose() docstring
@@ -1478,6 +1449,7 @@ export class EntityVisuals {
    *  for the mode. */
   setLightingMode(mode: LightingMode): void {
     this.lighting = mode;
+    this.bulbs.setCastShadows(mode.lightShadows);
   }
 
   /** Repaint every badge from the current config (per-entity colour + glyph).
@@ -1951,11 +1923,11 @@ export class EntityVisuals {
         this.inflateThinStrip(m);
         // EVERY light fixture mesh — marker sphere, inflated strip, or a
         // fully modelled bulb/fixture from the SweetHome catalog — gets the
-        // same off-state alpha treatment in applyToMesh (see STRIP_OFF_ALPHA):
+        // same off-state alpha treatment in BulbSet.show (see its OFF_ALPHA):
         // a smart light should read as "off" (translucent) the instant HA
         // says so, not stay a permanently opaque, statically-coloured prop.
         // That toggle needs depth writing while alpha-blended (see the
-        // window-glass/strip depth-sort note by STRIP_OFF_ALPHA), so set it
+        // window-glass/strip depth-sort note by OFF_ALPHA), so set it
         // here, once, for every light mesh — not only the ones inflateThinStrip
         // happens to touch.
         if (mat) mat.forceDepthWrite = true;
@@ -2263,8 +2235,6 @@ export class EntityVisuals {
 
   /** Tear down all entity light sources and their shadow generators. */
   private disposeLights(): void {
-    this.lightShadows.forEach((g) => g.dispose());
-    this.lightShadows.clear();
     this.bulbs.clear();
   }
 
@@ -3001,9 +2971,6 @@ export class EntityVisuals {
     for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
     if (map.type === "light") this.bulbs.show(meshes, this.lightReading(entity, map));
     if (map.type === "fan") this.updateFanSpin(entity, meshes);
-    if (map.type === "light") {
-      this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
-    }
     // Pose selection — ONE call, no type branch at all. A cover, a lock, a
     // switch, a sensor and any future type all resolve their pose the same
     // way (see desiredVariantWord). A pure no-op for the overwhelming common
@@ -3101,7 +3068,7 @@ export class EntityVisuals {
     // be redrawn. Gated on an ACTUAL change: this function runs for every
     // state event on every pose-capable entity, and re-arming on a no-op
     // would put the per-frame cost straight back.
-    if (poseChanged) this.invalidateShadowMaps();
+    if (poseChanged) { this.bulbs.invalidateShadows(); this.requestRender(); }
     // Read the flags straight back off the mesh objects (not just "what we
     // just set") so this answers "is __open ACTUALLY hidden right now" with
     // zero ambiguity — a mesh only renders if BOTH isVisible AND isEnabled()
@@ -3224,16 +3191,13 @@ export class EntityVisuals {
     this.occlusion.invalidate();
     // A bulb on a now-hidden storey must go dark — its pools are decals
     // FloorManager never toggles, and its PointLight kept lighting through the
-    // slab until 2.496.82. Repaint every bulb from its floor-correct state.
+    // slab until 2.496.82. Repaint every bulb from its floor-correct state;
+    // resync also redraws the shadow maps, since which storey's geometry
+    // occludes a lamp just changed (they render once and then hold).
     this.bulbs.resync();
     // Mesh variants (curtain/lock poses) need NO floor resync: their
     // exclusivity rides `isVisible`, which FloorManager's per-floor
     // `setEnabled` never touches — see applyMeshVariant's docstring.
-    //
-    // The shadow maps DO need it: FloorManager's setEnabled sweep just changed
-    // which storey's geometry exists to occlude a lamp, and those maps render
-    // once and then hold (see syncEntityShadow).
-    this.invalidateShadowMaps();
     this.requestRender();
   }
 
@@ -8513,119 +8477,17 @@ export class EntityVisuals {
     return WARM_GLOW.clone();
   }
 
-  /**
-   * Make walls actually block a lamp's light. Always-on (no quality toggle): a
-   * single cube shadow map per light ENTITY, attached to its representative
-   * (first) fixture light, since the markers of a strip are clustered and one
-   * occluder covers them — so a 12-marker strip costs one shadow map, not 12. The
-   * un-shadowed sibling markers stay out of the next room via the tight LIGHT_RANGE.
-   * Created lazily when the entity turns on and disposed when it turns off, so an
-   * idle/off light costs nothing. Called once per entity from apply().
-   */
-  private syncEntityShadow(entityId: string, meshes: AbstractMesh[], on: boolean): void {
-    // Only where the walls' shadows are not already in a bake (lightingMode.ts):
-    // per-fixture cube shadow maps are a cost the owner asked to keep low.
-    if (!this.lighting.lightShadows) return;
-    const existing = this.lightShadows.get(entityId);
-
-    if (!on) {
-      if (existing) {
-        existing.dispose();
-        this.lightShadows.delete(entityId);
-      }
-      return;
-    }
-    if (existing) return; // already casting
-
-    // Representative light = the first fixture mesh that owns a PointLight.
-    let light: PointLight | undefined;
-    for (const m of meshes) {
-      light = this.bulbs.lightOf(m.uniqueId);
-      if (light) break;
-    }
-    if (!light) return;
-
-    const gen = new ShadowGenerator(LIGHT_SHADOW_SIZE, light);
-    gen.usePoissonSampling = true; // cheap soft edge; blur-ESM isn't supported for cube maps
-    const shadowMap = gen.getShadowMap();
-    if (shadowMap) {
-      shadowMap.renderList = this.shadowCasters.slice();
-      for (const caster of this.shadowCasters) caster.receiveShadows = true;
-      // ── Render ONCE, not every frame (the app's biggest idle GPU cost) ────
-      // Babylon's ObjectRenderer defaults refreshRate to 1 =
-      // REFRESHRATE_RENDER_ONEVERYFRAME, and a PointLight needs a CUBE map, so
-      // every lit fixture was re-rendering the entire shadowCasters list — the
-      // whole villa shell plus furniture — SIX times per frame, on every frame
-      // the scene drew. With the handful of lights a villa normally leaves on
-      // that is tens of full-geometry depth passes per frame, forever, and it
-      // dominated the main camera pass. Reported as the device heating slowly
-      // for as long as the app stayed open, which fits exactly: lights-on is
-      // the resting state of a house, so this ran essentially always.
-      //
-      // Rendering once is CORRECT here, not a quality trade: a shadow map is
-      // rendered from the LIGHT's point of view, so it is independent of the
-      // camera — panning, walking and zooming cannot change it. The lights are
-      // fixed at their fixture positions and the casters are static villa
-      // shell/furniture, so the map's content only changes when the set of
-      // VISIBLE occluders does. invalidateShadowMaps() re-renders it for
-      // exactly those events (floor switch, pose swap); nothing else needs to.
-      shadowMap.refreshRate = RenderTargetTexture.REFRESHRATE_RENDER_ONCE;
-    }
-    this.lightShadows.set(entityId, gen);
-  }
-
-  /** Re-render every live shadow map ONCE on the next frame.
-   *
-   *  Call whenever the set of VISIBLE shadow-casting geometry changes — a
-   *  floor switch hiding/showing a storey, or a pose variant swapping a door
-   *  or cover mesh. Deliberately NOT called for camera movement or for a
-   *  light's own brightness/colour: neither can alter a depth map rendered
-   *  from the light's position, so re-rendering for those would reintroduce
-   *  the per-frame cost this exists to avoid.
-   *
-   *  resetRefreshCounter() puts the map back into its "never rendered" state,
-   *  which makes the next frame draw it once and then stop again. */
-  private invalidateShadowMaps(): void {
-    if (this.lightShadows.size === 0) return;
-    for (const gen of this.lightShadows.values()) gen.getShadowMap()?.resetRefreshCounter();
-    this.requestRender();
-  }
-
   private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity): void {
     const setEmissive = this.emissiveOf(mesh);
     const setDiffuse = this.diffuseOf(mesh);
 
     switch (map.type) {
-      case "light": {
-        // See lightReading — the per-light override lets one fixture be tuned
-        // brighter/dimmer than its HA dimmer level alone would produce without
-        // touching the global "Light effect strength" slider.
-        const { on, colour, frac: effectiveFrac } = this.lightReading(state, map);
-
-        // 1) The fixture mesh glows.
-        setEmissive?.(on ? colour.scale(effectiveFrac) : Color3.Black());
-
-        // EVERY light fixture mesh — an inflated LED strip bar, a geometry-
-        // less marker sphere, or a fully modelled bulb/fixture straight from
-        // the SweetHome catalog — goes window-glass transparent while off
-        // and fully opaque again once on (see STRIP_OFF_ALPHA for why
-        // material alpha, not mesh.visibility). Applied unconditionally, by
-        // TYPE alone (map.type === "light"), not by guessing which meshes
-        // "look like" stand-in geometry from their size/name — any current
-        // or future light asset gets this for free, no per-fixture setup.
-        const fixtureMat = mesh.material;
-        if (fixtureMat) {
-          fixtureMat.alpha = on ? 1 : STRIP_OFF_ALPHA;
-          fixtureMat.transparencyMode = on
-            ? Material.MATERIAL_OPAQUE
-            : Material.MATERIAL_ALPHABLEND;
-        }
-
-        // 2) Its light — PointLight, pools, furniture light — is the entity's,
-        //    shown once for all its bulbs by apply() (bulbSet.ts).
-        // Wall occlusion is handled once per entity in apply(), not per mesh.
+      case "light":
+        // Everything a light fixture shows — its own glow and off-state
+        // transparency, its light, pools, furniture light and shadow map — is
+        // the entity's, shown once for all its bulbs by BulbSet.show (apply()
+        // and the first paint both call it).
         break;
-      }
 
       case "lock": {
         // A lock authored as POSE meshes (lock.foo__locked / __unlocked — a

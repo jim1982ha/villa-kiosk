@@ -34,7 +34,7 @@ console.log("\n  the callers read the table, and nothing else decides");
   ck("  ...and no longer claims the dynamic lights are disabled", !/dynamic light simulation disabled/.test(ml));
   ck("the scene hands it to the visuals before they build the bulbs", /this\.visuals\.setLightingMode\(result\.lighting\);/.test(sm));
   ck("the visuals read pools, the furniture light and shadows from it — no bakedMode left",
-     /this\.lighting\.pools/.test(ev) && /this\.lighting\.furnitureLight/.test(ev) && /this\.lighting\.lightShadows/.test(ev) && !/bakedMode/.test(ev));
+     /this\.lighting\.pools/.test(ev) && /this\.lighting\.furnitureLight/.test(ev) && /this\.bulbs\.setCastShadows\(mode\.lightShadows\)/.test(ev) && !/bakedMode/.test(ev));
   ck("BulbSet no longer infers lightmapping from a material", !/some\(\(m\) => hasLampGlow/.test(bs));
 }
 

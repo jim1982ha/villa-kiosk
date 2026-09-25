@@ -17,7 +17,9 @@ const { Scene } = await import("@babylonjs/core/scene.js");
 const { Color3 } = await import("@babylonjs/core/Maths/math.color.js");
 const { CreateBox } = await import("@babylonjs/core/Meshes/Builders/boxBuilder.js");
 const { PBRMaterial } = await import("@babylonjs/core/Materials/PBR/pbrMaterial.js");
-const { BulbSet, STRIP_MIN_LENGTH } = await import("@/babylon/bulbSet");
+const { BulbSet, STRIP_MIN_LENGTH, OFF_ALPHA } = await import("@/babylon/bulbSet");
+const { Material } = await import("@babylonjs/core/Materials/material.js");
+const { RenderTargetTexture } = await import("@babylonjs/core/Materials/Textures/renderTargetTexture.js");
 const { attachLampGlow, hasLampGlow } = await import("@/babylon/lampGlow");
 
 let fail = 0;
@@ -28,7 +30,8 @@ const warm = new Color3(1, 0.8, 0.6);
 function rig({ withPools = true } = {}) {
   const scene = new Scene(new NullEngine());
   const entities = [];
-  const bulbs = new BulbSet(scene, probe(0), () => entities);
+  const casters = [];
+  const bulbs = new BulbSet(scene, probe(0), () => entities, () => {}, () => casters);
   const bulb = (x, { w = 0.1, d = 0.1, y = 2.3 } = {}) => {
     const m = CreateBox(`light.b${x}`, { width: w, height: 0.05, depth: d }, scene);
     m.position.set(x, y, 0); m.computeWorldMatrix(true); m.refreshBoundingInfo();
@@ -36,7 +39,7 @@ function rig({ withPools = true } = {}) {
     return m;
   };
   const entity = (meshes, reading) => { const e = { meshes, reading }; entities.push(e); return e; };
-  return { scene, bulbs, bulb, entity };
+  return { scene, bulbs, bulb, entity, casters };
 }
 const on = (frac = 1) => ({ on: true, colour: warm, frac });
 
@@ -126,6 +129,47 @@ console.log("\n  the furniture light: every lit surface, and the PointLights kep
   ck("clear: every light disposed", r.scene.lights.length === 0 && r.bulbs.size === 0, r.scene.lights.length);
 }
 
+console.log("\n  the fixture's own look, and its shadow — BulbSet's since 2.496.92");
+{
+  const r = rig();
+  const a = r.bulb(0), b = r.bulb(3);
+  for (const m of [a, b]) m.material = new PBRMaterial(`f${m.uniqueId}`, r.scene);
+  const e = r.entity([a, b], on(0.5));
+  r.bulbs.show(e.meshes, e.reading);
+  ck("on: the fixture glows its light's colour at its brightness, opaque",
+     near(a.material.emissiveColor.r, warm.r * 0.5) && a.material.alpha === 1 && a.material.transparencyMode === Material.MATERIAL_OPAQUE, [a.material.emissiveColor, a.material.alpha]);
+  e.reading = { on: false, colour: warm, frac: 1 };
+  r.bulbs.show(e.meshes, e.reading);
+  ck("off: dark and window-glass translucent", a.material.emissiveColor.r === 0 && a.material.alpha === OFF_ALPHA
+     && a.material.transparencyMode === Material.MATERIAL_ALPHABLEND && b.material.alpha === OFF_ALPHA);
+}
+{
+  const r = rig();
+  const wall = CreateBox("Structure_wall", { size: 1 }, r.scene); r.casters.push(wall);
+  const spots = [r.bulb(0), r.bulb(3)];
+  const e = r.entity(spots, on());
+  r.bulbs.show(e.meshes, e.reading);
+  ck("no shadow maps where the lighting mode has none (a baked villa)", r.bulbs.shadowCount === 0);
+  r.bulbs.setCastShadows(true);
+  ck("turned on for an unbaked villa: a light already ON gets its map (the first paint used to forget it)", r.bulbs.shadowCount === 1, r.bulbs.shadowCount);
+  const gen = [...r.bulbs["shadows"].values()][0];
+  const map = gen.getShadowMap();
+  ck("  ...ONE for the entity's two bulbs, drawing the villa's casters, rendered once",
+     map.renderList.length === 1 && map.renderList[0] === wall && map.refreshRate === RenderTargetTexture.REFRESHRATE_RENDER_ONCE && wall.receiveShadows);
+  let redraws = 0; const orig = map.resetRefreshCounter.bind(map); map.resetRefreshCounter = () => { redraws++; orig(); };
+  r.bulbs.resync();
+  ck("a floor switch (resync) redraws it — what occludes changed", redraws === 1, redraws);
+  r.bulbs.invalidateShadows();
+  ck("a pose swap (invalidateShadows) redraws it", redraws === 2, redraws);
+  e.reading = { on: false, colour: warm, frac: 1 };
+  r.bulbs.show(e.meshes, e.reading);
+  ck("off: the map is disposed — an off light costs nothing", r.bulbs.shadowCount === 0);
+  e.reading = on();
+  r.bulbs.show(e.meshes, e.reading);
+  r.bulbs.clear();
+  ck("clear: the maps go with the lights", r.bulbs.shadowCount === 0);
+}
+
 console.log("\n  the callers (a module nobody calls is green and useless)");
 {
   const { readFileSync } = await import("node:fs");
@@ -140,6 +184,10 @@ console.log("\n  the callers (a module nobody calls is green and useless)");
   ck("the furniture light is written before each frame", /onBeforeRender = \(\) => \{[\s\S]*?this\.bulbs\.syncGlow\(\);[\s\S]*?\};/.test(ev));
   ck("and nothing in EntityVisuals computes a bulb's light itself any more",
      !/MAX_LIGHT_INTENSITY|lightShare|new PointLight\(|meshLights/.test(ev));
+  ck("  ...nor its look or its shadow", !/ShadowGenerator|STRIP_OFF_ALPHA|syncEntityShadow|invalidateShadowMaps|fixtureMat\.alpha/.test(ev));
+  ck("the lighting mode tells BulbSet whether lamps cast shadows", /this\.bulbs\.setCastShadows\(mode\.lightShadows\);/.test(ev));
+  ck("a pose swap redraws the shadow maps", /if \(poseChanged\) \{ this\.bulbs\.invalidateShadows\(\);/.test(ev));
+  ck("the casters are handed in", /new BulbSet\([^;]*\(\) => this\.shadowCasters\)/.test(ev));
 }
 
 if (fail) { console.log(`  ${fail} FAILED`); process.exit(1); }
