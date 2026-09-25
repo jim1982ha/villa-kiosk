@@ -1,3 +1,25 @@
+## 2.496.62
+
+### Fixed — a sensor that is offline right now showed no outage on its chart
+When a sensor stops reporting, its trend chart shades the time it was silent.
+That worked for an outage that had ended — but for one still going on, the
+most important case, the chart showed nothing: no shading, and a line that
+simply stopped. The chart stretched its time axis only from the first to the
+last reading it received, so an outage that began after the last reading fell
+off its right-hand edge.
+
+Charts now always show the whole period you picked (the last hour, day or week),
+right up to now. An ongoing outage is shaded to the right-hand edge, one at the
+very start of the period is shaded from the left, and a sensor that simply
+hasn't changed holds its last value to the present instead of stopping short.
+
+### Fixed — "Last day before …" showed the wrong stretch of time
+For a device offline longer than the period you picked, the history bar is
+titled "Last 24 hours before <date>" and is meant to show the day before it
+went quiet. The bar was still drawing the last 24 hours up to now, so the day
+it was actually given lay off its edge. It now draws the period the title names,
+starting with the state the device was in at the beginning of it.
+
 ## 2.496.61
 
 **Nothing you should see changed.** Badges are placed and drawn exactly as
