@@ -146,7 +146,7 @@ import {
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
-import { lampGlowFor, hasLampGlow, LAMP_GLOW_MAX } from "./lampGlow";
+import { lampGlowFor, hasLampGlow, attachLampGlow, LAMP_GLOW_MAX } from "./lampGlow";
 import "./babylonSideEffects";
 
 const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
@@ -2091,7 +2091,6 @@ export class EntityVisuals {
         // entity turns on. With most lights off at load, this slashes the active
         // light count the first frame has to compile shaders for.
         light.setEnabled(false);
-        this.keepOffGlow(light);
         this.meshLights.set(m.uniqueId, light);
 
         // Baked mode ALSO gets the floor glow pool: the unlit baked floor can't
@@ -2167,6 +2166,7 @@ export class EntityVisuals {
       (m) => blocksCameraBeam(m) && !isResolvedCeiling(m));
     this.extendStripJoints();
     this.mergeStripEntityLights();
+    this.glowEverythingLit();
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
@@ -2287,7 +2287,6 @@ export class EntityVisuals {
       shared.diffuse = WARM_GLOW.clone();
       shared.specular = Color3.Black();
       shared.setEnabled(false);
-      this.keepOffGlow(shared);
       for (const m of meshes) this.meshLights.set(m.uniqueId, shared);
     }
   }
@@ -2478,11 +2477,31 @@ export class EntityVisuals {
     this.glowMeshes = null;
   }
 
-  /** A bulb's PointLight never shades a glowing mesh: there the lightmap
-   *  multiplied its whole contribution away, and the glow carries it. */
-  private keepOffGlow(light: PointLight): void {
-    this.glowMeshes ??= this.scene.meshes.filter((m) => hasLampGlow(m.material));
-    if (this.glowMeshes.length) light.excludedMeshes.push(...this.glowMeshes);
+  /**
+   * On a lightmapped villa, EVERY lit surface takes the bulbs' light from the
+   * glow, by one rule — not only the lightmapped structure ModelLoader gave it
+   * to. Everything else lit (a device's curtain, door leaf, TV, fan; free
+   * furniture) gets it here, after its per-entity material clone exists; then
+   * every bulb's PointLight is taken off every glowing mesh — there it was
+   * either multiplied away or a ninth-strength duplicate.
+   *
+   * Left out, on purpose: the light fixtures themselves (they glow by their
+   * own emissive), anything transparent (glass would turn milky), unlit and
+   * non-PBR materials (markers, pools, badges). Runs after the fixture loop
+   * and the strip merge, so it sees every light that exists.
+   */
+  private glowEverythingLit(): void {
+    this.glowMeshes = null;
+    if (!this.scene.meshes.some((m) => hasLampGlow(m.material))) return; // not lightmapped
+    for (const m of this.scene.meshes) {
+      const mat = m.material as (PBRMaterial & { unlit?: boolean }) | null;
+      if (!(mat instanceof PBRMaterial) || hasLampGlow(mat) || mat.unlit) continue;
+      if (this.meshLights.has(m.uniqueId) || isHelperMesh(m)) continue;
+      if (mat.alpha < 1 || mat.transparencyMode === Material.MATERIAL_ALPHABLEND) continue;
+      attachLampGlow(mat);
+    }
+    this.glowMeshes = this.scene.meshes.filter((m) => hasLampGlow(m.material));
+    for (const l of new Set(this.meshLights.values())) l.excludedMeshes.push(...this.glowMeshes);
   }
 
   /** Write the pools that are on to the glow — the same bulbs, strengths and

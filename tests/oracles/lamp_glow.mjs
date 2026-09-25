@@ -16,7 +16,7 @@ const { Scene } = await import("@babylonjs/core/scene.js");
 const { PBRMaterial } = await import("@babylonjs/core/Materials/PBR/pbrMaterial.js");
 const { pbrBlockFinalColorComposition } = await import("@babylonjs/core/Shaders/ShadersInclude/pbrBlockFinalColorComposition.js");
 const { pbrPixelShader } = await import("@babylonjs/core/Shaders/pbr.fragment.js");
-const { LampGlowState, LAMP_GLOW_MAX, LAMP_GLOW_ANCHOR, LAMP_GLOW_GLSL, attachLampGlow, hasLampGlow } =
+const { LampGlowState, LAMP_GLOW_MAX, LAMP_GLOW_ANCHOR, LAMP_GLOW_GLSL, LAMP_GLOW_PLAIN_POINT, LAMP_GLOW_PLAIN_GLSL, attachLampGlow, hasLampGlow } =
   await import("@/babylon/lampGlow");
 
 let fail = 0;
@@ -38,6 +38,21 @@ console.log("  the hook exists in the installed Babylon");
   }
 }
 
+console.log("  the second hook, for everything that is not lightmapped");
+{
+  const main = pbrPixelShader.shader;
+  const at = main.indexOf(`#define ${LAMP_GLOW_PLAIN_POINT}`);
+  ck("the plain injection point exists in the installed PBR shader", at > 0, at);
+  const unlit = main.indexOf("#include<pbrBlockFinalUnlitComponents>");
+  ck("  ...after finalDiffuse is declared", unlit > 0 && unlit < at, { unlit, at });
+  ck("  ...and before the final colour is composed", at < main.indexOf("#include<pbrBlockFinalColorComposition>"));
+  ck("the plain snippet adds to finalDiffuse", /finalDiffuse \+= lgAdd;/.test(LAMP_GLOW_PLAIN_GLSL));
+  ck("  ...and never runs on a lightmapped material (which has the anchor instead)",
+    LAMP_GLOW_PLAIN_GLSL.includes("!defined(USELIGHTMAPASSHADOWMAP)"));
+  ck("the light WRAPS round a surface: no hard edge where it turns side-on",
+    /lgNdl = clamp\(\(dot\(lgN, [^)]*\)\) \+ 0\.\d+\) \/ 1\.\d+, 0\.0, 1\.0\)/.test(LAMP_GLOW_GLSL));
+}
+
 console.log("  the plugin attaches to a material");
 {
   const scene = new Scene(new NullEngine());
@@ -51,7 +66,8 @@ console.log("  the plugin attaches to a material");
   ck("a material never attached does not", !hasLampGlow(other) && !hasLampGlow(null));
   const code = plugins[0]?.getCustomCode("fragment") ?? {};
   const key = Object.keys(code)[0] ?? "";
-  ck("its injection point is the anchor, as a regex", key === `!${LAMP_GLOW_ANCHOR}`, key);
+  ck("its injection points: the anchor, as a regex, and the plain point",
+    key === `!${LAMP_GLOW_ANCHOR}` && Object.keys(code)[1] === LAMP_GLOW_PLAIN_POINT, Object.keys(code));
   ck("the anchor line is kept, the glow follows it", (code[key] ?? "").startsWith("$0"));
   ck("nothing in the vertex shader", plugins[0]?.getCustomCode("vertex") === null);
 }
@@ -88,9 +104,14 @@ function near4(a, b) { return b.every((v, i) => Math.abs(a[i] - v) < 1e-6); }
 console.log("  the callers");
 {
   const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  const made = (ev.match(/new PointLight\(/g) ?? []).length;
-  const kept = (ev.match(/this\.keepOffGlow\(/g) ?? []).length;
-  ck("every entity PointLight is kept off the glowing meshes", made > 0 && kept === made, { made, kept });
+  const idx = ev.match(/this\.mergeStripEntityLights\(\);\s*this\.glowEverythingLit\(\);/);
+  ck("every lit surface gets the glow, after every light exists (the strip merge)", !!idx);
+  const all = ev.match(/private glowEverythingLit\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  ck("  ...every PBR material, lightmapped or not", /instanceof PBRMaterial/.test(all) && /attachLampGlow\(mat\)/.test(all));
+  ck("  ...but not the light fixtures, markers, unlit or transparent ones",
+    /this\.meshLights\.has\(m\.uniqueId\)/.test(all) && /isHelperMesh\(m\)/.test(all) && /mat\.unlit/.test(all) && /mat\.alpha < 1/.test(all));
+  ck("  ...and every bulb's PointLight is taken off every glowing mesh",
+    /for \(const l of new Set\(this\.meshLights\.values\(\)\)\) l\.excludedMeshes\.push\(\.\.\.this\.glowMeshes\)/.test(all));
   const sync = ev.match(/private syncLampGlow\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   ck("the glow is the POOLS' light (LightPoolSet.glowLamps), never a PointLight's",
     /this\.pools\.glowLamps\(\)/.test(sync) && !/intensity|\.position\b|meshLights/.test(sync), sync.slice(0, 80));

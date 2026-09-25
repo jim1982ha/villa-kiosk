@@ -12,10 +12,13 @@
 // 2.496.72 put the pool on the floor and the table was left with no light of
 // its own (the owner's photos, 2026-09-25).
 //
-// So this adds the bulbs AFTER that multiply, as a material plugin on exactly
-// the lightmapped materials, and the bulbs' PointLights are taken off those
-// meshes (EntityVisuals) — they were a full PBR light per pixel, multiplied
-// away.
+// So this adds the bulbs AFTER that multiply, as a material plugin on the
+// lightmapped materials — and on EVERY OTHER lit surface too (EntityVisuals:
+// curtains, door leaves, the TV, fans; any free furniture), so a bulb lights
+// the whole room by one rule. An audit of the villa GLB after the first cut
+// found 280 device meshes still lit by the old PointLights: a ninth of the
+// light and ~20x weaker than the glow beside them — dark curtains next to a
+// lit table. The bulbs' PointLights are then taken off every glowing mesh.
 //
 // ⚠️ THE POOL'S BULB AND STRENGTH, A LIGHT'S FALLOFF. Each lamp here is one
 // floor pool (LightPoolSet.glowLamps): its bulb, colour and strength
@@ -30,7 +33,9 @@
 //
 // The rules, once:
 //  * brightness = the pool's strength and colour × the surface's colour ×
-//    how squarely it faces the bulb × an inverse-square falloff, normalised
+//    how squarely it faces the bulb, WRAPPED (GLOW_WRAP) so a curved or
+//    side-on surface is never cut off at a hard edge × an inverse-square
+//    falloff, normalised
 //    so a surface GLOW_AT_M below a bulb gets what its pool gives the floor
 //    right under it, faded to nothing at GLOW_REACH_M, and capped near the
 //    bulb (GLOW_CAP_ONE, GLOW_CAP_ALL);
@@ -72,6 +77,16 @@ const GLOW_REACH_M = 4;
  *  a metre of each ceiling spot blown to white (~20x the floor under it). */
 const GLOW_CAP_ONE = 1.4;
 const GLOW_CAP_ALL = 1.8;
+/**
+ * How far round a surface the light WRAPS — the stand-in for the light a real
+ * room bounces back. With a plain N·L the light stopped dead where a surface
+ * turned side-on to the bulbs: across the middle of the pouf and along the
+ * front of the sofa, a hard horizontal edge that read as a flat disc of light
+ * at seat height (the owner's photo after 2.496.77, and the villa render).
+ * Wrapped, a surface facing up is lit fully, a side-on one at 0.6/1.6 of that,
+ * and only one facing well away — the far face of a wall — gets nothing.
+ */
+const GLOW_WRAP = 0.6;
 /** The pool's brightness at its centre (POOL_ALPHA_STOPS[0]). */
 const POOL_CENTRE = POOL_ALPHA_STOPS[0][1];
 /**
@@ -142,10 +157,8 @@ export function lampGlowFor(scene: Scene): LampGlowState {
 
 const f = (v: number) => v.toFixed(4);
 
-/** The GLSL appended after the lightmap multiply. Exported for the oracle. */
-export const LAMP_GLOW_GLSL = `
-#ifdef LAMPGLOW
-{
+/** The bulbs' light on this fragment, into `lgSum` — shared by both hooks. */
+const ACCUMULATE = `
   vec3 lgN = normalize(normalW);
   if (dot(lgN, vEyePosition.xyz - vPositionW) < 0.0) lgN = -lgN;
   vec3 lgSum = vec3(0.0);
@@ -157,11 +170,32 @@ export const LAMP_GLOW_GLSL = `
     float lgD2 = max(dot(lgL, lgL), 0.25);
     float lgWin = clamp(1.0 - lgD2 * ${f(1 / (GLOW_REACH_M * GLOW_REACH_M))}, 0.0, 1.0);
     float lgFall = min(${f(POOL_CENTRE * GLOW_AT_M * GLOW_AT_M)} / lgD2, ${f(POOL_CENTRE * GLOW_CAP_ONE)}) * lgWin * lgWin;
-    float lgNdl = max(dot(lgN, lgL * inversesqrt(lgD2)), 0.0);
+    float lgNdl = clamp((dot(lgN, lgL * inversesqrt(lgD2)) + ${f(GLOW_WRAP)}) / ${f(1 + GLOW_WRAP)}, 0.0, 1.0);
     float lgAbove = smoothstep(lgP.w + ${f(ABOVE_FLOOR_FROM)}, lgP.w + ${f(ABOVE_FLOOR_TO)}, vPositionW.y);
     lgSum += lgC.rgb * (lgFall * lgNdl * lgAbove);
   }
-  finalColor.rgb += surfaceAlbedo * ${f(LAMP_GLOW_GAIN)} * min(lgSum, vec3(${f(POOL_CENTRE * GLOW_CAP_ALL)}));
+  vec3 lgAdd = surfaceAlbedo * ${f(LAMP_GLOW_GAIN)} * min(lgSum, vec3(${f(POOL_CENTRE * GLOW_CAP_ALL)}));
+`;
+
+/** LIGHTMAPPED structure: appended after the lightmap multiply (the anchor),
+ *  which would otherwise darken it to nothing. Exported for the oracle. */
+export const LAMP_GLOW_GLSL = `
+#ifdef LAMPGLOW
+{${ACCUMULATE}
+  finalColor.rgb += lgAdd;
+}
+#endif
+`;
+
+/** Everything else that is lit — a device, a curtain, a door leaf, a free
+ *  piece of furniture: nothing multiplies it afterwards, so the light joins
+ *  the diffuse just before the final colour is composed. Never on a
+ *  lightmapped material, which has the hook above instead. */
+export const LAMP_GLOW_PLAIN_POINT = "CUSTOM_FRAGMENT_BEFORE_FINALCOLORCOMPOSITION";
+export const LAMP_GLOW_PLAIN_GLSL = `
+#if defined(LAMPGLOW) && !defined(USELIGHTMAPASSHADOWMAP)
+{${ACCUMULATE}
+  finalDiffuse += lgAdd;
 }
 #endif
 `;
@@ -206,13 +240,14 @@ uniform float lampGlowCount;
 
   override getCustomCode(shaderType: string): { [pointName: string]: string } | null {
     if (shaderType !== "fragment") return null;
-    return { [`!${LAMP_GLOW_ANCHOR}`]: `$0${LAMP_GLOW_GLSL}` };
+    return { [`!${LAMP_GLOW_ANCHOR}`]: `$0${LAMP_GLOW_GLSL}`, [LAMP_GLOW_PLAIN_POINT]: LAMP_GLOW_PLAIN_GLSL };
   }
 }
 
 const glowing = new WeakSet<Material>();
 
-/** Give a lightmapped material the lamp glow. Idempotent. */
+/** Give a material the lamp glow — a lightmapped one takes it after its
+ *  lightmap, any other before its final colour. Idempotent. */
 export function attachLampGlow(material: Material): void {
   if (glowing.has(material)) return;
   new LampGlowPlugin(material, lampGlowFor(material.getScene()));

@@ -1,3 +1,19 @@
+## 2.496.78
+
+### Fixed — a flat "disc" of light across the pouf and the sofa
+With the ceiling spots on, the pouf and the sofa were lit on top and dark
+below, with a hard line between — which read as a flat disc of light at seat
+height. The light from 2.496.77 only reached surfaces facing a bulb, so it
+stopped dead wherever a surface turned side-on to the ceiling. The light now
+wraps round rounded and side-on surfaces the way bounced light does in a real
+room: tops stay brightest, sides get a softer share, and there is no edge.
+
+### Fixed — curtains, doors, the TV and other devices stayed dark
+2.496.77 lit the furniture that is part of the building. An audit of the whole
+3D model found 280 more surfaces — curtains, door leaves, the TV, fans and the
+other devices — still lit the old, much weaker way, so the curtains beside a
+lit table stayed dark. Every lit surface now uses the same light. Only the
+lights themselves and glass are left out, on purpose.
 ## 2.496.77
 
 ### Fixed — the table, chairs and sofa stayed dark under a light that was on
