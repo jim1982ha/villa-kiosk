@@ -109,19 +109,7 @@ function near4(a, b) { return b.every((v, i) => Math.abs(a[i] - v) < 1e-6); }
 
 console.log("  the callers");
 {
-  const ev = readFileSync(new URL("../../src/babylon/EntityVisuals.ts", import.meta.url), "utf8");
-  const idx = ev.match(/this\.mergeStripEntityLights\(\);\s*this\.glowEverythingLit\(\);/);
-  ck("every lit surface gets the glow, after every light exists (the strip merge)", !!idx);
-  const all = ev.match(/private glowEverythingLit\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  ck("  ...every PBR material, lightmapped or not", /instanceof PBRMaterial/.test(all) && /attachLampGlow\(mat\)/.test(all));
-  ck("  ...but not the light fixtures, markers, unlit or transparent ones",
-    /this\.meshLights\.has\(m\.uniqueId\)/.test(all) && /isHelperMesh\(m\)/.test(all) && /mat\.unlit/.test(all) && /mat\.alpha < 1/.test(all));
-  ck("  ...and every bulb's PointLight is taken off every glowing mesh",
-    /for \(const l of new Set\(this\.meshLights\.values\(\)\)\) l\.excludedMeshes\.push\(\.\.\.this\.glowMeshes\)/.test(all));
-  const sync = ev.match(/private syncLampGlow\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  ck("the glow is the POOLS' light (LightPoolSet.glowLamps), never a PointLight's",
-    /this\.pools\.glowLamps\(\)/.test(sync) && !/intensity|\.position\b|meshLights/.test(sync), sync.slice(0, 80));
-  ck("the glow is written before each frame", /onBeforeRender = \(\) => \{[\s\S]*?this\.syncLampGlow\(\);[\s\S]*?\};/.test(ev));
+  // What lights which mesh, and when, is BulbSet's — tests/oracles/bulb_set.mjs.
   const ml = readFileSync(new URL("../../src/babylon/ModelLoader.ts", import.meta.url), "utf8");
   ck("ModelLoader attaches it to every lightmapped material",
     /for \(const sm of lmMats\) \{[\s\S]*?useLightmapAsShadowmap = true;[\s\S]*?attachLampGlow\(sm as unknown as Material\);[\s\S]*?\n      \}/.test(ml));

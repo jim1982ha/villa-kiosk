@@ -1,3 +1,14 @@
+## 2.496.82
+
+### Changed — one module owns everything about a light bulb
+A bulb's brightness, position, on/off and strip handling were decided in about
+fifteen places, which did not always agree. They are now decided in one place.
+
+### Fixed — a light on a hidden floor kept lighting through the ceiling
+With the ground floor shown, a light that was on upstairs could still light the
+rooms below through the ceiling: its floor glow switched off with the hidden
+floor, but its light did not. Both now switch off together, and come back when
+the floor is shown again.
 ## 2.496.81
 
 ### Changed — one module decides which storey a room or a light is on

@@ -120,7 +120,7 @@ import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
 import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
-import { LightPoolSet, type LightReading } from "./lightPoolSet";
+import type { LightReading } from "./lightPoolSet";
 import { OcclusionSweep } from "./occlusionSweep";
 import { bucketRoomChips, combineChips, chipSuffixOf, type RoomChip } from "./roomChips";
 import { rungAt, referenceDepthAt, iconZoomAt, viewportPx } from "./badgeScale";
@@ -146,11 +146,9 @@ import {
 // Pure label/chip overlap geometry — see labelLayout.ts.
 import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
-import { lampGlowFor, hasLampGlow, attachLampGlow, LAMP_GLOW_MAX } from "./lampGlow";
+import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSet";
 import "./babylonSideEffects";
 
-const WARM_GLOW = new Color3(1.0, 0.89, 0.63);
-const MAX_LIGHT_INTENSITY = 1.3;
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
 // 0.18 they were almost invisible — especially the clustered ones (Bedroom 1
@@ -159,15 +157,6 @@ const MAX_LIGHT_INTENSITY = 1.3;
 // wired; applyToMesh still overrides this from live HA state (on = bright, off
 // = black).
 const LIGHT_BASELINE_GLOW = 0.5;
-// Room-scale reach for a fixture's PointLight. An early value (8 m) lit straight
-// through walls into the next room because point lights have no occlusion of
-// their own — only the entity's REPRESENTATIVE light is wall-blocked by the
-// per-entity shadow below; any extra un-shadowed markers of a multi-marker strip
-// rely purely on this range to stay out of the adjacent room. 4 m is a deliberate
-// middle ground (rooms were reading as barely lit at the old 2.8 m) — if a light
-// starts bleeding into a neighbouring room, especially at night, shrink this
-// back down rather than raising it further.
-const LIGHT_RANGE = 4;
 /**
  * ⚠️ HISTORICAL NOTE, not a live constant. There is NO cell ceiling for a
  * FOCUSED group's card — the one a room chip's tap produces — and this records
@@ -213,17 +202,7 @@ function clampRatio(ratio: number | undefined): number {
 }
 
 
-// A SweetHome "line light" (the Sweet Home Light plugin's linear LED strip) is
-// mounted flush against a ceiling/wall. A PointLight placed ON the strip sits
-// centimetres from that surface, so it prints a hard bright pool right there —
-// and sampling several lights along the strip (tried in v2.4.72) just prints a
-// CHAIN of pools, reading as separate bulbs instead of a line. The continuous
-// "LED line" look must come from the strip mesh's own emissive colour
-// (view-independent), NOT from dynamic lights. The dynamic light's only
-// job is the soft ambient wash on the room, so for elongated strips we push it
-// DOWN toward the floor, well clear of the mounting surface, where its pool is
-// wide and soft instead of a tight hotspot.
-const STRIP_MIN_LENGTH = 1.5; // metres — fixture meshes longer than this are "strips"
+// Strips — what counts as one, and why its light is lowered: bulbSet.ts.
 
 /**
  * Every `PLACEMENT:` assertion, on the `place` channel — one call so sixteen
@@ -278,8 +257,6 @@ const WALL_OCCLUSION = true;
  *  a walk across the villa is a handful of lines rather than a wall of them,
  *  and short enough that a capture of a lag complaint contains several. */
 const WALK_REPORT_MS = 2000;
-const STRIP_DROP_FRACTION = 0.45; // drop the light this fraction of the way to the floor
-const STRIP_DROP_MAX = 1.1; // metres — cap the drop so tall rooms don't put it at knee height
 // SweetHome's Led Line asset is modelled just 1 cm wide (and 3 cm tall) — from
 // almost any camera angle/distance that's under a pixel on screen, so the
 // rasteriser only lights a handful of scattered sub-pixel samples along its
@@ -1123,31 +1100,9 @@ export class EntityVisuals {
   /** Scratch for animatePulse — see its comment. */
   private pulseColor = new Color3(0, 0, 0);
 
-  // Real light sources for `light` entities. Keyed by MESH uniqueId (not entity
-  // id) so an entity whose fixture is several distinct meshes — e.g. the two
-  // bedside lamps that share one HA entity, or the four Led Line meshes of a
-  // perimeter strip — gets a real light at EACH piece. ONE light per mesh, no
-  // more: materials cap simultaneous lights (ModelLoader), and every light past
-  // the cap is silently dropped, which reads as patchy/arbitrary illumination.
-  private meshLights = new Map<number, PointLight>();
-  /** Baked-mode counterpart to meshLights — see LightPools.ts for why a real
-   *  PointLight is pointless there (the structure renders unlit) and what
-   *  this fakes instead. Keyed the same way, one per fixture mesh. A compact
-   *  fixture gets a single pool; an elongated strip gets an ARRAY — one
-   *  full-intensity pool at its centre plus two half-intensity pools at its
-   *  ends, so two strips meeting at a corner light that corner too instead of
-   *  leaving it dark between their centres (see LightPoolSet.addFixture). */
-  private pools!: LightPoolSet;
-  /** config.render.lightPoolIntensity, cached — see setLightPoolIntensity. */
-  private lightPoolStrength = 1;
-  /** The meshes whose bulb light comes from the glow (lampGlow.ts) — kept off
-   *  every entity PointLight. Found once per model; null until asked. */
-  private glowMeshes: AbstractMesh[] | null = null;
-  /** The LightPoolSet version the glow was last written from. */
-  private glowVersion = -1;
-  /** More pools are on than the glow holds, so WHICH ones follows the eye and
-   *  is re-chosen every frame. */
-  private glowOverflow = false;
+  /** Every bulb and every light it gives — PointLights, floor pools, the
+   *  furniture light, the slider and the storey rule: bulbSet.ts. */
+  private bulbs!: BulbSet;
   /** One wall-blocking cube shadow map per light ENTITY, keyed by entity_id and
    *  attached to that entity's representative light. Created lazily while the
    *  light is on; a 12-marker strip therefore costs a single shadow map, not 12. */
@@ -1416,14 +1371,10 @@ export class EntityVisuals {
    *  cullLabels compares each label's stamped floorIndex against this. */
   private activeFloor = 1;
 
-  /** Baked-lighting GLB loaded (see ModelLoader). All lighting — including
-   *  every fixture's contribution to the room — is already painted into the
-   *  structure's texture, and the structure is unlit, so a runtime PointLight
-   *  can't brighten it anyway; per-entity lights and their cube shadow maps
-   *  would be pure cost with no visible effect. Skipped entirely in baked
-   *  mode. The fixture's own emissive glow is KEPT — that's surface glow
-   *  on the fixture itself (the on/off signal the user reads), not light
-   *  transport. */
+  /** Baked-lighting GLB loaded (see ModelLoader): its bulbs get floor pools
+   *  (bulbSet.ts), and no cube shadow maps — the bake already holds the
+   *  shadows. The fixture's own emissive glow is kept either way: it is the
+   *  on/off signal the user reads, not light transport. */
   private bakedMode = false;
 
   /** camera entity_id -> world-space unit facing direction (may include a
@@ -1483,7 +1434,7 @@ export class EntityVisuals {
     this.roomHighlight = new RoomHighlight(scene, frames, this.probe);
     // Every baked-mode floor pool — see lightPoolSet.ts. The probe is its floor
     // port; the readings callback lets it repaint a pool it creates late.
-    this.pools = new LightPoolSet(scene, this.probe, () => this.poolReadings(), tapDebug);
+    this.bulbs = new BulbSet(scene, this.probe, () => this.bulbReadings(), tapDebug);
     this.beams = new CameraBeams(scene);
     // ⚠️ KEPT SO `dispose()` CAN DETACH THEM. Both observers below used to be
     // registered and never removed, while this class's own dispose() docstring
@@ -1499,7 +1450,7 @@ export class EntityVisuals {
       this.animatePulse(dtMs);
       this.animateFans(dtMs);
       this.cullLabels();
-      this.syncLampGlow();
+      this.bulbs.syncGlow();
     };
     scene.registerBeforeRender(this.onBeforeRender);
     // AFTER render, not before: Babylon reprojects every linkWithMesh control
@@ -1722,38 +1673,7 @@ export class EntityVisuals {
    *  pools, making it a silent no-op on a non-baked model) — so dragging
    *  the slider previews live on any light that's already on. */
   setLightPoolIntensity(value: number): void {
-    if (value === this.lightPoolStrength) return;
-    this.lightPoolStrength = value;
-    this.pools.setStrength(value);
-    this.resyncDynamicLightIntensities();
-    this.requestRender();
-  }
-
-  /** Re-derive every dynamic PointLight's intensity from its entity's last
-   *  known state — the non-baked counterpart of LightPoolSet.resync, for
-   *  when a GLOBAL factor (lightPoolStrength) changes without
-   *  any entity state change. Mirrors applyToMesh's light branch exactly
-   *  (same effectiveFrac/lightShare formula) so a slider drag and the next
-   *  real state_changed event land on identical values. */
-  private resyncDynamicLightIntensities(): void {
-    if (this.meshLights.size === 0) return; // nothing to resync (no fixtures)
-    for (const [entityId, map] of this.mapping) {
-      if (map.type !== "light") continue;
-      const state = this.lastState.get(entityId);
-      const meshes = this.byEntity.get(entityId);
-      if (!state || !meshes) continue;
-      const { on, frac: effectiveFrac } = this.lightReading(state, map);
-      const lightShare =
-        new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1;
-      for (const mesh of meshes) {
-        const light = this.meshLights.get(mesh.uniqueId);
-        if (light) {
-          light.intensity = on
-            ? (MAX_LIGHT_INTENSITY * effectiveFrac * this.lightPoolStrength) / lightShare
-            : 0;
-        }
-      }
-    }
+    if (this.bulbs.setStrength(value)) this.requestRender();
   }
 
   /** One light's state as its fixture shows it: on/off, colour, and the
@@ -1771,17 +1691,22 @@ export class EntityVisuals {
     };
   }
 
-  /** Every light fixture's current reading, for LightPoolSet's bulk repaint.
-   *  `on` folds in the fixture mesh's live enabled state, so a light left on
-   *  behind a now-hidden floor comes back off instead of staying lit. */
-  private *poolReadings(): Iterable<[number, LightReading]> {
+  /** Every light entity's bulbs and current reading, for BulbSet's bulk
+   *  repaint (slider, floor switch, a pool created late). */
+  private *bulbReadings(): Iterable<BulbReading> {
     for (const [entityId, map] of this.mapping) {
       if (map.type !== "light") continue;
       const state = this.lastState.get(entityId);
       const meshes = this.byEntity.get(entityId);
       if (!state || !meshes) continue;
-      const r = this.lightReading(state, map);
-      for (const mesh of meshes) yield [mesh.uniqueId, { ...r, on: r.on && mesh.isEnabled() }];
+      yield { meshes, reading: this.lightReading(state, map) };
+    }
+  }
+
+  /** Every light entity's fixture meshes. */
+  private *lightEntityMeshes(): Iterable<readonly AbstractMesh[]> {
+    for (const [entityId, meshes] of this.byEntity) {
+      if (this.mapping.get(entityId)?.type === "light") yield meshes;
     }
   }
 
@@ -1866,14 +1791,6 @@ export class EntityVisuals {
    */
   private bestCssToGui(): number {
     return Math.max(1, window.devicePixelRatio || 1);
-  }
-
-  /** Y of the first structure surface below (x, y, z) — see FloorProbe.below.
-   *  Kept as a one-line wrapper rather than inlining the probe at every call
-   *  site so `exclude` (the fixture must not pick itself) stays impossible to
-   *  forget. */
-  private surfaceBelow(x: number, y: number, z: number, exclude?: AbstractMesh): number | null {
-    return this.probe.below(x, y, z, exclude);
   }
 
   /** Build the reverse index entity_id -> meshes from the loaded GLB. */
@@ -2048,75 +1965,8 @@ export class EntityVisuals {
         // here, once, for every light mesh — not only the ones inflateThinStrip
         // happens to touch.
         if (mat) mat.forceDepthWrite = true;
-        // A real (diffuse-only, shadowless) PointLight at the fixture — created
-        // in BOTH modes now. In non-baked mode it lights the whole room. In
-        // BAKED mode it is kept off the lightmapped structure (keepOffGlow:
-        // the lightmap multiplies it to nothing there, and the lamp glow in
-        // lampGlow.ts carries the bulb's light instead — including furniture
-        // FUSED into the structure) and falls only on the separate
-        // furniture/entity meshes below the fixture, which the bake never
-        // covered. That's the fix for baked night
-        // scenes where furniture under an ON light stayed pitch-black while the
-        // floor around it was lit (the floor gets the pool below; the 3D assets
-        // get this light). Shadow maps stay OFF in baked mode (ensureLightShadow
-        // returns early), so the only added cost is the lights themselves — and
-        // they're disabled until their entity turns on, so an all-off villa pays
-        // nothing.
-        const bb = m.getBoundingInfo().boundingBox;
-        const pos = bb.centerWorld.clone();
-        // Elongated strips are mounted flush against a ceiling or wall; a light
-        // AT the strip prints a hard hotspot on that surface (or a chain of
-        // them). Drop the light partway toward whatever is below so its pool is
-        // a wide soft wash instead — the visible "LED line" itself stays the
-        // mesh's emissive + glow, not this light.
-        const size = bb.maximumWorld.subtract(bb.minimumWorld);
-        const longest = Math.max(size.x, size.y, size.z);
-        if (longest >= STRIP_MIN_LENGTH) {
-          const surfaceY = this.surfaceBelow(pos.x, pos.y, pos.z, m);
-          const distance = surfaceY === null ? 0 : pos.y - surfaceY;
-          if (distance > 0.3) {
-            pos.y -= Math.min(STRIP_DROP_MAX, distance * STRIP_DROP_FRACTION);
-          }
-        }
-        const light = new PointLight(`elight_${m.name}_${m.uniqueId}`, pos, this.scene);
-        light.intensity = 0;
-        light.range = LIGHT_RANGE;
-        light.diffuse = WARM_GLOW.clone();
-        // No specular: on glossy surfaces (the tiled floor) a point light's
-        // white specular lobe is a bright glint that SLIDES as the camera moves
-        // — easily mistaken for the light itself flickering. Diffuse-only keeps
-        // the wash identical from every viewpoint.
-        light.specular = Color3.Black();
-        // Start DISABLED, not just intensity 0. A disabled light is dropped from
-        // every material's shader light-loop entirely, so an off fixture costs
-        // nothing to compile or shade; it's re-enabled in applyToMesh when the
-        // entity turns on. With most lights off at load, this slashes the active
-        // light count the first frame has to compile shaders for.
-        light.setEnabled(false);
-        this.meshLights.set(m.uniqueId, light);
-
-        // Baked mode ALSO gets the floor glow pool: the unlit baked floor can't
-        // be lit by the PointLight above, so the pool paints the on-floor wash
-        // while the PointLight handles the 3D furniture. (see LightPools.ts —
-        // same floor-finding raycast; scene-wide predicate because every mesh is
-        // already in the scene even though this loop hasn't reached them all.)
-        //
-        // An elongated strip (e.g. one side of a rectangular LED ceiling cove)
-        // only lighting its OWN centre left the CORNERS dark where two adjoining
-        // strips' ends meet — each strip's single pool fades out well before
-        // reaching that far. Fixed by giving a strip THREE pools instead of one:
-        // full-intensity at its centre (unchanged), plus two half-intensity
-        // pools at its own ends. At a shared corner, the two adjoining strips'
-        // half-intensity end-pools land on (almost) the same spot and sum back
-        // to roughly the centre's brightness — lighting the corner without
-        // doubling it into a hotspot. A compact (non-strip) fixture is
-        // unaffected: it still gets exactly one full-intensity pool.
-        if (this.bakedMode) {
-          const horiz = Math.max(size.x, size.z);
-          this.pools.addFixture(m, {
-            min: bb.minimumWorld, max: bb.maximumWorld, centerY: bb.centerWorld.y,
-          }, longest >= STRIP_MIN_LENGTH && horiz >= STRIP_MIN_LENGTH);
-        }
+        // Its PointLight and, on a baked villa, its floor pools: bulbSet.ts.
+        this.bulbs.addFixture(m, this.bakedMode);
       }
     }
     endScan();
@@ -2167,8 +2017,8 @@ export class EntityVisuals {
     this.occluders = this.shadowCasters.filter(
       (m) => blocksCameraBeam(m) && !isResolvedCeiling(m));
     this.extendStripJoints();
-    this.mergeStripEntityLights();
-    this.glowEverythingLit();
+    this.bulbs.mergeStrips(this.lightEntityMeshes());
+    this.bulbs.glowEverythingLit();
     scene.blockMaterialDirtyMechanism = false;
 
     this.buildLabelAnchors();
@@ -2243,54 +2093,6 @@ export class EntityVisuals {
     this.rebuildLabels(); // labels are always shown
     this.stats.labelsMs = Math.round(performance.now() - tLabels);
     this.probe.save();
-  }
-
-  /** A rectangular LED cove (e.g. the dining-table or sofa-area perimeter) is
-   *  modelled as SEVERAL separate elongated strip meshes — one per side — so
-   *  the per-mesh loop above gives it one PointLight per side: 4 distinct
-   *  light "pools" instead of one even wash ("I want to keep seeing a light
-   *  line, not separate light bulbs"). When EVERY mesh of a light
-   *  entity is an elongated strip, merge their individual PointLights into
-   *  ONE shared light at the merged bounding box's centre — one soft,
-   *  even room-fill instead of N hotspots. Genuinely separate fixtures under
-   *  one entity (e.g. two bedside lamps) don't pass the "every mesh is a
-   *  strip" test, so each keeps its own light exactly as before. */
-  private mergeStripEntityLights(): void {
-    // Runs in BOTH modes now — baked mode gained per-fixture PointLights (to
-    // light furniture), so a multi-piece LED strip would otherwise spawn one
-    // light per side here too. Pools are per-marker and untouched by this merge.
-    for (const [entityId, meshes] of this.byEntity) {
-      const map = this.mapping.get(entityId);
-      if (!map || map.type !== "light" || meshes.length < 2) continue;
-      const allStrips = meshes.every((m) => {
-        const size = m.getBoundingInfo().boundingBox.maximumWorld.subtract(
-          m.getBoundingInfo().boundingBox.minimumWorld);
-        return Math.max(size.x, size.y, size.z) >= STRIP_MIN_LENGTH;
-      });
-      if (!allStrips) continue;
-
-      const bounds = this.mergedWorldBounds(meshes);
-      if (!bounds) continue;
-      const pos = Vector3.Center(bounds.min, bounds.max);
-      const surfaceY = this.surfaceBelow(pos.x, pos.y, pos.z, meshes[0]);
-      const distance = surfaceY === null ? 0 : pos.y - surfaceY;
-      if (distance > 0.3) {
-        pos.y -= Math.min(STRIP_DROP_MAX, distance * STRIP_DROP_FRACTION);
-      }
-
-      const seen = new Set<PointLight>();
-      for (const m of meshes) {
-        const l = this.meshLights.get(m.uniqueId);
-        if (l && !seen.has(l)) { seen.add(l); l.dispose(); }
-      }
-      const shared = new PointLight(`elight_${entityId}_merged`, pos, this.scene);
-      shared.intensity = 0;
-      shared.range = LIGHT_RANGE;
-      shared.diffuse = WARM_GLOW.clone();
-      shared.specular = Color3.Black();
-      shared.setEnabled(false);
-      for (const m of meshes) this.meshLights.set(m.uniqueId, shared);
-    }
   }
 
   /** Stretch every strip mesh of a multi-piece light entity past its own
@@ -2469,54 +2271,7 @@ export class EntityVisuals {
   private disposeLights(): void {
     this.lightShadows.forEach((g) => g.dispose());
     this.lightShadows.clear();
-    // A merged strip entity (mergeStripEntityLights) stores the SAME light
-    // instance under several mesh keys — dedupe before disposing.
-    const seen = new Set<PointLight>();
-    this.meshLights.forEach((l) => { if (!seen.has(l)) { seen.add(l); l.dispose(); } });
-    this.meshLights.clear();
-    this.pools.clear();
-    // The next model has its own structure; its glow meshes are found afresh.
-    this.glowMeshes = null;
-  }
-
-  /**
-   * On a lightmapped villa, EVERY lit surface takes the bulbs' light from the
-   * glow, by one rule — not only the lightmapped structure ModelLoader gave it
-   * to. Everything else lit (a device's curtain, door leaf, TV, fan; free
-   * furniture) gets it here, after its per-entity material clone exists; then
-   * every bulb's PointLight is taken off every glowing mesh — there it was
-   * either multiplied away or a ninth-strength duplicate.
-   *
-   * Left out, on purpose: the light fixtures themselves (they glow by their
-   * own emissive), anything transparent (glass would turn milky), unlit and
-   * non-PBR materials (markers, pools, badges). Runs after the fixture loop
-   * and the strip merge, so it sees every light that exists.
-   */
-  private glowEverythingLit(): void {
-    this.glowMeshes = null;
-    if (!this.scene.meshes.some((m) => hasLampGlow(m.material))) return; // not lightmapped
-    for (const m of this.scene.meshes) {
-      const mat = m.material as (PBRMaterial & { unlit?: boolean }) | null;
-      if (!(mat instanceof PBRMaterial) || hasLampGlow(mat) || mat.unlit) continue;
-      if (this.meshLights.has(m.uniqueId) || isHelperMesh(m)) continue;
-      if (mat.alpha < 1 || mat.transparencyMode === Material.MATERIAL_ALPHABLEND) continue;
-      attachLampGlow(mat);
-    }
-    this.glowMeshes = this.scene.meshes.filter((m) => hasLampGlow(m.material));
-    for (const l of new Set(this.meshLights.values())) l.excludedMeshes.push(...this.glowMeshes);
-  }
-
-  /** Write the pools that are on to the glow — the same bulbs, strengths and
-   *  falloff (LightPoolSet.glowLamps). Only when a pool changed, or every
-   *  frame while more are on than it holds (then the nearest to the eye). */
-  private syncLampGlow(): void {
-    if (this.pools.version === this.glowVersion && !this.glowOverflow) return;
-    if (!this.glowMeshes?.length) return;
-    this.glowVersion = this.pools.version;
-    const lamps = this.pools.glowLamps();
-    this.glowOverflow = lamps.length > LAMP_GLOW_MAX;
-    const eye = this.scene.activeCamera?.globalPosition ?? Vector3.ZeroReadOnly;
-    lampGlowFor(this.scene).set(lamps, eye);
+    this.bulbs.clear();
   }
 
   /** World-space bounding box spanning ALL of an entity's meshes merged (e.g.
@@ -2612,7 +2367,7 @@ export class EntityVisuals {
       .map((p) => ({ name: p.name, pts: p.pts, floorY: p.floorY ?? 0, storey: p.storey }));
     this.storeys = new Storeys(this.roomPolys);
     // The earliest moment the pools can take their rooms' shapes and floors.
-    this.pools.setRooms(this.roomPolys);
+    this.bulbs.setRooms(this.roomPolys);
     this.requestRender();
   }
 
@@ -3299,13 +3054,8 @@ export class EntityVisuals {
     ) {
       tapDebug(`apply(${entity.entity_id}): resolved mesh(es) but map.type="${map.type}" — a variant pose will NEVER be applied while the type mismatch stands (check Advanced Settings' Type field for this entity).`, "mesh");
     }
-    // Normalise by the number of DISTINCT light objects, not meshes — a merged
-    // strip entity (mergeStripEntityLights) shares ONE light across several
-    // meshes, so it must get the full intensity, not 1/N of it.
-    const lightShare = map.type === "light"
-      ? new Set(meshes.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1
-      : 1;
-    for (const mesh of meshes) this.applyToMesh(mesh, map, entity, lightShare);
+    for (const mesh of meshes) this.applyToMesh(mesh, map, entity);
+    if (map.type === "light") this.bulbs.show(meshes, this.lightReading(entity, map));
     if (map.type === "fan") this.updateFanSpin(entity, meshes);
     if (map.type === "light") {
       this.syncEntityShadow(entity.entity_id, meshes, entity.state === "on");
@@ -3528,10 +3278,10 @@ export class EntityVisuals {
     // if the walker has not moved a millimetre (the sweep used to keep its old
     // answers until the next step).
     this.occlusion.invalidate();
-    // A pool is a freestanding decal FloorManager never toggles, so a 2F light
-    // left on would stay lit over 1F — repaint every pool from its fixture's
-    // now floor-correct enabled state.
-    this.pools.resync();
+    // A bulb on a now-hidden storey must go dark — its pools are decals
+    // FloorManager never toggles, and its PointLight kept lighting through the
+    // slab until 2.496.82. Repaint every bulb from its floor-correct state.
+    this.bulbs.resync();
     // Mesh variants (curtain/lock poses) need NO floor resync: their
     // exclusivity rides `isVisible`, which FloorManager's per-floor
     // `setEnabled` never touches — see applyMeshVariant's docstring.
@@ -4224,10 +3974,8 @@ export class EntityVisuals {
       const meshesForEntity = this.byEntity.get(entityId);
       const mapForEntity = this.mapping.get(entityId);
       if (meshesForEntity?.length && mapForEntity) {
-        const lightShare = mapForEntity.type === "light"
-          ? new Set(meshesForEntity.map((m) => this.meshLights.get(m.uniqueId)).filter(Boolean)).size || 1
-          : 1;
-        for (const mesh of meshesForEntity) this.applyToMesh(mesh, mapForEntity, cached, lightShare);
+        for (const mesh of meshesForEntity) this.applyToMesh(mesh, mapForEntity, cached);
+        if (mapForEntity.type === "light") this.bulbs.show(meshesForEntity, this.lightReading(cached, mapForEntity));
       }
     }
     // The label set is now final for this build — refresh the hit-test view.
@@ -8850,7 +8598,7 @@ export class EntityVisuals {
     // Representative light = the first fixture mesh that owns a PointLight.
     let light: PointLight | undefined;
     for (const m of meshes) {
-      light = this.meshLights.get(m.uniqueId);
+      light = this.bulbs.lightOf(m.uniqueId);
       if (light) break;
     }
     if (!light) return;
@@ -8901,7 +8649,7 @@ export class EntityVisuals {
     this.requestRender();
   }
 
-  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity, lightShare = 1): void {
+  private applyToMesh(mesh: AbstractMesh, map: EntityMapping, state: HassEntity): void {
     const setEmissive = this.emissiveOf(mesh);
     const setDiffuse = this.diffuseOf(mesh);
 
@@ -8931,36 +8679,8 @@ export class EntityVisuals {
             : Material.MATERIAL_ALPHABLEND;
         }
 
-        // 2) This fixture mesh's own light source illuminates the room.
-        //    A single HA light is frequently modelled in SweetHome 3D as MANY
-        //    co-located virtual markers (e.g. a LED strip drawn as 8–12 point
-        //    lights for a soft, diffuse spread). Each marker becomes its own
-        //    PointLight, and point lights are ADDITIVE — 12 markers at full
-        //    intensity would blow out to solid white. Normalise by the number of
-        //    DISTINCT lights sharing this entity (lightShare, computed in apply())
-        //    so the whole group reads as one fixture's worth of light, regardless
-        //    of how many markers/meshes model it or whether they share one merged
-        //    light (mergeStripEntityLights).
-        const light = this.meshLights.get(mesh.uniqueId);
-        if (light) {
-          light.diffuse = colour;
-          // lightPoolStrength (Settings' global "Light effect strength")
-          // scales the DYNAMIC light too, not just baked-mode pools — before
-          // this, the slider was a silent no-op on a non-baked GLB, where
-          // room illumination comes from these real PointLights.
-          light.intensity = on
-            ? (MAX_LIGHT_INTENSITY * effectiveFrac * this.lightPoolStrength) / lightShare
-            : 0;
-          // Drop the light out of (or back into) shaders entirely with its state,
-          // so only lights that are actually on add per-pixel cost.
-          light.setEnabled(on);
-        }
-        // Baked mode's counterpart to the light above — see LightPools.ts.
-        // `mesh.isEnabled()` folds in FloorManager's floor toggle: a fixture
-        // on a currently-hidden floor must not light its pool even if the HA
-        // entity itself is "on" (see LightPoolSet.resync for the other
-        // direction — a floor SWITCH with no entity-state change).
-        this.pools.setLight(mesh.uniqueId, { on: on && mesh.isEnabled(), colour, frac: effectiveFrac });
+        // 2) Its light — PointLight, pools, furniture light — is the entity's,
+        //    shown once for all its bulbs by apply() (bulbSet.ts).
         // Wall occlusion is handled once per entity in apply(), not per mesh.
         break;
       }
