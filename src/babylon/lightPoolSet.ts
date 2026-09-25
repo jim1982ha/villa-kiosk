@@ -26,7 +26,7 @@ import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPool, poolFootprint, poolStrength } from "./LightPools";
 import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { onStorey, storeyFloorYAt, nearestFloorRoom, STOREY_MATCH_M } from "./roomStorey";
+import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
 
 /** A pool's radius on open floor. A separate knob from EntityVisuals'
  *  LIGHT_RANGE, which only matters for a non-baked villa's real PointLight. */
@@ -45,6 +45,9 @@ export const POOL_FLOOR_LIFT = 0.02;
 /** A pool whose floor answer stands this far above its room's own floor is put
  *  ON the room's floor. Above a stair tread's rise; below any table or counter. */
 const POOL_RAISED_M = 0.3;
+/** How far above a floor the next STOREY's floor must be — a storey is a
+ *  ceiling height, and nothing lower is one (a staircase, a raised terrace). */
+const STOREY_MIN_HEIGHT_M = 2.0;
 
 /** What the pools need from the floor below them. FloorProbe is the adapter. */
 export interface PoolFloorProbe {
@@ -335,14 +338,34 @@ export class LightPoolSet {
     pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
   }
 
-  /** The floor of the next storey up from a floor at `floorY` — where a
-   *  bulb's light must stop, because nothing in the glow knows a ceiling is
-   *  there (a 1F bulb lit the walls of the room above it through the slab,
-   *  seen on the villa render). No storey above: no limit. */
+  /**
+   * The floor of the next storey up from a floor at `floorY` — where a bulb's
+   * light must stop, because nothing in the glow knows a ceiling is there (a
+   * 1F bulb lit the walls of the room above it through the slab, seen on the
+   * villa render). No storey above: no limit.
+   *
+   * ⚠️ A STOREY, NOT THE LOWEST ODD ROOM (2.496.80). Each room's floor is
+   * measured at its outline's centre, and a staircase's centre is a TREAD:
+   * the villa's measures 0.85 m (and its upper one 1.11 m, the upstairs
+   * terrace 2.21 m). 2.496.79 took the lowest room floor more than 0.6 m up —
+   * the staircase — and cut every ground-floor bulb off at ~0.85 m: the table
+   * top dark again, in the owner's photo. So: only floors at least
+   * STOREY_MIN_HEIGHT_M up, and of those the height most rooms share.
+   */
   private storeyAbove(floorY: number): number {
-    let above = Infinity;
-    for (const r of this.rooms) if (r.floorY > floorY + STOREY_MATCH_M && r.floorY < above) above = r.floorY;
-    return above;
+    const counts = new Map<number, number>();
+    for (const r of this.rooms) {
+      if (!(r.floorY > floorY + STOREY_MIN_HEIGHT_M)) continue;
+      const k = Math.round(r.floorY * 10) / 10;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    let best = Infinity, n = 0;
+    for (const [k, c] of counts) if (c > n || (c === n && k < best)) { best = k; n = c; }
+    if (!Number.isFinite(best)) return Infinity;
+    // The rounded bucket's lowest real floor, so a 2.56 storey is not cut at 2.6.
+    let floor = Infinity;
+    for (const r of this.rooms) if (Math.abs(Math.round(r.floorY * 10) / 10 - best) < 1e-9) floor = Math.min(floor, r.floorY);
+    return floor;
   }
 
   /** The floor of the room this point stands in or above: of the rooms whose

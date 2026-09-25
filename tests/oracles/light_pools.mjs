@@ -186,6 +186,24 @@ console.log("\n  the same light, for what stands under it (lampGlow.ts):");
   const g = r.set.glowLamps()[0];
   ck("a 1F bulb's light stops at the NEXT storey's floor, not a higher one", g?.ceilingY === 2.56, g?.ceilingY);
 }
+{
+  // The villa's rooms as the app measures them: a staircase's centre is a
+  // tread (0.85 m; its upper half 1.11 m), the upstairs terrace 2.21 m.
+  // 2.496.79 took the staircase for the storey above and cut every ground-
+  // floor bulb off at 0.85 m — the table top dark (owner's photo).
+  const lamp = fixture("living");
+  const r = rig(probe({ below: () => 0 }), () => [[lamp.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
+  r.set.addFixture(lamp, box(0, 0.1, 0, 0.1, 2.3), false);
+  r.set.setRooms([room("Living", 0, -5, 5, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5), room("Staircase", 1.11, 6, 8, -5, 5),
+    room("Terrace 2F", 2.21, 9, 12, -5, 5), room("Gym", 2.56, -5, 5, -5, 5), room("Bedroom 3", 2.56, 9, 12, 6, 9), room("Bath 3", 2.56, 13, 15, 6, 9)]);
+  const g = r.set.glowLamps()[0];
+  ck("a staircase or a raised terrace is not the storey above: the light stops at 2.56 (2.496.80)", g?.ceilingY === 2.56, g?.ceilingY);
+  // A villa whose only room "above" is a staircase's tread has no storey above.
+  const r2 = rig(probe({ below: () => 0 }), () => [[lamp.uniqueId, { on: true, colour: { r: 1, g: 1, b: 1 }, frac: 1 }]]);
+  r2.set.addFixture(lamp, box(0, 0.1, 0, 0.1, 2.3), false);
+  r2.set.setRooms([room("Living", 0, -5, 5, -5, 5), room("Staircase", 0.85, 6, 8, -5, 5)]);
+  ck("  ...and a staircase alone is no storey: no limit at all", r2.set.glowLamps()[0]?.ceilingY === Infinity, r2.set.glowLamps()[0]?.ceilingY);
+}
 
 console.log("\n  state:");
 {
