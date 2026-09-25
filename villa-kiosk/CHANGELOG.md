@@ -1,3 +1,16 @@
+## 2.496.67
+
+**Nothing you should see changed.** Walls, stairs and ceilings behave exactly as
+before: ceilings are there while you walk and lifted away in the bird's-eye
+view.
+
+Behind that: ceilings have been the most-changed subject in VESTA's 3D code, and
+the list of them was looked after in five different places — including the one
+that, when it once forgot, leaked 35 MB of memory every time the villa reloaded.
+All of it now lives in one place that finds the ceilings, shows or hides them,
+checks what is over your head, and forgets them on unload, with automatic checks
+that build a small test villa and confirm each of those.
+
 ## 2.496.66
 
 **Nothing you should see changed.** VESTA starts, loads the villa and lands in
