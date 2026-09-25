@@ -1,3 +1,21 @@
+## 2.496.57
+
+**Nothing you should see changed** — the camera opens exactly as in 2.496.52.
+Two small things behave better:
+
+* **Switching between cameras** no longer sends one wasted request to the camera
+  you just left before starting the new one.
+* **A camera opened while the connection to Home Assistant was down** now starts
+  by itself when the connection comes back, instead of staying on the spinner
+  until you closed and reopened it.
+
+Behind that: the four ways the panel tries to reach a camera (WebRTC, then HLS,
+then a motion-JPEG stream, then still pictures) and the rules for giving up on
+each were tangled into the screen's own code, alongside the swiping, zooming and
+buttons. They now live in their own piece with automatic checks of their own,
+so a change to how cameras are reached can be tested before it reaches the
+wall.
+
 ## 2.496.56
 
 ### Improved — the pointer shows the hand over everything you can click
