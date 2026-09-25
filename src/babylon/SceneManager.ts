@@ -2829,7 +2829,7 @@ export class SceneManager {
     tapDebug(`calibration: ${solution.strategy}`);
 
     // Transform each room polygon to model space; centroid → teleport point.
-    const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; conform?: { positions: number[]; indices: number[] } }> = [];
+    const worldPolys: Array<{ name: string; pts: Pt2[]; floorY: number; storey: number; conform?: { positions: number[]; indices: number[] } }> = [];
     const points: TeleportPoint[] = [];
     /** Stair rooms whose surface-hugging glow is built after the block ends. */
     const stairJobs: Array<{ index: number; pts: Pt2[]; floor: number }> = [];
@@ -2855,7 +2855,9 @@ export class SceneManager {
       // ships with its flat patch now and is upgraded a few frames later.
       const isStairRoom = STAIR_ROOM_RE.test(room.name);
       if (isStairRoom) stairJobs.push({ index: worldPolys.length, pts, floor });
-      worldPolys.push({ name: room.name, pts, floorY });
+      // The plan's storey travels with the room — Storeys (storeys.ts) needs
+      // it, and re-deriving it from a centroid height is what went wrong.
+      worldPolys.push({ name: room.name, pts, floorY, storey: floor });
       // QUANTISED TO MILLIMETRES, and that is not cosmetic — it is what stops
       // this data pushing itself to the server on every single boot.
       //

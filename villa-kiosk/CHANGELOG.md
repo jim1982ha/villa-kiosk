@@ -1,3 +1,17 @@
+## 2.496.81
+
+### Changed — one module decides which storey a room or a light is on
+Which storey a room, a light or a device is on used to be guessed from heights,
+in several places with different rules. A room's floor height is measured at
+the centre of the room, and the centre of a staircase is a step, so the
+staircase kept being mistaken for a storey of its own. That caused the last two
+lighting regressions.
+
+VESTA now uses the storey each room already has in your floor plan, and a
+storey's floor is the height most of its rooms share. One thing this fixes
+right away: a ground-floor ceiling light could be placed in no room at all,
+because the staircase's step was taken for its storey. It is now in the room
+it hangs in. Nothing else should look different.
 ## 2.496.80
 
 ### Fixed — furniture dark again after 2.496.79

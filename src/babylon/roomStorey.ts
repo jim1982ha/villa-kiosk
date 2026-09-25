@@ -67,40 +67,12 @@ export interface StoreyRoom {
  */
 export const STOREY_MIN_MOUNT = 0.30;
 
-/**
- * How far two room floor heights may differ and still be the SAME storey.
- *
- * Each room's `floorY` is probed at its own centroid, so a step-down lounge, a
- * raised terrace or a sloped slab legitimately reads tens of centimetres from
- * its neighbours — while a storey separation is metres. 0.6 m sits an order of
- * magnitude away from both.
- */
-export const STOREY_MATCH_M = 0.6;
-
-/** Whether a room's floor belongs to the storey whose floor is at `storeyY`. */
-export function onStorey(roomFloorY: number, storeyY: number): boolean {
-  return Math.abs(roomFloorY - storeyY) <= STOREY_MATCH_M;
-}
-
-/**
- * The floor height of the storey a world Y belongs to: the HIGHEST room floor
- * at least `STOREY_MIN_MOUNT` below it, or — for a point with no floor that far
- * beneath it (something at or near ground level, or below every floor there is)
- * — the lowest floor of all, so nothing ever belongs to no storey.
- *
- * Returns 0 for an empty room list, which is what every caller wants: before
- * calibration there are no polygons and no storeys to tell apart.
- */
-export function storeyFloorYAt(rooms: readonly StoreyRoom[], y: number): number {
-  let below = -Infinity;
-  let lowest = Infinity;
-  for (const room of rooms) {
-    if (room.floorY < lowest) lowest = room.floorY;
-    if (room.floorY <= y - STOREY_MIN_MOUNT && room.floorY > below) below = room.floorY;
-  }
-  if (below > -Infinity) return below;
-  return Number.isFinite(lowest) ? lowest : 0;
-}
+// ⚠️ "WHICH STOREY" LIVES IN storeys.ts NOW (2.496.81). This file held two
+// height-only rules — a room within 0.6 m of a storey's floor is on it, and a
+// point's storey is the highest room floor 0.3 m below it — and a staircase's
+// centre, measured at a tread (0.85 m on the villa), broke both. Storeys uses
+// the plan's own storey numbers and the height a storey's rooms agree on;
+// only the clearance above and the nearest-floor rule below remain here.
 
 /**
  * The room whose floor is NEAREST a known floor height — for the callers that

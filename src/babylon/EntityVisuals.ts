@@ -117,7 +117,7 @@ import { formatCountBadge } from "@/utils/countBadge";
 import { RoomHighlight } from "./RoomHighlight";
 import { CameraBeams, type BeamSource } from "./CameraBeams";
 import { blocksCameraBeam, isResolvedCeiling, isHelperMesh } from "./meshRoles";
-import { onStorey, storeyFloorYAt } from "./roomStorey";
+import { Storeys } from "./storeys";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPoolSet, type LightReading } from "./lightPoolSet";
@@ -1364,7 +1364,9 @@ export class EntityVisuals {
    *  lower one's in XZ. A containment test alone therefore answers with
    *  whichever polygon the array lists first, which is the load order of
    *  `.rooms.json` and nothing else. See `roomPolyAt`. */
-  private roomPolys: { name: string; pts: { x: number; z: number }[]; floorY: number }[] = [];
+  private roomPolys: { name: string; pts: { x: number; z: number }[]; floorY: number; storey?: number }[] = [];
+  /** Every storey question about `roomPolys` — see storeys.ts. */
+  private storeys = new Storeys(this.roomPolys);
   /** True while the walking camera is the active one — see setFirstPerson. */
   private firstPerson = false;
   /** Which badges are behind a wall from the walker's eye — see
@@ -2599,7 +2601,7 @@ export class EntityVisuals {
   /** Replace the calibrated room polygons (world space) — forwarded straight
    *  to RoomHighlight. Called by SceneManager after every plan→world re-fit
    *  (load + mirror-flip toggles), same trigger as the teleport grid. */
-  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
+  setRoomPolygons(polys: { name: string; pts: { x: number; z: number }[]; floorY?: number; storey?: number; conform?: { positions: number[]; indices: number[] } }[]): void {
     this.roomHighlight.setRooms(polys);
     // Each room's ground WIDTH used to be cached here too, as the "is there
     // space here?" denominator for laying a pile of badges out across a room.
@@ -2607,7 +2609,8 @@ export class EntityVisuals {
     // or their room summarises), so the room's own size no longer takes part
     // in any grouping decision and the cache is gone with the fan.
     this.roomPolys = polys.filter((p) => p.pts.length >= 3)
-      .map((p) => ({ name: p.name, pts: p.pts, floorY: p.floorY ?? 0 }));
+      .map((p) => ({ name: p.name, pts: p.pts, floorY: p.floorY ?? 0, storey: p.storey }));
+    this.storeys = new Storeys(this.roomPolys);
     // The earliest moment the pools can take their rooms' shapes and floors.
     this.pools.setRooms(this.roomPolys);
     this.requestRender();
@@ -2681,21 +2684,7 @@ export class EntityVisuals {
   private roomPolyAt(
     x: number, y: number, z: number,
   ): { name: string; pts: { x: number; z: number }[]; floorY: number } | null {
-    const storeyY = this.storeyFloorYAt(y);
-    for (const room of this.roomPolys) {
-      if (!onStorey(room.floorY, storeyY)) continue;
-      if (pointInPolygon(x, z, room.pts)) return room;
-    }
-    return null;
-  }
-
-  /** The floor height of the storey a world Y stands on. Delegates to
-   *  roomStorey.ts, which owns the two tolerances and is pinned by
-   *  `tests/oracles/badge_geometry.mjs`; shared by `roomPolyAt` and the light pool's
-   *  no-room fallback so the two cannot disagree about which storey a fixture
-   *  belongs to. */
-  private storeyFloorYAt(y: number): number {
-    return storeyFloorYAt(this.roomPolys, y);
+    return this.storeys.roomAt(x, y, z);
   }
 
   /** Geometric room fallback: which real drawn room polygon this entity's

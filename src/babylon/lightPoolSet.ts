@@ -25,8 +25,8 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import { LightPool, poolFootprint, poolStrength } from "./LightPools";
-import { clipPolygonToConvex, distanceToPolygonBoundary, pointInPolygon, type Pt2 } from "@/utils/geometry";
-import { onStorey, storeyFloorYAt, nearestFloorRoom } from "./roomStorey";
+import { clipPolygonToConvex, distanceToPolygonBoundary, type Pt2 } from "@/utils/geometry";
+import { Storeys } from "./storeys";
 
 /** A pool's radius on open floor. A separate knob from EntityVisuals'
  *  LIGHT_RANGE, which only matters for a non-baked villa's real PointLight. */
@@ -45,9 +45,6 @@ export const POOL_FLOOR_LIFT = 0.02;
 /** A pool whose floor answer stands this far above its room's own floor is put
  *  ON the room's floor. Above a stair tread's rise; below any table or counter. */
 const POOL_RAISED_M = 0.3;
-/** How far above a floor the next STOREY's floor must be — a storey is a
- *  ceiling height, and nothing lower is one (a staircase, a raised terrace). */
-const STOREY_MIN_HEIGHT_M = 2.0;
 
 /** What the pools need from the floor below them. FloorProbe is the adapter. */
 export interface PoolFloorProbe {
@@ -64,7 +61,7 @@ export interface PoolFloorProbe {
  *  fixture's storey is shown; `frac` is brightness × the per-light override. */
 export interface LightReading { on: boolean; colour: Color3; frac: number }
 
-export interface PoolRoom { name: string; pts: Pt2[]; floorY: number }
+export interface PoolRoom { name: string; pts: Pt2[]; floorY: number; storey?: number }
 
 /** A fixture's box, as the load path already has it. */
 export interface FixtureBounds {
@@ -82,7 +79,8 @@ export class LightPoolSet {
   private pools = new Map<number, LightPool[]>();
   /** Spots whose load-path probe missed, kept so calibration can ask again. */
   private pending = new Map<number, PendingSpot[]>();
-  private rooms: readonly PoolRoom[] = [];
+  /** Every storey question about `rooms` (storeys.ts). */
+  private storeys = new Storeys<PoolRoom>([]);
   /** Each pool's ROOM floor, which for a step light is not the tread its
    *  pool lies on — the height the lamp glow is held back below. */
   private roomFloors = new Map<LightPool, number>();
@@ -144,7 +142,7 @@ export class LightPoolSet {
    * per calibration, after first paint — never on a state change.
    */
   setRooms(rooms: readonly PoolRoom[]): void {
-    this.rooms = rooms;
+    this.storeys = new Storeys(rooms);
     if (this.pools.size === 0 || rooms.length === 0) return;
     // The memoised answers were keyed by grid on the load path; dropping them
     // lets the same points be re-asked now that the probe can name their room.
@@ -201,7 +199,7 @@ export class LightPoolSet {
           amount: poolStrength(r.frac * this.strength, pool.intensityScale),
           radius: pool.radius,
           floorY: this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT,
-          ceilingY: this.storeyAbove(this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT),
+          ceilingY: this.storeys.floorAbove(this.storeys.storeyStandingOn(this.roomFloors.get(pool) ?? p.y - POOL_FLOOR_LIFT)),
         });
       }
     }
@@ -301,7 +299,7 @@ export class LightPoolSet {
       // load. Deterministic too — it cannot depend on what the memo held.
       // Step and stair lights never reach here: the airborne branch above
       // keeps a pool mounted close to what it lights.
-      const roomFloor = this.floorUnder(x, surfaceY, z);
+      const roomFloor = this.storeys.floorUnder(x, surfaceY, z);
       if (roomFloor !== null && surfaceY - roomFloor > POOL_RAISED_M) { surfaceY = roomFloor; n.lowered++; }
     }
     // ⚠️ TWO RULES, AND WHAT WE KNOW PICKS ONE (2.477.0). A probed surface is
@@ -309,8 +307,10 @@ export class LightPoolSet {
     // distance ABOVE one — clearance. Asking the clearance rule about a floor
     // the pool stands on names the storey below, so every upper-storey pool
     // found no room and washed through its walls.
-    const room = surfaceY !== null ? this.roomOnFloor(x, surfaceY, z) : this.roomAtFixture(x, pool.probeFromY, z);
-    const roomFloor = surfaceY !== null ? this.floorUnder(x, surfaceY, z) : null;
+    const room = surfaceY !== null
+      ? this.storeys.roomStandingOn(x, surfaceY, z)
+      : this.storeys.roomAt(x, pool.probeFromY, z);
+    const roomFloor = surfaceY !== null ? this.storeys.floorUnder(x, surfaceY, z) : null;
     if (roomFloor !== null) this.roomFloors.set(pool, roomFloor); else this.roomFloors.delete(pool);
     let radius = LIGHT_POOL_RADIUS;
     let shape: Pt2[] | undefined;
@@ -323,12 +323,11 @@ export class LightPoolSet {
       // SAME-STOREY room boundary, so it still cannot cross a wall. Measuring
       // against every storey let a bedroom wall one floor up crush a terrace
       // pool to POOL_MIN_RADIUS.
-      const storeyY = surfaceY !== null
-        ? (this.roomOnFloor(x, surfaceY, z)?.floorY ?? surfaceY)
-        : storeyFloorYAt(this.rooms, pool.probeFromY);
+      const storey = surfaceY !== null
+        ? this.storeys.storeyStandingOn(surfaceY)
+        : this.storeys.storeyAt(pool.probeFromY);
       let nearest = Infinity;
-      for (const r of this.rooms) {
-        if (!onStorey(r.floorY, storeyY)) continue;
+      for (const r of this.storeys.roomsOn(storey)) {
         nearest = Math.min(nearest, distanceToPolygonBoundary(x, z, r.pts));
       }
       if (Number.isFinite(nearest)) radius = Math.min(radius, Math.max(POOL_MIN_RADIUS, nearest));
@@ -336,61 +335,5 @@ export class LightPoolSet {
       if (radius <= POOL_MIN_RADIUS + 1e-3) n.crushed++;
     }
     pool.reshape(shape, radius, surfaceY === null ? undefined : surfaceY + POOL_FLOOR_LIFT);
-  }
-
-  /**
-   * The floor of the next storey up from a floor at `floorY` — where a bulb's
-   * light must stop, because nothing in the glow knows a ceiling is there (a
-   * 1F bulb lit the walls of the room above it through the slab, seen on the
-   * villa render). No storey above: no limit.
-   *
-   * ⚠️ A STOREY, NOT THE LOWEST ODD ROOM (2.496.80). Each room's floor is
-   * measured at its outline's centre, and a staircase's centre is a TREAD:
-   * the villa's measures 0.85 m (and its upper one 1.11 m, the upstairs
-   * terrace 2.21 m). 2.496.79 took the lowest room floor more than 0.6 m up —
-   * the staircase — and cut every ground-floor bulb off at ~0.85 m: the table
-   * top dark again, in the owner's photo. So: only floors at least
-   * STOREY_MIN_HEIGHT_M up, and of those the height most rooms share.
-   */
-  private storeyAbove(floorY: number): number {
-    const counts = new Map<number, number>();
-    for (const r of this.rooms) {
-      if (!(r.floorY > floorY + STOREY_MIN_HEIGHT_M)) continue;
-      const k = Math.round(r.floorY * 10) / 10;
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-    let best = Infinity, n = 0;
-    for (const [k, c] of counts) if (c > n || (c === n && k < best)) { best = k; n = c; }
-    if (!Number.isFinite(best)) return Infinity;
-    // The rounded bucket's lowest real floor, so a 2.56 storey is not cut at 2.6.
-    let floor = Infinity;
-    for (const r of this.rooms) if (Math.abs(Math.round(r.floorY * 10) / 10 - best) < 1e-9) floor = Math.min(floor, r.floorY);
-    return floor;
-  }
-
-  /** The floor of the room this point stands in or above: of the rooms whose
-   *  outline contains it, the highest floor not above `y` (a small tolerance
-   *  for a slab's own thickness). Null outside every room. */
-  private floorUnder(x: number, y: number, z: number): number | null {
-    let best: number | null = null;
-    for (const r of this.rooms) {
-      if (r.floorY > y + 0.05 || !pointInPolygon(x, z, r.pts)) continue;
-      if (best === null || r.floorY > best) best = r.floorY;
-    }
-    return best;
-  }
-
-  /** Nearest-floor rule: the room a point STANDING on floorY is in. */
-  private roomOnFloor(x: number, floorY: number, z: number): PoolRoom | null {
-    return nearestFloorRoom(this.rooms, floorY, (r) => pointInPolygon(x, z, r.pts));
-  }
-
-  /** Clearance rule: the room a point an unknown height above its floor is in. */
-  private roomAtFixture(x: number, y: number, z: number): PoolRoom | null {
-    const storeyY = storeyFloorYAt(this.rooms, y);
-    for (const room of this.rooms) {
-      if (onStorey(room.floorY, storeyY) && pointInPolygon(x, z, room.pts)) return room;
-    }
-    return null;
   }
 }
