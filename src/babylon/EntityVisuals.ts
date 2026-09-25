@@ -121,6 +121,7 @@ import { onStorey, storeyFloorYAt } from "./roomStorey";
 import { FloorProbe } from "./floorProbe";
 import { axisWorldScale } from "./meshUnits";
 import { LightPoolSet, type LightReading } from "./lightPoolSet";
+import { OcclusionSweep } from "./occlusionSweep";
 import { onGlass, glyphDrawPx, glyphBakePx } from "./badgeLayout";
 import type { FrameRequests } from "./frameScheduler";
 import { badgeImageDataUrl, BADGE_INSET_CARD, BADGE_CORNER_FRACTION } from "./badgeIcons";
@@ -1399,33 +1400,15 @@ export class EntityVisuals {
   private roomPolys: { name: string; pts: { x: number; z: number }[]; floorY: number }[] = [];
   /** True while the walking camera is the active one — see setFirstPerson. */
   private firstPerson = false;
-  /** Entity ids whose badge is behind a wall from the walker's current eye
-   *  position. A SET rather than a flag on the label, because `shown` is
-   *  rebuilt every pass while the answer outlives it (the sweep is
-   *  round-robin). Empty in overview, always. */
-  private occludedIds = new Set<string>();
-  /** Scratch for pruning `occludedIds` to the live shown set — allocated once,
-   *  because the prune runs on every sweep restart, i.e. every walking frame. */
-  private readonly occlLive = new Set<string>();
-  /** Where the answers in `occludedIds` were measured from; a different eye
-   *  position restarts the sweep. */
-  private occlusionFrom = new Vector3(NaN, NaN, NaN);
-  /** How many badges have been answered at `occlusionFrom`, and where the
-   *  round-robin is. The cursor deliberately does NOT reset with the sweep —
-   *  resuming where it left off spreads the cost evenly instead of re-testing
-   *  the same first eight badges on every step. */
-  private occlusionSwept = 0;
-  private occlusionCursor = 0;
-  /** Rays cast on the last pass, and what they COST in ms — reported by the
-   *  `walk:` line, so the budget is a measurement rather than a claim. A budget
-   *  that is never measured is how a per-frame raycast becomes a freeze. */
-  private occlRays = 0;
-  private occlMs = 0;
+  /** Which badges are behind a wall from the walker's eye — see
+   *  occlusionSweep.ts, which owns the answers, when they go stale and what a
+   *  pass may spend. This file only supplies the ray cast. Empty in overview. */
+  private readonly occlusion = new OcclusionSweep({
+    settleMs: OCCLUSION_SETTLE_MS, nearM: OCCLUSION_NEAR_M, slackM: OCCLUSION_SLACK_M,
+    cast: (ox, oy, oz, dx, dy, dz, len) => this.castOcclusionRay(ox, oy, oz, dx, dy, dz, len),
+  });
   /** Dedupe for the badge-geometry diagnostic — see logBadgeGeometry. */
   private lastBadgeGeom = "";
-  /** entityId → the mesh that blocked its badge, stem-collapsed. Read by the
-   *  `walk:` line's `occludedBy=` field; see refreshWallOcclusion. */
-  private readonly occlBlockedBy = new Map<string, string>();
   /** Frames logBadgeGeometry refused to print because the row's children were
    *  not inside their own badge yet — see there. Printed on the next good line
    *  rather than dropped, so "it stopped complaining" and "it never measured"
@@ -1442,9 +1425,6 @@ export class EntityVisuals {
   private walkFloorCost:
     (() => { rays: number; ms: number; still: number; flat: boolean; cand: number })
     | null = null;
-  /** performance.now() when the eye last MOVED. The sweep waits for this to go
-   *  quiet, so a walking frame never pays for a ray — see refreshWallOcclusion. */
-  private movingSince = 0;
   /**
    * The meshes a wall-occlusion ray may hit — resolved ONCE per indexMeshes,
    * because it cannot change while you walk.
@@ -1462,7 +1442,6 @@ export class EntityVisuals {
    *  Ray and a Vector3 per badge per frame is exactly the kind of steady-state
    *  garbage this file pools everything else to avoid. */
   private occlRay = new Ray(new Vector3(0, 0, 0), new Vector3(0, 0, 1), 1);
-  private occlDir = new Vector3(0, 0, 0);
   /** Active storey from FloorManager (1-based). Floors below it stay rendered
    *  (cumulative visibility), so enabled-state alone can't cull their badges —
    *  cullLabels compares each label's stamped floorIndex against this. */
@@ -3543,6 +3522,10 @@ export class EntityVisuals {
     // Badges are culled per storey, and FloorManager's setEnabled sweep is not
     // otherwise visible to the layout pass.
     this.markLayoutDirty();
+    // The slabs that occlude changed with the storey: re-test every badge, even
+    // if the walker has not moved a millimetre (the sweep used to keep its old
+    // answers until the next step).
+    this.occlusion.invalidate();
     // A pool is a freestanding decal FloorManager never toggles, so a 2F light
     // left on would stay lit over 1F — repaint every pool from its fixture's
     // now floor-correct enabled state.
@@ -4561,7 +4544,7 @@ export class EntityVisuals {
       s.wy = wp.y;
       s.wz = wp.z;
       s.inFront = p.z >= 0 && p.z <= 1;
-      s.occluded = this.occludedIds.has(id);
+      s.occluded = this.occlusion.occluded.has(id);
       shown[shownCount] = s;
       shownCount++;
     }
@@ -5029,147 +5012,44 @@ export class EntityVisuals {
     if (!WALL_OCCLUSION || !this.firstPerson || shown.length === 0) {
       // Leaving first-person must not strand a hidden badge — the overview has
       // no notion of occlusion at all.
-      if (this.occludedIds.size) {
-        this.occludedIds.clear();
+      if (this.occlusion.occluded.size) {
+        this.occlusion.reset(true);
         for (const s of shown) s.occluded = false;
       }
       return;
     }
-    const eye = cam.globalPosition;
-    // Compared in WORLD METRES, deliberately — the one quantity in this file
-    // that is compared BETWEEN frames and so must not be in render pixels,
-    // which the resolution valve moves every time the camera starts or stops
-    // (see quantisedPixelsPerWorldUnit's cssPixels note). A camera position
-    // cannot be forged by a resolution change.
-    const still = this.occlusionFrom.equalsWithEpsilon(eye, 1e-4);
-    if (this.occlusionSwept >= shown.length && still) {
-      // Zero rays is the truth for this pass, and leaving the previous pass's
-      // count standing would overstate the sustained cost in every capture
-      // taken while standing still.
-      this.occlRays = 0;
-      this.occlMs = 0;
-      return;
-    }
-    if (!still) {
-      this.occlusionFrom.copyFrom(eye);
-      this.occlusionSwept = 0;
-      this.movingSince = performance.now();
-      // ⚠️ PRUNE TO THE LIVE SET. `occludedIds` persists across frames on
-      // purpose — it is what carries the last still pose's answers — but it was
-      // only ever CLEARED on leaving first-person, so walking UPSTAIRS kept
-      // every id the ground floor had occluded. Caught by its own counter
-      // printing the impossible `occl=52/16`: 52 remembered ids against 16
-      // badges on the storey.
-      //
-      // Not cosmetic. Every frame seeds `s.occluded` from this set, and
-      // `settleChips` hides a whole room chip when EVERY member is in it — so a
-      // stale id can hide a badge, or a room's chip, until the round-robin
-      // sweep happens to re-test it, which is 2-8 rays a pass.
-      if (this.occludedIds.size > 0) {
-        this.occlLive.clear();
-        for (const s of shown) this.occlLive.add(s.id);
-        for (const id of this.occludedIds) {
-          if (this.occlLive.has(id)) continue;
-          this.occludedIds.delete(id);
-          this.occlBlockedBy.delete(id);
-        }
-      }
-    }
-    // ⚠️ NOT A FRAME OF RAYS WHILE MOVING — see this method's header. The
-    // answers on screen are the last still pose's, stale by at most the
-    // distance walked, and the cost of a walking frame is unchanged from before
-    // this feature existed. `requestRender` keeps a settle frame coming so the
-    // sweep starts the moment the camera stops.
-    if (performance.now() - this.movingSince < OCCLUSION_SETTLE_MS) {
-      this.occlRays = 0;
-      this.occlMs = 0;
-      this.requestRender();
-      return;
-    }
-    const dir = this.occlDir;
-    // A TIME budget, halved on a phone. A ray-count budget was the wrong unit:
-    // the same eight rays measured 7 ms in a corridor and 121 ms down the
-    // length of the villa, so the count that is safe in one pose is a dropped
-    // frame in another. This one is self-limiting on any device and any villa.
-    const msBudget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
-    const t0 = performance.now();
-    let rays = 0;
-    // `rays < 1 ||` — at least one ray always runs, or a villa where a single
-    // ray exceeds the whole budget would never sweep at all.
-    while (this.occlusionSwept < shown.length
-      && (rays < 1 || performance.now() - t0 < msBudget)) {
-      const s = shown[this.occlusionCursor % shown.length];
-      this.occlusionCursor++;
-      this.occlusionSwept++;
-      rays++;
-      dir.set(s.wx - eye.x, s.wy - eye.y, s.wz - eye.z);
-      const dist = dir.length();
-      // Anything within arm's reach is in the room with you; and a ray shorter
-      // than the slack below has no interval left to test.
-      if (dist <= OCCLUSION_NEAR_M) { s.occluded = false; this.occludedIds.delete(s.id); continue; }
-      dir.scaleInPlace(1 / dist);
-      this.occlRay.origin.copyFrom(eye);
-      this.occlRay.direction.copyFrom(dir);
-      // Stop SHORT of the anchor. A device is normally mounted ON a wall or a
-      // ceiling, so a ray run all the way to its anchor ends inside the very
-      // surface it hangs from and every wall-mounted device would report itself
-      // occluded.
-      this.occlRay.length = dist - OCCLUSION_SLACK_M;
-      // ⚠️ NOT `scene.pickWithRay` (2.437.0). That walks EVERY mesh in the scene
-      // and calls the predicate on each — ~900 here — and the predicate was
-      // `blocksCameraBeam`, which falls through to `normaliseMeshName` plus a
-      // regex for any mesh the pipeline did not stamp. Eight rays a frame made
-      // that ~7,200 regex-backed classifications per frame, on the one code
-      // path that has frozen this app before, and it is the nameable half of
-      // "it feels a bit more laggy now".
-      //
-      // The occluder set does not change while you walk, so it is resolved ONCE
-      // (occludersFor) and each ray tests only those meshes. Babylon's
-      // `intersectsMesh` does the same bounding-sphere/box rejection and the
-      // same submesh octree as the pick did — what is gone is the scene walk
-      // and the classification, not the accuracy. `fastCheck` because the
-      // question is "is anything in the way", not "what is nearest".
-      let blocked = false;
-      let blocker = "";
-      for (const m of this.occluders) {
-        // Visibility is asked HERE for the same reason the old predicate had to
-        // ask it: a hidden storey's slab must not occlude the storey you are
-        // standing on. Cheap, and it has to be per-frame — the ceiling that
-        // 2.435.0 added appears and disappears with the view mode.
-        if (!m.isEnabled() || !m.isVisible) continue;
-        if (this.occlRay.intersectsMesh(m, true).hit) {
-          blocked = true;
-          blocker = m.name;
-          break;
-        }
-      }
-      s.occluded = blocked;
-      // ⚠️ WHICH MESH, not just how many. `occl=58/70` is a count, and a count
-      // cannot answer the only question ever asked of this tier — "why is THAT
-      // badge missing when I can see the device". A 2026-08-19 report (a ceiling
-      // fan and the sensor under it, both plainly on screen, neither badged)
-      // could not be diagnosed from a capture at all: the two hypotheses worth
-      // having, self-occlusion against the ceiling the device hangs from and
-      // the disabled storey-above slab, are BOTH already handled in this loop
-      // (OCCLUSION_SLACK_M above, the isEnabled test just now), so the honest
-      // next step was a name rather than a third guess.
-      if (blocked) {
-        this.occludedIds.add(s.id);
-        this.occlBlockedBy.set(s.id, blocker.replace(/_primitive\d+$/, ""));
-      } else {
-        this.occludedIds.delete(s.id);
-        this.occlBlockedBy.delete(s.id);
-      }
-    }
-    this.occlRays = rays;
-    this.occlMs = performance.now() - t0;
+    // A TIME budget, halved on a phone — see occlusionSweep.ts.
+    const budget = this.pointer === "coarse" ? OCCLUSION_MS_COARSE : OCCLUSION_MS_BUDGET;
+    const pass = this.occlusion.step(shown, cam.globalPosition, budget);
+    if (pass === "idle") return;
+    // Settling: no rays while moving, but a frame must come to start the sweep
+    // the moment the camera stops.
+    if (pass === "settling") { this.requestRender(); return; }
     this.reportWalkCost(shown.length);
-    if (this.occlusionSwept < shown.length) {
+    if (pass === "sweeping") {
       // The sweep owes answers and the camera may now stop moving — see the
-      // early-return in cullLabels.
+      // early-return in cullLabels, which would otherwise freeze half the
+      // badges on a stale answer.
       this.layoutDirty = true;
       this.requestRender();
     }
+  }
+
+  /** The occlusion sweep's adapter: is this segment blocked by a VISIBLE
+   *  structure mesh? Tests only `occluders` (resolved once per load, not a
+   *  scene walk — 2.437.0), and asks visibility per ray because a hidden
+   *  storey's slab, or the ceiling hidden in overview, must not occlude. */
+  private castOcclusionRay(
+    ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, len: number,
+  ): string | null {
+    this.occlRay.origin.set(ox, oy, oz);
+    this.occlRay.direction.set(dx, dy, dz);
+    this.occlRay.length = len;
+    for (const m of this.occluders) {
+      if (!m.isEnabled() || !m.isVisible) continue;
+      if (this.occlRay.intersectsMesh(m, true).hit) return m.name.replace(/_primitive\d+$/, "");
+    }
+    return null;
   }
 
   /**
@@ -5236,12 +5116,12 @@ export class EntityVisuals {
     const eng = this.scene.getEngine();
     tapDebug(
       `walk: fps=${eng.getFps().toFixed(0)}`
-      + ` occl=${this.occludedIds.size}/${eligible} swept=${this.occlusionSwept}/${eligible}`
+      + ` occl=${this.occlusion.occluded.size}/${eligible} swept=${this.occlusion.swept}/${eligible}`
       // `moving` is the field that says whether the sweep was even ALLOWED to
       // run this pass — without it, `rays=0` reads as "cheap" when it means
       // "not asked", which is the misread this project keeps paying for.
-      + ` moving=${performance.now() - this.movingSince < OCCLUSION_SETTLE_MS ? "y" : "n"}`
-      + ` rays=${this.occlRays}/pass occlMs=${this.occlMs.toFixed(2)}`
+      + ` moving=${this.occlusion.isMoving() ? "y" : "n"}`
+      + ` rays=${this.occlusion.lastRays}/pass occlMs=${this.occlusion.lastMs.toFixed(2)}`
       + ` occluders=${this.occluders.length} active=${this.scene.getActiveMeshes().length}`
       + ` win=${(winMs / 1000).toFixed(1)}s`
       // ⚠️ The field that turns `occl=N/M` from a count into a diagnosis. Top
@@ -5251,10 +5131,10 @@ export class EntityVisuals {
       // glance apart. Empty string when nothing is occluded, so it costs a
       // stationary overview capture nothing.
       + (() => {
-        if (!this.occlBlockedBy.size) return "";
+        if (!this.occlusion.blockedBy.size) return "";
         const counts = new Map<string, number>();
         const eg = new Map<string, string[]>();
-        for (const [id, mesh] of this.occlBlockedBy) {
+        for (const [id, mesh] of this.occlusion.blockedBy) {
           counts.set(mesh, (counts.get(mesh) ?? 0) + 1);
           const list = eg.get(mesh) ?? [];
           if (list.length < 2) { list.push(id); eg.set(mesh, list); }
@@ -5309,9 +5189,7 @@ export class EntityVisuals {
   setFirstPerson(on: boolean): void {
     if (on === this.firstPerson) return;
     this.firstPerson = on;
-    this.occlusionSwept = 0;
-    this.occlusionCursor = 0;
-    if (!on) this.occludedIds.clear();
+    this.occlusion.reset(!on);
     this.markLayoutDirty();
   }
 
@@ -5765,8 +5643,8 @@ export class EntityVisuals {
       // current eye position: anything below `eligible` means some badges are
       // still carrying the previous pose's answer.
       + (this.firstPerson
-        ? ` occl=${this.occludedIds.size} swept=${this.occlusionSwept}/${shown.length}`
-        + ` rays=${this.occlRays}`
+        ? ` occl=${this.occlusion.occluded.size} swept=${this.occlusion.swept}/${shown.length}`
+        + ` rays=${this.occlusion.lastRays}`
         : " occl=off")
       + ` | piles=${stats.piles} exempt=${stats.exempt} accepted=${stats.accepted}`
       + ` deferred=${stats.deferred} pulledBack=${stats.pulledBack}`
@@ -8523,10 +8401,10 @@ export class EntityVisuals {
       // which badges are drawn and cannot feed back into any collision test.
       // It is also `every`, not `some` — a chip stands for its whole room, and
       // one visible device in that room is reason enough to keep the room's
-      // label on the glass. `occludedIds` is empty in overview, so this is a
+      // label on the glass. the occluded set is empty in overview, so this is a
       // set lookup that can never fire there.
       if (this.firstPerson && chip.ids.length > 0
-        && chip.ids.every((id) => this.occludedIds.has(id))) {
+        && chip.ids.every((id) => this.occlusion.occluded.has(id))) {
         const stale = this.clusters.get(chip.key);
         if (stale) stale.container.isVisible = false;
         continue;

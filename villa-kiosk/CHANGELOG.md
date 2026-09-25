@@ -1,3 +1,18 @@
+## 2.496.65
+
+### Fixed — walking view: badges behind walls could be wrong after a floor switch
+In the walking view, VESTA hides the badge of a device that is behind a wall
+from where you stand. It only re-checked that when you took a step. So if you
+switched floors — or a device's badge appeared — while standing still, the old
+answers stayed until you moved: a badge could show through a wall that was now
+in the way, or stay hidden when it was in plain sight, sometimes taking a whole
+room's label with it.
+
+It now re-checks the moment the floor changes or the set of badges on screen
+changes, even if you haven't moved. Everything else is as before: nothing is
+checked while you are walking (so walking stays smooth), and the check starts a
+quarter of a second after you stop.
+
 ## 2.496.64
 
 ### Fixed — a camera's viewing cone could vanish behind a window
