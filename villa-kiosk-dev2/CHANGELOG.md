@@ -1,3 +1,12 @@
+## 2.496.160
+
+### Fixed — reconnecting to Home Assistant
+- **Room names and floors are refreshed after a reconnect.** When the
+  connection dropped and came back, only device states were reloaded; a room
+  renamed or a device moved in Home Assistant meanwhile stayed out of date
+  until the next change there. Every reconnect now reloads them too.
+- The first connection no longer loads every device's state twice.
+
 ## 2.496.159
 
 ### Internal — device panels and Facility records
