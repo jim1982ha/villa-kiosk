@@ -91,6 +91,38 @@ export interface ChartGeometry {
   hover: (t: number) => ChartHover | null;
 }
 
+/** Runs with every stretch inside a band removed: each run is cut at the
+ *  band's edges, the cut point on the run's own segment. */
+export function clipRuns(
+  runs: readonly { x: number; y: number }[][], bands: readonly { x: number; w: number }[],
+): { x: number; y: number }[][] {
+  const inside = (x: number) => bands.some((b) => x > b.x && x < b.x + b.w);
+  const out: { x: number; y: number }[][] = [];
+  for (const run of runs) {
+    let cur: { x: number; y: number }[] = [];
+    const flush = () => { if (cur.length >= 2) out.push(cur); cur = []; };
+    for (let k = 0; k < run.length; k++) {
+      const p = run[k];
+      if (k > 0) {
+        const a = run[k - 1];
+        // Every band edge crossed on this segment, in order along it.
+        const edges = bands.flatMap((b) => [b.x, b.x + b.w])
+          .filter((e) => (e > Math.min(a.x, p.x) && e < Math.max(a.x, p.x)))
+          .sort((e1, e2) => (p.x >= a.x ? e1 - e2 : e2 - e1));
+        for (const e of edges) {
+          const f = (e - a.x) / (p.x - a.x);
+          const q = { x: e, y: a.y + f * (p.y - a.y) };
+          if (inside((q.x + (p.x >= a.x ? -1e-6 : 1e-6)))) { flush(); cur.push(q); }   // leaving a band
+          else { cur.push(q); flush(); }                                              // entering one
+        }
+      }
+      if (!inside(p.x)) cur.push(p);
+    }
+    flush();
+  }
+  return out;
+}
+
 /** The reading in force at `t`: the last one at or before it, unless `t` is
  *  inside one of the series' outages (a reading holds until it changes — see
  *  stepSeries — but not across a stretch nobody reported). */
@@ -129,9 +161,6 @@ export function chartGeometry(
     const kind = s.scale ?? "shared";
     const [lo, hi] = kind === "shared" ? shared : range(s.pts.map((p) => p.v), kind === "fromZero");
     const sy = (v: number) => plot.bottom - ((v - lo) / (hi - lo)) * (plot.bottom - plot.top);
-    const runs = lineRuns(s.pts, s.gaps, window)
-      .filter((r) => r.length >= 2)
-      .map((r) => r.map((p) => ({ x: sx(p.t), y: sy(p.v) })));
     const minW = (plot.right - plot.left) * MIN_BAND_OF_PLOT;
     const bands = s.gaps.flatMap((gap) => {
       if (!gapBand(gap, sx, plot.left, plot.right)) return [];   // outside the plot
@@ -141,6 +170,16 @@ export function chartGeometry(
       const x = Math.max(plot.left, Math.min(plot.right - w, (x0 + x1) / 2 - w / 2));
       return [{ x, w, y: plot.top + i * slice, h: Math.max(1, slice), gap }];
     });
+    // ⚠️ THE LINE IS CUT WHERE THE BAND IS DRAWN, not only where the outage
+    // was (2.496.150). A band widened to be seen, with the line running
+    // through it, says "unavailable" and draws a value at once — on the pool
+    // pump's chart every band had the line straight across it (owner: "this
+    // is not what we see in the picture"). The hover already reads the drawn
+    // band as the outage; the line now agrees.
+    const runs = clipRuns(
+      lineRuns(s.pts, s.gaps, window).filter((r) => r.length >= 2).map((r) => r.map((p) => ({ x: sx(p.t), y: sy(p.v) }))),
+      bands,
+    );
     // About four steps: a line keeps its own range (a bar chart rounds its
     // top up instead), so only the ticks INSIDE it are drawn — three steps
     // left a 0–900 W/m² line with two labels.

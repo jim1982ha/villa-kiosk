@@ -155,6 +155,16 @@ console.log("\n  an outage you can SEE and POINT AT (2.496.149 — a pump's 3-mi
   ck("the tooltip says what and how long: 'Unavailable · from–to (3 min)', a 2-s blip in seconds, a running one 'since'",
      /^Unavailable · .+–.+ \(3 min\)$/.test(fmtOutage(drop, win.to)) && fmtDuration(2_000) === "2 s" && fmtDuration(80 * 60_000) === "1 h 20 min"
      && /^Unavailable since .+ \(2 h\)$/.test(fmtOutage({ from: win.to - 2 * H, to: Infinity }, win.to)), fmtOutage(drop, win.to));
+  // 2.496.150: the line is cut at the DRAWN band, not only at the outage's
+  // own seconds — 2.496.149 drew the widened bands with the line straight
+  // across them (owner: "this is not what we see in the picture").
+  const inside = g.series[0].runs.flat().filter((p) => b.some((x) => p.x > x.x + 1e-6 && p.x < x.x + x.w - 1e-6));
+  const across = g.series[0].runs.flatMap((r) => r.slice(1).map((p, k) => [r[k], p]))
+    .filter(([a, p]) => Math.abs(p.x - a.x) > 1e-9 && b.some((x) => Math.min(a.x, p.x) < x.x + x.w - 1e-6 && Math.max(a.x, p.x) > x.x + 1e-6));
+  ck("the line stops at every drawn band's edges: no point inside a band, no segment across one",
+     inside.length === 0 && across.length === 0, { inside: inside.length, across: across.length });
+  ck("  ...and only there: each break in the line is a band's width",
+     g.series[0].runs.slice(1).every((r, k) => b.some((x) => Math.abs(g.series[0].runs[k].at(-1).x - x.x) < 1e-6 && Math.abs(r[0].x - (x.x + x.w)) < 1e-6)));
   const lc = readFileSync(new URL("../../src/components/panels/LineChart.tsx", import.meta.url), "utf8");
   ck("LineChart prints the outage row the geometry reports", /if \(out\) return \[\{ key: `\$\{i\}`, marker: keyOf\(l\), text: `\$\{who\}\$\{fmtOutage\(out, g\.window\.to\)\}` \}\];/.test(lc));
 }
