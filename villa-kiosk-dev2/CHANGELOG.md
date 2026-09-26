@@ -1,3 +1,10 @@
+## 2.496.115
+
+### Improved — chart axes
+- **Every line chart labels its y-axis in round steps.** The sensor charts in
+  a device's window used to label the exact highest, middle and lowest
+  readings (e.g. 30.87 / 27.0 / 23.13). They now use round values such as
+  24 / 26 / 28 / 30, like the Weather and Energy charts.
 ## 2.496.114
 
 ### Fixed — the Energy and Weather windows' bar charts
