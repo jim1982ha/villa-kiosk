@@ -30,6 +30,7 @@ import { tapDebug } from "@/utils/tapDebug";
 import { inferTypeFromEntityId } from "@/config/EntityMap";
 import { isCeilingMesh, structureRole, isHelperMesh } from "./meshRoles";
 import { pointInPolygon } from "@/utils/geometry";
+import { stampedFloor } from "./floorOf";
 
 // ⚠️ THE STAIR-FOOT TOLERANCE ("the lowest room floor + 0.30 m is the ground")
 // WAS HERE, and was the height rule storeys.ts retired everywhere else: the
@@ -603,7 +604,7 @@ export class StructureSet {
         + ` bbox=${(bb.maximumWorld.x - bb.minimumWorld.x).toFixed(1)}x`
         + `${(bb.maximumWorld.z - bb.minimumWorld.z).toFixed(1)}m`
         + ` area=${projectedAreaXZ(m).toFixed(1)}m2`
-        + ` floor=${(m.metadata as { floorIndex?: number } | null)?.floorIndex ?? "-"}`
+        + ` floor=${stampedFloor(m) ?? "-"}`
         + ` verts=${m.getTotalVertices()}`
         // ⚠️ `visibility` is NOT `isVisible`. Babylon has both: the boolean gates
         // submission, this is a 0..1 alpha multiplier applied when drawing. A

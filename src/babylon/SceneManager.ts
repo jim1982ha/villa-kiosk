@@ -57,6 +57,7 @@ import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { entityMapDelta } from "./entityMapDiff";
+import { onActiveFloor, stampedFloor } from "./floorOf";
 import { ModelKeyedStore } from "./modelStore";
 import { cameraFrame } from "./cameraFrame";
 import { roomWallFit, MIN_ROOM_FIT_RADIUS } from "./roomZoomSolver";
@@ -2220,6 +2221,9 @@ export class SceneManager {
     const plan = new Storeys(worldPolys.filter((p) => p.pts.length >= 3));
     this.plan = plan;
     this.camera.setPlan(plan);
+    // FloorManager re-decides every non-structure mesh's floor by it
+    // (floorOf.ts) — before the visuals read the stamps.
+    this.floors.setPlan(plan);
     // Synchronously runs roomHighlight.setRooms AND LightPoolSet.setRooms — the
     // top suspect for the residual, since the latter re-probes every light
     // pool's floor. The pools report themselves as `calibPools`.
@@ -2613,9 +2617,7 @@ export class SceneManager {
       // you're on 2F (and vice-versa). Match the badge culler: show only the
       // active storey's fixtures. floorIndex is stamped by FloorManager on the
       // entity mesh (or its parent when the mesh is a split primitive).
-      const floorIdx = (m.metadata as { floorIndex?: number } | null)?.floorIndex
-        ?? (m.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
-      if (floorIdx !== undefined && floorIdx !== activeFloor) continue;
+      if (!onActiveFloor(stampedFloor(m), activeFloor)) continue;
       const mapping = resolveMeshToMapping(
         m.name, this.config.entityMap, this.config.meshBindings, this.config.deniedTypes,
       );

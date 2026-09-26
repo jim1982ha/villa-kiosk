@@ -148,6 +148,7 @@ import { chipWidthPx, fitChipLabel, type ChipTextMetrics } from "./labelLayout";
 import { BulbSet, WARM_GLOW, STRIP_MIN_LENGTH, type BulbReading } from "./bulbSet";
 import { lightingModeFor, type LightingMode } from "./lightingMode";
 import "./babylonSideEffects";
+import { onActiveFloor, stampedFloor } from "./floorOf";
 
 // Baseline emissive for an UNWIRED light marker (no HA state yet). SweetHome
 // ceiling spots / LED strips export as small placeholder spheres; at the old
@@ -3488,10 +3489,8 @@ export class EntityVisuals {
     // Floors below the active one stay RENDERED (cumulative floors: the 2F
     // view keeps the 1F shell underneath), but badges are GUI overlay and
     // would draw straight through the 2F slab — only the active floor's.
-    const floorIdx = (mesh?.metadata as { floorIndex?: number } | null)?.floorIndex
-      ?? (lbl.anchor.metadata as { floorIndex?: number } | null)?.floorIndex
-      ?? (lbl.anchor.parent?.metadata as { floorIndex?: number } | null)?.floorIndex;
-    return floorIdx === undefined || floorIdx === this.activeFloor;
+    // The bound mesh first, then the anchor (each before its parent).
+    return onActiveFloor(stampedFloor(mesh, lbl.anchor), this.activeFloor);
   }
 
   /** Decide which badges are visible, then group the ones whose room is too

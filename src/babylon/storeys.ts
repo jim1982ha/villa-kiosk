@@ -165,6 +165,13 @@ export class Storeys<R extends StoreyRoomIn = StoreyRoomIn> {
     return pick;
   }
 
+  /** The 1-based LEVEL (lowest storey = 1) of a point an unknown height above
+   *  its floor — storeyAt's answer as FloorManager numbers floors. */
+  levelAt(y: number): number | null {
+    const s = this.storeyAt(y);
+    return s === null ? null : this.order.indexOf(s) + 1;
+  }
+
   /** The storey of a point STANDING on a floor at `floorY` — a probed
    *  surface, the walker's feet: the storey whose floor is nearest. */
   storeyStandingOn(floorY: number): number | null {
