@@ -23,28 +23,16 @@ import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
 import { fetchEnergySetup, fetchEnergyPeriod, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
 import type { HistorySeries } from "@/types/ha.types";
-import type { StatisticsPeriod } from "@/utils/statisticsSeries";
+import { PERIOD_MS, type StatisticsPeriod } from "@/utils/statisticsSeries";
+import { localMidnight } from "@/utils/localDay";
 import {
-  energySplit, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney,
-  type EnergySplit, type NodeUse,
+  energyPeriod, periodStarts, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney,
+  type EnergyBucket, type EnergyPeriodKind, type EnergySplit, type NodeUse,
 } from "@/config/energyModel";
 
 type View = "now" | "history";
 const DAY = 86_400_000;
 
-/** A statistic's per-bucket values keyed by bucket start. */
-function byStart(s: HistorySeries | undefined): Map<number, number> {
-  const m = new Map<number, number>();
-  for (const p of s?.points ?? []) m.set(p.t, (m.get(p.t) ?? 0) + p.v);
-  return m;
-}
-function total(s: HistorySeries | undefined): number | undefined {
-  return s && s.points.length ? s.points.reduce((a, p) => a + p.v, 0) : undefined;
-}
-function midnight(offsetDays = 0): number {
-  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offsetDays);
-  return d.getTime();
-}
 const weekday = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short" });
 
 export default function EnergyPanel({ onClose, fallback }: { onClose: () => void; fallback: () => ReactNode }) {
@@ -108,7 +96,8 @@ function useRateKw() {
 
 function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: string | undefined }) {
   const { ws } = useHA();
-  const today = midnight(), weekAgo = midnight(-7);
+  const now = Date.now();
+  const today = localMidnight(now), weekAgo = localMidnight(now, -7);
   // Refreshed every five minutes while open: the recorder writes hourly
   // buckets, so a faster refresh would fetch the same numbers.
   const [tick, setTick] = useState(0);
@@ -127,48 +116,34 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
   const rateKw = useRateKw();
   if (!data) return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load Home Assistant's energy." : "Loading…"}</div>;
 
-  const todayOf = (id: string) => total(data.hourly[id]);
-  const split = energySplit(setup, todayOf);
-  const cost = setup.gridIn.reduce<number | undefined>((a, id) => {
-    const c = setup.costOf[id] ? total(data.hourly[setup.costOf[id]]) : undefined;
-    return c === undefined ? a : (a ?? 0) + c;
-  }, undefined);
-
-  // Hour by hour: used = import + solar − export, per bucket.
-  const usedPerBucket = (src: Record<string, HistorySeries>, starts: number[]) => {
-    const maps = { i: setup.gridIn.map((id) => byStart(src[id])), o: setup.gridOut.map((id) => byStart(src[id])), s: setup.solar.map((id) => byStart(src[id])) };
-    return starts.map((t) => {
-      const g = (ms: Map<number, number>[]) => ms.reduce((a, m) => a + (m.get(t) ?? 0), 0);
-      return Math.max(0, g(maps.i) + g(maps.s) - g(maps.o));
-    });
-  };
-  const hours = Array.from({ length: 24 }, (_, h) => today + h * 3_600_000);
-  const nowH = new Date().getHours();
-  const hourly = usedPerBucket(data.hourly, hours).map((v, h) => (h <= nowH ? v : undefined));
-
-  // The last seven COMPLETE days — today is not one yet.
-  const days = Array.from({ length: 7 }, (_, i) => weekAgo + i * DAY);
-  const daily = usedPerBucket(data.daily, days);
+  // The period's sums, bucket by bucket, are energyModel's: an hour the
+  // recorder has no reading for is MISSING there, never 0 kWh.
+  const hours = periodStarts("hoursToday", now);
+  const days = periodStarts("last7Complete", now);
+  const todayP = energyPeriod(setup, data.hourly, hours, PERIOD_MS.hour, now);
+  const weekP = energyPeriod(setup, data.daily, days, PERIOD_MS.day, now);
+  const split = todayP.whole;
+  const cost = todayP.cost;
+  const daily = weekP.buckets.map((b) => b.split?.used);
   const typical = typicalDay(daily);
   const standout = standoutDay(daily, typical);
-  const dayFraction = (Date.now() - today) / DAY;
-  const clock = fmtChartTime(Date.now());
+  const dayFraction = (now - today) / DAY;
+  const clock = fmtChartTime(now);
 
   // Per-device typical and stand-out day, for the stand-out card's "what rose".
-  const deviceDay = (id: string, t: number) => byStart(data.daily[id]).get(t);
-  const deviceTypical = (id: string) => typicalDay(days.map((t) => deviceDay(id, t) ?? 0));
+  const deviceTypical = (id: string) => typicalDay(days.map((t) => weekP.at(id, t)));
   const leafDevices = setup.devices.filter((d) => d.children.length === 0);
   const leader = deviceRanking(split).filter((u) => u.node.children.length === 0)[0];
 
   const cards: { tone: "good" | "caution" | "neutral"; title: string; detail: string }[] = [];
   if (standout && typical) {
     const t = days[standout.index];
-    const rose = risers(leafDevices, (id) => deviceDay(id, t), deviceTypical).slice(0, 2).map((r) => r.node.name);
-    const dayCost = setup.gridIn.reduce((a, id) => a + (setup.costOf[id] ? deviceDay(setup.costOf[id], t) ?? 0 : 0), 0);
+    const rose = risers(leafDevices, (id) => weekP.at(id, t), deviceTypical).slice(0, 2).map((r) => r.node.name);
+    const dayCost = weekP.buckets[standout.index].cost;
     cards.push({
       tone: "caution",
       title: `${weekday(t)}: ${standout.ratio.toFixed(1)}× usual`,
-      detail: `${fmtKwh(daily[standout.index])} kWh${dayCost > 0 ? `, ${fmtMoney(dayCost, costUnit)}` : ""}.`
+      detail: `${fmtKwh(daily[standout.index] ?? 0)} kWh${dayCost !== undefined && dayCost > 0 ? `, ${fmtMoney(dayCost, costUnit)}` : ""}.`
         + (rose.length ? ` ${rose.join(" and ")} ran more than usual.` : " No device meter shows why."),
     });
   }
@@ -222,7 +197,7 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour</div><div className="weather-legend">kWh per hour</div></div>
         <Bars
-          buckets={hours.map((t, i) => ({ t, segs: hourly[i] === undefined ? [] : [{ key: "used", label: "Used", v: hourly[i]!, cls: "e-used" }] }))}
+          buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
           stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`} unit="kWh"
           ticks={["00:00", "06:00", "12:00", "18:00", "24:00"]}
         />
@@ -231,10 +206,10 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
           <div className="weather-eyebrow">Last 7 days</div>
-          <div className="weather-legend">{fmtKwh(daily.reduce((a, v) => a + v, 0))} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
+          <div className="weather-legend">{fmtKwh(daily.reduce<number>((a, v) => a + (v ?? 0), 0))} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
         <Bars
-          buckets={days.map((t, i) => ({ t, segs: [{ key: "used", label: "Used", v: daily[i], cls: standout?.index === i ? "e-standout" : "e-used" }] }))}
+          buckets={weekP.buckets.map((b, i) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: standout?.index === i ? "e-standout" : "e-used" }]) }))}
           stamp={(t) => new Date(t).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}
           ticks={days.map(weekday)} typical={typical} unit="kWh"
         />
@@ -359,6 +334,14 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
   );
 }
 
+/** A bucket's bar: its segments once ready; nothing yet while pending; and,
+ *  for a bucket the recorder has no reading for, nothing either — never a
+ *  bar of 0 (energyModel.energyPeriod). */
+function segsOf(b: EnergyBucket, ready: () => BarSeg[]): BarSeg[] {
+  return b.state === "ready" ? ready() : [];
+}
+type BarSeg = { key: string; label: string; v: number; cls: string };
+
 /** Stacked bars over buckets, with the app's tooltip. `typical` draws a line. */
 function Bars({ buckets, stamp, ticks, typical, height = 150, unit }: {
   buckets: { t: number; segs: { key: string; label: string; v: number; cls: string }[] }[];
@@ -416,22 +399,14 @@ const RANGES: Record<RangeKey, { label: string; period: StatisticsPeriod }> = {
   month: { label: "Month", period: "day" },
   year: { label: "Year", period: "month" },
 };
-/** The buckets a range shows, oldest first: today's hours; the last 7 or 30
- *  days (today included); the last 12 calendar months. */
-function bucketsOf(range: RangeKey): number[] {
-  if (range === "day") return Array.from({ length: 24 }, (_, h) => midnight() + h * 3_600_000);
-  if (range === "week" || range === "month") {
-    const n = range === "week" ? 7 : 30;
-    return Array.from({ length: n }, (_, i) => midnight(i - (n - 1)));
-  }
-  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(1);
-  return Array.from({ length: 12 }, (_, i) => new Date(d.getFullYear(), d.getMonth() - (11 - i), 1).getTime());
-}
+/** The buckets each range shows (energyModel.periodStarts). */
+const KIND: Record<RangeKey, EnergyPeriodKind> = { day: "hoursToday", week: "last7", month: "last30", year: "last12Months" };
 
 function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: string | undefined }) {
   const { ws } = useHA();
   const [range, setRange] = useState<RangeKey>("week");
-  const starts = bucketsOf(range);
+  const now = Date.now();
+  const starts = periodStarts(KIND[range], now);
   const { data, status } = useHistory<Record<string, HistorySeries> | null>(
     `energy-history|${range}|${starts[0]}`,
     () => fetchEnergyPeriod(ws, setup, starts[0], RANGES[range].period),
@@ -452,16 +427,13 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
       </div>
     );
   }
-  const maps = new Map(Object.entries(data).map(([id, s]) => [id, byStart(s)]));
-  const at = (id: string, t: number) => maps.get(id)?.get(t);
-  const perBucket = starts.map((t) => energySplit(setup, (id) => at(id, t)));
-  const whole = energySplit(setup, (id) => total(data[id]));
-  const costs = starts.map((t) => setup.gridIn.reduce((a, id) => a + (setup.costOf[id] ? at(setup.costOf[id], t) ?? 0 : 0), 0));
-  const hasCost = setup.gridIn.some((id) => setup.costOf[id] && data[setup.costOf[id]]?.points.length);
-  const costTotal = costs.reduce((a, v) => a + v, 0);
-  const busiest = perBucket.reduce((bi, s, i) => (s.used > perBucket[bi].used ? i : bi), 0);
+  const p = energyPeriod(setup, data, starts, PERIOD_MS[RANGES[range].period], now);
+  const whole = p.whole;
+  const costs = p.buckets.map((b) => b.cost);
+  const hasCost = p.cost !== undefined;
+  const costTotal = p.cost ?? 0;
+  const busiest = p.busiest;
   const unit = range === "day" ? "hour" : range === "year" ? "month" : "day";
-  const done = perBucket.filter((_, i) => starts[i] <= Date.now());
   const label = (t: number) => range === "day" ? fmtChartTime(t)
     : range === "year" ? new Date(t).toLocaleDateString([], { month: "short" })
     : new Date(t).toLocaleDateString([], { weekday: "short", day: "numeric" });
@@ -476,8 +448,8 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
       <div className="weather-figures">
         <Figure label="Energy" value={`${fmtKwh(whole.used)} kWh`} />
         <Figure label="Cost" value={hasCost ? fmtMoney(costTotal, costUnit) : "—"} />
-        <Figure label={`Per ${unit}`} value={done.length ? `${fmtKwh(whole.used / done.length)} kWh` : "—"} />
-        <Figure label={`Busiest ${unit}`} value={perBucket[busiest]?.used > 0 ? `${label(starts[busiest])} · ${fmtKwh(perBucket[busiest].used)}` : "—"} />
+        <Figure label={`Per ${unit}`} value={p.readyCount ? `${fmtKwh(whole.used / p.readyCount)} kWh` : "—"} />
+        <Figure label={`Busiest ${unit}`} value={busiest >= 0 ? `${label(starts[busiest])} · ${fmtKwh(p.buckets[busiest].split!.used)}` : "—"} />
       </div>
 
       <div className="weather-tile chart energy-wide">
@@ -486,15 +458,15 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
           <div className="weather-legend">{series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}</div>
         </div>
         <Bars height={220}
-          buckets={starts.map((t, i) => ({
-            t,
-            segs: [
+          buckets={p.buckets.map((b) => ({
+            t: b.t,
+            segs: segsOf(b, () => [
               ...roots.map((r, k) => {
-                const u = perBucket[i].roots.find((x) => x.node.id === r.node.id);
+                const u = b.split!.roots.find((x) => x.node.id === r.node.id);
                 return { key: r.node.id, label: r.node.name, v: u?.kwh ?? 0, cls: `e-s${k % 6}` };
               }),
-              { key: "_u", label: "Untracked", v: perBucket[i].untracked, cls: "e-untracked" },
-            ],
+              { key: "_u", label: "Untracked", v: b.split!.untracked, cls: "e-untracked" },
+            ]),
           }))}
           stamp={(t) => label(t)} ticks={tickIdx.map((i) => label(starts[i]))} unit="kWh" />
       </div>
@@ -503,7 +475,7 @@ function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: 
         <div className="weather-tile chart energy-wide">
           <div className="weather-chart-head"><div className="weather-eyebrow">Cost per {unit}</div><div className="weather-legend">{fmtMoney(costTotal, costUnit)}</div></div>
           <Bars height={120}
-            buckets={starts.map((t, i) => ({ t, segs: [{ key: "cost", label: "Cost", v: costs[i], cls: "e-used" }] }))}
+            buckets={p.buckets.map((b, i) => ({ t: b.t, segs: costs[i] === undefined ? [] : [{ key: "cost", label: "Cost", v: costs[i]!, cls: "e-used" }] }))}
             stamp={(t) => `${label(t)} · ${fmtMoney(costs[starts.indexOf(t)] ?? 0, costUnit)}`} ticks={tickIdx.map((i) => label(starts[i]))} unit={costUnit} />
         </div>
       )}

@@ -19,7 +19,7 @@
 // working one.
 
 import type { HAWebSocket } from "./HAWebSocket";
-import { energySetup, type EnergySetup } from "@/config/energyModel";
+import { energySetup, type EnergyCostSetup } from "@/config/energyModel";
 import { fetchStatistics } from "./HAHistoryAPI";
 import type { HistorySeries } from "@/types/ha.types";
 import type { StatisticsPeriod } from "@/utils/statisticsSeries";
@@ -78,10 +78,7 @@ export async function fetchEnergyToday(ws: HAWebSocket): Promise<EnergyToday | n
 
 
 /** The setup, plus each energy statistic's cost statistic (HA's own). */
-export interface EnergyWindowSetup extends EnergySetup {
-  /** energy statistic → its cost statistic, where HA computes one. */
-  costOf: Record<string, string>;
-}
+export type EnergyWindowSetup = EnergyCostSetup;
 
 /** Null when HA has no Energy dashboard with a grid or solar source. */
 export async function fetchEnergySetup(

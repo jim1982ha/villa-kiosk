@@ -1,3 +1,11 @@
+## 2.496.113
+
+### Fixed — the Energy window
+- **An hour or day with no meter reading is no longer drawn as 0 kWh.** If
+  Home Assistant's recorder has nothing for a bucket, that bucket is left
+  empty instead of showing as a bucket where nothing was used. "Per hour/day"
+  averages over the buckets that have readings, and a day with no reading no
+  longer counts towards the typical day.
 ## 2.496.112
 
 ### Fixed — every chart's tooltip
