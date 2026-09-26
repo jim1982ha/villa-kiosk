@@ -17,6 +17,13 @@ directions at once:
 This walks all three directions. It cannot make the four files into one
 declaration — that is the deeper fix — but it makes a disagreement loud.
 
+⚠️ THE FOURTH LIST WAS NAMED ABOVE AND NEVER CHECKED (round 11, 2.496.168).
+The service worker's never-cache rule decides whether a proxy GET is served
+from a cache on the standalone hostname — the defect its own comment records
+(a sync read returning a document 1.8 hours old). A new GET route the rule
+does not cover is that defect again; now every one must be excluded, or be
+named below as deliberately cacheable.
+
 Run: python3 tests/routes.py   (also `npm run test:routes`)
 """
 from __future__ import annotations
@@ -28,6 +35,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 NGINX = ROOT / "rootfs" / "etc" / "nginx" / "nginx.conf"
 PROXY = ROOT / "rootfs" / "usr" / "bin" / "supervisor-proxy.py"
+SW = ROOT / "public" / "sw.js"
 VITE = ROOT / "vite.config.ts"
 
 FAIL = 0
@@ -113,6 +121,38 @@ ck(f"all {len(to_backend)} locations reaching the proxy include the snippet",
 by_hand = [loc for loc, body in to_backend if "X-VK-Ingress" in body]
 ck("no location sets X-VK-Ingress by hand", not by_hand,
    f"a hand-written copy: {', '.join(by_hand)}")
+
+# ── what the service worker may serve from its cache ─────────────────────
+# Its rule, read from sw.js: a path containing one of the `includes(...)`
+# fragments, or ending with a NEVER_CACHE entry, goes to the network. Tried
+# on the BARE path — the standalone hostname, where the add-on's endpoints
+# are not under /api/ and only the explicit list protects them.
+sw = SW.read_text()
+nc = re.search(r"const NEVER_CACHE = \[(.*?)\];", sw, re.S)
+never = re.findall(r'"([^"]+)"', nc.group(1)) if nc else []
+guard = sw[nc.end():sw.index("return; // default network handling", nc.end())] if nc else ""
+fragments = re.findall(r'url\.pathname\.includes\("([^"]+)"\)', guard)
+ck("the service worker's never-cache rule was read", bool(never) and bool(fragments),
+   f"list {never}, fragments {fragments}")
+
+
+def sw_skips(path: str) -> bool:
+    return any(f in path for f in fragments) or any(path.endswith(p) for p in never)
+
+
+# Cacheable ON PURPOSE — and why. Anything else a GET reaches must be skipped.
+SW_CACHEABLE = {
+    "/fm-evidence/x": "a photo under a never-reused id: content-addressed",
+    "/core/websocket": "a websocket, which never passes through a fetch event",
+}
+gets = [re.sub(r"\{[^}]*\}", "x", m.group(1)) for m in
+        re.finditer(r'app\.router\.add_(?:get|route)\(\s*(?:"[A-Z*]+"\s*,\s*)?"([^"]+)"', px)]
+cached = sorted(p for p in gets if not sw_skips(p) and p not in SW_CACHEABLE)
+ck(f"every one of the proxy's {len(gets)} GET routes is kept out of the offline cache", bool(gets) and not cached,
+   f"the service worker would serve these from its cache: {', '.join(cached)}")
+stale = sorted(p for p in SW_CACHEABLE if p not in gets)
+ck("  ...and every deliberately cacheable path is still a route", not stale,
+   f"no longer routes: {', '.join(stale)}")
 
 print()
 print("✅ the four path lists agree" if FAIL == 0 else "❌ THE PATH LISTS DISAGREE")
