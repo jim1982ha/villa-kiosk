@@ -65,3 +65,12 @@ export function seriesExtent(s: HistorySeries | undefined): { min: number; max: 
   for (const p of s.points) { if (p.v < min) min = p.v; if (p.v > max) max = p.v; }
   return { min, max };
 }
+
+/** The highest reading and when, or null with none — today's UV peak. The
+ *  first of equal maxima: the moment it was first reached. */
+export function peakOf(s: HistorySeries | undefined): { v: number; t: number } | null {
+  if (!s || s.points.length === 0) return null;
+  let best = s.points[0];
+  for (const p of s.points) if (p.v > best.v) best = p;
+  return { v: best.v, t: best.t };
+}

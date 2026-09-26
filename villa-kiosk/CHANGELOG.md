@@ -1,3 +1,12 @@
+## 2.496.103
+
+### Improved — the Weather window
+- **The Sun & UV tile now shows what it means.** The UV index is drawn on
+  the standard WHO colour scale (green Low → violet Extreme) with a marker at
+  the current reading, the band and its advice in words, today's peak UV and
+  when it happened, and how much sunshine there is against a clear sky at noon.
+  The arc with a sun on it is gone: the sun only ever sat at the top when it
+  was day, whatever the time, so it said nothing.
 ## 2.496.102
 
 ### Changed

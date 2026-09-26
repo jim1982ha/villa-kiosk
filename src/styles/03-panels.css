@@ -606,11 +606,37 @@ input[type="range"]::-moz-range-thumb {
 .weather-gauge-read span { font-size: var(--text-xs); color: var(--text-secondary); }
 .weather-gauge-read b { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.weather-sun { width: 100%; height: auto; max-height: 150px; }
-.sun-path { fill: none; stroke: var(--hairline-strong); stroke-width: 3; stroke-dasharray: 4 6; }
-.sun-dot { fill: var(--text-dim); }
-.sun-dot.day { fill: var(--accent-warm); }
-.sun-value { font: 500 30px var(--font-display); fill: var(--text-primary); text-anchor: middle; }
+/* Sun & UV: the UV index on the WHO scale. The five colours are the WHO's
+   own (green, yellow, orange, red, violet) — a published scale people read
+   on beaches and weather apps, so they are drawn as published, not themed. */
+.weather-uv { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; justify-content: space-between; }
+.weather-uv-head { display: flex; align-items: center; gap: 14px; }
+.weather-uv-value { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.weather-uv-value b { font: 500 42px var(--font-display); color: var(--text-primary); }
+.weather-uv-value span { font-size: var(--text-xs); letter-spacing: 1px; color: var(--text-secondary); }
+.weather-uv-band { font-weight: 600; font-size: var(--text-md); color: var(--text-primary); }
+.weather-uv-advice { font-size: var(--text-sm); color: var(--text-secondary); }
+.weather-uv-meter { display: flex; flex-direction: column; gap: 6px; }
+.weather-uv-scale { position: relative; display: flex; height: 12px; border-radius: 6px; overflow: visible; }
+.uv-seg:first-child { border-radius: 6px 0 0 6px; }
+.uv-seg:nth-last-child(2) { border-radius: 0 6px 6px 0; }
+.uv-seg.low { background: #3ea72d; }
+.uv-seg.moderate { background: #fff300; }
+.uv-seg.high { background: #f18b00; }
+.uv-seg.very-high { background: #e53210; }
+.uv-seg.extreme { background: #b567a4; }
+.weather-uv-mark {
+  position: absolute; top: -5px; width: 4px; height: 22px; margin-left: -2px; border-radius: 2px;
+  background: var(--text-primary); box-shadow: 0 0 0 2px var(--bg-panel);
+}
+.weather-uv-ticks { position: relative; height: 14px; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.weather-uv-ticks span { position: absolute; transform: translateX(-50%); }
+.weather-uv-ticks span:first-child { transform: none; }
+.weather-uv-foot { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
+.weather-uv-foot > div { display: flex; align-items: center; gap: 10px; }
+.weather-uv-foot b { margin-left: auto; color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.weather-sunshine-bar { flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--bg-input); overflow: hidden; }
+.weather-sunshine-bar i { display: block; height: 100%; background: var(--accent-warm); }
 
 
 .weather-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }

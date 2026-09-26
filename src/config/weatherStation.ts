@@ -175,13 +175,41 @@ export function beaufort(kmh: number): string {
   return "Hurricane force";
 }
 
-/** WHO UV index bands, with the advice that goes with each. */
-export function uvBand(uv: number): { band: string; advice: string } {
-  if (uv < 3) return { band: "Low", advice: "no protection needed" };
-  if (uv < 6) return { band: "Moderate", advice: "shade around midday" };
-  if (uv < 8) return { band: "High", advice: "cover up, sunscreen" };
-  if (uv < 11) return { band: "Very high", advice: "avoid midday sun" };
-  return { band: "Extreme", advice: "stay indoors at midday" };
+/** The WHO UV index bands — each from its lower edge, with the advice that
+ *  goes with it and the key of the WHO colour it is drawn in (green, yellow,
+ *  orange, red, violet: the published scale, not a theme choice). ONE table:
+ *  the words (uvBand) and the Sun & UV tile's scale are both read from it. */
+export const UV_BANDS: readonly { from: number; band: string; advice: string; key: string }[] = [
+  { from: 0, band: "Low", advice: "no protection needed", key: "low" },
+  { from: 3, band: "Moderate", advice: "shade around midday", key: "moderate" },
+  { from: 6, band: "High", advice: "cover up, sunscreen", key: "high" },
+  { from: 8, band: "Very high", advice: "avoid midday sun", key: "very-high" },
+  { from: 11, band: "Extreme", advice: "stay indoors at midday", key: "extreme" },
+];
+/** Where the drawn UV scale ends. The index has no ceiling, but 11+ is one band;
+ *  two units of it are enough to show a reading sits inside it. */
+export const UV_SCALE_TOP = 13;
+
+/** WHO UV index band, with the advice that goes with it. */
+export function uvBand(uv: number): { band: string; advice: string; key: string } {
+  let b = UV_BANDS[0];
+  for (const x of UV_BANDS) if (uv >= x.from) b = x;
+  return { band: b.band, advice: b.advice, key: b.key };
+}
+
+/** A UV reading's place along the drawn scale, 0–1 (the index is linear, so
+ *  the scale is too); past its end, the end. */
+export function uvScalePosition(uv: number): number {
+  return Math.max(0, Math.min(1, uv / UV_SCALE_TOP));
+}
+
+/** Solar radiation on a horizontal surface under a clear sky with the sun
+ *  high — roughly 1000 W/m² at sea level. What the Sun & UV tile measures
+ *  "how much sunshine" against: a bar full at clear noon, never a claim that
+ *  a reading is "low" or "high" for this place or season. */
+export const CLEAR_SKY_WM2 = 1000;
+export function sunshineFraction(wm2: number): number {
+  return Math.max(0, Math.min(1, wm2 / CLEAR_SKY_WM2));
 }
 
 /** How humid it feels, from the dew point in °C (the usual comfort bands). */

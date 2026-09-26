@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
-import { fmtChartValue, fmtChartTick } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtChartTime } from "./chartUtils";
 import ChartTip from "./ChartTip";
 import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import BasePanel from "./BasePanel";
@@ -25,11 +25,12 @@ import { useHA } from "@/ha/HAStateStore";
 import { fetchHistory, fetchStatistics } from "@/ha/HAHistoryAPI";
 import { useHistory } from "@/hooks/useHistory";
 import { useHistoryRange, WEATHER_RANGES, type HistoryRange } from "./historyRange";
-import { seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
+import { peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/statisticsSeries";
 import { isUnavailable, STATUS_COLOR } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
   beaufort, compass, pressureTendency, toCelsius, toKmh, toHpa, uvBand,
+  UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction,
   comfortHeadline, comfortPosition, COMFORT_BANDS, windowAdvice, laundryAdvice, outdoorsAdvice,
   type Advice, type WeatherRole, type WeatherStation,
 } from "@/config/weatherStation";
@@ -208,7 +209,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
           </Tile>
         )}
         {(r.rainToday !== undefined || r.rate !== undefined) && <Tile title="Rain gauge"><RainGauge r={r} /></Tile>}
-        {(r.uv !== undefined || r.solar !== undefined) && <Tile title="Sun & UV"><SunUv r={r} /></Tile>}
+        {(r.uv !== undefined || r.solar !== undefined) && <Tile title="Sun & UV"><SunUv r={r} uvId={station.roles.uv} /></Tile>}
       </div>
 
     </div>
@@ -332,21 +333,68 @@ function RainGauge({ r }: { r: Readings }) {
   );
 }
 
-function SunUv({ r }: { r: Readings }) {
-  const day = (r.solar ?? 0) > 5;
+/**
+ * Sun & UV, as the owner chose it (2026-09-26): the UV index on the WHO scale,
+ * the band and its advice, today's peak and when it happened, and the
+ * sunshine against a clear sky.
+ *
+ * ⚠️ IT WAS AN ARC WITH A SUN ON IT THAT MEANT NOTHING. The dot sat at the top
+ * of the arc whenever the station read more than 5 W/m² and at its left end
+ * otherwise — "the sun is at its highest" at nine in the morning — and the
+ * 935 W/m² beneath had nothing to be read against. Every mark here is data.
+ */
+function SunUv({ r, uvId }: { r: Readings; uvId: string | undefined }) {
+  const peak = useTodayPeak(uvId);
+  const b = r.uv !== undefined ? uvBand(r.uv) : null;
   return (
-    <>
-      <svg className="weather-sun" viewBox="0 0 280 110" role="img" aria-label={`UV index ${f0(r.uv)}`}>
-        <path d="M 20 100 A 120 120 0 0 1 260 100" className="sun-path" />
-        <circle cx={day ? 140 : 20} cy={day ? 16 : 100} r="8" className={`sun-dot${day ? " day" : ""}`} />
-        <text x="140" y="92" className="sun-value">UV {f0(r.uv)}</text>
-      </svg>
-      <div className="weather-tile-foot spread">
-        <span>{r.uv !== undefined ? (day ? `${uvBand(r.uv).band} — ${uvBand(r.uv).advice}` : "Night") : day ? "Day" : "Night"}</span>
-        {r.solar !== undefined && <span>{f0(r.solar)} W/m²</span>}
+    <div className="weather-uv">
+      {r.uv !== undefined && b && (
+        <>
+          <div className="weather-uv-head">
+            <div className="weather-uv-value"><b>{f0(r.uv)}</b><span>UV</span></div>
+            <div><div className="weather-uv-band">{b.band}</div><div className="weather-uv-advice">{b.advice}</div></div>
+          </div>
+          <div className="weather-uv-meter">
+          <div className="weather-uv-scale" role="img" aria-label={`UV index ${f0(r.uv)}, ${b.band.toLowerCase()}`}>
+            {UV_BANDS.map((x, i) => (
+              <span key={x.key} className={`uv-seg ${x.key}`}
+                style={{ flexGrow: (UV_BANDS[i + 1]?.from ?? UV_SCALE_TOP) - x.from }} />
+            ))}
+            <span className="weather-uv-mark" style={{ left: `${uvScalePosition(r.uv) * 100}%` }} />
+          </div>
+          <div className="weather-uv-ticks">
+            {UV_BANDS.map((x) => (
+              <span key={x.key} style={{ left: `${uvScalePosition(x.from) * 100}%` }}>{x.from === UV_BANDS[UV_BANDS.length - 1].from ? `${x.from}+` : x.from}</span>
+            ))}
+          </div>
+          </div>
+        </>
+      )}
+      <div className="weather-uv-foot">
+        {peak && <div><span>Peak today</span><b>{f0(peak.v)} at {fmtChartTime(peak.t)}</b></div>}
+        {r.solar !== undefined && (
+          <div className="weather-sunshine">
+            <span>Sunshine</span>
+            <span className="weather-sunshine-bar" aria-hidden="true"><i style={{ width: `${sunshineFraction(r.solar) * 100}%` }} /></span>
+            <b>{f0(r.solar)} W/m²</b>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
+}
+
+/** Today's highest UV and the 5-minute bucket it fell in, from the recorder. */
+function useTodayPeak(entityId: string | undefined): { v: number; t: number } | null {
+  const { ws } = useHA();
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const since = midnight.getTime();
+  const { data } = useHistory(
+    entityId ? `${entityId}|peak|${since}` : null,
+    () => fetchStatistics(ws, [entityId!], 0, "5minute", ["max"] as const, since),
+    {},
+  );
+  return entityId ? peakOf(data[entityId]?.max) : null;
 }
 
 // ── History and trends ─────────────────────────────────────────────────
