@@ -28,9 +28,10 @@ const setup = E.energySetup(prefs, (x) => x);
 const kwh = { "sensor.grid_in": 43.94, "sensor.phase_c": 26.16, "sensor.phase_a": 8.90, "sensor.phase_b": 8.88, "sensor.pool": 5.25, "sensor.spa": 0,
   ...Object.fromEntries(aKids.map((id, i) => [id, small[i]])) };
 const split = E.energySplit(setup, (id) => kwh[id]);
+const colourOf = F.deviceColours(setup);
 
 console.log("  the tree — HA's, from the house:");
-const tree = F.flowTree(split, "The House");
+const tree = F.flowTree(split, "The House", colourOf);
 ck("it starts at the house, with the day's total", tree.label === "The House" && near(tree.kwh, 43.94, 0.01), tree.kwh);
 ck("then each top-level device, largest first", tree.children.map((c) => c.label).join() === "Phase C,Phase A,Phase B");
 const [c, a, b] = tree.children;
@@ -41,7 +42,7 @@ ck("phase A's tiny devices (< 1% of the day) fold into one 'Other' — HA does t
    !!other && other.members.length === 11 && a.children.filter((n) => n.kind === "device").map((n) => n.label).join() === "Device 0,Device 1", a.children.map((n) => n.label));
 ck("  ...and nothing is lost: A's children add up to A", near(a.children.reduce((s, n) => s + n.kwh, 0), 8.90, 0.01));
 ck("one small device alone keeps its name (nothing to fold it with)",
-   F.flowTree(E.energySplit(setup, (id) => (aKids.includes(id) ? (id === aKids[0] ? 0.1 : 0) : kwh[id])), "H").children[1].children.some((n) => n.label === "Device 0"));
+   F.flowTree(E.energySplit(setup, (id) => (aKids.includes(id) ? (id === aKids[0] ? 0.1 : 0) : kwh[id])), "H", colourOf).children[1].children.some((n) => n.label === "Device 0"));
 
 console.log("\n  the layout:");
 const L = F.flowLayout(tree);
@@ -60,13 +61,28 @@ ck("every link arrives at its child's top", L.links.every((k) => near(k.dy, k.to
 ck("the drawing is tall enough for every node", L.boxes.every((x) => x.y + Math.max(x.h, 20) <= L.H + 1e-9));
 
 console.log("\n  the pie of every device — HA's 'Individual devices':");
-const slices = F.energySlices(split);
+const slices = F.energySlices(split, colourOf);
 ck("its slices add up to what was used (the list's rows count a parent AND its children)", near(slices.reduce((s, x) => s + x.kwh, 0), 43.94, 0.02));
 ck("largest first: 'Phase C (untracked)' 20.92, as HA shows it", slices[0].label === "Phase C (untracked)" && near(slices[0].kwh, 20.92, 0.02), slices.slice(0, 3));
 ck("B and A's own remainders, then the pool pump — HA's order", slices.slice(1, 4).map((x) => x.label).join() === "Phase B (untracked),Phase A (untracked),Pool Pump", slices.slice(1, 4).map((x) => x.label));
 ck("no zero slices", slices.every((x) => x.kwh > 0.005));
 const turns = F.sliceTurns(slices.map((x) => x.kwh));
 ck("the slices go once round, from the top, without gaps", turns[0].from === 0 && near(turns[turns.length - 1].to, 1) && turns.every((t, i) => i === 0 || near(t.from, turns[i - 1].to)));
+
+console.log("\n  one colour a device, everywhere (round 7):");
+{
+  // 2.496.121: the flow's counter also counted the devices INSIDE a phase,
+  // so Phase A took C's pool pump's slot — pink in the flow, blue in the chart.
+  const flowA = tree.children.find((n) => n.label === "Phase A").cls;
+  ck("a top-level device's colour is HA's order: C, A, B → e-s0, e-s1, e-s2", colourOf("sensor.phase_c") === "e-s0" && colourOf("sensor.phase_a") === "e-s1" && colourOf("sensor.phase_b") === "e-s2");
+  ck("the flow gives Phase A the SAME colour the history chart and legend do", flowA === colourOf("sensor.phase_a"), flowA);
+  ck("a device inside one takes the wider palette in HA's order", colourOf("sensor.pool") === "e-p0" && colourOf(aKids[0]) === "e-p2");
+  const sl = F.energySlices(split, colourOf);
+  ck("the pie: a device's slice is its colour; a parent's remainder the parent's; the rest untracked",
+     sl.find((x) => x.label === "Pool Pump").cls === "e-p0" && sl.find((x) => x.label === "Phase C (untracked)").cls === "e-s0");
+  const other = E.energySplit(setup, (id) => (id === "sensor.phase_a" ? 40 : kwh[id]));
+  ck("the colour does not follow the kWh: Phase A leading the day keeps e-s1", F.flowTree(other, "H", colourOf).children[0].label === "Phase A" && F.flowTree(other, "H", colourOf).children[0].cls === "e-s1");
+}
 
 console.log("\n  the pie's legend, ten a page (owner, 2026-09-26):");
 {
@@ -79,9 +95,11 @@ console.log("\n  the pie's legend, ten a page (owner, 2026-09-26):");
 
 console.log("\n  the callers:");
 const panel = readFileSync(new URL("../../src/components/panels/EnergyPanel.tsx", import.meta.url), "utf8");
-ck("the flow starts at the house the kiosk's title names (never a name in the code)", /const house = resolveSiteTitle\(config, haConfig\?\.location_name\);/.test(panel) && /<Flow split=\{split\} rateKw=\{rateKw\} house=\{house\} \/>/.test(panel));
+ck("the flow starts at the house the kiosk's title names (never a name in the code)", /const house = resolveSiteTitle\(config, haConfig\?\.location_name\);/.test(panel) && /<Flow split=\{split\} rateKw=\{rateKw\} house=\{house\} colourOf=\{colourOf\} \/>/.test(panel));
+ck("the window decides colour in ONE place: no e-s/e-p slot is computed in the panel",
+   !/`e-[sp]\$\{/.test(panel) && /const colourOf = useMemo\(\(\) => \(setup \? deviceColours\(setup\)/.test(panel));
 ck("the legend shows one page, the pie every slice", /slices\.slice\(pg\.from, pg\.to\)\.map/.test(panel) && /const pg = legendPage\(slices\.length, page\);/.test(panel) && /\{slices\.map\(\(s, i\) => \(\s*<path/.test(panel));
-ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
+ck("'Every device' switches between the list and the pie", /shape === "pie"\s*\? <DevicePie split=\{whole\} colourOf=\{colourOf\} \/>/.test(panel) && /useSegmentedChoice\(SHAPES, "list"/.test(panel));
 ck("the period picker is in the header, the Weather window's control", /headerActions=\{view === "now" \? <span className="weather-live">Home Assistant Energy<\/span> : picker\}/.test(panel)
    && /useSegmentedChoice\(RANGE_OPTIONS, "week", "Period", "weather-ranges"\)/.test(panel) && !/energy-history-head/.test(panel));
 const hr = readFileSync(new URL("../../src/components/panels/historyRange.tsx", import.meta.url), "utf8");

@@ -122,7 +122,7 @@ ck("the window reads that setup, and falls back to the device list when HA has n
    /fetchEnergySetup\(ws, nameOf\)/.test(panel) && /if \(status === "ready" && setup === null\) return <>\{fallback\(\)\}<\/>;/.test(panel));
 ck("the flow sits BELOW the last-7-days trend (owner, 2026-09-26)", panel.indexOf("Last 7 days") < panel.indexOf("Where today&apos;s"));
 ck("the flow is energyFlow's tree and layout, each node answering the pointer (energy_flow.mjs)",
-   /const tree = flowTree\(split, house\);/.test(panel) && /const L = flowLayout\(tree\);/.test(panel) && /onPointerEnter=\{\(\) => setHover\(i\)\} onPointerDown=\{\(\) => setHover\(i\)\}/.test(panel));
+   /const tree = flowTree\(split, house, colourOf\);/.test(panel) && /const L = flowLayout\(tree\);/.test(panel) && /onPointerEnter=\{\(\) => setHover\(i\)\} onPointerDown=\{\(\) => setHover\(i\)\}/.test(panel));
 const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
 ck("the observation cards share the row however many there are (two cards, no empty third column)",
    /\.weather-advice \{ display: grid; grid-auto-flow: column; grid-auto-columns: minmax\(0, 1fr\);/.test(css) && !/\.weather-advice \{[^}]*repeat\(3/.test(css));
