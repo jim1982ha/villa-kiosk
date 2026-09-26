@@ -1,3 +1,9 @@
+## 2.496.147
+
+### Internal — chart colours
+- No visible change. Each chart colour (outside, inside, rain, UV, each
+  device in the Energy window) is now written once in the stylesheet.
+
 ## 2.496.146
 
 ### Internal — map badges
