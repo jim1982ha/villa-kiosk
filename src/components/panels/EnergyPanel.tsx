@@ -17,6 +17,7 @@ import { ChevronLeft, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
 import ChartTip from "./ChartTip";
 import BarChart from "./BarChart";
+import { Figure, ObservationCards, type ObservationCard } from "./WindowPieces";
 import type { BarSeg } from "@/utils/barChart";
 import { fmtChartTime } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
@@ -26,7 +27,7 @@ import type { HistorySeries } from "@/types/ha.types";
 import { PERIOD_MS, type StatisticsPeriod } from "@/utils/statisticsSeries";
 import { localMidnight } from "@/utils/localDay";
 import {
-  energyPeriod, periodStarts, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney,
+  energyPeriod, periodStarts, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney, fmtPower,
   type EnergyBucket, type EnergyPeriodKind, type EnergySplit, type NodeUse,
 } from "@/config/energyModel";
 
@@ -135,7 +136,7 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
   const leafDevices = setup.devices.filter((d) => d.children.length === 0);
   const leader = deviceRanking(split).filter((u) => u.node.children.length === 0)[0];
 
-  const cards: { tone: "good" | "caution" | "neutral"; title: string; detail: string }[] = [];
+  const cards: ObservationCard[] = [];
   if (standout && typical) {
     const t = days[standout.index];
     const rose = risers(leafDevices, (id) => weekP.at(id, t), deviceTypical).slice(0, 2).map((r) => r.node.name);
@@ -183,16 +184,7 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
         </div>
       </div>
 
-      {cards.length > 0 && (
-        <div className="weather-advice">
-          {cards.slice(0, 3).map((a) => (
-            <div key={a.title} className={`weather-advice-card tone-${a.tone}`}>
-              <div className="weather-advice-title"><span className="weather-advice-mark" aria-hidden="true">{a.tone === "good" ? "✓" : a.tone === "neutral" ? "·" : "!"}</span>{a.title}</div>
-              <div className="weather-advice-detail">{a.detail}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ObservationCards cards={cards.slice(0, 3)} />
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour</div><div className="weather-legend">kWh per hour</div></div>
@@ -261,14 +253,14 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
   // A phone gets the same answer as rows — the flow's text would be 7 px.
   const list = (
     <div className="energy-flow-list">
-      <div className="energy-flow-row grid"><b>Grid</b><span>{fmtKwh(split.used)} kWh{nowKw !== undefined ? ` · ${nowKw.toFixed(2)} kW now` : ""}</span></div>
+      <div className="energy-flow-row grid"><b>Grid</b><span>{fmtKwh(split.used)} kWh{nowKw !== undefined ? ` · ${fmtPower(nowKw)} now` : ""}</span></div>
       {bands.map((b) => {
         const kw = b.r ? rateKw(b.r.node.rateId) : undefined;
         return (
           <div key={`r${b.i}`} className="energy-flow-row">
             <i className={b.r ? `e-s${b.i % 6}` : "e-untracked"} style={{ width: `${Math.max(2, (b.kwh / scaleTo) * 100)}%` }} />
             <b>{b.r ? b.r.node.name : "Untracked"}</b>
-            <span>{fmtKwh(b.kwh)} kWh{kw !== undefined ? ` · ${kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`} now` : ""}</span>
+            <span>{fmtKwh(b.kwh)} kWh{kw !== undefined ? ` · ${fmtPower(kw)} now` : ""}</span>
           </div>
         );
       })}
@@ -288,12 +280,12 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
       <rect x="116" y="10" width="34" height={Math.max(3, gridH)} rx="6" className="energy-grid" />
       <text x="102" y={10 + gridH / 2 - 12} textAnchor="end" className="energy-flow-name">Grid</text>
       <text x="102" y={10 + gridH / 2 + 6} textAnchor="end" className="energy-flow-sub">{fmtKwh(split.used)} kWh</text>
-      {nowKw !== undefined && <text x="102" y={10 + gridH / 2 + 22} textAnchor="end" className="energy-flow-sub">{nowKw.toFixed(2)} kW now</text>}
+      {nowKw !== undefined && <text x="102" y={10 + gridH / 2 + 22} textAnchor="end" className="energy-flow-sub">{fmtPower(nowKw)} now</text>}
       {bands.map((b) => {
         const kw = b.r ? rateKw(b.r.node.rateId) : undefined;
         const inside = b.r?.children.filter((c) => c.kwh > 0.005) ?? [];
         const sub = [
-          kw !== undefined ? `${kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`} now` : "",
+          kw !== undefined ? `${fmtPower(kw)} now` : "",
           inside.length ? `${inside.length === 1 ? inside[0].node.name : `${inside.length} devices`} ${fmtKwh(inside.reduce((a, c) => a + c.kwh, 0))}` : "",
         ].filter(Boolean).join(" · ");
         return (
@@ -318,7 +310,7 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
       const rows = [
         { key: "t", text: `${u ? u.node.name : "Untracked"} · ${fmtKwh(b.kwh)} kWh` },
         { key: "p", text: `${pct}% of the ${fmtKwh(split.used)} kWh used` },
-        ...(kw !== undefined ? [{ key: "n", text: `${kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`} now` }] : []),
+        ...(kw !== undefined ? [{ key: "n", text: `${fmtPower(kw)} now` }] : []),
         ...inside.slice(0, 6).map((c) => ({ key: c.node.id, text: `↳ ${c.node.name} ${fmtKwh(c.kwh)} kWh` })),
         ...(inside.length > 6 ? [{ key: "more", text: `↳ ${inside.length - 6} more ${fmtKwh(inside.slice(6).reduce((a, c) => a + c.kwh, 0))} kWh` }] : []),
         ...(u && inside.length && u.untracked > 0.005 ? [{ key: "u", text: `↳ not metered ${fmtKwh(u.untracked)} kWh` }] : []),
@@ -452,8 +444,4 @@ function RankRow({ u, kwh, of, used }: { u: NodeUse | null; kwh?: number; of: nu
       <span className="muted">{used > 0 ? `${Math.round((v / used) * 100)}%` : ""}</span>
     </>
   );
-}
-
-function Figure({ label, value }: { label: string; value: string }) {
-  return <div className="weather-figure"><div className="weather-figure-l">{label}</div><div className="weather-figure-v">{value}</div></div>;
 }

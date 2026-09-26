@@ -314,6 +314,13 @@ export function periodStarts(kind: EnergyPeriodKind, now: number): number[] {
   }
 }
 
+/** Live power, from kW: watts below 1 kW ("948 W"), else kW ("3.08 kW").
+ *  The flow wrote it three ways, and the grid's "0.95 kW" beside a
+ *  device's "948 W". */
+export function fmtPower(kw: number): string {
+  return Math.abs(kw) < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`;
+}
+
 export function fmtKwh(v: number): string {
   return v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
 }

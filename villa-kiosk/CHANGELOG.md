@@ -1,3 +1,12 @@
+## 2.496.119
+
+### Fixed — the Energy window
+- **Live power is written one way everywhere.** The grid's power read "0.95 kW
+  now" beside a device's "948 W now"; below 1 kW it is now in watts
+  everywhere, and above it in kW.
+
+Behind that, the Weather and Energy windows now share one copy of their
+figures, their observation cards and "today since midnight".
 ## 2.496.118
 
 **Nothing you should see changed.** The automatic checks that make sure every

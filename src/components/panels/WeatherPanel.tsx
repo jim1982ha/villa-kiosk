@@ -19,6 +19,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
 import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
 import BarChart from "./BarChart";
+import { Figure, ObservationCards } from "./WindowPieces";
+import { localMidnight } from "@/utils/localDay";
 import { useChartPointer } from "./useChartPointer";
 import { barNote, seriesBuckets } from "@/utils/barChart";
 import ChartTip from "./ChartTip";
@@ -174,16 +176,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
         </div>
       )}
 
-      {advice.length > 0 && (
-        <div className="weather-advice">
-          {advice.map((a) => (
-            <div key={a.title} className={`weather-advice-card tone-${a.tone}`}>
-              <div className="weather-advice-title"><span className="weather-advice-mark" aria-hidden="true">{a.tone === "good" ? "✓" : a.tone === "neutral" ? "·" : "!"}</span>{a.title}</div>
-              <div className="weather-advice-detail">{a.detail}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ObservationCards cards={advice} />
 
       <div className="weather-instruments">
         {(r.wind !== undefined || r.dir !== undefined) && <Tile title="Wind" k="wind" center><WindCompass r={r} /></Tile>}
@@ -233,8 +226,7 @@ function Tile({ title, center, k, children }: { title: string; center?: boolean;
 /** Today's low and high, from the recorder's 5-minute statistics since midnight. */
 function useTodayRange(entityId: string | undefined): { min: number; max: number } | null {
   const { ws } = useHA();
-  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-  const since = midnight.getTime();
+  const since = localMidnight(Date.now());
   const { data } = useHistory(
     entityId ? `${entityId}|${since}` : null,
     () => fetchStatistics(ws, [entityId!], 0, "5minute", ["min", "max"] as const, since),
@@ -412,8 +404,7 @@ function SunUv({ r, uvId }: { r: Readings; uvId: string | undefined }) {
 /** Today's highest UV and the 5-minute bucket it fell in, from the recorder. */
 function useTodayPeak(entityId: string | undefined): { v: number; t: number } | null {
   const { ws } = useHA();
-  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-  const since = midnight.getTime();
+  const since = localMidnight(Date.now());
   const { data } = useHistory(
     entityId ? `${entityId}|peak|${since}` : null,
     () => fetchStatistics(ws, [entityId!], 0, "5minute", ["max"] as const, since),
@@ -492,10 +483,6 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
       </div>
     </div>
   );
-}
-
-function Figure({ label, value }: { label: string; value: string }) {
-  return <div className="weather-figure"><div className="weather-figure-l">{label}</div><div className="weather-figure-v">{value}</div></div>;
 }
 
 /** The window's start, middle and "now" — chartGeometry's ticks, labelled by
