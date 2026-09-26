@@ -37,6 +37,7 @@ import WeatherPanel from "@/components/panels/WeatherPanel";
 import { villaDevices } from "@/config/deviceGroups";
 import { onOffSummary } from "@/utils/entityState";
 import SummaryGroupPanel from "@/components/panels/SummaryGroupPanel";
+import EnergyPanel from "@/components/panels/EnergyPanel";
 import type { HassEntity } from "@/types/ha.types";
 import type { Category, EntityMapping } from "@/types/scene.types";
 import { useBackToClose } from "@/hooks/useBackToClose";
@@ -479,7 +480,20 @@ export default function SummaryBar({ onOpenEntity, mappedEntityIds, scenes }: Pr
       {openGroup?.id === "__weather" && station && (
         <WeatherPanel station={station} onClose={() => setOpenGroup(null)} />
       )}
-      {openGroup && openGroup.id !== "__weather" && (
+      {/* Energy: Home Assistant's Energy dashboard, laid out (EnergyPanel) — or,
+          on an install with none, the list of power sensors as before. */}
+      {openGroup?.id === "__energy" && (
+        <EnergyPanel onClose={() => setOpenGroup(null)} fallback={() => (
+          <SummaryGroupPanel
+            group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
+            canControl={openGroup.canControl}
+            mappedEntityIds={mappedEntityIds}
+            onClose={() => setOpenGroup(null)}
+            onOpenEntity={onOpenEntity}
+          />
+        )} />
+      )}
+      {openGroup && openGroup.id !== "__weather" && openGroup.id !== "__energy" && (
         <SummaryGroupPanel
           group={{ title: openGroup.title, icon: openGroup.icon, entityIds: openGroup.entityIds }}
           canControl={openGroup.canControl}

@@ -586,6 +586,15 @@ input[type="range"]::-moz-range-thumb {
 .weather-rings { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
 .weather-ring-row { display: flex; align-items: center; gap: 16px; }
 .weather-ring { width: 104px; height: 104px; flex: 0 0 auto; }
+/* Side by side WHEREVER THE TILE HAS ROOM (owner, 2026-09-26) — a phone's
+   full-width tile, a wide window — and stacked where it has not (the
+   tablet's three-column grid). Asked of the tile's own width, not the
+   screen's, so the same rule holds however the grid reflows. */
+.weather-tile.k-hum { container-type: inline-size; }
+@container (min-width: 300px) {
+  .weather-rings { flex-direction: row; justify-content: space-around; }
+  .weather-ring-row { flex-direction: column; gap: 4px; text-align: center; }
+}
 .ring-track { fill: none; stroke: var(--bg-card); stroke-width: 12; }
 .ring-fill { fill: none; stroke-width: 12; stroke-linecap: round; }
 .ring-fill.water { stroke: var(--cat-energy); }
@@ -675,6 +684,44 @@ input[type="range"]::-moz-range-thumb {
 .chart-empty-note { font: 14px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
 .weather-axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
+/* ── Energy (EnergyPanel): the Weather window's layout, Home Assistant
+   Energy's numbers. Series colours are the Weather palette, in rotation for
+   HA's top-level devices; untracked is the neutral. */
+.energy-hero { display: flex; flex-direction: column; align-items: flex-end; }
+.energy-hero-sub { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
+.weather-tile.energy-wide { min-height: 0; justify-content: flex-start; }
+.energy-bars-wrap { display: flex; flex-direction: column; gap: 6px; }
+.energy-bars { position: relative; display: flex; align-items: flex-end; gap: 4px; }
+.energy-bar { flex: 1 1 0; height: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; }
+.energy-bar.hover { outline: 2px solid var(--hairline-strong); outline-offset: 1px; }
+.energy-seg { flex: 0 0 auto; }
+.energy-seg.e-none { height: 3px; background: var(--bg-card); }
+.energy-typical { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); pointer-events: none; }
+.e-used { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.e-standout { background: color-mix(in srgb, var(--status-danger) 55%, transparent); }
+.e-untracked { background: color-mix(in srgb, var(--text-secondary) 30%, transparent); fill: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
+.e-s0 { background: color-mix(in srgb, var(--accent-warm) 60%, transparent); fill: color-mix(in srgb, var(--accent-warm) 60%, transparent); }
+.e-s1 { background: color-mix(in srgb, var(--cat-energy) 55%, transparent); fill: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
+.e-s2 { background: color-mix(in srgb, var(--status-danger) 45%, transparent); fill: color-mix(in srgb, var(--status-danger) 45%, transparent); }
+.e-s3 { background: color-mix(in srgb, var(--accent) 55%, transparent); fill: color-mix(in srgb, var(--accent) 55%, transparent); }
+.e-s4 { background: color-mix(in srgb, var(--accent-warm) 30%, transparent); fill: color-mix(in srgb, var(--accent-warm) 30%, transparent); }
+.e-s5 { background: color-mix(in srgb, var(--cat-energy) 28%, transparent); fill: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
+.weather-legend .key.e-used, .weather-legend .key[class*="e-s"], .weather-legend .key.e-untracked { height: 8px; }
+.energy-flow { width: 100%; height: auto; }
+.energy-band { opacity: 0.55; }
+.energy-grid { fill: var(--accent); }
+.energy-flow-name { font: 600 15px var(--font-ui); fill: var(--text-primary); }
+.energy-flow-sub { font: 13px var(--font-ui); fill: var(--text-secondary); }
+.energy-flow-list { display: none; }
+.energy-note { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
+.energy-history-head { display: flex; justify-content: flex-end; }
+.energy-rank { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) auto 3.2em; gap: 8px 12px; align-items: center; font-size: var(--text-sm); }
+.energy-rank b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.energy-rank .muted { color: var(--text-secondary); text-align: right; }
+.energy-rank > span:first-child, .energy-rank > span:nth-child(4n+1) { text-align: left; }
+.energy-rank-bar { height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; }
+.energy-rank-bar i { display: block; height: 100%; background: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
+
 /* A phone: one column of advice, two of instruments, one of charts. */
 @media (max-width: 720px) {
   .weather-advice { grid-template-columns: 1fr; }
@@ -682,7 +729,40 @@ input[type="range"]::-moz-range-thumb {
   .weather-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .weather-charts { grid-template-columns: 1fr; }
 }
+/* ── A PHONE (owner, 2026-09-26: "the information in the tiles appears too
+   thin, with a lot of empty space inside each tile"). Every tile had a
+   280 px floor and spread its content to fill it, one tile per row. Now:
+   no floor, content packed from the top; the two round dials side by side;
+   the wide instruments laid out across the phone's width — the humidity
+   rings in a row, the rain readings two by two, the UV bands' ranges beside
+   their names. The Energy window's flow becomes rows: at this width its
+   drawn text would be 7 px. */
 @media (max-width: 480px) {
-  .weather-instruments { grid-template-columns: 1fr; }
+  .weather-instruments { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .weather-tile { min-height: 0; padding: 12px; gap: 8px; justify-content: flex-start; border-radius: 16px; }
+  .weather-tile.k-temp, .weather-tile.k-hum, .weather-tile.k-rain, .weather-tile.k-uv { grid-column: 1 / -1; }
+  .weather-dial { max-width: 132px; }
+  .weather-tile-foot { gap: 4px 10px; font-size: var(--text-xs); }
+  .weather-bars { min-height: 0; }
+  .weather-bar-track { height: 84px; width: 16px; }
+  .weather-ring { width: 76px; height: 76px; }
+  .weather-gauge { min-height: 0; gap: 16px; }
+  .weather-tube { min-height: 0; height: 150px; width: 56px; }
+  .weather-gauge-read { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 12px 10px; padding: 0; }
+  .weather-uv { gap: 10px; }
+  .weather-uv-value b { font-size: 34px; }
+  .weather-uv-meter { min-height: 118px; }
+  .weather-uv-labels { max-width: 200px; }
+  .weather-advice-card { padding: 12px 14px; }
   .weather-big { font-size: var(--text-display-sm); }
+  .weather-headline { font-size: var(--text-xl); }
+  .energy-flow { display: none; }
+  .energy-flow-list { display: flex; flex-direction: column; gap: 10px; }
+  .energy-rank { grid-template-columns: minmax(0, 1fr) auto 2.8em; }
+  .energy-rank-bar { display: none; }
 }
+.energy-flow-row { position: relative; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 10px; overflow: hidden; font-size: var(--text-sm); }
+.energy-flow-row > i { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.55; }
+.energy-flow-row > b, .energy-flow-row > span { position: relative; }
+.energy-flow-row > span { color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.energy-flow-row.grid { background: color-mix(in srgb, var(--accent) 22%, transparent); }

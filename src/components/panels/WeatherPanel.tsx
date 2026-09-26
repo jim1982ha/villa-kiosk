@@ -182,15 +182,15 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
       )}
 
       <div className="weather-instruments">
-        {(r.wind !== undefined || r.dir !== undefined) && <Tile title="Wind" center><WindCompass r={r} /></Tile>}
+        {(r.wind !== undefined || r.dir !== undefined) && <Tile title="Wind" k="wind" center><WindCompass r={r} /></Tile>}
         {r.pressure !== undefined && (
-          <Tile title="Barometer" center>
+          <Tile title="Barometer" k="baro" center>
             <Barometer hpa={r.pressure} />
             <div className="weather-tile-foot">{tendency ? `${tendency} over the last 3 h` : "…"}</div>
           </Tile>
         )}
         {r.t !== undefined && (
-          <Tile title="Temperature">
+          <Tile title="Temperature" k="temp">
             <div className="weather-bars">
               <Bar label="Outside" c={r.t} cls="out" />
               {r.feels !== undefined && <Bar label="Feels" c={r.feels} cls="feels" />}
@@ -201,24 +201,25 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
           </Tile>
         )}
         {(r.hum !== undefined || r.inHum !== undefined) && (
-          <Tile title="Humidity">
+          <Tile title="Humidity" k="hum">
             <div className="weather-rings">
               {r.hum !== undefined && <Ring pct={r.hum} cls="water" label="Outside" sub={r.dew !== undefined ? `dew ${f1(r.dew)}°` : ""} />}
               {r.inHum !== undefined && <Ring pct={r.inHum} cls="in" label="Inside" sub={r.inDew !== undefined ? `dew ${f1(r.inDew)}°` : ""} />}
             </div>
           </Tile>
         )}
-        {(r.rainToday !== undefined || r.rate !== undefined) && <Tile title="Rain gauge"><RainGauge r={r} /></Tile>}
-        {(r.uv !== undefined || r.solar !== undefined) && <Tile title="Sun & UV"><SunUv r={r} uvId={station.roles.uv} /></Tile>}
+        {(r.rainToday !== undefined || r.rate !== undefined) && <Tile title="Rain gauge" k="rain"><RainGauge r={r} /></Tile>}
+        {(r.uv !== undefined || r.solar !== undefined) && <Tile title="Sun & UV" k="uv"><SunUv r={r} uvId={station.roles.uv} /></Tile>}
       </div>
 
     </div>
   );
 }
 
-function Tile({ title, center, children }: { title: string; center?: boolean; children: ReactNode }) {
+/** `k` names the instrument, so a phone can lay each one out for its shape. */
+function Tile({ title, center, k, children }: { title: string; center?: boolean; k: string; children: ReactNode }) {
   return (
-    <div className={`weather-tile${center ? " center" : ""}`}>
+    <div className={`weather-tile k-${k}${center ? " center" : ""}`}>
       <div className="weather-eyebrow">{title}</div>
       {children}
     </div>
@@ -267,12 +268,14 @@ function Barometer({ hpa }: { hpa: number }) {
   const a = ((Math.max(960, Math.min(1060, hpa)) - 960) / 100) * 270 - 135; // degrees from up
   const rad = (a * Math.PI) / 180;
   const x = 115 + 78 * Math.sin(rad), y = 120 - 78 * Math.cos(rad);
+  // No "CHANGE" over the arc (owner, 2026-09-26: redundant — the needle
+  // between RAIN and FAIR says it), so the frame starts at the arc's top.
   return (
-    <svg className="weather-dial" viewBox="0 0 230 230" role="img" aria-label={`Pressure ${hpa.toFixed(1)} hPa`}>
+    <svg className="weather-dial baro" viewBox="0 30 230 166" role="img" aria-label={`Pressure ${hpa.toFixed(1)} hPa`}>
       <path d="M 30 160 A 90 90 0 1 1 200 160" className="baro-track" />
       <path d="M 30 160 A 90 90 0 0 1 60 58" className="baro-zone rain" />
       <path d="M 170 58 A 90 90 0 0 1 200 160" className="baro-zone fair" />
-      <g className="baro-words"><text x="26" y="186">RAIN</text><text x="96" y="30">CHANGE</text><text x="178" y="186">FAIR</text></g>
+      <g className="baro-words"><text x="26" y="186">RAIN</text><text x="178" y="186">FAIR</text></g>
       <line x1="115" y1="120" x2={x.toFixed(1)} y2={y.toFixed(1)} className="baro-needle" />
       <circle cx="115" cy="120" r="7" className="baro-hub" />
       <text x="115" y="160" className="dial-value small">{hpa.toFixed(1)}</text>

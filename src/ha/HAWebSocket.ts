@@ -3,7 +3,7 @@
 // exponential-backoff reconnect with re-subscription. (3Dash-informed patterns.)
 
 import type {
-  EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
+  EnergyInfo, EnergyPrefs, HassAreaRegistryEntry, HassDeviceRegistryEntry, HassEntity, HassEntityRegistryEntry,
   HassFloorRegistryEntry, HassServiceTarget, RawLogbookEntry, StatisticIdInfo, StatisticPeriod,
 } from "@/types/ha.types";
 import { ingressWsUrl } from "./ingress";
@@ -529,6 +529,12 @@ export class HAWebSocket {
    *  all returns them as empty arrays, not an error. */
   async getEnergyPrefs(): Promise<EnergyPrefs> {
     return this.sendMessage<EnergyPrefs>("energy/get_prefs");
+  }
+
+  /** Where HA keeps each energy source's computed COST — the same cost the
+   *  Energy dashboard shows (from its tariff, however it is configured). */
+  async getEnergyInfo(): Promise<EnergyInfo> {
+    return this.sendMessage<EnergyInfo>("energy/info");
   }
 
   /** Which statistic IDs actually have recorded data — an Energy Dashboard
