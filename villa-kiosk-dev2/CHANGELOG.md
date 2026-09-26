@@ -1,3 +1,12 @@
+## 2.496.157
+
+### Fixed — bottom bar
+- **The lock tile no longer shows an open door for a lock it cannot read.**
+  An unavailable lock showed an open-door icon next to "1 Unknown"; it now
+  shows a plain lock. The open door appears only when a lock is unlocked.
+- **The AC tile uses your Home Assistant's temperature unit.** It always
+  said "°C", even on an install set to Fahrenheit.
+
 ## 2.496.156
 
 ### Changed — Advanced Settings
