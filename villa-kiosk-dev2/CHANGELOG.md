@@ -1,3 +1,12 @@
+## 2.496.138
+
+### Fixed — group cards
+- **The icons in a card of two (or more) devices are centred again.** On
+  some screens they sat lower than the card's middle, with more space
+  above them than below. The card's size fell between two pixels, and the
+  card and its icons were rounded in opposite directions; every size is
+  now a whole pixel, with the same margin above, below and beside each icon.
+
 ## 2.496.137
 
 ### Fixed — badges that show a value
