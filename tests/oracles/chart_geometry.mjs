@@ -86,20 +86,44 @@ console.log("\n  the callers:");
   const SRC = new URL("../../src/", import.meta.url).pathname;
   const walk = (d, out = []) => { for (const e of readdirSync(d)) { const p = join(d, e); statSync(p).isDirectory() ? walk(p, out) : /\.tsx?$/.test(p) && out.push(p); } return out; };
   const files = walk(SRC);
-  const charts = files.filter((f) => /<polyline|className="chart-bar"/.test(readFileSync(f, "utf8")));
-  ck(`found the history charts (${charts.length}: Sparkline, DualSparkline, Weather)`, charts.length >= 3, charts.map((f) => f.slice(SRC.length)));
-  const own = charts.filter((f) => !/\bchartGeometry\(/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
-  ck("every one draws from chartGeometry", own.length === 0, own);
-  const rules = files.filter((f) => /function (nearest|timeAt|nearestIndexByX)\b|const sx = \(t: number\)/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
+  // ⚠️ "A CHART" USED TO BE WHATEVER HAD <polyline OR className="chart-bar",
+  // and the scan shrank silently: the Energy bars (energy-bar) and the state
+  // timelines matched neither, and once the rain bars moved to BarChart
+  // (2.496.114) "chart-bar" matched nothing at all — three files checked, six
+  // charts drawn. Now every chart PRIMITIVE is looked for, every file that
+  // draws one must be a known chart module, and the set is pinned exactly, so
+  // a chart added or dropped fails here until this list is updated.
+  const PRIMITIVE = /<polyline|className="bar-chart"|className="state-timeline-seg"|className="energy-flow"|className="chart-bar"/;
+  const CHARTS = {
+    "components/panels/Sparkline.tsx": "line",
+    "components/panels/DualSparkline.tsx": "line",
+    "components/panels/WeatherPanel.tsx": "line",
+    "components/panels/BarChart.tsx": "bars",
+    "components/panels/StateTimeline.tsx": "timeline",
+    "components/panels/EnergyPanel.tsx": "flow",
+  };
+  const rel = (f) => f.slice(SRC.length);
+  const src = (f) => readFileSync(f, "utf8");
+  const charts = files.filter((f) => PRIMITIVE.test(src(f)));
+  const unknown = charts.map(rel).filter((f) => !(f in CHARTS));
+  ck("every file that draws a chart is a known chart module", unknown.length === 0, unknown);
+  const missing = Object.keys(CHARTS).filter((f) => !charts.map(rel).includes(f));
+  ck(`  ...and all ${Object.keys(CHARTS).length} still draw one — the scan cannot shrink unseen`, missing.length === 0, missing);
+  const byKind = (k) => charts.filter((f) => CHARTS[rel(f)] === k);
+  const own = byKind("line").filter((f) => !/\bchartGeometry\(/.test(src(f))).map(rel);
+  ck("every line chart draws from chartGeometry", own.length === 0, own);
+  const bars = byKind("bars").filter((f) => !/barLayout\(/.test(src(f)) || !/className="bar-band" style=\{\{ background: STATUS_COLOR\.unavailable \}\}/.test(src(f))).map(rel);
+  ck("the bar chart draws from barLayout, and a bucket with no reading as the outage band", bars.length === 0, bars);
+  const rules = files.filter((f) => /function (nearest|timeAt|nearestIndexByX)\b|const sx = \(t: number\)/.test(src(f))).map(rel);
   ck("no chart keeps a hover rule or x-scale of its own", rules.length === 0, rules);
-  const unbanded = charts.filter((f) => {
+  const unbanded = byKind("line").filter((f) => {
     // The shared <Bands> renderer's own body is not a use of it.
-    const src = readFileSync(f, "utf8").replace(/function Bands\([\s\S]*?\n\}\n/, "");
-    const drawn = (src.match(/\.bands\b[^;\n]*\.map\(|<Bands g=\{g\} \/>/g) ?? []).length;
-    return drawn < (src.match(/\bchartGeometry\(/g) ?? []).length;
-  }).map((f) => f.slice(SRC.length));
-  ck("every chart draws the bands its geometry returns", unbanded.length === 0, unbanded);
-  const tips = charts.filter((f) => /className="spark-tip/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
+    const body = src(f).replace(/function Bands\([\s\S]*?\n\}\n/, "");
+    const drawn = (body.match(/\.bands\b[^;\n]*\.map\(|<Bands g=\{g\} \/>/g) ?? []).length;
+    return drawn < (body.match(/\bchartGeometry\(/g) ?? []).length;
+  }).map(rel);
+  ck("every line chart draws the bands its geometry returns", unbanded.length === 0, unbanded);
+  const tips = charts.filter((f) => /className="spark-tip/.test(src(f))).map(rel);
   ck("every chart's tooltip is ChartTip", tips.length === 0, tips);
 }
 

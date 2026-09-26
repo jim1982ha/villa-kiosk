@@ -15,11 +15,16 @@
 // Width: the same as every other window the bottom bar opens
 // (`summary-group-modal`, 780 px) — the owner asked for them to match.
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, CloudSun, LineChart } from "lucide-react";
-import { fmtChartValue, fmtChartTick, fmtChartTime } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtChartTime, fmtChartStamp } from "./chartUtils";
+import BarChart from "./BarChart";
+import { Figure, ObservationCards } from "./WindowPieces";
+import { localMidnight } from "@/utils/localDay";
+import { useChartPointer } from "./useChartPointer";
+import { barNote, seriesBuckets } from "@/utils/barChart";
 import ChartTip from "./ChartTip";
-import { chartGeometry, niceTicks, type ChartGeometry, type SeriesGeometry } from "@/utils/chartGeometry";
+import { chartGeometry, type ChartGeometry } from "@/utils/chartGeometry";
 import YAxis, { type AxisTick } from "./ChartAxis";
 import BasePanel from "./BasePanel";
 import { useHA } from "@/ha/HAStateStore";
@@ -171,16 +176,7 @@ function NowView({ station, r }: { station: WeatherStation; r: Readings }) {
         </div>
       )}
 
-      {advice.length > 0 && (
-        <div className="weather-advice">
-          {advice.map((a) => (
-            <div key={a.title} className={`weather-advice-card tone-${a.tone}`}>
-              <div className="weather-advice-title"><span className="weather-advice-mark" aria-hidden="true">{a.tone === "good" ? "✓" : a.tone === "neutral" ? "·" : "!"}</span>{a.title}</div>
-              <div className="weather-advice-detail">{a.detail}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ObservationCards cards={advice} />
 
       <div className="weather-instruments">
         {(r.wind !== undefined || r.dir !== undefined) && <Tile title="Wind" k="wind" center><WindCompass r={r} /></Tile>}
@@ -230,8 +226,7 @@ function Tile({ title, center, k, children }: { title: string; center?: boolean;
 /** Today's low and high, from the recorder's 5-minute statistics since midnight. */
 function useTodayRange(entityId: string | undefined): { min: number; max: number } | null {
   const { ws } = useHA();
-  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-  const since = midnight.getTime();
+  const since = localMidnight(Date.now());
   const { data } = useHistory(
     entityId ? `${entityId}|${since}` : null,
     () => fetchStatistics(ws, [entityId!], 0, "5minute", ["min", "max"] as const, since),
@@ -409,8 +404,7 @@ function SunUv({ r, uvId }: { r: Readings; uvId: string | undefined }) {
 /** Today's highest UV and the 5-minute bucket it fell in, from the recorder. */
 function useTodayPeak(entityId: string | undefined): { v: number; t: number } | null {
   const { ws } = useHA();
-  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-  const since = midnight.getTime();
+  const since = localMidnight(Date.now());
   const { data } = useHistory(
     entityId ? `${entityId}|peak|${since}` : null,
     () => fetchStatistics(ws, [entityId!], 0, "5minute", ["max"] as const, since),
@@ -491,10 +485,6 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
   );
 }
 
-function Figure({ label, value }: { label: string; value: string }) {
-  return <div className="weather-figure"><div className="weather-figure-l">{label}</div><div className="weather-figure-v">{value}</div></div>;
-}
-
 /** The window's start, middle and "now" — chartGeometry's ticks, labelled by
  *  the app's one tick labeller. */
 function Axis({ g, right }: { g: ChartGeometry | null; right?: boolean }) {
@@ -509,7 +499,8 @@ function Axis({ g, right }: { g: ChartGeometry | null; right?: boolean }) {
 
 interface Line { s: HistorySeries | undefined; cls: string; label: string; unit: string; area?: boolean; ownScale?: boolean }
 const W = 320, H = 150, TOP = 12, BOT = 138;
-/** The plot's drawn height (px) — .weather-chart's CSS height; the y-axis is sized to it. */
+/** The chart's height on screen (px): the SVG (whose viewBox is H tall) and
+ *  its y-axis are both set to it here, so they cannot disagree. */
 const CHART_PX = 150;
 const PLOT = { left: 0, right: W, top: TOP, bottom: BOT };
 
@@ -517,17 +508,6 @@ const PLOT = { left: 0, right: W, top: TOP, bottom: BOT };
 function ChartEmpty({ status }: { status: HistoryStatus }) {
   if (status === "loading") return <div className="state-timeline-skeleton weather-chart" />;
   return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load this history." : "Not enough history yet."}</div>;
-}
-
-/** The time under the pointer, as chartGeometry reads it (the SVG is W wide). */
-function useHoverTime(g: ChartGeometry | null) {
-  const [t, setT] = useState<number | null>(null);
-  const on = (e: PointerEvent<SVGSVGElement>) => {
-    if (!g) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    setT(g.tAt(((e.clientX - rect.left) / Math.max(1, rect.width)) * W));
-  };
-  return { t, handlers: { onPointerMove: on, onPointerDown: on, onPointerLeave: () => setT(null) } };
 }
 
 function Bands({ g }: { g: ChartGeometry }) {
@@ -538,17 +518,9 @@ function Bands({ g }: { g: ChartGeometry }) {
   )))}</>;
 }
 
-/** The y-axis ticks of one series' scale that fall inside it, and where
- *  each sits (0 = the plot's bottom edge, 1 = its top) — ChartAxis. */
-function axisOf(sg: SeriesGeometry): AxisTick[] {
-  return niceTicks(sg.lo, sg.hi).ticks
-    .filter((v) => v >= sg.lo - 1e-9 && v <= sg.hi + 1e-9)
-    .map((v) => ({ v, at: 1 - sg.sy(v) / H }));
-}
-
 /** Gridlines at the left axis' ticks (the plot's own lines, in its units). */
-const Grid = ({ ticks }: { ticks: AxisTick[] }) => (
-  <g className="chart-grid">{ticks.map((t) => <line key={t.v} x1="0" y1={(1 - t.at) * H} x2={W} y2={(1 - t.at) * H} />)}</g>
+const Grid = ({ ticks }: { ticks: readonly AxisTick[] }) => (
+  <g className="chart-grid">{ticks.map((t) => <line key={t.v} x1="0" y1={t.y} x2={W} y2={t.y} />)}</g>
 );
 
 function ChartTile({ title, legend, note, lines, win, status }: {
@@ -561,11 +533,12 @@ function ChartTile({ title, legend, note, lines, win, status }: {
   const g = any ? chartGeometry(win, present.map((l) => ({ pts: l.s.points, gaps: l.s.gaps, scale: l.ownScale ? "fromZero" as const : "shared" as const })), PLOT, 0.08) : null;
   // The left axis is the first line's scale; a later line on its OWN scale
   // (sunlight in W/m², UV beside it) gets a right axis of its own.
-  const leftAxis = g ? axisOf(g.series[0]) : [];
+  const leftAxis = g ? g.series[0].ticks : [];
   const ownAt = present.findIndex((l, i) => i > 0 && l.ownScale);
-  const rightAxis = g && ownAt > 0 ? axisOf(g.series[ownAt]) : null;
-  const { t, handlers } = useHoverTime(g);
-  const hover = g && t !== null ? g.hover(t) : null;
+  const rightAxis = g && ownAt > 0 ? g.series[ownAt].ticks : null;
+  // The pointer's fraction across the plot, as a time in chartGeometry's window.
+  const { frac, handlers } = useChartPointer<SVGSVGElement>();
+  const hover = g && frac !== null ? g.hover(g.tAt(frac * W)) : null;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
@@ -577,10 +550,10 @@ function ChartTile({ title, legend, note, lines, win, status }: {
         ? <ChartEmpty status={status} />
         : (
           <div className="chart-with-axis has-unit">
-          <YAxis height={CHART_PX} unit={present[0]?.unit.trim()} ticks={leftAxis} />
+          <YAxis height={CHART_PX} frame={H} unit={present[0]?.unit.trim()} ticks={leftAxis} />
           <div className="spark-wrap weather-chart-wrap">
           <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${title} history`}
-            style={{ touchAction: "none" }} {...handlers}>
+            style={{ height: CHART_PX, touchAction: "none" }} {...handlers}>
             <Grid ticks={leftAxis} />
             <Bands g={g} />
             {g.series.map((sg, i) => (
@@ -599,14 +572,14 @@ function ChartTile({ title, legend, note, lines, win, status }: {
             {hover && <line x1={hover.x} y1={TOP} x2={hover.x} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
           </svg>
           {hover && (
-            <ChartTip left={`${(hover.x / W) * 100}%`} top={TOP} flip={hover.x > W / 2} t={hover.t} spanHours={g.spanHours}
+            <ChartTip x={hover.x / W} y={TOP / H} stamp={fmtChartStamp(hover.t, g.spanHours)}
               rows={present.flatMap((l, i) => {
                 const r = hover.readings[i];
                 return r ? [{ key: l.label, marker: <i className={`key ${l.cls.split(" ")[0]}`} />, text: `${l.label} ${fmtChartValue(r.v)}${l.unit}` }] : [];
               })} />
           )}
           </div>
-          {rightAxis && <YAxis side="right" height={CHART_PX} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} />}
+          {rightAxis && <YAxis side="right" height={CHART_PX} frame={H} unit={present[ownAt].unit.trim() || present[ownAt].label} ticks={rightAxis} />}
           </div>
         )}
       <Axis g={g} right={!!rightAxis} />
@@ -617,54 +590,33 @@ function ChartTile({ title, legend, note, lines, win, status }: {
 function RainTile({ s, win, status, perDay, unit }: {
   s: HistorySeries | undefined; win: { from: number; to: number }; status: HistoryStatus; perDay: boolean; unit: string;
 }) {
-  const bars = s?.points ?? [];
-  // Bars from zero, in the one geometry — a missing bucket is an outage band,
-  // never a dry hour (utils/statisticsSeries).
-  const g = s && (bars.length > 0 || status === "ready") ? chartGeometry(win, [{ pts: bars, gaps: s.gaps, scale: "fromZero" }], PLOT) : null;
-  const { t, handlers } = useHoverTime(g);
-  const hover = g && t !== null ? g.hover(t) : null;
-  const bar = hover?.readings[0] ?? null;
-  const max = Math.max(...bars.map((b) => b.v), 0);
+  // One bar a bucket, from zero, in the app's one bar chart (utils/barChart):
+  // a bucket the recorder has no reading for is an outage band, never a dry
+  // hour (utils/statisticsSeries).
   const slot = perDay ? 86_400_000 : 3_600_000;
-  const bw = Math.max(1.5, (slot / Math.max(1, win.to - win.from)) * W * 0.72);
+  const buckets = s && (s.points.length > 0 || status === "ready")
+    ? seriesBuckets({ points: s.points, window: win }, slot, { key: "rain", label: "Rain", cls: "water" })
+    : [];
   const spanH = (win.to - win.from) / 3600_000;
   const span = spanH > 48 ? `${Math.round(spanH / 24)} days` : `${Math.round(spanH)} h`;
+  // "No rain" only when the gauge REPORTED zero; an empty record is not a dry
+  // day — it is no record (the bands say so).
+  const note = barNote(buckets, `No rain readings in the last ${span}`, `No rain in the last ${span}`);
+  const n = buckets.length;
   return (
     <div className="weather-tile chart">
       <div className="weather-chart-head">
         <div className="weather-eyebrow">Rain</div>
         <div className="weather-legend">per {perDay ? "day" : "hour"} · {unit}</div>
       </div>
-      {!g
+      {n === 0
         ? <ChartEmpty status={status} />
         : (
-          <div className="chart-with-axis has-unit">
-          <YAxis height={CHART_PX} unit={unit} ticks={axisOf(g.series[0])} />
-          <div className="spark-wrap weather-chart-wrap">
-          <svg className="weather-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Rain history"
-            style={{ touchAction: "none" }} {...handlers}>
-            <Grid ticks={axisOf(g.series[0])} />
-            <Bands g={g} />
-            {bars.map((b) => {
-              const h = max > 0 ? Math.max(2, BOT - g.series[0].sy(b.v)) : 2;
-              return <rect key={b.t} x={g.sx(b.t).toFixed(1)} y={(BOT - h).toFixed(1)} width={bw.toFixed(1)} height={h.toFixed(1)} rx="1" className="chart-bar" />;
-            })}
-            {/* "No rain" only when the gauge REPORTED zero; an empty record is
-                not a dry day — it is no record (the band says so). */}
-            {bars.length === 0
-              ? <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain readings in the last ${span}`}</text>
-              : max === 0 && <text x={W / 2} y={H / 2} className="chart-empty-note">{`No rain in the last ${span}`}</text>}
-            {hover && bar && <line x1={bar.x + bw / 2} y1={TOP} x2={bar.x + bw / 2} y2={BOT} className="spark-crosshair" vectorEffect="non-scaling-stroke" />}
-          </svg>
-          {hover && bar && (
-            <ChartTip left={`${((bar.x + bw / 2) / W) * 100}%`} top={TOP} flip={bar.x > W / 2} t={bar.t} spanHours={g.spanHours}
-              stampPrefix={perDay ? "day of " : "hour from "}
-              rows={[{ key: "rain", marker: <i className="key water" />, text: `${fmtChartValue(bar.v)} ${unit}` }]} />
-          )}
-          </div>
-          </div>
+          <BarChart label="Rain history" buckets={buckets} height={CHART_PX} unit={unit} note={note}
+            fmt={(v) => `${fmtChartValue(v)} ${unit}`}
+            stamp={(t) => `${perDay ? "day of " : "hour from "}${fmtChartStamp(t, spanH)}`}
+            ticks={[{ i: 0, label: fmtChartTick(buckets[0].t, spanH) }, { i: Math.floor(n / 2), label: fmtChartTick(buckets[Math.floor(n / 2)].t, spanH) }, { i: n - 1, label: "now" }]} />
         )}
-      <Axis g={g} />
     </div>
   );
 }

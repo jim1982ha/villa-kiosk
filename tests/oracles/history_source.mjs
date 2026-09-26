@@ -83,8 +83,8 @@ console.log("\n  the callers:");
      /key: "30d"[^}]*period: "hour", totalPeriod: "day"/.test(range) && /WEATHER_RANGES[^=]*= \["12h", "24h", "7d", "30d"\]/.test(range));
   const panel = readFileSync(new URL("../../src/components/panels/WeatherPanel.tsx", import.meta.url), "utf8");
   ck("the Weather window has no range table of its own", !/const RANGES\b/.test(panel) && /useHistoryRange\(WEATHER_RANGES/.test(panel));
-  ck("'No rain' is said only over readings; no readings says so",
-     /bars\.length === 0\s*\?[^:]*No rain readings[\s\S]{0,80}: max === 0 && /.test(panel));
+  ck("'No rain' is said only over readings; no readings says so (utils/barChart.barNote, driven in bar_chart.mjs)",
+     /barNote\(buckets, `No rain readings in the last \$\{span\}`, `No rain in the last \$\{span\}`\)/.test(panel));
   ck("the Rain figure is a dash, not '0.0 mm', when there is nothing to sum",
      /<Figure label="Rain" value=\{rainTotal !== undefined \?/.test(panel));
   ck("a failed history says it could not load", /status === "failed" \? "Couldn't load this history\."/.test(panel));

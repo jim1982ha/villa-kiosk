@@ -52,15 +52,15 @@ console.log("  brightness: one fixture's worth per entity, and a whole pool per 
   const ls = spots.map((m) => r.bulbs.lightOf(m.uniqueId));
   ck("three bulbs of one entity: each PointLight is a third of one fixture's worth", ls.every((l) => near(l.intensity, 1.3 / 3)), ls.map((l) => l.intensity));
   ck("  ...and each is on", ls.every((l) => l.isEnabled()));
-  const lamps = r.bulbs.pools.glowLamps();
+  const lamps = r.bulbs.lamps();
   ck("each bulb's pool — and the furniture light it feeds — is at FULL strength", lamps.length === 3 && lamps.every((l) => near(l.amount, 1)), lamps.map((l) => l.amount));
   r.bulbs.setStrength(0.5);
   ck("the slider halves the PointLights", ls.every((l) => near(l.intensity, 0.65 / 3)), ls.map((l) => l.intensity));
-  ck("  ...and the pools, together", r.bulbs.pools.glowLamps().every((l) => near(l.amount, 0.5)));
+  ck("  ...and the pools, together", r.bulbs.lamps().every((l) => near(l.amount, 0.5)));
   ck("an unchanged slider is not a change", r.bulbs.setStrength(0.5) === false);
   e.reading = { on: false, colour: warm, frac: 1 };
   r.bulbs.show(e.meshes, e.reading);
-  ck("off: every PointLight disabled, every pool gone", ls.every((l) => !l.isEnabled() && l.intensity === 0) && r.bulbs.pools.glowLamps().length === 0);
+  ck("off: every PointLight disabled, every pool gone", ls.every((l) => !l.isEnabled() && l.intensity === 0) && r.bulbs.lamps().length === 0);
 }
 
 console.log("\n  the storey: a hidden storey's bulbs are dark — ALL their light");
@@ -73,10 +73,10 @@ console.log("\n  the storey: a hidden storey's bulbs are dark — ALL their ligh
   r.bulbs.resync();
   const l = r.bulbs.lightOf(up.uniqueId);
   ck("its PointLight goes off with the storey (it used to light through the slab)", !l.isEnabled(), l.isEnabled());
-  ck("  ...and its pool", r.bulbs.pools.glowLamps().length === 0);
+  ck("  ...and its pool", r.bulbs.lamps().length === 0);
   up.setEnabled(true);
   r.bulbs.resync();
-  ck("shown again: both back", l.isEnabled() && r.bulbs.pools.glowLamps().length === 1);
+  ck("shown again: both back", l.isEnabled() && r.bulbs.lamps().length === 1);
 }
 
 console.log("\n  strips: one rule");
@@ -90,7 +90,7 @@ console.log("\n  strips: one rule");
   ck("a spot's is not", near(pl.position.y, 2.3, 1e-3), pl.position.y);
   const e = r.entity([strip], on());
   r.bulbs.show(e.meshes, e.reading);
-  ck("a horizontal strip has three pools: its centre and both ends", r.bulbs.pools.glowLamps().length === 3, r.bulbs.pools.glowLamps().length);
+  ck("a horizontal strip has three pools: its centre and both ends", r.bulbs.lamps().length === 3, r.bulbs.lamps().length);
 }
 {
   const r = rig();

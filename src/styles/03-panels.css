@@ -689,8 +689,6 @@ input[type="range"]::-moz-range-thumb {
 .chart-area { stroke: none; }
 .chart-area.out { fill: color-mix(in srgb, var(--accent) 28%, transparent); }
 .chart-area.warm { fill: color-mix(in srgb, var(--accent-warm) 26%, transparent); }
-.chart-bar { fill: var(--cat-energy); }
-.chart-empty-note { font: 14px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
 .weather-axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
 /* The y-axis every Weather and Energy history chart draws (ChartAxis). */
@@ -712,13 +710,34 @@ input[type="range"]::-moz-range-thumb {
 .energy-hero { display: flex; flex-direction: column; align-items: flex-end; }
 .energy-hero-sub { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
 .weather-tile.energy-wide { min-height: 0; justify-content: flex-start; }
-.energy-bars-wrap { display: flex; flex-direction: column; gap: 6px; }
-.energy-bars { position: relative; display: flex; align-items: flex-end; gap: 4px; }
-.energy-bar { flex: 1 1 0; height: 100%; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; }
-.energy-bar.hover { outline: 2px solid var(--hairline-strong); outline-offset: 1px; }
-.energy-seg { flex: 0 0 auto; }
-.energy-seg.e-none { height: 3px; background: var(--bg-card); }
-.energy-typical { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); pointer-events: none; }
+/* The app's bar chart (BarChart.tsx, utils/barChart): every bucket an equal
+   slot, so the bucket under the pointer and its centre are exact fractions;
+   the gap between bars is the slot's padding, not a flex gap. */
+.bar-chart-wrap { display: flex; flex-direction: column; gap: 6px; }
+.bar-chart { position: relative; display: flex; align-items: stretch; }
+.bar-slot { position: relative; flex: 1 1 0; min-width: 0; display: flex; padding: 0 2px; }
+.bar-stack { flex: 1 1 auto; display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; }
+.bar-slot.hover .bar-stack { outline: 2px solid var(--hairline-strong); outline-offset: 1px; }
+.bar-seg { flex: 0 0 auto; }
+.bar-seg.none { height: 3px; background: var(--bg-card); }
+.bar-seg.zero { height: 2px; }
+.bar-seg.water { background: var(--cat-energy); }
+/* No reading: the outage band every history chart draws, the slot's full width. */
+.bar-band { position: absolute; inset: 0; opacity: 0.18; }
+.bar-chart-typical { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--hairline-strong); pointer-events: none; }
+/* A second measure over the bars (the cost over the energy), on the right axis. */
+.bar-chart-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.bar-chart-line polyline { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.bar-chart-line.cost polyline { stroke: var(--text-primary); }
+.bar-chart-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); border: 1.5px solid var(--bg-panel); pointer-events: none; }
+.bar-chart-dot.hover { width: 11px; height: 11px; }
+.bar-chart-dot.cost, .key.cost { background: var(--text-primary); }
+.weather-legend .key.line { height: 3px; border-radius: 2px; }
+.bar-chart-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); color: var(--text-secondary); pointer-events: none; }
+.bar-chart-axis { position: relative; height: 1.4em; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.bar-chart-axis span { position: absolute; top: 0; white-space: nowrap; }
+.bar-chart-axis span.middle { transform: translateX(-50%); }
+.bar-chart-axis span.end { transform: translateX(-100%); }
 .e-used { background: color-mix(in srgb, var(--accent) 55%, transparent); }
 .e-standout { background: color-mix(in srgb, var(--status-danger) 55%, transparent); }
 .e-untracked { background: color-mix(in srgb, var(--text-secondary) 30%, transparent); fill: color-mix(in srgb, var(--text-secondary) 30%, transparent); }
@@ -728,24 +747,68 @@ input[type="range"]::-moz-range-thumb {
 .e-s3 { background: color-mix(in srgb, var(--accent) 55%, transparent); fill: color-mix(in srgb, var(--accent) 55%, transparent); }
 .e-s4 { background: color-mix(in srgb, var(--accent-warm) 30%, transparent); fill: color-mix(in srgb, var(--accent-warm) 30%, transparent); }
 .e-s5 { background: color-mix(in srgb, var(--cat-energy) 28%, transparent); fill: color-mix(in srgb, var(--cat-energy) 28%, transparent); }
+/* The energy flow's and pie's colours: the house, "Other", and twelve slots
+   for the devices below the top level — theme tokens mixed, never hex. The
+   slots open on hues the top-level devices (e-s0..5) do not use: the first
+   device inside a meter was the first meter's tan (2.496.127). */
+.e-house { background: var(--accent); fill: var(--accent); }
+.e-other { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
+.e-p0 { background: color-mix(in srgb, var(--accent-teal) 65%, transparent); fill: color-mix(in srgb, var(--accent-teal) 65%, transparent); }
+.e-p1 { background: color-mix(in srgb, var(--status-warning) 65%, transparent); fill: color-mix(in srgb, var(--status-warning) 65%, transparent); }
+.e-p2 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-warm) 50%, var(--status-danger)) 70%, transparent); }
+.e-p3 { background: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--cat-energy) 50%, var(--accent-teal)) 70%, transparent); }
+.e-p4 { background: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-warning) 50%, var(--accent)) 70%, transparent); }
+.e-p5 { background: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--status-danger) 50%, var(--cat-energy)) 70%, transparent); }
+.e-p6 { background: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); fill: color-mix(in srgb, color-mix(in srgb, var(--accent-teal) 50%, var(--accent-warm)) 70%, transparent); }
+.e-p7 { background: color-mix(in srgb, var(--accent) 60%, transparent); fill: color-mix(in srgb, var(--accent) 60%, transparent); }
+.e-p8 { background: color-mix(in srgb, var(--accent-warm) 70%, transparent); fill: color-mix(in srgb, var(--accent-warm) 70%, transparent); }
+.e-p9 { background: color-mix(in srgb, var(--cat-energy) 65%, transparent); fill: color-mix(in srgb, var(--cat-energy) 65%, transparent); }
+.e-p10 { background: color-mix(in srgb, var(--status-danger) 55%, transparent); fill: color-mix(in srgb, var(--status-danger) 55%, transparent); }
+.e-p11 { background: color-mix(in srgb, var(--text-secondary) 45%, transparent); fill: color-mix(in srgb, var(--text-secondary) 45%, transparent); }
+/* Every device as a pie (HA's "Individual devices"): the ring, its total, a legend. */
+.energy-rank-tools { display: flex; align-items: center; gap: 10px; }
+.energy-shape button { padding: 4px 10px; display: inline-flex; align-items: center; }
+.energy-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+.energy-pie-wrap { flex: 0 1 260px; min-width: 200px; margin: 0 auto; }
+.energy-pie-svg { width: 100%; height: auto; display: block; }
+.energy-slice { opacity: 0.85; stroke: var(--bg-card); stroke-width: 1; transition: opacity 120ms; }
+.energy-slice.hover { opacity: 1; stroke: var(--text-primary); stroke-width: 1.5; }
+.energy-pie-total-l { font: 12px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
+.energy-pie-total-v { font: 600 17px var(--font-ui); fill: var(--text-primary); text-anchor: middle; }
+.energy-pie-side { flex: 1 1 280px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.energy-pie-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; font-size: var(--text-sm); }
+.energy-pie-legend span { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 2px 4px; border-radius: 6px; }
+.energy-pie-legend span.hover { background: var(--bg-input); }
+.energy-pie-legend b { margin-left: auto; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.energy-pie-legend .key { flex: 0 0 auto; }
+
 .weather-legend .key.e-used, .weather-legend .key[class*="e-s"], .weather-legend .key.e-untracked { height: 8px; }
+.energy-pie-legend .key { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .energy-flow { width: 100%; height: auto; }
 .energy-band { opacity: 0.55; transition: opacity 120ms; }
 .energy-band.hover { opacity: 0.85; }
 .energy-hit { fill: transparent; }
 .energy-flow-wrap { position: relative; }
 .energy-grid { fill: var(--accent); }
-.energy-flow-name { font: 600 15px var(--font-ui); fill: var(--text-primary); }
+.energy-flow-name { font: 600 13px var(--font-ui); fill: var(--text-primary); paint-order: stroke; stroke: color-mix(in srgb, var(--bg-card) 70%, transparent); stroke-width: 3px; stroke-linejoin: round; }
 .energy-flow-sub { font: 13px var(--font-ui); fill: var(--text-secondary); }
-.energy-flow-list { display: none; }
+/* The flow as rows (a phone only): the "Every device" row, in reading order. */
+.energy-flow-list.energy-rank { display: none; }
 .energy-note { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.45; }
-.energy-history-head { display: flex; justify-content: flex-end; }
-.energy-rank { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) auto 3.2em; gap: 8px 12px; align-items: center; font-size: var(--text-sm); }
-.energy-rank b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.energy-rank .muted { color: var(--text-secondary); text-align: right; }
-.energy-rank > span:first-child, .energy-rank > span:nth-child(4n+1) { text-align: left; }
-.energy-rank-bar { height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; }
-.energy-rank-bar i { display: block; height: 100%; background: color-mix(in srgb, var(--cat-energy) 55%, transparent); }
+/* Every device as a list: one grid row a device — name, bar (in the device's
+   colour class), kWh, share. A phone moves the bar under the name. */
+.energy-rank { display: flex; flex-direction: column; gap: 8px; font-size: var(--text-sm); }
+.energy-rank-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) auto 3.2em; grid-template-areas: "name bar kwh pct"; gap: 4px 12px; align-items: center; }
+.energy-rank-name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.energy-rank-name.muted { color: var(--text-secondary); }
+.energy-rank-note { color: var(--text-secondary); font-size: var(--text-xs); }
+.energy-rank-chevron { color: var(--text-secondary); vertical-align: -2px; margin-right: 4px; }
+.energy-rank-row b { grid-area: kwh; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.energy-rank-pct { grid-area: pct; text-align: right; color: var(--text-secondary); }
+.energy-rank-bar { grid-area: bar; height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; }
+.energy-rank-bar i { display: block; height: 100%; }
+.window-pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 10px; font-size: var(--text-sm); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.window-pager .btn { padding: 4px 8px; min-height: 0; }
 
 /* A phone: one column of advice, two of instruments, one of charts. */
 @media (max-width: 720px) {
@@ -782,12 +845,7 @@ input[type="range"]::-moz-range-thumb {
   .weather-big { font-size: var(--text-display-sm); }
   .weather-headline { font-size: var(--text-xl); }
   .energy-flow-wrap { display: none; }
-  .energy-flow-list { display: flex; flex-direction: column; gap: 10px; }
-  .energy-rank { grid-template-columns: minmax(0, 1fr) auto 2.8em; }
-  .energy-rank-bar { display: none; }
+  .energy-flow-list.energy-rank { display: flex; }
+  .energy-rank { gap: 10px; }
+  .energy-rank-row { grid-template-columns: minmax(0, 1fr) auto 2.8em; grid-template-areas: "name kwh pct" "bar bar bar"; }
 }
-.energy-flow-row { position: relative; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 10px; overflow: hidden; font-size: var(--text-sm); }
-.energy-flow-row > i { position: absolute; left: 0; top: 0; bottom: 0; opacity: 0.55; }
-.energy-flow-row > b, .energy-flow-row > span { position: relative; }
-.energy-flow-row > span { color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.energy-flow-row.grid { background: color-mix(in srgb, var(--accent) 22%, transparent); }

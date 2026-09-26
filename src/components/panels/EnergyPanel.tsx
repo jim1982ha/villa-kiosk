@@ -12,44 +12,47 @@
 // here the next time the window opens. The words: config/energyModel.ts.
 // No Energy dashboard in HA: the bar's old device list opens instead.
 
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { ChevronLeft, LineChart, Zap } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, LineChart, Zap } from "lucide-react";
 import BasePanel from "./BasePanel";
+import { List, PieChart } from "lucide-react";
+import { flowTree, flowLayout, flowRows, energySlices, sliceTurns, deviceColours, UNTRACKED_CLS, type FlowNode } from "@/config/energyFlow";
+import { useConfig } from "@/config/ConfigContext";
+import { resolveSiteTitle } from "@/config/AppConfig";
+import { useSegmentedChoice } from "./historyRange";
 import ChartTip from "./ChartTip";
-import YAxis from "./ChartAxis";
-import { niceTicks } from "@/utils/chartGeometry";
+import BarChart from "./BarChart";
+import { energyToday, historyFigures, overlapShows, share } from "@/config/energyObservations";
+import { ENERGY_RANGES, energyRange, type EnergyRangeKey } from "./energyRanges";
+import { Figure, ObservationCards } from "./WindowPieces";
+// Ten a page, with the app's one pager (the settings logs use it too).
+import { usePaged, Pager, PAGE_CARDS } from "@/components/common/Paged";
+import type { BarSeg } from "@/utils/barChart";
 import { fmtChartTime } from "./chartUtils";
 import { useHA } from "@/ha/HAStateStore";
 import { useHistory } from "@/hooks/useHistory";
 import { fetchEnergySetup, fetchEnergyPeriod, type EnergyWindowSetup } from "@/ha/HAEnergyAPI";
 import type { HistorySeries } from "@/types/ha.types";
-import type { StatisticsPeriod } from "@/utils/statisticsSeries";
+import { PERIOD_MS } from "@/utils/statisticsSeries";
+import { localMidnight } from "@/utils/localDay";
 import {
-  energySplit, deviceRanking, typicalDay, todayHeadline, standoutDay, risers, fmtKwh, fmtMoney,
-  type EnergySplit, type NodeUse,
+  energyPeriod, periodStarts, deviceRanking, fmtKwh, fmtMoney, fmtPower, powerKw,
+  type EnergyBucket, type EnergySplit,
 } from "@/config/energyModel";
 
 type View = "now" | "history";
-const DAY = 86_400_000;
 
-/** A statistic's per-bucket values keyed by bucket start. */
-function byStart(s: HistorySeries | undefined): Map<number, number> {
-  const m = new Map<number, number>();
-  for (const p of s?.points ?? []) m.set(p.t, (m.get(p.t) ?? 0) + p.v);
-  return m;
-}
-function total(s: HistorySeries | undefined): number | undefined {
-  return s && s.points.length ? s.points.reduce((a, p) => a + p.v, 0) : undefined;
-}
-function midnight(offsetDays = 0): number {
-  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + offsetDays);
-  return d.getTime();
-}
 const weekday = (t: number) => new Date(t).toLocaleDateString([], { weekday: "short" });
 
 export default function EnergyPanel({ onClose, fallback }: { onClose: () => void; fallback: () => ReactNode }) {
-  const { ws, entities } = useHA();
+  const { ws, entities, haConfig } = useHA();
+  const { config } = useConfig();
+  // The house the flow starts from: the name the kiosk's own title shows.
+  const house = resolveSiteTitle(config, haConfig?.location_name);
   const [view, setView] = useState<View>("now");
+  // The period picker lives in the HEADER on the history screen, as the
+  // Weather window's does — the same control (useSegmentedChoice).
+  const { key: range, picker } = useSegmentedChoice(RANGE_OPTIONS, "week", "Period", "weather-ranges");
   const topRef = useRef<HTMLDivElement>(null);
   useEffect(() => { topRef.current?.closest(".panel-body")?.scrollTo({ top: 0 }); }, [view]);
   // A statistic's name: the device's own name in HA's Energy settings, else its
@@ -58,6 +61,8 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
     String(entities[id]?.attributes.friendly_name ?? id).replace(/\s+energy$/i, "");
   const { data: setup, status } = useHistory<EnergyWindowSetup | null>(
     "energy-setup", () => fetchEnergySetup(ws, nameOf), null);
+  // Every device's colour, once, from HA's setup (energyFlow.deviceColours).
+  const colourOf = useMemo(() => (setup ? deviceColours(setup) : () => UNTRACKED_CLS), [setup]);
   if (status === "ready" && setup === null) return <>{fallback()}</>;
   const costUnit = setup?.gridIn.map((id) => setup.costOf[id]).filter(Boolean)
     .map((c) => String(entities[c]?.attributes.unit_of_measurement ?? ""))[0];
@@ -74,7 +79,7 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
       className="summary-group-modal weather-modal energy-modal"
       history={false}
       onClose={onClose}
-      headerActions={view === "now" ? <span className="weather-live">Home Assistant Energy</span> : undefined}
+      headerActions={view === "now" ? <span className="weather-live">Home Assistant Energy</span> : picker}
       footerLeading={view === "now" && (
         <button type="button" className="btn ghost" onClick={() => setView("history")}>
           <LineChart size={18} /> History and trends
@@ -85,8 +90,8 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
       {!setup
         ? <div className="state-timeline-skeleton weather-chart" />
         : view === "now"
-          ? <NowView setup={setup} costUnit={costUnit} />
-          : <HistoryView setup={setup} costUnit={costUnit} />}
+          ? <NowView setup={setup} costUnit={costUnit} house={house} colourOf={colourOf} />
+          : <HistoryView setup={setup} costUnit={costUnit} range={range} colourOf={colourOf} />}
     </BasePanel>
   );
 }
@@ -97,18 +102,15 @@ export default function EnergyPanel({ onClose, fallback }: { onClose: () => void
 function useRateKw() {
   const { entities } = useHA();
   return (rateId: string | null): number | undefined => {
-    if (!rateId) return undefined;
-    const e = entities[rateId];
-    const v = e ? Number(e.state) : NaN;
-    if (!Number.isFinite(v)) return undefined;
-    const u = String(e?.attributes.unit_of_measurement ?? "W").toLowerCase();
-    return u === "kw" ? v : u === "mw" ? v * 1000 : v / 1000;
+    const e = rateId ? entities[rateId] : undefined;
+    return e ? powerKw(e.state, e.attributes.unit_of_measurement as string | undefined) : undefined;
   };
 }
 
-function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: string | undefined }) {
+function NowView({ setup, costUnit, house, colourOf }: { setup: EnergyWindowSetup; costUnit: string | undefined; house: string; colourOf: (id: string) => string }) {
   const { ws } = useHA();
-  const today = midnight(), weekAgo = midnight(-7);
+  const now = Date.now();
+  const today = localMidnight(now), weekAgo = localMidnight(now, -7);
   // Refreshed every five minutes while open: the recorder writes hourly
   // buckets, so a faster refresh would fetch the same numbers.
   const [tick, setTick] = useState(0);
@@ -127,80 +129,23 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
   const rateKw = useRateKw();
   if (!data) return <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load Home Assistant's energy." : "Loading…"}</div>;
 
-  const todayOf = (id: string) => total(data.hourly[id]);
-  const split = energySplit(setup, todayOf);
-  const cost = setup.gridIn.reduce<number | undefined>((a, id) => {
-    const c = setup.costOf[id] ? total(data.hourly[setup.costOf[id]]) : undefined;
-    return c === undefined ? a : (a ?? 0) + c;
-  }, undefined);
-
-  // Hour by hour: used = import + solar − export, per bucket.
-  const usedPerBucket = (src: Record<string, HistorySeries>, starts: number[]) => {
-    const maps = { i: setup.gridIn.map((id) => byStart(src[id])), o: setup.gridOut.map((id) => byStart(src[id])), s: setup.solar.map((id) => byStart(src[id])) };
-    return starts.map((t) => {
-      const g = (ms: Map<number, number>[]) => ms.reduce((a, m) => a + (m.get(t) ?? 0), 0);
-      return Math.max(0, g(maps.i) + g(maps.s) - g(maps.o));
-    });
-  };
-  const hours = Array.from({ length: 24 }, (_, h) => today + h * 3_600_000);
-  const nowH = new Date().getHours();
-  const hourly = usedPerBucket(data.hourly, hours).map((v, h) => (h <= nowH ? v : undefined));
-
-  // The last seven COMPLETE days — today is not one yet.
-  const days = Array.from({ length: 7 }, (_, i) => weekAgo + i * DAY);
-  const daily = usedPerBucket(data.daily, days);
-  const typical = typicalDay(daily);
-  const standout = standoutDay(daily, typical);
-  const dayFraction = (Date.now() - today) / DAY;
-  const clock = fmtChartTime(Date.now());
-
-  // Per-device typical and stand-out day, for the stand-out card's "what rose".
-  const deviceDay = (id: string, t: number) => byStart(data.daily[id]).get(t);
-  const deviceTypical = (id: string) => typicalDay(days.map((t) => deviceDay(id, t) ?? 0));
-  const leafDevices = setup.devices.filter((d) => d.children.length === 0);
-  const leader = deviceRanking(split).filter((u) => u.node.children.length === 0)[0];
-
-  const cards: { tone: "good" | "caution" | "neutral"; title: string; detail: string }[] = [];
-  if (standout && typical) {
-    const t = days[standout.index];
-    const rose = risers(leafDevices, (id) => deviceDay(id, t), deviceTypical).slice(0, 2).map((r) => r.node.name);
-    const dayCost = setup.gridIn.reduce((a, id) => a + (setup.costOf[id] ? deviceDay(setup.costOf[id], t) ?? 0 : 0), 0);
-    cards.push({
-      tone: "caution",
-      title: `${weekday(t)}: ${standout.ratio.toFixed(1)}× usual`,
-      detail: `${fmtKwh(daily[standout.index])} kWh${dayCost > 0 ? `, ${fmtMoney(dayCost, costUnit)}` : ""}.`
-        + (rose.length ? ` ${rose.join(" and ")} ran more than usual.` : " No device meter shows why."),
-    });
-  }
-  if (leader && split.used > 0) {
-    const typ = deviceTypical(leader.node.id);
-    cards.push({
-      tone: "neutral",
-      title: `${leader.node.name} leads`,
-      detail: `${fmtKwh(leader.kwh)} kWh today — ${Math.round((leader.kwh / split.used) * 100)}% of the villa`
-        + (typ ? ` (about ${fmtKwh(typ)} kWh on a typical day).` : "."),
-    });
-  }
-  if (split.used > 0 && split.overlap > split.used * 0.05) {
-    cards.push({
-      tone: "caution",
-      title: "Devices overlap the meter",
-      detail: `They add up to ${fmtKwh(split.overlap)} kWh more than was used: some are set up beside the meter they are part of. Give them an upstream device in HA's Energy settings.`,
-    });
-  } else if (split.used > 0 && split.untracked / split.used > 0.25) {
-    cards.push({
-      tone: "neutral",
-      title: `${Math.round((split.untracked / split.used) * 100)}% untracked`,
-      detail: `${fmtKwh(split.untracked)} of today's ${fmtKwh(split.used)} kWh has no device meter in HA's Energy settings.`,
-    });
-  }
+  // The period's sums, bucket by bucket, are energyModel's: an hour the
+  // recorder has no reading for is MISSING there, never 0 kWh.
+  const hours = periodStarts("hoursToday", now);
+  const days = periodStarts("last7Complete", now);
+  const todayP = energyPeriod(setup, data.hourly, hours, PERIOD_MS.hour, now);
+  const weekP = energyPeriod(setup, data.daily, days, PERIOD_MS.day, now);
+  // Everything the screen SAYS — headline, cards, the week's figures — is
+  // config/energyObservations'.
+  const T = energyToday(setup, todayP, weekP, now, fmtChartTime(now), costUnit);
+  const { split, cost, typical, standout } = T;
 
   return (
     <div className="weather-now energy-now">
       <div className="weather-feels">
         <div>
           <div className="weather-eyebrow">Today so far</div>
-          <div className="weather-headline">{todayHeadline(split.used, typical, dayFraction, clock)}</div>
+          <div className="weather-headline">{T.headline}</div>
         </div>
         <div className="energy-hero">
           <div className="weather-big">{fmtKwh(split.used)}</div>
@@ -208,45 +153,35 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
         </div>
       </div>
 
-      {cards.length > 0 && (
-        <div className="weather-advice">
-          {cards.slice(0, 3).map((a) => (
-            <div key={a.title} className={`weather-advice-card tone-${a.tone}`}>
-              <div className="weather-advice-title"><span className="weather-advice-mark" aria-hidden="true">{a.tone === "good" ? "✓" : a.tone === "neutral" ? "·" : "!"}</span>{a.title}</div>
-              <div className="weather-advice-detail">{a.detail}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ObservationCards cards={T.cards} />
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head"><div className="weather-eyebrow">Today, hour by hour</div><div className="weather-legend">kWh per hour</div></div>
-        <Bars
-          buckets={hours.map((t, i) => ({ t, segs: hourly[i] === undefined ? [] : [{ key: "used", label: "Used", v: hourly[i]!, cls: "e-used" }] }))}
-          stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`} unit="kWh"
-          ticks={["00:00", "06:00", "12:00", "18:00", "24:00"]}
+        <BarChart label="Energy used today, hour by hour" fmt={kwh} unit="kWh"
+          buckets={todayP.buckets.map((b) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: "e-used" }]) }))}
+          stamp={(t) => `${fmtChartTime(t)}–${fmtChartTime(t + 3_600_000)}`}
+          ticks={energyRange("day").ticks(hours.length).map((i) => ({ i, label: energyRange("day").bucketLabel(hours[i]) }))}
         />
       </div>
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
           <div className="weather-eyebrow">Last 7 days</div>
-          <div className="weather-legend">{fmtKwh(daily.reduce((a, v) => a + v, 0))} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
+          <div className="weather-legend">{fmtKwh(T.weekTotal)} kWh{typical ? ` · typical day ${fmtKwh(typical)}` : ""}</div>
         </div>
-        <Bars
-          buckets={days.map((t, i) => ({ t, segs: [{ key: "used", label: "Used", v: daily[i], cls: standout?.index === i ? "e-standout" : "e-used" }] }))}
+        <BarChart label="Energy used, the last seven days" fmt={kwh} unit="kWh"
+          buckets={weekP.buckets.map((b, i) => ({ t: b.t, segs: segsOf(b, () => [{ key: "used", label: "Used", v: b.split!.used, cls: standout?.index === i ? "e-standout" : "e-used" }]) }))}
           stamp={(t) => new Date(t).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" })}
-          ticks={days.map(weekday)} typical={typical} unit="kWh"
+          ticks={days.map((t, i) => ({ i, label: weekday(t) }))} typical={typical}
         />
       </div>
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
           <div className="weather-eyebrow">Where today&apos;s {fmtKwh(split.used)} kWh went</div>
-          <div className="weather-legend">kWh today · now</div>
         </div>
-        <Flow split={split} rateKw={rateKw} />
-        {split.used > 0 && split.overlap > split.used * 0.05 && (
+        <Flow split={split} rateKw={rateKw} house={house} colourOf={colourOf} />
+        {overlapShows(split) && (
           <div className="energy-note">The devices add up to more than the grid meter: some are set up beside the meter they belong to. In Home Assistant&apos;s Energy settings, set each one&apos;s upstream device.</div>
         )}
       </div>
@@ -254,283 +189,276 @@ function NowView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: stri
   );
 }
 
-/** Where a period's energy went, as HA's dashboard models it: the grid (and
- *  solar) on the left, each top-level device a band sized by its kWh, what it
- *  contains named beside it, and what no device accounts for. */
-function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | null) => number | undefined }) {
-  // The band under the pointer (or the finger) — its tooltip says what the
-  // one line of text beside it cannot: its share, and what is inside it.
+/** Where a period's energy went, as Home Assistant's Energy dashboard draws
+ *  it (owner, 2026-09-26): the house, each top-level device, the devices
+ *  inside each, and at every level what no device accounts for. The tree and
+ *  its layout are config/energyFlow's; this draws them. A phone gets the same
+ *  tree as rows — the diagram's text would be 7 px. */
+export function Flow({ split, rateKw, house, colourOf }: { split: EnergySplit; rateKw: (id: string | null) => number | undefined; house: string; colourOf: (id: string) => string }) {
   const [hover, setHover] = useState<number | null>(null);
-  const rows = [...split.roots.filter((r) => r.kwh > 0.005), ...(split.untracked > 0.005 ? [null] : [])];
-  if (!rows.length) return <div className="muted body-text">Nothing recorded yet today.</div>;
-  const scaleTo = Math.max(split.used, split.roots.reduce((a, r) => a + r.kwh, 0) + split.untracked, 1e-6);
-  // Half the height it was first drawn at (owner, 2026-09-26): one line of
-  // text a device, the bands scaled to match.
-  const BAR = 150, SLOT = 22, GAP = 4;
-  const px = (kwh: number) => (kwh / scaleTo) * BAR;
-  const W = 800; // room for a one-line label (name · kWh · now · inside)
-  let srcY = 10, dstY = 4;
-  const bands = rows.map((r, i) => {
-    const kwh = r ? r.kwh : split.untracked;
-    const h = Math.max(3, px(kwh));
-    const band = { i, r, kwh, h, sy: srcY, dy: dstY };
-    srcY += h;
-    dstY += Math.max(h, SLOT) + GAP;
-    return band;
-  });
-  const H = Math.max(dstY, BAR + 16);
-  const gridH = px(split.used);
+  const tree = flowTree(split, house, colourOf);
+  if (tree.children.length === 0) return <div className="muted body-text">Nothing recorded yet today.</div>;
+  const L = flowLayout(tree);
+  const { W, H, nodeW } = L;
+  const colRight = (d: number) => Math.min(W, ...L.boxes.filter((b) => b.depth === d + 1).map((b) => b.x), W);
+  const now = (id: string | null) => { const kw = rateKw(id); return kw === undefined ? "" : `${fmtPower(kw)} now`; };
   const nowKw = split.roots.reduce<number | undefined>((a, r) => {
     const k = rateKw(r.node.rateId); return k === undefined ? a : (a ?? 0) + k;
   }, undefined);
-  // A phone gets the same answer as rows — the flow's text would be 7 px.
-  const list = (
-    <div className="energy-flow-list">
-      <div className="energy-flow-row grid"><b>Grid</b><span>{fmtKwh(split.used)} kWh{nowKw !== undefined ? ` · ${nowKw.toFixed(2)} kW now` : ""}</span></div>
-      {bands.map((b) => {
-        const kw = b.r ? rateKw(b.r.node.rateId) : undefined;
-        return (
-          <div key={`r${b.i}`} className="energy-flow-row">
-            <i className={b.r ? `e-s${b.i % 6}` : "e-untracked"} style={{ width: `${Math.max(2, (b.kwh / scaleTo) * 100)}%` }} />
-            <b>{b.r ? b.r.node.name : "Untracked"}</b>
-            <span>{fmtKwh(b.kwh)} kWh{kw !== undefined ? ` · ${kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`} now` : ""}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  const nowOf = (n: FlowNode) => (n.kind === "house" ? (nowKw === undefined ? "" : `${fmtPower(nowKw)} now`) : n.kind === "device" ? now(n.rateId) : "");
+  const hb = hover === null ? null : L.boxes[hover];
   return (
     <>
-    {list}
+    {/* A phone: the same tree as rows in reading order, drawn as "Every
+        device" draws its rows — every bar starting at the same left edge;
+        only the NAME is indented to show what is inside what. */}
+    <div className="energy-flow-list energy-rank">
+      {/* Without the house's own row: the window's title already names it and
+          its total (owner, 2026-09-26). A device inside a meter carries a
+          chevron, so the grouping reads at a glance. */}
+      {flowRows(tree).filter((r) => r.depth > 0).map(({ node: n, depth }) => (
+        <RankRow key={`r${n.id}`} label={n.label} kwh={n.kwh} of={tree.kwh} used={tree.kwh} cls={n.cls}
+          muted={n.kind === "untracked" || n.kind === "other"} depth={depth - 1} note={nowOf(n)} />
+      ))}
+    </div>
     <div className="spark-wrap energy-flow-wrap" onPointerLeave={() => setHover(null)}>
-    <svg className="energy-flow" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Where the energy went: the grid, then each device">
-      {bands.map((b) => {
-        const x0 = 150, x1 = 340, sy0 = b.sy, sy1 = b.sy + b.h, dy0 = b.dy, dy1 = b.dy + b.h;
-        return <path key={`b${b.i}`} className={`energy-band ${b.r ? `e-s${b.i % 6}` : "e-untracked"}${hover === b.i ? " hover" : ""}`}
-          onPointerEnter={() => setHover(b.i)} onPointerDown={() => setHover(b.i)}
-          d={`M${x0} ${sy0} C 250 ${sy0}, 250 ${dy0}, ${x1} ${dy0} L ${x1} ${dy1} C 250 ${dy1}, 250 ${sy1}, ${x0} ${sy1} Z`} />;
+    <svg className="energy-flow" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Where the energy went: ${house}, then each device`}>
+      {L.links.map((k) => {
+        const x0 = k.from.x + nodeW, x1 = k.to.x, mx = (x0 + x1) / 2;
+        const on = hb !== null && (hb.node === k.to.node || hb.node === k.from.node);
+        return <path key={`l${k.to.node.id}`} className={`energy-band ${k.to.node.cls}${on ? " hover" : ""}`}
+          d={`M${x0} ${k.sy} C ${mx} ${k.sy}, ${mx} ${k.dy}, ${x1} ${k.dy} L ${x1} ${k.dy + k.w} C ${mx} ${k.dy + k.w}, ${mx} ${k.sy + k.w}, ${x0} ${k.sy + k.w} Z`} />;
       })}
-      <rect x="116" y="10" width="34" height={Math.max(3, gridH)} rx="6" className="energy-grid" />
-      <text x="102" y={10 + gridH / 2 - 12} textAnchor="end" className="energy-flow-name">Grid</text>
-      <text x="102" y={10 + gridH / 2 + 6} textAnchor="end" className="energy-flow-sub">{fmtKwh(split.used)} kWh</text>
-      {nowKw !== undefined && <text x="102" y={10 + gridH / 2 + 22} textAnchor="end" className="energy-flow-sub">{nowKw.toFixed(2)} kW now</text>}
-      {bands.map((b) => {
-        const kw = b.r ? rateKw(b.r.node.rateId) : undefined;
-        const inside = b.r?.children.filter((c) => c.kwh > 0.005) ?? [];
-        const sub = [
-          kw !== undefined ? `${kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`} now` : "",
-          inside.length ? `${inside.length === 1 ? inside[0].node.name : `${inside.length} devices`} ${fmtKwh(inside.reduce((a, c) => a + c.kwh, 0))}` : "",
-        ].filter(Boolean).join(" · ");
+      {L.boxes.map((b, i) => {
+        const slotH = Math.max(b.h, 20);
         return (
-          <g key={`l${b.i}`} onPointerEnter={() => setHover(b.i)} onPointerDown={() => setHover(b.i)}>
-            {/* The whole row answers the pointer, not only the thin band. */}
-            <rect x="340" y={b.dy} width={W - 340} height={Math.max(b.h, SLOT)} className="energy-hit" />
-            <rect x="340" y={b.dy} width="14" height={b.h} rx="3" className={b.r ? `energy-node e-s${b.i % 6}` : "energy-node e-untracked"} />
-            <text x="366" y={b.dy + Math.min(b.h, SLOT) / 2 + 5}>
-              <tspan className="energy-flow-name">{b.r ? b.r.node.name : "Untracked"} · {fmtKwh(b.kwh)} kWh</tspan>
-              <tspan className="energy-flow-sub" dx="8">{b.r ? sub : "no device meter in HA"}</tspan>
-            </text>
+          <g key={`n${b.node.id}`} onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)}>
+            {/* The whole row beside the bar answers the pointer, not only the bar. */}
+            <rect x={b.x} y={b.y} width={colRight(b.depth) - b.x} height={slotH} className="energy-hit" />
+            <rect x={b.x} y={b.y} width={nodeW} height={b.h} rx="3" className={`energy-node ${b.node.cls}`} />
+            {/* Name and kWh only, as HA's diagram: a middle column's label
+                runs over the links, and "now" beside it ran into the next
+                column's names. The power "now" is in the tooltip and the
+                phone rows. */}
+            <text x={b.x + nodeW + 8} y={b.y + slotH / 2 + 4.5} className="energy-flow-name">{b.node.label} · {fmtKwh(b.node.kwh)} kWh</text>
           </g>
         );
       })}
     </svg>
-    {hover !== null && bands[hover] && (() => {
-      const b = bands[hover];
-      const u = b.r;
-      const kw = u ? rateKw(u.node.rateId) : undefined;
-      const inside = u?.children.filter((c) => c.kwh > 0.005) ?? [];
-      const pct = split.used > 0 ? Math.round((b.kwh / split.used) * 100) : 0;
+    {hb && (() => {
+      const n = hb.node;
+      const pct = share(n.kwh, tree.kwh);
+      const sub = nowOf(n);
       const rows = [
-        { key: "t", text: `${u ? u.node.name : "Untracked"} · ${fmtKwh(b.kwh)} kWh` },
-        { key: "p", text: `${pct}% of the ${fmtKwh(split.used)} kWh used` },
-        ...(kw !== undefined ? [{ key: "n", text: `${kw < 1 ? `${Math.round(kw * 1000)} W` : `${kw.toFixed(2)} kW`} now` }] : []),
-        ...inside.slice(0, 6).map((c) => ({ key: c.node.id, text: `↳ ${c.node.name} ${fmtKwh(c.kwh)} kWh` })),
-        ...(inside.length > 6 ? [{ key: "more", text: `↳ ${inside.length - 6} more ${fmtKwh(inside.slice(6).reduce((a, c) => a + c.kwh, 0))} kWh` }] : []),
-        ...(u && inside.length && u.untracked > 0.005 ? [{ key: "u", text: `↳ not metered ${fmtKwh(u.untracked)} kWh` }] : []),
-        ...(!u ? [{ key: "x", text: "no device meter in Home Assistant accounts for it" }] : []),
+        { key: "t", text: `${n.label} · ${fmtKwh(n.kwh)} kWh` },
+        ...(n.kind !== "house" ? [{ key: "p", text: `${pct}% of the ${fmtKwh(tree.kwh)} kWh used` }] : []),
+        ...(sub ? [{ key: "n", text: sub }] : []),
+        ...n.members.slice(0, 8).map((m, k) => ({ key: `m${k}`, text: `↳ ${m.label} ${fmtKwh(m.kwh)} kWh` })),
+        ...(n.members.length > 8 ? [{ key: "more", text: `↳ ${n.members.length - 8} more` }] : []),
+        ...(n.kind === "untracked" ? [{ key: "x", text: "no device meter in Home Assistant accounts for it" }] : []),
       ];
-      return (
-        <ChartTip left={`${(366 / W) * 100}%`} top={`${((b.dy + Math.max(b.h, SLOT)) / H) * 100}%`} flip={false}
-          t={0} spanHours={0} stamp="today so far" rows={rows} />
-      );
+      return <ChartTip x={(hb.x + nodeW + 8) / W} y={(hb.y + Math.max(hb.h, 20)) / H} stamp="today so far" rows={rows} />;
     })()}
     </div>
     </>
   );
 }
 
-/** Stacked bars over buckets, with the app's tooltip. `typical` draws a line. */
-function Bars({ buckets, stamp, ticks, typical, height = 150, unit }: {
-  buckets: { t: number; segs: { key: string; label: string; v: number; cls: string }[] }[];
-  stamp: (t: number) => string; ticks: string[]; typical?: number; height?: number;
-  /** The y-axis unit, printed over it (kWh, IDR). */
-  unit?: string;
-}) {
+/** Every device as HA's "Individual devices" pie: the devices with nothing
+ *  inside them, each parent's own untracked part and what no device accounts
+ *  for — slices that add up to what was used (config/energyFlow). */
+export function DevicePie({ split, colourOf }: { split: EnergySplit; colourOf: (id: string) => string }) {
   const [hover, setHover] = useState<number | null>(null);
-  // Scaled to a ROUND top, so the axis reads in whole steps (niceTicks).
-  const peak = Math.max(1e-6, typical ?? 0, ...buckets.map((b) => b.segs.reduce((a, s) => a + s.v, 0)));
-  const axis = niceTicks(0, peak);
-  const max = axis.top;
-  const at = (e: PointerEvent<HTMLDivElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    setHover(Math.min(buckets.length - 1, Math.max(0, Math.floor(((e.clientX - r.left) / Math.max(1, r.width)) * buckets.length))));
+  const slices = energySlices(split, colourOf);
+  // Before any early return: a hook runs on every render or none.
+  const paged = usePaged(slices, PAGE_CARDS);
+  const total = slices.reduce((a, s) => a + s.kwh, 0);
+  if (!slices.length) return <div className="muted body-text">Nothing recorded.</div>;
+  const turns = sliceTurns(slices.map((s) => s.kwh));
+  const cls = (i: number) => slices[i].cls;
+  const R0 = 58, R1 = 92, C = 100;
+  const pt = (f: number, r: number) => { const a = f * 2 * Math.PI - Math.PI / 2; return [C + r * Math.cos(a), C + r * Math.sin(a)]; };
+  const arc = (from: number, to: number): string => {
+    // A single slice is the whole ring: two halves, since one arc cannot close.
+    if (to - from >= 0.9999) return `${arc(0, 0.5)} ${arc(0.5, 1)}`;
+    const [x0, y0] = pt(from, R1), [x1, y1] = pt(to, R1), [x2, y2] = pt(to, R0), [x3, y3] = pt(from, R0);
+    const big = to - from > 0.5 ? 1 : 0;
+    return `M${x0} ${y0} A${R1} ${R1} 0 ${big} 1 ${x1} ${y1} L${x2} ${y2} A${R0} ${R0} 0 ${big} 0 ${x3} ${y3} Z`;
   };
-  const hb = hover === null ? null : buckets[hover];
+  const hs = hover === null ? null : slices[hover];
+  const mid = hover === null ? 0 : (turns[hover].from + turns[hover].to) / 2;
+  const [tx, ty] = pt(mid, R1);
   return (
-    <div className={`chart-with-axis${unit ? " has-unit" : ""}`}>
-    <YAxis unit={unit} height={height} ticks={axis.ticks.map((v) => ({ v, at: v / max }))} />
-    <div className="spark-wrap energy-bars-wrap">
-      <div className="energy-bars" style={{ height, touchAction: "none" }}
-        onPointerMove={at} onPointerDown={at} onPointerLeave={() => setHover(null)}>
-        {axis.ticks.map((v) => <div key={`g${v}`} className="chart-gridline" style={{ bottom: `${(v / max) * 100}%` }} />)}
-        {typical !== undefined && <div className="energy-typical" style={{ bottom: `${(typical / max) * 100}%` }} />}
-        {buckets.map((b, i) => (
-          <div key={b.t} className={`energy-bar${hover === i ? " hover" : ""}`}>
-            {b.segs.length === 0
-              ? <div className="energy-seg e-none" />
-              : b.segs.map((s) => <div key={s.key} className={`energy-seg ${s.cls}`} style={{ height: `${(s.v / max) * 100}%` }} />)}
-          </div>
-        ))}
+    <div className="energy-pie">
+      <div className="spark-wrap energy-pie-wrap" onPointerLeave={() => setHover(null)}>
+        <svg className="energy-pie-svg" viewBox="0 0 200 200" role="img" aria-label="Every device's share">
+          {slices.map((s, i) => (
+            <path key={s.id} d={arc(turns[i].from, turns[i].to)} className={`energy-slice ${cls(i)}${hover === i ? " hover" : ""}`}
+              onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)} />
+          ))}
+          <text x={C} y={C - 4} className="energy-pie-total-l">Total</text>
+          <text x={C} y={C + 16} className="energy-pie-total-v">{fmtKwh(total)} kWh</text>
+        </svg>
+        {hs && <ChartTip x={tx / 200} y={ty / 200} rows={[{ key: "s", marker: <i className={`key ${cls(hover!)}`} />, text: `${hs.label} · ${fmtKwh(hs.kwh)} kWh` }]}
+          stamp={`${share(hs.kwh, total)}% of ${fmtKwh(total)} kWh`} />}
       </div>
-      {hb && hb.segs.length > 0 && (
-        <ChartTip left={`${((hover! + 0.5) / buckets.length) * 100}%`} top={0} flip={hover! > buckets.length / 2}
-          t={hb.t} spanHours={0} stampPrefix=""
-          rows={[
-            ...(hb.segs.length > 1 ? [{ key: "_t", text: `${fmtKwh(hb.segs.reduce((a, s) => a + s.v, 0))} kWh` }] : []),
-            ...hb.segs.filter((s) => s.v > 0.005).map((s) => ({ key: s.key, marker: <i className={`key ${s.cls}`} />, text: `${s.label} ${fmtKwh(s.v)} kWh` })),
-          ]}
-          stamp={stamp(hb.t)} />
-      )}
-      <div className="weather-axis">{ticks.map((t, i) => <span key={`${t}${i}`}>{t}</span>)}</div>
-    </div>
+      {/* Ten devices a page (usePaged, the app's one pager); the ring keeps every slice. */}
+      <div className="energy-pie-side">
+        <div className="energy-pie-legend">
+          {paged.page.map((s, k) => {
+            const i = paged.first - 1 + k;
+            return (
+              <span key={s.id} className={hover === i ? "hover" : ""} onPointerEnter={() => setHover(i)} onPointerLeave={() => setHover(null)}>
+                <i className={`key ${cls(i)}`} />{s.label}<b>{fmtKwh(s.kwh)} kWh</b>
+              </span>
+            );
+          })}
+        </div>
+        <Pager paged={paged} unit="device" />
+      </div>
     </div>
   );
 }
+
+/** A bucket's bar: its segments once ready; nothing yet while pending; and an
+ *  outage band where the recorder has no reading — never a bar of 0
+ *  (energyModel.energyPeriod, utils/barChart). */
+function segsOf(b: EnergyBucket, ready: () => BarSeg[]): BarSeg[] | null {
+  return b.state === "ready" ? ready() : b.state === "pending" ? [] : null;
+}
+const kwh = (v: number) => `${fmtKwh(v)} kWh`;
 
 // ── History and trends ───────────────────────────────────────────────────
 
-type RangeKey = "day" | "week" | "month" | "year";
-const RANGES: Record<RangeKey, { label: string; period: StatisticsPeriod }> = {
-  day: { label: "Day", period: "hour" },
-  week: { label: "Week", period: "day" },
-  month: { label: "Month", period: "day" },
-  year: { label: "Year", period: "month" },
-};
-/** The buckets a range shows, oldest first: today's hours; the last 7 or 30
- *  days (today included); the last 12 calendar months. */
-function bucketsOf(range: RangeKey): number[] {
-  if (range === "day") return Array.from({ length: 24 }, (_, h) => midnight() + h * 3_600_000);
-  if (range === "week" || range === "month") {
-    const n = range === "week" ? 7 : 30;
-    return Array.from({ length: n }, (_, i) => midnight(i - (n - 1)));
-  }
-  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(1);
-  return Array.from({ length: 12 }, (_, i) => new Date(d.getFullYear(), d.getMonth() - (11 - i), 1).getTime());
-}
+const RANGE_OPTIONS = ENERGY_RANGES.map((r) => ({ key: r.key, label: r.label }));
 
-function HistoryView({ setup, costUnit }: { setup: EnergyWindowSetup; costUnit: string | undefined }) {
+const SHAPES = [
+  { key: "list" as const, label: <List size={16} />, title: "As a list" },
+  { key: "pie" as const, label: <PieChart size={16} />, title: "As a pie" },
+];
+
+function HistoryView({ setup, costUnit, range: rangeKey, colourOf }: { setup: EnergyWindowSetup; costUnit: string | undefined; range: EnergyRangeKey; colourOf: (id: string) => string }) {
+  const range = energyRange(rangeKey);
   const { ws } = useHA();
-  const [range, setRange] = useState<RangeKey>("week");
-  const starts = bucketsOf(range);
+  // Every device as a list or as HA's pie — the app's one segmented control.
+  const { key: shape, picker: shapePicker } = useSegmentedChoice(SHAPES, "list", "Show every device as", "energy-shape");
+  const now = Date.now();
+  const starts = periodStarts(range.kind, now);
   const { data, status } = useHistory<Record<string, HistorySeries> | null>(
-    `energy-history|${range}|${starts[0]}`,
-    () => fetchEnergyPeriod(ws, setup, starts[0], RANGES[range].period),
+    `energy-history|${range.key}|${starts[0]}`,
+    () => fetchEnergyPeriod(ws, setup, starts[0], range.period),
     null,
-  );
-  const picker = (
-    <div className="segmented weather-ranges" role="group" aria-label="Period">
-      {(Object.keys(RANGES) as RangeKey[]).map((k) => (
-        <button key={k} type="button" className={k === range ? "active" : ""} aria-pressed={k === range} onClick={() => setRange(k)}>{RANGES[k].label}</button>
-      ))}
-    </div>
   );
   if (!data) {
     return (
       <div className="weather-history">
-        <div className="energy-history-head">{picker}</div>
         <div className="muted body-text weather-chart-empty">{status === "failed" ? "Couldn't load Home Assistant's energy." : "Loading…"}</div>
       </div>
     );
   }
-  const maps = new Map(Object.entries(data).map(([id, s]) => [id, byStart(s)]));
-  const at = (id: string, t: number) => maps.get(id)?.get(t);
-  const perBucket = starts.map((t) => energySplit(setup, (id) => at(id, t)));
-  const whole = energySplit(setup, (id) => total(data[id]));
-  const costs = starts.map((t) => setup.gridIn.reduce((a, id) => a + (setup.costOf[id] ? at(setup.costOf[id], t) ?? 0 : 0), 0));
-  const hasCost = setup.gridIn.some((id) => setup.costOf[id] && data[setup.costOf[id]]?.points.length);
-  const costTotal = costs.reduce((a, v) => a + v, 0);
-  const busiest = perBucket.reduce((bi, s, i) => (s.used > perBucket[bi].used ? i : bi), 0);
-  const unit = range === "day" ? "hour" : range === "year" ? "month" : "day";
-  const done = perBucket.filter((_, i) => starts[i] <= Date.now());
-  const label = (t: number) => range === "day" ? fmtChartTime(t)
-    : range === "year" ? new Date(t).toLocaleDateString([], { month: "short" })
-    : new Date(t).toLocaleDateString([], { weekday: "short", day: "numeric" });
-  const tickIdx = range === "day" ? [0, 6, 12, 18, 23] : range === "month" ? [0, 7, 14, 21, 29] : starts.map((_, i) => i);
+  const p = energyPeriod(setup, data, starts, PERIOD_MS[range.period], now);
+  const whole = p.whole;
+  const costs = p.buckets.map((b) => b.cost);
+  const hasCost = p.cost !== undefined;
+  const costTotal = p.cost ?? 0;
+  const unit = range.unit;
+  const label = range.bucketLabel;
+  const tickIdx = range.ticks(starts.length);
   const roots = whole.roots.filter((r) => r.kwh > 0.005);
-  const series = [...roots.map((r, i) => ({ id: r.node.id, label: r.node.name, cls: `e-s${i % 6}` })), { id: "_u", label: "Untracked", cls: "e-untracked" }];
-  const rank = deviceRanking(whole).filter((u) => u.kwh > 0.005);
+  const series = [...roots.map((r) => ({ id: r.node.id, label: r.node.name, cls: colourOf(r.node.id) })), { id: "_u", label: "Untracked", cls: UNTRACKED_CLS }];
+
 
   return (
     <div className="weather-history">
-      <div className="energy-history-head">{picker}</div>
       <div className="weather-figures">
-        <Figure label="Energy" value={`${fmtKwh(whole.used)} kWh`} />
-        <Figure label="Cost" value={hasCost ? fmtMoney(costTotal, costUnit) : "—"} />
-        <Figure label={`Per ${unit}`} value={done.length ? `${fmtKwh(whole.used / done.length)} kWh` : "—"} />
-        <Figure label={`Busiest ${unit}`} value={perBucket[busiest]?.used > 0 ? `${label(starts[busiest])} · ${fmtKwh(perBucket[busiest].used)}` : "—"} />
+        {historyFigures(p, unit, label, costUnit).map((f) => <Figure key={f.label} label={f.label} value={f.value} />)}
       </div>
 
       <div className="weather-tile chart energy-wide">
         <div className="weather-chart-head">
-          <div className="weather-eyebrow">Energy used, by device</div>
-          <div className="weather-legend">{series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}</div>
+          <div className="weather-eyebrow">{hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"}</div>
+          <div className="weather-legend">
+            {series.map((s) => <span key={s.id}><i className={`key ${s.cls}`} />{s.label}</span>)}
+            {hasCost && <span><i className="key cost line" />Cost · {fmtMoney(costTotal, costUnit)}</span>}
+          </div>
         </div>
-        <Bars height={220}
-          buckets={starts.map((t, i) => ({
-            t,
-            segs: [
-              ...roots.map((r, k) => {
-                const u = perBucket[i].roots.find((x) => x.node.id === r.node.id);
-                return { key: r.node.id, label: r.node.name, v: u?.kwh ?? 0, cls: `e-s${k % 6}` };
+        {/* ONE chart for the energy and what it cost (owner, 2026-09-26): the
+            devices stacked in kWh on the left axis, the cost plotted over them
+            on its own right axis, both in one tooltip. */}
+        <BarChart label={hasCost ? `Energy and cost per ${unit}` : "Energy used, by device"} height={220} fmt={kwh} unit="kWh"
+          line={hasCost ? { values: p.buckets.map((b, i) => (b.state === "pending" ? undefined : costs[i])), label: "Cost", cls: "cost", unit: costUnit, fmt: (v) => fmtMoney(v, costUnit) } : undefined}
+          buckets={p.buckets.map((b) => ({
+            t: b.t,
+            segs: segsOf(b, () => [
+              ...roots.map((r) => {
+                const u = b.split!.roots.find((x) => x.node.id === r.node.id);
+                return { key: r.node.id, label: r.node.name, v: u?.kwh ?? 0, cls: colourOf(r.node.id) };
               }),
-              { key: "_u", label: "Untracked", v: perBucket[i].untracked, cls: "e-untracked" },
-            ],
+              { key: "_u", label: "Untracked", v: b.split!.untracked, cls: UNTRACKED_CLS },
+            ]),
           }))}
-          stamp={(t) => label(t)} ticks={tickIdx.map((i) => label(starts[i]))} unit="kWh" />
+          stamp={(t) => label(t)} ticks={tickIdx.map((i) => ({ i, label: label(starts[i]) }))} />
       </div>
 
-      {hasCost && (
-        <div className="weather-tile chart energy-wide">
-          <div className="weather-chart-head"><div className="weather-eyebrow">Cost per {unit}</div><div className="weather-legend">{fmtMoney(costTotal, costUnit)}</div></div>
-          <Bars height={120}
-            buckets={starts.map((t, i) => ({ t, segs: [{ key: "cost", label: "Cost", v: costs[i], cls: "e-used" }] }))}
-            stamp={(t) => `${label(t)} · ${fmtMoney(costs[starts.indexOf(t)] ?? 0, costUnit)}`} ticks={tickIdx.map((i) => label(starts[i]))} unit={costUnit} />
-        </div>
-      )}
-
       <div className="weather-tile chart energy-wide">
-        <div className="weather-chart-head"><div className="weather-eyebrow">Every device</div><div className="weather-legend">share of {fmtKwh(whole.used)} kWh</div></div>
-        <div className="energy-rank">
-          {rank.map((u) => <RankRow key={u.node.id} u={u} of={Math.max(whole.used, rank[0]?.kwh ?? 0)} used={whole.used} />)}
-          {whole.untracked > 0.005 && <RankRow u={null} kwh={whole.untracked} of={Math.max(whole.used, rank[0]?.kwh ?? 0)} used={whole.used} />}
+        <div className="weather-chart-head">
+          <div className="weather-eyebrow">Every device</div>
+          <div className="energy-rank-tools">
+            {shape === "list" && <span className="weather-legend">share of {fmtKwh(whole.used)} kWh</span>}
+            {shapePicker}
+          </div>
         </div>
+        {shape === "pie"
+          ? <DevicePie split={whole} colourOf={colourOf} />
+          : (
+            // Ten a page, as the pie's legend (the shared Pager); each bar in
+            // the device's own colour — the pie's (energyFlow.deviceColours).
+            <DeviceList whole={whole} colourOf={colourOf} />
+          )}
       </div>
     </div>
   );
 }
 
-function RankRow({ u, kwh, of, used }: { u: NodeUse | null; kwh?: number; of: number; used: number }) {
-  const v = u ? u.kwh : kwh ?? 0;
+/** Every device as a list, largest first, ten a page — each bar in the
+ *  device's own colour, the pie's (energyFlow.deviceColours). */
+export function DeviceList({ whole, colourOf }: { whole: EnergySplit; colourOf: (id: string) => string }) {
+  const rows = [
+    ...deviceRanking(whole).filter((u) => u.kwh > 0.005).map((u) => ({ id: u.node.id, label: u.node.name, kwh: u.kwh, cls: colourOf(u.node.id) })),
+    ...(whole.untracked > 0.005 ? [{ id: "_u", label: "Untracked", kwh: whole.untracked, cls: UNTRACKED_CLS }] : []),
+  ];
+  const paged = usePaged(rows, PAGE_CARDS);
+  const of = Math.max(whole.used, rows[0]?.kwh ?? 0);
   return (
     <>
-      <span className={u ? "" : "muted"}>{u ? u.node.name : "Untracked"}</span>
-      <span className="energy-rank-bar"><i style={{ width: `${Math.max(1, (v / Math.max(1e-6, of)) * 100)}%` }} className={u ? "" : "e-untracked"} /></span>
-      <b>{fmtKwh(v)} kWh</b>
-      <span className="muted">{used > 0 ? `${Math.round((v / used) * 100)}%` : ""}</span>
+      <div className="energy-rank">
+        {paged.page.map((r) => (
+          <RankRow key={r.id} label={r.label} kwh={r.kwh} of={of} used={whole.used} cls={r.cls} muted={r.id === "_u"} />
+        ))}
+      </div>
+      <Pager paged={paged} unit="device" />
     </>
   );
 }
 
-function Figure({ label, value }: { label: string; value: string }) {
-  return <div className="weather-figure"><div className="weather-figure-l">{label}</div><div className="weather-figure-v">{value}</div></div>;
+/** One device in the list: its name, a bar in its colour, its kWh and share.
+ *  One grid row, so a phone can put the bar UNDER the name (styles). */
+function RankRow({ label, kwh, of, used, cls, muted, depth = 0, note }: {
+  label: string; kwh: number; of: number; used: number; cls: string; muted: boolean;
+  /** How deep in HA's hierarchy — indents the NAME only, never the bar. */
+  depth?: number;
+  /** A short muted aside after the name (the power now). */
+  note?: string;
+}) {
+  return (
+    <div className="energy-rank-row">
+      <span className={`energy-rank-name${muted ? " muted" : ""}`} style={depth > 1 ? { paddingLeft: (depth - 1) * 14 } : undefined}>
+        {depth > 0 && <ChevronRight size={14} className="energy-rank-chevron" aria-hidden="true" />}
+        {label}{note ? <small className="energy-rank-note"> · {note}</small> : null}
+      </span>
+      <span className="energy-rank-bar"><i style={{ width: `${Math.max(1, (kwh / Math.max(1e-6, of)) * 100)}%` }} className={cls} /></span>
+      <b>{fmtKwh(kwh)} kWh</b>
+      <span className="energy-rank-pct">{used > 0 ? `${share(kwh, used)}%` : ""}</span>
+    </div>
+  );
 }

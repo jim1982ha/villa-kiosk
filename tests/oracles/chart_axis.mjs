@@ -31,18 +31,37 @@ ck("128281 → 128k", G.fmtAxis(128281) === "128k", G.fmtAxis(128281));
 ck("2500 → 2.5k, 1200000 → 1.2M", G.fmtAxis(2500) === "2.5k" && G.fmtAxis(1200000) === "1.2M");
 ck("0.2 → 0.2, 50 → 50, 2.5 → 2.5 — no trailing zeros", G.fmtAxis(0.2) === "0.2" && G.fmtAxis(50) === "50" && G.fmtAxis(2.5) === "2.5");
 
+console.log("\n  one tick rule for every line chart — the geometry's:");
+{
+  const w = { from: 0, to: 10 };
+  const g = G.chartGeometry(w, [{ pts: [{ t: 0, v: 23.4 }, { t: 5, v: 31.2 }], gaps: [] }], { left: 0, right: 100, top: 0, bottom: 100 });
+  const sg = g.series[0];
+  ck("a series' ticks are round values inside its range", sg.ticks.length >= 2 && sg.ticks.every((t) => t.v >= sg.lo && t.v <= sg.hi) && sg.ticks.map((t) => t.v).join() === "24,26,28,30", sg.ticks);
+  ck("  ...each at its pixel y", sg.ticks.every((t) => Math.abs(t.y - sg.sy(t.v)) < 1e-9));
+  const own = G.chartGeometry(w, [{ pts: [{ t: 0, v: 20 }], gaps: [] }, { pts: [{ t: 0, v: 0 }, { t: 5, v: 900 }], gaps: [], scale: "fromZero" }], { left: 0, right: 100, top: 0, bottom: 100 });
+  ck("a series on its own scale has its own ticks (sunlight 0 / 250 / 500 / 750)", own.series[1].ticks.map((t) => t.v).join() === "0,250,500,750", own.series[1].ticks);
+}
+const spark = readFileSync(new URL("../../src/components/panels/Sparkline.tsx", import.meta.url), "utf8"), dual = readFileSync(new URL("../../src/components/panels/DualSparkline.tsx", import.meta.url), "utf8");
+ck("the device panels' sparklines draw the geometry's ticks with the one label (fmtAxis) — no hi/mid/lo of their own",
+   /line\.ticks\.map/.test(spark) && /fmtAxis\(tk\.v\)/.test(spark) && !/yTicks/.test(spark)
+     && /ga\.ticks\.map/.test(dual) && /gb\.ticks\.map/.test(dual) && !/\[ga\.hi, ga\.lo\]/.test(dual));
+
 console.log("\n  the callers:");
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const energy = read("../../src/components/panels/EnergyPanel.tsx");
-ck("the Energy bars scale to the axis' round top and draw it",
-   /const axis = niceTicks\(0, peak\);\s*const max = axis\.top;/.test(energy) && /<YAxis unit=\{unit\} height=\{height\}/.test(energy));
-const bars = energy.match(/<Bars\b[^]*?\/>/g) ?? [];
-ck("  ...every Energy bar chart names its unit", bars.length >= 4 && bars.every((b) => /\bunit=/.test(b)), bars.filter((b) => !/\bunit=/.test(b)));
+ck("the Energy bars are the app's BarChart, which draws the axis over the round top (bar_chart.mjs)",
+   !/function Bars\(/.test(energy) && (energy.match(/<BarChart /g) ?? []).length === 3);
+const bars = energy.match(/<BarChart\b[^]*?\/>/g) ?? [];
+ck("  ...every Energy bar chart names its unit (the energy-and-cost one both: kWh left, the currency right)", bars.length === 3 && bars.every((b) => /\bunit=/.test(b)), bars.filter((b) => !/\bunit=/.test(b)));
+const barComp = read("../../src/components/panels/BarChart.tsx");
+ck("  ...and BarChart draws the YAxis from its layout's ticks", /<YAxis unit=\{unit\} height=\{height\} frame=\{1\} ticks=\{L\.ticks\} \/>/.test(barComp));
 const weather = read("../../src/components/panels/WeatherPanel.tsx");
-ck("each Weather line chart has a left axis, and a right one for a line on its own scale",
-   /<YAxis height=\{CHART_PX\} unit=\{present\[0\]\?\.unit\.trim\(\)\} ticks=\{leftAxis\} \/>/.test(weather)
-     && /\{rightAxis && <YAxis side="right"/.test(weather));
-ck("the rain chart has its axis", /<YAxis height=\{CHART_PX\} unit=\{unit\} ticks=\{axisOf\(g\.series\[0\]\)\} \/>/.test(weather));
+ck("each Weather line chart has a left axis, and a right one for a line on its own scale — the GEOMETRY's ticks",
+   /const leftAxis = g \? g\.series\[0\]\.ticks : \[\];/.test(weather) && /<YAxis height=\{CHART_PX\} frame=\{H\} unit=\{present\[0\]\?\.unit\.trim\(\)\} ticks=\{leftAxis\} \/>/.test(weather)
+     && /\{rightAxis && <YAxis side="right" height=\{CHART_PX\} frame=\{H\}/.test(weather) && !/function axisOf/.test(weather));
+ck("  ...and the SVG is set to the same CHART_PX as its axis (they agreed with a CSS 150px by coincidence)",
+   /style=\{\{ height: CHART_PX, touchAction: "none" \}\}/.test(weather));
+ck("the rain chart is a BarChart with its unit (so it has the axis)", /<BarChart label="Rain history" buckets=\{buckets\} height=\{CHART_PX\} unit=\{unit\}/.test(weather));
 const css = read("../../src/styles/03-panels.css");
 ck("the axis keeps its column at every width (no phone rule hides it)", !/\.chart-yaxis[^{]*\{[^}]*display:\s*none/.test(css));
 ck("the unit sits clear above the top tick", /\.chart-yaxis-unit \{[^}]*top: -2em;/.test(css) && /\.chart-with-axis\.has-unit \{ margin-top: 1\.6em; \}/.test(css));

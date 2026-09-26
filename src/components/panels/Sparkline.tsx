@@ -4,13 +4,14 @@
 // force under the pointer, and when it was taken). Width is measured (1 SVG unit = 1px) so axis
 // text stays crisp instead of being stretched by preserveAspectRatio="none".
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { chartWindow, type TimeWindow } from "@/utils/lineChart";
-import { chartGeometry } from "@/utils/chartGeometry";
+import { chartGeometry, fmtAxis } from "@/utils/chartGeometry";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
-import { fmtChartValue, fmtChartTick } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtChartStamp } from "./chartUtils";
+import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 
 interface Props {
@@ -34,7 +35,7 @@ const M = { top: 8, right: 10, bottom: 18, left: 38 };
 
 export default function Sparkline({ data, gaps = [], window, color = "var(--accent-teal)", height = 110, unit = "", loading }: Props) {
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
-  const [hoverT, setHoverT] = useState<number | null>(null);
+  const { frac, handlers } = useChartPointer<SVGSVGElement>();
 
   // Scales, the line (stepped, held to the window's end, split at outages),
   // the bands, the ticks and the hover answer: utils/chartGeometry, the one
@@ -51,12 +52,6 @@ export default function Sparkline({ data, gaps = [], window, color = "var(--acce
       { left: M.left, right: Math.max(M.left + 1, W - M.right), top: M.top, bottom: Math.max(M.top + 1, height - M.bottom) });
   }, [data, gaps, window, W, height]);
 
-  const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (!geom) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    setHoverT(geom.tAt(((e.clientX - rect.left) / rect.width) * W));
-  }, [geom, W]);
-
   if (!geom) {
     return loading
       ? <div ref={ref} className="state-timeline-skeleton" style={{ height }} />
@@ -64,15 +59,14 @@ export default function Sparkline({ data, gaps = [], window, color = "var(--acce
   }
 
   const line = geom.series[0];
-  const hover = hoverT === null ? null : geom.hover(hoverT);
+  const hover = frac === null ? null : geom.hover(geom.tAt(frac * W));
   const hp = hover?.readings[0] ?? null;
-  const yTicks = [line.hi, (line.hi + line.lo) / 2, line.lo];
 
   return (
     <div ref={ref} className="spark-wrap">
       <svg
         className="sparkline" width={W} height={height} style={{ height, touchAction: "none" }}
-        onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHoverT(null)}
+        {...handlers}
       >
         {/* ⚠️ FIRST IN THE SVG, so the band is BEHIND the grid and the line.
             SVG has no z-index — paint order is document order — so moving this
@@ -80,17 +74,15 @@ export default function Sparkline({ data, gaps = [], window, color = "var(--acce
         {line.bands.map((b, i) => (
           <rect key={`gap${i}`} x={b.x} y={b.y} width={b.w} height={b.h} fill={STATUS_COLOR.unavailable} opacity={0.18} />
         ))}
-        {yTicks.map((v, i) => {
-          const y = line.sy(v);
-          return (
-            <g key={`y${i}`}>
-              <line x1={M.left} y1={y} x2={W - M.right} y2={y} className="spark-grid" />
-              <text x={M.left - 5} y={y} textAnchor="end" dominantBaseline="middle" className="spark-axis">
-                {fmtChartValue(v)}
-              </text>
-            </g>
-          );
-        })}
+        {/* The y-axis: chartGeometry's round ticks, the app's one axis label. */}
+        {line.ticks.map((tk) => (
+          <g key={`y${tk.v}`}>
+            <line x1={M.left} y1={tk.y} x2={W - M.right} y2={tk.y} className="spark-grid" />
+            <text x={M.left - 5} y={tk.y} textAnchor="end" dominantBaseline="middle" className="spark-axis">
+              {fmtAxis(tk.v)}
+            </text>
+          </g>
+        ))}
         {geom.ticks.map((t, i) => (
           <text
             key={`x${i}`} x={geom.sx(t)} y={height - 4}
@@ -112,7 +104,7 @@ export default function Sparkline({ data, gaps = [], window, color = "var(--acce
         )}
       </svg>
       {hover && hp && (
-        <ChartTip left={hover.x} top={M.top} flip={hover.x > W / 2} t={hover.t} spanHours={geom.spanHours}
+        <ChartTip x={hover.x / W} y={M.top / height} stamp={fmtChartStamp(hover.t, geom.spanHours)}
           rows={[{ key: "v", text: `${fmtChartValue(hp.v)}${unit ? ` ${unit}` : ""}` }]} />
       )}
     </div>

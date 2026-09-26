@@ -103,11 +103,15 @@ const walk = (d, out = []) => {
 };
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../../src");
 const FILES = walk(SRC);
-// A history chart is a file drawing a <polyline> or a bar (chart-bar): the
-// rain bars escaped this scan while it looked for polylines only (2.496.89).
-const lineCharts = FILES.filter((f) => /<polyline|className="chart-bar"/.test(readFileSync(f, "utf8")));
+// A history chart is a file drawing a <polyline> or bars: the rain bars
+// escaped this scan while it looked for polylines only (2.496.89), and again
+// when they moved to BarChart (2.496.114) and "chart-bar" matched nothing —
+// hence the pinned count below.
+const lineCharts = FILES.filter((f) => /<polyline|className="bar-chart"|className="chart-bar"/.test(readFileSync(f, "utf8")));
 const blind = lineCharts.filter((f) => {
   const src = readFileSync(f, "utf8");
+  // A bar chart: its layout marks a bucket with no reading, drawn as the band.
+  if (/className="bar-chart"/.test(src)) return !/barLayout\(/.test(src) || !/STATUS_COLOR\.unavailable/.test(src);
   // Either the primitives, lineChart.ts's wrappers around them (2.496.62:
   // lineRuns splits, outageBands bands — both against the requested window),
   // or chartGeometry, which owns both for every chart (2.496.90).
@@ -120,6 +124,9 @@ for (const f of lineCharts) console.log(`     ${f.slice(SRC.length + 1)}`);
 if (blind.length) console.log(`      ✗ draws a line but ignores gaps: ${blind.join(", ")}`);
 
 console.log("\n  assertions:");
+ck("the scan sees all four history charts (Sparkline, DualSparkline, Weather, BarChart) — never fewer unseen",
+   lineCharts.length === 4, lineCharts.map((f) => f.slice(SRC.length + 1)));
+ck("  ...and none of them ignores gaps", blind.length === 0, blind);
 ck("the dead stretch is one gap, spanning first-missing to next-reading", oneGap);
 ck("the line is broken into two runs", runs.length === 2);
 ck("  ...and every reading survives the split", runs.flat().length === points.length);

@@ -6,13 +6,14 @@
 // y-axes are colour-matched to their series so which scale is which stays clear.
 // Crosshair + tooltip reads BOTH series at the hovered time.
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { HistoryPoint, HistoryGap } from "@/types/ha.types";
 import { chartWindow, type TimeWindow } from "@/utils/lineChart";
-import { chartGeometry } from "@/utils/chartGeometry";
+import { chartGeometry, fmtAxis } from "@/utils/chartGeometry";
 import { STATUS_COLOR } from "@/utils/stateColors";
 import { useElementWidth } from "@/hooks/useElementWidth";
-import { fmtChartValue, fmtChartTick } from "./chartUtils";
+import { fmtChartValue, fmtChartTick, fmtChartStamp } from "./chartUtils";
+import { useChartPointer } from "./useChartPointer";
 import ChartTip from "./ChartTip";
 
 interface Series {
@@ -36,7 +37,7 @@ const M = { top: 8, right: 40, bottom: 18, left: 40 };
 
 export default function DualSparkline({ a, b, window, height = 120 }: Props) {
   const [ref, W] = useElementWidth<HTMLDivElement>(320);
-  const [hoverT, setHoverT] = useState<number | null>(null);
+  const { frac, handlers } = useChartPointer<SVGSVGElement>();
 
   // Each series on its OWN y-scale ("own"), both on the window's x-axis — and
   // ⚠️ A BAND PER SERIES, IN ITS OWN HALF, NOT ONE FULL-HEIGHT BAND: a band
@@ -54,12 +55,6 @@ export default function DualSparkline({ a, b, window, height = 120 }: Props) {
     ], { left: M.left, right: Math.max(M.left + 1, W - M.right), top: M.top, bottom: Math.max(M.top + 1, height - M.bottom) });
   }, [a.data, a.gaps, b.data, b.gaps, window, W, height]);
 
-  const onMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (!geom) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    setHoverT(geom.tAt(((e.clientX - rect.left) / rect.width) * W));
-  }, [geom, W]);
-
   if (!geom) return <div ref={ref} className="muted body-text">Not enough history yet.</div>;
 
   const [ga, gb] = geom.series;
@@ -67,24 +62,25 @@ export default function DualSparkline({ a, b, window, height = 120 }: Props) {
     pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   // The reading in force in EACH series at the pointer — none inside that
   // series' own outage — under one stamp (chartGeometry.hover).
-  const hover = hoverT === null ? null : geom.hover(hoverT);
+  const hover = frac === null ? null : geom.hover(geom.tAt(frac * W));
   const [hpA, hpB] = hover ? hover.readings : [null, null];
 
   return (
     <div ref={ref} className="spark-wrap">
       <svg
         className="sparkline" width={W} height={height} style={{ height, touchAction: "none" }}
-        onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHoverT(null)}
+        {...handlers}
       >
         {/* Left Y axis (series a) */}
-        {a.data.length >= 2 && [ga.hi, ga.lo].map((v, i) => (
-          <text key={`ya${i}`} x={M.left - 5} y={ga.sy(v)} textAnchor="end" dominantBaseline="middle"
-            className="spark-axis" style={{ fill: a.color }}>{fmtChartValue(v)}</text>
+        {/* Each axis: its series' round ticks (chartGeometry), the app's one label. */}
+        {a.data.length >= 2 && ga.ticks.map((tk) => (
+          <text key={`ya${tk.v}`} x={M.left - 5} y={tk.y} textAnchor="end" dominantBaseline="middle"
+            className="spark-axis" style={{ fill: a.color }}>{fmtAxis(tk.v)}</text>
         ))}
         {/* Right Y axis (series b) */}
-        {b.data.length >= 2 && [gb.hi, gb.lo].map((v, i) => (
-          <text key={`yb${i}`} x={W - M.right + 5} y={gb.sy(v)} textAnchor="start" dominantBaseline="middle"
-            className="spark-axis" style={{ fill: b.color }}>{fmtChartValue(v)}</text>
+        {b.data.length >= 2 && gb.ticks.map((tk) => (
+          <text key={`yb${tk.v}`} x={W - M.right + 5} y={tk.y} textAnchor="start" dominantBaseline="middle"
+            className="spark-axis" style={{ fill: b.color }}>{fmtAxis(tk.v)}</text>
         ))}
         {/* ⚠️ FIRST IN THE SVG so the shading sits BEHIND the grid and both
             lines — SVG paints in document order and has no z-index. */}
@@ -111,7 +107,7 @@ export default function DualSparkline({ a, b, window, height = 120 }: Props) {
         )}
       </svg>
       {hover && (
-        <ChartTip left={hover.x} top={M.top} flip={hover.x > W / 2} t={hover.t} spanHours={geom.spanHours}
+        <ChartTip x={hover.x / W} y={M.top / height} stamp={fmtChartStamp(hover.t, geom.spanHours)}
           rows={[
             ...(hpA ? [{ key: "a", marker: <span style={{ color: a.color }}>●</span>, text: `${fmtChartValue(hpA.v)}${a.unit ? ` ${a.unit}` : ""}` }] : []),
             ...(hpB ? [{ key: "b", marker: <span style={{ color: b.color }}>┄</span>, text: `${fmtChartValue(hpB.v)}${b.unit ? ` ${b.unit}` : ""}` }] : []),

@@ -1,3 +1,142 @@
+## 2.496.129
+
+### Improved — "Where today's energy went"
+- **The confusing "kWh today · now" note is gone.** Each row already says
+  its kWh (today since midnight) and, where there is a live reading, its
+  power "now".
+- **On a phone, the house's own row is gone**: the title already names it
+  and its total. Each device inside a meter starts with a chevron (›), so
+  what is grouped under what is clear at a glance.
+## 2.496.128
+
+### Fixed — "Where today's energy went" on a phone
+- **Each meter is followed by the devices inside it.** Pool Pump appeared
+  under Main Power Phase A although it belongs to Phase C.
+- **Every bar starts at the same left edge.** Only the name is indented to
+  show what is inside what. The rows now look like the "Every device" list:
+  name, kWh and share on one line, the bar under it.
+## 2.496.127
+
+### Improved — the Energy window's "Every device"
+- **Each device's bar is in its pie colour**, so the list and the pie read
+  the same.
+- **Ten devices at a time**, with the same pager as the pie's legend
+  ("1–10 of 20" and arrows).
+- **On a phone the bars are back**, under each device's name with its kWh
+  and share beside the name. The bars had been hidden to save width.
+- A device inside a meter no longer starts with the meter's own colour
+  (Pool Pump was nearly the same tan as Main Power Phase C).
+## 2.496.126
+
+**Nothing you should see changed.** The villa renders pixel-for-pixel as
+before. Behind that, where each light stands (its floor, room and storey,
+and how far its glow reaches) is now worked out in one place with automatic
+checks. The "Light effect strength" slider no longer redraws every light
+twice and every shadow each time it moves.
+## 2.496.125
+
+**Nothing you should see changed.** The Energy window's headline,
+observation cards and history figures are now worked out in one place with
+automatic checks, instead of inside the window's layout.
+## 2.496.124
+
+**Nothing you should see changed.** The Energy window's Day, Week, Month
+and Year are now each described in one place (their buckets, labels and
+axis marks), so they cannot drift apart.
+## 2.496.123
+
+### Fixed — the Energy window
+- **Live power is read with the app's own unit rules.** A power sensor
+  reporting in milliwatts (mW) was read as megawatts. A unit the window
+  cannot interpret now shows no live power instead of a wrong one.
+## 2.496.122
+
+### Fixed — the Energy window
+- **Each device has one colour everywhere.** Phase A was pink in "Where
+  today's energy went" and blue in the history chart and its legend. The
+  flow, the history chart, the legend and the pie now agree. A device also
+  keeps its colour whatever the period or how much it used; the part of a
+  meter no device accounts for takes that meter's colour in the pie, as in
+  Home Assistant.
+## 2.496.121
+
+### Improved — the Energy window
+- **The pie's legend shows ten devices at a time.** Arrows under it page
+  through the rest ("1–10 of 20"). The pie itself still shows every device.
+## 2.496.120
+
+### Improved — the Energy window
+- **Energy and cost in one chart.** History and trends shows the devices'
+  kWh as stacked bars with the cost plotted over them, on its own axis on the
+  right. Hovering a bar shows the total, the cost and each device in one
+  tooltip.
+- **"Where today's energy went" is drawn like Home Assistant's energy
+  flow.** It starts from the house, then each main meter, then the devices
+  inside each, with each level's untracked share. Devices too small to label
+  are grouped as "Other"; hover it to see which.
+- **"Every device" can be shown as a pie**, like HA's "Individual devices".
+  A button switches between the list and the pie; the pie's slices add up to
+  what the house used.
+- **The Day / Week / Month / Year picker is in the window's header**, as the
+  Weather window's is.
+## 2.496.119
+
+### Fixed — the Energy window
+- **Live power is written one way everywhere.** The grid's power read "0.95 kW
+  now" beside a device's "948 W now"; below 1 kW it is now in watts
+  everywhere, and above it in kW.
+
+Behind that, the Weather and Energy windows now share one copy of their
+figures, their observation cards and "today since midnight".
+## 2.496.118
+
+**Nothing you should see changed.** The automatic checks that make sure every
+chart shows gaps in its data (and uses the shared tooltip) had quietly
+stopped looking at three of the six charts. They now cover all of them, and
+fail if one is added or removed without them noticing.
+## 2.496.117
+
+### Improved — chart tooltips
+- **Every chart's tooltip behaves the same way.** On the right half of a
+  chart it opens to the left; near the bottom of the screen it opens upward;
+  it always stays on screen. The state timelines (a door's or a motion
+  sensor's day) now use the same tooltip as every other chart, shown under
+  the bar instead of over it.
+## 2.496.116
+
+### Fixed — light on the stairs
+- **A light over the staircase no longer spills a flat block of light over
+  the lower steps.** Its floor glow was drawn at the height of one step and
+  floated over every lower one, so it looked as if light was pouring through
+  the living room's wall onto the stairs. Lights over a staircase now light
+  the steps themselves, and draw no glowing patch.
+## 2.496.115
+
+### Improved — chart axes
+- **Every line chart labels its y-axis in round steps.** The sensor charts in
+  a device's window used to label the exact highest, middle and lowest
+  readings (e.g. 30.87 / 27.0 / 23.13). They now use round values such as
+  24 / 26 / 28 / 30, like the Weather and Energy charts.
+## 2.496.114
+
+### Fixed — the Energy and Weather windows' bar charts
+- **The cost chart's tooltip shows money.** It read "Cost 45,000 kWh"; it now
+  shows the amount in your currency.
+- **The rain chart's scale always reaches its tallest bar.** Its top value
+  could sit below the wettest hour.
+- **An hour or day with no reading is drawn as a grey band**, as the line
+  charts already do, and its tooltip says "No reading". A dry hour is a
+  hairline, not an empty slot.
+- The bar under your finger or pointer is now exactly the one highlighted,
+  and the date labels sit under their own bars.
+## 2.496.113
+
+### Fixed — the Energy window
+- **An hour or day with no meter reading is no longer drawn as 0 kWh.** If
+  Home Assistant's recorder has nothing for a bucket, that bucket is left
+  empty instead of showing as a bucket where nothing was used. "Per hour/day"
+  averages over the buckets that have readings, and a day with no reading no
+  longer counts towards the typical day.
 ## 2.496.112
 
 ### Fixed — every chart's tooltip
