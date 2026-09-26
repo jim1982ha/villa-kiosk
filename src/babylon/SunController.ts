@@ -9,7 +9,7 @@ import type { LightingSystem } from "./LightingSystem";
 import type { SkyDome } from "./SkyDome";
 import { skyNow, skyTickMs, skySimActive, skySimLabel } from "@/utils/skyClock";
 import { tapDebug } from "@/utils/tapDebug";
-import { type AppConfig, DEFAULT_RENDER } from "@/config/AppConfig";
+import { type AppConfig } from "@/config/AppConfig";
 import { getSunPosition, getMoonPosition, getMoonIllumination } from "@/utils/sunCalc";
 import type { NightSky } from "./NightSky";
 import type { FrameRequests } from "./frameScheduler";
@@ -143,7 +143,7 @@ export class SunController {
    * See AppConfig.northOffsetDeg for why the correction exists at all.
    */
   private modelAzimuth(azimuth: number): number {
-    return azimuth + ((this.config.northOffsetDeg ?? 0) * Math.PI) / 180;
+    return azimuth + (this.config.northOffsetDeg * Math.PI) / 180;
   }
 
   /** Compute lighting from the computed sun altitude/azimuth right now. */
@@ -320,7 +320,7 @@ export class SunController {
   ): void {
     // Render-quality multipliers let Settings rebalance the key light + fill
     // without touching the day/night base values here.
-    const r = this.config.render ?? DEFAULT_RENDER;
+    const r = this.config.render;
 
     // How much EXTRA the night pass dims beyond its old "mild dim" baseline —
     // 0 = the original mild dim (this file's long-standing default), 1 = deep

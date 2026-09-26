@@ -240,7 +240,7 @@ export interface AppConfig {
    * Applies to the horizontal heading only; the downward tilt comes from each
    * piece's own `pitch` (or cameraBeamPitchDeg below when it has none).
    */
-  cameraBeamOffsetDeg?: number;
+  cameraBeamOffsetDeg: number;
   /**
    * Downward tilt in degrees for a camera whose plan piece specifies no
    * `pitch`. Default 30.
@@ -250,22 +250,22 @@ export interface AppConfig {
    * at the floor area the camera actually watches. A per-piece `pitch` set in
    * the plan still wins over this.
    */
-  cameraBeamPitchDeg?: number;
+  cameraBeamPitchDeg: number;
   /** Global size multiplier for the in-scene state-icon badges (1 = default).
    *  In the bird's-eye view this is further scaled by the zoom level.
-   *  Clamped to [ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX] by every
-   *  consumer — see those constants. */
+   *  Clamped to [ENTITY_ICON_SCALE_MIN, ENTITY_ICON_SCALE_MAX] by
+   *  normaliseConfig — every reader sees a valid size. */
   entityIconScale: number;
   /** Floating-badge visual style:
-   *  - "classic" (default): a category-coloured icon squircle with a small
-   *    value pill beneath it.
-   *  - "card": a horizontal category-coloured card with the icon and value
-   *    side by side (the dashboard-mockup look).
+   *  - "card" (default): a horizontal card with the icon and value side by
+   *    side (the dashboard-mockup look).
+   *  - "classic": a category-coloured icon squircle with a small value pill
+   *    beneath it.
    *  Both carry identical information; purely a look preference. Read by
    *  EntityVisuals.rebuildLabels. */
-  badgeStyle?: "classic" | "card";
+  badgeStyle: "classic" | "card";
   /** Show the bottom summary/scene strip (SummaryBar). Default true. */
-  showSummaryBar?: boolean;
+  showSummaryBar: boolean;
   /** Manually-grouped entities that are really one physical device (e.g. a
    *  combo sensor exposing separate `_temperature`/`_humidity` entities).
    *  Only `primaryEntityId` gets a badge/mesh presence on the map; every
@@ -291,7 +291,9 @@ export interface DeviceGroup {
   label?: string;
 }
 
-const env = import.meta.env;
+// `?? {}`: always defined under Vite; absent under Node, where the oracles
+// import this module (tests/oracles/config_complete.mjs).
+const env = (import.meta.env ?? {}) as Partial<ImportMetaEnv>;
 
 export const DEFAULT_CONFIG: AppConfig = {
   siteTitle: "",
@@ -317,6 +319,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   // devices in a room fall within the same clash radius). 1.0x is the badge's
   // native (unscaled) size — still user-adjustable via the Settings slider.
   entityIconScale: 1.0,
+  cameraBeamOffsetDeg: 180,
+  cameraBeamPitchDeg: 30,
   badgeStyle: "card",
   showSummaryBar: true,
   deviceGroups: [],
@@ -394,8 +398,26 @@ function migrateMotionEntityId(config: AppConfig): AppConfig {
  * Exported so ConfigContext can apply it to a SERVER patch too. Anything that
  * puts a whole AppConfig into memory goes through here.
  */
-export function normaliseConfig(config: AppConfig): AppConfig {
-  return migrateMotionEntityId(stripStaleVariantEntities(config));
+export function normaliseConfig(config: AppConfig, opts: { maps?: boolean } = {}): AppConfig {
+  const complete = completeConfig(config);
+  return opts.maps === false ? complete : migrateMotionEntityId(stripStaleVariantEntities(complete));
+}
+
+/**
+ * Every setting present and valid — the ONE place a default or a bound is
+ * applied (round 10, 2.496.155). A missing or null value takes DEFAULT_CONFIG's
+ * (a spread of stored config over the defaults KEEPS a stored null, which is
+ * why readers wrote `?? default` at a dozen sites, each with its own copy of
+ * the default); the badge size is clamped here, not by whichever reader
+ * remembered — Settings printed a stored 0 as "0.00×" while the top bar
+ * clamped it. Cheap: one pass over the top-level keys.
+ */
+function completeConfig(config: AppConfig): AppConfig {
+  const out = { ...config } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(DEFAULT_CONFIG)) if (out[k] === undefined || out[k] === null) out[k] = v;
+  const c = out as unknown as AppConfig;
+  c.entityIconScale = clampIconScale(c.entityIconScale);
+  return c;
 }
 
 export function loadConfig(): AppConfig {

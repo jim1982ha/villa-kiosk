@@ -88,7 +88,7 @@ eq("loadConfig uses it", /return normaliseConfig\(\{/.test(AC), true);
 // replace() and found that call instead, so deleting update()'s stayed green.
 const updateBody = /const update = useCallback([\s\S]*?)(?=const replace = useCallback)/.exec(CC)?.[1] ?? "";
 eq("...the update() the server pull arrives through wraps its setConfig",
-   /normaliseConfig\(next\)/.test(updateBody), true);
+   /normaliseConfig\(\{ \.\.\.prev, \.\.\.patch \}, \{ maps \}\)/.test(updateBody), true);
 eq("...and replace() does too",
    /const replace = useCallback[\s\S]{0,300}?setConfig\(normaliseConfig\(/.test(CC), true);
 eq("the migrations have no other caller",

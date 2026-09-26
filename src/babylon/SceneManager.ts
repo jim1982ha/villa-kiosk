@@ -551,7 +551,7 @@ export class SceneManager {
       onDoubleTap: handleDoubleTap,
       onAnimating: (ms) => this.requestAnimationRender(ms),
     });
-    this.overview.setNaturalScrolling(opts.config.naturalScrolling ?? true);
+    this.overview.setNaturalScrolling(opts.config.naturalScrolling);
     // Badge size holds at the configured "Icon size" (config.entityIconScale) for
     // all standard framings; only a zoom-OUT past the whole-villa fit scales it
     // down (getIconZoomCap). (We used to grow/shrink
@@ -2268,8 +2268,8 @@ export class SceneManager {
     // mis-aim every beam for any other villa. Being settings means a wrong
     // heading is a value to change, not a code change.
     const DEG = Math.PI / 180;
-    const beamOffsetRad = (this.config.cameraBeamOffsetDeg ?? 180) * DEG;
-    const defaultPitchRad = (this.config.cameraBeamPitchDeg ?? 30) * DEG;
+    const beamOffsetRad = this.config.cameraBeamOffsetDeg * DEG;
+    const defaultPitchRad = this.config.cameraBeamPitchDeg * DEG;
     const cameraDirections = new Map<string, { x: number; y: number; z: number }>();
     if (this.config.sh3dEntities?.length) {
       for (const e of this.config.sh3dEntities) {
@@ -2788,7 +2788,7 @@ export class SceneManager {
     // Settings; an "auto" kiosk crossing into night, or the OS switching to
     // dark, leave it untouched while the whole UI re-themes around it.
     this.camera.updateConfig(config);
-    this.overview.setNaturalScrolling(config.naturalScrolling ?? true);
+    this.overview.setNaturalScrolling(config.naturalScrolling);
     this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
     if (cosmeticOnly) this.visuals.repaintBadges(); // cheap glyph-only refresh

@@ -99,7 +99,7 @@ export class CameraController {
     this.cb = cb;
     this.canvas = canvas;
     this.eyeHeight = eyeHeightOf(config.eyeHeight);
-    this.walkSpeed = config.walkSpeed ?? 1;
+    this.walkSpeed = config.walkSpeed;
 
     this.camera = new UniversalCamera("villaCamera", new Vector3(0, this.eyeHeight, 0), scene);
     this.camera.setTarget(new Vector3(0, this.eyeHeight, 1));
