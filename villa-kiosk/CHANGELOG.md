@@ -1,3 +1,11 @@
+## 2.496.110
+
+### Improved — the Energy and Weather windows
+- **Every chart has a y-axis.** Round steps (0 / 50 / 100 kWh; 0 / 50k /
+  100k / 150k IDR) with their unit above, and faint gridlines at each step.
+  The bar charts now scale to the axis' round top. In Weather, a line on its
+  own scale (UV beside sunshine) gets a second axis on the right. The axis
+  keeps its narrow column on a phone, too.
 ## 2.496.109
 
 ### Improved — the Energy window

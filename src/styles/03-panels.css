@@ -688,6 +688,19 @@ input[type="range"]::-moz-range-thumb {
 .chart-empty-note { font: 14px var(--font-ui); fill: var(--text-secondary); text-anchor: middle; }
 .weather-axis { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
+/* The y-axis every Weather and Energy history chart draws (ChartAxis). */
+.chart-with-axis { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.chart-with-axis > .spark-wrap { flex: 1 1 auto; min-width: 0; }
+.chart-yaxis { position: relative; flex: 0 0 2.6em; font-size: var(--text-2xs, 11px); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.chart-yaxis.left { text-align: right; }
+.chart-yaxis.right { text-align: left; }
+.chart-yaxis-tick { position: absolute; left: 0; right: 0; transform: translateY(50%); line-height: 1; white-space: nowrap; }
+.chart-yaxis-unit { position: absolute; left: 0; right: 0; top: -2em; line-height: 1; opacity: 0.8; white-space: nowrap; }
+.weather-axis.under-yaxis { margin-left: calc(2.6em + 6px); }
+.weather-axis.under-yaxis.right { margin-right: calc(2.6em + 6px); }
+.chart-with-axis.has-unit { margin-top: 1.6em; }
+.chart-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--hairline); pointer-events: none; }
+
 /* ── Energy (EnergyPanel): the Weather window's layout, Home Assistant
    Energy's numbers. Series colours are the Weather palette, in rotation for
    HA's top-level devices; untracked is the neutral. */
