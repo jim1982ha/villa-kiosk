@@ -175,6 +175,9 @@ console.log("\n  the Sun & UV tile — the WHO scale (2026-09-26)");
   ck("the tile draws the band table, the reading's mark, the peak and the sunshine bar — and no decorative sun",
      /UV_BANDS\.map\(\(x, i\) =>/.test(panel) && /uvScalePosition\(r\.uv\)/.test(panel) && /Peak today/.test(panel)
        && /sunshineFraction\(r\.solar\)/.test(panel) && !/sun-dot|sun-path/.test(panel));
+  const css = readFileSync(new URL("../../src/styles/03-panels.css", import.meta.url), "utf8");
+  ck("the gauge is VERTICAL (the reading's height from the bottom) in the 'How it feels' palette — no WHO hexes",
+     /bottom: `\$\{uvScalePosition\(r\.uv\) \* 100\}%`/.test(panel) && /\.uv-seg\.low \{ background: color-mix\(in srgb, var\(--accent\) 40%/.test(css) && !/\.uv-seg\.[\w-]+ \{ background: #/.test(css));
 }
 
 console.log("\n  the window: the approved boards 6 and 7");

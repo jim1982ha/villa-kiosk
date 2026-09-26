@@ -354,19 +354,25 @@ function SunUv({ r, uvId }: { r: Readings; uvId: string | undefined }) {
             <div className="weather-uv-value"><b>{f0(r.uv)}</b><span>UV</span></div>
             <div><div className="weather-uv-band">{b.band}</div><div className="weather-uv-advice">{b.advice}</div></div>
           </div>
+          {/* VERTICAL, in the "How it feels" bar's own palette and marker
+              (owner, 2026-09-26): low at the bottom, the reading a dot on it,
+              each band named beside its stretch — the current one bold. */}
           <div className="weather-uv-meter">
-          <div className="weather-uv-scale" role="img" aria-label={`UV index ${f0(r.uv)}, ${b.band.toLowerCase()}`}>
-            {UV_BANDS.map((x, i) => (
-              <span key={x.key} className={`uv-seg ${x.key}`}
-                style={{ flexGrow: (UV_BANDS[i + 1]?.from ?? UV_SCALE_TOP) - x.from }} />
-            ))}
-            <span className="weather-uv-mark" style={{ left: `${uvScalePosition(r.uv) * 100}%` }} />
-          </div>
-          <div className="weather-uv-ticks">
-            {UV_BANDS.map((x) => (
-              <span key={x.key} style={{ left: `${uvScalePosition(x.from) * 100}%` }}>{x.from === UV_BANDS[UV_BANDS.length - 1].from ? `${x.from}+` : x.from}</span>
-            ))}
-          </div>
+            <div className="weather-uv-bar" role="img" aria-label={`UV index ${f0(r.uv)}, ${b.band.toLowerCase()}`}>
+              {UV_BANDS.map((x, i) => (
+                <span key={x.key} className={`uv-seg ${x.key}`}
+                  style={{ flexGrow: (UV_BANDS[i + 1]?.from ?? UV_SCALE_TOP) - x.from }} />
+              ))}
+              <span className="weather-mark uv" style={{ bottom: `${uvScalePosition(r.uv) * 100}%` }} />
+            </div>
+            <div className="weather-uv-labels">
+              {UV_BANDS.map((x, i) => (
+                <span key={x.key} className={x.key === b.key ? "on" : ""}
+                  style={{ flexGrow: (UV_BANDS[i + 1]?.from ?? UV_SCALE_TOP) - x.from }}>
+                  {x.band}<small>{UV_BANDS[i + 1] ? `${x.from}–${UV_BANDS[i + 1].from - 1}` : `${x.from}+`}</small>
+                </span>
+              ))}
+            </div>
           </div>
         </>
       )}
