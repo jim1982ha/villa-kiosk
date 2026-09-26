@@ -1,3 +1,10 @@
+## 2.496.104
+
+### Improved — the Weather window
+- **The UV gauge is vertical, in the same colours as "How it feels".** The
+  five UV bands run from Low at the bottom to Extreme at the top, each named
+  with its range beside it and the current one in bold. The reading is a dot
+  on the bar, like the dew-point marker.
 ## 2.496.103
 
 ### Improved — the Weather window
