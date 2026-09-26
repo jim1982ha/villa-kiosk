@@ -683,6 +683,11 @@ input[type="range"]::-moz-range-thumb {
 .chart-line.in { stroke: var(--accent-warm); }
 .chart-line.water { stroke: var(--cat-energy); }
 .chart-line.warm { stroke: var(--accent-warm); }
+/* UV: the UV scale's own high end, so it reads apart from the sunlight beside
+   it (owner, 2026-09-26) — line, legend key, tooltip marker and its axis. */
+.chart-line.uv { stroke: var(--status-danger); }
+.key.uv { background: var(--status-danger); }
+.chart-yaxis.tint-uv { color: var(--status-danger); }
 .chart-line.ink { stroke: var(--text-primary); opacity: 0.8; }
 .chart-line.thin { stroke-width: 1.6; }
 .chart-line.dashed { stroke-dasharray: 5 4; }

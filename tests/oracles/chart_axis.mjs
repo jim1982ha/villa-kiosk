@@ -66,5 +66,12 @@ const css = read("../../src/styles/03-panels.css");
 ck("the axis keeps its column at every width (no phone rule hides it)", !/\.chart-yaxis[^{]*\{[^}]*display:\s*none/.test(css));
 ck("the unit sits clear above the top tick", /\.chart-yaxis-unit \{[^}]*top: -2em;/.test(css) && /\.chart-with-axis\.has-unit \{ margin-top: 1\.6em; \}/.test(css));
 
+const sunUv = weather.match(/line\("solar", \{ cls: "([^"]+)"[^)]*\), line\("uv", \{ cls: "([^"]+)"/);
+ck("Sun & UV: the two lines have DIFFERENT colours (owner, 2026-09-26: tell sunlight from UV)",
+   !!sunUv && sunUv[1].split(" ")[0] !== sunUv[2].split(" ")[0], sunUv && [sunUv[1], sunUv[2]]);
+ck("  ...the legend says the same, and UV's colour has a line, a key and an axis tint",
+   /\["UV", "uv"\]/.test(weather) && /\.chart-line\.uv \{/.test(css) && /\.key\.uv \{/.test(css) && /\.chart-yaxis\.tint-uv \{/.test(css));
+ck("  ...and the right axis wears its line's colour", /ticks=\{rightAxis\} cls=\{present\[ownAt\]\.cls\.split\(" "\)\[0\]\} \/>/.test(weather));
+
 if (fail) { console.log(`\n❌ ${fail} failed`); process.exit(1); }
 console.log("\n✅ every chart says what its values are");
