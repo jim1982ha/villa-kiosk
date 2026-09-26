@@ -8,7 +8,6 @@
 // for frames the loop idles at ~0% GPU. (Core 3Dash idea, generalised.)
 
 import { Engine } from "@babylonjs/core/Engines/engine";
-import { sliceChanged } from "./entityMapDiff";
 import { Scene } from "@babylonjs/core/scene";
 import { SceneInstrumentation } from "@babylonjs/core/Instrumentation/sceneInstrumentation";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
@@ -56,7 +55,7 @@ import { loadOverviewView, saveOverviewView } from "@/utils/storage";
 import type { AppConfig, RenderConfig } from "@/config/AppConfig";
 import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
-import { entityMapDelta } from "./entityMapDiff";
+import { sceneConfigPlan } from "./sceneConfigPlan";
 import { onActiveFloor, stampedFloor } from "./floorOf";
 import { ModelKeyedStore } from "./modelStore";
 import { cameraFrame } from "./cameraFrame";
@@ -2705,81 +2704,15 @@ export class SceneManager {
     this.config = config;
 
     // --- Change-detection gating ---------------------------------------------
-    // updateConfig() fires on EVERY config mutation, including cheap UI toggles
-    // like "show labels" / "highlight clickable". Re-running the lighting pass
-    // (which rewrites scene.clearColor + the sky) and the structural pass (which
-    // re-clones materials and recreates per-light PointLights) on every toggle
-    // is what made the background flicker and the scene visibly hitch. Each heavy
-    // subsystem now only re-runs when an input it actually depends on changed.
-    // Config objects are recreated immutably by ConfigContext.update(), so a
-    // reference change reliably marks "this slice was touched".
-    const renderChanged =
-      prev.render !== config.render ||
-      prev.latitude !== config.latitude ||
-      prev.longitude !== config.longitude;
-
-    // A freshly (re)uploaded central .sh3d lands here asynchronously — see
-    // BabylonCanvas's background "central SH3D refresh", which fetches +
-    // parses it AFTER first paint and just calls update({ sh3dRooms,
-    // sh3dEntities }), with no full remount to force a re-fit. Without this,
-    // the new room names/shapes sat in config but nothing ever re-ran
-    // calibrateRooms() to pick them up — the Rooms menu kept showing
-    // whatever was calibrated at the PREVIOUS model load until a second full
-    // reload happened to already have the fresh data cached from last time.
-    // ⚠️ BY CONTENT HERE TOO, THOUGH BabylonCanvas ALREADY GUARDS ITS CALLER.
-    // `parseRoomData` returns fresh arrays every open, so a bare reference
-    // check is wrong for the same reason it was wrong for the four keys above;
-    // it survives only because the one caller happens to check first. A second
-    // caller would not know that.
-    const sh3dChanged =
-      sliceChanged(prev.sh3dRooms, config.sh3dRooms)
-      || sliceChanged(prev.sh3dEntities, config.sh3dEntities);
-
-    // A COSMETIC per-entity edit (label, room, category, badge colour, linked/
-    // motion entity, light intensity) changes entityMap by reference like any
-    // other edit, but needs only a cheap glyph repaint — NOT the full
-    // indexMeshes re-clone/relight pass, whose multi-second hitch is what made
-    // both the colour modal and every Advanced Settings device card feel
-    // laggy. Detect that case and route it to repaintBadges() below instead of
-    // the structural branch. See COSMETIC_MAPPING_FIELDS for why these
-    // specific fields are safe to skip re-indexing for.
-    // Three outcomes, not two — see entityMapDelta. A same-content replacement
-    // ("identical") must be neither cosmetic NOR structural, or every
-    // DeviceConfigSync focus-pull buys a full multi-second re-index for a
-    // config that did not change.
-    const mapDelta = prev.entityMap === config.entityMap
-      ? "identical"
-      : entityMapDelta(prev.entityMap, config.entityMap);
-    // meshBindings needs the SAME same-content-different-reference guard as
-    // entityMap just above, for the identical reason: DeviceConfigSync's
-    // pull() hands both fields a freshly JSON-parsed (so never `===` the
-    // existing one) object on every call, including a no-op pull that ran
-    // purely because the tab regained focus/visibility. Missed when
-    // entityMapDelta was introduced — meshBindings sat right next to it,
-    // still comparing by bare reference, so a config that hadn't changed at
-    // all still tripped `structuralChanged` (a full indexMeshes/
-    // applyStructure pass) on every single focus regain. Unlike entityMap
-    // there's no cosmetic/structural split to make here — any REAL change to
-    // which mesh is which entity is inherently structural — so this only
-    // needs a same-content check, not a delta classifier.
-    const meshBindingsChanged = sliceChanged(prev.meshBindings, config.meshBindings);
-    const cosmeticOnly =
-      mapDelta === "cosmetic" &&
-      !meshBindingsChanged &&
-      !sh3dChanged;
-
-    // indexMeshes()/applyStructure() only read entity↔mesh bindings; everything
-    // else (glass hints, grass, model transform) takes effect on the next
-    // model load, not here.
-    const structuralChanged =
-      mapDelta === "structural" ||
-      meshBindingsChanged ||
-      sh3dChanged;
+    // updateConfig() fires on EVERY config mutation, including cheap UI toggles.
+    // Each heavy subsystem re-runs only when an input it depends on changed —
+    // decided by sceneConfigPlan (pure, value-tested); this method runs it.
+    const plan = sceneConfigPlan(prev, config);
 
     // Each pass owns what it writes (renderFx: tone mapping, SSAO, the IBL
     // texture; the sun: key, ambient and fill lights) and reports its share of
     // exposure and IBL strength to the look, so neither needs the other first.
-    if (renderChanged) {
+    if (plan.render) {
       this.renderFx.apply(this.deviceRenderConfig(config.render));
       this.sun.updateConfig(config);
     }
@@ -2791,37 +2724,15 @@ export class SceneManager {
     this.overview.setNaturalScrolling(config.naturalScrolling);
     this.pick.setMaps(config.entityMap, config.meshBindings, config.deniedTypes, config.hiddenCategories);
     this.visuals.updateConfig(config); // internally cheap; rebuilds labels only on its own diff
-    if (cosmeticOnly) this.visuals.repaintBadges(); // cheap glyph-only refresh
+    if (plan.repaintBadges) this.visuals.repaintBadges(); // cheap glyph-only refresh
 
-    // A room added/renamed/removed via the Rooms menu ("Add room here") should
-    // start glowing (or stop) immediately — no model reload needed, unlike the
-    // real room polygons which only change on a full recalibration.
-    //
-    // ⚠️ CONTENT, NOT REFERENCE — the FOURTH shared key to need this, and the
-    // last one that lacked it (/dry-audit). entityMap, meshBindings and
-    // deviceGroups each got the guard after the same bug was reported in the
-    // field; teleportPoints is a SHARED_CONFIG_KEY too, so DeviceConfigSync's
-    // pull() hands back a freshly JSON-parsed (never `===`) array on every
-    // window focus and visibilitychange. What that bought on each one was not
-    // cheap: syncRoomPoints → setPointRooms disposes EVERY point-room glow and
-    // rebuilds it, and each rebuild casts a floor probe and either builds a
-    // decal against real geometry or triangulates a clipped polygon into a
-    // fresh Mesh + material. Focus the tab, rebuild the lot, for a config that
-    // did not change.
-    //
-    // `eyeHeight` is in the predicate because syncRoomPoints READS it (a point
-    // stores the eye position, so the patch's floorY is `y - eyeHeight`) —
-    // moving the slider in Settings used to leave every point-room glow at its
-    // old height until a reload. Same class of defect from the other side: a
-    // consumer that does not re-run when one of its inputs moves.
-    const roomPointsChanged =
-      sliceChanged(prev.teleportPoints, config.teleportPoints)
-      || prev.eyeHeight !== config.eyeHeight;
-    if (roomPointsChanged) {
+    // A room added/renamed/removed via the Rooms menu ("Add room here") starts
+    // glowing (or stops) immediately — no model reload needed.
+    if (plan.roomPoints) {
       this.syncRoomPoints();
     }
 
-    if (this.loadedMeshes.length && structuralChanged) {
+    if (this.loadedMeshes.length && plan.structural) {
       // Yield BEFORE the first heavy call too, not just between the two —
       // the click/keystroke that triggered this edit only just committed via
       // React's state update; giving the browser a frame here is what lets
@@ -2835,40 +2746,26 @@ export class SceneManager {
       // for indexMeshes twice back-to-back. The caller discards this stale
       // call's result on its own (React effect cleanup), so returning early
       // is safe either way.
-      if (this.disposed || this.config !== config) return structuralChanged;
+      if (this.disposed || this.config !== config) return plan.structural;
       this.visuals.indexMeshes(this.loadedMeshes);
 
       await this.yieldFrame();
-      if (this.disposed || this.config !== config) return structuralChanged;
+      if (this.disposed || this.config !== config) return plan.structural;
       this.structure.apply(this.loadedMeshes, this.viewMode);
 
-      const prevEntityCount = Object.keys(prev.entityMap).length;
-      const newEntityCount  = Object.keys(config.entityMap).length;
-      const entityDelta = newEntityCount - prevEntityCount;
-
-      const needsRecalibration =
-        sh3dChanged ||
-        entityDelta > 0;  // new entities improve the plan→world fit
-
-      if (needsRecalibration) {
+      if (plan.recalibrate) {
         this.calibrateRooms(this.loadedMeshes);
-        // On bulk auto-detection (many entities added at once) the initial
-        // spawn was computed from the old, sparse entityMap and is likely
-        // wrong. Re-teleport to the corrected default (staircase) position now.
-        if (entityDelta >= 5) this.camera.teleport(this.firstPersonSpawn(), true);
+        // On bulk auto-detection the initial spawn was computed from the old,
+        // sparse entityMap — re-teleport to the corrected default position.
+        if (plan.reteleport) this.camera.teleport(this.firstPersonSpawn(), true);
       }
     }
 
-    if (
-      this.loadedMeshes.length &&
-      (structuralChanged || // a disabled/rebound entity must lose/gain its outline
-        prev.highlightInteractive !== config.highlightInteractive ||
-        prev.hiddenCategories.join() !== config.hiddenCategories.join())
-    ) {
+    if (this.loadedMeshes.length && plan.highlight) {
       this.applyHighlight(this.loadedMeshes);
     }
     this.requestRender();
-    return structuralChanged;
+    return plan.structural;
   }
 
   /** All entity mappings resolved from the last model load (for Config Editor auto-population). */

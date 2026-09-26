@@ -1,3 +1,10 @@
+## 2.496.158
+
+### Internal — 3D scene
+- No visible change. What the 3D view redoes after a settings change (the
+  lighting, the device badges, the room fit, the outlines) is now decided in
+  one tested place.
+
 ## 2.496.157
 
 ### Fixed — bottom bar
