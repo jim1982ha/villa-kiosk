@@ -86,7 +86,8 @@ console.log("\n  the callers:");
   ck("'No rain' is said only over readings; no readings says so (utils/barChart.barNote, driven in bar_chart.mjs)",
      /barNote\(buckets, `No rain readings in the last \$\{span\}`, `No rain in the last \$\{span\}`\)/.test(panel));
   ck("the Rain figure is a dash, not '0.0 mm', when there is nothing to sum",
-     /<Figure label="Rain" value=\{rainTotal !== undefined \?/.test(panel));
+     (await import("@/config/weatherStation")).weatherHistoryFigures({ gustUnit: "", rainUnit: "mm" }).find((f) => f.label === "Rain").value === "—"
+     && /const rainTotal = seriesTotal\(data\.rain\);/.test(panel) && /weatherHistoryFigures\(\{[\s\S]*?rainTotal,/.test(panel));
   ck("a failed history says it could not load", /status === "failed" \? "Couldn't load this history\."/.test(panel));
 }
 

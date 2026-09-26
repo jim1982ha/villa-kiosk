@@ -35,8 +35,8 @@ import { peakOf, seriesExtent, seriesTotal, type HistoryStatus } from "@/utils/s
 import { isUnavailable, STATUS_COLOR } from "@/utils/stateColors";
 import type { HassEntity, HistorySeries } from "@/types/ha.types";
 import {
-  beaufort, compass, pressureTendency, toCelsius, toKmh, toHpa, uvBand,
-  UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction, rainBand,
+  beaufort, compass, pressureTendency, uvBand, stationReadings, barometerAngle, thermometerFraction, rainTubeTop,
+  weatherHistoryFigures, UV_BANDS, UV_SCALE_TOP, uvScalePosition, sunshineFraction, rainBand,
   comfortHeadline, comfortPosition, COMFORT_BANDS, windowAdvice, laundryAdvice, outdoorsAdvice,
   type Advice, type WeatherRole, type WeatherStation,
 } from "@/config/weatherStation";
@@ -54,7 +54,8 @@ function ago(iso: string | undefined, now: number): string {
 const f1 = (v: number | undefined) => (v === undefined ? "—" : v.toFixed(1));
 const f0 = (v: number | undefined) => (v === undefined ? "—" : String(Math.round(v)));
 
-/** The station's live readings, by role, in the units the rules use. */
+/** The station's live readings, by role — converted by
+ *  weatherStation.stationReadings; this only finds each role's entity. */
 function useReadings(station: WeatherStation) {
   const { entities } = useHA();
   const ent = (role: WeatherRole): HassEntity | undefined => {
@@ -62,28 +63,11 @@ function useReadings(station: WeatherStation) {
     const e = id ? entities[id] : undefined;
     return e && !isUnavailable(e) ? e : undefined;
   };
-  const raw = (role: WeatherRole) => {
-    const e = ent(role);
-    const v = e ? Number(e.state) : NaN;
-    return Number.isFinite(v) ? v : undefined;
-  };
-  const unit = (role: WeatherRole) => String(ent(role)?.attributes.unit_of_measurement ?? "");
-  const c = (role: WeatherRole) => { const v = raw(role); return v === undefined ? undefined : toCelsius(v, unit(role)); };
-  const k = (role: WeatherRole) => { const v = raw(role); return v === undefined ? undefined : toKmh(v, unit(role)); };
-  const rate = raw("rainRate");
-  const vpd = raw("vapourDeficit");
   return {
-    ent,
-    t: c("temperature"), feels: c("feelsLike"), dew: c("dewPoint"),
-    inT: c("indoorTemperature"), inDew: c("indoorDewPoint"),
-    hum: raw("humidity"), inHum: raw("indoorHumidity"),
-    wind: k("windSpeed"), gust: k("windGust"), gustToday: k("windGustToday"), dir: raw("windDirection"),
-    rate, rateUnit: unit("rainRate"), raining: rate === undefined ? undefined : rate > 0,
-    rainToday: raw("rainToday"), rainMonth: raw("rainMonth"), rainYear: raw("rainYear"),
-    rainUnit: unit("rainToday") || "mm",
-    pressure: raw("pressure"), pressureUnit: unit("pressure") || "hPa",
-    vpd: vpd === undefined ? undefined : toHpa(vpd, unit("vapourDeficit")),
-    uv: raw("uv"), solar: raw("solar"),
+    ...stationReadings((role) => {
+      const e = ent(role);
+      return e ? { state: e.state, unit: String(e.attributes.unit_of_measurement ?? "") } : undefined;
+    }),
     updated: ent("temperature")?.last_updated,
   };
 }
@@ -259,9 +243,9 @@ function WindCompass({ r }: { r: Readings }) {
   );
 }
 
-/** A barometer dial: 960 hPa at the left end, 1060 at the right. */
+/** A barometer dial (weatherStation.BAROMETER_HPA, barometerAngle). */
 function Barometer({ hpa }: { hpa: number }) {
-  const a = ((Math.max(960, Math.min(1060, hpa)) - 960) / 100) * 270 - 135; // degrees from up
+  const a = barometerAngle(hpa); // degrees from up
   const rad = (a * Math.PI) / 180;
   const x = 115 + 78 * Math.sin(rad), y = 120 - 78 * Math.cos(rad);
   // No "CHANGE" over the arc (owner, 2026-09-26: redundant — the needle
@@ -280,9 +264,9 @@ function Barometer({ hpa }: { hpa: number }) {
   );
 }
 
-/** A thermometer bar, 0–40 °C. */
+/** A thermometer bar (weatherStation.thermometerFraction). */
 function Bar({ label, c, cls }: { label: string; c: number; cls: string }) {
-  const pct = Math.max(4, Math.min(100, (c / 40) * 100));
+  const pct = thermometerFraction(c) * 100;
   return (
     <div className="weather-bar">
       <div className="weather-bar-v">{f1(c)}°</div>
@@ -306,21 +290,16 @@ function Ring({ pct, cls, label, sub }: { pct: number; cls: string; label: strin
   );
 }
 
-/** A rain tube for today, scaled 0–20 mm (or the next 10 above today). */
-/** A rain rate in mm/h, from the sensor's own unit (in/h is converted). */
-function toMmPerHour(v: number, unit: string): number {
-  return /in/i.test(unit) ? v * 25.4 : v;
-}
-
+/** A rain tube for today (weatherStation.rainTubeTop). */
 function RainGauge({ r }: { r: Readings }) {
   const today = r.rainToday ?? 0;
-  const top = Math.max(20, Math.ceil(today / 10) * 10);
+  const top = rainTubeTop(today);
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((q) => ({ v: Math.round(top * q), y: 248 - q * 224 }));
   const fillH = Math.max(3, (today / top) * 232);
   const u = r.rainUnit;
   // The same head as Sun & UV (owner, 2026-09-26): the number, and beside it
   // what it means — here today's rain, and whether and how hard it is raining.
-  const now = r.rate === undefined ? null : rainBand(toMmPerHour(r.rate, r.rateUnit));
+  const now = r.rateMmH === undefined ? null : rainBand(r.rateMmH);
   return (
     <div className="weather-rain">
     <div className="weather-uv-head">
@@ -433,12 +412,15 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
   const { data, status } = useHistory<WeatherHistory>(
     `${ids.join("|")}#${rainId ?? ""}|${range.hours}`,
     async () => {
-      const since = Date.now() - range.hours * 3600_000;
+      // One clock reading for both ends of the window, so its width is
+      // exactly the range's.
+      const at = Date.now();
+      const since = at - range.hours * 3600_000;
       const [measured, rain] = await Promise.all([
         fetchStatistics(ws, ids, range.hours, range.period, ["mean", "min", "max"] as const, since),
         rainId ? fetchStatistics(ws, [rainId], range.hours, range.totalPeriod, ["change"] as const, since) : Promise.resolve(null),
       ]);
-      return { measured, rain: rain && rainId ? rain[rainId].change : undefined, window: { from: since, to: Date.now() } };
+      return { measured, rain: rain && rainId ? rain[rainId].change : undefined, window: { from: since, to: at } };
     },
     { measured: {}, window: { from: 0, to: 0 } },
   );
@@ -463,10 +445,9 @@ function HistoryView({ station, range }: { station: WeatherStation; range: Histo
   return (
     <div className="weather-history">
       <div className="weather-figures">
-        <Figure label="Temperature range" value={t && T ? `${f1(t.min)}° – ${f1(T.max)}°` : "—"} />
-        <Figure label="Strongest gust" value={gustMax !== undefined ? `${f1(gustMax)} ${unitOf(gustRole)}` : "—"} />
-        <Figure label="Rain" value={rainTotal !== undefined ? `${f1(rainTotal)} ${unitOf("rainToday") || "mm"}` : "—"} />
-        <Figure label="Highest UV" value={uvMax !== undefined ? `${Math.round(uvMax)} · ${uvBand(uvMax).band.toLowerCase()}` : "—"} />
+        {weatherHistoryFigures({
+          tMin: t?.min, tMax: T?.max, gustMax, gustUnit: unitOf(gustRole), rainTotal, rainUnit: unitOf("rainToday"), uvMax,
+        }).map((f) => <Figure key={f.label} label={f.label} value={f.value} />)}
       </div>
       <div className="weather-charts">
         <ChartTile title="Temperature" legend={[["Outside", "out"], ["Inside", "in"]]} win={win} status={status}

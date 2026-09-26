@@ -3,9 +3,10 @@
 // (a label over a value) and a row of observation cards. They were copied
 // between the two windows, markup and all (round-6 candidate 6, 2.496.119).
 
-/** A card: good (✓), neutral (·), caution or bad (!). The Weather rules'
- *  Advice is one (config/weatherStation). */
-export interface ObservationCard { tone: "good" | "caution" | "bad" | "neutral"; title: string; detail: string }
+import type { Observation } from "@/config/observation";
+
+/** A card: good (✓), neutral (·), caution or bad (!) — config/observation. */
+export type ObservationCard = Observation;
 
 const MARK = { good: "✓", neutral: "·", caution: "!", bad: "!" } as const;
 
