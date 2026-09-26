@@ -1,3 +1,10 @@
+## 2.496.143
+
+### Internal — the Weather window's rules
+- No visible change. The Weather window's unit conversions, the scales of
+  its barometer, thermometers and rain tube, and its four history figures
+  are now decided in one tested place instead of inside the screen.
+
 ## 2.496.142
 
 ### Internal — the Energy window's rules
