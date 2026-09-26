@@ -11,7 +11,7 @@
 // advisory — two devices at one point never separate.
 import { register } from "node:module";
 register("../consistency/alias-hook.mjs", import.meta.url);
-const { solveRoomZoom } = await import("@/babylon/roomZoomSolver");
+const { solveRoomZoom, roomWallFit, ROOM_FIT_VIEWPORT_FRACTION, ROOM_FIT_VIEWPORT_FRACTION_ENTITIES, MIN_ROOM_FIT_RADIUS } = await import("@/babylon/roomZoomSolver");
 const { rungAt } = await import("@/babylon/badgeScale");
 const { GROUP_ZOOM_STEPS_PER_DOUBLING } = await import("@/babylon/badgeMetrics");
 
@@ -70,6 +70,27 @@ ck("no viewport: null", solveRoomZoom([badge(-1, 0), badge(1, 0)], view({ vpH: 0
 ck("the answer is always ON the ladder (the renderer quantises to it)",
    (() => { const r = solveRoomZoom([badge(-1, 0), badge(1, 0)], view({ maxRadius: 13.7 }), spacing); return r && Math.abs(Math.log2(r.radius) * 12 - Math.round(Math.log2(r.radius) * 12)) < 1e-9 && r.radius <= 13.7 && r.radius * step > 13.7; })());
 
+console.log("\n  the wall fit (roomWallFit, 2.496.102):");
+{
+  const room = { minX: 0, maxX: 12, minZ: 0, maxZ: 6, floorY: 0 };
+  const top = { alpha: -Math.PI / 2, beta: 0.05 };
+  // A portrait phone (narrow horizontal fov) and a landscape tablet.
+  const portrait = roomWallFit(room, true, { ...top, vFov: 1.0, hFov: 0.62 });
+  const landscape = roomWallFit(room, true, { ...top, vFov: 0.8, hFov: 1.2 });
+  const oldSphere = (hFov, vFov) => (Math.hypot(6, 3) / Math.tan(Math.min(hFov, vFov) / 2)) / ROOM_FIT_VIEWPORT_FRACTION;
+  ck("the OLD bounding-sphere fit pushed a portrait phone further out than the room needs (2.362.0)",
+     oldSphere(0.62, 1.0) > portrait.radius * 1.05, [oldSphere(0.62, 1.0), portrait.radius]);
+  ck("per screen axis: the binding axis sets the radius, at the context fraction",
+     Math.abs(portrait.radius - Math.max(portrait.halfW / Math.tan(0.31), portrait.halfH / Math.tan(0.5), MIN_ROOM_FIT_RADIUS) / ROOM_FIT_VIEWPORT_FRACTION) < 1e-9);
+  ck("centred on the footprint, looking (nearly) straight down", portrait.cx === 6 && portrait.cz === 3 && portrait.destDir.y < -0.99);
+  ck("a landscape screen frames the same room closer than a portrait one", landscape.radius < portrait.radius, [landscape.radius, portrait.radius]);
+  const entities = roomWallFit(room, false, { ...top, vFov: 0.8, hFov: 1.2 });
+  ck("entity-anchor bounds get the wider shot (they under-state the room)",
+     Math.abs(entities.radius / landscape.radius - ROOM_FIT_VIEWPORT_FRACTION / ROOM_FIT_VIEWPORT_FRACTION_ENTITIES) < 1e-9);
+  const point = roomWallFit({ minX: 3, maxX: 3, minZ: 3, maxZ: 3, floorY: 0 }, true, { ...top, vFov: 0.8, hFov: 1.2 });
+  ck("a room that measures as a point is not flown into", Math.abs(point.radius - MIN_ROOM_FIT_RADIUS / ROOM_FIT_VIEWPORT_FRACTION) < 1e-9);
+}
+
 console.log("\n  the caller:");
 {
   const { readFileSync } = await import("node:fs");
@@ -77,6 +98,9 @@ console.log("\n  the caller:");
   ck("EntityVisuals measures the badges and asks the solver, through the destination's grouping basis",
      /return solveRoomZoom\(\s*members\.map\(/.test(ev) && /grouping: this\.currentViewBasis\(view\.dir\),/.test(ev));
   ck("  ...and keeps no ladder of its own", !/widestFitting|widestClean|Math\.pow\(2, k \/ q\)/.test(ev));
+  const sm = readFileSync(new URL("../../src/babylon/SceneManager.ts", import.meta.url), "utf8");
+  ck("SceneManager's room shot asks roomWallFit, and fits nothing itself",
+     /const fit = roomWallFit\(bounds, allReal, /.test(sm) && !/Math\.tan\(hFov \/ 2\)|ROOM_FIT_VIEWPORT_FRACTION_ENTITIES/.test(sm));
 }
 
 console.log(fail ? `\n❌ ${fail} failed` : "\n✅ the room shot, replayed");

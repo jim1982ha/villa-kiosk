@@ -12,10 +12,44 @@
 //
 // PURE — badgeProjection, badgePlacement and badgeScale import nothing heavy.
 
-import { projectToView, type ViewBasis } from "./badgeProjection";
+import { projectToView, exactViewBasis, type ViewBasis } from "./badgeProjection";
 import { markContacts, createPlacementScratch, type PlacementItem, type PlacementScratch } from "./badgePlacement";
 import { rungAt } from "./badgeScale";
 import { GROUP_ZOOM_STEPS_PER_DOUBLING } from "./badgeMetrics";
+
+// ── Zoom-to-room framing (roomWallFit) ──────────────────────
+// How much of the BINDING SCREEN AXIS the room's own footprint should occupy.
+//
+// ── A ROOM IS SHOWN WITH ITS SURROUNDINGS, NOT EDGE TO EDGE (2.426.0) ───────
+// This was a margin — 0.18, i.e. the footprint filled 85% of the axis — and it
+// was reported as bad UX with four screenshots: the pool filled the glass
+// corner to corner with no context at all, and the living room cropped its own
+// curtains off the sides. The user then dragged to the shot they wanted and the
+// log recorded it, twice: rung 271.223 -> ~152, and rung 170.860 -> ~117. Both
+// asked for 1.5-1.8x more room around the subject.
+//
+// Restated as a FRACTION because that is the decision actually being made —
+// "how much of the frame is the room" — and because it is then the same
+// vocabulary as CHIP_MAX_VIEWPORT_FRACTION and CARD_MAX_VIEWPORT_FRACTION,
+// which answer the same shape of question for the other two composite objects.
+//
+// ⚠️ It is applied AFTER the per-axis max, so it is a property of whichever
+// axis binds — which is what makes one number behave identically on a portrait
+// phone, a landscape laptop and a tablet either way. A margin expressed against
+// one axis, or against the footprint's diagonal, is the 2.362.0 bug: the same
+// room wanted radius 36 at one aspect and 51 at another.
+//
+// The entity-bounds fallback takes a SMALLER fraction (a wider shot), because
+// device anchors sit inside the room rather than at its walls, so their box
+// under-states it and the shot has to cover what the box does not describe.
+export const ROOM_FIT_VIEWPORT_FRACTION = 0.6;
+export const ROOM_FIT_VIEWPORT_FRACTION_ENTITIES = 0.45;
+// Floor under the fitted radius, for a "room" that measures as a point (a
+// single device, or a one-entity teleport spot) and would otherwise ask the
+// camera to fly arbitrarily close. Expressed in world units = metres.
+export const MIN_ROOM_FIT_RADIUS = 1.5;
+// NOTE for anyone tempted to add a tuning constant back here: two used to
+// live at this spot and both are gone (2.209.0).
 
 /** One eligible badge, measured as the DECISION will see it (icon-only, at
  *  the destination's scale). Every eligible badge in the villa, not just the
@@ -268,4 +302,90 @@ export function solveRoomZoom(
   return widestFitting === null
     ? null
     : { radius: widestFitting, declutters: widestClean !== null };
+}
+
+
+/** A room's floor-plan footprint on the ground, and its floor. */
+export interface RoomBounds { minX: number; maxX: number; minZ: number; maxZ: number; floorY: number }
+
+/**
+ * The WALL FIT: the camera radius at which a room's footprint fills
+ * ROOM_FIT_VIEWPORT_FRACTION of the binding screen axis, seen from the shot's
+ * destination (`alpha` kept, `beta` the camera's top-down limit) — the upper
+ * bound the rung ladder (solveRoomZoom) searches below. `real` is whether every
+ * room had a wall polygon; entity-anchor bounds take the wider fraction.
+ *
+ * Pure since 2.496.102; it was the half of the room shot that stayed inside
+ * SceneManager when the ladder moved here (tests/oracles/room_zoom.mjs).
+ */
+export function roomWallFit(
+  bounds: RoomBounds, real: boolean,
+  view: { alpha: number; beta: number; vFov: number; hFov: number },
+): {
+  cx: number; cz: number; radius: number; halfW: number; halfH: number;
+  destDir: { x: number; y: number; z: number }; frame: ViewBasis;
+} {
+  const fitFrac = real ? ROOM_FIT_VIEWPORT_FRACTION : ROOM_FIT_VIEWPORT_FRACTION_ENTITIES;
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cz = (bounds.minZ + bounds.maxZ) / 2;
+  const { vFov, hFov } = view;
+  const scratch = { px: 0, py: 0, pz: 0, pd: 0 };
+    // Babylon puts an ArcRotateCamera at target + r(cos α sin β, cos β,
+    // sin α sin β), so the direction it LOOKS is the negated unit offset. At
+    // view.beta this is very nearly straight down, which is the whole point —
+    // and it is what the badge ladder below has to measure through.
+    const sb = Math.sin(view.beta);
+    const destDir = {
+      x: -Math.cos(view.alpha) * sb,
+      y: -Math.cos(view.beta),
+      z: -Math.sin(view.alpha) * sb,
+    };
+
+    // ── Fit the room's footprint AS PROJECTED, per screen axis ─────────────
+    // This used to fit a bounding SPHERE (half the footprint diagonal) inside
+    // the TIGHTER of the two field-of-view angles. Both halves of that are
+    // rotation-invariant, and on a portrait phone they compound into a shot
+    // that is dramatically too far out: the horizontal FOV is the tight one, so
+    // the room was pushed back until its DIAGONAL fitted the screen's SHORT
+    // axis, and the tall axis — most of the glass — was left empty.
+    //
+    // Measured, not argued (v2.362.0 telemetry): the same Living Room reports a
+    // bounding sphere of 7.157 m on a 704x845 tablet, 7.151 m on a 932x616
+    // tablet and 7.157 m on a 475x661 phone — the room is identical, and every
+    // difference in the resulting shot was the formula. Swimming Pool wanted
+    // radius 36.05 at aspect 0.719 and 51.13 at aspect 0.495: 42% further out
+    // on the iPhone for the same room, which is the "zoom level is too low"
+    // that was reported from it.
+    //
+    // The destination pose is known exactly by this point, so there is nothing
+    // to be invariant to. Project the footprint's four corners onto the view
+    // plane and fit each screen axis against its OWN half-angle. `tan`, not
+    // `sin`: a floor seen from above is a plane facing the camera, and the
+    // distance at which a plane's half-extent subtends a half-angle is
+    // extent/tan. `sin` is the tangent-sphere form, and is the more
+    // conservative of the two by 1/cos — small next to the anisotropy, but it
+    // was wrong in the same direction.
+    const frame = exactViewBasis(destDir.x, destDir.y, destDir.z, "plane");
+    let halfW = 0;
+    let halfH = 0;
+    for (const px of [bounds.minX, bounds.maxX]) {
+      for (const pz of [bounds.minZ, bounds.maxZ]) {
+        // Relative to the orbit centre, which is what the frame is centred on.
+        // The projection is linear, so the projected corners bound the whole
+        // footprint exactly — no corner can escape a frame that holds all four.
+        const p = projectToView(frame, px - cx, 0, pz - cz, scratch);
+        halfW = Math.max(halfW, Math.abs(p.px));
+        halfH = Math.max(halfH, Math.abs(p.py));
+      }
+    }
+    // Per axis against its OWN half-angle, THEN the context fraction — see
+    // ROOM_FIT_VIEWPORT_FRACTION for why that order is what makes one number
+    // correct on every aspect ratio.
+    const radius = Math.max(
+      halfW / Math.tan(hFov / 2),
+      halfH / Math.tan(vFov / 2),
+      MIN_ROOM_FIT_RADIUS,
+    ) / fitFrac;
+
+  return { cx, cz, radius, halfW, halfH, destDir, frame };
 }

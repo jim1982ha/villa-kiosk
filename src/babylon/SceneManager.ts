@@ -58,8 +58,8 @@ import type { HassEntity } from "@/types/ha.types";
 import type { TeleportPoint } from "@/types/scene.types";
 import { entityMapDelta } from "./entityMapDiff";
 import { ModelKeyedStore } from "./modelStore";
-import { exactViewBasis, projectToView, type ProjectedPoint } from "./badgeProjection";
 import { cameraFrame } from "./cameraFrame";
+import { roomWallFit, MIN_ROOM_FIT_RADIUS } from "./roomZoomSolver";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
 
@@ -117,39 +117,6 @@ const FRAME_REPORT_MAX = 8;
 // at eye level, and anything else puts the sea's edge below the terrace floor.
 const OVERVIEW_HORIZON_DROP = 700;
 
-// ── Zoom-to-room framing (see computeRoomOverviewPose) ──────────────────────
-// How much of the BINDING SCREEN AXIS the room's own footprint should occupy.
-//
-// ── A ROOM IS SHOWN WITH ITS SURROUNDINGS, NOT EDGE TO EDGE (2.426.0) ───────
-// This was a margin — 0.18, i.e. the footprint filled 85% of the axis — and it
-// was reported as bad UX with four screenshots: the pool filled the glass
-// corner to corner with no context at all, and the living room cropped its own
-// curtains off the sides. The user then dragged to the shot they wanted and the
-// log recorded it, twice: rung 271.223 -> ~152, and rung 170.860 -> ~117. Both
-// asked for 1.5-1.8x more room around the subject.
-//
-// Restated as a FRACTION because that is the decision actually being made —
-// "how much of the frame is the room" — and because it is then the same
-// vocabulary as CHIP_MAX_VIEWPORT_FRACTION and CARD_MAX_VIEWPORT_FRACTION,
-// which answer the same shape of question for the other two composite objects.
-//
-// ⚠️ It is applied AFTER the per-axis max, so it is a property of whichever
-// axis binds — which is what makes one number behave identically on a portrait
-// phone, a landscape laptop and a tablet either way. A margin expressed against
-// one axis, or against the footprint's diagonal, is the 2.362.0 bug: the same
-// room wanted radius 36 at one aspect and 51 at another.
-//
-// The entity-bounds fallback takes a SMALLER fraction (a wider shot), because
-// device anchors sit inside the room rather than at its walls, so their box
-// under-states it and the shot has to cover what the box does not describe.
-const ROOM_FIT_VIEWPORT_FRACTION = 0.6;
-const ROOM_FIT_VIEWPORT_FRACTION_ENTITIES = 0.45;
-// Floor under the fitted radius, for a "room" that measures as a point (a
-// single device, or a one-entity teleport spot) and would otherwise ask the
-// camera to fly arbitrarily close. Expressed in world units = metres.
-const MIN_ROOM_FIT_RADIUS = 1.5;
-// NOTE for anyone tempted to add a tuning constant back here: two used to
-// live at this spot and both are gone (2.209.0).
 //   * DECLUTTER_RADIUS_MARGIN (0.85) padded the declutter zoom so it would
 //     still clear groupBadges' QUANTISED step. That is arithmetic, not a
 //     margin — solveRoomZoomRadius (which is what minPxPerWorldToDeclutterRoom
@@ -279,10 +246,6 @@ export class SceneManager {
   /** Bumped by every calibration, so a cosmetic tail still yielding between
    *  frames can tell that a newer fit has superseded the geometry it holds. */
   private calibGeneration = 0;
-  /** Scratch for computeRoomOverviewPose's four-corner footprint projection.
-   *  Runs once per room tap, but projectToView writes into a caller-owned
-   *  point by contract and this keeps that contract honest. */
-  private fitScratch: ProjectedPoint = { px: 0, py: 0, pz: 0, pd: 0 };
 
   /**
    * The stair rooms' surface-hugging glow, carried across loads.
@@ -1553,15 +1516,8 @@ export class SceneManager {
       } : { ...b };
     }
     if (!bounds) return null;
-    // Entity anchors mark devices, not walls, so their box under-states the
-    // room — give that fallback more headroom than a true polygon needs.
-    const fitFrac = allReal
-      ? ROOM_FIT_VIEWPORT_FRACTION
-      : ROOM_FIT_VIEWPORT_FRACTION_ENTITIES;
-
-    const cx = (bounds.minX + bounds.maxX) / 2;
-    const cz = (bounds.minZ + bounds.maxZ) / 2;
-
+    // (Entity anchors mark devices, not walls, so their box under-states the
+    // room: roomWallFit gives that fallback more headroom — `allReal`.)
     const cam = this.overview.camera;
     // Which of the two angles `fov` actually is belongs to cameraFrame.ts —
     // this file used to assume it was the vertical one, as three other readers
@@ -1569,7 +1525,6 @@ export class SceneManager {
     const { vHalf, hHalf } = cameraFrame(this.scene, cam);
     const vFov = 2 * vHalf;
     const hFov = 2 * hHalf;
-
     // ── The shot is ZENITHAL, whatever the camera was doing before ──────────
     // A floor plan seen from straight above is the view that shows a room's
     // devices best, and it is the same view every time — tapping two rooms in
@@ -1585,62 +1540,11 @@ export class SceneManager {
     // It is computed HERE, above the fit, because the fit is measured through
     // it — see the anisotropy note below.
     const destBeta = this.overview.camera.lowerBetaLimit ?? 0.05;
-    // Babylon puts an ArcRotateCamera at target + r(cos α sin β, cos β,
-    // sin α sin β), so the direction it LOOKS is the negated unit offset. At
-    // destBeta this is very nearly straight down, which is the whole point —
-    // and it is what the badge ladder below has to measure through.
-    const sb = Math.sin(destBeta);
-    const destDir = {
-      x: -Math.cos(cam.alpha) * sb,
-      y: -Math.cos(destBeta),
-      z: -Math.sin(cam.alpha) * sb,
-    };
-
-    // ── Fit the room's footprint AS PROJECTED, per screen axis ─────────────
-    // This used to fit a bounding SPHERE (half the footprint diagonal) inside
-    // the TIGHTER of the two field-of-view angles. Both halves of that are
-    // rotation-invariant, and on a portrait phone they compound into a shot
-    // that is dramatically too far out: the horizontal FOV is the tight one, so
-    // the room was pushed back until its DIAGONAL fitted the screen's SHORT
-    // axis, and the tall axis — most of the glass — was left empty.
-    //
-    // Measured, not argued (v2.362.0 telemetry): the same Living Room reports a
-    // bounding sphere of 7.157 m on a 704x845 tablet, 7.151 m on a 932x616
-    // tablet and 7.157 m on a 475x661 phone — the room is identical, and every
-    // difference in the resulting shot was the formula. Swimming Pool wanted
-    // radius 36.05 at aspect 0.719 and 51.13 at aspect 0.495: 42% further out
-    // on the iPhone for the same room, which is the "zoom level is too low"
-    // that was reported from it.
-    //
-    // The destination pose is known exactly by this point, so there is nothing
-    // to be invariant to. Project the footprint's four corners onto the view
-    // plane and fit each screen axis against its OWN half-angle. `tan`, not
-    // `sin`: a floor seen from above is a plane facing the camera, and the
-    // distance at which a plane's half-extent subtends a half-angle is
-    // extent/tan. `sin` is the tangent-sphere form, and is the more
-    // conservative of the two by 1/cos — small next to the anisotropy, but it
-    // was wrong in the same direction.
-    const frame = exactViewBasis(destDir.x, destDir.y, destDir.z, "plane");
-    let halfW = 0;
-    let halfH = 0;
-    for (const px of [bounds.minX, bounds.maxX]) {
-      for (const pz of [bounds.minZ, bounds.maxZ]) {
-        // Relative to the orbit centre, which is what the frame is centred on.
-        // The projection is linear, so the projected corners bound the whole
-        // footprint exactly — no corner can escape a frame that holds all four.
-        const p = projectToView(frame, px - cx, 0, pz - cz, this.fitScratch);
-        halfW = Math.max(halfW, Math.abs(p.px));
-        halfH = Math.max(halfH, Math.abs(p.py));
-      }
-    }
-    // Per axis against its OWN half-angle, THEN the context fraction — see
-    // ROOM_FIT_VIEWPORT_FRACTION for why that order is what makes one number
-    // correct on every aspect ratio.
-    let radius = Math.max(
-      halfW / Math.tan(hFov / 2),
-      halfH / Math.tan(vFov / 2),
-      MIN_ROOM_FIT_RADIUS,
-    ) / fitFrac;
+    // The footprint fitted per screen axis, through the destination's own
+    // view — roomZoomSolver.roomWallFit, beside the rung ladder it bounds.
+    const fit = roomWallFit(bounds, allReal, { alpha: cam.alpha, beta: destBeta, vFov, hFov });
+    const { cx, cz, destDir, frame, halfW, halfH } = fit;
+    let radius = fit.radius;
 
     // ── Now ask the badges, by TESTING rather than deriving ───────────────
     // The wall fit above frames the ROOM. It says nothing about whether the
