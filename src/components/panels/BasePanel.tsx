@@ -13,7 +13,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Wrench } from "lucide-react";
-import { usePanelActions } from "./PanelActionsContext";
+import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { badgeImage } from "@/babylon/badgeIcons";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { useConfig } from "@/config/ConfigContext";
@@ -146,11 +146,7 @@ export default function BasePanel({ title, entityId, icon, className, headerActi
             <div className="panel-linked-row">
               <button
                 className={`summary-entity-toggle${linked.isOn ? " on" : ""}`}
-                onClick={linked.known ? linked.toggle : undefined}
-                disabled={!linked.known}
-                role="switch"
-                aria-checked={linked.isOn}
-                aria-label={`${linked.label}: ${linked.isOn ? "on" : "off"}`}
+                {...linkedSwitchProps(linked)}
                 title={linked.isOn ? "Turn off" : "Turn on"}
               >
                 <span className="knob" />

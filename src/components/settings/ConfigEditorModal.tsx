@@ -18,6 +18,7 @@ import ConfigEditor from "./ConfigEditor";
 import BindingsTable from "./BindingsTable";
 import TelemetryPanel from "./TelemetryPanel";
 import GroupedDevices from "./GroupedDevices";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 /** ⚠️ EVERY TAB CARRIES TWO PANELS, AND THAT IS A RULE RATHER THAN AN
  *  ACCIDENT. This screen was a stack of six collapsible sections and read as
@@ -113,19 +114,13 @@ function LogoutAllSection() {
         </div>
       )}
       {confirming ? (
-        <div className="modal-actions" style={{ margin: 0 }}>
-          <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
-          <button
-            className="btn danger"
-            onClick={async () => {
-              const ok = await logoutAll();
-              setFailed(!ok);
-              setConfirming(false);
-            }}
-          >
-            Log out every device?
-          </button>
-        </div>
+        <InlineConfirm confirmLabel="Log out every device?"
+          onConfirm={async () => {
+            const ok = await logoutAll();
+            setFailed(!ok);
+            setConfirming(false);
+          }}
+          onCancel={() => setConfirming(false)} />
       ) : (
         <button className="btn ghost" onClick={() => setConfirming(true)}>
           <LogOut size={16} /> Log out all devices

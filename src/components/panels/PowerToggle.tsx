@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Power } from "lucide-react";
 import { usePendingAck } from "@/hooks/usePendingAck";
 import { tapFeedback } from "@/utils/haptics";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   on: boolean;
@@ -57,13 +58,9 @@ export default function PowerToggle({ on, onClick, label, requireConfirm }: Prop
 
   if (requireConfirm && confirming) {
     return (
-      <div className="modal-actions" style={{ margin: 0 }}>
-        <span className="body-text" style={{ marginRight: "auto" }}>
-          Turn {on ? "off" : "on"}{label ? ` ${label}` : ""}?
-        </span>
-        <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
-        <button className="btn danger" onClick={act}>Confirm</button>
-      </div>
+      <InlineConfirm
+        question={<>Turn {on ? "off" : "on"}{label ? ` ${label}` : ""}?</>}
+        confirmLabel="Confirm" onConfirm={act} onCancel={() => setConfirming(false)} />
     );
   }
 

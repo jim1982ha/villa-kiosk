@@ -1,8 +1,13 @@
 #!/bin/sh
-# Every backport oracle. LOCAL ONLY — tests/ is gitignored and main keeps no
-# tracked test suite (see .scratch/backport-main/spec.md). Each oracle
-# discriminates the OLD rule from the NEW, so a pass means the fix changed
-# something, not merely that the code runs.
+# Every oracle — `npm run test:oracles`, a CI gate (.github/workflows/ci.yaml).
+# TRACKED despite tests/ being gitignored (negation patterns in .gitignore;
+# verify with `git ls-files`). Each oracle discriminates the OLD rule from the
+# NEW, so a pass means the fix changed something, not merely that the code runs.
+#
+# ⚠️ STDERR IS SHOWN (round 11, 2.496.173). It went to /dev/null, so an oracle
+# that CRASHED — an import that throws, a missing export — printed only
+# "^ FAILED" with its cause discarded, locally and in the CI log alike.
+# `--no-warnings` drops only Node's type-stripping ExperimentalWarning.
 #
 # ⚠️ `open/` HOLDS ORACLES THAT ARE SUPPOSED TO FAIL — each pins a defect that
 # is found, reproduced and NOT YET FIXED. They are run and reported separately
@@ -12,7 +17,7 @@ cd "$(dirname "$0")" || exit 1
 fail=0
 for f in *.mjs; do
   printf '\n═══ %s ═══\n' "$f"
-  node "$f" 2>/dev/null || { echo "  ^ FAILED"; fail=1; }
+  node --no-warnings "$f" || { echo "  ^ FAILED"; fail=1; }
 done
 printf '\n%s\n' "$([ $fail -eq 0 ] && echo '✅ all fixed-defect oracles pass' || echo '❌ SOME ORACLES FAILED')"
 if [ -d open ]; then
@@ -20,7 +25,7 @@ if [ -d open ]; then
   for f in open/*.mjs; do
     [ -e "$f" ] || continue
     printf '\n═══ %s ═══\n' "$f"
-    node "$f" 2>/dev/null && echo "  ⚠️ THIS NOW PASSES — the defect is fixed; move it out of open/"
+    node --no-warnings "$f" && echo "  ⚠️ THIS NOW PASSES — the defect is fixed; move it out of open/"
   done
 fi
 exit $fail

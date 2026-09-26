@@ -15,6 +15,7 @@ import { MONEY_CURRENCY } from "@/fm/fmTypes";
 import EvidenceRow from "./EvidenceRow";
 import RecentWorkList from "./RecentWorkList";
 import NotesField from "./NotesField";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 const STATE_LABEL: Record<ScheduleStatus["state"], string> = {
   overdue: "Overdue",
@@ -94,19 +95,13 @@ export default function TodayTab({ onOpenEntity }: { onOpenEntity: (id: string) 
 
       <div className="row" style={{ justifyContent: "flex-end" }}>
         {confirmingDeleteAll ? (
-          <div className="modal-actions" style={{ margin: 0 }}>
-            <button className="btn ghost" onClick={() => setConfirmingDeleteAll(false)}>Cancel</button>
-            <button
-              className="btn danger"
-              onClick={async () => { await removeAllSchedules(); setConfirmingDeleteAll(false); }}
-            >
-              {/* data.schedules.length, not board.length: the board only shows
-                  ENABLED tasks (scheduleBoard filters paused ones out), but
-                  removeAllSchedules clears every schedule regardless — the
-                  confirm count must match what actually gets deleted. */}
-              Delete all {data.schedules.length} tasks?
-            </button>
-          </div>
+          // data.schedules.length, not board.length: the board only shows
+          // ENABLED tasks (scheduleBoard filters paused ones out), but
+          // removeAllSchedules clears every schedule regardless — the
+          // confirm count must match what actually gets deleted.
+          <InlineConfirm confirmLabel={<>Delete all {data.schedules.length} tasks?</>}
+            onConfirm={async () => { await removeAllSchedules(); setConfirmingDeleteAll(false); }}
+            onCancel={() => setConfirmingDeleteAll(false)} />
         ) : (
           <button className="btn ghost" onClick={() => setConfirmingDeleteAll(true)}>
             <Trash2 size={16} /> Delete all

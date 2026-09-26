@@ -154,6 +154,65 @@ stale = sorted(p for p in SW_CACHEABLE if p not in gets)
 ck("  ...and every deliberately cacheable path is still a route", not stale,
    f"no longer routes: {', '.join(stale)}")
 
+# ── the security headers are written once (round 11, 2.496.173) ──────────
+# nginx drops every inherited add_header in a location that sets its own, so
+# the five headers live in one snippet that the server level AND each such
+# location include, and the CSP in another. They were also written out at the
+# server level, the CSP twice word for word.
+SNIPS = NGINX.parent / "snippets"
+SEC = ("X-Content-Type-Options", "Referrer-Policy", "X-Frame-Options",
+       "Permissions-Policy", "Strict-Transport-Security", "Content-Security-Policy")
+by_hand = [h for h in SEC if re.search(rf"^\s*add_header\s+{h}", ng, re.M)]
+ck("nginx.conf writes no security header by hand (the snippets hold them)", not by_hand,
+   f"written out in nginx.conf: {', '.join(by_hand)}")
+snip_text = "".join(f.read_text() for f in sorted(SNIPS.glob("*.conf")))
+csp_count = len(re.findall(r"^\s*add_header\s+Content-Security-Policy", snip_text, re.M))
+ck("  ...the CSP is written exactly once", csp_count == 1, f"{csp_count} copies")
+server_block = ng[re.search(r"^\s*server\s*\{", ng, re.M).start():]
+first_loc = re.search(r"^\s*location\s", server_block, re.M).start()
+ck("  ...the server level includes both snippets",
+   all(f"include /etc/nginx/snippets/{n}.conf;" in server_block[:first_loc] for n in ("security-headers", "csp")))
+own = [m.group(2) for m in re.finditer(r"location\s+(=\s*|~\*?\s*)?(\S+)\s*\{([^}]*)\}", ng)
+       if "add_header" in m.group(3) and "include /etc/nginx/snippets/security-headers.conf;" not in m.group(3)]
+ck("  ...and every location with an add_header of its own includes the headers again", not own,
+   f"these drop them: {', '.join(own)}")
+
+# ── each layer's body cap sits above the one inside it (round 11, 2.496.173) ─
+# A body passes the client, then nginx, then the proxy. nginx's cap must not
+# be the tighter one — its bare 413 would stand in for the proxy's own
+# explanation ("event too large", "…exceeds the limit") — and the client's
+# model upload must fit under HA Ingress's ~16 MB per-request cap, which no
+# setting here can raise. Three files in three languages, ordered here.
+def _num(expr: str) -> int:
+    return int(eval(expr.replace("_", ""), {"__builtins__": {}}))  # constant arithmetic only
+
+
+def _py(name: str) -> int:
+    m = re.search(rf"^{name}\s*=\s*([0-9_ *]+)", px, re.M)
+    return _num(m.group(1)) if m else -1
+
+
+def _nginx_cap(loc: str) -> int:
+    m = re.search(rf"location\s+(=\s*)?{re.escape(loc)}\s*\{{([^}}]*)\}}", ng)
+    cap = re.search(r"client_max_body_size\s+(\d+)([kKmM]?)", m.group(2)) if m else None
+    if not cap:
+        return -1
+    return int(cap.group(1)) * {"": 1, "k": 1024, "m": 1024 ** 2}[cap.group(2).lower()]
+
+
+CAPS = {"/device-config": "DEVICE_CONFIG_MAX_BYTES", "/fm-data": "FM_DATA_MAX_BYTES",
+        "/fm-evidence": "FM_EVIDENCE_MAX_BYTES", "/telemetry": "TELEMETRY_MAX_BODY",
+        "/model-upload": "MAX_UPLOAD_BYTES"}
+tighter = [f"{loc} nginx {_nginx_cap(loc)} < proxy {_py(name)}" for loc, name in CAPS.items()
+           if _nginx_cap(loc) < _py(name) or _py(name) < 0]
+ck(f"nginx's body cap is never tighter than the proxy's ({len(CAPS)} endpoints)", not tighter,
+   "; ".join(tighter))
+cm = (ROOT / "src" / "utils" / "centralModel.ts").read_text()
+ts = {k: _num(re.search(rf"const {k} = ([0-9 *]+);", cm).group(1)) for k in ("SINGLE_SHOT_MAX_BYTES", "UPLOAD_CHUNK_BYTES")}
+INGRESS_CAP = 16 * 1000 * 1000  # HA Ingress's per-request limit (~16 MB), Supervisor-side
+ck("  ...and every model-upload request fits HA Ingress's ~16 MB (single shot and each chunk)",
+   max(ts.values()) < INGRESS_CAP and max(ts.values()) <= _nginx_cap("/model-upload"), str(ts))
+
 print()
 print("✅ the four path lists agree" if FAIL == 0 else "❌ THE PATH LISTS DISAGREE")
 sys.exit(1 if FAIL else 0)

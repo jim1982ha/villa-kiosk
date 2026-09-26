@@ -84,5 +84,24 @@ export interface PanelActions {
 }
 
 const PanelActionsContext = createContext<PanelActions>({});
+/**
+ * The linked entity's switch SEMANTICS — what it does, whether it can, and
+ * what it says to assistive tech — spread onto whichever button draws it:
+ * the panel chrome's toggle (BasePanel) or the camera's rail icon
+ * (CameraPanel). They look different on purpose; they wrote these five
+ * attributes out separately (round 11, 2.496.173), where one could drift
+ * from the other — the "Unavailable" state reached both only because
+ * 2.496.164 edited both.
+ */
+export function linkedSwitchProps(linked: NonNullable<PanelActions["linked"]>) {
+  return {
+    onClick: linked.known ? linked.toggle : undefined,
+    disabled: !linked.known,
+    role: "switch" as const,
+    "aria-checked": linked.isOn,
+    "aria-label": `${linked.label}: ${!linked.known ? "unavailable" : linked.isOn ? "on" : "off"}`,
+  };
+}
+
 export const PanelActionsProvider = PanelActionsContext.Provider;
 export const usePanelActions = (): PanelActions => useContext(PanelActionsContext);

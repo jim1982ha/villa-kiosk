@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { X, VideoOff, Maximize2, Minimize2, ZoomOut, ChevronLeft, ChevronRight, Power, Check, Video } from "lucide-react";
 import type { PanelProps } from "@/types/panel.types";
 import { useRailLayout } from "@/utils/railLayout";
-import { usePanelActions } from "./PanelActionsContext";
+import { linkedSwitchProps, usePanelActions } from "./PanelActionsContext";
 import { useHA } from "@/ha/HAStateStore";
 import { createCameraPlayer, type CameraPlayer, type CameraPlayerState } from "./cameraPlayer";
 import { cameraTiers } from "./cameraTiers";
@@ -694,11 +694,7 @@ export default function CameraPanel({ mapping, onClose, pinContinuous, onOpenEnt
           {linked && (
             <button
               className={`icon-btn camera-linked-btn${linked.isOn ? " on" : ""}`}
-              onClick={linked.known ? linked.toggle : undefined}
-              disabled={!linked.known}
-              role="switch"
-              aria-checked={linked.isOn}
-              aria-label={`${linked.label}: ${linked.isOn ? "on" : "off"}`}
+              {...linkedSwitchProps(linked)}
               title={`${linked.label} — ${linked.isOn ? "turn off" : "turn on"}`}
               style={vOrder(5)}
             >

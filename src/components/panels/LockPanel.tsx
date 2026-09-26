@@ -9,6 +9,7 @@ import { usePendingAck } from "@/hooks/usePendingAck";
 import { isUnavailable, statusKeyFor, STATUS_PILL_CLASS } from "@/utils/stateColors";
 import { tapFeedback, successFeedback } from "@/utils/haptics";
 import UnavailableNotice from "./UnavailableNotice";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
   const { ws } = useHA();
@@ -101,11 +102,8 @@ export default function LockPanel({ entity, mapping, onClose }: PanelProps) {
               <Unlock size={18} /> Unlock door…
             </button>
           ) : (
-            <div className="modal-actions">
-              <span className="body-text" style={{ marginRight: "auto" }}>Unlock {mapping.label}?</span>
-              <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
-              <button className="btn danger" onClick={doUnlock}>Confirm unlock</button>
-            </div>
+            <InlineConfirm flush={false} question={<>Unlock {mapping.label}?</>}
+              confirmLabel="Confirm unlock" onConfirm={doUnlock} onCancel={() => setConfirming(false)} />
           )}
         </div>
       )}

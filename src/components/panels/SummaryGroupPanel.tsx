@@ -38,6 +38,7 @@ export type { SummaryGroup } from "@/config/summaryGroups";
 import type { SummaryGroup } from "@/config/summaryGroups";
 import { useVillaModel } from "@/config/VillaModel";
 import { devicePower } from "@/utils/devicePower";
+import InlineConfirm from "@/components/common/InlineConfirm";
 
 interface Props {
   group: SummaryGroup;
@@ -207,12 +208,8 @@ export default function SummaryGroupPanel({
       // visible, not scrolled past a long, room-grouped device list.
       headerActions={!hideBulkToggle && canControl && toggleables.length > 1 && (
         confirming ? (
-          <div className="modal-actions" style={{ margin: 0 }}>
-            <button className="btn ghost" onClick={() => setConfirming(false)}>Cancel</button>
-            <button className="btn danger" onClick={doToggleAll}>
-              {anyOn ? "Turn off?" : "Turn on?"}
-            </button>
-          </div>
+          <InlineConfirm confirmLabel={anyOn ? "Turn off?" : "Turn on?"}
+            onConfirm={doToggleAll} onCancel={() => setConfirming(false)} />
         ) : (
           // Icon-only — the text label ("Turn all on/off") cost too much
           // horizontal space in the header, especially on a phone. The icon

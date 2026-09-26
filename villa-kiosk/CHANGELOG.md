@@ -1,3 +1,20 @@
+## 2.496.173
+
+### Fixed
+- **Turning with the keyboard in walk mode (A/D, arrow keys) is the same
+  speed on every screen.** It turned twice as fast on a 120 Hz iPad as on a
+  60 Hz screen, and slowed down whenever the 3D view got busy.
+
+### Changed
+- A screen reader now hears "unavailable" for a linked device Home Assistant
+  has lost (it said "off").
+
+### Behind the scenes
+- The "Cancel / Confirm" step before unlocking a door, switching a device,
+  signing every device out or deleting all tasks is one shared piece.
+- The add-on's web server sends its security headers from one place, and a
+  check keeps each layer's upload size limit in the right order.
+
 ## 2.496.172
 
 ### Behind the scenes

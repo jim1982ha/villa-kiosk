@@ -23,6 +23,7 @@ import { rayTargets } from "./meshRoles";
 import { TapRecognizer } from "./TapRecognizer";
 // Babylon prototype patches this module depends on — see babylonSideEffects.
 import "./babylonSideEffects";
+import { keyLook, PITCH_LIMIT } from "./keyLook";
 
 interface CameraCallbacks {
   onRoomChange: (room: string | null) => void;
@@ -266,7 +267,7 @@ export class CameraController {
       // Mouse drag or one finger = look around.
       this.pinchDist = 0; // reset if one finger lifts mid-gesture
       this.camera.rotation.y += dx * CameraController.LOOK_SENS;
-      this.camera.rotation.x = clamp(this.camera.rotation.x + dy * CameraController.LOOK_SENS, -1.4, 1.4);
+      this.camera.rotation.x = clamp(this.camera.rotation.x + dy * CameraController.LOOK_SENS, -PITCH_LIMIT, PITCH_LIMIT);
       this.cb.onActivity();
     }
   };
@@ -356,7 +357,7 @@ export class CameraController {
     // Hold Shift while swiping/scrolling = look around (turn + tilt) instead of walk.
     if (e.shiftKey) {
       this.camera.rotation.y += e.deltaX * 0.0022;
-      this.camera.rotation.x = clamp(this.camera.rotation.x + e.deltaY * 0.0022, -1.4, 1.4);
+      this.camera.rotation.x = clamp(this.camera.rotation.x + e.deltaY * 0.0022, -PITCH_LIMIT, PITCH_LIMIT);
       this.cb.onActivity();
       return;
     }
@@ -375,6 +376,8 @@ export class CameraController {
    * fling the camera on the next frame.
    */
   private readonly walkClock = new FrameClock();
+  /** frameFactor() for the current step, read once at its top (see step). */
+  private stepFrames = 1;
 
   private frameFactor(): number {
     // ⚠️ THIS CALLED `engine.getDeltaTime()`, THE ONE FUNCTION THE PROJECT'S
@@ -834,6 +837,9 @@ export class CameraController {
     // Evaluate last frame's progress, then reset the flag for this frame.
     this.antiStuck();
     this.requestedMove = false;
+    // This step's length in 60 Hz frames — ONCE per step: the clock advances
+    // when read, and the look, the walk and the auto-walk all share it.
+    this.stepFrames = this.frameFactor();
 
     // Keep frames coming during a teleport animation too.
     if (this.animating) this.cb.onActivity();
@@ -845,8 +851,11 @@ export class CameraController {
       pitch += (this.keys.has("back") ? 1 : 0) - (this.keys.has("fwd") ? 1 : 0);
     }
     if (yaw !== 0 || pitch !== 0) {
-      this.camera.rotation.y += yaw * 0.03;
-      this.camera.rotation.x = clamp(this.camera.rotation.x + pitch * 0.03, -1.4, 1.4);
+      // Radians per SECOND (keyLook) — it was 0.03 per frame, so a 120 Hz
+      // iPad turned twice as fast as a 60 Hz screen.
+      const r = keyLook(this.camera.rotation, yaw, pitch, this.stepFrames);
+      this.camera.rotation.y = r.y;
+      this.camera.rotation.x = r.x;
       this.cb.onActivity();
     }
 
@@ -863,7 +872,7 @@ export class CameraController {
       const right = this.camera.getDirection(Axis.X);
       forward.y = 0; right.y = 0;
       forward.normalize(); right.normalize();
-      const speed = WALK_SPEED * this.walkSpeed * this.frameFactor();
+      const speed = WALK_SPEED * this.walkSpeed * this.stepFrames;
       const move = forward.scale(my * speed).add(right.scale(mx * speed));
       move.y = 0;
       this.camera.cameraDirection.addInPlace(move);
@@ -905,7 +914,7 @@ export class CameraController {
     this.lastAutoPos = { x: pos.x, z: pos.z };
 
     this.requestedMove = true;
-    const speed = WALK_SPEED * this.walkSpeed * 1.6 * this.frameFactor();
+    const speed = WALK_SPEED * this.walkSpeed * 1.6 * this.stepFrames;
     const inv = 1 / dist;
     this.camera.cameraDirection.addInPlace(new Vector3(dx * inv * speed, 0, dz * inv * speed));
     this.followFloor();
