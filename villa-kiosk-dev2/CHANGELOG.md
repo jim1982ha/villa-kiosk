@@ -1,3 +1,9 @@
+## 2.496.134
+
+### Improved — the Weather window's "Sun & UV" chart
+- **UV has its own colour.** Sunlight and UV were the same tan. UV is now
+  the red of the UV scale, on its line, its legend, its tooltip and the
+  numbers of its axis on the right, so the two read apart.
 ## 2.496.133
 
 **Nothing you should see changed.** References to the retired development
