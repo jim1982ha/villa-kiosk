@@ -1,3 +1,10 @@
+## 2.496.172
+
+### Behind the scenes
+- Choosing which 3D model to load (the add-on's shared model, or this
+  browser's own upload) and what each failure means is now one tested step
+  of the loading sequence. Nothing changes on screen.
+
 ## 2.496.171
 
 ### Behind the scenes
