@@ -1,3 +1,12 @@
+## 2.496.112
+
+### Fixed — every chart's tooltip
+- **Tooltips float above the window instead of pushing it.** A tall tooltip,
+  like the one on "Where today's energy went" listing the devices inside a
+  meter, used to stretch the window's scroll area, so the window shifted and
+  the tip was cut off at the footer. The tooltip shared by every chart now
+  floats above everything, stays on screen, and opens upward when there is no
+  room below. This replaces the one-off fix in 2.496.111.
 ## 2.496.111
 
 ### Fixed — the Energy window

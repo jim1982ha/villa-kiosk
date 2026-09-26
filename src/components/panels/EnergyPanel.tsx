@@ -340,7 +340,6 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
       const kw = u ? rateKw(u.node.rateId) : undefined;
       const inside = u?.children.filter((c) => c.kwh > 0.005) ?? [];
       const pct = split.used > 0 ? Math.round((b.kwh / split.used) * 100) : 0;
-      const lift = b.dy + Math.max(b.h, SLOT) / 2 > H / 2;
       const rows = [
         { key: "t", text: `${u ? u.node.name : "Untracked"} · ${fmtKwh(b.kwh)} kWh` },
         { key: "p", text: `${pct}% of the ${fmtKwh(split.used)} kWh used` },
@@ -351,11 +350,8 @@ function Flow({ split, rateKw }: { split: EnergySplit; rateKw: (id: string | nul
         ...(!u ? [{ key: "x", text: "no device meter in Home Assistant accounts for it" }] : []),
       ];
       return (
-        // A row in the lower half opens its tip UPWARD from the row: hung
-        // below, it ran past the tile and the window cut it off (owner's
-        // screenshot, 2026-09-26).
-        <ChartTip left={`${(366 / W) * 100}%`} top={`${((lift ? b.dy : b.dy + Math.max(b.h, SLOT)) / H) * 100}%`} flip={false}
-          lift={lift} t={0} spanHours={0} stamp="today so far" rows={rows} />
+        <ChartTip left={`${(366 / W) * 100}%`} top={`${((b.dy + Math.max(b.h, SLOT)) / H) * 100}%`} flip={false}
+          t={0} spanHours={0} stamp="today so far" rows={rows} />
       );
     })()}
     </div>
